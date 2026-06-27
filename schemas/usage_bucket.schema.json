@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wardpulse.app/schemas/usage_bucket.schema.json",
+  "title": "UsageBucket",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["startAt", "endAt"],
+  "properties": {
+    "startAt": { "type": "string", "format": "date-time" },
+    "endAt": { "type": "string", "format": "date-time" },
+    "cost": { "anyOf": [{ "$ref": "#/$defs/money" }, { "type": "null" }] },
+    "inputTokens": { "type": ["integer", "null"], "minimum": 0 },
+    "outputTokens": { "type": ["integer", "null"], "minimum": 0 },
+    "cachedTokens": { "type": ["integer", "null"], "minimum": 0 },
+    "requests": { "type": ["integer", "null"], "minimum": 0 },
+    "model": { "type": ["string", "null"] },
+    "project": { "type": ["string", "null"] },
+    "user": { "type": ["string", "null"] }
+  },
+  "$defs": {
+    "money": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minorUnits", "currency"],
+      "properties": {
+        "minorUnits": { "type": "integer" },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+      }
+    }
+  }
+}

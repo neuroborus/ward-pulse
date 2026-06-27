@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wardpulse.app/schemas/budget_state.schema.json",
+  "title": "BudgetState",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["period", "spent", "limit", "remaining", "usedPercent", "projectedTotal", "status"],
+  "properties": {
+    "period": { "enum": ["today", "week", "month"] },
+    "spent": { "anyOf": [{ "$ref": "#/$defs/money" }, { "type": "null" }] },
+    "limit": { "anyOf": [{ "$ref": "#/$defs/money" }, { "type": "null" }] },
+    "remaining": { "anyOf": [{ "$ref": "#/$defs/money" }, { "type": "null" }] },
+    "usedPercent": { "type": ["number", "null"] },
+    "projectedTotal": { "anyOf": [{ "$ref": "#/$defs/money" }, { "type": "null" }] },
+    "status": { "enum": ["ok", "warning", "error", "rateLimited", "authRequired", "stale", "unknown"] }
+  },
+  "$defs": {
+    "money": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minorUnits", "currency"],
+      "properties": {
+        "minorUnits": { "type": "integer" },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+      }
+    }
+  }
+}

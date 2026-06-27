@@ -1,0 +1,43 @@
+{
+  "generatedAt": "2026-06-27T18:42:00Z",
+  "overallStatus": "warning",
+  "accounts": [],
+  "todayTotal": {
+    "period": "today",
+    "spent": { "minorUnits": 4500, "currency": "USD" },
+    "limit": { "minorUnits": 5000, "currency": "USD" },
+    "remaining": { "minorUnits": 500, "currency": "USD" },
+    "usedPercent": 90.0,
+    "projectedTotal": null,
+    "status": "warning"
+  },
+  "weekTotal": {
+    "period": "week",
+    "spent": { "minorUnits": 7130, "currency": "USD" },
+    "limit": { "minorUnits": 25000, "currency": "USD" },
+    "remaining": { "minorUnits": 17870, "currency": "USD" },
+    "usedPercent": 28.52,
+    "projectedTotal": { "minorUnits": 22800, "currency": "USD" },
+    "status": "ok"
+  },
+  "monthTotal": {
+    "period": "month",
+    "spent": { "minorUnits": 21210, "currency": "USD" },
+    "limit": { "minorUnits": 80000, "currency": "USD" },
+    "remaining": { "minorUnits": 58790, "currency": "USD" },
+    "usedPercent": 26.5125,
+    "projectedTotal": { "minorUnits": 74200, "currency": "USD" },
+    "status": "ok"
+  },
+  "alerts": [
+    {
+      "severity": "warning",
+      "message": "Mock usage is above the warning threshold."
+    }
+  ],
+  "watchSummary": {
+    "todayUsedPercent": 90.0,
+    "weekUsedPercent": 28.52,
+    "status": "warning"
+  }
+}

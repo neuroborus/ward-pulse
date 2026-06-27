@@ -1,0 +1,6 @@
+[bindings.kotlin]
+package_name = "app.wardpulse.bindings"
+cdylib_name = "ward_pulse_ffi"
+
+[bindings.swift]
+module_name = "WardPulseCore"

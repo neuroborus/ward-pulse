@@ -1,0 +1,38 @@
+{
+  "generatedAt": "2026-06-27T18:42:00Z",
+  "overallStatus": "ok",
+  "accounts": [],
+  "todayTotal": {
+    "period": "today",
+    "spent": { "minorUnits": 1240, "currency": "USD" },
+    "limit": { "minorUnits": 5000, "currency": "USD" },
+    "remaining": { "minorUnits": 3760, "currency": "USD" },
+    "usedPercent": 24.8,
+    "projectedTotal": null,
+    "status": "ok"
+  },
+  "weekTotal": {
+    "period": "week",
+    "spent": { "minorUnits": 7130, "currency": "USD" },
+    "limit": { "minorUnits": 25000, "currency": "USD" },
+    "remaining": { "minorUnits": 17870, "currency": "USD" },
+    "usedPercent": 28.52,
+    "projectedTotal": { "minorUnits": 22800, "currency": "USD" },
+    "status": "ok"
+  },
+  "monthTotal": {
+    "period": "month",
+    "spent": { "minorUnits": 21210, "currency": "USD" },
+    "limit": { "minorUnits": 80000, "currency": "USD" },
+    "remaining": { "minorUnits": 58790, "currency": "USD" },
+    "usedPercent": 26.5125,
+    "projectedTotal": { "minorUnits": 74200, "currency": "USD" },
+    "status": "ok"
+  },
+  "alerts": [],
+  "watchSummary": {
+    "todayUsedPercent": 24.8,
+    "weekUsedPercent": 28.52,
+    "status": "ok"
+  }
+}

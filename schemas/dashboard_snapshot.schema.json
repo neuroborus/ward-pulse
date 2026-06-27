@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wardpulse.app/schemas/dashboard_snapshot.schema.json",
+  "title": "DashboardSnapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["generatedAt", "overallStatus", "accounts", "todayTotal", "weekTotal", "monthTotal", "alerts", "watchSummary"],
+  "properties": {
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "overallStatus": { "$ref": "#/$defs/providerStatus" },
+    "accounts": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "todayTotal": { "$ref": "budget_state.schema.json" },
+    "weekTotal": { "$ref": "budget_state.schema.json" },
+    "monthTotal": { "$ref": "budget_state.schema.json" },
+    "alerts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "message"],
+        "properties": {
+          "severity": { "enum": ["info", "warning", "error"] },
+          "message": { "type": "string" }
+        }
+      }
+    },
+    "watchSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["todayUsedPercent", "weekUsedPercent", "status"],
+      "properties": {
+        "todayUsedPercent": { "type": ["number", "null"] },
+        "weekUsedPercent": { "type": ["number", "null"] },
+        "status": { "$ref": "#/$defs/providerStatus" }
+      }
+    }
+  },
+  "$defs": {
+    "providerStatus": {
+      "enum": ["ok", "warning", "error", "rateLimited", "authRequired", "stale", "unknown"]
+    }
+  }
+}

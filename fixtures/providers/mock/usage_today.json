@@ -1,0 +1,18 @@
+{
+  "provider": "mock",
+  "generatedAt": "2026-06-27T18:42:00Z",
+  "buckets": [
+    {
+      "startAt": "2026-06-27T00:00:00Z",
+      "endAt": "2026-06-27T18:42:00Z",
+      "cost": {
+        "minorUnits": 1240,
+        "currency": "USD"
+      },
+      "inputTokens": 120000,
+      "outputTokens": 42000,
+      "requests": 186,
+      "model": "mock-fast"
+    }
+  ]
+}

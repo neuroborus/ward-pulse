@@ -1,0 +1,10 @@
+name: Watch Face
+
+on:
+  workflow_dispatch:
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "TODO: enable WFF build and validation during Phase 6."

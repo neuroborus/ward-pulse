@@ -1,0 +1,53 @@
+# Local state
+.env
+.env.*
+!.env.example
+*.local
+*.log
+
+# Rust
+target/
+debug/
+**/*.rs.bk
+*.pdb
+**/mutants.out*/
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+coverage/
+
+# Android / Gradle
+.gradle/
+**/build/
+local.properties
+captures/
+*.apk
+*.aab
+*.ap_
+
+# IDEs
+.idea/
+.idea_modules/
+.vscode/
+*.iml
+*.iws
+out/
+cmake-build-*/
+atlassian-ide-plugin.xml
+http-client.private.env.json
+com_crashlytics_export_strings.xml
+crashlytics.properties
+crashlytics-build.properties
+fabric.properties
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Generated bindings are reproducible. Keep directory placeholders.
+bindings/**/generated/*
+!bindings/**/generated/.gitkeep

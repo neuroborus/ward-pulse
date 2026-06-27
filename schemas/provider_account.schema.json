@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wardpulse.app/schemas/provider_account.schema.json",
+  "title": "ProviderAccount",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "provider", "displayName", "enabled"],
+  "properties": {
+    "id": { "type": "string" },
+    "provider": { "enum": ["openai", "codex", "claude", "cursor", "mock"] },
+    "displayName": { "type": "string" },
+    "workspaceName": { "type": ["string", "null"] },
+    "maskedCredential": { "type": ["string", "null"] },
+    "enabled": { "type": "boolean" },
+    "budget": { "type": ["object", "null"] }
+  }
+}
