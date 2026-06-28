@@ -897,24 +897,19 @@ Recommended model:
 ```text
 Repository: public
 Source code: open source
+Source license: Apache-2.0
 Brand/assets: not open source by default
 Google Play build: paid app
 Freemium: not planned for the first release
 Subscription: not planned for the first release
-Self-build: allowed according to the chosen source license
+Self-build: allowed under Apache-2.0
 ```
 
 ### Source code license
 
-The source code license is intentionally not finalized yet. The repository should make the chosen license explicit before the first public release.
-
-Possible directions:
-
-- Apache-2.0 or MIT for permissive adoption;
-- GPLv3/AGPLv3 if copyleft is desired;
-- dual-license if commercial control becomes important.
-
-The chosen source license should apply to code and documentation only unless another file or directory states otherwise.
+The source license is Apache-2.0. It applies to source code, documentation,
+schemas, fixtures, and tooling unless another file or directory states
+otherwise.
 
 ### Brand and asset license
 
@@ -949,7 +944,7 @@ Reason:
 Recommended repository convention:
 
 ```text
-LICENSE                       # source code license
+LICENSE                       # Apache-2.0 source license
 TRADEMARKS.md                 # WardPulse name/logo/store identity rules
 THIRD_PARTY_NOTICES.md         # third-party licenses and attributions
 brand/README.md               # brand asset usage notes
@@ -960,7 +955,7 @@ brand/store/                  # Play Store graphics and copy drafts
 Default rule:
 
 ```text
-You may study, build, and modify the source code under the source license.
+You may study, build, and modify the source code under Apache-2.0.
 You may not publish an app, fork, store listing, website, or package using the WardPulse name, logo, icon, or confusingly similar branding without explicit permission.
 ```
 
@@ -1015,7 +1010,7 @@ Deliverables:
 - Wear OS app stub;
 - WFF module stub;
 - fixtures folder;
-- initial license/brand/trademark placeholders;
+- Apache-2.0 license, brand boundary, and trademark baseline;
 - CI skeleton.
 
 Useful commands:
@@ -1183,8 +1178,8 @@ Deliverables:
 - data deletion;
 - privacy policy draft;
 - legal disclaimer;
-- source license draft;
-- trademark/brand asset notice draft;
+- source license scope review;
+- trademark/brand asset notice review;
 - paid Google Play distribution notes;
 - Play Store internal testing build;
 - real device smoke tests.
@@ -1346,7 +1341,7 @@ The first useful pull request should contain:
 
 ```text
 DEVELOPMENT_PLAN.md
-LICENSE / TRADEMARKS.md placeholders
+LICENSE / TRADEMARKS.md baseline
 Rust workspace
 mock provider fixtures
 DashboardSnapshot model

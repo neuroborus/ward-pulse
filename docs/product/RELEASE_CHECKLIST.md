@@ -36,4 +36,7 @@ This checklist is a gate, not a schedule.
 - App includes the independent-product disclaimer.
 - Privacy policy draft exists.
 - Data deletion flow exists.
+- Apache-2.0 license scope and Rust package metadata are still accurate.
+- WardPulse trademark and brand asset boundaries are documented.
+- Third-party notices are current for bundled dependencies and assets.
 - No credentials or sensitive provider payloads appear in logs.

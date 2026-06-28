@@ -15,12 +15,15 @@ This repository is intentionally organized as one product monorepo with separate
 - `schemas/` contains shared JSON schemas for snapshots, accounts, usage buckets, and budgets.
 - `fixtures/` contains sanitized provider fixtures and stable dashboard snapshots.
 - `bindings/` contains generated and hand-written platform binding wrappers.
+- `brand/` contains protected product identity assets and store artwork placeholders.
 - `docs/` contains product, architecture, security, and release documentation.
 - `tools/` contains local automation for code generation, fixture validation, and Android Rust builds.
 
 ## Current Phase
 
-The repository is at Phase 0: foundation and structure. Platform projects are represented as idiomatic shells, not generated app projects yet. That keeps the first commit focused on ownership boundaries and avoids generated Flutter or Gradle noise before the core model stabilizes.
+Phase 0 is closed: the repository foundation, documentation gate, Rust workspace, app shells, schemas, fixtures, CI placeholders, and legal/brand baseline are in place.
+
+The next implementation track is Phase 1: Rust core with mock data, fixture loading, golden snapshot tests, and a CLI that prints stable `DashboardSnapshot` JSON.
 
 ## Useful Commands
 
@@ -49,3 +52,9 @@ cargo test --workspace
 Start with [docs/README.md](docs/README.md). It is the documentation index and project gate. The original development plan lives at [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md).
 
 Repository-wide working agreements for agents and humans live in [AGENTS.md](AGENTS.md).
+
+## License
+
+WardPulse source code, docs, schemas, fixtures, and tooling are licensed under the [Apache License 2.0](LICENSE) unless a file explicitly says otherwise.
+
+The Apache-2.0 license does not grant rights to the WardPulse name, logo, app icon, watch face identity, store listings, or other product branding. Brand and product identity rules live in [TRADEMARKS.md](TRADEMARKS.md) and [brand/README.md](brand/README.md).
