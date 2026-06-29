@@ -54,3 +54,14 @@ pub fn mock_provider_snapshot(account_id: impl Into<String>) -> ProviderSnapshot
         last_error: None,
     }
 }
+
+pub fn mock_provider_budget_warning_snapshot(account_id: impl Into<String>) -> ProviderSnapshot {
+    let mut snapshot = mock_provider_snapshot(account_id);
+    snapshot.today = calculate_budget_state(
+        BudgetPeriod::Today,
+        Some(usd(4_500)),
+        Some(usd(5_000)),
+        None,
+    );
+    snapshot
+}

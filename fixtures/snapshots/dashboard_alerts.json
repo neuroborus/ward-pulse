@@ -1,38 +1,169 @@
 {
   "generatedAt": "2026-06-27T18:42:00Z",
   "overallStatus": "warning",
-  "accounts": [],
+  "accounts": [
+    {
+      "accountId": "mock-local",
+      "provider": "mock",
+      "status": "ok",
+      "today": {
+        "period": "today",
+        "spent": {
+          "minorUnits": 4500,
+          "currency": "USD"
+        },
+        "limit": {
+          "minorUnits": 5000,
+          "currency": "USD"
+        },
+        "remaining": {
+          "minorUnits": 500,
+          "currency": "USD"
+        },
+        "usedPercent": 90.0,
+        "projectedTotal": null,
+        "status": "warning"
+      },
+      "week": {
+        "period": "week",
+        "spent": {
+          "minorUnits": 7130,
+          "currency": "USD"
+        },
+        "limit": {
+          "minorUnits": 25000,
+          "currency": "USD"
+        },
+        "remaining": {
+          "minorUnits": 17870,
+          "currency": "USD"
+        },
+        "usedPercent": 28.52,
+        "projectedTotal": {
+          "minorUnits": 22800,
+          "currency": "USD"
+        },
+        "status": "ok"
+      },
+      "month": {
+        "period": "month",
+        "spent": {
+          "minorUnits": 21210,
+          "currency": "USD"
+        },
+        "limit": {
+          "minorUnits": 80000,
+          "currency": "USD"
+        },
+        "remaining": {
+          "minorUnits": 58790,
+          "currency": "USD"
+        },
+        "usedPercent": 26.5125,
+        "projectedTotal": {
+          "minorUnits": 74200,
+          "currency": "USD"
+        },
+        "status": "ok"
+      },
+      "credits": [],
+      "buckets": [
+        {
+          "startAt": "2026-06-27T00:00:00Z",
+          "endAt": "2026-06-27T18:42:00Z",
+          "cost": {
+            "minorUnits": 1240,
+            "currency": "USD"
+          },
+          "inputTokens": 120000,
+          "outputTokens": 42000,
+          "cachedTokens": null,
+          "requests": 186,
+          "model": "mock-fast",
+          "project": null,
+          "user": null
+        }
+      ],
+      "modelBreakdown": [
+        {
+          "model": "mock-fast",
+          "cost": {
+            "minorUnits": 810,
+            "currency": "USD"
+          },
+          "inputTokens": 120000,
+          "outputTokens": 42000,
+          "requests": 186
+        }
+      ],
+      "lastSuccessfulSyncAt": "2026-06-27T18:42:00Z",
+      "lastError": null
+    }
+  ],
   "todayTotal": {
     "period": "today",
-    "spent": { "minorUnits": 4500, "currency": "USD" },
-    "limit": { "minorUnits": 5000, "currency": "USD" },
-    "remaining": { "minorUnits": 500, "currency": "USD" },
+    "spent": {
+      "minorUnits": 4500,
+      "currency": "USD"
+    },
+    "limit": {
+      "minorUnits": 5000,
+      "currency": "USD"
+    },
+    "remaining": {
+      "minorUnits": 500,
+      "currency": "USD"
+    },
     "usedPercent": 90.0,
     "projectedTotal": null,
     "status": "warning"
   },
   "weekTotal": {
     "period": "week",
-    "spent": { "minorUnits": 7130, "currency": "USD" },
-    "limit": { "minorUnits": 25000, "currency": "USD" },
-    "remaining": { "minorUnits": 17870, "currency": "USD" },
+    "spent": {
+      "minorUnits": 7130,
+      "currency": "USD"
+    },
+    "limit": {
+      "minorUnits": 25000,
+      "currency": "USD"
+    },
+    "remaining": {
+      "minorUnits": 17870,
+      "currency": "USD"
+    },
     "usedPercent": 28.52,
-    "projectedTotal": { "minorUnits": 22800, "currency": "USD" },
+    "projectedTotal": {
+      "minorUnits": 22800,
+      "currency": "USD"
+    },
     "status": "ok"
   },
   "monthTotal": {
     "period": "month",
-    "spent": { "minorUnits": 21210, "currency": "USD" },
-    "limit": { "minorUnits": 80000, "currency": "USD" },
-    "remaining": { "minorUnits": 58790, "currency": "USD" },
+    "spent": {
+      "minorUnits": 21210,
+      "currency": "USD"
+    },
+    "limit": {
+      "minorUnits": 80000,
+      "currency": "USD"
+    },
+    "remaining": {
+      "minorUnits": 58790,
+      "currency": "USD"
+    },
     "usedPercent": 26.5125,
-    "projectedTotal": { "minorUnits": 74200, "currency": "USD" },
+    "projectedTotal": {
+      "minorUnits": 74200,
+      "currency": "USD"
+    },
     "status": "ok"
   },
   "alerts": [
     {
       "severity": "warning",
-      "message": "Mock usage is above the warning threshold."
+      "message": "Today budget is above the warning threshold."
     }
   ],
   "watchSummary": {
