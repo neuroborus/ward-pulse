@@ -58,5 +58,6 @@ mod tests {
         assert!(actual.get("weekTotal").is_some());
         assert!(actual.get("monthTotal").is_some());
         assert!(actual.get("watchSummary").is_some());
+        assert!(actual.pointer("/accounts/0/credits/0").is_some());
     }
 }
