@@ -21,9 +21,7 @@ This repository is intentionally organized as one product monorepo with separate
 
 ## Current Phase
 
-Phase 0 is closed: the repository foundation, documentation gate, Rust workspace, app shells, schemas, fixtures, CI placeholders, and legal/brand baseline are in place.
-
-The next implementation track is Phase 1: Rust core with mock data, fixture loading, golden snapshot tests, and a CLI that prints stable `DashboardSnapshot` JSON.
+Phase 1 is in progress: Rust core models, mock provider data, golden snapshot tests, and stable `DashboardSnapshot` JSON are the active implementation track.
 
 ## Useful Commands
 
@@ -33,6 +31,8 @@ Install `just` if you want the command shortcuts.
 just test-core
 just lint-core
 just check-core
+just snapshot-core
+just validate-fixtures
 just gen-bindings
 just run-phone
 just run-wear
@@ -45,6 +45,13 @@ Direct Rust commands work from `core/`:
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo run --quiet -p ward-pulse-cli
+```
+
+Fixture validation runs from the repository root:
+
+```sh
+python3 tools/validate-fixtures/validate_json.py
 ```
 
 ## Documentation

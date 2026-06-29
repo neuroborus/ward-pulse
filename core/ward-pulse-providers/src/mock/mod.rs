@@ -1,6 +1,6 @@
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
-    BudgetPeriod, ModelUsage, Money, ProviderKind, ProviderSnapshot, ProviderStatus,
+    BudgetPeriod, ModelUsage, Money, ProviderKind, ProviderSnapshot, ProviderStatus, UsageBucket,
 };
 
 fn usd(cents: i64) -> Money {
@@ -31,7 +31,18 @@ pub fn mock_provider_snapshot(account_id: impl Into<String>) -> ProviderSnapshot
             Some(usd(74_200)),
         ),
         credits: Vec::new(),
-        buckets: Vec::new(),
+        buckets: vec![UsageBucket {
+            start_at: "2026-06-27T00:00:00Z".into(),
+            end_at: "2026-06-27T18:42:00Z".into(),
+            cost: Some(usd(1_240)),
+            input_tokens: Some(120_000),
+            output_tokens: Some(42_000),
+            cached_tokens: None,
+            requests: Some(186),
+            model: Some("mock-fast".to_string()),
+            project: None,
+            user: None,
+        }],
         model_breakdown: vec![ModelUsage {
             model: "mock-fast".to_string(),
             cost: Some(usd(810)),

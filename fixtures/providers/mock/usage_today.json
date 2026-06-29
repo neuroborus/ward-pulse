@@ -11,8 +11,11 @@
       },
       "inputTokens": 120000,
       "outputTokens": 42000,
+      "cachedTokens": null,
       "requests": 186,
-      "model": "mock-fast"
+      "model": "mock-fast",
+      "project": null,
+      "user": null
     }
   ]
 }

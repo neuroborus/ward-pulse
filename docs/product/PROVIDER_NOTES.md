@@ -5,7 +5,7 @@ Provider integrations should be added one at a time. The initial implementation 
 ## Initial Order
 
 1. Mock provider.
-2. OpenAI / Codex, if usage and cost reporting is available for the target account type.
+2. OpenAI, including Codex usage if OpenAI reporting exposes it for the target account type.
 3. Claude.
 4. Cursor.
 

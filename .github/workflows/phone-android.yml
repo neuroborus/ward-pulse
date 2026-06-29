@@ -7,4 +7,5 @@ jobs:
   placeholder:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "TODO: enable flutter analyze, flutter test, and debug APK build during Phase 2."
+      - run: |
+          echo "TODO: enable flutter analyze, flutter test, and debug APK build during Phase 2."

@@ -4,7 +4,18 @@
   "title": "UsageBucket",
   "type": "object",
   "additionalProperties": false,
-  "required": ["startAt", "endAt"],
+  "required": [
+    "startAt",
+    "endAt",
+    "cost",
+    "inputTokens",
+    "outputTokens",
+    "cachedTokens",
+    "requests",
+    "model",
+    "project",
+    "user"
+  ],
   "properties": {
     "startAt": { "type": "string", "format": "date-time" },
     "endAt": { "type": "string", "format": "date-time" },

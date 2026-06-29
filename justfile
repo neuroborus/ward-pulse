@@ -12,10 +12,16 @@ lint-core:
 test-core:
     cd core && cargo test --workspace
 
-check-core:
+check-core: validate-fixtures
     cd core && cargo fmt --all -- --check
     cd core && cargo clippy --workspace --all-targets -- -D warnings
     cd core && cargo test --workspace
+
+snapshot-core:
+    @cd core && cargo run --quiet -p ward-pulse-cli
+
+validate-fixtures:
+    python3 tools/validate-fixtures/validate_json.py
 
 gen-bindings:
     @echo "TODO: generate Dart/Kotlin/Swift bindings from core/ward-pulse-ffi."
@@ -29,5 +35,4 @@ run-wear:
 build-watchface:
     @echo "TODO: build the WFF package after apps/watchface_wff is generated."
 
-test-all:
-    just check-core
+test-all: check-core

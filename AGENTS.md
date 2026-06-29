@@ -30,7 +30,11 @@ cd core && cargo clippy --workspace --all-targets -- -D warnings
 cd core && cargo test --workspace
 ```
 
-After schema or fixture changes, validate JSON syntax and keep examples sanitized.
+After schema or fixture changes, validate JSON syntax and keep examples sanitized:
+
+```bash
+just validate-fixtures
+```
 
 After local skill changes, run:
 

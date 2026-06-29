@@ -7,4 +7,5 @@ jobs:
   placeholder:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "TODO: enable Wear OS Gradle test and assembleDebug during Phase 4."
+      - run: |
+          echo "TODO: enable Wear OS Gradle test and assembleDebug during Phase 4."

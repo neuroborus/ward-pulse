@@ -22,7 +22,7 @@ Build the Android ecosystem version of WardPulse: a local-first usage dashboard 
 
 The Android product should let a developer or small team monitor usage, cost, limits, credits, provider status, and warning signals across selected providers:
 
-- OpenAI / Codex;
+- OpenAI, including Codex usage where OpenAI reporting exposes it;
 - Claude;
 - Cursor.
 
@@ -152,12 +152,13 @@ Android app display name: WardPulse
 ```text
 ward-pulse/
   README.md
-  DEVELOPMENT_PLAN.md
   justfile
   .gitignore
   .editorconfig
 
   docs/
+    README.md
+    DEVELOPMENT_PLAN.md
     product/
       ANDROID_GOALS.md
       PROVIDER_NOTES.md
@@ -333,7 +334,6 @@ Suggested core model:
 ```rust
 enum ProviderKind {
     OpenAi,
-    Codex,
     Claude,
     Cursor,
     Mock,
@@ -797,7 +797,7 @@ Add one real provider first. Prefer the provider with the clearest usage/cost re
 Recommended order:
 
 ```text
-1. OpenAI / Codex
+1. OpenAI, including Codex usage where OpenAI reporting exposes it
 2. Claude
 3. Cursor
 ```
@@ -870,7 +870,7 @@ Claude Cursor Dashboard
 Official OpenAI Usage Watch
 ```
 
-Provider names such as Codex, Claude, and Cursor can be used descriptively as integration labels, for example:
+Provider and product names such as Codex, Claude, and Cursor can be used descriptively as integration labels, for example:
 
 ```text
 Connect Codex
@@ -1003,7 +1003,7 @@ Deliverables:
 
 - monorepo skeleton;
 - root README;
-- this `DEVELOPMENT_PLAN.md`;
+- this `docs/DEVELOPMENT_PLAN.md`;
 - `justfile` with common commands;
 - Rust workspace;
 - Flutter app stub;
@@ -1340,7 +1340,7 @@ Create the monorepo skeleton and implement Phase 1 with mock data.
 The first useful pull request should contain:
 
 ```text
-DEVELOPMENT_PLAN.md
+docs/DEVELOPMENT_PLAN.md
 LICENSE / TRADEMARKS.md baseline
 Rust workspace
 mock provider fixtures
