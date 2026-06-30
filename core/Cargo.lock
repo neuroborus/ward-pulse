@@ -120,6 +120,8 @@ dependencies = [
 name = "ward-pulse-providers"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
  "ward-pulse-core",
 ]
 

@@ -101,7 +101,7 @@
         {
           "model": "mock-fast",
           "cost": {
-            "minorUnits": 810,
+            "minorUnits": 1240,
             "currency": "USD"
           },
           "inputTokens": 120000,
