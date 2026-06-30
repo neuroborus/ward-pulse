@@ -12,6 +12,16 @@ lint-core:
 test-core:
     cd core && cargo test --workspace
 
+lint-phone:
+    cd apps/phone_flutter && flutter analyze
+
+test-phone:
+    cd apps/phone_flutter && flutter test
+
+check-phone:
+    just lint-phone
+    just test-phone
+
 check-core: validate-fixtures
     cd core && cargo fmt --all -- --check
     cd core && cargo clippy --workspace --all-targets -- -D warnings
@@ -27,12 +37,12 @@ gen-bindings:
     @echo "TODO: generate Dart/Kotlin/Swift bindings from core/ward-pulse-ffi."
 
 run-phone:
-    @echo "TODO: run the Flutter phone app after apps/phone_flutter is generated."
+    @echo "TODO: enable flutter run after Flutter Android project files are added."
 
 run-wear:
-    @echo "TODO: run the Wear OS app after apps/wear_android is generated."
+    @echo "TODO: run the Wear OS app after Wear OS project files are added."
 
 build-watchface:
-    @echo "TODO: build the WFF package after apps/watchface_wff is generated."
+    @echo "TODO: build the WFF package after WFF project files are added."
 
-test-all: check-core
+test-all: check-core check-phone

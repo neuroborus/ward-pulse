@@ -1,0 +1,182 @@
+{
+  "generatedAt": "2026-06-27T18:42:00Z",
+  "overallStatus": "ok",
+  "accounts": [
+    {
+      "accountId": "mock-local",
+      "provider": "mock",
+      "status": "ok",
+      "today": {
+        "period": "today",
+        "spent": {
+          "minorUnits": 1240,
+          "currency": "USD"
+        },
+        "limit": {
+          "minorUnits": 5000,
+          "currency": "USD"
+        },
+        "remaining": {
+          "minorUnits": 3760,
+          "currency": "USD"
+        },
+        "usedPercent": 24.8,
+        "projectedTotal": null,
+        "status": "ok"
+      },
+      "week": {
+        "period": "week",
+        "spent": {
+          "minorUnits": 7130,
+          "currency": "USD"
+        },
+        "limit": {
+          "minorUnits": 25000,
+          "currency": "USD"
+        },
+        "remaining": {
+          "minorUnits": 17870,
+          "currency": "USD"
+        },
+        "usedPercent": 28.52,
+        "projectedTotal": {
+          "minorUnits": 22800,
+          "currency": "USD"
+        },
+        "status": "ok"
+      },
+      "month": {
+        "period": "month",
+        "spent": {
+          "minorUnits": 21210,
+          "currency": "USD"
+        },
+        "limit": {
+          "minorUnits": 80000,
+          "currency": "USD"
+        },
+        "remaining": {
+          "minorUnits": 58790,
+          "currency": "USD"
+        },
+        "usedPercent": 26.5125,
+        "projectedTotal": {
+          "minorUnits": 74200,
+          "currency": "USD"
+        },
+        "status": "ok"
+      },
+      "credits": [
+        {
+          "remaining": {
+            "minorUnits": 1875,
+            "currency": "USD"
+          },
+          "granted": {
+            "minorUnits": 2500,
+            "currency": "USD"
+          },
+          "expiresAt": "2026-07-31T00:00:00Z",
+          "source": "provider"
+        }
+      ],
+      "buckets": [
+        {
+          "startAt": "2026-06-27T00:00:00Z",
+          "endAt": "2026-06-27T18:42:00Z",
+          "cost": {
+            "minorUnits": 1240,
+            "currency": "USD"
+          },
+          "inputTokens": 120000,
+          "outputTokens": 42000,
+          "cachedTokens": null,
+          "requests": 186,
+          "model": "mock-fast",
+          "project": null,
+          "user": null
+        }
+      ],
+      "modelBreakdown": [
+        {
+          "model": "mock-fast",
+          "cost": {
+            "minorUnits": 1240,
+            "currency": "USD"
+          },
+          "inputTokens": 120000,
+          "outputTokens": 42000,
+          "requests": 186
+        }
+      ],
+      "lastSuccessfulSyncAt": "2026-06-27T18:42:00Z",
+      "lastError": null
+    }
+  ],
+  "todayTotal": {
+    "period": "today",
+    "spent": {
+      "minorUnits": 1240,
+      "currency": "USD"
+    },
+    "limit": {
+      "minorUnits": 5000,
+      "currency": "USD"
+    },
+    "remaining": {
+      "minorUnits": 3760,
+      "currency": "USD"
+    },
+    "usedPercent": 24.8,
+    "projectedTotal": null,
+    "status": "ok"
+  },
+  "weekTotal": {
+    "period": "week",
+    "spent": {
+      "minorUnits": 7130,
+      "currency": "USD"
+    },
+    "limit": {
+      "minorUnits": 25000,
+      "currency": "USD"
+    },
+    "remaining": {
+      "minorUnits": 17870,
+      "currency": "USD"
+    },
+    "usedPercent": 28.52,
+    "projectedTotal": {
+      "minorUnits": 22800,
+      "currency": "USD"
+    },
+    "status": "ok"
+  },
+  "monthTotal": {
+    "period": "month",
+    "spent": {
+      "minorUnits": 21210,
+      "currency": "USD"
+    },
+    "limit": {
+      "minorUnits": 80000,
+      "currency": "USD"
+    },
+    "remaining": {
+      "minorUnits": 58790,
+      "currency": "USD"
+    },
+    "usedPercent": 26.5125,
+    "projectedTotal": {
+      "minorUnits": 74200,
+      "currency": "USD"
+    },
+    "status": "ok"
+  },
+  "alerts": [],
+  "watchSummary": {
+    "todayUsedPercent": 24.8,
+    "weekUsedPercent": 28.52,
+    "status": "ok"
+  }
+}

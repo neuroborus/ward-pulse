@@ -2,7 +2,7 @@
 
 Flutter phone app shell for the primary WardPulse dashboard.
 
-This directory is intentionally light until the Rust dashboard model and mock fixtures settle. Generate or expand the Flutter project here when Phase 2 starts.
+This directory is intentionally light while Phase 2 starts. The current app shell loads a sanitized mock dashboard asset and renders the first phone dashboard, provider list, provider detail, and settings surfaces.
 
 ## Ownership
 

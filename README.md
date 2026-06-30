@@ -21,7 +21,7 @@ This repository is intentionally organized as one product monorepo with separate
 
 ## Current Phase
 
-Phase 1 is in progress: Rust core models, mock provider data, golden snapshot tests, and stable `DashboardSnapshot` JSON are the active implementation track.
+Phase 2 is starting: the Rust mock dashboard is stable enough for the Flutter phone shell to render local mock dashboard data.
 
 ## Useful Commands
 
@@ -31,6 +31,7 @@ Install `just` if you want the command shortcuts.
 just test-core
 just lint-core
 just check-core
+just check-phone
 just snapshot-core
 just validate-fixtures
 just gen-bindings
