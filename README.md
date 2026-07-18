@@ -14,14 +14,17 @@ This repository is intentionally organized as one product monorepo with separate
 - `apps/watchface_wff/` contains the Watch Face Format package shell.
 - `schemas/` contains shared JSON schemas for snapshots, accounts, usage buckets, and budgets.
 - `fixtures/` contains sanitized provider fixtures and stable dashboard snapshots.
-- `bindings/` contains generated and hand-written platform binding wrappers.
+- `bindings/` contains platform binding wrappers.
 - `brand/` contains protected product identity assets and store artwork placeholders.
 - `docs/` contains product, architecture, security, and release documentation.
 - `tools/` contains local automation for code generation, fixture validation, and Android Rust builds.
 
 ## Current Phase
 
-Phase 2 is complete: the Flutter phone shell has a reviewed Android runner, green automated checks, a debug APK build, and verified dashboard, chart, and provider navigation on the canonical emulator. Phase 3 starts the Rust-to-Flutter bridge.
+Phase 3 is complete: the Flutter phone app loads its dashboard from the Rust core through a
+thin JSON FFI bridge. The golden snapshot, UI-safe error mapping, Android libraries, debug
+APK packaging, and emulator runtime path are verified. Phase 4 starts the Wear OS compact
+app.
 
 ## Useful Commands
 
@@ -34,7 +37,7 @@ just check-core
 just check-phone
 just snapshot-core
 just validate-fixtures
-just gen-bindings
+just build-android-rust
 just run-phone
 just run-wear
 just build-watchface

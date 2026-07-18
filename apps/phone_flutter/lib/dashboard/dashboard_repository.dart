@@ -1,6 +1,8 @@
-import 'package:flutter/services.dart';
+import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 
 import 'dashboard_models.dart';
+
+typedef DashboardJsonLoader = String Function();
 
 abstract class DashboardRepository {
   const DashboardRepository();
@@ -8,17 +10,27 @@ abstract class DashboardRepository {
   Future<DashboardSnapshot> load();
 }
 
-class AssetDashboardRepository extends DashboardRepository {
-  const AssetDashboardRepository({
-    this.assetPath = 'assets/mock/dashboard_today.json',
+final class DashboardLoadException implements Exception {
+  const DashboardLoadException();
+
+  @override
+  String toString() => 'Dashboard data is unavailable.';
+}
+
+final class RustDashboardRepository extends DashboardRepository {
+  const RustDashboardRepository({
+    this.loadDashboardJson = loadDashboardSnapshotJson,
   });
 
-  final String assetPath;
+  final DashboardJsonLoader loadDashboardJson;
 
   @override
   Future<DashboardSnapshot> load() async {
-    final source = await rootBundle.loadString(assetPath);
-    return DashboardSnapshot.fromJsonString(source);
+    try {
+      return DashboardSnapshot.fromJsonString(loadDashboardJson());
+    } catch (_) {
+      throw const DashboardLoadException();
+    }
   }
 }
 

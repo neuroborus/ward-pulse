@@ -4,11 +4,19 @@ on:
   push:
     paths:
       - "apps/phone_flutter/**"
+      - "bindings/dart/**"
+      - "core/**"
+      - "fixtures/**"
+      - "tools/build-android-rust/**"
       - "justfile"
       - ".github/workflows/phone-android.yml"
   pull_request:
     paths:
       - "apps/phone_flutter/**"
+      - "bindings/dart/**"
+      - "core/**"
+      - "fixtures/**"
+      - "tools/build-android-rust/**"
       - "justfile"
       - ".github/workflows/phone-android.yml"
   workflow_dispatch:
@@ -20,7 +28,7 @@ jobs:
   phone-android:
     name: Analyze, test, and build
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: apps/phone_flutter
@@ -36,7 +44,16 @@ jobs:
           channel: stable
           flutter-version: 3.44.6
           cache: true
-      - run: flutter pub get
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+      - run: sdkmanager "ndk;29.0.14206865"
+        working-directory: .
+      - run: cargo install cargo-ndk --version 4.1.2 --locked
+        working-directory: .
+      - run: flutter pub get --enforce-lockfile
       - run: flutter analyze
       - run: flutter test
+      - run: tools/build-android-rust/build.sh
+        working-directory: .
       - run: flutter build apk --debug

@@ -204,7 +204,6 @@ ward-pulse/
       Cargo.toml
       src/
         lib.rs
-      uniffi.toml
 
     ward-pulse-cli/
       Cargo.toml
@@ -247,8 +246,10 @@ ward-pulse/
   bindings/
     dart/
       README.md
-      generated/
-      wrappers/
+      pubspec.yaml
+      lib/
+        ward_pulse_bindings.dart
+        src/
 
     kotlin/
       README.md
@@ -1017,7 +1018,7 @@ Useful commands:
 
 ```text
 just test-core
-just gen-bindings
+just build-android-rust
 just run-phone
 just run-wear
 just build-watchface
@@ -1070,6 +1071,8 @@ provider detail pages are reachable
 ```
 
 ### Phase 3 — Rust ↔ Flutter bridge
+
+Status: complete as of 2026-07-18.
 
 Deliverables:
 
@@ -1335,18 +1338,21 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Start Phase 3 with an explicitly selected and versioned Rust-to-Flutter bridge.
+Start Phase 4 with the minimal Wear OS compact app.
 
-Phase 2 passed its phone-dashboard acceptance gate on 2026-07-18. The Android runner builds a debug APK, the app starts on the canonical emulator, the dashboard and usage-history chart render, provider details are reachable, and phone CI runs analyze, test, and build checks. Phase 3 should:
+Phase 3 passed its Rust-to-Flutter acceptance gate on 2026-07-18. WardPulse uses a
+hand-written JSON C ABI, `cargo-ndk 4.1.2`, Android NDK r29, and the `arm64-v8a` and
+`x86_64` ABIs. The Flutter app loads the Rust-generated snapshot at runtime, bridge errors
+map to the UI-safe unavailable state, the snapshot matches the golden fixture, and the
+debug APK runs on the canonical emulator. Phase 4 should:
 
 ```text
-select and record the MVP bridge approach
-pin cargo-ndk and install the required Android Rust targets
-build the Rust core for the Android emulator and device ABIs
-add the minimal Dart wrapper around the Rust boundary
-replace the packaged mock snapshot with a Rust-generated runtime snapshot
-map bridge failures to UI-safe error states
-verify the Rust-generated snapshot against the golden fixture
+select and pin the minimal Wear OS Gradle and Compose baseline
+create the Wear OS app only within the existing apps/wear_android boundary
+add Today, Week, Providers, Alerts, and stale-data states
+persist the sanitized mock watch summary locally
+verify readable layouts on round and square previews or emulators
 ```
 
-For MVP speed, prefer the smallest stable boundary that preserves Rust ownership of domain logic. A thin JSON boundary remains acceptable before optimizing or expanding the FFI interface.
+Keep provider credentials and sync on the phone. Phase 4 consumes a local mock summary;
+phone-to-watch Data Layer transport remains Phase 5 work.

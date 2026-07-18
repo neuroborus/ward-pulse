@@ -9,7 +9,7 @@ import '../settings/settings_screen.dart';
 class WardPulseApp extends StatelessWidget {
   const WardPulseApp({
     super.key,
-    this.repository = const AssetDashboardRepository(),
+    this.repository = const RustDashboardRepository(),
   });
 
   final DashboardRepository repository;

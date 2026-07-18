@@ -1,14 +1,15 @@
 # Android Toolchain
 
 This document is the operational source of truth for the WardPulse Android development
-environment. It records the Phase 2 baseline, canonical SDK package names, local paths,
-verification commands, and later-phase tooling that is intentionally not installed yet.
+environment. It records the baseline through Phase 3, canonical SDK package names, local
+paths, verification commands, and later-phase tooling that is intentionally not installed
+yet.
 
 Last verified: **2026-07-18** on TUXEDO OS 24.04.4 LTS, x86_64.
 
 ## Current Readiness
 
-The command-line toolchain required for **Phase 2 — Flutter phone dashboard** is ready:
+The command-line toolchain required through **Phase 3 — Rust to Flutter bridge** is ready:
 
 - Flutter detects the Android SDK and reports the Android toolchain as healthy.
 - All Android SDK licenses are accepted.
@@ -19,9 +20,14 @@ The command-line toolchain required for **Phase 2 — Flutter phone dashboard** 
 - `flutter build apk --debug` produces the WardPulse debug APK.
 - The `app.wardpulse` runner starts on the canonical AVD and renders the dashboard,
   usage-history chart, provider list, and provider detail screen.
+- `cargo-ndk 4.1.2` and the Android Rust targets for `arm64-v8a` and `x86_64` are installed.
+- The Rust library builds with Android NDK r29 and is packaged into the Flutter APK for
+  both supported ABIs.
+- The phone app loads the golden dashboard snapshot from Rust at runtime and maps bridge
+  failures to the safe unavailable state.
 
-The Phase 2 phone-dashboard acceptance gate passed on **2026-07-18**. Phase 3 tooling is
-still intentionally incomplete until the Rust-to-Flutter bridge approach is selected.
+The Phase 2 phone-dashboard and Phase 3 Rust-bridge acceptance gates passed on
+**2026-07-18**.
 
 Chrome and Linux desktop warnings from `flutter doctor` are out of scope. WardPulse targets
 Android phone, Wear OS, and Watch Face Format in the current product plan.
@@ -44,11 +50,14 @@ Android phone, Wear OS, and Watch Face Format in the current product plan.
 | Android Gradle Plugin | 9.0.1 | Flutter Android runner |
 | Kotlin Gradle Plugin | 2.3.20 | Android host activity |
 | Android NDK | `ndk;28.2.13676358` | Flutter Android debug build |
-| Android NDK | `ndk;29.0.14206865` | Reserved for Phase 3 Rust bridge |
+| Android NDK | `ndk;29.0.14206865` | Rust Android library builds |
 | Android SDK CMake | 3.22.1 | Flutter Android debug build |
 | Host CMake | 3.31.6 | Available for later native build work |
-| Rust | 1.96.0 | Domain core and future Android library builds |
+| Rust | 1.96.0 | Domain core and Android library builds |
 | Cargo | 1.96.0 | Rust workspace |
+| cargo-ndk | 4.1.2 | Rust builds for Android ABIs |
+| Rust Android targets | `aarch64-linux-android`, `x86_64-linux-android` | Phone device and emulator libraries |
+| Dart `ffi` package | 2.2.0 | UTF-8 C ABI wrapper |
 | Git | 2.43.0 | Source control and Flutter SDK support |
 
 The Rust workspace declares Rust 1.75 as its minimum supported version. The newer local
@@ -68,6 +77,9 @@ Phone system image system-images;android-36;google_apis;x86_64
 Application ID:    app.wardpulse
 Flutter NDK:       ndk;28.2.13676358
 Rust bridge NDK:   ndk;29.0.14206865
+cargo-ndk:         4.1.2
+Phone Rust ABIs:   arm64-v8a, x86_64
+Rust targets:      aarch64-linux-android, x86_64-linux-android
 ```
 
 The shell environment belongs in `~/.profile` as single-line exports:
@@ -89,7 +101,7 @@ Do not install a separate Dart SDK. Use the Dart version bundled with Flutter. D
 a global Gradle distribution for project builds; let Flutter manage the generated Gradle
 Wrapper.
 
-## Reproducible Phase 2 Installation
+## Reproducible Android Installation
 
 ### Host packages and KVM
 
@@ -170,6 +182,22 @@ flutter precache --android
 flutter doctor --android-licenses
 ```
 
+### Rust Android bridge
+
+Install the pinned targets and build helper:
+
+```sh
+rustup target add aarch64-linux-android x86_64-linux-android
+cargo install cargo-ndk --version 4.1.2 --locked
+```
+
+Verify the installed bridge tooling:
+
+```sh
+cargo ndk --version
+rustup target list --installed
+```
+
 ## Phone AVD
 
 Create the canonical phone AVD:
@@ -221,15 +249,15 @@ Run WardPulse checks:
 
 ```sh
 just check-core
-cd apps/phone_flutter
-flutter pub get
-flutter analyze
-flutter test
+just check-phone
+just build-android-rust
 ```
 
-Run the Phase 2 Android acceptance checks:
+Run the phone Android acceptance checks:
 
 ```sh
+just build-android-rust
+cd apps/phone_flutter
 flutter build apk --debug
 flutter run
 ```
@@ -239,27 +267,8 @@ Do not hardcode `emulator-5554` in project automation; resolve the active device
 
 ## Later-Phase Gaps
 
-The full Android roadmap is not tool-complete yet. Install or select these only when their
-phase begins:
-
-### Phase 3 — Rust to Flutter bridge
-
-- Android NDK r29 is installed.
-- `cargo-ndk` is not installed or version-pinned yet.
-- Android Rust targets are not installed yet.
-- The binding generator is not selected yet; the plan permits UniFFI or a thin JSON bridge.
-
-After the bridge approach and tool version are recorded, add the required Rust targets:
-
-```sh
-rustup target add \
-  aarch64-linux-android \
-  armv7-linux-androideabi \
-  x86_64-linux-android
-```
-
-Do not install an unpinned `cargo-ndk` in project automation. Select a version when the
-Phase 3 build script is implemented, then record it here and in CI.
+The remaining Android roadmap is not tool-complete yet. Install or select these only when
+their phase begins:
 
 ### Phase 4 — Wear OS
 
@@ -305,3 +314,6 @@ After an update:
 - [Android Emulator acceleration](https://developer.android.com/studio/run/emulator-acceleration)
 - [Android SDK platform releases](https://developer.android.com/tools/releases/platforms)
 - [Android NDK downloads](https://developer.android.com/ndk/downloads)
+- [Rust Android platform support](https://doc.rust-lang.org/rustc/platform-support/android.html)
+- [`cargo-ndk` releases](https://github.com/bbqsrc/cargo-ndk/releases)
+- [Dart `ffi` package](https://pub.dev/packages/ffi)

@@ -33,10 +33,10 @@ snapshot-core:
 validate-fixtures:
     python3 tools/validate-fixtures/validate_json.py
 
-gen-bindings:
-    @echo "TODO: generate Dart/Kotlin/Swift bindings from core/ward-pulse-ffi."
+build-android-rust:
+    tools/build-android-rust/build.sh
 
-run-phone:
+run-phone: build-android-rust
     cd apps/phone_flutter && flutter run
 
 run-wear:

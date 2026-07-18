@@ -12,6 +12,10 @@ debug/
 *.pdb
 **/mutants.out*/
 
+# Python
+__pycache__/
+*.py[cod]
+
 # Flutter / Dart
 .dart_tool/
 .flutter-plugins

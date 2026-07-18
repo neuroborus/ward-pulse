@@ -113,7 +113,9 @@ dependencies = [
 name = "ward-pulse-ffi"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
  "ward-pulse-core",
+ "ward-pulse-providers",
 ]
 
 [[package]]
