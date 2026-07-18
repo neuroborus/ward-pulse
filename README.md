@@ -21,10 +21,9 @@ This repository is intentionally organized as one product monorepo with separate
 
 ## Current Phase
 
-Phase 3 is complete: the Flutter phone app loads its dashboard from the Rust core through a
-thin JSON FFI bridge. The golden snapshot, UI-safe error mapping, Android libraries, debug
-APK packaging, and emulator runtime path are verified. Phase 4 starts the Wear OS compact
-app.
+Phase 4 is complete: the Kotlin/Compose Wear OS app shows the compact dashboard, persists a
+sanitized mock summary, exposes stale state, and runs on the canonical round and square
+Wear OS emulators. Phase 5 adds phone-to-watch Data Layer sync.
 
 ## Useful Commands
 
@@ -39,6 +38,9 @@ just snapshot-core
 just validate-fixtures
 just build-android-rust
 just run-phone
+just check-wear
+just build-wear
+just test-wear-device
 just run-wear
 just build-watchface
 ```

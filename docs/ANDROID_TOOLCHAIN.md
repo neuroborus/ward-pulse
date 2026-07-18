@@ -1,7 +1,7 @@
 # Android Toolchain
 
 This document is the operational source of truth for the WardPulse Android development
-environment. It records the baseline through Phase 3, canonical SDK package names, local
+environment. It records the baseline through Phase 4, canonical SDK package names, local
 paths, verification commands, and later-phase tooling that is intentionally not installed
 yet.
 
@@ -9,7 +9,7 @@ Last verified: **2026-07-18** on TUXEDO OS 24.04.4 LTS, x86_64.
 
 ## Current Readiness
 
-The command-line toolchain required through **Phase 3 — Rust to Flutter bridge** is ready:
+The command-line toolchain required through **Phase 4 — Wear OS compact app** is ready:
 
 - Flutter detects the Android SDK and reports the Android toolchain as healthy.
 - All Android SDK licenses are accepted.
@@ -25,9 +25,14 @@ The command-line toolchain required through **Phase 3 — Rust to Flutter bridge
   both supported ABIs.
 - The phone app loads the golden dashboard snapshot from Rust at runtime and maps bridge
   failures to the safe unavailable state.
+- Android SDK Platform 37.1 is installed for the Wear compile SDK while target SDK remains
+  API 36.
+- The Wear OS 6.1 x86_64 system image and canonical round and square AVDs are installed.
+- The Wear app passes lint, builds its debug and instrumentation APKs, runs on both AVD
+  shapes, and passes its local-persistence tests on the round AVD.
 
-The Phase 2 phone-dashboard and Phase 3 Rust-bridge acceptance gates passed on
-**2026-07-18**.
+The Phase 2 phone-dashboard, Phase 3 Rust-bridge, and Phase 4 Wear-app acceptance gates
+passed on **2026-07-18**.
 
 Chrome and Linux desktop warnings from `flutter doctor` are out of scope. WardPulse targets
 Android phone, Wear OS, and Watch Face Format in the current product plan.
@@ -42,13 +47,22 @@ Android phone, Wear OS, and Watch Face Format in the current product plan.
 | OpenJDK / `javac` | 21.0.11 | Android builds and SDK tools |
 | Android SDK Command-line Tools | 20.0, bundle `14742923` | `sdkmanager` and `avdmanager` |
 | Android SDK Platform | `platforms;android-36`, revision 2 | Compile SDK baseline |
+| Android SDK Platform | `platforms;android-37.1`, revision 1 | Wear compile SDK |
 | Android SDK Build Tools | `build-tools;36.0.0` | Android build baseline |
 | Android SDK Platform Tools | 37.0.0 | `adb` |
 | Android Emulator | 36.6.11.0, build 15507667 | Phone emulator |
 | Android phone system image | `system-images;android-36;google_apis;x86_64`, revision 7 | Phone AVD |
+| Android Wear system image | `system-images;android-36.1;android-wear-signed;x86_64`, revision 1 | Wear OS 6.1 AVDs |
 | Gradle Wrapper | 9.1.0 | Flutter Android build |
 | Android Gradle Plugin | 9.0.1 | Flutter Android runner |
-| Kotlin Gradle Plugin | 2.3.20 | Android host activity |
+| Kotlin Gradle Plugin | 2.3.20 | Flutter Android host activity |
+| Wear Gradle Wrapper | 9.6.1 | Native Wear app build |
+| Wear Android Gradle Plugin | 9.3.0 | Native Wear app build |
+| Wear Kotlin Compose plugin | 2.3.21 | Compose compiler; Kotlin compilation is built into AGP |
+| Compose BOM | 2026.06.00 | Wear Compose runtime baseline |
+| Compose for Wear OS | 1.6.2 | Material 3 UI and preview tooling |
+| AndroidX Activity | 1.13.0 | Wear Compose activity host |
+| AndroidX Core | 1.19.0 | Android Kotlin extensions |
 | Android NDK | `ndk;28.2.13676358` | Flutter Android debug build |
 | Android NDK | `ndk;29.0.14206865` | Rust Android library builds |
 | Android SDK CMake | 3.22.1 | Flutter Android debug build |
@@ -74,7 +88,12 @@ Java home:         /usr/lib/jvm/java-21-openjdk-amd64
 Phone AVD:         wardpulse_phone_api36
 Phone platform:    android-36
 Phone system image system-images;android-36;google_apis;x86_64
+Wear compile SDK:  platforms;android-37.1
+Wear system image: system-images;android-36.1;android-wear-signed;x86_64
+Wear round AVD:    wardpulse_wear_round_api36_1
+Wear square AVD:   wardpulse_wear_square_api36_1
 Application ID:    app.wardpulse
+Wear application:  app.wardpulse.wear
 Flutter NDK:       ndk;28.2.13676358
 Rust bridge NDK:   ndk;29.0.14206865
 cargo-ndk:         4.1.2
@@ -98,8 +117,8 @@ hash -r
 ```
 
 Do not install a separate Dart SDK. Use the Dart version bundled with Flutter. Do not install
-a global Gradle distribution for project builds; let Flutter manage the generated Gradle
-Wrapper.
+a global Gradle distribution for project builds; use the committed wrapper in each Android
+project.
 
 ## Reproducible Android Installation
 
@@ -160,15 +179,17 @@ Review and accept the Android licenses interactively:
 sdkmanager --licenses
 ```
 
-Install the pinned Phase 2 packages and the Phase 3 NDK baseline:
+Install the pinned phone, bridge, and Wear packages:
 
 ```sh
 sdkmanager --sdk_root="$ANDROID_HOME" \
   "platform-tools" \
   "platforms;android-36" \
+  "platforms;android-37.1" \
   "build-tools;36.0.0" \
   "emulator" \
   "system-images;android-36;google_apis;x86_64" \
+  "system-images;android-36.1;android-wear-signed;x86_64" \
   "ndk;28.2.13676358" \
   "cmake;3.22.1" \
   "ndk;29.0.14206865"
@@ -228,6 +249,42 @@ flutter devices
 
 The expected Flutter device is an Android x64 emulator running Android 16 / API 36.
 
+## Wear OS AVDs
+
+Create the canonical small round and square Wear OS 6.1 AVDs:
+
+```sh
+printf 'no\n' | avdmanager create avd \
+  --name wardpulse_wear_round_api36_1 \
+  --package "system-images;android-36.1;android-wear-signed;x86_64" \
+  --device wearos_small_round \
+  --force
+
+printf 'no\n' | avdmanager create avd \
+  --name wardpulse_wear_square_api36_1 \
+  --package "system-images;android-36.1;android-wear-signed;x86_64" \
+  --device wearos_square \
+  --force
+```
+
+Run one Wear AVD at a time:
+
+```sh
+emulator @wardpulse_wear_round_api36_1
+emulator @wardpulse_wear_square_api36_1
+```
+
+With either AVD active, build, test, install, and start the app:
+
+```sh
+just check-wear
+just test-wear-device
+just run-wear
+```
+
+The app compiles against Android SDK 37.1 but targets API 36 and runs on the Wear OS 6.1 /
+API 36.1 image. Compile SDK and runtime system image versions are intentionally independent.
+
 ## Routine Verification
 
 Verify installed versions and packages:
@@ -251,6 +308,7 @@ Run WardPulse checks:
 just check-core
 just check-phone
 just build-android-rust
+just check-wear
 ```
 
 Run the phone Android acceptance checks:
@@ -262,24 +320,25 @@ flutter build apk --debug
 flutter run
 ```
 
+Run the Wear OS acceptance checks with one canonical Wear AVD active:
+
+```sh
+just check-wear
+just test-wear-device
+just run-wear
+```
+
 Do not hardcode `emulator-5554` in project automation; resolve the active device through
 `flutter devices` or `adb devices` because the emulator port can change.
 
 ## Later-Phase Gaps
 
+The command-line toolchain is complete through Phase 4. Android Studio is not installed and
+is optional for the verified CLI workflow. The stable IDE at the last verification date is
+Android Studio **Quail 2 | 2026.1.2**, which supports the Wear project's AGP 9.3 baseline.
+
 The remaining Android roadmap is not tool-complete yet. Install or select these only when
 their phase begins:
-
-### Phase 4 — Wear OS
-
-- Android Studio is not currently installed. It is optional for Phase 2 command-line work,
-  but should be installed before Compose for Wear OS development.
-- No Wear OS system image or Wear AVD has been selected yet.
-- The Wear Gradle project is still a repository placeholder.
-
-The current stable IDE at the last verification date is Android Studio
-**Quail 2 | 2026.1.2**. Re-check the stable release before Phase 4 instead of pinning a stale
-IDE download in automation.
 
 ### Phase 6 — Watch Face Format
 
@@ -313,6 +372,10 @@ After an update:
 - [Android `sdkmanager`](https://developer.android.com/tools/sdkmanager)
 - [Android Emulator acceleration](https://developer.android.com/studio/run/emulator-acceleration)
 - [Android SDK platform releases](https://developer.android.com/tools/releases/platforms)
+- [Android Gradle Plugin 9.3](https://developer.android.com/build/releases/agp-9-3-0-release-notes)
+- [Compose BOM](https://developer.android.com/develop/ui/compose/bom)
+- [Compose for Wear OS releases](https://developer.android.com/jetpack/androidx/releases/wear-compose)
+- [Wear OS app packaging](https://developer.android.com/training/wearables/apps/packaging)
 - [Android NDK downloads](https://developer.android.com/ndk/downloads)
 - [Rust Android platform support](https://doc.rust-lang.org/rustc/platform-support/android.html)
 - [`cargo-ndk` releases](https://github.com/bbqsrc/cargo-ndk/releases)

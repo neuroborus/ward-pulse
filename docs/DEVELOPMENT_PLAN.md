@@ -230,11 +230,10 @@ ward-pulse/
       build.gradle.kts
       app/
         build.gradle.kts
-        src/main/java/...
+        src/main/java/app/wardpulse/wear/...
         src/main/res/...
-      data/
-      ui/
-      test/
+        src/test/java/...
+        src/androidTest/java/...
 
     watchface_wff/
       build.gradle.kts
@@ -1093,6 +1092,8 @@ For MVP speed, a JSON boundary is acceptable before optimizing the FFI interface
 
 ### Phase 4 — Wear OS compact app
 
+Status: complete as of 2026-07-18.
+
 Deliverables:
 
 - Kotlin Wear OS app;
@@ -1338,21 +1339,20 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Start Phase 4 with the minimal Wear OS compact app.
+Start Phase 5 with the minimal phone-to-watch Data Layer path.
 
-Phase 3 passed its Rust-to-Flutter acceptance gate on 2026-07-18. WardPulse uses a
-hand-written JSON C ABI, `cargo-ndk 4.1.2`, Android NDK r29, and the `arm64-v8a` and
-`x86_64` ABIs. The Flutter app loads the Rust-generated snapshot at runtime, bridge errors
-map to the UI-safe unavailable state, the snapshot matches the golden fixture, and the
-debug APK runs on the canonical emulator. Phase 4 should:
+Phase 4 passed its Wear OS acceptance gate on 2026-07-18. The Kotlin/Compose app uses Wear
+Material 3, stores the latest sanitized summary in local preferences, keeps stale state
+visible, and runs on the canonical round and square Wear OS 6.1 emulators. Its persistence
+instrumentation tests pass on the round emulator. Phase 5 should:
 
 ```text
-select and pin the minimal Wear OS Gradle and Compose baseline
-create the Wear OS app only within the existing apps/wear_android boundary
-add Today, Week, Providers, Alerts, and stale-data states
-persist the sanitized mock watch summary locally
-verify readable layouts on round and square previews or emulators
+define the smallest stable WatchSummary transport contract
+send the latest successful summary from the phone over Wear Data Layer
+receive and persist it within apps/wear_android
+add a development-only manual sync trigger
+keep sync logs redacted and preserve the previous summary on failure
 ```
 
-Keep provider credentials and sync on the phone. Phase 4 consumes a local mock summary;
-phone-to-watch Data Layer transport remains Phase 5 work.
+Keep provider credentials and provider polling on the phone. The watch receives only the
+derived summary needed by its compact screens.

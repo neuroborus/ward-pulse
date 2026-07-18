@@ -39,10 +39,20 @@ build-android-rust:
 run-phone: build-android-rust
     cd apps/phone_flutter && flutter run
 
+check-wear:
+    cd apps/wear_android && ./gradlew --no-daemon lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest
+
+test-wear-device:
+    cd apps/wear_android && ./gradlew --no-daemon connectedDebugAndroidTest
+
+build-wear:
+    cd apps/wear_android && ./gradlew --no-daemon assembleDebug
+
 run-wear:
-    @echo "TODO: run the Wear OS app after Wear OS project files are added."
+    cd apps/wear_android && ./gradlew --no-daemon installDebug
+    adb shell am start -n app.wardpulse.wear/.MainActivity
 
 build-watchface:
     @echo "TODO: build the WFF package after WFF project files are added."
 
-test-all: check-core check-phone
+test-all: check-core check-phone check-wear
