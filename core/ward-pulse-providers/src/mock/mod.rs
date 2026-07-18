@@ -42,18 +42,7 @@ pub fn mock_provider_snapshot(account_id: impl Into<String>) -> ProviderSnapshot
             expires_at: Some("2026-07-31T00:00:00Z".into()),
             source: CreditSource::Provider,
         }],
-        buckets: vec![UsageBucket {
-            start_at: "2026-06-27T00:00:00Z".into(),
-            end_at: "2026-06-27T18:42:00Z".into(),
-            cost: Some(usd(1_240)),
-            input_tokens: Some(120_000),
-            output_tokens: Some(42_000),
-            cached_tokens: None,
-            requests: Some(186),
-            model: Some("mock-fast".to_string()),
-            project: None,
-            user: None,
-        }],
+        buckets: mock_usage_buckets(),
         model_breakdown: vec![ModelUsage {
             model: "mock-fast".to_string(),
             cost: Some(usd(1_240)),
@@ -64,6 +53,59 @@ pub fn mock_provider_snapshot(account_id: impl Into<String>) -> ProviderSnapshot
         last_successful_sync_at: Some("2026-06-27T18:42:00Z".into()),
         last_error: None,
     }
+}
+
+fn mock_usage_buckets() -> Vec<UsageBucket> {
+    vec![
+        UsageBucket {
+            start_at: "2026-06-27T00:00:00Z".into(),
+            end_at: "2026-06-27T06:00:00Z".into(),
+            cost: Some(usd(220)),
+            input_tokens: Some(30_000),
+            output_tokens: Some(9_000),
+            cached_tokens: None,
+            requests: Some(42),
+            model: Some("mock-fast".to_string()),
+            project: None,
+            user: None,
+        },
+        UsageBucket {
+            start_at: "2026-06-27T06:00:00Z".into(),
+            end_at: "2026-06-27T12:00:00Z".into(),
+            cost: Some(usd(310)),
+            input_tokens: Some(28_000),
+            output_tokens: Some(10_000),
+            cached_tokens: None,
+            requests: Some(48),
+            model: Some("mock-fast".to_string()),
+            project: None,
+            user: None,
+        },
+        UsageBucket {
+            start_at: "2026-06-27T12:00:00Z".into(),
+            end_at: "2026-06-27T18:00:00Z".into(),
+            cost: Some(usd(520)),
+            input_tokens: Some(45_000),
+            output_tokens: Some(17_000),
+            cached_tokens: None,
+            requests: Some(72),
+            model: Some("mock-fast".to_string()),
+            project: None,
+            user: None,
+        },
+        UsageBucket {
+            start_at: "2026-06-27T18:00:00Z".into(),
+            end_at: "2026-06-27T18:42:00Z".into(),
+            cost: Some(usd(190)),
+            input_tokens: Some(17_000),
+            output_tokens: Some(6_000),
+            cached_tokens: None,
+            requests: Some(24),
+            model: Some("mock-fast".to_string()),
+            project: None,
+            user: None,
+        },
+    ]
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -241,7 +283,7 @@ mod tests {
             fixture.provider_snapshot.last_successful_sync_at,
             Some(DateTimeUtc::from("2026-06-27T18:42:00Z"))
         );
-        assert_eq!(fixture.provider_snapshot.buckets.len(), 1);
+        assert_eq!(fixture.provider_snapshot.buckets.len(), 4);
         assert_eq!(fixture.provider_snapshot.today.spent, Some(usd(1_240)));
         assert_eq!(
             fixture.provider_snapshot.model_breakdown,

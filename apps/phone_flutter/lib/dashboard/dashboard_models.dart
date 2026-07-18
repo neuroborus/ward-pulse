@@ -80,6 +80,7 @@ class ProviderSnapshot {
     required this.week,
     required this.month,
     required this.credits,
+    required this.buckets,
     required this.modelBreakdown,
     required this.lastSuccessfulSyncAt,
   });
@@ -91,6 +92,7 @@ class ProviderSnapshot {
   final BudgetState week;
   final BudgetState month;
   final List<CreditState> credits;
+  final List<UsageBucket> buckets;
   final List<ModelUsage> modelBreakdown;
   final DateTime? lastSuccessfulSyncAt;
 
@@ -103,6 +105,7 @@ class ProviderSnapshot {
       week: BudgetState.fromJson(_jsonMap(json['week'])),
       month: BudgetState.fromJson(_jsonMap(json['month'])),
       credits: _jsonList(json['credits'], CreditState.fromJson),
+      buckets: _jsonList(json['buckets'], UsageBucket.fromJson),
       modelBreakdown: _jsonList(json['modelBreakdown'], ModelUsage.fromJson),
       lastSuccessfulSyncAt: _optionalDateTime(json['lastSuccessfulSyncAt']),
     );
@@ -116,6 +119,49 @@ class ProviderSnapshot {
       'mock' => 'Mock',
       _ => provider,
     };
+  }
+}
+
+class UsageBucket {
+  const UsageBucket({
+    required this.startAt,
+    required this.endAt,
+    required this.cost,
+    required this.inputTokens,
+    required this.outputTokens,
+    required this.cachedTokens,
+    required this.requests,
+    required this.model,
+  });
+
+  final DateTime startAt;
+  final DateTime endAt;
+  final Money? cost;
+  final int? inputTokens;
+  final int? outputTokens;
+  final int? cachedTokens;
+  final int? requests;
+  final String? model;
+
+  factory UsageBucket.fromJson(Map<String, dynamic> json) {
+    return UsageBucket(
+      startAt: DateTime.parse(json['startAt'] as String),
+      endAt: DateTime.parse(json['endAt'] as String),
+      cost: Money.maybeFromJson(json['cost']),
+      inputTokens: (json['inputTokens'] as num?)?.toInt(),
+      outputTokens: (json['outputTokens'] as num?)?.toInt(),
+      cachedTokens: (json['cachedTokens'] as num?)?.toInt(),
+      requests: (json['requests'] as num?)?.toInt(),
+      model: json['model'] as String?,
+    );
+  }
+
+  int? get totalTokens {
+    if (inputTokens == null && outputTokens == null && cachedTokens == null) {
+      return null;
+    }
+
+    return (inputTokens ?? 0) + (outputTokens ?? 0) + (cachedTokens ?? 0);
   }
 }
 

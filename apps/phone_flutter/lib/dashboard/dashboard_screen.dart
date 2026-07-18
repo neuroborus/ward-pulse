@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../charts/budget_progress_bar.dart';
+import '../charts/usage_history_chart.dart';
 import 'dashboard_models.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -18,6 +19,11 @@ class DashboardScreen extends StatelessWidget {
         _SyncHeader(snapshot: snapshot),
         const SizedBox(height: 16),
         _BudgetCards(snapshot: snapshot),
+        const SizedBox(height: 16),
+        UsageHistoryChart(
+          buckets: primaryAccount?.buckets ?? const <UsageBucket>[],
+          totalCost: primaryAccount?.today.spent,
+        ),
         const SizedBox(height: 16),
         _SectionHeader(
           title: 'Model usage',
