@@ -16,11 +16,12 @@ The command-line toolchain required for **Phase 2 — Flutter phone dashboard** 
 - The canonical phone AVD is installed, starts, and is detected by Flutter.
 - `flutter analyze` passes for `apps/phone_flutter`.
 - `flutter test` passes, including usage-history rendering and provider-detail navigation.
+- `flutter build apk --debug` produces the WardPulse debug APK.
+- The `app.wardpulse` runner starts on the canonical AVD and renders the dashboard,
+  usage-history chart, provider list, and provider detail screen.
 
-Phase 2 is not accepted yet for project-level reasons:
-
-- The repository still needs a reviewed Flutter Android runner before `flutter run` and
-  debug APK acceptance can become project checks.
+The Phase 2 phone-dashboard acceptance gate passed on **2026-07-18**. Phase 3 tooling is
+still intentionally incomplete until the Rust-to-Flutter bridge approach is selected.
 
 Chrome and Linux desktop warnings from `flutter doctor` are out of scope. WardPulse targets
 Android phone, Wear OS, and Watch Face Format in the current product plan.
@@ -39,8 +40,13 @@ Android phone, Wear OS, and Watch Face Format in the current product plan.
 | Android SDK Platform Tools | 37.0.0 | `adb` |
 | Android Emulator | 36.6.11.0, build 15507667 | Phone emulator |
 | Android phone system image | `system-images;android-36;google_apis;x86_64`, revision 7 | Phone AVD |
+| Gradle Wrapper | 9.1.0 | Flutter Android build |
+| Android Gradle Plugin | 9.0.1 | Flutter Android runner |
+| Kotlin Gradle Plugin | 2.3.20 | Android host activity |
+| Android NDK | `ndk;28.2.13676358` | Flutter Android debug build |
 | Android NDK | `ndk;29.0.14206865` | Reserved for Phase 3 Rust bridge |
-| CMake | 3.31.6 | Native build support |
+| Android SDK CMake | 3.22.1 | Flutter Android debug build |
+| Host CMake | 3.31.6 | Available for later native build work |
 | Rust | 1.96.0 | Domain core and future Android library builds |
 | Cargo | 1.96.0 | Rust workspace |
 | Git | 2.43.0 | Source control and Flutter SDK support |
@@ -59,7 +65,9 @@ Java home:         /usr/lib/jvm/java-21-openjdk-amd64
 Phone AVD:         wardpulse_phone_api36
 Phone platform:    android-36
 Phone system image system-images;android-36;google_apis;x86_64
-Android NDK:       ndk;29.0.14206865
+Application ID:    app.wardpulse
+Flutter NDK:       ndk;28.2.13676358
+Rust bridge NDK:   ndk;29.0.14206865
 ```
 
 The shell environment belongs in `~/.profile` as single-line exports:
@@ -78,8 +86,8 @@ hash -r
 ```
 
 Do not install a separate Dart SDK. Use the Dart version bundled with Flutter. Do not install
-a global Gradle distribution for project builds; generated Android projects must use their
-checked-in Gradle Wrapper.
+a global Gradle distribution for project builds; let Flutter manage the generated Gradle
+Wrapper.
 
 ## Reproducible Phase 2 Installation
 
@@ -149,6 +157,8 @@ sdkmanager --sdk_root="$ANDROID_HOME" \
   "build-tools;36.0.0" \
   "emulator" \
   "system-images;android-36;google_apis;x86_64" \
+  "ndk;28.2.13676358" \
+  "cmake;3.22.1" \
   "ndk;29.0.14206865"
 ```
 
@@ -217,11 +227,11 @@ flutter analyze
 flutter test
 ```
 
-Once the Android runner is present, add these Phase 2 acceptance checks:
+Run the Phase 2 Android acceptance checks:
 
 ```sh
 flutter build apk --debug
-flutter run -d emulator-5554
+flutter run
 ```
 
 Do not hardcode `emulator-5554` in project automation; resolve the active device through

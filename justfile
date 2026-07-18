@@ -37,7 +37,7 @@ gen-bindings:
     @echo "TODO: generate Dart/Kotlin/Swift bindings from core/ward-pulse-ffi."
 
 run-phone:
-    @echo "TODO: enable flutter run after Flutter Android project files are added."
+    cd apps/phone_flutter && flutter run
 
 run-wear:
     @echo "TODO: run the Wear OS app after Wear OS project files are added."

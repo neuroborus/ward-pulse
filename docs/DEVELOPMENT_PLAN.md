@@ -1335,16 +1335,18 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Finish Phase 2 and pass its phone-dashboard acceptance gate before starting the Rust-to-Flutter bridge.
+Start Phase 3 with an explicitly selected and versioned Rust-to-Flutter bridge.
 
-The Rust mock dashboard and the first Flutter dashboard surfaces are implemented. The Android command-line toolchain and phone emulator baseline are verified in `docs/ANDROID_TOOLCHAIN.md`. The remaining Phase 2 work should:
+Phase 2 passed its phone-dashboard acceptance gate on 2026-07-18. The Android runner builds a debug APK, the app starts on the canonical emulator, the dashboard and usage-history chart render, provider details are reachable, and phone CI runs analyze, test, and build checks. Phase 3 should:
 
 ```text
-add and review the Flutter Android runner
-build and run the debug app on the canonical phone emulator
-verify dashboard, chart, provider-list, and provider-detail navigation
-replace the phone CI placeholder with analyze, test, and debug APK checks
-replace the run-phone placeholder with the real Flutter command
+select and record the MVP bridge approach
+pin cargo-ndk and install the required Android Rust targets
+build the Rust core for the Android emulator and device ABIs
+add the minimal Dart wrapper around the Rust boundary
+replace the packaged mock snapshot with a Rust-generated runtime snapshot
+map bridge failures to UI-safe error states
+verify the Rust-generated snapshot against the golden fixture
 ```
 
-Phase 2 is complete only when the phone app starts on the Android emulator, renders stable mock dashboard and chart states, and exposes reachable provider details with green automated checks. After that gate, start Phase 3 with an explicitly selected and versioned Rust-to-Flutter bridge; the plan permits a thin JSON boundary for MVP speed.
+For MVP speed, prefer the smallest stable boundary that preserves Rust ownership of domain logic. A thin JSON boundary remains acceptable before optimizing or expanding the FFI interface.

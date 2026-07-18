@@ -21,7 +21,7 @@ This repository is intentionally organized as one product monorepo with separate
 
 ## Current Phase
 
-Phase 2 is active and approaching acceptance: the Rust mock dashboard is stable, the Flutter phone shell renders the local dashboard and usage-history surfaces, its automated checks are green, and the Android toolchain is verified. Remaining work is to add the reviewed Android runner, run the app on the phone emulator, and enable phone CI.
+Phase 2 is complete: the Flutter phone shell has a reviewed Android runner, green automated checks, a debug APK build, and verified dashboard, chart, and provider navigation on the canonical emulator. Phase 3 starts the Rust-to-Flutter bridge.
 
 ## Useful Commands
 
