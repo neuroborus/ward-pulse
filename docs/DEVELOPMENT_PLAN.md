@@ -1,6 +1,6 @@
 # WardPulse Android — Development Plan
 
-Updated: 2026-06-27
+Updated: 2026-07-18
 
 Product name: **WardPulse**
 
@@ -1335,20 +1335,16 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Create the monorepo skeleton and implement Phase 1 with mock data.
+Finish Phase 2 and pass its phone-dashboard acceptance gate before starting the Rust-to-Flutter bridge.
 
-The first useful pull request should contain:
+The Rust mock dashboard and the first Flutter dashboard surfaces are implemented. The Android command-line toolchain and phone emulator baseline are verified in `docs/ANDROID_TOOLCHAIN.md`. The remaining Phase 2 work should:
 
 ```text
-docs/DEVELOPMENT_PLAN.md
-LICENSE / TRADEMARKS.md baseline
-Rust workspace
-mock provider fixtures
-DashboardSnapshot model
-budget calculation tests
-CLI command that prints a dashboard snapshot
-Flutter app stub that can later consume the snapshot
-Wear app stub that can later consume WatchSummary
+add and review the Flutter Android runner
+build and run the debug app on the canonical phone emulator
+verify dashboard, chart, provider-list, and provider-detail navigation
+replace the phone CI placeholder with analyze, test, and debug APK checks
+replace the run-phone placeholder with the real Flutter command
 ```
 
-The product should earn complexity step by step. Start with a stable data model and convincing dashboard states before adding real providers or release infrastructure.
+Phase 2 is complete only when the phone app starts on the Android emulator, renders stable mock dashboard and chart states, and exposes reachable provider details with green automated checks. After that gate, start Phase 3 with an explicitly selected and versioned Rust-to-Flutter bridge; the plan permits a thin JSON boundary for MVP speed.

@@ -5,6 +5,7 @@ This directory is the documentation gate for the project. Root files should stay
 ## Start Here
 
 - [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) is the full product and implementation plan.
+- [ANDROID_TOOLCHAIN.md](ANDROID_TOOLCHAIN.md) records the verified Android/Flutter development baseline, SDK package names, AVDs, and setup commands.
 - [product/ANDROID_GOALS.md](product/ANDROID_GOALS.md) defines the MVP goal, surfaces, and non-goals.
 - [product/PROVIDER_NOTES.md](product/PROVIDER_NOTES.md) tracks provider integration assumptions and open questions.
 - [product/SECURITY_MODEL.md](product/SECURITY_MODEL.md) defines local-first credential and diagnostics rules.

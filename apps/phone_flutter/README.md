@@ -2,7 +2,9 @@
 
 Flutter phone app shell for the primary WardPulse dashboard.
 
-This directory is intentionally light while Phase 2 starts. The current app shell loads a sanitized mock dashboard asset and renders the first phone dashboard, provider list, provider detail, and settings surfaces.
+This directory remains intentionally light while Phase 2 approaches acceptance. The current app shell loads a sanitized mock dashboard asset and renders the phone dashboard, usage history, provider list, provider detail, and settings surfaces. The reviewed Android runner and emulator build/run gate are still pending.
+
+The verified Flutter and Android SDK baseline is documented in [`../../docs/ANDROID_TOOLCHAIN.md`](../../docs/ANDROID_TOOLCHAIN.md).
 
 ## Ownership
 

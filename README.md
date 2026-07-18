@@ -21,7 +21,7 @@ This repository is intentionally organized as one product monorepo with separate
 
 ## Current Phase
 
-Phase 2 is starting: the Rust mock dashboard is stable enough for the Flutter phone shell to render local mock dashboard data.
+Phase 2 is active and approaching acceptance: the Rust mock dashboard is stable, the Flutter phone shell renders the local dashboard and usage-history surfaces, its automated checks are green, and the Android toolchain is verified. Remaining work is to add the reviewed Android runner, run the app on the phone emulator, and enable phone CI.
 
 ## Useful Commands
 
@@ -57,7 +57,7 @@ python3 tools/validate-fixtures/validate_json.py
 
 ## Documentation
 
-Start with [docs/README.md](docs/README.md). It is the documentation index and project gate. The original development plan lives at [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md).
+Start with [docs/README.md](docs/README.md). It is the documentation index and project gate. The development plan lives at [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md), and the verified Android/Flutter environment is recorded in [docs/ANDROID_TOOLCHAIN.md](docs/ANDROID_TOOLCHAIN.md).
 
 Repository-wide working agreements for agents and humans live in [AGENTS.md](AGENTS.md).
 
