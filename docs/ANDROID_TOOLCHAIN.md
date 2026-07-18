@@ -1,15 +1,16 @@
 # Android Toolchain
 
 This document is the operational source of truth for the WardPulse Android development
-environment. It records the baseline through Phase 4, canonical SDK package names, local
-paths, verification commands, and later-phase tooling that is intentionally not installed
-yet.
+environment. It records the baseline through the Phase 5 implementation, canonical SDK
+package names, local paths, verification commands, and tooling that is intentionally not
+installed yet.
 
 Last verified: **2026-07-18** on TUXEDO OS 24.04.4 LTS, x86_64.
 
 ## Current Readiness
 
-The command-line toolchain required through **Phase 4 — Wear OS compact app** is ready:
+The command-line toolchain required through the local **Phase 5 — phone-to-watch sync**
+build and test gates is ready:
 
 - Flutter detects the Android SDK and reports the Android toolchain as healthy.
 - All Android SDK licenses are accepted.
@@ -30,9 +31,15 @@ The command-line toolchain required through **Phase 4 — Wear OS compact app** 
 - The Wear OS 6.1 x86_64 system image and canonical round and square AVDs are installed.
 - The Wear app passes lint, builds its debug and instrumentation APKs, runs on both AVD
   shapes, and passes its local-persistence tests on the round AVD.
+- Phone and Wear builds use Wearable Data Layer `20.0.1`; the Wear listener validates the
+  versioned summary before replacing locally persisted state.
 
 The Phase 2 phone-dashboard, Phase 3 Rust-bridge, and Phase 4 Wear-app acceptance gates
 passed on **2026-07-18**.
+
+Phase 5 paired-device acceptance is pending. The installed `google_apis` phone image is
+sufficient for normal phone development but not for Android Studio's Wear pairing flow;
+that flow requires a Play Store phone image, documented below.
 
 Chrome and Linux desktop warnings from `flutter doctor` are out of scope. WardPulse targets
 Android phone, Wear OS, and Watch Face Format in the current product plan.
@@ -63,6 +70,7 @@ Android phone, Wear OS, and Watch Face Format in the current product plan.
 | Compose for Wear OS | 1.6.2 | Material 3 UI and preview tooling |
 | AndroidX Activity | 1.13.0 | Wear Compose activity host |
 | AndroidX Core | 1.19.0 | Android Kotlin extensions |
+| Google Play services Wearable | 20.0.1 | Phone-to-watch Data Layer transport |
 | Android NDK | `ndk;28.2.13676358` | Flutter Android debug build |
 | Android NDK | `ndk;29.0.14206865` | Rust Android library builds |
 | Android SDK CMake | 3.22.1 | Flutter Android debug build |
@@ -88,12 +96,14 @@ Java home:         /usr/lib/jvm/java-21-openjdk-amd64
 Phone AVD:         wardpulse_phone_api36
 Phone platform:    android-36
 Phone system image system-images;android-36;google_apis;x86_64
+Paired phone AVD:  wardpulse_phone_play_api36
+Paired phone image system-images;android-36;google_apis_playstore;x86_64
 Wear compile SDK:  platforms;android-37.1
 Wear system image: system-images;android-36.1;android-wear-signed;x86_64
 Wear round AVD:    wardpulse_wear_round_api36_1
 Wear square AVD:   wardpulse_wear_square_api36_1
 Application ID:    app.wardpulse
-Wear application:  app.wardpulse.wear
+Wear namespace:    app.wardpulse.wear
 Flutter NDK:       ndk;28.2.13676358
 Rust bridge NDK:   ndk;29.0.14206865
 cargo-ndk:         4.1.2
@@ -249,6 +259,27 @@ flutter devices
 
 The expected Flutter device is an Android x64 emulator running Android 16 / API 36.
 
+### Phase 5 paired phone AVD
+
+Wear Data Layer emulator pairing requires a phone image with the Play Store. Install the
+image and create a separate AVD without replacing the canonical CLI phone AVD:
+
+```sh
+sdkmanager --sdk_root="$ANDROID_HOME" \
+  "system-images;android-36;google_apis_playstore;x86_64"
+
+printf 'no\n' | avdmanager create avd \
+  --name wardpulse_phone_play_api36 \
+  --package "system-images;android-36;google_apis_playstore;x86_64" \
+  --device pixel_7 \
+  --force
+```
+
+Start `wardpulse_phone_play_api36` and one canonical Wear AVD, then pair them with Android
+Studio's Wear OS emulator pairing assistant. Both WardPulse APKs must use application ID
+`app.wardpulse` and the same signing certificate; the Wear Kotlin namespace remains
+`app.wardpulse.wear`.
+
 ## Wear OS AVDs
 
 Create the canonical small round and square Wear OS 6.1 AVDs:
@@ -333,9 +364,11 @@ Do not hardcode `emulator-5554` in project automation; resolve the active device
 
 ## Later-Phase Gaps
 
-The command-line toolchain is complete through Phase 4. Android Studio is not installed and
-is optional for the verified CLI workflow. The stable IDE at the last verification date is
-Android Studio **Quail 2 | 2026.1.2**, which supports the Wear project's AGP 9.3 baseline.
+The command-line toolchain is complete for Phase 5 builds and local tests. Android Studio is
+not installed and is optional for the verified CLI workflow, but its pairing assistant is
+required for the Phase 5 emulator-to-emulator acceptance test. The stable IDE at the last
+verification date is Android Studio **Quail 2 | 2026.1.2**, which supports the Wear project's
+AGP 9.3 baseline.
 
 The remaining Android roadmap is not tool-complete yet. Install or select these only when
 their phase begins:
@@ -376,6 +409,9 @@ After an update:
 - [Compose BOM](https://developer.android.com/develop/ui/compose/bom)
 - [Compose for Wear OS releases](https://developer.android.com/jetpack/androidx/releases/wear-compose)
 - [Wear OS app packaging](https://developer.android.com/training/wearables/apps/packaging)
+- [Wear OS Data Layer overview](https://developer.android.com/training/wearables/data/overview)
+- [Sync data with Data Layer](https://developer.android.com/training/wearables/data/sync)
+- [Connect a watch to a phone](https://developer.android.com/training/wearables/get-started/connect-phone)
 - [Android NDK downloads](https://developer.android.com/ndk/downloads)
 - [Rust Android platform support](https://doc.rust-lang.org/rustc/platform-support/android.html)
 - [`cargo-ndk` releases](https://github.com/bbqsrc/cargo-ndk/releases)

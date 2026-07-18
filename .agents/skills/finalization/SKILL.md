@@ -54,6 +54,7 @@ cd apps/phone_flutter && flutter analyze && flutter test
 
 - [ ] If Android/Wear/WFF Gradle projects are generated, run the relevant Gradle test/build task.
 - [ ] If schemas or fixtures changed, validate fixture shape manually or with `tools/validate-fixtures/` when available.
+- [ ] If GitHub Actions workflows changed, run `actionlint .github/workflows/*.yml`.
 
 ## 5. Documentation Review
 

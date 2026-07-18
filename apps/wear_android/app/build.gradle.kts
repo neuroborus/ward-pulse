@@ -12,7 +12,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "app.wardpulse.wear"
+        applicationId = "app.wardpulse"
         minSdk = 30
         targetSdk = 36
         versionCode = 1
@@ -23,6 +23,12 @@ android {
 
     buildFeatures {
         compose = true
+    }
+
+    sourceSets {
+        getByName("androidTest").assets.directories.add(
+            "../../../fixtures/snapshots",
+        )
     }
 
     compileOptions {
@@ -40,6 +46,7 @@ dependencies {
     implementation("androidx.wear.compose:compose-material3:1.6.2")
     implementation("androidx.wear.compose:compose-navigation:1.6.2")
     implementation("androidx.wear.compose:compose-ui-tooling:1.6.2")
+    implementation("com.google.android.gms:play-services-wearable:20.0.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

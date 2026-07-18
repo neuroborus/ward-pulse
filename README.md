@@ -21,9 +21,9 @@ This repository is intentionally organized as one product monorepo with separate
 
 ## Current Phase
 
-Phase 4 is complete: the Kotlin/Compose Wear OS app shows the compact dashboard, persists a
-sanitized mock summary, exposes stale state, and runs on the canonical round and square
-Wear OS emulators. Phase 5 adds phone-to-watch Data Layer sync.
+Phase 5 is implemented: the phone sends a sanitized, versioned summary through Wear Data
+Layer, and the Wear app validates and persists the latest successful summary. Paired-device
+acceptance remains before Phase 6 starts.
 
 ## Useful Commands
 

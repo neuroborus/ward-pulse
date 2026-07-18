@@ -2,22 +2,25 @@ name: Core
 
 on:
   push:
+    branches: [main]
     paths:
       - "core/**"
       - "fixtures/**"
       - "schemas/**"
       - "tools/validate-fixtures/**"
-      - "justfile"
       - ".github/workflows/core.yml"
   pull_request:
+    branches: [main]
     paths:
       - "core/**"
       - "fixtures/**"
       - "schemas/**"
       - "tools/validate-fixtures/**"
-      - "justfile"
       - ".github/workflows/core.yml"
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   core:

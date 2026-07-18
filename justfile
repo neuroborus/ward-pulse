@@ -50,7 +50,7 @@ build-wear:
 
 run-wear:
     cd apps/wear_android && ./gradlew --no-daemon installDebug
-    adb shell am start -n app.wardpulse.wear/.MainActivity
+    adb shell am start -n app.wardpulse/app.wardpulse.wear.MainActivity
 
 build-watchface:
     @echo "TODO: build the WFF package after WFF project files are added."

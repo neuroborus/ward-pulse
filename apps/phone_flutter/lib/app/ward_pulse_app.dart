@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../dashboard/dashboard_models.dart';
@@ -5,14 +7,17 @@ import '../dashboard/dashboard_repository.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../providers/providers_screen.dart';
 import '../settings/settings_screen.dart';
+import '../sync/watch_sync_service.dart';
 
 class WardPulseApp extends StatelessWidget {
   const WardPulseApp({
     super.key,
     this.repository = const RustDashboardRepository(),
+    this.watchSyncService = const MethodChannelWatchSyncService(),
   });
 
   final DashboardRepository repository;
+  final WatchSyncService watchSyncService;
 
   @override
   Widget build(BuildContext context) {
@@ -33,27 +38,49 @@ class WardPulseApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: DashboardHost(repository: repository),
+      home: DashboardHost(
+        repository: repository,
+        watchSyncService: watchSyncService,
+      ),
     );
   }
 }
 
 class DashboardHost extends StatefulWidget {
-  const DashboardHost({super.key, required this.repository});
+  const DashboardHost({
+    super.key,
+    required this.repository,
+    required this.watchSyncService,
+  });
 
   final DashboardRepository repository;
+  final WatchSyncService watchSyncService;
 
   @override
   State<DashboardHost> createState() => _DashboardHostState();
 }
 
 class _DashboardHostState extends State<DashboardHost> {
-  late Future<DashboardSnapshot> _snapshot = widget.repository.load();
+  late Future<DashboardSnapshot> _snapshot = _loadSnapshot();
   int _selectedIndex = 0;
+
+  Future<DashboardSnapshot> _loadSnapshot() async {
+    final snapshot = await widget.repository.load();
+    unawaited(_syncWatch(snapshot));
+    return snapshot;
+  }
+
+  Future<void> _syncWatch(DashboardSnapshot snapshot) async {
+    try {
+      await widget.watchSyncService.sync(snapshot);
+    } catch (_) {
+      // Watch availability must not block the phone dashboard.
+    }
+  }
 
   void _reload() {
     setState(() {
-      _snapshot = widget.repository.load();
+      _snapshot = _loadSnapshot();
     });
   }
 
@@ -85,9 +112,10 @@ class _DashboardHostState extends State<DashboardHost> {
               ConnectionState.waiting => const _LoadingView(),
               _ when state.hasError => _ErrorView(onRetry: _reload),
               _ when snapshot != null => _SelectedSurface(
-                  selectedIndex: _selectedIndex,
-                  snapshot: snapshot,
-                ),
+                selectedIndex: _selectedIndex,
+                snapshot: snapshot,
+                watchSyncService: widget.watchSyncService,
+              ),
               _ => _ErrorView(onRetry: _reload),
             },
           ),
@@ -126,17 +154,22 @@ class _SelectedSurface extends StatelessWidget {
   const _SelectedSurface({
     required this.selectedIndex,
     required this.snapshot,
+    required this.watchSyncService,
   });
 
   final int selectedIndex;
   final DashboardSnapshot snapshot;
+  final WatchSyncService watchSyncService;
 
   @override
   Widget build(BuildContext context) {
     return switch (selectedIndex) {
       0 => DashboardScreen(snapshot: snapshot),
       1 => ProvidersScreen(snapshot: snapshot),
-      _ => SettingsScreen(snapshot: snapshot),
+      _ => SettingsScreen(
+        snapshot: snapshot,
+        watchSyncService: watchSyncService,
+      ),
     };
   }
 }

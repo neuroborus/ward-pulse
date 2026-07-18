@@ -657,7 +657,7 @@ DashboardSnapshot
    ↓
 Persist locally on phone
    ↓
-Send WatchSummary through Wear Data Layer
+Send WatchDashboardSummary through Wear Data Layer
    ↓
 Wear OS app stores latest snapshot
    ↓
@@ -668,32 +668,12 @@ The Wear OS app may later support standalone mode, but this is not required for 
 
 ### MVP payload
 
-```json
-{
-  "generatedAt": "2026-06-27T18:42:00Z",
-  "overallStatus": "ok",
-  "today": {
-    "spent": "12.40",
-    "limit": "50.00",
-    "remaining": "37.60",
-    "usedPercent": 24.8
-  },
-  "week": {
-    "spent": "71.30",
-    "limit": "250.00",
-    "projectedTotal": "228.00",
-    "usedPercent": 28.5
-  },
-  "providers": [
-    { "name": "Codex", "main": "$8.10", "status": "ok" },
-    { "name": "Claude", "main": "$2.80", "status": "ok" },
-    { "name": "Cursor", "main": "68%", "status": "warning" }
-  ],
-  "alerts": [
-    { "severity": "warning", "message": "Codex burn rate is higher than usual" }
-  ]
-}
-```
+The versioned platform transport contract is defined by
+`schemas/watch_dashboard_summary.schema.json`, with a sanitized example in
+`fixtures/snapshots/watch_dashboard_summary.json`. It is intentionally distinct from the
+compact Rust `WatchSummary` view model. Monetary values use integer minor units and ISO
+currency codes rather than presentation strings. The watch payload excludes account IDs,
+credentials, prompts, and raw provider data.
 
 ---
 
@@ -1117,7 +1097,7 @@ mock summary is persisted locally
 
 Deliverables:
 
-- phone app sends WatchSummary to Wear OS app;
+- phone app sends WatchDashboardSummary to Wear OS app;
 - Wear OS app receives and persists latest summary;
 - manual sync button for development;
 - redacted logs for sync events.
@@ -1339,20 +1319,20 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Start Phase 5 with the minimal phone-to-watch Data Layer path.
+Finish the paired-device acceptance check for Phase 5.
 
-Phase 4 passed its Wear OS acceptance gate on 2026-07-18. The Kotlin/Compose app uses Wear
-Material 3, stores the latest sanitized summary in local preferences, keeps stale state
-visible, and runs on the canonical round and square Wear OS 6.1 emulators. Its persistence
-instrumentation tests pass on the round emulator. Phase 5 should:
+The Phase 5 implementation now provides:
 
 ```text
-define the smallest stable WatchSummary transport contract
-send the latest successful summary from the phone over Wear Data Layer
-receive and persist it within apps/wear_android
-add a development-only manual sync trigger
-keep sync logs redacted and preserve the previous summary on failure
+versioned schemas/watch_dashboard_summary.schema.json contract and sanitized fixture
+automatic send after a successful phone snapshot load or refresh
+development-only manual retry from the Flutter settings screen
+urgent Data Layer DataItem delivery on /wardpulse/watch-summary
+Wear listener, validation, local persistence, two-hour stale threshold, and foreground refresh
+redacted outcome logs and previous-state preservation on invalid input
 ```
 
-Keep provider credentials and provider polling on the phone. The watch receives only the
-derived summary needed by its compact screens.
+Static analysis, Flutter tests, Wear lint, JVM tests, and both Wear APK builds pass. Before
+Phase 6, pair the Play Store phone AVD with the canonical Wear AVD and verify that changing
+the phone snapshot updates the watch while offline and failure cases preserve the last
+successful summary.

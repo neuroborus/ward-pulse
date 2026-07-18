@@ -2,22 +2,24 @@ name: Phone Android
 
 on:
   push:
+    branches: [main]
     paths:
       - "apps/phone_flutter/**"
       - "bindings/dart/**"
       - "core/**"
       - "fixtures/**"
+      - "schemas/**"
       - "tools/build-android-rust/**"
-      - "justfile"
       - ".github/workflows/phone-android.yml"
   pull_request:
+    branches: [main]
     paths:
       - "apps/phone_flutter/**"
       - "bindings/dart/**"
       - "core/**"
       - "fixtures/**"
+      - "schemas/**"
       - "tools/build-android-rust/**"
-      - "justfile"
       - ".github/workflows/phone-android.yml"
   workflow_dispatch:
 
@@ -39,6 +41,10 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: gradle
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: "ndk;29.0.14206865"
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -47,8 +53,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,x86_64-linux-android
-      - run: sdkmanager "ndk;29.0.14206865"
-        working-directory: .
       - run: cargo install cargo-ndk --version 4.1.2 --locked
         working-directory: .
       - run: flutter pub get --enforce-lockfile

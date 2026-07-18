@@ -23,10 +23,12 @@ import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
 import androidx.wear.compose.ui.tooling.preview.WearPreviewDevices
 import androidx.wear.compose.ui.tooling.preview.WearPreviewSquare
-import app.wardpulse.wear.model.MockWatchSummary
+import app.wardpulse.wear.model.MockWatchDashboardSummary
+import app.wardpulse.wear.model.Money
 import app.wardpulse.wear.model.PulseStatus
-import app.wardpulse.wear.model.WatchSummary
+import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.ui.theme.WardPulseTheme
+import java.util.Locale
 
 private const val HOME_ROUTE = "home"
 
@@ -45,7 +47,7 @@ private data class SummaryRow(
 )
 
 @Composable
-fun WardPulseApp(summary: WatchSummary) {
+fun WardPulseApp(summary: WatchDashboardSummary) {
     AppScaffold {
         val navController = rememberSwipeDismissableNavController()
         SwipeDismissableNavHost(
@@ -67,22 +69,30 @@ fun WardPulseApp(summary: WatchSummary) {
     }
 }
 
-private fun WatchSummary.rowsFor(screen: Screen): List<SummaryRow> = when (screen) {
+private fun WatchDashboardSummary.rowsFor(screen: Screen): List<SummaryRow> = when (screen) {
     Screen.TODAY -> listOf(
-        SummaryRow("\$${today.spent} / \$${today.limit}", "Budget"),
-        SummaryRow("${today.usedPercent}% used", "\$${today.remaining} left"),
+        SummaryRow("${today.spent.labelOrUnknown()} / ${today.limit.labelOrUnknown()}", "Budget"),
+        SummaryRow(today.usedPercent.usedLabel(), "${today.remaining.labelOrUnknown()} left"),
         SummaryRow(overallStatus.label, "Overall status", overallStatus),
     )
     Screen.WEEK -> listOf(
-        SummaryRow("\$${week.spent} / \$${week.limit}", "Budget"),
-        SummaryRow("${week.usedPercent}% used", "\$${week.remaining} left"),
+        SummaryRow("${week.spent.labelOrUnknown()} / ${week.limit.labelOrUnknown()}", "Budget"),
+        SummaryRow(week.usedPercent.usedLabel(), "${week.remaining.labelOrUnknown()} left"),
         SummaryRow(
-            week.projectedTotal?.let { "\$$it" } ?: "Unavailable",
+            week.projectedTotal?.label ?: "Unavailable",
             "Projected total",
         ),
     )
-    Screen.PROVIDERS -> providers.map { SummaryRow(it.name, it.main, it.status) }
-    Screen.ALERTS -> alerts.map { SummaryRow(it.title, it.message, PulseStatus.WARNING) }
+    Screen.PROVIDERS -> providers.map {
+        SummaryRow(it.providerLabel, it.todaySpent?.label ?: "Unavailable", it.status)
+    }
+    Screen.ALERTS -> alerts.map {
+        SummaryRow(
+            it.severity.replaceFirstChar(Char::uppercase),
+            it.message,
+            it.severity.toStatus(),
+        )
+    }
         .ifEmpty { listOf(SummaryRow("No active alerts", "All providers look normal")) }
     Screen.LAST_SYNC -> listOf(
         SummaryRow(lastSyncLabel, "Saved locally"),
@@ -99,7 +109,7 @@ private fun WatchSummary.rowsFor(screen: Screen): List<SummaryRow> = when (scree
 }
 
 @Composable
-private fun HomeScreen(summary: WatchSummary, onOpen: (Screen) -> Unit) {
+private fun HomeScreen(summary: WatchDashboardSummary, onOpen: (Screen) -> Unit) {
     val state = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
 
@@ -124,7 +134,10 @@ private fun HomeScreen(summary: WatchSummary, onOpen: (Screen) -> Unit) {
                         if (summary.isStale) "Stale data" else summary.overallStatus.label,
                         color = statusColor(status),
                     )
-                    Text("Today ${summary.today.usedPercent}% · Week ${summary.week.usedPercent}%")
+                    Text(
+                        "Today ${summary.today.usedPercent.percentLabel()} · " +
+                            "Week ${summary.week.usedPercent.percentLabel()}",
+                    )
                 }
             }
             items(Screen.entries.size) { index ->
@@ -165,7 +178,10 @@ private fun SummaryScreen(title: String, rows: List<SummaryRow>) {
                         .transformedHeight(this, transformationSpec),
                     transformation = SurfaceTransformation(transformationSpec),
                 ) {
-                    Text(row.title, color = row.status?.let { statusColor(it) } ?: Color.Unspecified)
+                    Text(
+                        row.title,
+                        color = row.status?.let { statusColor(it) } ?: Color.Unspecified,
+                    )
                     Text(row.detail)
                 }
             }
@@ -176,9 +192,33 @@ private fun SummaryScreen(title: String, rows: List<SummaryRow>) {
 @Composable
 private fun statusColor(status: PulseStatus): Color = when (status) {
     PulseStatus.OK -> MaterialTheme.colorScheme.primary
-    PulseStatus.WARNING -> MaterialTheme.colorScheme.tertiary
-    PulseStatus.ERROR -> MaterialTheme.colorScheme.error
+    PulseStatus.WARNING,
+    PulseStatus.RATE_LIMITED,
+    PulseStatus.STALE,
+    -> MaterialTheme.colorScheme.tertiary
+    PulseStatus.ERROR,
+    PulseStatus.AUTH_REQUIRED,
+    -> MaterialTheme.colorScheme.error
     PulseStatus.UNKNOWN -> MaterialTheme.colorScheme.onSurfaceVariant
+}
+
+private fun Money?.labelOrUnknown(): String = this?.label ?: "Unknown"
+
+private fun Double?.percentLabel(): String = this?.let { value ->
+    val formatted = if (value % 1.0 == 0.0) {
+        value.toLong().toString()
+    } else {
+        String.format(Locale.US, "%.1f", value)
+    }
+    "$formatted%"
+} ?: "Unknown"
+
+private fun Double?.usedLabel(): String = "${percentLabel()} used"
+
+private fun String.toStatus(): PulseStatus = when (this) {
+    "error" -> PulseStatus.ERROR
+    "warning" -> PulseStatus.WARNING
+    else -> PulseStatus.UNKNOWN
 }
 
 @WearPreviewDevices
@@ -186,6 +226,6 @@ private fun statusColor(status: PulseStatus): Color = when (status) {
 @Composable
 private fun WardPulsePreview() {
     WardPulseTheme {
-        WardPulseApp(MockWatchSummary.value)
+        WardPulseApp(MockWatchDashboardSummary.value)
     }
 }
