@@ -1,16 +1,6 @@
 name: Phone Android
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "apps/phone_flutter/**"
-      - "bindings/dart/**"
-      - "core/**"
-      - "fixtures/**"
-      - "schemas/**"
-      - "tools/build-android-rust/**"
-      - ".github/workflows/phone-android.yml"
   pull_request:
     branches: [main]
     paths:
@@ -21,7 +11,6 @@ on:
       - "schemas/**"
       - "tools/build-android-rust/**"
       - ".github/workflows/phone-android.yml"
-  workflow_dispatch:
 
 permissions:
   contents: read

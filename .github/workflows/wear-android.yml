@@ -1,13 +1,6 @@
 name: Wear Android
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "apps/wear_android/**"
-      - "fixtures/**"
-      - "schemas/**"
-      - ".github/workflows/wear-android.yml"
   pull_request:
     branches: [main]
     paths:
@@ -15,7 +8,6 @@ on:
       - "fixtures/**"
       - "schemas/**"
       - ".github/workflows/wear-android.yml"
-  workflow_dispatch:
 
 permissions:
   contents: read

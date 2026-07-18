@@ -1,7 +1,14 @@
 name: Watch Face
 
 on:
-  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/watchface_wff/**"
+      - ".github/workflows/watchface.yml"
+
+permissions:
+  contents: read
 
 jobs:
   placeholder:
