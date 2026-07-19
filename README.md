@@ -17,13 +17,13 @@ This repository is intentionally organized as one product monorepo with separate
 - `bindings/` contains platform binding wrappers.
 - `brand/` contains protected product identity assets and store artwork placeholders.
 - `docs/` contains product, architecture, security, and release documentation.
-- `tools/` contains local automation for code generation, fixture validation, and Android Rust builds.
+- `tools/` contains repeatable local development and validation automation.
 
 ## Current Phase
 
-Phase 5 is implemented: the phone sends a sanitized, versioned summary through Wear Data
-Layer, and the Wear app validates and persists the latest successful summary. Paired-device
-acceptance remains before Phase 6 starts.
+Phase 5 is complete: paired phone and Wear OS emulators exchange a sanitized, versioned
+summary through Wear Data Layer, and the Wear app validates and persists the latest
+successful state. Phase 6 adds the minimal Watch Face Format surface.
 
 ## Useful Commands
 
@@ -41,6 +41,7 @@ just run-phone
 just check-wear
 just build-wear
 just test-wear-device
+just test-phone-watch-sync
 just run-wear
 just build-watchface
 ```

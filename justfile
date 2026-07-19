@@ -45,6 +45,12 @@ check-wear:
 test-wear-device:
     cd apps/wear_android && ./gradlew --no-daemon connectedDebugAndroidTest
 
+prepare-phone-watch-sync:
+    tools/test-phone-watch-sync/run.sh prepare
+
+test-phone-watch-sync:
+    tools/test-phone-watch-sync/run.sh verify
+
 build-wear:
     cd apps/wear_android && ./gradlew --no-daemon assembleDebug
 

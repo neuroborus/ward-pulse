@@ -1,6 +1,6 @@
 # WardPulse Android — Development Plan
 
-Updated: 2026-07-18
+Updated: 2026-07-19
 
 Product name: **WardPulse**
 
@@ -1095,6 +1095,8 @@ mock summary is persisted locally
 
 ### Phase 5 — phone-to-watch sync
 
+Status: complete as of 2026-07-19.
+
 Deliverables:
 
 - phone app sends WatchDashboardSummary to Wear OS app;
@@ -1319,20 +1321,20 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Finish the paired-device acceptance check for Phase 5.
+Start Phase 6 with the smallest buildable Watch Face Format package.
 
-The Phase 5 implementation now provides:
+Phase 5 passed paired-device acceptance on 2026-07-19:
 
 ```text
-versioned schemas/watch_dashboard_summary.schema.json contract and sanitized fixture
-automatic send after a successful phone snapshot load or refresh
-development-only manual retry from the Flutter settings screen
-urgent Data Layer DataItem delivery on /wardpulse/watch-summary
-Wear listener, validation, local persistence, two-hour stale threshold, and foreground refresh
-redacted outcome logs and previous-state preservation on invalid input
+the paired phone delivered the canonical WatchDashboardSummary over Data Layer
+the Wear listener validated and persisted the received payload
+the saved summary survived a phone app force-stop and Wear app restart unchanged
+four Wear instrumentation tests passed, including invalid-payload state preservation
+tools/test-phone-watch-sync provides the repeatable paired-emulator acceptance harness
 ```
 
-Static analysis, Flutter tests, Wear lint, JVM tests, and both Wear APK builds pass. Before
-Phase 6, pair the Play Store phone AVD with the canonical Wear AVD and verify that changing
-the phone snapshot updates the watch while offline and failure cases preserve the last
-successful summary.
+Phase 6 should replace the current WFF placeholders with a declarative, independently
+buildable package. Keep the first face static and ambient-readable, add tap-to-open where
+the format supports it, and avoid introducing runtime code or a second data model. Dynamic
+today/week/status values should use only a WFF-supported data source once that boundary is
+verified.

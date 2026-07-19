@@ -5,7 +5,7 @@ environment. It records the baseline through the Phase 5 implementation, canonic
 package names, local paths, verification commands, and tooling that is intentionally not
 installed yet.
 
-Last verified: **2026-07-18** on TUXEDO OS 24.04.4 LTS, x86_64.
+Last verified: **2026-07-19** on TUXEDO OS 24.04.4 LTS, x86_64.
 
 ## Current Readiness
 
@@ -33,13 +33,11 @@ build and test gates is ready:
   shapes, and passes its local-persistence tests on the round AVD.
 - Phone and Wear builds use Wearable Data Layer `20.0.1`; the Wear listener validates the
   versioned summary before replacing locally persisted state.
+- The paired Play Store phone and round Wear AVD deliver the canonical summary; it remains
+  unchanged after the phone app is force-stopped and the Wear app is restarted.
 
 The Phase 2 phone-dashboard, Phase 3 Rust-bridge, and Phase 4 Wear-app acceptance gates
-passed on **2026-07-18**.
-
-Phase 5 paired-device acceptance is pending. The installed `google_apis` phone image is
-sufficient for normal phone development but not for Android Studio's Wear pairing flow;
-that flow requires a Play Store phone image, documented below.
+passed on **2026-07-18**. Phase 5 paired-device acceptance passed on **2026-07-19**.
 
 Chrome and Linux desktop warnings from `flutter doctor` are out of scope. WardPulse targets
 Android phone, Wear OS, and Watch Face Format in the current product plan.
@@ -52,13 +50,16 @@ Android phone, Wear OS, and Watch Face Format in the current product plan.
 | Dart | 3.12.2, bundled with Flutter | Phase 2 phone UI |
 | Flutter DevTools | 2.57.0 | Flutter diagnostics |
 | OpenJDK / `javac` | 21.0.11 | Android builds and SDK tools |
-| Android SDK Command-line Tools | 20.0, bundle `14742923` | `sdkmanager` and `avdmanager` |
+| Android Studio | Quail 2, 2026.1.2 | Wear emulator pairing and Android project tooling |
+| Android CLI | 1.0.15857036 | SDK package management and Android tooling |
+| Android SDK Command-line Tools | 22.0 | `android`, `avdmanager`, and bootstrap SDK tools |
 | Android SDK Platform | `platforms;android-36`, revision 2 | Compile SDK baseline |
 | Android SDK Platform | `platforms;android-37.1`, revision 1 | Wear compile SDK |
 | Android SDK Build Tools | `build-tools;36.0.0` | Android build baseline |
 | Android SDK Platform Tools | 37.0.0 | `adb` |
 | Android Emulator | 36.6.11.0, build 15507667 | Phone emulator |
 | Android phone system image | `system-images;android-36;google_apis;x86_64`, revision 7 | Phone AVD |
+| Android phone Play Store image | `system-images;android-36;google_apis_playstore;x86_64`, revision 7 | Paired phone AVD |
 | Android Wear system image | `system-images;android-36.1;android-wear-signed;x86_64`, revision 1 | Wear OS 6.1 AVDs |
 | Gradle Wrapper | 9.1.0 | Flutter Android build |
 | Android Gradle Plugin | 9.0.1 | Flutter Android runner |
@@ -92,6 +93,7 @@ Use these names consistently in local commands and future automation:
 ```text
 Flutter SDK:       $HOME/develop/flutter
 Android SDK:       $HOME/Android/Sdk
+Android Studio:    $HOME/.local/opt/android-studio
 Java home:         /usr/lib/jvm/java-21-openjdk-amd64
 Phone AVD:         wardpulse_phone_api36
 Phone platform:    android-36
@@ -168,6 +170,18 @@ printf '%s  %s\n' \
 tar -xf flutter_linux_3.44.6-stable.tar.xz -C "$HOME/develop"
 ```
 
+### Android Studio
+
+Install the verified Linux archive per user and select the standard setup on first launch:
+
+```sh
+mkdir -p "$HOME/.local/opt"
+tar -xzf /path/to/android-studio-quail2-linux.tar.gz -C "$HOME/.local/opt"
+"$HOME/.local/opt/android-studio/bin/studio"
+```
+
+Use `$ANDROID_HOME` as the Android SDK location. A system-wide package is not required.
+
 ### Android command-line tools
 
 ```sh
@@ -180,29 +194,28 @@ printf '%s  %s\n' \
   'commandlinetools-linux-14742923_latest.zip' \
   | sha256sum -c -
 unzip -q commandlinetools-linux-14742923_latest.zip -d "$ANDROID_HOME/cmdline-tools"
-mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
-```
+mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/20.0"
 
-Review and accept the Android licenses interactively:
-
-```sh
-sdkmanager --licenses
+# The downloaded 20.0 bundle bootstraps the current tool package.
+"$ANDROID_HOME/cmdline-tools/20.0/bin/sdkmanager" \
+  --sdk_root="$ANDROID_HOME" \
+  "cmdline-tools;latest"
 ```
 
 Install the pinned phone, bridge, and Wear packages:
 
 ```sh
-sdkmanager --sdk_root="$ANDROID_HOME" \
-  "platform-tools" \
-  "platforms;android-36" \
-  "platforms;android-37.1" \
-  "build-tools;36.0.0" \
-  "emulator" \
-  "system-images;android-36;google_apis;x86_64" \
-  "system-images;android-36.1;android-wear-signed;x86_64" \
-  "ndk;28.2.13676358" \
-  "cmake;3.22.1" \
-  "ndk;29.0.14206865"
+"$ANDROID_HOME/cmdline-tools/latest/bin/android" --sdk="$ANDROID_HOME" sdk install \
+  platform-tools \
+  platforms/android-36 \
+  platforms/android-37.1 \
+  build-tools/36.0.0 \
+  emulator \
+  system-images/android-36/google_apis/x86_64 \
+  system-images/android-36.1/android-wear-signed/x86_64 \
+  ndk/28.2.13676358 \
+  cmake/3.22.1 \
+  ndk/29.0.14206865
 ```
 
 Configure Flutter explicitly and populate Android artifacts:
@@ -265,20 +278,26 @@ Wear Data Layer emulator pairing requires a phone image with the Play Store. Ins
 image and create a separate AVD without replacing the canonical CLI phone AVD:
 
 ```sh
-sdkmanager --sdk_root="$ANDROID_HOME" \
-  "system-images;android-36;google_apis_playstore;x86_64"
+android --sdk="$ANDROID_HOME" sdk install \
+  system-images/android-36/google_apis_playstore/x86_64
 
 printf 'no\n' | avdmanager create avd \
   --name wardpulse_phone_play_api36 \
   --package "system-images;android-36;google_apis_playstore;x86_64" \
   --device pixel_7 \
   --force
+
+# avdmanager may leave this disabled even for a Play Store image.
+sed -i 's/^PlayStore.enabled=no$/PlayStore.enabled=yes/' \
+  "$HOME/.android/avd/wardpulse_phone_play_api36.avd/config.ini"
 ```
 
 Start `wardpulse_phone_play_api36` and one canonical Wear AVD, then pair them with Android
-Studio's Wear OS emulator pairing assistant. Both WardPulse APKs must use application ID
-`app.wardpulse` and the same signing certificate; the Wear Kotlin namespace remains
-`app.wardpulse.wear`.
+Studio's Wear OS emulator pairing assistant. Installing the Google Pixel Watch companion
+from Play Store requires a Google account on the phone AVD; use a dedicated test account.
+The companion's optional `Associate` action is not part of this acceptance flow and is not
+required for Data Layer. Both WardPulse APKs must use application ID `app.wardpulse` and the
+same signing certificate; the Wear Kotlin namespace remains `app.wardpulse.wear`.
 
 ## Wear OS AVDs
 
@@ -313,6 +332,23 @@ just test-wear-device
 just run-wear
 ```
 
+### Wear emulator navigation
+
+From the watch face, Android Emulator's **Button 1** opens the app launcher. If an app is
+foregrounded, return home first. The equivalent deterministic ADB commands are:
+
+```sh
+adb -s "$WEAR_SERIAL" shell input keyevent 3
+adb -s "$WEAR_SERIAL" shell input keyevent 264
+```
+
+Start WardPulse directly when launcher navigation is not under test:
+
+```sh
+adb -s "$WEAR_SERIAL" shell am start \
+  -n app.wardpulse/app.wardpulse.wear.MainActivity
+```
+
 The app compiles against Android SDK 37.1 but targets API 36 and runs on the Wear OS 6.1 /
 API 36.1 image. Compile SDK and runtime system image versions are intentionally independent.
 
@@ -326,8 +362,9 @@ dart --version
 java -version
 rustc --version
 cargo --version
-sdkmanager --version
-sdkmanager --sdk_root="$ANDROID_HOME" --list_installed
+android --version
+android --sdk="$ANDROID_HOME" info
+android --sdk="$ANDROID_HOME" sdk list
 adb version
 emulator -version
 flutter doctor -v
@@ -359,16 +396,25 @@ just test-wear-device
 just run-wear
 ```
 
+Prepare and run the paired phone-to-watch acceptance check:
+
+```sh
+just prepare-phone-watch-sync
+just test-phone-watch-sync
+```
+
+The preparation command is one-time; pairing still completes in Android Studio. The test
+command discovers one online phone and one online Wear device without hardcoded emulator
+ports. Set `PHONE_SERIAL` and `WEAR_SERIAL` explicitly when additional devices are online.
+
 Do not hardcode `emulator-5554` in project automation; resolve the active device through
 `flutter devices` or `adb devices` because the emulator port can change.
 
 ## Later-Phase Gaps
 
-The command-line toolchain is complete for Phase 5 builds and local tests. Android Studio is
-not installed and is optional for the verified CLI workflow, but its pairing assistant is
-required for the Phase 5 emulator-to-emulator acceptance test. The stable IDE at the last
-verification date is Android Studio **Quail 2 | 2026.1.2**, which supports the Wear project's
-AGP 9.3 baseline.
+The Android toolchain is complete through Phase 5. Android Studio **Quail 2 | 2026.1.2**,
+the Play Store phone image, and the canonical `wardpulse_phone_play_api36` AVD completed the
+emulator-to-emulator pairing check and support the Wear project's AGP 9.3 baseline.
 
 The remaining Android roadmap is not tool-complete yet. Install or select these only when
 their phase begins:
@@ -386,7 +432,7 @@ Updates are explicit project changes, not silent local drift:
 ```sh
 flutter channel stable
 flutter upgrade
-sdkmanager --update
+android --sdk="$ANDROID_HOME" sdk update
 ```
 
 After an update:
@@ -402,7 +448,9 @@ After an update:
 - [Flutter manual installation](https://docs.flutter.dev/install/manual)
 - [Flutter Android setup](https://docs.flutter.dev/platform-integration/android/setup)
 - [Android Studio stable releases](https://developer.android.com/studio/releases)
-- [Android `sdkmanager`](https://developer.android.com/tools/sdkmanager)
+- [Android CLI](https://developer.android.com/tools/agents/android-cli)
+- [Android `sdkmanager` bootstrap](https://developer.android.com/tools/sdkmanager)
+- [Android Emulator controls](https://developer.android.com/studio/run/emulator)
 - [Android Emulator acceleration](https://developer.android.com/studio/run/emulator-acceleration)
 - [Android SDK platform releases](https://developer.android.com/tools/releases/platforms)
 - [Android Gradle Plugin 9.3](https://developer.android.com/build/releases/agp-9-3-0-release-notes)
