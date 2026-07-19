@@ -90,9 +90,7 @@ class BudgetSummaryCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Expanded(
-                  child: Text(title, style: textTheme.titleMedium),
-                ),
+                Expanded(child: Text(title, style: textTheme.titleMedium)),
                 StatusPill(status: state.status),
               ],
             ),
@@ -108,9 +106,7 @@ class BudgetSummaryCard extends StatelessWidget {
             const SizedBox(height: 10),
             Row(
               children: [
-                Expanded(
-                  child: Text('${state.usedPercentLabel} used'),
-                ),
+                Expanded(child: Text('${state.usedPercentLabel} used')),
                 Text('Left ${state.remaining?.label ?? 'Unknown'}'),
               ],
             ),
@@ -129,13 +125,18 @@ class _SyncHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final updatedAt = formatUtc(snapshot.generatedAt);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Usage dashboard', style: textTheme.headlineSmall),
         const SizedBox(height: 4),
-        Text('Updated ${formatUtc(snapshot.generatedAt)}'),
+        Text(
+          snapshot.overallStatus == ProviderStatus.stale
+              ? 'Showing previous data · Updated $updatedAt'
+              : 'Updated $updatedAt',
+        ),
       ],
     );
   }
@@ -220,9 +221,10 @@ class _ModelUsagePanel extends StatelessWidget {
 
     final maxRequests = models.fold<int>(
       0,
-      (current, model) => model.requests != null && model.requests! > current
-          ? model.requests!
-          : current,
+      (current, model) =>
+          model.requests != null && model.requests! > current
+              ? model.requests!
+              : current,
     );
 
     return Card(
@@ -251,9 +253,10 @@ class _ModelUsageRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final value = maxRequests == 0 || model.requests == null
-        ? 0.0
-        : model.requests! / maxRequests;
+    final value =
+        maxRequests == 0 || model.requests == null
+            ? 0.0
+            : model.requests! / maxRequests;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -272,10 +275,7 @@ class _ModelUsageRow extends StatelessWidget {
         const SizedBox(height: 10),
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            minHeight: 8,
-            value: value,
-          ),
+          child: LinearProgressIndicator(minHeight: 8, value: value),
         ),
         const SizedBox(height: 8),
         Wrap(

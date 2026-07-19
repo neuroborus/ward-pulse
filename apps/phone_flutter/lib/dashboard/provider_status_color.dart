@@ -11,10 +11,10 @@ Color providerStatusColor(ColorScheme colors, ProviderStatus status) {
       Brightness.light => _successLight,
       Brightness.dark => _successDark,
     },
-    ProviderStatus.warning => colors.tertiary,
-    ProviderStatus.error ||
+    ProviderStatus.warning ||
     ProviderStatus.rateLimited ||
-    ProviderStatus.authRequired => colors.error,
-    ProviderStatus.stale || ProviderStatus.unknown => colors.outline,
+    ProviderStatus.stale => colors.tertiary,
+    ProviderStatus.error || ProviderStatus.authRequired => colors.error,
+    ProviderStatus.unknown => colors.outline,
   };
 }

@@ -69,6 +69,21 @@ class DashboardSnapshot {
   String get accountCountLabel {
     return accounts.length == 1 ? '1 account' : '${accounts.length} accounts';
   }
+
+  DashboardSnapshot withStaleStatus() {
+    return DashboardSnapshot(
+      generatedAt: generatedAt,
+      overallStatus: ProviderStatus.stale,
+      accounts: accounts
+          .map((account) => account._withStatus(ProviderStatus.stale))
+          .toList(growable: false),
+      todayTotal: todayTotal,
+      weekTotal: weekTotal,
+      monthTotal: monthTotal,
+      alerts: alerts,
+      watchSummary: watchSummary._withStatus(ProviderStatus.stale),
+    );
+  }
 }
 
 class ProviderSnapshot {
@@ -119,6 +134,21 @@ class ProviderSnapshot {
       'mock' => 'Mock',
       _ => provider,
     };
+  }
+
+  ProviderSnapshot _withStatus(ProviderStatus value) {
+    return ProviderSnapshot(
+      accountId: accountId,
+      provider: provider,
+      status: value,
+      today: today,
+      week: week,
+      month: month,
+      credits: credits,
+      buckets: buckets,
+      modelBreakdown: modelBreakdown,
+      lastSuccessfulSyncAt: lastSuccessfulSyncAt,
+    );
   }
 }
 
@@ -343,6 +373,14 @@ class WatchSummary {
       todayUsedPercent: (json['todayUsedPercent'] as num?)?.toDouble(),
       weekUsedPercent: (json['weekUsedPercent'] as num?)?.toDouble(),
       status: _statusFromJson(json['status']),
+    );
+  }
+
+  WatchSummary _withStatus(ProviderStatus value) {
+    return WatchSummary(
+      todayUsedPercent: todayUsedPercent,
+      weekUsedPercent: weekUsedPercent,
+      status: value,
     );
   }
 }

@@ -1185,6 +1185,14 @@ confirm the saved key remains masked and no sensitive values appear in logcat
 
 ### Phase 8 — MVP hardening
 
+Status: in progress as of 2026-07-19; Phase 7 live acceptance remains pending.
+
+Completed slice:
+
+- the phone keeps the last successful live snapshot after a refresh failure;
+- cached dashboard, provider, and watch-summary state is marked stale;
+- the dashboard labels previous data explicitly while preserving its original timestamp.
+
 Deliverables:
 
 - error states;
@@ -1352,8 +1360,8 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Complete the Phase 7 live acceptance with a user-supplied OpenAI Admin API key, then start
-Phase 8 MVP hardening.
+Complete the Phase 7 live acceptance with a user-supplied OpenAI Admin API key. Phase 8 MVP
+hardening has started independently with explicit stale-state handling for cached snapshots.
 
 Phase 6 passed Watch Face Format acceptance on 2026-07-19:
 

@@ -39,10 +39,7 @@ class ProviderDetailScreen extends StatelessWidget {
             const SizedBox(height: 12),
             BudgetSummaryCard(title: 'Month', state: account.month),
             const SizedBox(height: 16),
-            Text(
-              'Models',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text('Models', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             for (final model in account.modelBreakdown)
               Card(

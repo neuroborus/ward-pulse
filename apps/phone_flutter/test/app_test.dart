@@ -103,6 +103,31 @@ void main() {
     expect(find.text('Dashboard unavailable'), findsNothing);
   });
 
+  testWidgets('labels previous dashboard data as stale', (tester) async {
+    final snapshot =
+        DashboardSnapshot.fromJsonString(
+          File(
+            '../../fixtures/snapshots/dashboard_today.json',
+          ).readAsStringSync(),
+        ).withStaleStatus();
+
+    await tester.pumpWidget(
+      WardPulseApp(repository: ValueDashboardRepository(snapshot)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Stale'), findsOneWidget);
+    expect(
+      find.textContaining('Showing previous data · Updated'),
+      findsOneWidget,
+    );
+    final staleIcon = find.byIcon(Icons.schedule);
+    expect(
+      tester.widget<Icon>(staleIcon).color,
+      Theme.of(tester.element(staleIcon)).colorScheme.tertiary,
+    );
+  });
+
   testWidgets('stores and masks an OpenAI Admin API key', (tester) async {
     final snapshot = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),

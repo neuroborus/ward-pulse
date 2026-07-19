@@ -103,7 +103,7 @@ final class OpenAiDashboardRepository extends DashboardRepository {
     final cached = _lastSuccessfulSnapshot;
     if (cached != null) {
       _logger.record(ProviderSyncEvent.usingCachedSnapshot);
-      return Future.value(cached);
+      return Future.value(cached.withStaleStatus());
     }
 
     return Future.error(const DashboardLoadException());

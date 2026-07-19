@@ -89,18 +89,20 @@ class _UsageHistoryPainter extends CustomPainter {
       return;
     }
 
-    final baselinePaint = Paint()
-      ..color = baselineColor
-      ..strokeWidth = 1;
+    final baselinePaint =
+        Paint()
+          ..color = baselineColor
+          ..strokeWidth = 1;
     final barPaint = Paint()..color = color;
     final maxValue = values.fold<int>(
       0,
       (current, value) => value > current ? value : current,
     );
     final barGap = values.length > 1 ? 8.0 : 0.0;
-    final availableWidth = (size.width - barGap * (values.length - 1))
-        .clamp(0.0, size.width)
-        .toDouble();
+    final availableWidth =
+        (size.width - barGap * (values.length - 1))
+            .clamp(0.0, size.width)
+            .toDouble();
     final barWidth = availableWidth / values.length;
     final radius = Radius.circular(barWidth < 6 ? 2 : 4);
 
@@ -116,7 +118,8 @@ class _UsageHistoryPainter extends CustomPainter {
 
     for (var index = 0; index < values.length; index += 1) {
       final fraction = maxValue == 0 ? 0.0 : values[index] / maxValue;
-      final height = (size.height * fraction).clamp(2.0, size.height).toDouble();
+      final height =
+          (size.height * fraction).clamp(2.0, size.height).toDouble();
       final left = index * (barWidth + barGap);
       final rect = Rect.fromLTWH(left, size.height - height, barWidth, height);
 

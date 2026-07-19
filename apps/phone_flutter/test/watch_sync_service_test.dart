@@ -20,4 +20,28 @@ void main() {
 
     expect(jsonDecode(payload.encode()), expected);
   });
+
+  test('marks the previous watch summary stale after a sync failure', () {
+    final dashboard =
+        DashboardSnapshot.fromJsonString(
+          File(
+            '../../fixtures/snapshots/dashboard_today.json',
+          ).readAsStringSync(),
+        ).withStaleStatus();
+
+    final payload =
+        jsonDecode(
+              WatchDashboardSummaryPayload.fromSnapshot(dashboard).encode(),
+            )
+            as Map<String, dynamic>;
+
+    expect(payload['overallStatus'], 'stale');
+    expect(payload['isStale'], isTrue);
+    expect(
+      (payload['providers'] as List<dynamic>).map(
+        (provider) => (provider as Map<String, dynamic>)['status'],
+      ),
+      everyElement('stale'),
+    );
+  });
 }

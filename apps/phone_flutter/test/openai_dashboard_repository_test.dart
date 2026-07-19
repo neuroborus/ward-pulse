@@ -109,7 +109,15 @@ void main() {
     transport.fail = true;
     final second = await repository.load();
 
-    expect(second, same(first));
+    expect(second, isNot(same(first)));
+    expect(second.generatedAt, first.generatedAt);
+    expect(second.overallStatus, ProviderStatus.stale);
+    expect(
+      second.accounts.map((account) => account.status),
+      everyElement(ProviderStatus.stale),
+    );
+    expect(second.todayTotal, same(first.todayTotal));
+    expect(second.watchSummary.status, ProviderStatus.stale);
     expect(logger.events, [
       ProviderSyncEvent.succeeded,
       ProviderSyncEvent.authenticationRequired,
