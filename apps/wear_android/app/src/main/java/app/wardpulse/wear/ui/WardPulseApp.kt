@@ -23,6 +23,7 @@ import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
 import androidx.wear.compose.ui.tooling.preview.WearPreviewDevices
 import androidx.wear.compose.ui.tooling.preview.WearPreviewSquare
+import app.wardpulse.wear.model.AllowanceSummary
 import app.wardpulse.wear.model.MockWatchDashboardSummary
 import app.wardpulse.wear.model.Money
 import app.wardpulse.wear.model.PulseStatus
@@ -34,6 +35,7 @@ import java.util.Locale
 private const val HOME_ROUTE = "home"
 
 private enum class Screen(val route: String, val label: String) {
+    USAGE("usage", "Usage"),
     TODAY("today", "Today"),
     WEEK("week", "Week"),
     PROVIDERS("providers", "Providers"),
@@ -71,6 +73,13 @@ fun WardPulseApp(summary: WatchDashboardSummary) {
 }
 
 private fun WatchDashboardSummary.rowsFor(screen: Screen): List<SummaryRow> = when (screen) {
+    Screen.USAGE -> allowances.map { allowance ->
+        SummaryRow(
+            allowance.label,
+            allowance.valueLabel,
+            allowance.status,
+        )
+    }.ifEmpty { listOf(SummaryRow("No usage data", "Sync from the phone")) }
     Screen.TODAY -> listOf(
         SummaryRow("${today.spent.labelOrUnknown()} / ${today.limit.labelOrUnknown()}", "Budget"),
         SummaryRow(today.usedPercent.usedLabel(), "${today.remaining.labelOrUnknown()} left"),
@@ -136,8 +145,12 @@ private fun HomeScreen(summary: WatchDashboardSummary, onOpen: (Screen) -> Unit)
                         color = statusColor(status),
                     )
                     Text(
-                        "Today ${summary.today.usedPercent.percentLabel()} · " +
-                            "Week ${summary.week.usedPercent.percentLabel()}",
+                        summary.allowances.take(2).joinToString(" · ") { allowance ->
+                            allowance.valueLabel
+                        }.ifEmpty {
+                            "Today ${summary.today.usedPercent.percentLabel()} · " +
+                                "Week ${summary.week.usedPercent.percentLabel()}"
+                        },
                     )
                 }
             }
@@ -156,6 +169,14 @@ private fun HomeScreen(summary: WatchDashboardSummary, onOpen: (Screen) -> Unit)
         }
     }
 }
+
+private val AllowanceSummary.valueLabel: String
+    get() = when {
+        unlimited -> "Unlimited"
+        usedPercent != null -> usedPercent.usedLabel()
+        remaining != null -> remaining.label
+        else -> "Unavailable"
+    }
 
 @Composable
 private fun SummaryScreen(title: String, rows: List<SummaryRow>) {

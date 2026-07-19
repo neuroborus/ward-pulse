@@ -5,9 +5,10 @@ Provider integrations should be added one at a time. The initial implementation 
 ## Initial Order
 
 1. Mock provider.
-2. OpenAI, including Codex usage if OpenAI reporting exposes it for the target account type.
-3. Claude.
-4. Cursor.
+2. OpenAI Platform organization reporting.
+3. Codex subscription usage directly from the phone.
+4. Claude.
+5. Cursor.
 
 The order can change when API access, account type, or reporting endpoints make another provider a better first real integration.
 
@@ -27,6 +28,18 @@ Each provider should document:
 ## Boundary
 
 Platform code owns transport, TLS, background scheduling, secure credential retrieval, retries, and encrypted storage. Rust owns parsing, validation, normalization, error mapping, aggregation, budgets, projections, alerts, and dashboard view models.
+
+## Consumption display
+
+Providers may report plan allowances, purchased tokens or credits, or both. These values stay
+separate from monetary budgets because their units and reset rules differ.
+
+- Plan usage is visible by default; purchased usage is opt-in.
+- The user may show either source or both, but at least one source remains enabled.
+- The preference filters phone and Wear OS presentation without discarding collected data.
+- WardPulse does not invent a limit, balance, or percentage when the provider omits it.
+- Exact provider quantities cross shared contracts as decimal strings with an explicit `tokens`
+  or `credits` unit.
 
 ## OpenAI Platform organization reporting
 
@@ -68,7 +81,8 @@ Implementation status as of 2026-07-19:
 - Android backup is disabled so encrypted values cannot be restored without their device-bound key.
 - Usage and cost pages are fetched directly from the phone, then passed without credentials or authorization headers to the Rust normalization boundary.
 - OpenAI API costs are normalized as USD. Raw page JSON crosses the Dart-to-Rust boundary as strings so decimal values remain exact; Rust sums exact values before rounding period totals to cents. Missing optional amount fields are ignored and an empty successful cost report is represented as zero spend.
-- Sync diagnostics contain fixed outcome names only. Provider response bodies are processed in memory and are not logged.
+- Cost amounts accept both JSON numbers and decimal strings because the live Costs API may use either representation.
+- Sync diagnostics contain only the endpoint label, HTTP status, provider error code, request ID, or a sanitized parser reason. Provider response bodies are processed in memory and are not logged.
 - Authentication, permission, rate-limit, availability, and response-shape failures are mapped to fixed UI-safe messages without response bodies or credentials.
 - Sanitized fixtures cover report parsing; live acceptance requires a user-supplied Admin API key.
 
@@ -77,3 +91,46 @@ Official references:
 - [Administration overview](https://developers.openai.com/api/reference/administration/overview)
 - [Organization completions usage](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage/methods/completions)
 - [Organization costs](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage/methods/costs)
+
+## Codex subscription reporting
+
+Status: implemented as an experimental on-device integration on 2026-07-19; Android end-to-end
+acceptance is pending.
+
+The OpenAI Platform Admin API does not represent personal Codex subscription limits. WardPulse
+therefore treats Codex as a separate provider. The phone reproduces only the narrow authentication
+and read paths used by the open-source Codex client:
+
+- OpenAI device-code sign-in and OAuth token refresh;
+- `GET /backend-api/wham/usage` for plan windows and purchased credit balance;
+- `GET /backend-api/wham/profiles/me` for daily token activity.
+
+The access token, rotating refresh token, and account routing identifier stay in platform-secure
+storage. The client retries once after refreshing an expired token, retains at most the latest 31
+daily buckets, and discards profile identity fields. Refresh and report operations are serialized,
+and every rotated token is saved before reporting continues. No Codex CLI, desktop process,
+loopback server, or WardPulse cloud service is involved.
+
+When both Codex and OpenAI Platform are configured, the phone fetches them independently and Rust
+rebuilds one dashboard from both provider snapshots. A failure in one provider leaves current data
+from the other provider visible with the failed sync identified.
+
+This is a compatibility integration, not a published third-party API contract. Endpoint or OAuth
+changes may require an app update. WardPulse must surface that failure without exposing tokens or
+raw responses and must not expand this path into model execution or general ChatGPT access.
+
+Capabilities:
+
+| Metric | Support | Notes |
+| --- | --- | --- |
+| Plan usage | Yes | Primary and secondary rate-limit windows when reported. |
+| Purchased credits | Yes | Includes finite balances and explicitly unlimited balances. |
+| Token activity | Yes | Latest 31 daily buckets. |
+| Platform API cost | No | Remains the separate OpenAI Platform provider. |
+| Requests or model breakdown | No | Not exposed by these account methods. |
+
+Official references:
+
+- [Codex app-server authentication and account methods](https://learn.chatgpt.com/docs/app-server#auth-endpoints)
+- [Open-source Codex device-code implementation](https://github.com/openai/codex/blob/main/codex-rs/login/src/device_code_auth.rs)
+- [Open-source Codex backend client](https://github.com/openai/codex/blob/main/codex-rs/backend-client/src/client.rs)

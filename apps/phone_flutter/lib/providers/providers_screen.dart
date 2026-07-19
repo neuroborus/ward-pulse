@@ -2,12 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_screen.dart';
+import '../settings/consumption_display_preferences.dart';
 import 'provider_detail_screen.dart';
 
 class ProvidersScreen extends StatelessWidget {
-  const ProvidersScreen({super.key, required this.snapshot});
+  const ProvidersScreen({
+    super.key,
+    required this.snapshot,
+    this.displayPreferences = const ConsumptionDisplayPreferences(),
+  });
 
   final DashboardSnapshot snapshot;
+  final ConsumptionDisplayPreferences displayPreferences;
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +51,7 @@ class ProvidersScreen extends StatelessWidget {
             subtitle: Text(account.accountId),
             trailing: StatusPill(
               status: account.status,
-              tooltip: snapshot.syncIssue?.message,
+              tooltip: snapshot.syncTooltip,
             ),
             onTap: () {
               Navigator.of(context).push(
@@ -53,7 +59,8 @@ class ProvidersScreen extends StatelessWidget {
                   builder:
                       (context) => ProviderDetailScreen(
                         account: account,
-                        syncIssue: snapshot.syncIssue,
+                        displayPreferences: displayPreferences,
+                        syncTooltip: snapshot.syncTooltip,
                       ),
                 ),
               );

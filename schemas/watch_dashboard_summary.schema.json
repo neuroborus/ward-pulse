@@ -10,12 +10,13 @@
     "overallStatus",
     "today",
     "week",
+    "allowances",
     "providers",
     "alerts",
     "isStale"
   ],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 2 },
     "generatedAt": { "type": "string", "format": "date-time" },
     "overallStatus": { "$ref": "dashboard_snapshot.schema.json#/$defs/providerStatus" },
     "today": {
@@ -35,6 +36,28 @@
           "properties": { "period": { "const": "week" } }
         }
       ]
+    },
+    "allowances": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "label", "usedPercent", "remaining", "resetsAt", "status"],
+        "properties": {
+          "source": { "$ref": "dashboard_snapshot.schema.json#/$defs/allowanceSource" },
+          "label": { "type": "string" },
+          "usedPercent": { "type": ["number", "null"], "minimum": 0 },
+          "remaining": {
+            "anyOf": [
+              { "$ref": "dashboard_snapshot.schema.json#/$defs/quantity" },
+              { "type": "null" }
+            ]
+          },
+          "unlimited": { "type": "boolean" },
+          "resetsAt": { "type": ["string", "null"], "format": "date-time" },
+          "status": { "$ref": "dashboard_snapshot.schema.json#/$defs/providerStatus" }
+        }
+      }
     },
     "providers": {
       "type": "array",

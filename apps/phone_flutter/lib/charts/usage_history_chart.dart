@@ -1,16 +1,24 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../dashboard/dashboard_models.dart';
 
 class UsageHistoryChart extends StatelessWidget {
-  const UsageHistoryChart({super.key, required this.buckets});
+  const UsageHistoryChart({
+    super.key,
+    required this.buckets,
+    this.title = 'Usage history',
+  });
 
   final List<UsageBucket> buckets;
+  final String title;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final totalCost = _totalCost(buckets);
+    final totalTokens = _totalTokens(buckets);
+    final usesTokens = totalCost == null && totalTokens != null;
     final showDates = _spansMultipleUtcDays(buckets);
 
     return Card(
@@ -25,7 +33,7 @@ class UsageHistoryChart extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'Usage history',
+                    title,
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
@@ -40,9 +48,15 @@ class UsageHistoryChart extends StatelessWidget {
                 height: 112,
                 width: double.infinity,
                 child: CustomPaint(
+                  key: const ValueKey('usage-history-bars'),
                   painter: _UsageHistoryPainter(
                     values: buckets
-                        .map((bucket) => bucket.cost?.minorUnits ?? 0)
+                        .map(
+                          (bucket) =>
+                              usesTokens
+                                  ? bucket.totalTokens ?? 0
+                                  : bucket.cost?.minorUnits ?? 0,
+                        )
                         .toList(growable: false),
                     color: colors.primary,
                     baselineColor: colors.outlineVariant,
@@ -55,7 +69,12 @@ class UsageHistoryChart extends StatelessWidget {
                   Expanded(
                     child: Text(_rangeLabel(buckets.first.startAt, showDates)),
                   ),
-                  Text(totalCost?.label ?? 'Unknown'),
+                  Text(
+                    totalCost?.label ??
+                        (totalTokens == null
+                            ? 'Unknown'
+                            : '${formatCount(totalTokens)} tokens'),
+                  ),
                   Expanded(
                     child: Text(
                       _rangeLabel(buckets.last.endAt, showDates),
@@ -98,7 +117,10 @@ class _UsageHistoryPainter extends CustomPainter {
       0,
       (current, value) => value > current ? value : current,
     );
-    final barGap = values.length > 1 ? 8.0 : 0.0;
+    final barGap =
+        values.length > 1
+            ? (size.width / values.length / 4).clamp(2.0, 8.0).toDouble()
+            : 0.0;
     final availableWidth =
         (size.width - barGap * (values.length - 1))
             .clamp(0.0, size.width)
@@ -112,12 +134,15 @@ class _UsageHistoryPainter extends CustomPainter {
       baselinePaint,
     );
 
-    if (barWidth <= 0) {
+    if (barWidth <= 0 || maxValue <= 0) {
       return;
     }
 
     for (var index = 0; index < values.length; index += 1) {
-      final fraction = maxValue == 0 ? 0.0 : values[index] / maxValue;
+      if (values[index] <= 0) {
+        continue;
+      }
+      final fraction = values[index] / maxValue;
       final height =
           (size.height * fraction).clamp(2.0, size.height).toDouble();
       final left = index * (barWidth + barGap);
@@ -129,7 +154,7 @@ class _UsageHistoryPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_UsageHistoryPainter oldDelegate) {
-    return oldDelegate.values != values ||
+    return !listEquals(oldDelegate.values, values) ||
         oldDelegate.color != color ||
         oldDelegate.baselineColor != baselineColor;
   }
@@ -156,6 +181,18 @@ Money? _totalCost(List<UsageBucket> buckets) {
       (total, bucket) => total + bucket.cost!.minorUnits,
     ),
     currency: currency,
+  );
+}
+
+int? _totalTokens(List<UsageBucket> buckets) {
+  if (buckets.isEmpty ||
+      buckets.every((bucket) => bucket.totalTokens == null)) {
+    return null;
+  }
+
+  return buckets.fold<int>(
+    0,
+    (total, bucket) => total + (bucket.totalTokens ?? 0),
   );
 }
 

@@ -50,6 +50,24 @@ data class PeriodSummary(
     val status: PulseStatus,
 )
 
+data class Quantity(
+    val value: String,
+    val unit: String,
+) {
+    val label: String
+        get() = "$value $unit"
+}
+
+data class AllowanceSummary(
+    val source: String,
+    val label: String,
+    val usedPercent: Double?,
+    val remaining: Quantity?,
+    val unlimited: Boolean = false,
+    val resetsAt: String?,
+    val status: PulseStatus,
+)
+
 data class ProviderSummary(
     val provider: String,
     val status: PulseStatus,
@@ -58,6 +76,7 @@ data class ProviderSummary(
     val providerLabel: String
         get() = when (provider) {
             "openai" -> "OpenAI"
+            "codex" -> "Codex"
             "claude" -> "Claude"
             "cursor" -> "Cursor"
             "mock" -> "Mock"
@@ -76,6 +95,7 @@ data class WatchDashboardSummary(
     val overallStatus: PulseStatus,
     val today: PeriodSummary,
     val week: PeriodSummary,
+    val allowances: List<AllowanceSummary>,
     val providers: List<ProviderSummary>,
     val alerts: List<AlertSummary>,
     val isStale: Boolean,
@@ -109,7 +129,7 @@ data class WatchDashboardSummary(
 
 object MockWatchDashboardSummary {
     val value = WatchDashboardSummary(
-        schemaVersion = 1,
+        schemaVersion = 2,
         generatedAt = "2026-06-27T18:42:00Z",
         overallStatus = PulseStatus.OK,
         today = PeriodSummary(
@@ -130,6 +150,7 @@ object MockWatchDashboardSummary {
             projectedTotal = Money(22_800, "USD"),
             status = PulseStatus.OK,
         ),
+        allowances = emptyList(),
         providers = listOf(
             ProviderSummary(
                 provider = "mock",

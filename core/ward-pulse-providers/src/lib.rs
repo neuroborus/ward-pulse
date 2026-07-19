@@ -1,4 +1,5 @@
 pub mod claude;
+pub mod codex;
 pub mod cursor;
 pub mod mock;
 pub mod openai;
@@ -45,6 +46,7 @@ pub struct ProviderCapabilities {
 pub const fn provider_capabilities(provider: ProviderKind) -> Option<ProviderCapabilities> {
     match provider {
         ProviderKind::OpenAi => Some(openai::CAPABILITIES),
+        ProviderKind::Codex => Some(codex::CAPABILITIES),
         ProviderKind::Mock => Some(mock::CAPABILITIES),
         ProviderKind::Claude | ProviderKind::Cursor => None,
     }
@@ -72,6 +74,11 @@ mod tests {
             (mock.usage_buckets, mock.cost_buckets),
             (BucketCapabilities::NONE, BucketCapabilities::NONE)
         );
+
+        let codex = provider_capabilities(ProviderKind::Codex).expect("Codex capabilities");
+        assert_eq!(codex.usage_buckets, BucketCapabilities::DAILY);
+        assert!(codex.supports_tokens);
+        assert!(codex.supports_credits);
     }
 
     #[test]

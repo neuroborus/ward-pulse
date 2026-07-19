@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_repository.dart';
 import '../dashboard/dashboard_screen.dart';
-import '../providers/providers_screen.dart';
+import '../providers/codex_account_service.dart';
 import '../providers/provider_credential_store.dart';
+import '../providers/providers_screen.dart';
 import '../settings/settings_screen.dart';
+import '../settings/consumption_display_preferences.dart';
 import '../sync/watch_sync_service.dart';
 
 final ColorScheme _lightColorScheme = ColorScheme.fromSeed(
@@ -41,11 +43,16 @@ class WardPulseApp extends StatelessWidget {
     this.repository = const RustDashboardRepository(),
     this.watchSyncService = const MethodChannelWatchSyncService(),
     this.credentialStore = const EmptyProviderCredentialStore(),
+    this.codexAccountService = const EmptyCodexAccountService(),
+    this.displayPreferenceStore =
+        const DefaultConsumptionDisplayPreferenceStore(),
   });
 
   final DashboardRepository repository;
   final WatchSyncService watchSyncService;
   final ProviderCredentialStore credentialStore;
+  final CodexAccountService codexAccountService;
+  final ConsumptionDisplayPreferenceStore displayPreferenceStore;
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +65,8 @@ class WardPulseApp extends StatelessWidget {
         repository: repository,
         watchSyncService: watchSyncService,
         credentialStore: credentialStore,
+        codexAccountService: codexAccountService,
+        displayPreferenceStore: displayPreferenceStore,
       ),
     );
   }
@@ -69,11 +78,15 @@ class DashboardHost extends StatefulWidget {
     required this.repository,
     required this.watchSyncService,
     required this.credentialStore,
+    required this.codexAccountService,
+    required this.displayPreferenceStore,
   });
 
   final DashboardRepository repository;
   final WatchSyncService watchSyncService;
   final ProviderCredentialStore credentialStore;
+  final CodexAccountService codexAccountService;
+  final ConsumptionDisplayPreferenceStore displayPreferenceStore;
 
   @override
   State<DashboardHost> createState() => _DashboardHostState();
@@ -81,17 +94,46 @@ class DashboardHost extends StatefulWidget {
 
 class _DashboardHostState extends State<DashboardHost> {
   late Future<DashboardSnapshot> _snapshot = _loadSnapshot();
+  DashboardSnapshot? _currentSnapshot;
+  ConsumptionDisplayPreferences _displayPreferences =
+      const ConsumptionDisplayPreferences();
   int _selectedIndex = 0;
 
+  Future<void> _readDisplayPreferences() async {
+    try {
+      final value = await widget.displayPreferenceStore.read();
+      _displayPreferences = value;
+    } catch (_) {
+      // The default plan view remains available if local preferences fail.
+    }
+  }
+
+  Future<void> _updateDisplayPreferences(
+    ConsumptionDisplayPreferences value,
+  ) async {
+    await widget.displayPreferenceStore.write(value);
+    if (mounted) {
+      setState(() {
+        _displayPreferences = value;
+      });
+    }
+    final snapshot = _currentSnapshot;
+    if (snapshot != null) {
+      unawaited(_syncWatch(snapshot));
+    }
+  }
+
   Future<DashboardSnapshot> _loadSnapshot() async {
+    await _readDisplayPreferences();
     final snapshot = await widget.repository.load();
+    _currentSnapshot = snapshot;
     unawaited(_syncWatch(snapshot));
     return snapshot;
   }
 
   Future<void> _syncWatch(DashboardSnapshot snapshot) async {
     try {
-      await widget.watchSyncService.sync(snapshot);
+      await widget.watchSyncService.sync(snapshot, _displayPreferences);
     } catch (_) {
       // Watch availability must not block the phone dashboard.
     }
@@ -119,7 +161,7 @@ class _DashboardHostState extends State<DashboardHost> {
                   padding: const EdgeInsetsDirectional.only(end: 12),
                   child: StatusPill(
                     status: snapshot.overallStatus,
-                    tooltip: snapshot.syncIssue?.message,
+                    tooltip: snapshot.syncTooltip,
                   ),
                 ),
               IconButton(
@@ -135,6 +177,9 @@ class _DashboardHostState extends State<DashboardHost> {
                 snapshot: snapshot,
                 watchSyncService: widget.watchSyncService,
                 credentialStore: widget.credentialStore,
+                codexAccountService: widget.codexAccountService,
+                displayPreferences: _displayPreferences,
+                onDisplayPreferencesChanged: _updateDisplayPreferences,
                 onCredentialsChanged: () {
                   widget.repository.invalidate();
                   _reload();
@@ -142,15 +187,16 @@ class _DashboardHostState extends State<DashboardHost> {
               ),
               ConnectionState.waiting => const _LoadingView(),
               _ when state.hasError => _ErrorView(
-                issue: _dashboardIssue(state.error),
+                failure: _dashboardFailure(state.error),
                 onRetry: _reload,
               ),
               _ when snapshot != null => _SelectedSurface(
                 selectedIndex: _selectedIndex,
                 snapshot: snapshot,
+                displayPreferences: _displayPreferences,
               ),
               _ => _ErrorView(
-                issue: DashboardSyncIssue.dashboardUnavailable,
+                failure: const DashboardLoadException(),
                 onRetry: _reload,
               ),
             },
@@ -187,16 +233,27 @@ class _DashboardHostState extends State<DashboardHost> {
 }
 
 class _SelectedSurface extends StatelessWidget {
-  const _SelectedSurface({required this.selectedIndex, required this.snapshot});
+  const _SelectedSurface({
+    required this.selectedIndex,
+    required this.snapshot,
+    required this.displayPreferences,
+  });
 
   final int selectedIndex;
   final DashboardSnapshot snapshot;
+  final ConsumptionDisplayPreferences displayPreferences;
 
   @override
   Widget build(BuildContext context) {
     return switch (selectedIndex) {
-      0 => DashboardScreen(snapshot: snapshot),
-      _ => ProvidersScreen(snapshot: snapshot),
+      0 => DashboardScreen(
+        snapshot: snapshot,
+        displayPreferences: displayPreferences,
+      ),
+      _ => ProvidersScreen(
+        snapshot: snapshot,
+        displayPreferences: displayPreferences,
+      ),
     };
   }
 }
@@ -211,9 +268,9 @@ class _LoadingView extends StatelessWidget {
 }
 
 class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.issue, required this.onRetry});
+  const _ErrorView({required this.failure, required this.onRetry});
 
-  final DashboardSyncIssue issue;
+  final DashboardLoadException failure;
   final VoidCallback onRetry;
 
   @override
@@ -227,7 +284,7 @@ class _ErrorView extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Tooltip(
-              message: issue.message,
+              message: failure.issue.message,
               child: Icon(Icons.error_outline, color: colors.error, size: 36),
             ),
             const SizedBox(height: 12),
@@ -237,15 +294,28 @@ class _ErrorView extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              issue.message,
+              failure.issue.message,
               textAlign: TextAlign.center,
               style: TextStyle(color: colors.onSurfaceVariant),
             ),
             const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              children: [
+                if (failure.details != null)
+                  TextButton.icon(
+                    onPressed:
+                        () => _showErrorDetails(context, failure.details!),
+                    icon: const Icon(Icons.info_outline),
+                    label: const Text('Details'),
+                  ),
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+              ],
             ),
           ],
         ),
@@ -254,8 +324,25 @@ class _ErrorView extends StatelessWidget {
   }
 }
 
-DashboardSyncIssue _dashboardIssue(Object? error) {
+DashboardLoadException _dashboardFailure(Object? error) {
   return error is DashboardLoadException
-      ? error.issue
-      : DashboardSyncIssue.dashboardUnavailable;
+      ? error
+      : const DashboardLoadException();
+}
+
+void _showErrorDetails(BuildContext context, String details) {
+  showDialog<void>(
+    context: context,
+    builder:
+        (context) => AlertDialog(
+          title: const Text('Error details'),
+          content: SelectableText(details),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+  );
 }

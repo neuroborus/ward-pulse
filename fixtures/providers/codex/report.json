@@ -1,0 +1,49 @@
+{
+  "generatedAt": "2026-07-19T12:00:00Z",
+  "rateLimits": {
+    "rateLimits": {
+      "limitId": "codex",
+      "limitName": "Weekly plan",
+      "primary": {
+        "usedPercent": 84,
+        "windowDurationMins": 10080,
+        "resetsAt": 1785059737
+      },
+      "secondary": null,
+      "credits": {
+        "hasCredits": true,
+        "unlimited": false,
+        "balance": "12.5"
+      }
+    },
+    "rateLimitsByLimitId": {
+      "codex": {
+        "limitId": "codex",
+        "limitName": "Weekly plan",
+        "primary": {
+          "usedPercent": 84,
+          "windowDurationMins": 10080,
+          "resetsAt": 1785059737
+        },
+        "secondary": null,
+        "credits": {
+          "hasCredits": true,
+          "unlimited": false,
+          "balance": "12.5"
+        }
+      }
+    }
+  },
+  "usage": {
+    "dailyUsageBuckets": [
+      {
+        "startDate": "2026-07-18",
+        "tokens": 1800000
+      },
+      {
+        "startDate": "2026-07-19",
+        "tokens": 4200000
+      }
+    ]
+  }
+}

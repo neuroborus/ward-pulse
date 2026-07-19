@@ -79,7 +79,7 @@ final class OpenAiDashboardRepository extends DashboardRepository {
       _logger.record(ProviderSyncEvent.succeeded);
       return snapshot;
     } on OpenAiReportingException catch (error) {
-      _logger.record(switch (error.failure) {
+      final event = switch (error.failure) {
         OpenAiReportingFailure.authentication =>
           ProviderSyncEvent.authenticationRequired,
         OpenAiReportingFailure.permissionDenied =>
@@ -88,7 +88,8 @@ final class OpenAiDashboardRepository extends DashboardRepository {
         OpenAiReportingFailure.unavailable => ProviderSyncEvent.unavailable,
         OpenAiReportingFailure.invalidResponse =>
           ProviderSyncEvent.invalidResponse,
-      });
+      };
+      _logger.record(event, details: error.details);
       return _cachedOrThrow(switch (error.failure) {
         OpenAiReportingFailure.authentication =>
           DashboardSyncIssue.authentication,
@@ -99,10 +100,20 @@ final class OpenAiDashboardRepository extends DashboardRepository {
           DashboardSyncIssue.providerUnavailable,
         OpenAiReportingFailure.invalidResponse =>
           DashboardSyncIssue.invalidResponse,
-      });
-    } catch (_) {
-      _logger.record(ProviderSyncEvent.invalidResponse);
-      return _cachedOrThrow(DashboardSyncIssue.invalidResponse);
+      }, details: error.details);
+    } on WardPulseBindingsException catch (error) {
+      _logger.record(ProviderSyncEvent.invalidResponse, details: error.message);
+      return _cachedOrThrow(
+        DashboardSyncIssue.invalidResponse,
+        details: error.message,
+      );
+    } catch (error) {
+      final details = 'Unexpected ${error.runtimeType}';
+      _logger.record(ProviderSyncEvent.invalidResponse, details: details);
+      return _cachedOrThrow(
+        DashboardSyncIssue.invalidResponse,
+        details: details,
+      );
     }
   }
 
@@ -111,13 +122,18 @@ final class OpenAiDashboardRepository extends DashboardRepository {
     _lastSuccessfulSnapshot = null;
   }
 
-  Future<DashboardSnapshot> _cachedOrThrow(DashboardSyncIssue issue) {
+  Future<DashboardSnapshot> _cachedOrThrow(
+    DashboardSyncIssue issue, {
+    String? details,
+  }) {
     final cached = _lastSuccessfulSnapshot;
     if (cached != null) {
       _logger.record(ProviderSyncEvent.usingCachedSnapshot);
-      return Future.value(cached.withStaleStatus(syncIssue: issue));
+      return Future.value(
+        cached.withStaleStatus(syncIssue: issue, syncDetails: details),
+      );
     }
 
-    return Future.error(DashboardLoadException(issue));
+    return Future.error(DashboardLoadException(issue: issue, details: details));
   }
 }

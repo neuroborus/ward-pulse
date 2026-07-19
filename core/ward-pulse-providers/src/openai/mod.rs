@@ -35,9 +35,11 @@ pub struct OpenAiReportSnapshot {
 
 #[derive(Debug)]
 pub enum OpenAiReportError {
-    Json(serde_json::Error),
+    ReportJson(serde_json::Error),
+    UsageJson(serde_json::Error),
+    CostsJson(serde_json::Error),
     InvalidCurrency(String),
-    InvalidAmount(String),
+    InvalidAmount,
     InvalidTimestamp(i64),
     NumericOverflow,
 }
@@ -45,16 +47,12 @@ pub enum OpenAiReportError {
 impl fmt::Display for OpenAiReportError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Json(error) => write!(formatter, "invalid OpenAI report JSON: {error}"),
-            Self::InvalidCurrency(currency) => {
-                write!(formatter, "invalid OpenAI cost currency: {currency}")
-            }
-            Self::InvalidAmount(amount) => {
-                write!(formatter, "invalid OpenAI cost amount: {amount}")
-            }
-            Self::InvalidTimestamp(timestamp) => {
-                write!(formatter, "invalid OpenAI bucket timestamp: {timestamp}")
-            }
+            Self::ReportJson(error) => write_json_error(formatter, "report", error),
+            Self::UsageJson(error) => write_json_error(formatter, "usage response", error),
+            Self::CostsJson(error) => write_json_error(formatter, "costs response", error),
+            Self::InvalidCurrency(_) => formatter.write_str("invalid OpenAI cost currency"),
+            Self::InvalidAmount => formatter.write_str("invalid OpenAI cost amount"),
+            Self::InvalidTimestamp(_) => formatter.write_str("invalid OpenAI bucket timestamp"),
             Self::NumericOverflow => formatter.write_str("OpenAI report value overflow"),
         }
     }
@@ -63,30 +61,47 @@ impl fmt::Display for OpenAiReportError {
 impl StdError for OpenAiReportError {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
-            Self::Json(error) => Some(error),
+            Self::ReportJson(error) | Self::UsageJson(error) | Self::CostsJson(error) => {
+                Some(error)
+            }
             Self::InvalidCurrency(_)
-            | Self::InvalidAmount(_)
+            | Self::InvalidAmount
             | Self::InvalidTimestamp(_)
             | Self::NumericOverflow => None,
         }
     }
 }
 
-impl From<serde_json::Error> for OpenAiReportError {
-    fn from(error: serde_json::Error) -> Self {
-        Self::Json(error)
-    }
+fn write_json_error(
+    formatter: &mut fmt::Formatter<'_>,
+    subject: &str,
+    error: &serde_json::Error,
+) -> fmt::Result {
+    let category = match error.classify() {
+        serde_json::error::Category::Io => "I/O error",
+        serde_json::error::Category::Syntax => "invalid syntax",
+        serde_json::error::Category::Data => "unsupported data",
+        serde_json::error::Category::Eof => "unexpected end",
+    };
+    write!(
+        formatter,
+        "invalid OpenAI {subject} JSON: {category} at line {} column {}",
+        error.line(),
+        error.column()
+    )
 }
 
 pub fn openai_provider_snapshot_from_report_json(
     report_json: &str,
 ) -> Result<OpenAiReportSnapshot, OpenAiReportError> {
-    let report: RawReport = serde_json::from_str(report_json)?;
+    let report: RawReport =
+        serde_json::from_str(report_json).map_err(OpenAiReportError::ReportJson)?;
     let mut usage_by_bucket = BTreeMap::<(i64, i64), UsageTotals>::new();
     let mut model_breakdown = BTreeMap::<String, UsageTotals>::new();
 
     for page_json in &report.usage_pages {
-        let page: RawUsagePage = serde_json::from_str(page_json)?;
+        let page: RawUsagePage =
+            serde_json::from_str(page_json).map_err(OpenAiReportError::UsageJson)?;
         for bucket in &page.data {
             let totals = usage_by_bucket
                 .entry((bucket.start_time, bucket.end_time))
@@ -106,7 +121,8 @@ pub fn openai_provider_snapshot_from_report_json(
 
     let mut cost_by_bucket = BTreeMap::<(i64, i64), DecimalAmount>::new();
     for page_json in &report.cost_pages {
-        let page: RawCostPage = serde_json::from_str(page_json)?;
+        let page: RawCostPage =
+            serde_json::from_str(page_json).map_err(OpenAiReportError::CostsJson)?;
         for bucket in &page.data {
             let mut bucket_cost = DecimalAmount::default();
             for result in &bucket.results {
@@ -118,7 +134,7 @@ pub fn openai_provider_snapshot_from_report_json(
                 };
                 normalize_currency(currency)?;
 
-                bucket_cost = bucket_cost.checked_add(DecimalAmount::from_number(value)?)?;
+                bucket_cost = bucket_cost.checked_add(value.parse()?)?;
             }
             let total = cost_by_bucket
                 .entry((bucket.start_time, bucket.end_time))
@@ -149,6 +165,7 @@ pub fn openai_provider_snapshot_from_report_json(
         week,
         month,
         credits: Vec::new(),
+        allowances: Vec::new(),
         buckets,
         model_breakdown,
         last_successful_sync_at: Some(report.generated_at.clone()),
@@ -232,8 +249,24 @@ struct RawCostResult {
 
 #[derive(Debug, Deserialize)]
 struct RawAmount {
-    value: Option<Number>,
+    value: Option<RawDecimalAmount>,
     currency: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum RawDecimalAmount {
+    Number(Number),
+    String(String),
+}
+
+impl RawDecimalAmount {
+    fn parse(&self) -> Result<DecimalAmount, OpenAiReportError> {
+        match self {
+            Self::Number(value) => DecimalAmount::from_source(&value.to_string()),
+            Self::String(value) => DecimalAmount::from_source(value),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -256,26 +289,25 @@ impl DecimalAmount {
         Self { coefficient, scale }
     }
 
-    fn from_number(value: &Number) -> Result<Self, OpenAiReportError> {
-        let source = value.to_string();
+    fn from_source(source: &str) -> Result<Self, OpenAiReportError> {
         let (mantissa, exponent) = match source.split_once(['e', 'E']) {
             Some((mantissa, exponent)) => {
                 let exponent = exponent
                     .parse::<i32>()
-                    .map_err(|_| OpenAiReportError::InvalidAmount(source.clone()))?;
+                    .map_err(|_| OpenAiReportError::InvalidAmount)?;
                 (mantissa, exponent)
             }
-            None => (source.as_str(), 0),
+            None => (source, 0),
         };
         let (integer, fraction) = mantissa.split_once('.').unwrap_or((mantissa, ""));
         let coefficient = format!("{integer}{fraction}")
             .parse::<i128>()
-            .map_err(|_| OpenAiReportError::InvalidAmount(source.clone()))?;
-        let fractional_digits = i32::try_from(fraction.len())
-            .map_err(|_| OpenAiReportError::InvalidAmount(source.clone()))?;
+            .map_err(|_| OpenAiReportError::InvalidAmount)?;
+        let fractional_digits =
+            i32::try_from(fraction.len()).map_err(|_| OpenAiReportError::InvalidAmount)?;
         let decimal_places = fractional_digits
             .checked_sub(exponent)
-            .ok_or_else(|| OpenAiReportError::InvalidAmount(source.clone()))?;
+            .ok_or(OpenAiReportError::InvalidAmount)?;
 
         if coefficient == 0 {
             Ok(Self::default())
@@ -401,6 +433,7 @@ fn merge_buckets(
                 input_tokens: usage.map(|value| value.input_tokens),
                 output_tokens: usage.map(|value| value.output_tokens),
                 cached_tokens: usage.map(|value| value.cached_tokens),
+                total_tokens: None,
                 requests: usage.map(|value| value.requests),
                 model: None,
                 project: None,
@@ -516,14 +549,39 @@ mod tests {
         ];
 
         for (source, expected) in values {
-            let value: Number = serde_json::from_str(source).expect("JSON number");
             assert_eq!(
-                DecimalAmount::from_number(&value)
+                DecimalAmount::from_source(source)
                     .and_then(DecimalAmount::to_minor_units)
                     .expect("valid cost amount"),
                 expected
             );
         }
+    }
+
+    #[test]
+    fn accepts_string_encoded_cost_amounts() {
+        let mut report: serde_json::Value =
+            serde_json::from_str(&report_json()).expect("report JSON");
+        let costs = serde_json::json!({
+            "data": [{
+                "start_time": 1_784_419_200_i64,
+                "end_time": 1_784_505_600_i64,
+                "results": [{
+                    "amount": {
+                        "value": "0.00004320000000000000000000000000",
+                        "currency": "usd"
+                    }
+                }]
+            }]
+        })
+        .to_string();
+        report["costPages"] = serde_json::json!([costs]);
+
+        let snapshot = openai_provider_snapshot_from_report_json(&report.to_string())
+            .expect("normalize string cost amount")
+            .provider_snapshot;
+
+        assert_eq!(snapshot.today.spent, Some(Money::minor_units(0, "USD")));
     }
 
     #[test]

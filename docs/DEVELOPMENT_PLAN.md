@@ -22,7 +22,8 @@ Build the Android ecosystem version of WardPulse: a local-first usage dashboard 
 
 The Android product should let a developer or small team monitor usage, cost, limits, credits, provider status, and warning signals across selected providers:
 
-- OpenAI, including Codex usage where OpenAI reporting exposes it;
+- OpenAI Platform organization reporting;
+- Codex subscription usage directly from the phone;
 - Claude;
 - Cursor.
 
@@ -334,6 +335,7 @@ Suggested core model:
 ```rust
 enum ProviderKind {
     OpenAi,
+    Codex,
     Claude,
     Cursor,
     Mock,
@@ -366,6 +368,7 @@ struct UsageBucket {
     input_tokens: Option<u64>,
     output_tokens: Option<u64>,
     cached_tokens: Option<u64>,
+    total_tokens: Option<u64>,
     requests: Option<u64>,
     model: Option<String>,
     project: Option<String>,
@@ -377,6 +380,13 @@ struct CreditState {
     granted: Option<Money>,
     expires_at: Option<DateTimeUtc>,
     source: CreditSource,
+}
+
+struct AllowanceState {
+    source: AllowanceSource,
+    used_percent: Option<f64>,
+    remaining: Option<Quantity>,
+    resets_at: Option<DateTimeUtc>,
 }
 
 struct BudgetPolicy {
@@ -404,6 +414,7 @@ struct ProviderSnapshot {
     week: BudgetState,
     month: BudgetState,
     credits: Vec<CreditState>,
+    allowances: Vec<AllowanceState>,
     buckets: Vec<UsageBucket>,
     model_breakdown: Vec<ModelUsage>,
     last_successful_sync_at: Option<DateTimeUtc>,
@@ -673,7 +684,8 @@ The versioned platform transport contract is defined by
 `fixtures/snapshots/watch_dashboard_summary.json`. It is intentionally distinct from the
 compact Rust `WatchSummary` view model. Monetary values use integer minor units and ISO
 currency codes rather than presentation strings. The watch payload excludes account IDs,
-credentials, prompts, and raw provider data.
+credentials, prompts, and raw provider data. Version 2 adds only the plan/purchased allowances
+selected by the phone display preference.
 
 ---
 
@@ -777,9 +789,10 @@ Add one real provider first. Prefer the provider with the clearest usage/cost re
 Recommended order:
 
 ```text
-1. OpenAI, including Codex usage where OpenAI reporting exposes it
-2. Claude
-3. Cursor
+1. OpenAI Platform organization reporting
+2. Codex subscription reporting directly from the phone
+3. Claude
+4. Cursor
 ```
 
 The exact order can change based on API access, account type, and available reporting endpoints.
@@ -1167,7 +1180,7 @@ Completed slice:
 OpenAI Platform organization reporting selected as the first live adapter
 provider capability descriptor added for implemented providers
 usage/cost endpoint, credential, pagination, and redaction contract documented
-personal ChatGPT/Codex subscription analytics explicitly excluded from this adapter
+personal ChatGPT/Codex subscription analytics kept separate from this adapter
 phone credential UI stores the Admin API key in platform-secure storage and masks it after save
 phone transport fetches paginated daily usage and cost reports with Retry-After/backoff handling
 Rust normalizes sanitized OpenAI reports into the existing dashboard snapshot contract
@@ -1181,6 +1194,17 @@ Remaining acceptance:
 save a valid OpenAI Admin API key in Settings on an Android phone or emulator
 refresh and confirm that OpenAI today/week/month cost plus usage/model data are rendered
 confirm the saved key remains masked and no sensitive values appear in logcat
+```
+
+Codex subscription slice:
+
+```text
+phone owns Codex device-code sign-in, secure token storage, refresh, and read-only reporting
+no desktop process, local server, or adb reverse dependency remains
+Rust normalizes plan windows, purchased credits, and daily token buckets without fake money values
+plan usage is displayed by default; users can select plan, purchased usage, or both
+the same filtered allowance summary is propagated to Wear OS through schema version 2
+Android end-to-end acceptance remains: sign in from Settings and verify the live phone/watch UI
 ```
 
 ### Phase 8 — MVP hardening
@@ -1362,8 +1386,9 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Complete the Phase 7 live acceptance with a user-supplied OpenAI Admin API key. Phase 8 MVP
-hardening has started independently with explicit stale-state handling for cached snapshots.
+Complete Android end-to-end acceptance for on-device Codex reporting: connect the Codex account
+from phone Settings, then verify plan usage and token activity on the phone and watch.
+OpenAI Platform reporting remains a separate optional provider for organization cost data.
 
 Phase 6 passed Watch Face Format acceptance on 2026-07-19:
 
@@ -1378,5 +1403,6 @@ pull-request CI now validates, lints, and builds the watch face package
 
 The OpenAI Platform organization reporting adapter, secure credential boundary, pagination,
 retry handling, redacted outcome logging, deterministic Rust normalization, and automated
-tests are implemented. The key must still be entered by the user on a phone or emulator to
-confirm live organization reporting before Phase 7 is marked accepted.
+tests are implemented. Direct Codex rate-limit and token-activity reads have passed against the
+current backend contract; the phone sign-in and Wear OS presentation still need emulator
+acceptance.

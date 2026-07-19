@@ -15,6 +15,7 @@ The verified Flutter and Android SDK baseline is documented in
 - Phone dashboard UI.
 - Provider setup screens.
 - Platform transport for provider APIs.
+- On-device Codex account sign-in and read-only usage transport.
 - Secure credential storage integration.
 - Local persistence and sync scheduling.
 - Wear Data Layer sender.

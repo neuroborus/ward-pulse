@@ -151,6 +151,7 @@ mod tests {
             week: budget_state(BudgetPeriod::Week, usd(0), usd(100)),
             month: budget_state(BudgetPeriod::Month, usd(0), usd(100)),
             credits: Vec::new(),
+            allowances: Vec::new(),
             buckets: Vec::new(),
             model_breakdown: Vec::new(),
             last_successful_sync_at: None,

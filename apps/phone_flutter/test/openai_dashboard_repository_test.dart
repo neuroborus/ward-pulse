@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/dashboard/openai_dashboard_repository.dart';
@@ -92,6 +93,46 @@ void main() {
       ),
     );
     expect(logger.events, [ProviderSyncEvent.authenticationRequired]);
+  });
+
+  test('preserves a safe Rust normalization error', () async {
+    final page = jsonEncode({
+      'object': 'page',
+      'data': <Object>[],
+      'has_more': false,
+      'next_page': null,
+    });
+    final logger = _RecordingLogger();
+    final repository = OpenAiDashboardRepository(
+      credentialStore: _MemoryCredentialStore('secret-admin-key'),
+      client: OpenAiReportingClient(
+        transport: _FixtureTransport(usage: page, costs: page),
+      ),
+      logger: logger,
+      normalizeReport:
+          (_) =>
+              throw const WardPulseBindingsException(
+                'failed to normalize OpenAI report: missing field `input_tokens`',
+              ),
+    );
+
+    await expectLater(
+      repository.load(),
+      throwsA(
+        isA<DashboardLoadException>()
+            .having(
+              (error) => error.issue,
+              'issue',
+              DashboardSyncIssue.invalidResponse,
+            )
+            .having(
+              (error) => error.details,
+              'details',
+              contains('missing field `input_tokens`'),
+            ),
+      ),
+    );
+    expect(logger.events, [ProviderSyncEvent.invalidResponse]);
   });
 
   test('keeps the last live snapshot when refresh fails', () async {
@@ -215,7 +256,7 @@ final class _RecordingLogger implements ProviderSyncLogger {
   final events = <ProviderSyncEvent>[];
 
   @override
-  void record(ProviderSyncEvent event) {
+  void record(ProviderSyncEvent event, {String? details}) {
     events.add(event);
   }
 }

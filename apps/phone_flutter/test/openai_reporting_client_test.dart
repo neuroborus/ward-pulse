@@ -128,10 +128,58 @@ void main() {
               (error) => error.toString(),
               'safe message',
               isNot(contains('sensitive provider detail')),
+            )
+            .having(
+              (error) => error.details,
+              'safe details',
+              allOf(contains('Usage'), contains('HTTP 401')),
             ),
       ),
     );
   });
+
+  test(
+    'describes an invalid successful response without exposing it',
+    () async {
+      final transport = _FakeTransport({
+        '/v1/organization/usage/completions': [
+          const ProviderHttpResponse(
+            statusCode: HttpStatus.ok,
+            headers: {'x-request-id': 'request-safe'},
+            body: '{"unexpected":"sensitive provider detail"}',
+          ),
+        ],
+        '/v1/organization/costs': [_response(_page())],
+      });
+      final client = OpenAiReportingClient(transport: transport);
+
+      await expectLater(
+        client.fetchDailyReports(
+          adminApiKey: 'secret-admin-key',
+          start: start,
+          end: end,
+        ),
+        throwsA(
+          isA<OpenAiReportingException>()
+              .having(
+                (error) => error.failure,
+                'failure',
+                OpenAiReportingFailure.invalidResponse,
+              )
+              .having(
+                (error) => error.details,
+                'safe details',
+                allOf(
+                  contains('Usage · HTTP 200'),
+                  contains('request request-safe'),
+                  contains('Missing data array'),
+                  isNot(contains('sensitive provider detail')),
+                ),
+              ),
+        ),
+      );
+    },
+  );
 
   test('distinguishes missing organization permission', () async {
     final transport = _FakeTransport({

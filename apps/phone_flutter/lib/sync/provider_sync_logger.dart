@@ -12,15 +12,18 @@ enum ProviderSyncEvent {
 }
 
 abstract interface class ProviderSyncLogger {
-  void record(ProviderSyncEvent event);
+  void record(ProviderSyncEvent event, {String? details});
 }
 
 final class DeveloperProviderSyncLogger implements ProviderSyncLogger {
   const DeveloperProviderSyncLogger();
 
   @override
-  void record(ProviderSyncEvent event) {
-    developer.log(event.name, name: 'WardPulse.ProviderSync');
+  void record(ProviderSyncEvent event, {String? details}) {
+    developer.log(
+      details == null ? event.name : '${event.name}: $details',
+      name: 'WardPulse.ProviderSync',
+    );
   }
 }
 
@@ -28,5 +31,5 @@ final class NullProviderSyncLogger implements ProviderSyncLogger {
   const NullProviderSyncLogger();
 
   @override
-  void record(ProviderSyncEvent event) {}
+  void record(ProviderSyncEvent event, {String? details}) {}
 }

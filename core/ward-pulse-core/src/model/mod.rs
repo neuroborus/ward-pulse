@@ -8,6 +8,7 @@ pub type AccountId = String;
 pub enum ProviderKind {
     #[serde(rename = "openai")]
     OpenAi,
+    Codex,
     Claude,
     Cursor,
     Mock,
@@ -117,6 +118,8 @@ pub struct UsageBucket {
     pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
     pub cached_tokens: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_tokens: Option<u64>,
     pub requests: Option<u64>,
     pub model: Option<String>,
     pub project: Option<String>,
@@ -139,6 +142,48 @@ pub struct CreditState {
     pub granted: Option<Money>,
     pub expires_at: Option<DateTimeUtc>,
     pub source: CreditSource,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AllowanceSource {
+    Plan,
+    Purchased,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum QuantityUnit {
+    Tokens,
+    Credits,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Quantity {
+    pub value: String,
+    pub unit: QuantityUnit,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AllowanceState {
+    pub id: String,
+    pub source: AllowanceSource,
+    pub label: String,
+    pub used_percent: Option<f64>,
+    pub used: Option<Quantity>,
+    pub limit: Option<Quantity>,
+    pub remaining: Option<Quantity>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub unlimited: bool,
+    pub window_minutes: Option<u64>,
+    pub resets_at: Option<DateTimeUtc>,
+    pub status: ProviderStatus,
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
@@ -168,6 +213,8 @@ pub struct ProviderSnapshot {
     pub week: BudgetState,
     pub month: BudgetState,
     pub credits: Vec<CreditState>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allowances: Vec<AllowanceState>,
     pub buckets: Vec<UsageBucket>,
     pub model_breakdown: Vec<ModelUsage>,
     pub last_successful_sync_at: Option<DateTimeUtc>,
@@ -218,6 +265,7 @@ mod tests {
     fn serializes_provider_kinds_as_stable_contract_values() {
         let values = [
             ProviderKind::OpenAi,
+            ProviderKind::Codex,
             ProviderKind::Claude,
             ProviderKind::Cursor,
             ProviderKind::Mock,
@@ -226,7 +274,13 @@ mod tests {
 
         assert_eq!(
             values,
-            ["\"openai\"", "\"claude\"", "\"cursor\"", "\"mock\""]
+            [
+                "\"openai\"",
+                "\"codex\"",
+                "\"claude\"",
+                "\"cursor\"",
+                "\"mock\""
+            ]
         );
     }
 }

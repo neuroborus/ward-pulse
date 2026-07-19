@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:ward_pulse_phone/app/ward_pulse_app.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
+import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 
 void main() {
@@ -58,6 +60,12 @@ void main() {
 
     expect(find.text('mock-local'), findsOneWidget);
     expect(find.text('Today'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Usage history'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('4 buckets'), findsOneWidget);
   });
 
   testWidgets('queues a development watch sync', (tester) async {
@@ -77,7 +85,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(watchSyncService.syncedSnapshots, [snapshot]);
 
-    await tester.tap(find.text('Sync').last);
+    await tester.scrollUntilVisible(
+      find.text('Send to watch'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -160));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Sync'));
     await tester.pumpAndSettle();
 
     expect(watchSyncService.syncedSnapshots, [snapshot, snapshot]);
@@ -149,8 +164,8 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Not set'), findsOneWidget);
-    await tester.tap(find.text('OpenAI credential'));
+    expect(find.text('Not set'), findsWidgets);
+    await tester.tap(find.text('OpenAI Platform credential'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField), 'secret-admin-key');
     expect(
@@ -181,6 +196,7 @@ void main() {
       WardPulseApp(
         repository: const _FailingDashboardRepository(
           DashboardSyncIssue.authentication,
+          'Usage · HTTP 401 · invalid_api_key',
         ),
         credentialStore: credentialStore,
       ),
@@ -196,14 +212,84 @@ void main() {
       find.byTooltip(DashboardSyncIssue.authentication.message),
       findsOneWidget,
     );
+    expect(find.text('Details'), findsOneWidget);
+    await tester.tap(find.text('Details'));
+    await tester.pumpAndSettle();
+    expect(find.text('Error details'), findsOneWidget);
+    expect(find.text('Usage · HTTP 401 · invalid_api_key'), findsOneWidget);
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
-    expect(find.text('OpenAI credential'), findsOneWidget);
+    expect(find.text('OpenAI Platform credential'), findsOneWidget);
     expect(find.text('••••••••'), findsOneWidget);
-    await tester.tap(find.text('OpenAI credential'));
+    await tester.tap(find.text('OpenAI Platform credential'));
     await tester.pumpAndSettle();
     expect(find.text('Remove'), findsOneWidget);
+  });
+
+  testWidgets('shows plan usage by default and can include purchases', (
+    tester,
+  ) async {
+    final json =
+        jsonDecode(
+              File(
+                '../../fixtures/snapshots/dashboard_today.json',
+              ).readAsStringSync(),
+            )
+            as Map<String, dynamic>;
+    final account = (json['accounts'] as List).first as Map<String, dynamic>;
+    account['provider'] = 'codex';
+    account['allowances'] = [
+      {
+        'id': 'plan',
+        'source': 'plan',
+        'label': 'Weekly plan',
+        'usedPercent': 84.0,
+        'used': null,
+        'limit': null,
+        'remaining': null,
+        'windowMinutes': 10080,
+        'resetsAt': '2026-07-26T09:55:37Z',
+        'status': 'warning',
+      },
+      {
+        'id': 'purchased',
+        'source': 'purchased',
+        'label': 'Purchased credits',
+        'usedPercent': null,
+        'used': null,
+        'limit': null,
+        'remaining': {'value': '12.5', 'unit': 'credits'},
+        'windowMinutes': null,
+        'resetsAt': null,
+        'status': 'ok',
+      },
+    ];
+    final preferences = _MemoryDisplayPreferenceStore();
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(DashboardSnapshot.fromJson(json)),
+        displayPreferenceStore: preferences,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Weekly plan'), findsOneWidget);
+    expect(find.text('Purchased credits'), findsNothing);
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(SwitchListTile, 'Purchased usage'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dashboard'));
+    await tester.pumpAndSettle();
+
+    expect(preferences.value.purchased, isTrue);
+    expect(find.text('Weekly plan'), findsOneWidget);
+    expect(find.text('Purchased credits'), findsOneWidget);
   });
 }
 
@@ -211,7 +297,10 @@ class _FakeWatchSyncService implements WatchSyncService {
   final syncedSnapshots = <DashboardSnapshot>[];
 
   @override
-  Future<void> sync(DashboardSnapshot snapshot) async {
+  Future<void> sync(
+    DashboardSnapshot snapshot,
+    ConsumptionDisplayPreferences displayPreferences,
+  ) async {
     syncedSnapshots.add(snapshot);
   }
 }
@@ -220,19 +309,23 @@ class _FailingWatchSyncService implements WatchSyncService {
   const _FailingWatchSyncService();
 
   @override
-  Future<void> sync(DashboardSnapshot snapshot) {
+  Future<void> sync(
+    DashboardSnapshot snapshot,
+    ConsumptionDisplayPreferences displayPreferences,
+  ) {
     return Future.error(StateError('Watch unavailable'));
   }
 }
 
 final class _FailingDashboardRepository extends DashboardRepository {
-  const _FailingDashboardRepository(this.issue);
+  const _FailingDashboardRepository(this.issue, [this.details]);
 
   final DashboardSyncIssue issue;
+  final String? details;
 
   @override
   Future<DashboardSnapshot> load() {
-    return Future.error(DashboardLoadException(issue));
+    return Future.error(DashboardLoadException(issue: issue, details: details));
   }
 }
 
@@ -252,5 +345,18 @@ class _MemoryCredentialStore implements ProviderCredentialStore {
   @override
   Future<void> deleteOpenAiAdminKey() async {
     value = null;
+  }
+}
+
+class _MemoryDisplayPreferenceStore
+    implements ConsumptionDisplayPreferenceStore {
+  ConsumptionDisplayPreferences value = const ConsumptionDisplayPreferences();
+
+  @override
+  Future<ConsumptionDisplayPreferences> read() async => value;
+
+  @override
+  Future<void> write(ConsumptionDisplayPreferences value) async {
+    this.value = value;
   }
 }

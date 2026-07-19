@@ -43,6 +43,10 @@ enum DashboardSyncIssue {
   rateLimited,
   providerUnavailable,
   invalidResponse,
+  codexAuthentication,
+  codexPermissionDenied,
+  codexUnavailable,
+  codexInvalidResponse,
   dashboardUnavailable,
 }
 
@@ -61,6 +65,14 @@ extension DashboardSyncIssueMessage on DashboardSyncIssue {
         'OpenAI reporting is unavailable. Check your connection and try again.',
       DashboardSyncIssue.invalidResponse =>
         'OpenAI returned an unsupported reporting response.',
+      DashboardSyncIssue.codexAuthentication =>
+        'Codex sign-in expired. Reconnect your ChatGPT account in Settings.',
+      DashboardSyncIssue.codexPermissionDenied =>
+        'This Codex account cannot access usage reporting.',
+      DashboardSyncIssue.codexUnavailable =>
+        'Codex usage is unavailable. Check your connection and try again.',
+      DashboardSyncIssue.codexInvalidResponse =>
+        'Codex returned an unsupported usage response.',
       DashboardSyncIssue.dashboardUnavailable =>
         'Dashboard data could not be loaded.',
     };
@@ -78,6 +90,7 @@ class DashboardSnapshot {
     required this.alerts,
     required this.watchSummary,
     this.syncIssue,
+    this.syncDetails,
   });
 
   final DateTime generatedAt;
@@ -89,6 +102,17 @@ class DashboardSnapshot {
   final List<AlertSummary> alerts;
   final WatchSummary watchSummary;
   final DashboardSyncIssue? syncIssue;
+  final String? syncDetails;
+
+  String? get syncTooltip {
+    final issue = syncIssue;
+    if (issue == null) {
+      return null;
+    }
+
+    final details = syncDetails;
+    return details == null ? issue.message : '${issue.message}\n$details';
+  }
 
   factory DashboardSnapshot.fromJsonString(String source) {
     return DashboardSnapshot.fromJson(_jsonMap(jsonDecode(source)));
@@ -107,6 +131,19 @@ class DashboardSnapshot {
     );
   }
 
+  String toJsonString() => jsonEncode(toJson());
+
+  Map<String, dynamic> toJson() => {
+    'generatedAt': generatedAt.toUtc().toIso8601String(),
+    'overallStatus': overallStatus.name,
+    'accounts': accounts.map((account) => account.toJson()).toList(),
+    'todayTotal': todayTotal.toJson(),
+    'weekTotal': weekTotal.toJson(),
+    'monthTotal': monthTotal.toJson(),
+    'alerts': alerts.map((alert) => alert.toJson()).toList(),
+    'watchSummary': watchSummary.toJson(),
+  };
+
   ProviderSnapshot? get primaryAccount {
     return accounts.isEmpty ? null : accounts.first;
   }
@@ -115,7 +152,10 @@ class DashboardSnapshot {
     return accounts.length == 1 ? '1 account' : '${accounts.length} accounts';
   }
 
-  DashboardSnapshot withStaleStatus({DashboardSyncIssue? syncIssue}) {
+  DashboardSnapshot withStaleStatus({
+    DashboardSyncIssue? syncIssue,
+    String? syncDetails,
+  }) {
     return DashboardSnapshot(
       generatedAt: generatedAt,
       overallStatus: ProviderStatus.stale,
@@ -128,6 +168,22 @@ class DashboardSnapshot {
       alerts: alerts,
       watchSummary: watchSummary._withStatus(ProviderStatus.stale),
       syncIssue: syncIssue,
+      syncDetails: syncDetails,
+    );
+  }
+
+  DashboardSnapshot withSyncIssue(DashboardSyncIssue issue, {String? details}) {
+    return DashboardSnapshot(
+      generatedAt: generatedAt,
+      overallStatus: overallStatus,
+      accounts: accounts,
+      todayTotal: todayTotal,
+      weekTotal: weekTotal,
+      monthTotal: monthTotal,
+      alerts: alerts,
+      watchSummary: watchSummary,
+      syncIssue: issue,
+      syncDetails: details,
     );
   }
 }
@@ -141,9 +197,11 @@ class ProviderSnapshot {
     required this.week,
     required this.month,
     required this.credits,
+    required this.allowances,
     required this.buckets,
     required this.modelBreakdown,
     required this.lastSuccessfulSyncAt,
+    this.lastError,
   });
 
   final String accountId;
@@ -153,9 +211,11 @@ class ProviderSnapshot {
   final BudgetState week;
   final BudgetState month;
   final List<CreditState> credits;
+  final List<AllowanceState> allowances;
   final List<UsageBucket> buckets;
   final List<ModelUsage> modelBreakdown;
   final DateTime? lastSuccessfulSyncAt;
+  final ProviderErrorSummary? lastError;
 
   factory ProviderSnapshot.fromJson(Map<String, dynamic> json) {
     return ProviderSnapshot(
@@ -166,15 +226,39 @@ class ProviderSnapshot {
       week: BudgetState.fromJson(_jsonMap(json['week'])),
       month: BudgetState.fromJson(_jsonMap(json['month'])),
       credits: _jsonList(json['credits'], CreditState.fromJson),
+      allowances:
+          json['allowances'] == null
+              ? const <AllowanceState>[]
+              : _jsonList(json['allowances'], AllowanceState.fromJson),
       buckets: _jsonList(json['buckets'], UsageBucket.fromJson),
       modelBreakdown: _jsonList(json['modelBreakdown'], ModelUsage.fromJson),
       lastSuccessfulSyncAt: _optionalDateTime(json['lastSuccessfulSyncAt']),
+      lastError:
+          json['lastError'] == null
+              ? null
+              : ProviderErrorSummary.fromJson(_jsonMap(json['lastError'])),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'accountId': accountId,
+    'provider': provider,
+    'status': status.name,
+    'today': today.toJson(),
+    'week': week.toJson(),
+    'month': month.toJson(),
+    'credits': credits.map((credit) => credit.toJson()).toList(),
+    'allowances': allowances.map((allowance) => allowance.toJson()).toList(),
+    'buckets': buckets.map((bucket) => bucket.toJson()).toList(),
+    'modelBreakdown': modelBreakdown.map((model) => model.toJson()).toList(),
+    'lastSuccessfulSyncAt': lastSuccessfulSyncAt?.toUtc().toIso8601String(),
+    'lastError': lastError?.toJson(),
+  };
 
   String get providerLabel {
     return switch (provider) {
       'openai' => 'OpenAI',
+      'codex' => 'Codex',
       'claude' => 'Claude',
       'cursor' => 'Cursor',
       'mock' => 'Mock',
@@ -191,11 +275,29 @@ class ProviderSnapshot {
       week: week,
       month: month,
       credits: credits,
+      allowances: allowances,
       buckets: buckets,
       modelBreakdown: modelBreakdown,
       lastSuccessfulSyncAt: lastSuccessfulSyncAt,
+      lastError: lastError,
     );
   }
+}
+
+class ProviderErrorSummary {
+  const ProviderErrorSummary({required this.code, required this.message});
+
+  final String code;
+  final String message;
+
+  factory ProviderErrorSummary.fromJson(Map<String, dynamic> json) {
+    return ProviderErrorSummary(
+      code: json['code'] as String,
+      message: json['message'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {'code': code, 'message': message};
 }
 
 class UsageBucket {
@@ -206,8 +308,11 @@ class UsageBucket {
     required this.inputTokens,
     required this.outputTokens,
     required this.cachedTokens,
+    this.reportedTotalTokens,
     required this.requests,
     required this.model,
+    this.project,
+    this.user,
   });
 
   final DateTime startAt;
@@ -216,8 +321,11 @@ class UsageBucket {
   final int? inputTokens;
   final int? outputTokens;
   final int? cachedTokens;
+  final int? reportedTotalTokens;
   final int? requests;
   final String? model;
+  final String? project;
+  final String? user;
 
   factory UsageBucket.fromJson(Map<String, dynamic> json) {
     return UsageBucket(
@@ -227,18 +335,139 @@ class UsageBucket {
       inputTokens: (json['inputTokens'] as num?)?.toInt(),
       outputTokens: (json['outputTokens'] as num?)?.toInt(),
       cachedTokens: (json['cachedTokens'] as num?)?.toInt(),
+      reportedTotalTokens: (json['totalTokens'] as num?)?.toInt(),
       requests: (json['requests'] as num?)?.toInt(),
       model: json['model'] as String?,
+      project: json['project'] as String?,
+      user: json['user'] as String?,
     );
   }
 
+  Map<String, dynamic> toJson() => {
+    'startAt': startAt.toUtc().toIso8601String(),
+    'endAt': endAt.toUtc().toIso8601String(),
+    'cost': cost?.toJson(),
+    'inputTokens': inputTokens,
+    'outputTokens': outputTokens,
+    'cachedTokens': cachedTokens,
+    'totalTokens': reportedTotalTokens,
+    'requests': requests,
+    'model': model,
+    'project': project,
+    'user': user,
+  };
+
   int? get totalTokens {
+    if (reportedTotalTokens != null) {
+      return reportedTotalTokens;
+    }
+
     if (inputTokens == null && outputTokens == null) {
       return null;
     }
 
     return (inputTokens ?? 0) + (outputTokens ?? 0);
   }
+}
+
+enum AllowanceSource { plan, purchased }
+
+class AllowanceState {
+  const AllowanceState({
+    required this.id,
+    required this.source,
+    required this.label,
+    required this.usedPercent,
+    required this.used,
+    required this.limit,
+    required this.remaining,
+    this.unlimited = false,
+    required this.windowMinutes,
+    required this.resetsAt,
+    required this.status,
+  });
+
+  final String id;
+  final AllowanceSource source;
+  final String label;
+  final double? usedPercent;
+  final Quantity? used;
+  final Quantity? limit;
+  final Quantity? remaining;
+  final bool unlimited;
+  final int? windowMinutes;
+  final DateTime? resetsAt;
+  final ProviderStatus status;
+
+  factory AllowanceState.fromJson(Map<String, dynamic> json) {
+    return AllowanceState(
+      id: json['id'] as String,
+      source: switch (json['source']) {
+        'purchased' => AllowanceSource.purchased,
+        _ => AllowanceSource.plan,
+      },
+      label: json['label'] as String,
+      usedPercent: (json['usedPercent'] as num?)?.toDouble(),
+      used: Quantity.maybeFromJson(json['used']),
+      limit: Quantity.maybeFromJson(json['limit']),
+      remaining: Quantity.maybeFromJson(json['remaining']),
+      unlimited: json['unlimited'] == true,
+      windowMinutes: (json['windowMinutes'] as num?)?.toInt(),
+      resetsAt: _optionalDateTime(json['resetsAt']),
+      status: _statusFromJson(json['status']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'source': source.name,
+    'label': label,
+    'usedPercent': usedPercent,
+    'used': used?.toJson(),
+    'limit': limit?.toJson(),
+    'remaining': remaining?.toJson(),
+    'unlimited': unlimited,
+    'windowMinutes': windowMinutes,
+    'resetsAt': resetsAt?.toUtc().toIso8601String(),
+    'status': status.name,
+  };
+
+  double? get usedFraction {
+    final value = usedPercent;
+    return value == null ? null : (value / 100).clamp(0.0, 1.0).toDouble();
+  }
+
+  String get usedPercentLabel {
+    final value = usedPercent;
+    if (value == null) {
+      return 'Unknown';
+    }
+
+    final places = value.truncateToDouble() == value ? 0 : 1;
+    return '${value.toStringAsFixed(places)}%';
+  }
+}
+
+class Quantity {
+  const Quantity({required this.value, required this.unit});
+
+  final String value;
+  final String unit;
+
+  factory Quantity.fromJson(Map<String, dynamic> json) {
+    return Quantity(
+      value: json['value'] as String,
+      unit: json['unit'] as String,
+    );
+  }
+
+  static Quantity? maybeFromJson(Object? value) {
+    return value == null ? null : Quantity.fromJson(_jsonMap(value));
+  }
+
+  Map<String, dynamic> toJson() => {'value': value, 'unit': unit};
+
+  String get label => '$value $unit';
 }
 
 class BudgetState {
@@ -271,6 +500,16 @@ class BudgetState {
       status: _statusFromJson(json['status']),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'period': period,
+    'spent': spent?.toJson(),
+    'limit': limit?.toJson(),
+    'remaining': remaining?.toJson(),
+    'usedPercent': usedPercent,
+    'projectedTotal': projectedTotal?.toJson(),
+    'status': status.name,
+  };
 
   double? get usedFraction {
     final value = usedPercent;
@@ -322,6 +561,11 @@ class Money {
     return Money.fromJson(_jsonMap(value));
   }
 
+  Map<String, dynamic> toJson() => {
+    'minorUnits': minorUnits,
+    'currency': currency,
+  };
+
   String get label {
     final sign = minorUnits < 0 ? '-' : '';
     final absolute = minorUnits.abs();
@@ -353,6 +597,13 @@ class CreditState {
       source: json['source'] as String,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'remaining': remaining?.toJson(),
+    'granted': granted?.toJson(),
+    'expiresAt': expiresAt?.toUtc().toIso8601String(),
+    'source': source,
+  };
 }
 
 class ModelUsage {
@@ -380,6 +631,14 @@ class ModelUsage {
     );
   }
 
+  Map<String, dynamic> toJson() => {
+    'model': model,
+    'cost': cost?.toJson(),
+    'inputTokens': inputTokens,
+    'outputTokens': outputTokens,
+    'requests': requests,
+  };
+
   int? get totalTokens {
     if (inputTokens == null && outputTokens == null) {
       return null;
@@ -401,6 +660,8 @@ class AlertSummary {
       message: json['message'] as String,
     );
   }
+
+  Map<String, dynamic> toJson() => {'severity': severity, 'message': message};
 }
 
 class WatchSummary {
@@ -421,6 +682,12 @@ class WatchSummary {
       status: _statusFromJson(json['status']),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'todayUsedPercent': todayUsedPercent,
+    'weekUsedPercent': weekUsedPercent,
+    'status': status.name,
+  };
 
   WatchSummary _withStatus(ProviderStatus value) {
     return WatchSummary(

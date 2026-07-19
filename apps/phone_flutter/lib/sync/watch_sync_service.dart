@@ -3,9 +3,13 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 
 import '../dashboard/dashboard_models.dart';
+import '../settings/consumption_display_preferences.dart';
 
 abstract interface class WatchSyncService {
-  Future<void> sync(DashboardSnapshot snapshot);
+  Future<void> sync(
+    DashboardSnapshot snapshot,
+    ConsumptionDisplayPreferences displayPreferences,
+  );
 }
 
 class MethodChannelWatchSyncService implements WatchSyncService {
@@ -14,10 +18,16 @@ class MethodChannelWatchSyncService implements WatchSyncService {
   static const _channel = MethodChannel('app.wardpulse/watch_sync');
 
   @override
-  Future<void> sync(DashboardSnapshot snapshot) {
+  Future<void> sync(
+    DashboardSnapshot snapshot,
+    ConsumptionDisplayPreferences displayPreferences,
+  ) {
     return _channel.invokeMethod<void>(
       'syncWatchSummary',
-      WatchDashboardSummaryPayload.fromSnapshot(snapshot).encode(),
+      WatchDashboardSummaryPayload.fromSnapshot(
+        snapshot,
+        displayPreferences,
+      ).encode(),
     );
   }
 }
@@ -29,13 +39,28 @@ class WatchDashboardSummaryPayload {
 
   factory WatchDashboardSummaryPayload.fromSnapshot(
     DashboardSnapshot snapshot,
+    ConsumptionDisplayPreferences displayPreferences,
   ) {
     return WatchDashboardSummaryPayload._({
-      'schemaVersion': 1,
+      'schemaVersion': 2,
       'generatedAt': snapshot.generatedAt.toUtc().toIso8601String(),
       'overallStatus': snapshot.overallStatus.wireName,
       'today': _budgetToJson(snapshot.todayTotal),
       'week': _budgetToJson(snapshot.weekTotal),
+      'allowances': [
+        for (final account in snapshot.accounts)
+          for (final allowance in account.allowances)
+            if (displayPreferences.allows(allowance.source))
+              {
+                'source': allowance.source.name,
+                'label': allowance.label,
+                'usedPercent': allowance.usedPercent,
+                'remaining': _quantityToJson(allowance.remaining),
+                if (allowance.unlimited) 'unlimited': true,
+                'resetsAt': allowance.resetsAt?.toUtc().toIso8601String(),
+                'status': allowance.status.wireName,
+              },
+      ],
       'providers': [
         for (final account in snapshot.accounts)
           {
@@ -87,4 +112,12 @@ Map<String, Object?>? _moneyToJson(Money? money) {
   }
 
   return {'minorUnits': money.minorUnits, 'currency': money.currency};
+}
+
+Map<String, Object?>? _quantityToJson(Quantity? quantity) {
+  if (quantity == null) {
+    return null;
+  }
+
+  return {'value': quantity.value, 'unit': quantity.unit};
 }

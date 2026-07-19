@@ -43,7 +43,7 @@
       "enum": ["ok", "warning", "error", "rateLimited", "authRequired", "stale", "unknown"]
     },
     "providerKind": {
-      "enum": ["openai", "claude", "cursor", "mock"]
+      "enum": ["openai", "codex", "claude", "cursor", "mock"]
     },
     "creditSource": {
       "enum": ["provider", "promo", "manual", "unknown"]
@@ -69,6 +69,53 @@
         "granted": { "$ref": "#/$defs/nullableMoney" },
         "expiresAt": { "type": ["string", "null"], "format": "date-time" },
         "source": { "$ref": "#/$defs/creditSource" }
+      }
+    },
+    "allowanceSource": {
+      "enum": ["plan", "purchased"]
+    },
+    "quantityUnit": {
+      "enum": ["tokens", "credits"]
+    },
+    "quantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit"],
+      "properties": {
+        "value": { "type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$" },
+        "unit": { "$ref": "#/$defs/quantityUnit" }
+      }
+    },
+    "nullableQuantity": {
+      "anyOf": [{ "$ref": "#/$defs/quantity" }, { "type": "null" }]
+    },
+    "allowanceState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source",
+        "label",
+        "usedPercent",
+        "used",
+        "limit",
+        "remaining",
+        "windowMinutes",
+        "resetsAt",
+        "status"
+      ],
+      "properties": {
+        "id": { "type": "string" },
+        "source": { "$ref": "#/$defs/allowanceSource" },
+        "label": { "type": "string" },
+        "usedPercent": { "type": ["number", "null"], "minimum": 0 },
+        "used": { "$ref": "#/$defs/nullableQuantity" },
+        "limit": { "$ref": "#/$defs/nullableQuantity" },
+        "remaining": { "$ref": "#/$defs/nullableQuantity" },
+        "unlimited": { "type": "boolean" },
+        "windowMinutes": { "type": ["integer", "null"], "minimum": 1 },
+        "resetsAt": { "type": ["string", "null"], "format": "date-time" },
+        "status": { "$ref": "#/$defs/providerStatus" }
       }
     },
     "modelUsage": {
@@ -118,6 +165,10 @@
         "credits": {
           "type": "array",
           "items": { "$ref": "#/$defs/creditState" }
+        },
+        "allowances": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/allowanceState" }
         },
         "buckets": {
           "type": "array",

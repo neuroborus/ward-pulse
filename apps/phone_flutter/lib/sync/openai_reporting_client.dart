@@ -12,9 +12,10 @@ enum OpenAiReportingFailure {
 }
 
 final class OpenAiReportingException implements Exception {
-  const OpenAiReportingException(this.failure);
+  const OpenAiReportingException(this.failure, {this.details});
 
   final OpenAiReportingFailure failure;
+  final String? details;
 
   @override
   String toString() => 'OpenAI reporting request failed: ${failure.name}.';
@@ -144,7 +145,7 @@ final class OpenAiReportingClient {
         _baseUri.replace(path: path, queryParameters: parameters),
         adminApiKey,
       );
-      final page = _parsePage(response);
+      final page = _parsePage(response, path: path);
       pages.add(response.body);
       cursor = page.hasMore ? page.nextPage : null;
 
@@ -152,6 +153,7 @@ final class OpenAiReportingClient {
           (cursor == null || cursor.isEmpty || !seenCursors.add(cursor))) {
         throw const OpenAiReportingException(
           OpenAiReportingFailure.invalidResponse,
+          details: 'Reporting pagination returned a repeated or empty cursor.',
         );
       }
     } while (cursor != null);
@@ -171,12 +173,14 @@ final class OpenAiReportingClient {
           headers: {'Authorization': 'Bearer $adminApiKey'},
         );
       } on IOException {
-        throw const OpenAiReportingException(
+        throw OpenAiReportingException(
           OpenAiReportingFailure.unavailable,
+          details: '${_endpointLabel(uri.path)} · Network error',
         );
       } on TimeoutException {
-        throw const OpenAiReportingException(
+        throw OpenAiReportingException(
           OpenAiReportingFailure.unavailable,
+          details: '${_endpointLabel(uri.path)} · Request timed out',
         );
       }
 
@@ -189,20 +193,24 @@ final class OpenAiReportingClient {
       return switch (response.statusCode) {
         HttpStatus.ok => response,
         HttpStatus.unauthorized =>
-          throw const OpenAiReportingException(
+          throw OpenAiReportingException(
             OpenAiReportingFailure.authentication,
+            details: _responseDetails(uri.path, response),
           ),
         HttpStatus.forbidden =>
-          throw const OpenAiReportingException(
+          throw OpenAiReportingException(
             OpenAiReportingFailure.permissionDenied,
+            details: _responseDetails(uri.path, response),
           ),
         HttpStatus.tooManyRequests =>
-          throw const OpenAiReportingException(
+          throw OpenAiReportingException(
             OpenAiReportingFailure.rateLimited,
+            details: _responseDetails(uri.path, response),
           ),
         _ =>
-          throw const OpenAiReportingException(
+          throw OpenAiReportingException(
             OpenAiReportingFailure.unavailable,
+            details: _responseDetails(uri.path, response),
           ),
       };
     }
@@ -236,24 +244,95 @@ final class OpenAiReportingClient {
     return Duration(milliseconds: (baseMilliseconds * jitter).round());
   }
 
-  _PageMetadata _parsePage(ProviderHttpResponse response) {
+  _PageMetadata _parsePage(
+    ProviderHttpResponse response, {
+    required String path,
+  }) {
+    final Object? value;
     try {
-      final value = jsonDecode(response.body);
-      if (value is! Map<String, dynamic> || value['data'] is! List) {
-        throw const FormatException();
-      }
-      final hasMore = value['has_more'];
-      final nextPage = value['next_page'];
-      if (hasMore is! bool || nextPage != null && nextPage is! String) {
-        throw const FormatException();
-      }
-
-      return _PageMetadata(hasMore: hasMore, nextPage: nextPage as String?);
+      value = jsonDecode(response.body);
     } on FormatException {
-      throw const OpenAiReportingException(
+      throw OpenAiReportingException(
         OpenAiReportingFailure.invalidResponse,
+        details: _responseDetails(path, response, reason: 'Invalid JSON'),
       );
     }
+
+    if (value is! Map<String, dynamic>) {
+      throw OpenAiReportingException(
+        OpenAiReportingFailure.invalidResponse,
+        details: _responseDetails(path, response, reason: 'Expected an object'),
+      );
+    }
+    if (value['data'] is! List) {
+      throw OpenAiReportingException(
+        OpenAiReportingFailure.invalidResponse,
+        details: _responseDetails(path, response, reason: 'Missing data array'),
+      );
+    }
+    final hasMore = value['has_more'];
+    final nextPage = value['next_page'];
+    if (hasMore is! bool) {
+      throw OpenAiReportingException(
+        OpenAiReportingFailure.invalidResponse,
+        details: _responseDetails(
+          path,
+          response,
+          reason: 'Missing pagination flag',
+        ),
+      );
+    }
+    if (nextPage != null && nextPage is! String) {
+      throw OpenAiReportingException(
+        OpenAiReportingFailure.invalidResponse,
+        details: _responseDetails(
+          path,
+          response,
+          reason: 'Invalid pagination cursor',
+        ),
+      );
+    }
+
+    return _PageMetadata(hasMore: hasMore, nextPage: nextPage as String?);
+  }
+
+  String _responseDetails(
+    String path,
+    ProviderHttpResponse response, {
+    String? reason,
+  }) {
+    final parts = <String>[
+      _endpointLabel(path),
+      'HTTP ${response.statusCode}',
+      if (_errorCode(response.body) case final code?) code,
+      if (_safeToken(response.headers['x-request-id']) case final requestId?)
+        'request $requestId',
+      if (reason != null) reason,
+    ];
+    return parts.join(' · ');
+  }
+
+  String _endpointLabel(String path) {
+    return path.endsWith('/costs') ? 'Costs' : 'Usage';
+  }
+
+  String? _errorCode(String body) {
+    try {
+      final value = jsonDecode(body);
+      if (value case {'error': final Map<String, dynamic> error}) {
+        return _safeToken(error['code']) ?? _safeToken(error['type']);
+      }
+    } on FormatException {
+      return null;
+    }
+    return null;
+  }
+
+  String? _safeToken(Object? value) {
+    if (value is! String || value.length > 128) {
+      return null;
+    }
+    return RegExp(r'^[A-Za-z0-9_.-]+$').hasMatch(value) ? value : null;
   }
 }
 

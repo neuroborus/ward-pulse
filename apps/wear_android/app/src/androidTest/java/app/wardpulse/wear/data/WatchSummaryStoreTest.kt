@@ -40,10 +40,24 @@ class WatchSummaryStoreTest {
     }
 
     @Test
+    fun preservesUnlimitedPurchasedUsage() {
+        val encoded = testContext.assets.open("watch_dashboard_summary.json")
+            .bufferedReader()
+            .use { it.readText() }
+            .replace(
+                "\"allowances\": []",
+                """"allowances": [{"source":"purchased","label":"Purchased credits","usedPercent":null,"remaining":null,"unlimited":true,"resetsAt":null,"status":"ok"}]""",
+            )
+
+        assertTrue(store.saveEncoded(encoded))
+        assertTrue(store.load()?.allowances?.single()?.unlimited == true)
+    }
+
+    @Test
     fun invalidSummaryKeepsPreviousState() {
         store.save(MockWatchDashboardSummary.value)
 
-        assertFalse(store.saveEncoded("{\"schemaVersion\":2}"))
+        assertFalse(store.saveEncoded("{\"schemaVersion\":3}"))
         assertEquals(MockWatchDashboardSummary.value, store.load())
     }
 

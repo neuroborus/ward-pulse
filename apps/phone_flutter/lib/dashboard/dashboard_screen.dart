@@ -2,36 +2,76 @@ import 'package:flutter/material.dart';
 
 import '../charts/budget_progress_bar.dart';
 import '../charts/usage_history_chart.dart';
+import '../settings/consumption_display_preferences.dart';
 import 'dashboard_models.dart';
 import 'provider_status_color.dart';
 
 class DashboardScreen extends StatelessWidget {
-  const DashboardScreen({super.key, required this.snapshot});
+  const DashboardScreen({
+    super.key,
+    required this.snapshot,
+    this.displayPreferences = const ConsumptionDisplayPreferences(),
+  });
 
   final DashboardSnapshot snapshot;
+  final ConsumptionDisplayPreferences displayPreferences;
 
   @override
   Widget build(BuildContext context) {
     final primaryAccount = snapshot.primaryAccount;
+    final hasMultipleAccounts = snapshot.accounts.length > 1;
+    final allowances = snapshot.accounts
+        .expand((account) => account.allowances)
+        .where((allowance) => displayPreferences.allows(allowance.source))
+        .toList(growable: false);
+    final hasAllowanceData = snapshot.accounts.any(
+      (account) => account.allowances.isNotEmpty,
+    );
+    final historyAccount = _firstAccountWith(
+      snapshot.accounts,
+      (account) => account.buckets.isNotEmpty,
+    );
+    final modelAccount = _firstAccountWith(
+      snapshot.accounts,
+      (account) => account.modelBreakdown.isNotEmpty,
+    );
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
         _SyncHeader(snapshot: snapshot),
         const SizedBox(height: 16),
-        _BudgetCards(snapshot: snapshot),
+        if (!hasAllowanceData)
+          _BudgetCards(snapshot: snapshot)
+        else if (allowances.isEmpty)
+          const EmptyAllowanceCard()
+        else
+          _AllowanceCards(allowances: allowances),
         const SizedBox(height: 16),
         UsageHistoryChart(
-          buckets: primaryAccount?.buckets ?? const <UsageBucket>[],
+          title:
+              hasMultipleAccounts && historyAccount != null
+                  ? '${historyAccount.providerLabel} usage history'
+                  : 'Usage history',
+          buckets:
+              historyAccount?.buckets ??
+              primaryAccount?.buckets ??
+              const <UsageBucket>[],
         ),
         const SizedBox(height: 16),
         _SectionHeader(
-          title: 'Model usage',
+          title:
+              hasMultipleAccounts && modelAccount != null
+                  ? '${modelAccount.providerLabel} model usage'
+                  : 'Model usage',
           trailing: snapshot.accountCountLabel,
         ),
         const SizedBox(height: 8),
         _ModelUsagePanel(
-          models: primaryAccount?.modelBreakdown ?? const <ModelUsage>[],
+          models:
+              modelAccount?.modelBreakdown ??
+              primaryAccount?.modelBreakdown ??
+              const <ModelUsage>[],
         ),
         const SizedBox(height: 16),
         _SectionHeader(title: 'Alerts'),
@@ -40,6 +80,90 @@ class DashboardScreen extends StatelessWidget {
       ],
     );
   }
+}
+
+class EmptyAllowanceCard extends StatelessWidget {
+  const EmptyAllowanceCard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: const Padding(
+        padding: EdgeInsets.all(16),
+        child: Text('The provider did not report the selected usage source.'),
+      ),
+    );
+  }
+}
+
+class AllowanceSummaryCard extends StatelessWidget {
+  const AllowanceSummaryCard({super.key, required this.allowance});
+
+  final AllowanceState allowance;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final progress = allowance.usedFraction;
+    final headline = switch (allowance.source) {
+      AllowanceSource.plan => '${allowance.usedPercentLabel} used',
+      AllowanceSource.purchased when allowance.unlimited => 'Unlimited',
+      AllowanceSource.purchased => allowance.remaining?.label ?? 'Unknown',
+    };
+    final detail = switch (allowance.source) {
+      AllowanceSource.plan when allowance.resetsAt != null =>
+        'Resets ${formatUtc(allowance.resetsAt!)}',
+      AllowanceSource.plan => 'Reset time unavailable',
+      AllowanceSource.purchased when allowance.unlimited => 'No balance limit',
+      AllowanceSource.purchased => 'Available balance',
+    };
+
+    return Card(
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(allowance.label, style: textTheme.titleMedium),
+                ),
+                StatusPill(status: allowance.status),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(headline, style: textTheme.headlineSmall),
+            if (progress != null) ...[
+              const SizedBox(height: 14),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(minHeight: 8, value: progress),
+              ),
+            ],
+            const SizedBox(height: 10),
+            Text(detail),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+ProviderSnapshot? _firstAccountWith(
+  List<ProviderSnapshot> accounts,
+  bool Function(ProviderSnapshot account) matches,
+) {
+  for (final account in accounts) {
+    if (matches(account)) {
+      return account;
+    }
+  }
+  return null;
 }
 
 class StatusPill extends StatelessWidget {
@@ -149,7 +273,7 @@ class _SyncHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Tooltip(
-                message: syncIssue.message,
+                message: snapshot.syncTooltip ?? syncIssue.message,
                 child: Icon(Icons.error_outline, color: colors.error, size: 18),
               ),
               const SizedBox(width: 8),
@@ -178,6 +302,45 @@ class _BudgetCards extends StatelessWidget {
       BudgetSummaryCard(title: 'Today', state: snapshot.todayTotal),
       BudgetSummaryCard(title: 'Week', state: snapshot.weekTotal),
       BudgetSummaryCard(title: 'Month', state: snapshot.monthTotal),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 760) {
+          return Column(
+            children: [
+              for (final card in cards) ...[
+                card,
+                if (card != cards.last) const SizedBox(height: 12),
+              ],
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final card in cards) ...[
+              Expanded(child: card),
+              if (card != cards.last) const SizedBox(width: 12),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _AllowanceCards extends StatelessWidget {
+  const _AllowanceCards({required this.allowances});
+
+  final List<AllowanceState> allowances;
+
+  @override
+  Widget build(BuildContext context) {
+    final cards = [
+      for (final allowance in allowances)
+        AllowanceSummaryCard(allowance: allowance),
     ];
 
     return LayoutBuilder(

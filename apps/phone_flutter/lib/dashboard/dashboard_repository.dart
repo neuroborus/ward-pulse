@@ -13,11 +13,13 @@ abstract class DashboardRepository {
 }
 
 final class DashboardLoadException implements Exception {
-  const DashboardLoadException([
+  const DashboardLoadException({
     this.issue = DashboardSyncIssue.dashboardUnavailable,
-  ]);
+    this.details,
+  });
 
   final DashboardSyncIssue issue;
+  final String? details;
 
   @override
   String toString() => issue.message;

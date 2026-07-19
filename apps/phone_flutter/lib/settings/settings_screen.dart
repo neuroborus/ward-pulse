@@ -1,10 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_screen.dart';
+import '../providers/codex_account_service.dart';
 import '../providers/provider_credential_store.dart';
+import '../sync/codex_account_client.dart';
 import '../sync/watch_sync_service.dart';
+import 'consumption_display_preferences.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
@@ -12,12 +17,19 @@ class SettingsScreen extends StatefulWidget {
     required this.snapshot,
     required this.watchSyncService,
     required this.credentialStore,
+    required this.codexAccountService,
+    required this.displayPreferences,
+    required this.onDisplayPreferencesChanged,
     required this.onCredentialsChanged,
   });
 
   final DashboardSnapshot? snapshot;
   final WatchSyncService watchSyncService;
   final ProviderCredentialStore credentialStore;
+  final CodexAccountService codexAccountService;
+  final ConsumptionDisplayPreferences displayPreferences;
+  final Future<void> Function(ConsumptionDisplayPreferences value)
+  onDisplayPreferencesChanged;
   final VoidCallback onCredentialsChanged;
 
   @override
@@ -26,6 +38,8 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool? _hasCredential;
+  bool? _hasCodexAccount;
+  bool _isConnectingCodex = false;
   bool _isSyncing = false;
   String? _syncResult;
 
@@ -33,6 +47,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _loadCredentialState();
+    _loadCodexAccountState();
+  }
+
+  Future<void> _loadCodexAccountState() async {
+    try {
+      final value = await widget.codexAccountService.isConnected();
+      if (mounted) {
+        setState(() {
+          _hasCodexAccount = value;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _hasCodexAccount = false;
+        });
+      }
+    }
   }
 
   Future<void> _loadCredentialState() async {
@@ -85,6 +117,82 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _editCodexAccount() async {
+    if (_hasCodexAccount == true) {
+      final action = await showDialog<_CodexAccountAction>(
+        context: context,
+        builder: (context) => const _ConnectedCodexAccountDialog(),
+      );
+      if (action == _CodexAccountAction.disconnect) {
+        try {
+          await widget.codexAccountService.disconnect();
+        } on CodexAccountException catch (error) {
+          if (mounted) {
+            _showMessage(error.details ?? 'Could not disconnect Codex');
+          }
+          return;
+        } catch (_) {
+          if (mounted) {
+            _showMessage('Could not disconnect Codex');
+          }
+          return;
+        }
+        if (mounted) {
+          setState(() {
+            _hasCodexAccount = false;
+          });
+          widget.onCredentialsChanged();
+        }
+        return;
+      }
+      if (action != _CodexAccountAction.reconnect) {
+        return;
+      }
+    }
+
+    setState(() {
+      _isConnectingCodex = true;
+    });
+    try {
+      final attempt = await widget.codexAccountService.startLogin();
+      if (!mounted) {
+        attempt.cancel();
+        return;
+      }
+      final connected = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => _CodexLoginDialog(attempt: attempt),
+      );
+      if (connected == true && mounted) {
+        setState(() {
+          _hasCodexAccount = true;
+        });
+        widget.onCredentialsChanged();
+      }
+    } on CodexAccountException catch (error) {
+      if (mounted && error.failure != CodexAccountFailure.cancelled) {
+        _showMessage(error.details ?? 'Could not start Codex sign-in');
+      }
+    } catch (_) {
+      if (mounted) {
+        _showMessage('Could not start Codex sign-in');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isConnectingCodex = false;
+        });
+      }
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _syncWatch() async {
     final snapshot = widget.snapshot;
     if (snapshot == null) {
@@ -97,7 +205,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     try {
-      await widget.watchSyncService.sync(snapshot);
+      await widget.watchSyncService.sync(snapshot, widget.displayPreferences);
       if (mounted) {
         setState(() {
           _syncResult = 'Watch summary queued';
@@ -118,6 +226,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _setDisplayPreferences(
+    ConsumptionDisplayPreferences value,
+  ) async {
+    if (!value.plan && !value.purchased) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Keep at least one usage source visible')),
+      );
+      return;
+    }
+
+    try {
+      await widget.onDisplayPreferencesChanged(value);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not update display settings')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final snapshot = widget.snapshot;
@@ -130,9 +259,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           child: Column(
             children: [
+              SwitchListTile(
+                secondary: const Icon(Icons.speed_outlined),
+                title: const Text('Plan usage'),
+                subtitle: const Text('Subscription rate limits'),
+                value: widget.displayPreferences.plan,
+                onChanged:
+                    (value) => _setDisplayPreferences(
+                      widget.displayPreferences.copyWith(plan: value),
+                    ),
+              ),
+              const Divider(height: 1),
+              SwitchListTile(
+                secondary: const Icon(Icons.toll_outlined),
+                title: const Text('Purchased usage'),
+                subtitle: const Text('Purchased tokens or credits'),
+                value: widget.displayPreferences.purchased,
+                onChanged:
+                    (value) => _setDisplayPreferences(
+                      widget.displayPreferences.copyWith(purchased: value),
+                    ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Card(
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.account_circle_outlined),
+                title: const Text('Codex account'),
+                subtitle: const Text(
+                  'Experimental · plan limits and token activity',
+                ),
+                trailing: switch ((_hasCodexAccount, _isConnectingCodex)) {
+                  (_, true) => const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  (null, _) => const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  (true, _) => const Text('Connected'),
+                  (false, _) => const Text('Not connected'),
+                },
+                onTap:
+                    _hasCodexAccount == null || _isConnectingCodex
+                        ? null
+                        : _editCodexAccount,
+              ),
+              const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.key_outlined),
-                title: const Text('OpenAI credential'),
+                title: const Text('OpenAI Platform credential'),
                 subtitle: const Text('Admin API key · stored on this phone'),
                 trailing: switch (_hasCredential) {
                   null => const SizedBox.square(
@@ -152,7 +335,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: Text(formatUtc(snapshot.generatedAt)),
                   trailing: StatusPill(
                     status: snapshot.overallStatus,
-                    tooltip: snapshot.syncIssue?.message,
+                    tooltip: snapshot.syncTooltip,
                   ),
                 ),
                 const Divider(height: 1),
@@ -164,7 +347,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   trailing: StatusPill(
                     status: snapshot.watchSummary.status,
-                    tooltip: snapshot.syncIssue?.message,
+                    tooltip: snapshot.syncTooltip,
                   ),
                 ),
               ],
@@ -188,6 +371,187 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ],
           ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ConnectedCodexAccountDialog extends StatelessWidget {
+  const _ConnectedCodexAccountDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Codex account'),
+      content: const Text(
+        'WardPulse reads subscription limits and token activity directly on this phone.',
+      ),
+      actions: [
+        TextButton(
+          onPressed:
+              () => Navigator.of(context).pop(_CodexAccountAction.disconnect),
+          child: const Text('Disconnect'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed:
+              () => Navigator.of(context).pop(_CodexAccountAction.reconnect),
+          child: const Text('Reconnect'),
+        ),
+      ],
+    );
+  }
+}
+
+class _CodexLoginDialog extends StatefulWidget {
+  const _CodexLoginDialog({required this.attempt});
+
+  final CodexLoginAttempt attempt;
+
+  @override
+  State<_CodexLoginDialog> createState() => _CodexLoginDialogState();
+}
+
+class _CodexLoginDialogState extends State<_CodexLoginDialog> {
+  String? _error;
+  String? _browserError;
+  bool _completed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _waitForLogin();
+  }
+
+  Future<void> _waitForLogin() async {
+    try {
+      await widget.attempt.completion;
+      _completed = true;
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
+    } on CodexAccountException catch (error) {
+      if (mounted && error.failure != CodexAccountFailure.cancelled) {
+        setState(() {
+          _error = error.details ?? 'Codex sign-in failed';
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _error = 'Codex sign-in failed';
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    if (!_completed) {
+      widget.attempt.cancel();
+    }
+    super.dispose();
+  }
+
+  Future<void> _openBrowser() async {
+    if (_browserError != null) {
+      setState(() {
+        _browserError = null;
+      });
+    }
+    try {
+      final opened = await launchUrl(
+        widget.attempt.deviceCode.verificationUri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (opened || !mounted) {
+        return;
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _browserError = 'Could not open the browser';
+      });
+    }
+  }
+
+  Future<void> _copyCode() async {
+    await Clipboard.setData(
+      ClipboardData(text: widget.attempt.deviceCode.userCode),
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Code copied')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Connect Codex'),
+      scrollable: true,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Open the secure OpenAI sign-in page, then enter this one-time code:',
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: SelectableText(
+                  widget.attempt.deviceCode.userCode,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Copy code',
+                onPressed: _copyCode,
+                icon: const Icon(Icons.copy_outlined),
+              ),
+            ],
+          ),
+          SelectableText(
+            widget.attempt.deviceCode.verificationUri.toString(),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          if (_error == null)
+            const LinearProgressIndicator()
+          else
+            Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          if (_browserError != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _browserError!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: _error == null ? _openBrowser : null,
+          icon: const Icon(Icons.open_in_browser),
+          label: const Text('Open browser'),
         ),
       ],
     );
@@ -296,3 +660,5 @@ final class _CredentialChange {
   final String? value;
   final bool remove;
 }
+
+enum _CodexAccountAction { reconnect, disconnect }

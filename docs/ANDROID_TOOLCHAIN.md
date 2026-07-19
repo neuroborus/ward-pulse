@@ -92,6 +92,8 @@ Android phone, Wear OS, and Watch Face Format in the current product plan.
 | Rust Android targets | `aarch64-linux-android`, `x86_64-linux-android` | Phone device and emulator libraries |
 | Dart `ffi` package | 2.2.0 | UTF-8 C ABI wrapper |
 | Flutter Secure Storage | 10.3.1 | Android credential encryption |
+| URL Launcher | 6.3.2 | External OpenAI device-code sign-in page |
+| Node.js | 24.x | Documentation and design tooling |
 | Git | 2.43.0 | Source control and Flutter SDK support |
 
 The Rust workspace declares Rust 1.75 as its minimum supported version. The newer local
@@ -437,6 +439,11 @@ flutter build apk --debug
 flutter run
 ```
 
+For Codex acceptance, open **Settings > Codex account**, start sign-in, open the external OpenAI
+page, and enter the one-time code. Plan usage is enabled by default; purchased usage can be
+enabled independently. The OAuth session stays in phone-secure storage and does not require a
+Codex CLI, local server, or `adb reverse`.
+
 Run the Wear OS acceptance checks with one canonical Wear AVD active:
 
 ```sh
@@ -472,8 +479,8 @@ The Android toolchain is complete through the Phase 7 implementation. Android St
 the Play Store phone image, and the canonical `wardpulse_phone_play_api36` AVD completed the
 emulator-to-emulator pairing check. The canonical Wear AVD also passed WFF install, render,
 tap-to-open, and ambient acceptance on the shared AGP 9.3 baseline. Phase 7 needs no
-additional Android host package; its remaining live acceptance requires only a user-supplied
-OpenAI Admin API key entered in the phone app.
+additional Android host package. Codex acceptance uses the phone's browser and secure storage;
+Node.js 24 remains a documentation and design-tooling dependency only.
 
 ## Updating The Baseline
 

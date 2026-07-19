@@ -9,7 +9,7 @@
         {
           "object": "organization.costs.result",
           "amount": {
-            "value": 1.20,
+            "value": "1.20",
             "currency": "usd"
           },
           "line_item": null,
@@ -26,7 +26,7 @@
         {
           "object": "organization.costs.result",
           "amount": {
-            "value": 2.30,
+            "value": "2.30",
             "currency": "usd"
           },
           "line_item": null,
@@ -43,7 +43,7 @@
         {
           "object": "organization.costs.result",
           "amount": {
-            "value": 0.50,
+            "value": "0.50",
             "currency": "usd"
           },
           "line_item": null,
