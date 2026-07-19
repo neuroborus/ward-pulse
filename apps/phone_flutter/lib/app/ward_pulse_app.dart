@@ -6,6 +6,7 @@ import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_repository.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../providers/providers_screen.dart';
+import '../providers/provider_credential_store.dart';
 import '../settings/settings_screen.dart';
 import '../sync/watch_sync_service.dart';
 
@@ -14,10 +15,12 @@ class WardPulseApp extends StatelessWidget {
     super.key,
     this.repository = const RustDashboardRepository(),
     this.watchSyncService = const MethodChannelWatchSyncService(),
+    this.credentialStore = const EmptyProviderCredentialStore(),
   });
 
   final DashboardRepository repository;
   final WatchSyncService watchSyncService;
+  final ProviderCredentialStore credentialStore;
 
   @override
   Widget build(BuildContext context) {
@@ -41,6 +44,7 @@ class WardPulseApp extends StatelessWidget {
       home: DashboardHost(
         repository: repository,
         watchSyncService: watchSyncService,
+        credentialStore: credentialStore,
       ),
     );
   }
@@ -51,10 +55,12 @@ class DashboardHost extends StatefulWidget {
     super.key,
     required this.repository,
     required this.watchSyncService,
+    required this.credentialStore,
   });
 
   final DashboardRepository repository;
   final WatchSyncService watchSyncService;
+  final ProviderCredentialStore credentialStore;
 
   @override
   State<DashboardHost> createState() => _DashboardHostState();
@@ -109,12 +115,20 @@ class _DashboardHostState extends State<DashboardHost> {
           ),
           body: SafeArea(
             child: switch (state.connectionState) {
+              _ when _selectedIndex == 2 => SettingsScreen(
+                snapshot: snapshot,
+                watchSyncService: widget.watchSyncService,
+                credentialStore: widget.credentialStore,
+                onCredentialsChanged: () {
+                  widget.repository.invalidate();
+                  _reload();
+                },
+              ),
               ConnectionState.waiting => const _LoadingView(),
               _ when state.hasError => _ErrorView(onRetry: _reload),
               _ when snapshot != null => _SelectedSurface(
                 selectedIndex: _selectedIndex,
                 snapshot: snapshot,
-                watchSyncService: widget.watchSyncService,
               ),
               _ => _ErrorView(onRetry: _reload),
             },
@@ -151,25 +165,16 @@ class _DashboardHostState extends State<DashboardHost> {
 }
 
 class _SelectedSurface extends StatelessWidget {
-  const _SelectedSurface({
-    required this.selectedIndex,
-    required this.snapshot,
-    required this.watchSyncService,
-  });
+  const _SelectedSurface({required this.selectedIndex, required this.snapshot});
 
   final int selectedIndex;
   final DashboardSnapshot snapshot;
-  final WatchSyncService watchSyncService;
 
   @override
   Widget build(BuildContext context) {
     return switch (selectedIndex) {
       0 => DashboardScreen(snapshot: snapshot),
-      1 => ProvidersScreen(snapshot: snapshot),
-      _ => SettingsScreen(
-        snapshot: snapshot,
-        watchSyncService: watchSyncService,
-      ),
+      _ => ProvidersScreen(snapshot: snapshot),
     };
   }
 }

@@ -21,8 +21,8 @@ This repository is intentionally organized as one product monorepo with separate
 
 ## Current Phase
 
-Phase 7 is in progress: OpenAI Platform organization reporting is selected as the first live
-provider contract. The next slice adds phone-side secure credential storage and transport.
+Phase 7 implementation is complete. Live acceptance remains: save an OpenAI Admin API key on
+the phone and confirm that the dashboard shows organization usage and cost reporting.
 
 ## Useful Commands
 

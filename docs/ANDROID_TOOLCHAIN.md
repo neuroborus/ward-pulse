@@ -1,7 +1,7 @@
 # Android Toolchain
 
 This document is the operational source of truth for the WardPulse Android development
-environment. It records the baseline through the Phase 6 implementation, canonical SDK
+environment. It records the baseline through the Phase 7 implementation, canonical SDK
 package names, local paths, verification commands, and tooling that is intentionally not
 installed yet.
 
@@ -9,12 +9,13 @@ Last verified: **2026-07-19** on TUXEDO OS 24.04.4 LTS, x86_64.
 
 ## Current Readiness
 
-The command-line toolchain required through the local **Phase 6 — WFF watch face**
+The command-line toolchain required through the local **Phase 7 — first real provider**
 build and test gates is ready:
 
 - Flutter detects the Android SDK and reports the Android toolchain as healthy.
 - All Android SDK licenses are accepted.
 - Android 16 / API 36 and Build Tools 36.0.0 are installed.
+- Android SDK Platform 35 is installed for Flutter plugin builds that declare that compile SDK.
 - The canonical phone AVD is installed, starts, and is detected by Flutter.
 - `flutter analyze` passes for `apps/phone_flutter`.
 - `flutter test` passes, including usage-history rendering and provider-detail navigation.
@@ -26,6 +27,8 @@ build and test gates is ready:
   both supported ABIs.
 - The phone app loads the golden dashboard snapshot from Rust at runtime and maps bridge
   failures to the safe unavailable state.
+- The phone debug APK includes platform-secure OpenAI credential storage and the live
+  reporting FFI boundary; it starts successfully on the canonical AVD.
 - Android SDK Platform 37.1 is installed for the Wear compile SDK while target SDK remains
   API 36.
 - The Wear OS 6.1 x86_64 system image and canonical round and square AVDs are installed.
@@ -58,6 +61,7 @@ Android phone, Wear OS, and Watch Face Format in the current product plan.
 | Android Studio | Quail 2, 2026.1.2 | Wear emulator pairing and Android project tooling |
 | Android CLI | 1.0.15857036 | SDK package management and Android tooling |
 | Android SDK Command-line Tools | 22.0 | `android`, `avdmanager`, and bootstrap SDK tools |
+| Android SDK Platform | `platforms;android-35`, revision 2 | Flutter plugin compile compatibility |
 | Android SDK Platform | `platforms;android-36`, revision 2 | Compile SDK baseline |
 | Android SDK Platform | `platforms;android-37.1`, revision 1 | Wear compile SDK |
 | Android SDK Build Tools | `build-tools;36.0.0` | Android build baseline |
@@ -87,6 +91,7 @@ Android phone, Wear OS, and Watch Face Format in the current product plan.
 | cargo-ndk | 4.1.2 | Rust builds for Android ABIs |
 | Rust Android targets | `aarch64-linux-android`, `x86_64-linux-android` | Phone device and emulator libraries |
 | Dart `ffi` package | 2.2.0 | UTF-8 C ABI wrapper |
+| Flutter Secure Storage | 10.3.1 | Android credential encryption |
 | Git | 2.43.0 | Source control and Flutter SDK support |
 
 The Rust workspace declares Rust 1.75 as its minimum supported version. The newer local
@@ -214,6 +219,7 @@ Install the pinned phone, bridge, and Wear packages:
 ```sh
 "$ANDROID_HOME/cmdline-tools/latest/bin/android" --sdk="$ANDROID_HOME" sdk install \
   platform-tools \
+  platforms/android-35 \
   platforms/android-36 \
   platforms/android-37.1 \
   build-tools/36.0.0 \
@@ -462,12 +468,12 @@ Do not hardcode `emulator-5554` in project automation; resolve the active device
 
 ## Later-Phase Gaps
 
-The Android toolchain is complete through Phase 6. Android Studio **Quail 2 | 2026.1.2**,
+The Android toolchain is complete through the Phase 7 implementation. Android Studio **Quail 2 | 2026.1.2**,
 the Play Store phone image, and the canonical `wardpulse_phone_play_api36` AVD completed the
 emulator-to-emulator pairing check. The canonical Wear AVD also passed WFF install, render,
-tap-to-open, and ambient acceptance on the shared AGP 9.3 baseline. Phase 7 currently needs
-no additional Android host package; provider-specific tooling must be chosen only after the
-first provider boundary is selected.
+tap-to-open, and ambient acceptance on the shared AGP 9.3 baseline. Phase 7 needs no
+additional Android host package; its remaining live acceptance requires only a user-supplied
+OpenAI Admin API key entered in the phone app.
 
 ## Updating The Baseline
 

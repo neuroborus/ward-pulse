@@ -157,11 +157,11 @@ class UsageBucket {
   }
 
   int? get totalTokens {
-    if (inputTokens == null && outputTokens == null && cachedTokens == null) {
+    if (inputTokens == null && outputTokens == null) {
       return null;
     }
 
-    return (inputTokens ?? 0) + (outputTokens ?? 0) + (cachedTokens ?? 0);
+    return (inputTokens ?? 0) + (outputTokens ?? 0);
   }
 }
 

@@ -3,18 +3,15 @@ import 'package:flutter/material.dart';
 import '../dashboard/dashboard_models.dart';
 
 class UsageHistoryChart extends StatelessWidget {
-  const UsageHistoryChart({
-    super.key,
-    required this.buckets,
-    required this.totalCost,
-  });
+  const UsageHistoryChart({super.key, required this.buckets});
 
   final List<UsageBucket> buckets;
-  final Money? totalCost;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final totalCost = _totalCost(buckets);
+    final showDates = _spansMultipleUtcDays(buckets);
 
     return Card(
       margin: EdgeInsets.zero,
@@ -55,11 +52,13 @@ class UsageHistoryChart extends StatelessWidget {
               const SizedBox(height: 10),
               Row(
                 children: [
-                  Expanded(child: Text(_timeLabel(buckets.first.startAt))),
+                  Expanded(
+                    child: Text(_rangeLabel(buckets.first.startAt, showDates)),
+                  ),
                   Text(totalCost?.label ?? 'Unknown'),
                   Expanded(
                     child: Text(
-                      _timeLabel(buckets.last.endAt),
+                      _rangeLabel(buckets.last.endAt, showDates),
                       textAlign: TextAlign.end,
                     ),
                   ),
@@ -137,8 +136,46 @@ String _bucketCountLabel(int count) {
   return count == 1 ? '1 bucket' : '$count buckets';
 }
 
-String _timeLabel(DateTime value) {
+Money? _totalCost(List<UsageBucket> buckets) {
+  if (buckets.isEmpty) {
+    return null;
+  }
+
+  final currency = buckets.first.cost?.currency;
+  if (currency == null ||
+      buckets.any((bucket) => bucket.cost?.currency != currency)) {
+    return null;
+  }
+
+  return Money(
+    minorUnits: buckets.fold(
+      0,
+      (total, bucket) => total + bucket.cost!.minorUnits,
+    ),
+    currency: currency,
+  );
+}
+
+bool _spansMultipleUtcDays(List<UsageBucket> buckets) {
+  if (buckets.isEmpty) {
+    return false;
+  }
+
+  final start = buckets.first.startAt.toUtc();
+  final end = buckets.last.endAt.toUtc();
+  return start.year != end.year ||
+      start.month != end.month ||
+      start.day != end.day;
+}
+
+String _rangeLabel(DateTime value, bool showDate) {
   final utc = value.toUtc();
+  if (showDate) {
+    final month = utc.month.toString().padLeft(2, '0');
+    final day = utc.day.toString().padLeft(2, '0');
+    return '${utc.year}-$month-$day';
+  }
+
   final hour = utc.hour.toString().padLeft(2, '0');
   final minute = utc.minute.toString().padLeft(2, '0');
 

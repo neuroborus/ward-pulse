@@ -22,7 +22,6 @@ class DashboardScreen extends StatelessWidget {
         const SizedBox(height: 16),
         UsageHistoryChart(
           buckets: primaryAccount?.buckets ?? const <UsageBucket>[],
-          totalCost: primaryAccount?.today.spent,
         ),
         const SizedBox(height: 16),
         _SectionHeader(

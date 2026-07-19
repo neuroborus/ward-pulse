@@ -8,6 +8,8 @@ abstract class DashboardRepository {
   const DashboardRepository();
 
   Future<DashboardSnapshot> load();
+
+  void invalidate() {}
 }
 
 final class DashboardLoadException implements Exception {

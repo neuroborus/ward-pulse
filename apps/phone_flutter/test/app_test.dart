@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_app.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
+import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 
 void main() {
@@ -101,6 +102,58 @@ void main() {
     expect(find.text('WardPulse'), findsOneWidget);
     expect(find.text('Dashboard unavailable'), findsNothing);
   });
+
+  testWidgets('stores and masks an OpenAI Admin API key', (tester) async {
+    final snapshot = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final credentialStore = _MemoryCredentialStore();
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(snapshot),
+        credentialStore: credentialStore,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Not set'), findsOneWidget);
+    await tester.tap(find.text('OpenAI credential'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), 'secret-admin-key');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(credentialStore.value, 'secret-admin-key');
+    expect(find.text('••••••••'), findsOneWidget);
+    expect(find.text('secret-admin-key'), findsNothing);
+  });
+
+  testWidgets('keeps credential settings available after a load failure', (
+    tester,
+  ) async {
+    final credentialStore = _MemoryCredentialStore('invalid-admin-key');
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: const _FailingDashboardRepository(),
+        credentialStore: credentialStore,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dashboard unavailable'), findsOneWidget);
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('OpenAI credential'), findsOneWidget);
+    expect(find.text('••••••••'), findsOneWidget);
+    await tester.tap(find.text('OpenAI credential'));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove'), findsOneWidget);
+  });
 }
 
 class _FakeWatchSyncService implements WatchSyncService {
@@ -118,5 +171,33 @@ class _FailingWatchSyncService implements WatchSyncService {
   @override
   Future<void> sync(DashboardSnapshot snapshot) {
     return Future.error(StateError('Watch unavailable'));
+  }
+}
+
+final class _FailingDashboardRepository extends DashboardRepository {
+  const _FailingDashboardRepository();
+
+  @override
+  Future<DashboardSnapshot> load() {
+    return Future.error(const DashboardLoadException());
+  }
+}
+
+class _MemoryCredentialStore implements ProviderCredentialStore {
+  _MemoryCredentialStore([this.value]);
+
+  String? value;
+
+  @override
+  Future<String?> readOpenAiAdminKey() async => value;
+
+  @override
+  Future<void> writeOpenAiAdminKey(String value) async {
+    this.value = value;
+  }
+
+  @override
+  Future<void> deleteOpenAiAdminKey() async {
+    value = null;
   }
 }

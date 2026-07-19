@@ -1139,7 +1139,7 @@ ambient mode remains readable
 
 ### Phase 7 — first real provider
 
-Status: in progress as of 2026-07-19.
+Status: implementation complete; live acceptance pending as of 2026-07-19.
 
 Deliverables:
 
@@ -1168,6 +1168,19 @@ OpenAI Platform organization reporting selected as the first live adapter
 provider capability descriptor added for implemented providers
 usage/cost endpoint, credential, pagination, and redaction contract documented
 personal ChatGPT/Codex subscription analytics explicitly excluded from this adapter
+phone credential UI stores the Admin API key in platform-secure storage and masks it after save
+phone transport fetches paginated daily usage and cost reports with Retry-After/backoff handling
+Rust normalizes sanitized OpenAI reports into the existing dashboard snapshot contract
+sync diagnostics record outcome names only; credentials, headers, identifiers, and payloads stay out of logs
+automated Rust, Flutter, FFI, fixture, pagination, retry, and credential-masking tests pass
+```
+
+Remaining acceptance:
+
+```text
+save a valid OpenAI Admin API key in Settings on an Android phone or emulator
+refresh and confirm that OpenAI today/week/month cost plus usage/model data are rendered
+confirm the saved key remains masked and no sensitive values appear in logcat
 ```
 
 ### Phase 8 — MVP hardening
@@ -1178,6 +1191,7 @@ Deliverables:
 - empty states;
 - offline states;
 - stale data indicators;
+- automatic provider polling with a conservative minimum interval;
 - data deletion;
 - privacy policy draft;
 - legal disclaimer;
@@ -1338,7 +1352,8 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Continue Phase 7 with phone-side credential storage and the OpenAI reporting transport.
+Complete the Phase 7 live acceptance with a user-supplied OpenAI Admin API key, then start
+Phase 8 MVP hardening.
 
 Phase 6 passed Watch Face Format acceptance on 2026-07-19:
 
@@ -1351,7 +1366,7 @@ ambient mode rendered a readable thin time layer with a minimal product label
 pull-request CI now validates, lints, and builds the watch face package
 ```
 
-The OpenAI Platform organization reporting contract is now selected and documented. Add the
-smallest phone-side secure-storage boundary for its Admin API key, then fetch paginated daily
-usage and cost responses without logging secrets or raw payloads. Keep parsing and
-normalization deterministic in Rust and preserve the existing snapshot boundary.
+The OpenAI Platform organization reporting adapter, secure credential boundary, pagination,
+retry handling, redacted outcome logging, deterministic Rust normalization, and automated
+tests are implemented. The key must still be entered by the user on a phone or emulator to
+confirm live organization reporting before Phase 7 is marked accepted.

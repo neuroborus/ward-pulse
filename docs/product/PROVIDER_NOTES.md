@@ -39,7 +39,7 @@ Scope:
 - Send `GET` requests only. The key cannot call non-administration endpoints or run model inference, so this adapter cannot initiate billable model work; unrelated administrative privileges may still be present.
 - Fetch completions usage from `GET /v1/organization/usage/completions` and cost from `GET /v1/organization/costs`.
 - Request daily buckets for dashboard cost. Usage also supports hourly buckets and grouping by model, project, or user; cost supports daily buckets and grouping by project, line item, or API key.
-- Follow response pagination. Poll automatically no more than once every 15 minutes; after `429`, honor `Retry-After` when present and apply exponential backoff with jitter.
+- Follow response pagination. Phase 7 syncs on app start and manual refresh; automatic polling is deferred to MVP hardening and must run no more than once every 15 minutes. After `429`, honor `Retry-After` when present and apply exponential backoff with jitter.
 - Keep budgets local. This adapter reads reporting data and does not manage provider-side spending limits or spend alerts.
 - Never log the key, authorization header, full account identifiers, or raw response bodies.
 
@@ -60,6 +60,15 @@ Capabilities:
 | Active agents | No | Reporting data is not live agent state. |
 
 Revocation is performed in OpenAI Admin API key settings. Until a narrower account-specific credential is verified, WardPulse must describe this key as an administrative credential rather than read-only analytics access.
+
+Implementation status as of 2026-07-19:
+
+- The phone stores the key with platform-secure storage and never reads it back into the credential field.
+- Android backup is disabled so encrypted values cannot be restored without their device-bound key.
+- Usage and cost pages are fetched directly from the phone, then passed without credentials or authorization headers to the Rust normalization boundary.
+- OpenAI API costs are normalized as USD. Raw page JSON crosses the Dart-to-Rust boundary as strings so decimal values remain exact; Rust sums exact values before rounding period totals to cents. Missing optional amount fields are ignored and an empty successful cost report is represented as zero spend.
+- Sync diagnostics contain fixed outcome names only. Provider response bodies are processed in memory and are not logged.
+- Sanitized fixtures cover report parsing; live acceptance requires a user-supplied Admin API key.
 
 Official references:
 
