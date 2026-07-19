@@ -1,0 +1,18 @@
+{
+  "name": "ward-pulse",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "workspaces": [
+    "docs/site"
+  ],
+  "scripts": {
+    "docs:dev": "npm run dev --workspace @wardpulse/docs",
+    "docs:build": "npm run build --workspace @wardpulse/docs",
+    "docs:preview": "npm run preview --workspace @wardpulse/docs"
+  },
+  "engines": {
+    "node": "^24.0.0"
+  },
+  "packageManager": "npm@11.16.0"
+}

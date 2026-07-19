@@ -16,6 +16,11 @@ debug/
 __pycache__/
 *.py[cod]
 
+# Node.js / Vocs
+node_modules/
+docs/site/dist/
+docs/site/.vocs/
+
 # Flutter / Dart
 .dart_tool/
 .flutter-plugins

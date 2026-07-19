@@ -42,9 +42,17 @@ After local skill changes, run:
 python3 /home/neuroborus/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/<skill-name>
 ```
 
+After durable documentation, Vocs page, or navigation changes, run:
+
+```bash
+just check-docs
+```
+
 ## Documentation
 
 - Start from `docs/README.md` for durable project documentation.
 - Keep root `README.md` short and operational.
 - Keep product, provider, security, and release guidance in `docs/product/`.
+- Keep component-specific guidance beside its owner and expose it through thin pages in `docs/site/`.
+- Update `docs/site/vocs.config.ts` when site navigation changes.
 - Update local skills in `.agents/skills/` when repository workflow or ownership boundaries change.

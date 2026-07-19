@@ -13,6 +13,8 @@ Use this skill before changing durable project knowledge.
 - Root `AGENTS.md`: short working agreements for agents and humans.
 - Root `LICENSE`, `TRADEMARKS.md`, and `THIRD_PARTY_NOTICES.md`: Apache-2.0 source license, brand usage, and attribution gate.
 - `docs/README.md`: index and gate for project documentation.
+- `docs/DOCUMENTATION.md`: documentation ownership, Vocs tooling, and contributor workflow.
+- `docs/site/`: Vocs configuration, navigation, and thin presentation pages.
 - `docs/DEVELOPMENT_PLAN.md`: full product and implementation plan.
 - `docs/product/ANDROID_GOALS.md`: Android MVP goals and non-goals.
 - `docs/product/PROVIDER_NOTES.md`: provider integration assumptions and open questions.
@@ -25,6 +27,8 @@ Use this skill before changing durable project knowledge.
 ## Rules
 
 - Link new durable docs from `docs/README.md`.
+- Keep authoritative prose in `docs/` or beside its owning component; Vocs pages should import it instead of copying it.
+- Update `docs/site/vocs.config.ts` when an exposed document is added, removed, or renamed.
 - Keep root docs concise; move detailed requirements into `docs/`.
 - Keep root `AGENTS.md` aligned with `.agents/skills/*` when workflow checks or ownership boundaries change.
 - Keep Apache-2.0 source licensing and WardPulse brand rights separate.
@@ -39,5 +43,6 @@ Use this skill before changing durable project knowledge.
 - Is this information operational, product, security, provider, release, schema, or fixture knowledge?
 - Is it duplicated somewhere else?
 - Will another agent know where to find it from `docs/README.md`?
+- Is the Vocs page and navigation current when this document is exposed on the site?
 - Does this change alter phase scope in `docs/DEVELOPMENT_PLAN.md`?
 - Does this create a public contract that should be represented in `schemas/`?

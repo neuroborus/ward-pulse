@@ -32,4 +32,5 @@ just run-wear
 ```
 
 `test-wear-device` and `run-wear` require one active Wear AVD. Canonical AVD names and setup
-commands live in [`docs/ANDROID_TOOLCHAIN.md`](../../docs/ANDROID_TOOLCHAIN.md).
+commands live in
+[`docs/ANDROID_TOOLCHAIN.md`](https://github.com/neuroborus/ward-pulse/blob/main/docs/ANDROID_TOOLCHAIN.md).

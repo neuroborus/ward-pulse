@@ -1,6 +1,6 @@
 ---
 name: finalization
-description: Post-change finalization checklist for WardPulse (Rust core, Flutter phone shell, Kotlin Wear OS shell, WFF watch face, shared schemas, fixtures, docs, and tooling). Use after completing feature, fix, refactor, documentation, or structure work before handoff or commit drafting.
+description: Post-change finalization checklist for WardPulse (Rust core, Flutter phone shell, Kotlin Wear OS shell, WFF watch face, shared schemas, fixtures, Vocs documentation, and tooling). Use after completing feature, fix, refactor, documentation, or structure work before handoff or commit drafting.
 ---
 
 # Finalization — WardPulse
@@ -9,7 +9,7 @@ description: Post-change finalization checklist for WardPulse (Rust core, Flutte
 >
 > Run this after implementation or documentation work to keep the monorepo coherent.
 >
-> Last Updated: 2026-06-28
+> Last Updated: 2026-07-19
 
 ## 1. Scope Review
 
@@ -55,10 +55,17 @@ cd apps/phone_flutter && flutter analyze && flutter test
 - [ ] If Android/Wear/WFF Gradle projects are generated, run the relevant Gradle test/build task.
 - [ ] If schemas or fixtures changed, validate fixture shape manually or with `tools/validate-fixtures/` when available.
 - [ ] If GitHub Actions workflows changed, run `actionlint .github/workflows/*.yml`.
+- [ ] If durable docs, Vocs pages, component READMEs, or site navigation changed, run:
+
+```bash
+just check-docs
+```
 
 ## 5. Documentation Review
 
 - [ ] `docs/README.md` links any new durable document.
+- [ ] The Vocs page and `docs/site/vocs.config.ts` navigation are updated for documentation exposed on the site.
+- [ ] Vocs pages import authoritative Markdown instead of duplicating it.
 - [ ] `README.md` still describes the current repository shape and commands.
 - [ ] Product, provider, release, or security docs are updated when behavior or boundaries changed.
 - [ ] Placeholder TODOs are acceptable only for intentionally deferred platform generation work.

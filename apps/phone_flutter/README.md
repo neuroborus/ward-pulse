@@ -7,7 +7,8 @@ the narrow JSON FFI bridge and renders the phone dashboard, usage history, provi
 provider detail, and settings surfaces. Its Android application ID is `app.wardpulse`; the
 runner builds and runs on the canonical phone emulator.
 
-The verified Flutter and Android SDK baseline is documented in [`../../docs/ANDROID_TOOLCHAIN.md`](../../docs/ANDROID_TOOLCHAIN.md).
+The verified Flutter and Android SDK baseline is documented in
+[`docs/ANDROID_TOOLCHAIN.md`](https://github.com/neuroborus/ward-pulse/blob/main/docs/ANDROID_TOOLCHAIN.md).
 
 ## Ownership
 

@@ -6,6 +6,7 @@ This directory is the documentation gate for the project. Root files should stay
 
 - [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) is the full product and implementation plan.
 - [ANDROID_TOOLCHAIN.md](ANDROID_TOOLCHAIN.md) records the verified Android/Flutter development baseline, SDK package names, AVDs, and setup commands.
+- [DOCUMENTATION.md](DOCUMENTATION.md) defines documentation ownership, Vocs tooling, and contributor workflow.
 - [product/ANDROID_GOALS.md](product/ANDROID_GOALS.md) defines the MVP goal, surfaces, and non-goals.
 - [product/PROVIDER_NOTES.md](product/PROVIDER_NOTES.md) tracks provider integration assumptions and open questions.
 - [product/SECURITY_MODEL.md](product/SECURITY_MODEL.md) defines local-first credential and diagnostics rules.
@@ -31,3 +32,5 @@ Use this index before adding new work:
 - Update `DEVELOPMENT_PLAN.md` only when the product direction changes.
 - Add focused documents instead of growing one catch-all file.
 - Link new documents from this index before relying on them in implementation.
+- Add a thin page under `site/src/pages/` and update `site/vocs.config.ts` when a document should appear in the Vocs site.
+- Run `just check-docs` after changing durable docs, Vocs pages, or navigation.
