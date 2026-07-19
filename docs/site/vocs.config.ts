@@ -2,6 +2,7 @@ import { defineConfig } from 'vocs/config'
 
 export default defineConfig({
   description: 'Product and development documentation for WardPulse.',
+  renderStrategy: 'full-static',
   sidebar: [
     { text: 'Overview', link: '/' },
     {

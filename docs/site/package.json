@@ -6,10 +6,11 @@
   "type": "module",
   "scripts": {
     "dev": "vocs dev",
-    "build": "vocs build",
+    "build": "node build.mjs",
     "preview": "vocs preview"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "6.0.3",
     "vite": "8.1.5",
     "vocs": "2.6.0",
     "waku": "1.0.0-beta.7"
