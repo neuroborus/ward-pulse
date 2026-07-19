@@ -24,7 +24,16 @@ void main() {
       loadDashboardJson: () => throw StateError('native details'),
     );
 
-    expect(repository.load(), throwsA(isA<DashboardLoadException>()));
+    expect(
+      repository.load(),
+      throwsA(
+        isA<DashboardLoadException>().having(
+          (error) => error.issue,
+          'issue',
+          DashboardSyncIssue.dashboardUnavailable,
+        ),
+      ),
+    );
   });
 
   test('does not double-count cached input tokens', () {

@@ -1191,7 +1191,9 @@ Completed slice:
 
 - the phone keeps the last successful live snapshot after a refresh failure;
 - cached dashboard, provider, and watch-summary state is marked stale;
-- the dashboard labels previous data explicitly while preserving its original timestamp.
+- the dashboard labels previous data explicitly while preserving its original timestamp;
+- OpenAI authentication, permission, rate-limit, availability, and response failures surface as fixed safe messages;
+- status icons expose concise tooltips, and credential entry can reveal only the current unsaved key on demand.
 
 Deliverables:
 

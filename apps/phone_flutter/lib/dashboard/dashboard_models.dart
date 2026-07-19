@@ -22,6 +22,49 @@ extension ProviderStatusLabel on ProviderStatus {
       ProviderStatus.unknown => 'Unknown',
     };
   }
+
+  String get description {
+    return switch (this) {
+      ProviderStatus.ok => 'Provider data is current.',
+      ProviderStatus.warning => 'Usage is approaching a configured limit.',
+      ProviderStatus.error => 'Provider sync failed.',
+      ProviderStatus.rateLimited => 'Provider rate limit reached.',
+      ProviderStatus.authRequired => 'Provider authentication is required.',
+      ProviderStatus.stale => 'Showing data from the last successful sync.',
+      ProviderStatus.unknown => 'Provider status is unavailable.',
+    };
+  }
+}
+
+enum DashboardSyncIssue {
+  credentialUnavailable,
+  authentication,
+  permissionDenied,
+  rateLimited,
+  providerUnavailable,
+  invalidResponse,
+  dashboardUnavailable,
+}
+
+extension DashboardSyncIssueMessage on DashboardSyncIssue {
+  String get message {
+    return switch (this) {
+      DashboardSyncIssue.credentialUnavailable =>
+        'The saved key could not be read. Re-enter it in Settings.',
+      DashboardSyncIssue.authentication =>
+        'OpenAI rejected the key. Check that you pasted the full Admin API key.',
+      DashboardSyncIssue.permissionDenied =>
+        'This key cannot read organization usage. Use an organization Admin API key.',
+      DashboardSyncIssue.rateLimited =>
+        'OpenAI rate limit reached. Try again shortly.',
+      DashboardSyncIssue.providerUnavailable =>
+        'OpenAI reporting is unavailable. Check your connection and try again.',
+      DashboardSyncIssue.invalidResponse =>
+        'OpenAI returned an unsupported reporting response.',
+      DashboardSyncIssue.dashboardUnavailable =>
+        'Dashboard data could not be loaded.',
+    };
+  }
 }
 
 class DashboardSnapshot {
@@ -34,6 +77,7 @@ class DashboardSnapshot {
     required this.monthTotal,
     required this.alerts,
     required this.watchSummary,
+    this.syncIssue,
   });
 
   final DateTime generatedAt;
@@ -44,6 +88,7 @@ class DashboardSnapshot {
   final BudgetState monthTotal;
   final List<AlertSummary> alerts;
   final WatchSummary watchSummary;
+  final DashboardSyncIssue? syncIssue;
 
   factory DashboardSnapshot.fromJsonString(String source) {
     return DashboardSnapshot.fromJson(_jsonMap(jsonDecode(source)));
@@ -70,7 +115,7 @@ class DashboardSnapshot {
     return accounts.length == 1 ? '1 account' : '${accounts.length} accounts';
   }
 
-  DashboardSnapshot withStaleStatus() {
+  DashboardSnapshot withStaleStatus({DashboardSyncIssue? syncIssue}) {
     return DashboardSnapshot(
       generatedAt: generatedAt,
       overallStatus: ProviderStatus.stale,
@@ -82,6 +127,7 @@ class DashboardSnapshot {
       monthTotal: monthTotal,
       alerts: alerts,
       watchSummary: watchSummary._withStatus(ProviderStatus.stale),
+      syncIssue: syncIssue,
     );
   }
 }

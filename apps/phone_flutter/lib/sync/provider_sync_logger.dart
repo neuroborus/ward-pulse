@@ -4,6 +4,7 @@ enum ProviderSyncEvent {
   skippedNoCredential,
   succeeded,
   authenticationRequired,
+  permissionDenied,
   rateLimited,
   unavailable,
   invalidResponse,

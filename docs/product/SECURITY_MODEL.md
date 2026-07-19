@@ -6,7 +6,7 @@ WardPulse is local-first. The MVP must not introduce a custom cloud path for pro
 
 - Credentials are entered on the phone only.
 - Credentials are stored with platform-secure storage.
-- Credentials are never displayed in full after save.
+- Saved credentials are never displayed in full. Credential entry may reveal only the current unsaved value after an explicit user action.
 - Credentials are never sent to a WardPulse cloud service in the MVP.
 - Wear OS surfaces receive dashboard summaries, not provider credentials.
 - Android encrypted credential data is excluded from backup because its key is device-bound.

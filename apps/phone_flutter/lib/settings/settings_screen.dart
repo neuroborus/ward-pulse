@@ -150,7 +150,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   leading: const Icon(Icons.sync_outlined),
                   title: const Text('Sync'),
                   subtitle: Text(formatUtc(snapshot.generatedAt)),
-                  trailing: StatusPill(status: snapshot.overallStatus),
+                  trailing: StatusPill(
+                    status: snapshot.overallStatus,
+                    tooltip: snapshot.syncIssue?.message,
+                  ),
                 ),
                 const Divider(height: 1),
                 ListTile(
@@ -159,7 +162,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: Text(
                     'Today ${snapshot.todayTotal.usedPercentLabel}',
                   ),
-                  trailing: StatusPill(status: snapshot.watchSummary.status),
+                  trailing: StatusPill(
+                    status: snapshot.watchSummary.status,
+                    tooltip: snapshot.syncIssue?.message,
+                  ),
                 ),
               ],
               if (kDebugMode && snapshot != null) ...[
@@ -200,6 +206,7 @@ class _CredentialDialog extends StatefulWidget {
 class _CredentialDialogState extends State<_CredentialDialog> {
   final _formKey = GlobalKey<FormState>();
   final _controller = TextEditingController();
+  bool _obscureKey = true;
 
   @override
   void dispose() {
@@ -232,12 +239,25 @@ class _CredentialDialogState extends State<_CredentialDialog> {
             TextFormField(
               controller: _controller,
               autofocus: true,
-              obscureText: true,
+              obscureText: _obscureKey,
               autocorrect: false,
               enableSuggestions: false,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
                 labelText: 'Admin API key',
+                suffixIcon: IconButton(
+                  tooltip: _obscureKey ? 'Show API key' : 'Hide API key',
+                  onPressed: () {
+                    setState(() {
+                      _obscureKey = !_obscureKey;
+                    });
+                  },
+                  icon: Icon(
+                    _obscureKey
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                  ),
+                ),
               ),
               textInputAction: TextInputAction.done,
               onFieldSubmitted: (_) => _save(),

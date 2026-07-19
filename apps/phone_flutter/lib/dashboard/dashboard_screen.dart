@@ -43,25 +43,29 @@ class DashboardScreen extends StatelessWidget {
 }
 
 class StatusPill extends StatelessWidget {
-  const StatusPill({super.key, required this.status});
+  const StatusPill({super.key, required this.status, this.tooltip});
 
   final ProviderStatus status;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          _statusIcon(status),
-          color: providerStatusColor(colors, status),
-          size: 18,
-        ),
-        const SizedBox(width: 6),
-        Text(status.label),
-      ],
+    return Tooltip(
+      message: tooltip ?? status.description,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            _statusIcon(status),
+            color: providerStatusColor(colors, status),
+            size: 18,
+          ),
+          const SizedBox(width: 6),
+          Text(status.label),
+        ],
+      ),
     );
   }
 }
@@ -124,8 +128,10 @@ class _SyncHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final updatedAt = formatUtc(snapshot.generatedAt);
+    final syncIssue = snapshot.syncIssue;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,6 +143,25 @@ class _SyncHeader extends StatelessWidget {
               ? 'Showing previous data · Updated $updatedAt'
               : 'Updated $updatedAt',
         ),
+        if (syncIssue != null) ...[
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Tooltip(
+                message: syncIssue.message,
+                child: Icon(Icons.error_outline, color: colors.error, size: 18),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  syncIssue.message,
+                  style: TextStyle(color: colors.error),
+                ),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }

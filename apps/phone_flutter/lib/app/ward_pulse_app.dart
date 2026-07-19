@@ -117,7 +117,10 @@ class _DashboardHostState extends State<DashboardHost> {
               if (snapshot != null)
                 Padding(
                   padding: const EdgeInsetsDirectional.only(end: 12),
-                  child: StatusPill(status: snapshot.overallStatus),
+                  child: StatusPill(
+                    status: snapshot.overallStatus,
+                    tooltip: snapshot.syncIssue?.message,
+                  ),
                 ),
               IconButton(
                 tooltip: 'Refresh',
@@ -138,12 +141,18 @@ class _DashboardHostState extends State<DashboardHost> {
                 },
               ),
               ConnectionState.waiting => const _LoadingView(),
-              _ when state.hasError => _ErrorView(onRetry: _reload),
+              _ when state.hasError => _ErrorView(
+                issue: _dashboardIssue(state.error),
+                onRetry: _reload,
+              ),
               _ when snapshot != null => _SelectedSurface(
                 selectedIndex: _selectedIndex,
                 snapshot: snapshot,
               ),
-              _ => _ErrorView(onRetry: _reload),
+              _ => _ErrorView(
+                issue: DashboardSyncIssue.dashboardUnavailable,
+                onRetry: _reload,
+              ),
             },
           ),
           bottomNavigationBar: NavigationBar(
@@ -202,8 +211,9 @@ class _LoadingView extends StatelessWidget {
 }
 
 class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.onRetry});
+  const _ErrorView({required this.issue, required this.onRetry});
 
+  final DashboardSyncIssue issue;
   final VoidCallback onRetry;
 
   @override
@@ -216,11 +226,20 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, color: colors.error, size: 36),
+            Tooltip(
+              message: issue.message,
+              child: Icon(Icons.error_outline, color: colors.error, size: 36),
+            ),
             const SizedBox(height: 12),
             Text(
               'Dashboard unavailable',
               style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              issue.message,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: colors.onSurfaceVariant),
             ),
             const SizedBox(height: 16),
             FilledButton.icon(
@@ -233,4 +252,10 @@ class _ErrorView extends StatelessWidget {
       ),
     );
   }
+}
+
+DashboardSyncIssue _dashboardIssue(Object? error) {
+  return error is DashboardLoadException
+      ? error.issue
+      : DashboardSyncIssue.dashboardUnavailable;
 }

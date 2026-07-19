@@ -41,7 +41,7 @@ final class OpenAiDashboardRepository extends DashboardRepository {
       adminApiKey = await _credentialStore.readOpenAiAdminKey();
     } catch (_) {
       _logger.record(ProviderSyncEvent.unavailable);
-      return _cachedOrThrow();
+      return _cachedOrThrow(DashboardSyncIssue.credentialUnavailable);
     }
 
     if (adminApiKey == null) {
@@ -82,15 +82,27 @@ final class OpenAiDashboardRepository extends DashboardRepository {
       _logger.record(switch (error.failure) {
         OpenAiReportingFailure.authentication =>
           ProviderSyncEvent.authenticationRequired,
+        OpenAiReportingFailure.permissionDenied =>
+          ProviderSyncEvent.permissionDenied,
         OpenAiReportingFailure.rateLimited => ProviderSyncEvent.rateLimited,
         OpenAiReportingFailure.unavailable => ProviderSyncEvent.unavailable,
         OpenAiReportingFailure.invalidResponse =>
           ProviderSyncEvent.invalidResponse,
       });
-      return _cachedOrThrow();
+      return _cachedOrThrow(switch (error.failure) {
+        OpenAiReportingFailure.authentication =>
+          DashboardSyncIssue.authentication,
+        OpenAiReportingFailure.permissionDenied =>
+          DashboardSyncIssue.permissionDenied,
+        OpenAiReportingFailure.rateLimited => DashboardSyncIssue.rateLimited,
+        OpenAiReportingFailure.unavailable =>
+          DashboardSyncIssue.providerUnavailable,
+        OpenAiReportingFailure.invalidResponse =>
+          DashboardSyncIssue.invalidResponse,
+      });
     } catch (_) {
       _logger.record(ProviderSyncEvent.invalidResponse);
-      return _cachedOrThrow();
+      return _cachedOrThrow(DashboardSyncIssue.invalidResponse);
     }
   }
 
@@ -99,13 +111,13 @@ final class OpenAiDashboardRepository extends DashboardRepository {
     _lastSuccessfulSnapshot = null;
   }
 
-  Future<DashboardSnapshot> _cachedOrThrow() {
+  Future<DashboardSnapshot> _cachedOrThrow(DashboardSyncIssue issue) {
     final cached = _lastSuccessfulSnapshot;
     if (cached != null) {
       _logger.record(ProviderSyncEvent.usingCachedSnapshot);
-      return Future.value(cached.withStaleStatus());
+      return Future.value(cached.withStaleStatus(syncIssue: issue));
     }
 
-    return Future.error(const DashboardLoadException());
+    return Future.error(DashboardLoadException(issue));
   }
 }

@@ -13,10 +13,14 @@ abstract class DashboardRepository {
 }
 
 final class DashboardLoadException implements Exception {
-  const DashboardLoadException();
+  const DashboardLoadException([
+    this.issue = DashboardSyncIssue.dashboardUnavailable,
+  ]);
+
+  final DashboardSyncIssue issue;
 
   @override
-  String toString() => 'Dashboard data is unavailable.';
+  String toString() => issue.message;
 }
 
 final class RustDashboardRepository extends DashboardRepository {

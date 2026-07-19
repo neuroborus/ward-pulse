@@ -5,6 +5,7 @@ import 'dart:math';
 
 enum OpenAiReportingFailure {
   authentication,
+  permissionDenied,
   rateLimited,
   unavailable,
   invalidResponse,
@@ -187,9 +188,13 @@ final class OpenAiReportingClient {
 
       return switch (response.statusCode) {
         HttpStatus.ok => response,
-        HttpStatus.unauthorized || HttpStatus.forbidden =>
+        HttpStatus.unauthorized =>
           throw const OpenAiReportingException(
             OpenAiReportingFailure.authentication,
+          ),
+        HttpStatus.forbidden =>
+          throw const OpenAiReportingException(
+            OpenAiReportingFailure.permissionDenied,
           ),
         HttpStatus.tooManyRequests =>
           throw const OpenAiReportingException(

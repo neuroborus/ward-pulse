@@ -4,9 +4,14 @@ import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_screen.dart';
 
 class ProviderDetailScreen extends StatelessWidget {
-  const ProviderDetailScreen({super.key, required this.account});
+  const ProviderDetailScreen({
+    super.key,
+    required this.account,
+    this.syncIssue,
+  });
 
   final ProviderSnapshot account;
+  final DashboardSyncIssue? syncIssue;
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +34,10 @@ class ProviderDetailScreen extends StatelessWidget {
                       ? 'No sync'
                       : 'Synced ${formatUtc(account.lastSuccessfulSyncAt!)}',
                 ),
-                trailing: StatusPill(status: account.status),
+                trailing: StatusPill(
+                  status: account.status,
+                  tooltip: syncIssue?.message,
+                ),
               ),
             ),
             const SizedBox(height: 16),

@@ -132,6 +132,41 @@ void main() {
       ),
     );
   });
+
+  test('distinguishes missing organization permission', () async {
+    final transport = _FakeTransport({
+      '/v1/organization/usage/completions': [
+        const ProviderHttpResponse(
+          statusCode: HttpStatus.forbidden,
+          headers: {},
+          body: '{"error":"sensitive provider detail"}',
+        ),
+      ],
+      '/v1/organization/costs': [_response(_page())],
+    });
+    final client = OpenAiReportingClient(transport: transport);
+
+    await expectLater(
+      client.fetchDailyReports(
+        adminApiKey: 'secret-admin-key',
+        start: start,
+        end: end,
+      ),
+      throwsA(
+        isA<OpenAiReportingException>()
+            .having(
+              (error) => error.failure,
+              'failure',
+              OpenAiReportingFailure.permissionDenied,
+            )
+            .having(
+              (error) => error.toString(),
+              'safe message',
+              isNot(contains('sensitive provider detail')),
+            ),
+      ),
+    );
+  });
 }
 
 ProviderHttpResponse _response(String body) {

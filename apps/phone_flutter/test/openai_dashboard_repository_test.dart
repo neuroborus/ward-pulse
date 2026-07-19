@@ -83,7 +83,13 @@ void main() {
 
     await expectLater(
       repository.load(),
-      throwsA(isA<DashboardLoadException>()),
+      throwsA(
+        isA<DashboardLoadException>().having(
+          (error) => error.issue,
+          'issue',
+          DashboardSyncIssue.authentication,
+        ),
+      ),
     );
     expect(logger.events, [ProviderSyncEvent.authenticationRequired]);
   });
@@ -118,6 +124,7 @@ void main() {
     );
     expect(second.todayTotal, same(first.todayTotal));
     expect(second.watchSummary.status, ProviderStatus.stale);
+    expect(second.syncIssue, DashboardSyncIssue.authentication);
     expect(logger.events, [
       ProviderSyncEvent.succeeded,
       ProviderSyncEvent.authenticationRequired,

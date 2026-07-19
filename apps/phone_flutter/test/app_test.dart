@@ -104,12 +104,9 @@ void main() {
   });
 
   testWidgets('labels previous dashboard data as stale', (tester) async {
-    final snapshot =
-        DashboardSnapshot.fromJsonString(
-          File(
-            '../../fixtures/snapshots/dashboard_today.json',
-          ).readAsStringSync(),
-        ).withStaleStatus();
+    final snapshot = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    ).withStaleStatus(syncIssue: DashboardSyncIssue.authentication);
 
     await tester.pumpWidget(
       WardPulseApp(repository: ValueDashboardRepository(snapshot)),
@@ -120,6 +117,14 @@ void main() {
     expect(
       find.textContaining('Showing previous data · Updated'),
       findsOneWidget,
+    );
+    expect(
+      find.text(DashboardSyncIssue.authentication.message),
+      findsOneWidget,
+    );
+    expect(
+      find.byTooltip(DashboardSyncIssue.authentication.message),
+      findsWidgets,
     );
     final staleIcon = find.byIcon(Icons.schedule);
     expect(
@@ -148,6 +153,17 @@ void main() {
     await tester.tap(find.text('OpenAI credential'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField), 'secret-admin-key');
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).obscureText,
+      isTrue,
+    );
+    await tester.tap(find.byTooltip('Show API key'));
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).obscureText,
+      isFalse,
+    );
+    expect(find.byTooltip('Hide API key'), findsOneWidget);
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
@@ -163,13 +179,23 @@ void main() {
 
     await tester.pumpWidget(
       WardPulseApp(
-        repository: const _FailingDashboardRepository(),
+        repository: const _FailingDashboardRepository(
+          DashboardSyncIssue.authentication,
+        ),
         credentialStore: credentialStore,
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Dashboard unavailable'), findsOneWidget);
+    expect(
+      find.text(DashboardSyncIssue.authentication.message),
+      findsOneWidget,
+    );
+    expect(
+      find.byTooltip(DashboardSyncIssue.authentication.message),
+      findsOneWidget,
+    );
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
@@ -200,11 +226,13 @@ class _FailingWatchSyncService implements WatchSyncService {
 }
 
 final class _FailingDashboardRepository extends DashboardRepository {
-  const _FailingDashboardRepository();
+  const _FailingDashboardRepository(this.issue);
+
+  final DashboardSyncIssue issue;
 
   @override
   Future<DashboardSnapshot> load() {
-    return Future.error(const DashboardLoadException());
+    return Future.error(DashboardLoadException(issue));
   }
 }
 

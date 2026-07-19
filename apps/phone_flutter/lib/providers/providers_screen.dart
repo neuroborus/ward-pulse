@@ -43,11 +43,18 @@ class ProvidersScreen extends StatelessWidget {
             leading: const Icon(Icons.hub),
             title: Text(account.providerLabel),
             subtitle: Text(account.accountId),
-            trailing: StatusPill(status: account.status),
+            trailing: StatusPill(
+              status: account.status,
+              tooltip: snapshot.syncIssue?.message,
+            ),
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (context) => ProviderDetailScreen(account: account),
+                  builder:
+                      (context) => ProviderDetailScreen(
+                        account: account,
+                        syncIssue: snapshot.syncIssue,
+                      ),
                 ),
               );
             },
