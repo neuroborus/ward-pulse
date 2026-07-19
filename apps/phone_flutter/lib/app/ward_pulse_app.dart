@@ -10,6 +10,31 @@ import '../providers/provider_credential_store.dart';
 import '../settings/settings_screen.dart';
 import '../sync/watch_sync_service.dart';
 
+final ColorScheme _lightColorScheme = ColorScheme.fromSeed(
+  seedColor: const Color(0xFF67E8D4),
+  dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+  primary: const Color(0xFF006B60),
+  onPrimary: Colors.white,
+  tertiary: const Color(0xFF715D00),
+  onTertiary: Colors.white,
+  tertiaryContainer: const Color(0xFFFFE16B),
+  onTertiaryContainer: const Color(0xFF221B00),
+);
+
+final ColorScheme _darkColorScheme = ColorScheme.fromSeed(
+  seedColor: const Color(0xFF67E8D4),
+  brightness: Brightness.dark,
+  dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+  primary: const Color(0xFF67E8D4),
+  onPrimary: const Color(0xFF002F2A),
+  primaryContainer: const Color(0xFF155B45),
+  onPrimaryContainer: const Color(0xFFF4FBF8),
+  tertiary: const Color(0xFFE6C349),
+  onTertiary: const Color(0xFF3C2F00),
+  tertiaryContainer: const Color(0xFF574500),
+  onTertiaryContainer: const Color(0xFFFFE17A),
+);
+
 class WardPulseApp extends StatelessWidget {
   const WardPulseApp({
     super.key,
@@ -27,20 +52,8 @@ class WardPulseApp extends StatelessWidget {
     return MaterialApp(
       title: 'WardPulse',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1F7A5A),
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1F7A5A),
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
+      theme: ThemeData(colorScheme: _lightColorScheme, useMaterial3: true),
+      darkTheme: ThemeData(colorScheme: _darkColorScheme, useMaterial3: true),
       home: DashboardHost(
         repository: repository,
         watchSyncService: watchSyncService,

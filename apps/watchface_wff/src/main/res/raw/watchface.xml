@@ -49,13 +49,13 @@
 
                 <PartText x="0" y="92" width="450" height="36">
                     <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="24" color="#ff80b8ff">WARDPULSE</Font>
+                        <Font family="SYNC_TO_DEVICE" size="24" color="#fff4fbf8">WARDPULSE</Font>
                     </Text>
                 </PartText>
 
                 <PartText x="50" y="282" width="150" height="28">
                     <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="18" color="#ff9aa0aa">TODAY</Font>
+                        <Font family="SYNC_TO_DEVICE" size="18" color="#ffbec9c1">TODAY</Font>
                     </Text>
                 </PartText>
                 <PartText x="50" y="312" width="150" height="42">
@@ -66,7 +66,7 @@
 
                 <PartText x="250" y="282" width="150" height="28">
                     <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="18" color="#ff9aa0aa">WEEK</Font>
+                        <Font family="SYNC_TO_DEVICE" size="18" color="#ffbec9c1">WEEK</Font>
                     </Text>
                 </PartText>
                 <PartText x="250" y="312" width="150" height="42">

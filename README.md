@@ -42,6 +42,7 @@ just validate-watchface
 just check-watchface
 just docs-dev
 just check-docs
+just export-icons
 just build-wear
 just test-wear-device
 just test-phone-watch-sync

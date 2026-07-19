@@ -42,6 +42,19 @@ check-docs:
 export-design source output format="svg" scale="1":
     npm run design:export -- "{{source}}" --format "{{format}}" --scale "{{scale}}" --output "{{output}}"
 
+export-icons:
+    just export-design brand/icons/wardpulse.fig brand/icons/wardpulse.svg
+    just export-design brand/icons/wardpulse.fig apps/phone_flutter/android/app/src/main/res/mipmap-mdpi/ic_launcher.png png 1
+    just export-design brand/icons/wardpulse.fig apps/phone_flutter/android/app/src/main/res/mipmap-hdpi/ic_launcher.png png 1.5
+    just export-design brand/icons/wardpulse.fig apps/phone_flutter/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png png 2
+    just export-design brand/icons/wardpulse.fig apps/phone_flutter/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png png 3
+    just export-design brand/icons/wardpulse.fig apps/phone_flutter/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png png 4
+    just export-design brand/icons/wardpulse.fig apps/wear_android/app/src/main/res/mipmap-mdpi/ic_launcher.png png 1
+    just export-design brand/icons/wardpulse.fig apps/wear_android/app/src/main/res/mipmap-hdpi/ic_launcher.png png 1.5
+    just export-design brand/icons/wardpulse.fig apps/wear_android/app/src/main/res/mipmap-xhdpi/ic_launcher.png png 2
+    just export-design brand/icons/wardpulse.fig apps/wear_android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png png 3
+    just export-design brand/icons/wardpulse.fig apps/wear_android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png png 4
+
 build-android-rust:
     tools/build-android-rust/build.sh
 

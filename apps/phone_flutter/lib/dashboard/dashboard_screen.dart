@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../charts/budget_progress_bar.dart';
 import '../charts/usage_history_chart.dart';
 import 'dashboard_models.dart';
+import 'provider_status_color.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key, required this.snapshot});
@@ -53,7 +54,11 @@ class StatusPill extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(_statusIcon(status), color: _statusColor(colors, status), size: 18),
+        Icon(
+          _statusIcon(status),
+          color: providerStatusColor(colors, status),
+          size: 18,
+        ),
         const SizedBox(width: 6),
         Text(status.label),
       ],
@@ -345,16 +350,5 @@ IconData _statusIcon(ProviderStatus status) {
     ProviderStatus.authRequired => Icons.key,
     ProviderStatus.stale => Icons.schedule,
     ProviderStatus.unknown => Icons.help_outline,
-  };
-}
-
-Color _statusColor(ColorScheme colors, ProviderStatus status) {
-  return switch (status) {
-    ProviderStatus.ok => colors.primary,
-    ProviderStatus.warning => colors.tertiary,
-    ProviderStatus.error ||
-    ProviderStatus.rateLimited ||
-    ProviderStatus.authRequired => colors.error,
-    ProviderStatus.stale || ProviderStatus.unknown => colors.outline,
   };
 }

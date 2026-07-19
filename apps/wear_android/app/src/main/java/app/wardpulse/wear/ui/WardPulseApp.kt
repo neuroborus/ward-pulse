@@ -27,6 +27,7 @@ import app.wardpulse.wear.model.MockWatchDashboardSummary
 import app.wardpulse.wear.model.Money
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.WatchDashboardSummary
+import app.wardpulse.wear.ui.theme.WardPulseSuccess
 import app.wardpulse.wear.ui.theme.WardPulseTheme
 import java.util.Locale
 
@@ -191,7 +192,7 @@ private fun SummaryScreen(title: String, rows: List<SummaryRow>) {
 
 @Composable
 private fun statusColor(status: PulseStatus): Color = when (status) {
-    PulseStatus.OK -> MaterialTheme.colorScheme.primary
+    PulseStatus.OK -> WardPulseSuccess
     PulseStatus.WARNING,
     PulseStatus.RATE_LIMITED,
     PulseStatus.STALE,
