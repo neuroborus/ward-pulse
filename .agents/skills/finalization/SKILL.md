@@ -17,6 +17,7 @@ description: Post-change finalization checklist for WardPulse (Rust core, Flutte
 - [ ] Root files stay short and operational; durable requirements stay under `docs/`.
 - [ ] No generated platform project noise was added unless the user asked for it.
 - [ ] No unrelated local or user changes were reverted.
+- [ ] Changed OpenPencil sources and their generated runtime exports are staged together.
 - [ ] Changes follow root `AGENTS.md` working agreements.
 
 ## 2. Boundary Review

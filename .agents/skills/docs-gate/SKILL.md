@@ -14,6 +14,7 @@ Use this skill before changing durable project knowledge.
 - Root `LICENSE`, `TRADEMARKS.md`, and `THIRD_PARTY_NOTICES.md`: Apache-2.0 source license, brand usage, and attribution gate.
 - `docs/README.md`: index and gate for project documentation.
 - `docs/DOCUMENTATION.md`: documentation ownership, Vocs tooling, and contributor workflow.
+- `docs/DESIGN_ASSETS.md`: OpenPencil ownership and runtime export workflow.
 - `docs/site/`: Vocs configuration, navigation, and thin presentation pages.
 - `docs/DEVELOPMENT_PLAN.md`: full product and implementation plan.
 - `docs/product/ANDROID_GOALS.md`: Android MVP goals and non-goals.

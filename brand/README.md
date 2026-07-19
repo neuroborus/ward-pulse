@@ -5,7 +5,7 @@ reserved for assets that define the official WardPulse product identity.
 
 ## Directories
 
-- `icons/`: app icons, launcher icons, and product identity marks.
+- `icons/`: shared OpenPencil `.fig` sources and exported app and product identity icons.
 - `store/`: Play Store screenshots, feature graphics, listing copy, and release artwork.
 - `watchface/`: watch face visual assets and packaging artwork.
 
@@ -17,4 +17,9 @@ reserved for assets that define the official WardPulse product identity.
   using WardPulse branding without explicit permission.
 - Keep provider logos out of brand assets unless their usage terms explicitly
   allow bundling them.
+- Treat `.fig` files as the source of truth and regenerate runtime exports instead
+  of editing them by hand.
 - Keep brand and source licensing boundaries aligned with `TRADEMARKS.md`.
+
+The ownership and export workflow is documented in
+[`docs/DESIGN_ASSETS.md`](../docs/DESIGN_ASSETS.md).

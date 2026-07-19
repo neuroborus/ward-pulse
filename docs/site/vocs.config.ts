@@ -8,6 +8,7 @@ export default defineConfig({
       text: 'Project',
       items: [
         { text: 'Documentation workflow', link: '/project/documentation' },
+        { text: 'Design assets', link: '/project/design-assets' },
         { text: 'Development plan', link: '/project/development-plan' },
         { text: 'Android toolchain', link: '/project/android-toolchain' },
       ],

@@ -39,6 +39,9 @@ docs-dev:
 check-docs:
     npm run docs:build
 
+export-design source output format="svg" scale="1":
+    npm run design:export -- "{{source}}" --format "{{format}}" --scale "{{scale}}" --output "{{output}}"
+
 build-android-rust:
     tools/build-android-rust/build.sh
 

@@ -49,3 +49,8 @@ Phone sync worker
 ```
 
 Do not make the watch responsible for provider sync in the MVP.
+
+## Assets
+
+- Keep runtime images in the owning app's standard asset or resource directory.
+- Export from the owning OpenPencil source; do not make platform builds depend on design tooling.
