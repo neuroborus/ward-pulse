@@ -21,9 +21,8 @@ This repository is intentionally organized as one product monorepo with separate
 
 ## Current Phase
 
-Phase 6 is complete: the resource-only Watch Face Format package builds as APK/AAB, renders
-a static WardPulse summary with an ambient state, and opens the Wear app when tapped.
-Phase 7 adds the first real provider integration.
+Phase 7 is in progress: OpenAI Platform organization reporting is selected as the first live
+provider contract. The next slice adds phone-side secure credential storage and transport.
 
 ## Useful Commands
 

@@ -789,14 +789,20 @@ The exact order can change based on API access, account type, and available repo
 Each provider should have a capability descriptor:
 
 ```rust
+struct BucketCapabilities {
+    daily: bool,
+    hourly: bool,
+}
+
 struct ProviderCapabilities {
     supports_cost: bool,
     supports_tokens: bool,
     supports_requests: bool,
     supports_credits: bool,
-    supports_daily_buckets: bool,
-    supports_hourly_buckets: bool,
-    supports_model_breakdown: bool,
+    usage_buckets: BucketCapabilities,
+    cost_buckets: BucketCapabilities,
+    supports_usage_model_breakdown: bool,
+    supports_cost_model_breakdown: bool,
     supports_workspace_breakdown: bool,
     supports_active_agents: bool,
 }
@@ -1133,6 +1139,8 @@ ambient mode remains readable
 
 ### Phase 7 — first real provider
 
+Status: in progress as of 2026-07-19.
+
 Deliverables:
 
 - credential screen;
@@ -1151,6 +1159,15 @@ app fetches real reporting data
 dashboard shows real today/week metrics
 credential is masked after save
 logs are redacted
+```
+
+Completed slice:
+
+```text
+OpenAI Platform organization reporting selected as the first live adapter
+provider capability descriptor added for implemented providers
+usage/cost endpoint, credential, pagination, and redaction contract documented
+personal ChatGPT/Codex subscription analytics explicitly excluded from this adapter
 ```
 
 ### Phase 8 — MVP hardening
@@ -1321,7 +1338,7 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Start Phase 7 with the credential and transport boundary for the first real provider.
+Continue Phase 7 with phone-side credential storage and the OpenAI reporting transport.
 
 Phase 6 passed Watch Face Format acceptance on 2026-07-19:
 
@@ -1334,7 +1351,7 @@ ambient mode rendered a readable thin time layer with a minimal product label
 pull-request CI now validates, lints, and builds the watch face package
 ```
 
-Phase 7 should select one provider from documented capabilities before adding packages or
-credentials UI. Define the smallest provider transport contract, keep credential storage in
-the phone shell, keep provider normalization deterministic in Rust, and preserve redacted
-logs and the existing snapshot boundary.
+The OpenAI Platform organization reporting contract is now selected and documented. Add the
+smallest phone-side secure-storage boundary for its Admin API key, then fetch paginated daily
+usage and cost responses without logging secrets or raw payloads. Keep parsing and
+normalization deterministic in Rust and preserve the existing snapshot boundary.

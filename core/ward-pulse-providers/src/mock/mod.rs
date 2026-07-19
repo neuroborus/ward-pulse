@@ -1,6 +1,7 @@
 use std::error::Error as StdError;
 use std::fmt;
 
+use crate::{BucketCapabilities, ProviderCapabilities};
 use serde::Deserialize;
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
@@ -8,6 +9,19 @@ use ward_pulse_core::model::{
     ProviderStatus, UsageBucket,
 };
 use ward_pulse_core::time::DateTimeUtc;
+
+pub(crate) const CAPABILITIES: ProviderCapabilities = ProviderCapabilities {
+    supports_cost: true,
+    supports_tokens: true,
+    supports_requests: true,
+    supports_credits: true,
+    usage_buckets: BucketCapabilities::NONE,
+    cost_buckets: BucketCapabilities::NONE,
+    supports_usage_model_breakdown: true,
+    supports_cost_model_breakdown: true,
+    supports_workspace_breakdown: false,
+    supports_active_agents: false,
+};
 
 fn usd(cents: i64) -> Money {
     Money::minor_units(cents, "USD")
