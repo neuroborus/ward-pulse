@@ -1,7 +1,7 @@
 # Android Toolchain
 
 This document is the operational source of truth for the WardPulse Android development
-environment. It records the baseline through the Phase 5 implementation, canonical SDK
+environment. It records the baseline through the Phase 6 implementation, canonical SDK
 package names, local paths, verification commands, and tooling that is intentionally not
 installed yet.
 
@@ -9,7 +9,7 @@ Last verified: **2026-07-19** on TUXEDO OS 24.04.4 LTS, x86_64.
 
 ## Current Readiness
 
-The command-line toolchain required through the local **Phase 5 — phone-to-watch sync**
+The command-line toolchain required through the local **Phase 6 — WFF watch face**
 build and test gates is ready:
 
 - Flutter detects the Android SDK and reports the Android toolchain as healthy.
@@ -35,9 +35,14 @@ build and test gates is ready:
   versioned summary before replacing locally persisted state.
 - The paired Play Store phone and round Wear AVD deliver the canonical summary; it remains
   unchanged after the phone app is force-stopped and the Wear app is restarted.
+- The official WFF validator accepts the declarative watch face, and the package builds as
+  APK/AAB without dex files.
+- The watch face installs and renders on the round Wear AVD; tap-to-open and ambient mode
+  pass emulator acceptance.
 
 The Phase 2 phone-dashboard, Phase 3 Rust-bridge, and Phase 4 Wear-app acceptance gates
-passed on **2026-07-18**. Phase 5 paired-device acceptance passed on **2026-07-19**.
+passed on **2026-07-18**. Phase 5 paired-device and Phase 6 WFF acceptance passed on
+**2026-07-19**.
 
 Chrome and Linux desktop warnings from `flutter doctor` are out of scope. WardPulse targets
 Android phone, Wear OS, and Watch Face Format in the current product plan.
@@ -66,6 +71,7 @@ Android phone, Wear OS, and Watch Face Format in the current product plan.
 | Kotlin Gradle Plugin | 2.3.20 | Flutter Android host activity |
 | Wear Gradle Wrapper | 9.6.1 | Native Wear app build |
 | Wear Android Gradle Plugin | 9.3.0 | Native Wear app build |
+| WFF validator | 1.7.0 | WFF v1 schema validation |
 | Wear Kotlin Compose plugin | 2.3.21 | Compose compiler; Kotlin compilation is built into AGP |
 | Compose BOM | 2026.06.00 | Wear Compose runtime baseline |
 | Compose for Wear OS | 1.6.2 | Material 3 UI and preview tooling |
@@ -106,6 +112,7 @@ Wear round AVD:    wardpulse_wear_round_api36_1
 Wear square AVD:   wardpulse_wear_square_api36_1
 Application ID:    app.wardpulse
 Wear namespace:    app.wardpulse.wear
+Watch face ID:      app.wardpulse.watchface
 Flutter NDK:       ndk;28.2.13676358
 Rust bridge NDK:   ndk;29.0.14206865
 cargo-ndk:         4.1.2
@@ -352,6 +359,41 @@ adb -s "$WEAR_SERIAL" shell am start \
 The app compiles against Android SDK 37.1 but targets API 36 and runs on the Wear OS 6.1 /
 API 36.1 image. Compile SDK and runtime system image versions are intentionally independent.
 
+## Watch Face Format
+
+The Phase 6 watch face is a separate resource-only package in `apps/watchface_wff/`:
+
+| Setting | Value | Purpose |
+| --- | --- | --- |
+| Watch Face Format | version 1 | Digital time, ambient variants, and tap-to-open on Wear OS 4+ |
+| Application ID | `app.wardpulse.watchface` | Independent watch face package |
+| Minimum SDK | API 33 | Minimum runtime for WFF v1 |
+| Compile SDK | Android SDK 37.1 | Shared Android build baseline |
+| Target SDK | API 36 | Shared Android target baseline |
+| Android Gradle Plugin | 9.3.0 | Shared Android build plugin |
+| Gradle | 9.6.1 | Checked-in wrapper version |
+
+No additional host package or runtime library is required. `just validate-watchface`
+downloads the official validator 1.7.0 once from immutable GitHub asset `464497818`, checks
+SHA-256 `3a10def0521ab97f41ab1b7e27a35649370af51580603b5bf656604d88f1aa29`, and caches it
+under `${XDG_CACHE_HOME:-$HOME/.cache}/wardpulse/`. Validate, build, and lint locally with:
+
+```sh
+just validate-watchface
+just check-watchface
+just build-watchface
+```
+
+Install and select it on exactly one Wear target:
+
+```sh
+export ANDROID_SERIAL="$WEAR_SERIAL"
+just run-watchface
+```
+
+The preview image is a sanitized emulator capture. After visual changes, replace it with a
+fresh interactive-mode capture from the canonical round Wear AVD.
+
 ## Routine Verification
 
 Verify installed versions and packages:
@@ -377,6 +419,7 @@ just check-core
 just check-phone
 just build-android-rust
 just check-wear
+just check-watchface
 ```
 
 Run the phone Android acceptance checks:
@@ -396,6 +439,13 @@ just test-wear-device
 just run-wear
 ```
 
+Build and install the watch face with one canonical Wear AVD active:
+
+```sh
+just check-watchface
+ANDROID_SERIAL="$WEAR_SERIAL" just run-watchface
+```
+
 Prepare and run the paired phone-to-watch acceptance check:
 
 ```sh
@@ -412,18 +462,12 @@ Do not hardcode `emulator-5554` in project automation; resolve the active device
 
 ## Later-Phase Gaps
 
-The Android toolchain is complete through Phase 5. Android Studio **Quail 2 | 2026.1.2**,
+The Android toolchain is complete through Phase 6. Android Studio **Quail 2 | 2026.1.2**,
 the Play Store phone image, and the canonical `wardpulse_phone_play_api36` AVD completed the
-emulator-to-emulator pairing check and support the Wear project's AGP 9.3 baseline.
-
-The remaining Android roadmap is not tool-complete yet. Install or select these only when
-their phase begins:
-
-### Phase 6 — Watch Face Format
-
-- No additional host package is required yet.
-- WFF build and validation versions must be chosen with the generated Gradle project during
-  Phase 6.
+emulator-to-emulator pairing check. The canonical Wear AVD also passed WFF install, render,
+tap-to-open, and ambient acceptance on the shared AGP 9.3 baseline. Phase 7 currently needs
+no additional Android host package; provider-specific tooling must be chosen only after the
+first provider boundary is selected.
 
 ## Updating The Baseline
 
@@ -460,6 +504,11 @@ After an update:
 - [Wear OS Data Layer overview](https://developer.android.com/training/wearables/data/overview)
 - [Sync data with Data Layer](https://developer.android.com/training/wearables/data/sync)
 - [Connect a watch to a phone](https://developer.android.com/training/wearables/get-started/connect-phone)
+- [Watch Face Format overview](https://developer.android.com/training/wearables/wff)
+- [Watch Face Format setup](https://developer.android.com/training/wearables/wff/setup)
+- [Build a Watch Face Format package](https://developer.android.com/training/wearables/wff/build)
+- [Watch Face Format ambient mode](https://developer.android.com/training/wearables/wff/ambient)
+- [Official WFF validator and schema](https://github.com/google/watchface)
 - [Android NDK downloads](https://developer.android.com/ndk/downloads)
 - [Rust Android platform support](https://doc.rust-lang.org/rustc/platform-support/android.html)
 - [`cargo-ndk` releases](https://github.com/bbqsrc/cargo-ndk/releases)

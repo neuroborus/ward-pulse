@@ -42,6 +42,12 @@ run-phone: build-android-rust
 check-wear:
     cd apps/wear_android && ./gradlew --no-daemon lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest
 
+validate-watchface:
+    tools/validate-watchface/validate.sh
+
+check-watchface: validate-watchface
+    cd apps/watchface_wff && ./gradlew --no-daemon lintDebug assembleDebug bundleDebug
+
 test-wear-device:
     cd apps/wear_android && ./gradlew --no-daemon connectedDebugAndroidTest
 
@@ -59,6 +65,11 @@ run-wear:
     adb shell am start -n app.wardpulse/app.wardpulse.wear.MainActivity
 
 build-watchface:
-    @echo "TODO: build the WFF package after WFF project files are added."
+    cd apps/watchface_wff && ./gradlew --no-daemon assembleDebug bundleDebug
 
-test-all: check-core check-phone check-wear
+run-watchface:
+    @test -n "${ANDROID_SERIAL:-}" || { echo "Set ANDROID_SERIAL to a Wear device serial."; exit 1; }
+    cd apps/watchface_wff && ./gradlew --no-daemon installDebug
+    adb -s "$ANDROID_SERIAL" shell am broadcast -a com.google.android.wearable.app.DEBUG_SURFACE --es operation set-watchface --es watchFaceId app.wardpulse.watchface
+
+test-all: check-core check-phone check-wear check-watchface

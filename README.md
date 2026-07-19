@@ -11,7 +11,7 @@ This repository is intentionally organized as one product monorepo with separate
 - `core/` contains the Rust domain model, provider normalization, FFI boundary, and CLI.
 - `apps/phone_flutter/` contains the Flutter phone app shell.
 - `apps/wear_android/` contains the native Kotlin/Compose for Wear OS shell.
-- `apps/watchface_wff/` contains the Watch Face Format package shell.
+- `apps/watchface_wff/` contains the declarative Watch Face Format package.
 - `schemas/` contains shared JSON schemas for snapshots, accounts, usage buckets, and budgets.
 - `fixtures/` contains sanitized provider fixtures and stable dashboard snapshots.
 - `bindings/` contains platform binding wrappers.
@@ -21,9 +21,9 @@ This repository is intentionally organized as one product monorepo with separate
 
 ## Current Phase
 
-Phase 5 is complete: paired phone and Wear OS emulators exchange a sanitized, versioned
-summary through Wear Data Layer, and the Wear app validates and persists the latest
-successful state. Phase 6 adds the minimal Watch Face Format surface.
+Phase 6 is complete: the resource-only Watch Face Format package builds as APK/AAB, renders
+a static WardPulse summary with an ambient state, and opens the Wear app when tapped.
+Phase 7 adds the first real provider integration.
 
 ## Useful Commands
 
@@ -39,11 +39,14 @@ just validate-fixtures
 just build-android-rust
 just run-phone
 just check-wear
+just validate-watchface
+just check-watchface
 just build-wear
 just test-wear-device
 just test-phone-watch-sync
 just run-wear
 just build-watchface
+ANDROID_SERIAL="$WEAR_SERIAL" just run-watchface
 ```
 
 Direct Rust commands work from `core/`:

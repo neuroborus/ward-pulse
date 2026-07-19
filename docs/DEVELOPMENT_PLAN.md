@@ -1273,8 +1273,8 @@ wear-android.yml
   ./gradlew assembleDebug
 
 watchface.yml
-  ./gradlew assembleDebug
-  WFF validation when configured
+  official WFF schema validation
+  ./gradlew lintDebug assembleDebug bundleDebug
 ```
 
 Release CI can be added later:
@@ -1321,20 +1321,20 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Start Phase 6 with the smallest buildable Watch Face Format package.
+Start Phase 7 with the credential and transport boundary for the first real provider.
 
-Phase 5 passed paired-device acceptance on 2026-07-19:
+Phase 6 passed Watch Face Format acceptance on 2026-07-19:
 
 ```text
-the paired phone delivered the canonical WatchDashboardSummary over Data Layer
-the Wear listener validated and persisted the received payload
-the saved summary survived a phone app force-stop and Wear app restart unchanged
-four Wear instrumentation tests passed, including invalid-payload state preservation
-tools/test-phone-watch-sync provides the repeatable paired-emulator acceptance harness
+the resource-only WFF v1 package built as APK and AAB without dex files
+the package installed and rendered on the canonical round Wear OS 6.1 emulator
+the static today/week/status layout remained separate from live application state
+tapping the face opened app.wardpulse/.wear.MainActivity
+ambient mode rendered a readable thin time layer with a minimal product label
+pull-request CI now validates, lints, and builds the watch face package
 ```
 
-Phase 6 should replace the current WFF placeholders with a declarative, independently
-buildable package. Keep the first face static and ambient-readable, add tap-to-open where
-the format supports it, and avoid introducing runtime code or a second data model. Dynamic
-today/week/status values should use only a WFF-supported data source once that boundary is
-verified.
+Phase 7 should select one provider from documented capabilities before adding packages or
+credentials UI. Define the smallest provider transport contract, keep credential storage in
+the phone shell, keep provider normalization deterministic in Rust, and preserve redacted
+logs and the existing snapshot boundary.

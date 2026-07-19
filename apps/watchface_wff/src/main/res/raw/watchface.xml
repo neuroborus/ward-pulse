@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<WatchFace width="450" height="450">
+    <Metadata key="CLOCK_TYPE" value="DIGITAL" />
+    <Metadata key="PREVIEW_TIME" value="10:08:00" />
+
+    <Scene backgroundColor="#ff000000">
+        <DigitalClock x="0" y="0" width="450" height="450">
+            <TimeText
+                x="0"
+                y="150"
+                width="450"
+                height="100"
+                alpha="255"
+                align="CENTER"
+                format="hh:mm"
+                hourFormat="SYNC_TO_DEVICE">
+                <Variant mode="AMBIENT" target="alpha" value="0" />
+                <Font
+                    family="SYNC_TO_DEVICE"
+                    size="104"
+                    weight="NORMAL"
+                    slant="NORMAL"
+                    color="#ffffffff" />
+            </TimeText>
+            <TimeText
+                x="0"
+                y="150"
+                width="450"
+                height="100"
+                alpha="0"
+                align="CENTER"
+                format="hh:mm"
+                hourFormat="SYNC_TO_DEVICE">
+                <Variant mode="AMBIENT" target="alpha" value="255" />
+                <Font
+                    family="SYNC_TO_DEVICE"
+                    size="104"
+                    weight="THIN"
+                    slant="NORMAL"
+                    color="#ffffffff" />
+            </TimeText>
+        </DigitalClock>
+
+        <Group x="0" y="0" width="450" height="450" name="wardpulse">
+            <Launch target="app.wardpulse/app.wardpulse.wear.MainActivity" />
+
+            <Group x="0" y="0" width="450" height="450" name="summary" alpha="255">
+                <Variant mode="AMBIENT" target="alpha" value="0" />
+
+                <PartText x="0" y="92" width="450" height="36">
+                    <Text align="CENTER">
+                        <Font family="SYNC_TO_DEVICE" size="24" color="#ff80b8ff">WARDPULSE</Font>
+                    </Text>
+                </PartText>
+
+                <PartText x="50" y="282" width="150" height="28">
+                    <Text align="CENTER">
+                        <Font family="SYNC_TO_DEVICE" size="18" color="#ff9aa0aa">TODAY</Font>
+                    </Text>
+                </PartText>
+                <PartText x="50" y="312" width="150" height="42">
+                    <Text align="CENTER">
+                        <Font family="SYNC_TO_DEVICE" size="34" color="#ffffffff">25%</Font>
+                    </Text>
+                </PartText>
+
+                <PartText x="250" y="282" width="150" height="28">
+                    <Text align="CENTER">
+                        <Font family="SYNC_TO_DEVICE" size="18" color="#ff9aa0aa">WEEK</Font>
+                    </Text>
+                </PartText>
+                <PartText x="250" y="312" width="150" height="42">
+                    <Text align="CENTER">
+                        <Font family="SYNC_TO_DEVICE" size="34" color="#ffffffff">29%</Font>
+                    </Text>
+                </PartText>
+
+                <PartText x="0" y="374" width="450" height="28">
+                    <Text align="CENTER">
+                        <Font family="SYNC_TO_DEVICE" size="18" color="#ff65d78a">STATUS  OK</Font>
+                    </Text>
+                </PartText>
+            </Group>
+
+            <PartText x="0" y="277" width="450" height="32" alpha="0">
+                <Variant mode="AMBIENT" target="alpha" value="255" />
+                <Text align="CENTER">
+                    <Font
+                        family="SYNC_TO_DEVICE"
+                        size="18"
+                        weight="THIN"
+                        color="#ffffffff">WARDPULSE</Font>
+                </Text>
+            </PartText>
+        </Group>
+    </Scene>
+</WatchFace>
