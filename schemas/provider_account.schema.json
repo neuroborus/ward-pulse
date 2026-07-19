@@ -4,14 +4,49 @@
   "title": "ProviderAccount",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "provider", "displayName", "enabled"],
+  "required": [
+    "id",
+    "provider",
+    "displayName",
+    "workspaceName",
+    "maskedCredential",
+    "enabled",
+    "budget"
+  ],
   "properties": {
     "id": { "type": "string" },
-    "provider": { "enum": ["openai", "codex", "claude", "cursor", "mock"] },
+    "provider": { "enum": ["openai", "claude", "cursor", "mock"] },
     "displayName": { "type": "string" },
     "workspaceName": { "type": ["string", "null"] },
     "maskedCredential": { "type": ["string", "null"] },
     "enabled": { "type": "boolean" },
-    "budget": { "type": ["object", "null"] }
+    "budget": {
+      "anyOf": [{ "$ref": "#/$defs/budgetPolicy" }, { "type": "null" }]
+    }
+  },
+  "$defs": {
+    "money": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minorUnits", "currency"],
+      "properties": {
+        "minorUnits": { "type": "integer" },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+      }
+    },
+    "nullableMoney": {
+      "anyOf": [{ "$ref": "#/$defs/money" }, { "type": "null" }]
+    },
+    "budgetPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dailyLimit", "weeklyLimit", "monthlyLimit", "warnAtPercent"],
+      "properties": {
+        "dailyLimit": { "$ref": "#/$defs/nullableMoney" },
+        "weeklyLimit": { "$ref": "#/$defs/nullableMoney" },
+        "monthlyLimit": { "$ref": "#/$defs/nullableMoney" },
+        "warnAtPercent": { "type": "integer", "minimum": 1, "maximum": 100 }
+      }
+    }
   }
 }

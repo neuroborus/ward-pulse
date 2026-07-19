@@ -11,16 +11,18 @@ This repository is intentionally organized as one product monorepo with separate
 - `core/` contains the Rust domain model, provider normalization, FFI boundary, and CLI.
 - `apps/phone_flutter/` contains the Flutter phone app shell.
 - `apps/wear_android/` contains the native Kotlin/Compose for Wear OS shell.
-- `apps/watchface_wff/` contains the Watch Face Format package shell.
+- `apps/watchface_wff/` contains the declarative Watch Face Format package.
 - `schemas/` contains shared JSON schemas for snapshots, accounts, usage buckets, and budgets.
 - `fixtures/` contains sanitized provider fixtures and stable dashboard snapshots.
-- `bindings/` contains generated and hand-written platform binding wrappers.
+- `bindings/` contains platform binding wrappers.
+- `brand/` contains protected product identity assets and store artwork placeholders.
 - `docs/` contains product, architecture, security, and release documentation.
-- `tools/` contains local automation for code generation, fixture validation, and Android Rust builds.
+- `tools/` contains repeatable local development and validation automation.
 
 ## Current Phase
 
-The repository is at Phase 0: foundation and structure. Platform projects are represented as idiomatic shells, not generated app projects yet. That keeps the first commit focused on ownership boundaries and avoids generated Flutter or Gradle noise before the core model stabilizes.
+Phase 7 is in progress: OpenAI Platform organization reporting is selected as the first live
+provider contract. The next slice adds phone-side secure credential storage and transport.
 
 ## Useful Commands
 
@@ -30,10 +32,20 @@ Install `just` if you want the command shortcuts.
 just test-core
 just lint-core
 just check-core
-just gen-bindings
+just check-phone
+just snapshot-core
+just validate-fixtures
+just build-android-rust
 just run-phone
+just check-wear
+just validate-watchface
+just check-watchface
+just build-wear
+just test-wear-device
+just test-phone-watch-sync
 just run-wear
 just build-watchface
+ANDROID_SERIAL="$WEAR_SERIAL" just run-watchface
 ```
 
 Direct Rust commands work from `core/`:
@@ -42,10 +54,23 @@ Direct Rust commands work from `core/`:
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo run --quiet -p ward-pulse-cli
+```
+
+Fixture validation runs from the repository root:
+
+```sh
+python3 tools/validate-fixtures/validate_json.py
 ```
 
 ## Documentation
 
-Start with [docs/README.md](docs/README.md). It is the documentation index and project gate. The original development plan lives at [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md).
+Start with [docs/README.md](docs/README.md). It is the documentation index and project gate. The development plan lives at [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md), and the verified Android/Flutter environment is recorded in [docs/ANDROID_TOOLCHAIN.md](docs/ANDROID_TOOLCHAIN.md).
 
 Repository-wide working agreements for agents and humans live in [AGENTS.md](AGENTS.md).
+
+## License
+
+WardPulse source code, docs, schemas, fixtures, and tooling are licensed under the [Apache License 2.0](LICENSE) unless a file explicitly says otherwise.
+
+The Apache-2.0 license does not grant rights to the WardPulse name, logo, app icon, watch face identity, store listings, or other product branding. Brand and product identity rules live in [TRADEMARKS.md](TRADEMARKS.md) and [brand/README.md](brand/README.md).

@@ -26,6 +26,7 @@ Use this skill before adding or moving project files.
 - `schemas/`: shared JSON contracts.
 - `fixtures/`: sanitized provider and dashboard examples.
 - `bindings/`: generated bindings and thin platform wrappers.
+- `brand/`: protected product identity assets and store artwork placeholders.
 - `tools/`: repeatable local automation.
 - `docs/product/`: durable product, provider, security, and release guidance.
 
@@ -34,6 +35,7 @@ Use this skill before adding or moving project files.
 - Do not make Rust depend on Flutter, Android, Google Play APIs, or platform credential storage.
 - Do not make platform apps own shared product math or provider normalization.
 - Do not put long product requirements in root files.
+- Do not treat files in `brand/` as Apache-2.0 licensed unless a file explicitly says so.
 - Do not add cross-platform abstractions until they remove real duplication or encode a stable boundary.
 - Prefer lightweight shells until a phase explicitly requires generated Flutter or Gradle projects.
 

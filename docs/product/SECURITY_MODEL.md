@@ -10,6 +10,19 @@ WardPulse is local-first. The MVP must not introduce a custom cloud path for pro
 - Credentials are never sent to a WardPulse cloud service in the MVP.
 - Wear OS surfaces receive dashboard summaries, not provider credentials.
 
+## Phone-to-Watch Sync
+
+- The Data Layer payload follows `schemas/watch_dashboard_summary.schema.json` and contains only
+  derived budget, provider-status, alert, and freshness fields.
+- Account identifiers, credentials, authorization headers, prompts, and raw provider
+  payloads are excluded from the watch contract.
+- Google Play services restricts Data Layer data to paired apps with matching application
+  IDs and signing certificates.
+- Data Layer may route the derived summary through Google-owned servers when Bluetooth is
+  unavailable; that cloud-routed transport is end-to-end encrypted.
+- The Wear app validates the schema version and required value shapes before replacing its
+  locally saved summary. Invalid payloads leave the previous summary intact.
+
 ## Logging Rules
 
 Logs must not include:
@@ -22,6 +35,7 @@ Logs must not include:
 - full account identifiers when a masked form is enough.
 
 Diagnostics export must redact sensitive data before writing files or sharing logs.
+Phone-to-watch logs record outcomes only and never include the serialized summary.
 
 ## Rust Core Rule
 

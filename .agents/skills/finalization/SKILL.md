@@ -9,7 +9,7 @@ description: Post-change finalization checklist for WardPulse (Rust core, Flutte
 >
 > Run this after implementation or documentation work to keep the monorepo coherent.
 >
-> Last Updated: 2026-06-27
+> Last Updated: 2026-06-28
 
 ## 1. Scope Review
 
@@ -54,6 +54,7 @@ cd apps/phone_flutter && flutter analyze && flutter test
 
 - [ ] If Android/Wear/WFF Gradle projects are generated, run the relevant Gradle test/build task.
 - [ ] If schemas or fixtures changed, validate fixture shape manually or with `tools/validate-fixtures/` when available.
+- [ ] If GitHub Actions workflows changed, run `actionlint .github/workflows/*.yml`.
 
 ## 5. Documentation Review
 
@@ -70,4 +71,7 @@ When finalization completes, report:
 2. Commands run and pass/fail status.
 3. Important files changed.
 4. Remaining risks or intentionally deferred work.
-5. Draft commit message only if the user asks for commit preparation.
+5. Git staging status: staged, unstaged, and untracked state.
+6. Idiomatic draft commit message for the staged set.
+
+Do not create a commit unless the user explicitly asks for one.

@@ -5,6 +5,7 @@
 - Build WardPulse as a local-first AI tool usage dashboard for Android phone, Wear OS, and Watch Face Format surfaces.
 - Keep one product repository with one Rust domain core, separate platform-native UI shells, shared schemas, fixtures, tests, and release process.
 - Keep provider credentials local to user devices and keep fixtures/logs sanitized.
+- Keep Apache-2.0 source licensing and WardPulse brand rights separate.
 - Keep the code clean, conventional, and easy to extend.
 
 ## Working Agreements
@@ -17,6 +18,7 @@
 - Prefer small, focused changes.
 - Do not generate full Flutter or Gradle projects unless the current task explicitly requires it.
 - Do not commit secrets, provider credentials, authorization headers, raw prompts, or sensitive raw provider payloads.
+- Do not treat WardPulse brand assets as covered by Apache-2.0 unless a file explicitly says so.
 
 ## Required Checks
 
@@ -28,7 +30,11 @@ cd core && cargo clippy --workspace --all-targets -- -D warnings
 cd core && cargo test --workspace
 ```
 
-After schema or fixture changes, validate JSON syntax and keep examples sanitized.
+After schema or fixture changes, validate JSON syntax and keep examples sanitized:
+
+```bash
+just validate-fixtures
+```
 
 After local skill changes, run:
 

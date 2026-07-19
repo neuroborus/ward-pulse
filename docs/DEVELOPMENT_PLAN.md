@@ -1,6 +1,6 @@
 # WardPulse Android — Development Plan
 
-Updated: 2026-06-27
+Updated: 2026-07-19
 
 Product name: **WardPulse**
 
@@ -22,7 +22,7 @@ Build the Android ecosystem version of WardPulse: a local-first usage dashboard 
 
 The Android product should let a developer or small team monitor usage, cost, limits, credits, provider status, and warning signals across selected providers:
 
-- OpenAI / Codex;
+- OpenAI, including Codex usage where OpenAI reporting exposes it;
 - Claude;
 - Cursor.
 
@@ -152,12 +152,13 @@ Android app display name: WardPulse
 ```text
 ward-pulse/
   README.md
-  DEVELOPMENT_PLAN.md
   justfile
   .gitignore
   .editorconfig
 
   docs/
+    README.md
+    DEVELOPMENT_PLAN.md
     product/
       ANDROID_GOALS.md
       PROVIDER_NOTES.md
@@ -203,7 +204,6 @@ ward-pulse/
       Cargo.toml
       src/
         lib.rs
-      uniffi.toml
 
     ward-pulse-cli/
       Cargo.toml
@@ -230,11 +230,10 @@ ward-pulse/
       build.gradle.kts
       app/
         build.gradle.kts
-        src/main/java/...
+        src/main/java/app/wardpulse/wear/...
         src/main/res/...
-      data/
-      ui/
-      test/
+        src/test/java/...
+        src/androidTest/java/...
 
     watchface_wff/
       build.gradle.kts
@@ -246,8 +245,10 @@ ward-pulse/
   bindings/
     dart/
       README.md
-      generated/
-      wrappers/
+      pubspec.yaml
+      lib/
+        ward_pulse_bindings.dart
+        src/
 
     kotlin/
       README.md
@@ -333,7 +334,6 @@ Suggested core model:
 ```rust
 enum ProviderKind {
     OpenAi,
-    Codex,
     Claude,
     Cursor,
     Mock,
@@ -657,7 +657,7 @@ DashboardSnapshot
    ↓
 Persist locally on phone
    ↓
-Send WatchSummary through Wear Data Layer
+Send WatchDashboardSummary through Wear Data Layer
    ↓
 Wear OS app stores latest snapshot
    ↓
@@ -668,32 +668,12 @@ The Wear OS app may later support standalone mode, but this is not required for 
 
 ### MVP payload
 
-```json
-{
-  "generatedAt": "2026-06-27T18:42:00Z",
-  "overallStatus": "ok",
-  "today": {
-    "spent": "12.40",
-    "limit": "50.00",
-    "remaining": "37.60",
-    "usedPercent": 24.8
-  },
-  "week": {
-    "spent": "71.30",
-    "limit": "250.00",
-    "projectedTotal": "228.00",
-    "usedPercent": 28.5
-  },
-  "providers": [
-    { "name": "Codex", "main": "$8.10", "status": "ok" },
-    { "name": "Claude", "main": "$2.80", "status": "ok" },
-    { "name": "Cursor", "main": "68%", "status": "warning" }
-  ],
-  "alerts": [
-    { "severity": "warning", "message": "Codex burn rate is higher than usual" }
-  ]
-}
-```
+The versioned platform transport contract is defined by
+`schemas/watch_dashboard_summary.schema.json`, with a sanitized example in
+`fixtures/snapshots/watch_dashboard_summary.json`. It is intentionally distinct from the
+compact Rust `WatchSummary` view model. Monetary values use integer minor units and ISO
+currency codes rather than presentation strings. The watch payload excludes account IDs,
+credentials, prompts, and raw provider data.
 
 ---
 
@@ -797,7 +777,7 @@ Add one real provider first. Prefer the provider with the clearest usage/cost re
 Recommended order:
 
 ```text
-1. OpenAI / Codex
+1. OpenAI, including Codex usage where OpenAI reporting exposes it
 2. Claude
 3. Cursor
 ```
@@ -809,14 +789,20 @@ The exact order can change based on API access, account type, and available repo
 Each provider should have a capability descriptor:
 
 ```rust
+struct BucketCapabilities {
+    daily: bool,
+    hourly: bool,
+}
+
 struct ProviderCapabilities {
     supports_cost: bool,
     supports_tokens: bool,
     supports_requests: bool,
     supports_credits: bool,
-    supports_daily_buckets: bool,
-    supports_hourly_buckets: bool,
-    supports_model_breakdown: bool,
+    usage_buckets: BucketCapabilities,
+    cost_buckets: BucketCapabilities,
+    supports_usage_model_breakdown: bool,
+    supports_cost_model_breakdown: bool,
     supports_workspace_breakdown: bool,
     supports_active_agents: bool,
 }
@@ -870,7 +856,7 @@ Claude Cursor Dashboard
 Official OpenAI Usage Watch
 ```
 
-Provider names such as Codex, Claude, and Cursor can be used descriptively as integration labels, for example:
+Provider and product names such as Codex, Claude, and Cursor can be used descriptively as integration labels, for example:
 
 ```text
 Connect Codex
@@ -897,24 +883,19 @@ Recommended model:
 ```text
 Repository: public
 Source code: open source
+Source license: Apache-2.0
 Brand/assets: not open source by default
 Google Play build: paid app
 Freemium: not planned for the first release
 Subscription: not planned for the first release
-Self-build: allowed according to the chosen source license
+Self-build: allowed under Apache-2.0
 ```
 
 ### Source code license
 
-The source code license is intentionally not finalized yet. The repository should make the chosen license explicit before the first public release.
-
-Possible directions:
-
-- Apache-2.0 or MIT for permissive adoption;
-- GPLv3/AGPLv3 if copyleft is desired;
-- dual-license if commercial control becomes important.
-
-The chosen source license should apply to code and documentation only unless another file or directory states otherwise.
+The source license is Apache-2.0. It applies to source code, documentation,
+schemas, fixtures, and tooling unless another file or directory states
+otherwise.
 
 ### Brand and asset license
 
@@ -949,7 +930,7 @@ Reason:
 Recommended repository convention:
 
 ```text
-LICENSE                       # source code license
+LICENSE                       # Apache-2.0 source license
 TRADEMARKS.md                 # WardPulse name/logo/store identity rules
 THIRD_PARTY_NOTICES.md         # third-party licenses and attributions
 brand/README.md               # brand asset usage notes
@@ -960,7 +941,7 @@ brand/store/                  # Play Store graphics and copy drafts
 Default rule:
 
 ```text
-You may study, build, and modify the source code under the source license.
+You may study, build, and modify the source code under Apache-2.0.
 You may not publish an app, fork, store listing, website, or package using the WardPulse name, logo, icon, or confusingly similar branding without explicit permission.
 ```
 
@@ -1008,21 +989,21 @@ Deliverables:
 
 - monorepo skeleton;
 - root README;
-- this `DEVELOPMENT_PLAN.md`;
+- this `docs/DEVELOPMENT_PLAN.md`;
 - `justfile` with common commands;
 - Rust workspace;
 - Flutter app stub;
 - Wear OS app stub;
 - WFF module stub;
 - fixtures folder;
-- initial license/brand/trademark placeholders;
+- Apache-2.0 license, brand boundary, and trademark baseline;
 - CI skeleton.
 
 Useful commands:
 
 ```text
 just test-core
-just gen-bindings
+just build-android-rust
 just run-phone
 just run-wear
 just build-watchface
@@ -1076,6 +1057,8 @@ provider detail pages are reachable
 
 ### Phase 3 — Rust ↔ Flutter bridge
 
+Status: complete as of 2026-07-18.
+
 Deliverables:
 
 - generated Dart bindings or thin JSON-based bridge;
@@ -1094,6 +1077,8 @@ errors are mapped to UI-safe error states
 For MVP speed, a JSON boundary is acceptable before optimizing the FFI interface.
 
 ### Phase 4 — Wear OS compact app
+
+Status: complete as of 2026-07-18.
 
 Deliverables:
 
@@ -1116,9 +1101,11 @@ mock summary is persisted locally
 
 ### Phase 5 — phone-to-watch sync
 
+Status: complete as of 2026-07-19.
+
 Deliverables:
 
-- phone app sends WatchSummary to Wear OS app;
+- phone app sends WatchDashboardSummary to Wear OS app;
 - Wear OS app receives and persists latest summary;
 - manual sync button for development;
 - redacted logs for sync events.
@@ -1152,6 +1139,8 @@ ambient mode remains readable
 
 ### Phase 7 — first real provider
 
+Status: in progress as of 2026-07-19.
+
 Deliverables:
 
 - credential screen;
@@ -1172,6 +1161,15 @@ credential is masked after save
 logs are redacted
 ```
 
+Completed slice:
+
+```text
+OpenAI Platform organization reporting selected as the first live adapter
+provider capability descriptor added for implemented providers
+usage/cost endpoint, credential, pagination, and redaction contract documented
+personal ChatGPT/Codex subscription analytics explicitly excluded from this adapter
+```
+
 ### Phase 8 — MVP hardening
 
 Deliverables:
@@ -1183,8 +1181,8 @@ Deliverables:
 - data deletion;
 - privacy policy draft;
 - legal disclaimer;
-- source license draft;
-- trademark/brand asset notice draft;
+- source license scope review;
+- trademark/brand asset notice review;
 - paid Google Play distribution notes;
 - Play Store internal testing build;
 - real device smoke tests.
@@ -1292,8 +1290,8 @@ wear-android.yml
   ./gradlew assembleDebug
 
 watchface.yml
-  ./gradlew assembleDebug
-  WFF validation when configured
+  official WFF schema validation
+  ./gradlew lintDebug assembleDebug bundleDebug
 ```
 
 Release CI can be added later:
@@ -1340,20 +1338,20 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Create the monorepo skeleton and implement Phase 1 with mock data.
+Continue Phase 7 with phone-side credential storage and the OpenAI reporting transport.
 
-The first useful pull request should contain:
+Phase 6 passed Watch Face Format acceptance on 2026-07-19:
 
 ```text
-DEVELOPMENT_PLAN.md
-LICENSE / TRADEMARKS.md placeholders
-Rust workspace
-mock provider fixtures
-DashboardSnapshot model
-budget calculation tests
-CLI command that prints a dashboard snapshot
-Flutter app stub that can later consume the snapshot
-Wear app stub that can later consume WatchSummary
+the resource-only WFF v1 package built as APK and AAB without dex files
+the package installed and rendered on the canonical round Wear OS 6.1 emulator
+the static today/week/status layout remained separate from live application state
+tapping the face opened app.wardpulse/.wear.MainActivity
+ambient mode rendered a readable thin time layer with a minimal product label
+pull-request CI now validates, lints, and builds the watch face package
 ```
 
-The product should earn complexity step by step. Start with a stable data model and convincing dashboard states before adding real providers or release infrastructure.
+The OpenAI Platform organization reporting contract is now selected and documented. Add the
+smallest phone-side secure-storage boundary for its Admin API key, then fetch paginated daily
+usage and cost responses without logging secrets or raw payloads. Keep parsing and
+normalization deterministic in Rust and preserve the existing snapshot boundary.

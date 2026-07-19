@@ -4,15 +4,63 @@
   "buckets": [
     {
       "startAt": "2026-06-27T00:00:00Z",
-      "endAt": "2026-06-27T18:42:00Z",
+      "endAt": "2026-06-27T06:00:00Z",
       "cost": {
-        "minorUnits": 1240,
+        "minorUnits": 220,
         "currency": "USD"
       },
-      "inputTokens": 120000,
-      "outputTokens": 42000,
-      "requests": 186,
-      "model": "mock-fast"
+      "inputTokens": 30000,
+      "outputTokens": 9000,
+      "cachedTokens": null,
+      "requests": 42,
+      "model": "mock-fast",
+      "project": null,
+      "user": null
+    },
+    {
+      "startAt": "2026-06-27T06:00:00Z",
+      "endAt": "2026-06-27T12:00:00Z",
+      "cost": {
+        "minorUnits": 310,
+        "currency": "USD"
+      },
+      "inputTokens": 28000,
+      "outputTokens": 10000,
+      "cachedTokens": null,
+      "requests": 48,
+      "model": "mock-fast",
+      "project": null,
+      "user": null
+    },
+    {
+      "startAt": "2026-06-27T12:00:00Z",
+      "endAt": "2026-06-27T18:00:00Z",
+      "cost": {
+        "minorUnits": 520,
+        "currency": "USD"
+      },
+      "inputTokens": 45000,
+      "outputTokens": 17000,
+      "cachedTokens": null,
+      "requests": 72,
+      "model": "mock-fast",
+      "project": null,
+      "user": null
+    },
+    {
+      "startAt": "2026-06-27T18:00:00Z",
+      "endAt": "2026-06-27T18:42:00Z",
+      "cost": {
+        "minorUnits": 190,
+        "currency": "USD"
+      },
+      "inputTokens": 17000,
+      "outputTokens": 6000,
+      "cachedTokens": null,
+      "requests": 24,
+      "model": "mock-fast",
+      "project": null,
+      "user": null
     }
   ]
 }

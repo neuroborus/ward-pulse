@@ -8,5 +8,6 @@ publish.workspace = true
 repository.workspace = true
 
 [dependencies]
+serde_json.workspace = true
 ward-pulse-core = { path = "../ward-pulse-core" }
 ward-pulse-providers = { path = "../ward-pulse-providers" }

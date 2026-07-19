@@ -10,7 +10,7 @@
     "overallStatus": { "$ref": "#/$defs/providerStatus" },
     "accounts": {
       "type": "array",
-      "items": { "type": "object" }
+      "items": { "$ref": "#/$defs/providerSnapshot" }
     },
     "todayTotal": { "$ref": "budget_state.schema.json" },
     "weekTotal": { "$ref": "budget_state.schema.json" },
@@ -41,6 +41,97 @@
   "$defs": {
     "providerStatus": {
       "enum": ["ok", "warning", "error", "rateLimited", "authRequired", "stale", "unknown"]
+    },
+    "providerKind": {
+      "enum": ["openai", "claude", "cursor", "mock"]
+    },
+    "creditSource": {
+      "enum": ["provider", "promo", "manual", "unknown"]
+    },
+    "money": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minorUnits", "currency"],
+      "properties": {
+        "minorUnits": { "type": "integer" },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+      }
+    },
+    "nullableMoney": {
+      "anyOf": [{ "$ref": "#/$defs/money" }, { "type": "null" }]
+    },
+    "creditState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["remaining", "granted", "expiresAt", "source"],
+      "properties": {
+        "remaining": { "$ref": "#/$defs/nullableMoney" },
+        "granted": { "$ref": "#/$defs/nullableMoney" },
+        "expiresAt": { "type": ["string", "null"], "format": "date-time" },
+        "source": { "$ref": "#/$defs/creditSource" }
+      }
+    },
+    "modelUsage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "cost", "inputTokens", "outputTokens", "requests"],
+      "properties": {
+        "model": { "type": "string" },
+        "cost": { "$ref": "#/$defs/nullableMoney" },
+        "inputTokens": { "type": ["integer", "null"], "minimum": 0 },
+        "outputTokens": { "type": ["integer", "null"], "minimum": 0 },
+        "requests": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "providerErrorSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" }
+      }
+    },
+    "providerSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accountId",
+        "provider",
+        "status",
+        "today",
+        "week",
+        "month",
+        "credits",
+        "buckets",
+        "modelBreakdown",
+        "lastSuccessfulSyncAt",
+        "lastError"
+      ],
+      "properties": {
+        "accountId": { "type": "string" },
+        "provider": { "$ref": "#/$defs/providerKind" },
+        "status": { "$ref": "#/$defs/providerStatus" },
+        "today": { "$ref": "budget_state.schema.json" },
+        "week": { "$ref": "budget_state.schema.json" },
+        "month": { "$ref": "budget_state.schema.json" },
+        "credits": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/creditState" }
+        },
+        "buckets": {
+          "type": "array",
+          "items": { "$ref": "usage_bucket.schema.json" }
+        },
+        "modelBreakdown": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/modelUsage" }
+        },
+        "lastSuccessfulSyncAt": { "type": ["string", "null"], "format": "date-time" },
+        "lastError": {
+          "anyOf": [{ "$ref": "#/$defs/providerErrorSummary" }, { "type": "null" }]
+        }
+      }
     }
   }
 }

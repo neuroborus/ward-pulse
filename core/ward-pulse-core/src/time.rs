@@ -1,4 +1,7 @@
-#[derive(Clone, Debug, PartialEq, Eq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(transparent)]
 pub struct DateTimeUtc(String);
 
 impl DateTimeUtc {

@@ -1,25 +1,38 @@
 name: Core
 
 on:
-  push:
-    paths:
-      - "core/**"
-      - ".github/workflows/core.yml"
   pull_request:
+    branches: [main]
     paths:
       - "core/**"
+      - "fixtures/**"
+      - "schemas/**"
+      - "tools/validate-fixtures/**"
       - ".github/workflows/core.yml"
-  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   core:
+    name: Core (${{ matrix.rust }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: ["1.75.0", stable]
     defaults:
       run:
         working-directory: core
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: rustfmt, clippy
+      - name: Validate JSON syntax
+        working-directory: .
+        run: python3 tools/validate-fixtures/validate_json.py
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace

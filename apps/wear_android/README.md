@@ -2,13 +2,34 @@
 
 Native Wear OS shell for compact WardPulse dashboard screens.
 
-Generate the Android project here when Phase 4 starts. The app should use Kotlin and Compose for Wear OS.
+The app uses Kotlin, Compose for Wear OS Material 3, and Wear Data Layer. It validates the
+versioned `WatchDashboardSummary` payload and persists only the latest successful summary.
 
 ## Ownership
 
 - Today, week, providers, alerts, and last sync screens.
-- Wear Data Layer receiver.
 - Local storage of the latest watch summary.
-- Wear-specific navigation, rotary input, ambient readability, and stale data states.
+- Wear-specific navigation, rotary input, shape-aware layouts, and stale data states.
+- Wear Data Layer receiver for `/wardpulse/watch-summary`.
 
 Provider credentials are never entered or stored on the watch.
+The app marks a summary stale when the phone reports stale data or its generation time is at
+least two hours old, twice the longest planned MVP polling interval.
+
+The phone and Wear APKs intentionally share the `app.wardpulse` application ID. Their
+namespaces remain separate, and paired builds must use the same signing certificate for Data
+Layer delivery.
+
+## Commands
+
+From the repository root:
+
+```sh
+just check-wear
+just build-wear
+just test-wear-device
+just run-wear
+```
+
+`test-wear-device` and `run-wear` require one active Wear AVD. Canonical AVD names and setup
+commands live in [`docs/ANDROID_TOOLCHAIN.md`](../../docs/ANDROID_TOOLCHAIN.md).
