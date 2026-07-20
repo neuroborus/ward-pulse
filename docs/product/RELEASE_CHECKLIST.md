@@ -12,7 +12,8 @@ This checklist is a gate, not a schedule.
 ## Phone
 
 - Flutter app starts on an Android emulator.
-- Home dashboard renders mock data.
+- Release builds never select mock data.
+- Debug mock data requires explicit opt-in in Settings.
 - Provider detail pages are reachable.
 - Credentials are masked after save.
 - Sync logs are redacted.
@@ -23,6 +24,7 @@ This checklist is a gate, not a schedule.
 - Today, week, providers, alerts, and last sync screens are readable.
 - Stale data state is visible.
 - Latest successful summary survives sync failure.
+- Missing phone data does not create an implicit mock summary.
 
 ## Watch Face
 
@@ -30,6 +32,7 @@ This checklist is a gate, not a schedule.
 - Face installs on emulator or physical watch.
 - Ambient mode remains readable.
 - Tap target opens the Wear OS app where supported.
+- Today, week, and provider status come from WardPulse complication data sources.
 
 ## Privacy And Legal
 

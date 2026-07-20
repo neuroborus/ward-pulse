@@ -37,6 +37,7 @@ extension ProviderStatusLabel on ProviderStatus {
 }
 
 enum DashboardSyncIssue {
+  noProviders,
   credentialUnavailable,
   authentication,
   permissionDenied,
@@ -53,6 +54,8 @@ enum DashboardSyncIssue {
 extension DashboardSyncIssueMessage on DashboardSyncIssue {
   String get message {
     return switch (this) {
+      DashboardSyncIssue.noProviders =>
+        'Connect a provider in Settings to load dashboard data.',
       DashboardSyncIssue.credentialUnavailable =>
         'The saved key could not be read. Re-enter it in Settings.',
       DashboardSyncIssue.authentication =>

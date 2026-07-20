@@ -14,7 +14,7 @@ final class OpenAiDashboardRepository extends DashboardRepository {
   OpenAiDashboardRepository({
     required ProviderCredentialStore credentialStore,
     OpenAiReportingClient? client,
-    DashboardRepository fallback = const RustDashboardRepository(),
+    DashboardRepository? fallback,
     ProviderSyncLogger logger = const DeveloperProviderSyncLogger(),
     OpenAiReportNormalizer normalizeReport = normalizeOpenAiReportJson,
     DateTime Function()? clock,
@@ -27,7 +27,7 @@ final class OpenAiDashboardRepository extends DashboardRepository {
 
   final ProviderCredentialStore _credentialStore;
   final OpenAiReportingClient _client;
-  final DashboardRepository _fallback;
+  final DashboardRepository? _fallback;
   final ProviderSyncLogger _logger;
   final OpenAiReportNormalizer _normalizeReport;
   final DateTime Function() _clock;
@@ -46,7 +46,11 @@ final class OpenAiDashboardRepository extends DashboardRepository {
 
     if (adminApiKey == null) {
       _logger.record(ProviderSyncEvent.skippedNoCredential);
-      return _fallback.load();
+      final fallback = _fallback;
+      if (fallback != null) {
+        return fallback.load();
+      }
+      throw const DashboardLoadException(issue: DashboardSyncIssue.noProviders);
     }
 
     try {
@@ -120,6 +124,7 @@ final class OpenAiDashboardRepository extends DashboardRepository {
   @override
   void invalidate() {
     _lastSuccessfulSnapshot = null;
+    _fallback?.invalidate();
   }
 
   Future<DashboardSnapshot> _cachedOrThrow(

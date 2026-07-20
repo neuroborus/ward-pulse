@@ -22,18 +22,39 @@ void main() {
     fallbackSnapshot = DashboardSnapshot.fromJsonString(dashboardFixture);
   });
 
-  test('uses mock data when no OpenAI credential is stored', () async {
-    final logger = _RecordingLogger();
+  test(
+    'uses an explicit fallback when no OpenAI credential is stored',
+    () async {
+      final logger = _RecordingLogger();
+      final repository = OpenAiDashboardRepository(
+        credentialStore: _MemoryCredentialStore(),
+        fallback: ValueDashboardRepository(fallbackSnapshot),
+        logger: logger,
+      );
+
+      final snapshot = await repository.load();
+
+      expect(snapshot, same(fallbackSnapshot));
+      expect(logger.events, [ProviderSyncEvent.skippedNoCredential]);
+    },
+  );
+
+  test('does not use mock data by default without a credential', () async {
     final repository = OpenAiDashboardRepository(
       credentialStore: _MemoryCredentialStore(),
-      fallback: ValueDashboardRepository(fallbackSnapshot),
-      logger: logger,
+      logger: const NullProviderSyncLogger(),
     );
 
-    final snapshot = await repository.load();
-
-    expect(snapshot, same(fallbackSnapshot));
-    expect(logger.events, [ProviderSyncEvent.skippedNoCredential]);
+    await expectLater(
+      repository.load(),
+      throwsA(
+        isA<DashboardLoadException>().having(
+          (error) => error.issue,
+          'issue',
+          DashboardSyncIssue.noProviders,
+        ),
+      ),
+    );
   });
 
   test('passes sanitized reporting pages to the Rust boundary', () async {

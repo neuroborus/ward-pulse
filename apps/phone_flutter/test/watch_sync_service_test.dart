@@ -101,7 +101,8 @@ void main() {
             )
             as Map<String, dynamic>;
 
-    expect(payload['schemaVersion'], 2);
+    expect(payload['schemaVersion'], 3);
+    expect(payload['dataMode'], 'mock');
     expect((payload['allowances'] as List), hasLength(1));
     expect((payload['allowances'] as List).first['source'], 'purchased');
   });

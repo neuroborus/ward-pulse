@@ -2,9 +2,9 @@
 
 Declarative Watch Face Format v1 package for a glanceable WardPulse summary.
 
-The first face shows static, sanitized today/week/status sample values. They are not a
-second live data model. Tapping the face opens the Wear OS app; ambient mode keeps only the
-time and product label.
+The face renders today, week, and provider-status complications supplied by the Wear OS app.
+Missing values remain neutral instead of falling back to sample data. Tapping the face or a
+WardPulse complication opens the Wear OS app; ambient mode keeps only the time and product label.
 
 ## Commands
 

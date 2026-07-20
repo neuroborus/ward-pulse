@@ -24,9 +24,10 @@ import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
 import androidx.wear.compose.ui.tooling.preview.WearPreviewDevices
 import androidx.wear.compose.ui.tooling.preview.WearPreviewSquare
 import app.wardpulse.wear.model.AllowanceSummary
-import app.wardpulse.wear.model.MockWatchDashboardSummary
 import app.wardpulse.wear.model.Money
+import app.wardpulse.wear.model.PreviewWatchDashboardSummary
 import app.wardpulse.wear.model.PulseStatus
+import app.wardpulse.wear.model.WatchDataMode
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.ui.theme.WardPulseSuccess
 import app.wardpulse.wear.ui.theme.WardPulseTheme
@@ -50,8 +51,12 @@ private data class SummaryRow(
 )
 
 @Composable
-fun WardPulseApp(summary: WatchDashboardSummary) {
+fun WardPulseApp(summary: WatchDashboardSummary?) {
     AppScaffold {
+        if (summary == null) {
+            EmptyDashboardScreen()
+            return@AppScaffold
+        }
         val navController = rememberSwipeDismissableNavController()
         SwipeDismissableNavHost(
             navController = navController,
@@ -66,6 +71,35 @@ fun WardPulseApp(summary: WatchDashboardSummary) {
                         title = screen.label,
                         rows = summary.rowsFor(screen),
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyDashboardScreen() {
+    val state = rememberTransformingLazyColumnState()
+    val transformationSpec = rememberTransformationSpec()
+
+    ScreenScaffold(scrollState = state) { contentPadding ->
+        TransformingLazyColumn(
+            state = state,
+            contentPadding = contentPadding,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            item {
+                ListHeader { Text("WardPulse") }
+            }
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .transformedHeight(this, transformationSpec),
+                    transformation = SurfaceTransformation(transformationSpec),
+                ) {
+                    Text("Sync from phone")
+                    Text("No dashboard data yet")
                 }
             }
         }
@@ -133,7 +167,11 @@ private fun HomeScreen(summary: WatchDashboardSummary, onOpen: (Screen) -> Unit)
                 ListHeader { Text("WardPulse") }
             }
             item {
-                val status = if (summary.isStale) PulseStatus.WARNING else summary.overallStatus
+                val status = when {
+                    summary.dataMode == WatchDataMode.MOCK -> PulseStatus.WARNING
+                    summary.isStale -> PulseStatus.WARNING
+                    else -> summary.overallStatus
+                }
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -141,7 +179,11 @@ private fun HomeScreen(summary: WatchDashboardSummary, onOpen: (Screen) -> Unit)
                     transformation = SurfaceTransformation(transformationSpec),
                 ) {
                     Text(
-                        if (summary.isStale) "Stale data" else summary.overallStatus.label,
+                        when {
+                            summary.dataMode == WatchDataMode.MOCK -> "Mock data"
+                            summary.isStale -> "Stale data"
+                            else -> summary.overallStatus.label
+                        },
                         color = statusColor(status),
                     )
                     Text(
@@ -248,6 +290,6 @@ private fun String.toStatus(): PulseStatus = when (this) {
 @Composable
 private fun WardPulsePreview() {
     WardPulseTheme {
-        WardPulseApp(MockWatchDashboardSummary.value)
+        WardPulseApp(PreviewWatchDashboardSummary.value)
     }
 }

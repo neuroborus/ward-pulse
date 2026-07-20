@@ -22,6 +22,7 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 
@@ -46,6 +47,7 @@ dependencies {
     implementation("androidx.wear.compose:compose-material3:1.6.2")
     implementation("androidx.wear.compose:compose-navigation:1.6.2")
     implementation("androidx.wear.compose:compose-ui-tooling:1.6.2")
+    implementation("androidx.wear.watchface:watchface-complications-data-source-ktx:1.2.1")
     implementation("com.google.android.gms:play-services-wearable:20.0.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")

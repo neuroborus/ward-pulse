@@ -3,6 +3,7 @@ package app.wardpulse.wear.data
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import app.wardpulse.wear.BuildConfig
 import app.wardpulse.wear.model.AlertSummary
 import app.wardpulse.wear.model.AllowanceSummary
 import app.wardpulse.wear.model.Money
@@ -11,6 +12,7 @@ import app.wardpulse.wear.model.ProviderSummary
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.Quantity
 import app.wardpulse.wear.model.WatchDashboardSummary
+import app.wardpulse.wear.model.WatchDataMode
 import java.time.Instant
 import org.json.JSONArray
 import org.json.JSONException
@@ -22,16 +24,22 @@ class WatchSummaryStore(private val preferences: SharedPreferences) {
     )
 
     fun load(): WatchDashboardSummary? =
-        preferences.getString(SUMMARY_KEY, null)?.let(WatchDashboardSummaryCodec::decode)
+        preferences.getString(SUMMARY_KEY, null)
+            ?.let(WatchDashboardSummaryCodec::decode)
+            ?.takeIf(::isAllowedForBuild)
 
     fun save(summary: WatchDashboardSummary) {
+        if (!isAllowedForBuild(summary)) {
+            return
+        }
         preferences.edit {
             putString(SUMMARY_KEY, WatchDashboardSummaryCodec.encode(summary))
         }
     }
 
     fun saveEncoded(encoded: String): Boolean {
-        if (WatchDashboardSummaryCodec.decode(encoded) == null) {
+        val summary = WatchDashboardSummaryCodec.decode(encoded)
+        if (summary == null || !isAllowedForBuild(summary)) {
             return false
         }
 
@@ -40,6 +48,9 @@ class WatchSummaryStore(private val preferences: SharedPreferences) {
         }
         return true
     }
+
+    private fun isAllowedForBuild(summary: WatchDashboardSummary): Boolean =
+        BuildConfig.DEBUG || summary.dataMode == WatchDataMode.LIVE
 
     fun observe(onChanged: () -> Unit): AutoCloseable {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -73,6 +84,7 @@ private object WatchDashboardSummaryCodec {
 
 private fun WatchDashboardSummary.toJson() = JSONObject().apply {
     put("schemaVersion", schemaVersion)
+    put("dataMode", dataMode.wireName)
     put("generatedAt", generatedAt)
     put("overallStatus", overallStatus.wireName)
     put("today", today.toJson())
@@ -134,6 +146,7 @@ private fun JSONObject.toWatchDashboardSummary(): WatchDashboardSummary {
 
     return WatchDashboardSummary(
         schemaVersion = SCHEMA_VERSION,
+        dataMode = requireNotNull(WatchDataMode.fromWireName(getString("dataMode"))),
         generatedAt = generatedAt,
         overallStatus = getString("overallStatus").toPulseStatus(),
         today = today,
@@ -218,7 +231,7 @@ private inline fun <T> JSONArray.mapObjects(transform: (JSONObject) -> T): List<
 
 private fun String.toPulseStatus(): PulseStatus = requireNotNull(PulseStatus.fromWireName(this))
 
-private const val SCHEMA_VERSION = 2
+private const val SCHEMA_VERSION = 3
 private val CURRENCY_PATTERN = Regex("^[A-Z]{3}$")
 private val PROVIDERS = setOf("openai", "codex", "claude", "cursor", "mock")
 private val ALLOWANCE_SOURCES = setOf("plan", "purchased")

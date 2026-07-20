@@ -61,6 +61,28 @@ void main() {
     expect(receivedReport, '{"sanitized":true}');
   });
 
+  test(
+    'does not report a missing platform provider when Codex loads',
+    () async {
+      final repository = CodexDashboardRepository(
+        accountService: const EmptyCodexAccountService(),
+        fallback: const _FailingDashboardRepository(
+          DashboardLoadException(issue: DashboardSyncIssue.noProviders),
+        ),
+        loadReport: () async => '{"sanitized":true}',
+        normalizeReport:
+            (_) =>
+                File(
+                  '../../fixtures/snapshots/dashboard_today.json',
+                ).readAsStringSync(),
+      );
+
+      final result = await repository.load();
+
+      expect(result.syncIssue, isNull);
+    },
+  );
+
   test('surfaces Codex authentication failures', () async {
     final repository = CodexDashboardRepository(
       accountService: const EmptyCodexAccountService(),

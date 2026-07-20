@@ -684,8 +684,9 @@ The versioned platform transport contract is defined by
 `fixtures/snapshots/watch_dashboard_summary.json`. It is intentionally distinct from the
 compact Rust `WatchSummary` view model. Monetary values use integer minor units and ISO
 currency codes rather than presentation strings. The watch payload excludes account IDs,
-credentials, prompts, and raw provider data. Version 2 adds only the plan/purchased allowances
-selected by the phone display preference.
+credentials, prompts, and raw provider data. Version 3 adds an explicit live/mock data mode and
+only the plan/purchased allowances selected by the phone display preference. Mock data is
+available only in debug builds and must be enabled explicitly on the phone.
 
 ---
 
@@ -1100,7 +1101,7 @@ Deliverables:
 - Week screen;
 - Providers screen;
 - Alerts screen;
-- local mock summary storage;
+- local summary storage validated with sanitized fixtures;
 - Compose for Wear OS UI.
 
 Acceptance:
@@ -1109,7 +1110,8 @@ Acceptance:
 Wear app runs on emulator
 screens are readable on round and square previews
 stale data state is visible
-mock summary is persisted locally
+valid phone summaries are persisted locally
+missing data never creates an implicit mock summary
 ```
 
 ### Phase 5 — phone-to-watch sync
@@ -1203,7 +1205,7 @@ phone owns Codex device-code sign-in, secure token storage, refresh, and read-on
 no desktop process, local server, or adb reverse dependency remains
 Rust normalizes plan windows, purchased credits, and daily token buckets without fake money values
 plan usage is displayed by default; users can select plan, purchased usage, or both
-the same filtered allowance summary is propagated to Wear OS through schema version 2
+the same filtered allowance summary is propagated to Wear OS through schema version 3
 Android end-to-end acceptance remains: sign in from Settings and verify the live phone/watch UI
 ```
 

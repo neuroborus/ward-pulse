@@ -11,8 +11,12 @@ versioned `WatchDashboardSummary` payload and persists only the latest successfu
 - Local storage of the latest watch summary.
 - Wear-specific navigation, rotary input, shape-aware layouts, and stale data states.
 - Wear Data Layer receiver for `/wardpulse/watch-summary`.
+- Today, week, and provider-status complication data sources for the WardPulse watch face.
 
 Provider credentials are never entered or stored on the watch.
+The app shows a neutral sync prompt until the first valid phone summary arrives; it never creates
+mock state on its own. Mock summaries are accepted only when explicitly marked by a debug phone
+build, and release Wear builds reject them.
 The app marks a summary stale when the phone reports stale data or its generation time is at
 least two hours old, twice the longest planned MVP polling interval.
 

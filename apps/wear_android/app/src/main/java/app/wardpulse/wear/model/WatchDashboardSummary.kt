@@ -25,6 +25,16 @@ enum class PulseStatus(
     }
 }
 
+enum class WatchDataMode(val wireName: String) {
+    LIVE("live"),
+    MOCK("mock"),
+    ;
+
+    companion object {
+        fun fromWireName(value: String): WatchDataMode? = entries.firstOrNull { it.wireName == value }
+    }
+}
+
 data class Money(
     val minorUnits: Long,
     val currency: String,
@@ -91,6 +101,7 @@ data class AlertSummary(
 
 data class WatchDashboardSummary(
     val schemaVersion: Int,
+    val dataMode: WatchDataMode,
     val generatedAt: String,
     val overallStatus: PulseStatus,
     val today: PeriodSummary,
@@ -127,9 +138,10 @@ data class WatchDashboardSummary(
     }
 }
 
-object MockWatchDashboardSummary {
+object PreviewWatchDashboardSummary {
     val value = WatchDashboardSummary(
-        schemaVersion = 2,
+        schemaVersion = 3,
+        dataMode = WatchDataMode.MOCK,
         generatedAt = "2026-06-27T18:42:00Z",
         overallStatus = PulseStatus.OK,
         today = PeriodSummary(

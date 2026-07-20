@@ -58,26 +58,9 @@
                         <Font family="SYNC_TO_DEVICE" size="18" color="#ffbec9c1">TODAY</Font>
                     </Text>
                 </PartText>
-                <PartText x="50" y="312" width="150" height="42">
-                    <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="34" color="#ffffffff">25%</Font>
-                    </Text>
-                </PartText>
-
                 <PartText x="250" y="282" width="150" height="28">
                     <Text align="CENTER">
                         <Font family="SYNC_TO_DEVICE" size="18" color="#ffbec9c1">WEEK</Font>
-                    </Text>
-                </PartText>
-                <PartText x="250" y="312" width="150" height="42">
-                    <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="34" color="#ffffffff">29%</Font>
-                    </Text>
-                </PartText>
-
-                <PartText x="0" y="374" width="450" height="28">
-                    <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="18" color="#ff65d78a">STATUS  OK</Font>
                     </Text>
                 </PartText>
             </Group>
@@ -93,5 +76,98 @@
                 </Text>
             </PartText>
         </Group>
+
+        <ComplicationSlot
+            x="50"
+            y="312"
+            width="150"
+            height="42"
+            slotId="101"
+            displayName="@string/today_complication"
+            supportedTypes="SHORT_TEXT EMPTY"
+            isCustomizable="FALSE">
+            <DefaultProviderPolicy
+                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.TodayComplicationDataSourceService"
+                primaryProviderType="SHORT_TEXT"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <BoundingBox x="0" y="0" width="150" height="42" />
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="0" width="150" height="42" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="34" color="#ffffffff">
+                            <Template>
+                                %s
+                                <Parameter expression="[COMPLICATION.TEXT]" />
+                            </Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <ComplicationSlot
+            x="250"
+            y="312"
+            width="150"
+            height="42"
+            slotId="102"
+            displayName="@string/week_complication"
+            supportedTypes="SHORT_TEXT EMPTY"
+            isCustomizable="FALSE">
+            <DefaultProviderPolicy
+                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.WeekComplicationDataSourceService"
+                primaryProviderType="SHORT_TEXT"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <BoundingBox x="0" y="0" width="150" height="42" />
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="0" width="150" height="42" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="34" color="#ffffffff">
+                            <Template>
+                                %s
+                                <Parameter expression="[COMPLICATION.TEXT]" />
+                            </Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <ComplicationSlot
+            x="0"
+            y="374"
+            width="450"
+            height="28"
+            slotId="103"
+            displayName="@string/status_complication"
+            supportedTypes="SHORT_TEXT EMPTY"
+            isCustomizable="FALSE">
+            <DefaultProviderPolicy
+                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.StatusComplicationDataSourceService"
+                primaryProviderType="SHORT_TEXT"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <BoundingBox x="0" y="0" width="450" height="28" />
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="0" width="450" height="28" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="18" color="#ff65d78a">
+                            <Template>
+                                %s
+                                <Parameter expression="[COMPLICATION.TEXT]" />
+                            </Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
     </Scene>
 </WatchFace>

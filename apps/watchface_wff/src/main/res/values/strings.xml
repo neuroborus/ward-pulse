@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="watch_face_name">WardPulse</string>
+    <string name="today_complication">Today usage</string>
+    <string name="week_complication">Week usage</string>
+    <string name="status_complication">Provider status</string>
 </resources>

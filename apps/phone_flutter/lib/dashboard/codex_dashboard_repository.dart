@@ -84,6 +84,9 @@ final class CodexDashboardRepository extends DashboardRepository {
       platformSnapshot = (await fallback).value;
     } on DashboardLoadException catch (error) {
       _logger.record(ProviderSyncEvent.succeeded);
+      if (error.issue == DashboardSyncIssue.noProviders) {
+        return _remember(codexSnapshot);
+      }
       return _remember(
         codexSnapshot,
       ).withSyncIssue(error.issue, details: error.details);

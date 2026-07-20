@@ -8,6 +8,7 @@ import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
+import 'package:ward_pulse_phone/settings/debug_data_preferences.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 
 void main() {
@@ -291,6 +292,62 @@ void main() {
     expect(find.text('Weekly plan'), findsOneWidget);
     expect(find.text('Purchased credits'), findsOneWidget);
   });
+
+  testWidgets('enables mock data only from the debug setting', (tester) async {
+    final mock = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final liveJson = mock.toJson();
+    (liveJson['accounts'] as List).first['provider'] = 'openai';
+    final live = DashboardSnapshot.fromJson(liveJson);
+    final preferences = _MemoryDebugDataPreferenceStore();
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: DebugDashboardRepository(
+          live: ValueDashboardRepository(live),
+          mock: ValueDashboardRepository(mock),
+          preferences: preferences,
+        ),
+        debugDataAvailable: true,
+        debugDataPreferenceStore: preferences,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    final toggle = find.widgetWithText(SwitchListTile, 'Mock data');
+    expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+
+    expect(preferences.value, isTrue);
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+    expect(find.text('Mock'), findsOneWidget);
+    expect(find.text('OpenAI'), findsNothing);
+  });
+
+  testWidgets('hides mock data outside debug builds', (tester) async {
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(
+          DashboardSnapshot.fromJsonString(
+            File(
+              '../../fixtures/snapshots/dashboard_today.json',
+            ).readAsStringSync(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mock data'), findsNothing);
+  });
 }
 
 class _FakeWatchSyncService implements WatchSyncService {
@@ -357,6 +414,18 @@ class _MemoryDisplayPreferenceStore
 
   @override
   Future<void> write(ConsumptionDisplayPreferences value) async {
+    this.value = value;
+  }
+}
+
+class _MemoryDebugDataPreferenceStore implements DebugDataPreferenceStore {
+  bool value = false;
+
+  @override
+  Future<bool> readMockDataEnabled() async => value;
+
+  @override
+  Future<void> writeMockDataEnabled(bool value) async {
     this.value = value;
   }
 }

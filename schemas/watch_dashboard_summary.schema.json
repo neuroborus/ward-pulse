@@ -6,6 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schemaVersion",
+    "dataMode",
     "generatedAt",
     "overallStatus",
     "today",
@@ -16,7 +17,8 @@
     "isStale"
   ],
   "properties": {
-    "schemaVersion": { "const": 2 },
+    "schemaVersion": { "const": 3 },
+    "dataMode": { "enum": ["live", "mock"] },
     "generatedAt": { "type": "string", "format": "date-time" },
     "overallStatus": { "$ref": "dashboard_snapshot.schema.json#/$defs/providerStatus" },
     "today": {

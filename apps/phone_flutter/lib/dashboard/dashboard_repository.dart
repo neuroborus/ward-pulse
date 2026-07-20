@@ -1,5 +1,6 @@
 import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 
+import '../settings/debug_data_preferences.dart';
 import 'dashboard_models.dart';
 
 typedef DashboardJsonLoader = String Function();
@@ -39,6 +40,32 @@ final class RustDashboardRepository extends DashboardRepository {
     } catch (_) {
       throw const DashboardLoadException();
     }
+  }
+}
+
+final class DebugDashboardRepository extends DashboardRepository {
+  const DebugDashboardRepository({
+    required DashboardRepository live,
+    required DebugDataPreferenceStore preferences,
+    DashboardRepository mock = const RustDashboardRepository(),
+  }) : _live = live,
+       _mock = mock,
+       _preferences = preferences;
+
+  final DashboardRepository _live;
+  final DashboardRepository _mock;
+  final DebugDataPreferenceStore _preferences;
+
+  @override
+  Future<DashboardSnapshot> load() async {
+    final useMock = await _preferences.readMockDataEnabled();
+    return useMock ? _mock.load() : _live.load();
+  }
+
+  @override
+  void invalidate() {
+    _live.invalidate();
+    _mock.invalidate();
   }
 }
 

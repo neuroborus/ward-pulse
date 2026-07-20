@@ -10,6 +10,7 @@ import '../providers/provider_credential_store.dart';
 import '../providers/providers_screen.dart';
 import '../settings/settings_screen.dart';
 import '../settings/consumption_display_preferences.dart';
+import '../settings/debug_data_preferences.dart';
 import '../sync/watch_sync_service.dart';
 
 final ColorScheme _lightColorScheme = ColorScheme.fromSeed(
@@ -40,12 +41,14 @@ final ColorScheme _darkColorScheme = ColorScheme.fromSeed(
 class WardPulseApp extends StatelessWidget {
   const WardPulseApp({
     super.key,
-    this.repository = const RustDashboardRepository(),
+    required this.repository,
     this.watchSyncService = const MethodChannelWatchSyncService(),
     this.credentialStore = const EmptyProviderCredentialStore(),
     this.codexAccountService = const EmptyCodexAccountService(),
     this.displayPreferenceStore =
         const DefaultConsumptionDisplayPreferenceStore(),
+    this.debugDataAvailable = false,
+    this.debugDataPreferenceStore = const DisabledDebugDataPreferenceStore(),
   });
 
   final DashboardRepository repository;
@@ -53,6 +56,8 @@ class WardPulseApp extends StatelessWidget {
   final ProviderCredentialStore credentialStore;
   final CodexAccountService codexAccountService;
   final ConsumptionDisplayPreferenceStore displayPreferenceStore;
+  final bool debugDataAvailable;
+  final DebugDataPreferenceStore debugDataPreferenceStore;
 
   @override
   Widget build(BuildContext context) {
@@ -67,6 +72,8 @@ class WardPulseApp extends StatelessWidget {
         credentialStore: credentialStore,
         codexAccountService: codexAccountService,
         displayPreferenceStore: displayPreferenceStore,
+        debugDataAvailable: debugDataAvailable,
+        debugDataPreferenceStore: debugDataPreferenceStore,
       ),
     );
   }
@@ -80,6 +87,8 @@ class DashboardHost extends StatefulWidget {
     required this.credentialStore,
     required this.codexAccountService,
     required this.displayPreferenceStore,
+    required this.debugDataAvailable,
+    required this.debugDataPreferenceStore,
   });
 
   final DashboardRepository repository;
@@ -87,6 +96,8 @@ class DashboardHost extends StatefulWidget {
   final ProviderCredentialStore credentialStore;
   final CodexAccountService codexAccountService;
   final ConsumptionDisplayPreferenceStore displayPreferenceStore;
+  final bool debugDataAvailable;
+  final DebugDataPreferenceStore debugDataPreferenceStore;
 
   @override
   State<DashboardHost> createState() => _DashboardHostState();
@@ -97,6 +108,7 @@ class _DashboardHostState extends State<DashboardHost> {
   DashboardSnapshot? _currentSnapshot;
   ConsumptionDisplayPreferences _displayPreferences =
       const ConsumptionDisplayPreferences();
+  bool _mockDataEnabled = false;
   int _selectedIndex = 0;
 
   Future<void> _readDisplayPreferences() async {
@@ -105,6 +117,19 @@ class _DashboardHostState extends State<DashboardHost> {
       _displayPreferences = value;
     } catch (_) {
       // The default plan view remains available if local preferences fail.
+    }
+  }
+
+  Future<void> _readDebugDataPreference() async {
+    if (!widget.debugDataAvailable) {
+      _mockDataEnabled = false;
+      return;
+    }
+    try {
+      _mockDataEnabled =
+          await widget.debugDataPreferenceStore.readMockDataEnabled();
+    } catch (_) {
+      _mockDataEnabled = false;
     }
   }
 
@@ -125,10 +150,23 @@ class _DashboardHostState extends State<DashboardHost> {
 
   Future<DashboardSnapshot> _loadSnapshot() async {
     await _readDisplayPreferences();
+    await _readDebugDataPreference();
     final snapshot = await widget.repository.load();
     _currentSnapshot = snapshot;
     unawaited(_syncWatch(snapshot));
     return snapshot;
+  }
+
+  Future<void> _updateMockDataEnabled(bool value) async {
+    await widget.debugDataPreferenceStore.writeMockDataEnabled(value);
+    if (!mounted) {
+      return;
+    }
+    widget.repository.invalidate();
+    setState(() {
+      _mockDataEnabled = value;
+      _snapshot = _loadSnapshot();
+    });
   }
 
   Future<void> _syncWatch(DashboardSnapshot snapshot) async {
@@ -180,6 +218,9 @@ class _DashboardHostState extends State<DashboardHost> {
                 codexAccountService: widget.codexAccountService,
                 displayPreferences: _displayPreferences,
                 onDisplayPreferencesChanged: _updateDisplayPreferences,
+                debugDataAvailable: widget.debugDataAvailable,
+                mockDataEnabled: _mockDataEnabled,
+                onMockDataEnabledChanged: _updateMockDataEnabled,
                 onCredentialsChanged: () {
                   widget.repository.invalidate();
                   _reload();

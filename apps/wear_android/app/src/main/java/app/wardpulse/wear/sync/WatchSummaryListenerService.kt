@@ -1,6 +1,7 @@
 package app.wardpulse.wear.sync
 
 import android.util.Log
+import app.wardpulse.wear.complication.WatchComplicationUpdater
 import app.wardpulse.wear.data.WatchSummaryStore
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
@@ -17,6 +18,7 @@ class WatchSummaryListenerService : WearableListenerService() {
             .filter { it.dataItem.uri.path == WatchDataContract.PATH }
             .forEach { event ->
                 if (storeSummary(event, store)) {
+                    WatchComplicationUpdater.requestUpdate(this)
                     Log.i(TAG, "Watch summary received.")
                 } else {
                     Log.w(TAG, "Ignored invalid watch summary.")

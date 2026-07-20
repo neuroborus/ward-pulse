@@ -5,14 +5,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.mutableStateOf
 import app.wardpulse.wear.data.WatchSummaryStore
-import app.wardpulse.wear.model.MockWatchDashboardSummary
+import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.ui.WardPulseApp
 import app.wardpulse.wear.ui.theme.WardPulseTheme
 import java.time.Instant
 
 class MainActivity : ComponentActivity() {
     private lateinit var store: WatchSummaryStore
-    private val summary = mutableStateOf(MockWatchDashboardSummary.value)
+    private val summary = mutableStateOf<WatchDashboardSummary?>(null)
     private var storeObserver: AutoCloseable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,8 +44,7 @@ class MainActivity : ComponentActivity() {
         summary.value = currentSummary()
     }
 
-    private fun currentSummary() =
-        (store.load() ?: MockWatchDashboardSummary.value.also(store::save)).let { saved ->
-            saved.copy(isStale = saved.isStaleAt(Instant.now()))
-        }
+    private fun currentSummary() = store.load()?.let { saved ->
+        saved.copy(isStale = saved.isStaleAt(Instant.now()))
+    }
 }

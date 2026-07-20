@@ -20,6 +20,9 @@ class SettingsScreen extends StatefulWidget {
     required this.codexAccountService,
     required this.displayPreferences,
     required this.onDisplayPreferencesChanged,
+    required this.debugDataAvailable,
+    required this.mockDataEnabled,
+    required this.onMockDataEnabledChanged,
     required this.onCredentialsChanged,
   });
 
@@ -30,6 +33,9 @@ class SettingsScreen extends StatefulWidget {
   final ConsumptionDisplayPreferences displayPreferences;
   final Future<void> Function(ConsumptionDisplayPreferences value)
   onDisplayPreferencesChanged;
+  final bool debugDataAvailable;
+  final bool mockDataEnabled;
+  final Future<void> Function(bool value) onMockDataEnabledChanged;
   final VoidCallback onCredentialsChanged;
 
   @override
@@ -247,6 +253,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _setMockDataEnabled(bool value) async {
+    try {
+      await widget.onMockDataEnabledChanged(value);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not update mock data setting')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final snapshot = widget.snapshot;
@@ -284,6 +302,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         const SizedBox(height: 16),
+        if (widget.debugDataAvailable) ...[
+          Card(
+            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: SwitchListTile(
+              secondary: const Icon(Icons.science_outlined),
+              title: const Text('Mock data'),
+              subtitle: const Text('Debug builds only'),
+              value: widget.mockDataEnabled,
+              onChanged: _setMockDataEnabled,
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         Card(
           margin: EdgeInsets.zero,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

@@ -20,6 +20,9 @@ The verified Flutter and Android SDK baseline is documented in
 - Local persistence and sync scheduling.
 - Wear Data Layer sender.
 
+Mock dashboards are available only in debug builds and remain disabled until explicitly enabled
+in Settings. Release builds never select the mock repository.
+
 The phone app consumes Rust-produced dashboard state; the Rust core must not depend on Flutter.
 
 Build the native libraries and run the app:

@@ -33,8 +33,10 @@ WardPulse is local-first. The MVP must not introduce a custom cloud path for pro
 
 ## Phone-to-Watch Sync
 
-- The version 2 Data Layer payload follows `schemas/watch_dashboard_summary.schema.json` and
+- The version 3 Data Layer payload follows `schemas/watch_dashboard_summary.schema.json` and
   contains only derived budget, selected allowance, provider-status, alert, and freshness fields.
+- Mock payloads are produced only by debug builds after the user explicitly enables mock data.
+- Release Wear builds reject mock payloads.
 - Account identifiers, credentials, authorization headers, prompts, and raw provider
   payloads are excluded from the watch contract.
 - Google Play services restricts Data Layer data to paired apps with matching application

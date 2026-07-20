@@ -42,7 +42,14 @@ class WatchDashboardSummaryPayload {
     ConsumptionDisplayPreferences displayPreferences,
   ) {
     return WatchDashboardSummaryPayload._({
-      'schemaVersion': 2,
+      'schemaVersion': 3,
+      'dataMode':
+          snapshot.accounts.isNotEmpty &&
+                  snapshot.accounts.every(
+                    (account) => account.provider == 'mock',
+                  )
+              ? 'mock'
+              : 'live',
       'generatedAt': snapshot.generatedAt.toUtc().toIso8601String(),
       'overallStatus': snapshot.overallStatus.wireName,
       'today': _budgetToJson(snapshot.todayTotal),
