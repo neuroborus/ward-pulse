@@ -20,13 +20,13 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final primaryAccount = snapshot.primaryAccount;
     final hasMultipleAccounts = snapshot.accounts.length > 1;
-    final allowances = snapshot.accounts
+    final allAllowances = snapshot.accounts
         .expand((account) => account.allowances)
+        .toList(growable: false);
+    final allowances = allAllowances
         .where((allowance) => displayPreferences.allows(allowance.source))
         .toList(growable: false);
-    final hasAllowanceData = snapshot.accounts.any(
-      (account) => account.allowances.isNotEmpty,
-    );
+    final hasAllowanceData = allAllowances.isNotEmpty;
     final historyAccount = _firstAccountWith(
       snapshot.accounts,
       (account) => account.buckets.isNotEmpty,
@@ -36,6 +36,12 @@ class DashboardScreen extends StatelessWidget {
       (account) => account.modelBreakdown.isNotEmpty,
     );
 
+    final hasPurchasedAllowance = allAllowances.any(
+      (allowance) => allowance.source == AllowanceSource.purchased,
+    );
+    final showMissingPurchased =
+        displayPreferences.purchased && !hasPurchasedAllowance;
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
@@ -44,9 +50,18 @@ class DashboardScreen extends StatelessWidget {
         if (!hasAllowanceData)
           _BudgetCards(snapshot: snapshot)
         else if (allowances.isEmpty)
-          const EmptyAllowanceCard()
-        else
+          EmptyAllowanceCard(
+            availableSources:
+                allAllowances.map((allowance) => allowance.source).toSet(),
+            purchasedSelectedWithoutData: showMissingPurchased,
+          )
+        else ...[
           _AllowanceCards(allowances: allowances),
+          if (showMissingPurchased) ...[
+            const SizedBox(height: 12),
+            const MissingPurchasedUsageCard(),
+          ],
+        ],
         const SizedBox(height: 16),
         UsageHistoryChart(
           title:
@@ -83,7 +98,45 @@ class DashboardScreen extends StatelessWidget {
 }
 
 class EmptyAllowanceCard extends StatelessWidget {
-  const EmptyAllowanceCard({super.key});
+  const EmptyAllowanceCard({
+    super.key,
+    this.availableSources = const {},
+    this.purchasedSelectedWithoutData = false,
+  });
+
+  final Set<AllowanceSource> availableSources;
+  final bool purchasedSelectedWithoutData;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPlan = availableSources.contains(AllowanceSource.plan);
+    final hasPurchased = availableSources.contains(AllowanceSource.purchased);
+    final message = switch ((
+      hasPlan,
+      hasPurchased,
+      purchasedSelectedWithoutData,
+    )) {
+      (_, _, true) when !hasPlan =>
+        'No purchased credits were reported for the connected account.',
+      (true, false, _) =>
+        'Plan usage is available. Enable Plan usage in Settings to show it.',
+      (false, true, _) =>
+        'Purchased usage is available. Enable Purchased usage in Settings to show it.',
+      (true, true, _) =>
+        'Plan and purchased usage are available. Enable them in Settings to show them.',
+      _ => 'The provider did not report the selected usage source.',
+    };
+
+    return Card(
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(padding: const EdgeInsets.all(16), child: Text(message)),
+    );
+  }
+}
+
+class MissingPurchasedUsageCard extends StatelessWidget {
+  const MissingPurchasedUsageCard({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +145,9 @@ class EmptyAllowanceCard extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: const Padding(
         padding: EdgeInsets.all(16),
-        child: Text('The provider did not report the selected usage source.'),
+        child: Text(
+          'Purchased usage: none reported. This account has no purchased credits right now.',
+        ),
       ),
     );
   }
@@ -457,7 +512,7 @@ class _ModelUsageRow extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleSmall,
               ),
             ),
-            Text(model.cost?.label ?? 'Unknown'),
+            if (model.cost != null) Text(model.cost!.label),
           ],
         ),
         const SizedBox(height: 10),

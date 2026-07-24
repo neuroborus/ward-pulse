@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/providers/codex_account_store.dart';
@@ -43,6 +44,51 @@ void main() {
     expect(transport.requests[0].uri.path, '/api/accounts/deviceauth/usercode');
     expect(transport.requests.last.body, contains('code_verifier=verifier'));
   });
+
+  test(
+    'keeps polling after a transient network error during sign-in',
+    () async {
+      final transport = _QueueTransport([
+        _jsonResponse({
+          'device_auth_id': 'device-id',
+          'user_code': 'ABCD-1234',
+          'interval': '5',
+        }),
+        const SocketException('temporary failure'),
+        _jsonResponse({
+          'authorization_code': 'authorization-code',
+          'code_challenge': 'challenge',
+          'code_verifier': 'verifier',
+        }),
+        _jsonResponse({
+          'id_token': _jwt(accountId: 'account-1'),
+          'access_token': _jwt(expiresAt: DateTime.utc(2026, 8)),
+          'refresh_token': 'refresh-token',
+        }),
+      ]);
+      final client = CodexAccountClient(
+        transport: transport,
+        clock: () => DateTime.utc(2026, 7, 19),
+        delay: (_) async {},
+      );
+
+      final code = await client.requestDeviceCode();
+      final session = await client.completeDeviceLogin(
+        code,
+        cancelled: Completer<void>().future,
+      );
+
+      expect(session.accountId, 'account-1');
+      expect(
+        transport.requests
+            .where(
+              (request) => request.uri.path == '/api/accounts/deviceauth/token',
+            )
+            .length,
+        2,
+      );
+    },
+  );
 
   test('normalizes direct Codex limits and recent token activity', () async {
     final buckets = List.generate(35, (index) {
@@ -102,6 +148,10 @@ void main() {
       transport.requests.first.headers['Authorization'],
       startsWith('Bearer '),
     );
+    expect(transport.requests.map((request) => request.uri.path).toList(), [
+      '/backend-api/wham/usage',
+      '/backend-api/wham/profiles/me',
+    ]);
   });
 
   test('refreshes an expired access token before loading usage', () async {
@@ -238,7 +288,7 @@ void main() {
 final class _QueueTransport implements CodexHttpTransport {
   _QueueTransport(this._responses);
 
-  final List<CodexHttpResponse> _responses;
+  final List<Object> _responses;
   final List<_Request> requests = [];
 
   @override
@@ -249,7 +299,14 @@ final class _QueueTransport implements CodexHttpTransport {
     String? body,
   }) async {
     requests.add(_Request(uri: uri, headers: headers, body: body));
-    return _responses.removeAt(0);
+    final next = _responses.removeAt(0);
+    if (next is CodexHttpResponse) {
+      return next;
+    }
+    if (next is Exception) {
+      throw next;
+    }
+    throw StateError('Unexpected transport fixture: ${next.runtimeType}');
   }
 }
 

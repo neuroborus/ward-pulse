@@ -53,4 +53,51 @@ void main() {
     expect(find.text('OpenAI usage history'), findsOneWidget);
     expect(find.text('OpenAI model usage'), findsOneWidget);
   });
+
+  testWidgets('explains missing purchased usage when enabled', (tester) async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final codex =
+        source.primaryAccount!.toJson()
+          ..['provider'] = 'codex'
+          ..['allowances'] = [
+            {
+              'id': 'codex-weekly',
+              'source': 'plan',
+              'label': 'Weekly plan',
+              'usedPercent': 100,
+              'used': null,
+              'limit': null,
+              'remaining': null,
+              'unlimited': false,
+              'windowMinutes': 10080,
+              'resetsAt': '2026-07-29T07:14:22Z',
+              'status': 'rate_limited',
+            },
+          ];
+    final dashboard = source.toJson()..['accounts'] = [codex];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DashboardScreen(
+            snapshot: DashboardSnapshot.fromJson(dashboard),
+            displayPreferences: const ConsumptionDisplayPreferences(
+              plan: true,
+              purchased: true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Weekly plan'), findsOneWidget);
+    expect(
+      find.text(
+        'Purchased usage: none reported. This account has no purchased credits right now.',
+      ),
+      findsOneWidget,
+    );
+  });
 }

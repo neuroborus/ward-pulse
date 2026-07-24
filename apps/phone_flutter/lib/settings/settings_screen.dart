@@ -291,7 +291,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               SwitchListTile(
                 secondary: const Icon(Icons.toll_outlined),
                 title: const Text('Purchased usage'),
-                subtitle: const Text('Purchased tokens or credits'),
+                subtitle: const Text(
+                  'Purchased tokens or credits, when the provider reports them',
+                ),
                 value: widget.displayPreferences.purchased,
                 onChanged:
                     (value) => _setDisplayPreferences(
@@ -583,7 +585,7 @@ class _CodexLoginDialogState extends State<_CodexLoginDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton.icon(
-          onPressed: _error == null ? _openBrowser : null,
+          onPressed: _openBrowser,
           icon: const Icon(Icons.open_in_browser),
           label: const Text('Open browser'),
         ),

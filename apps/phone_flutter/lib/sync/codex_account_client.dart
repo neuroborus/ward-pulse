@@ -108,7 +108,10 @@ final class CodexAccountClient {
     Future<void> Function(Duration)? delay,
   }) : _transport = transport ?? IoCodexHttpTransport(),
        _issuer = issuer ?? Uri.parse('https://auth.openai.com'),
-       _backend = backend ?? Uri.parse('https://chatgpt.com/backend-api'),
+       // Trailing slash is required: Uri.resolve replaces the final path segment
+       // when the base has no trailing slash (e.g. .../backend-api + wham/usage
+       // becomes .../wham/usage and drops backend-api).
+       _backend = backend ?? Uri.parse('https://chatgpt.com/backend-api/'),
        _clock = clock ?? DateTime.now,
        _delay = delay ?? Future<void>.delayed;
 
@@ -160,33 +163,41 @@ final class CodexAccountClient {
   }) async {
     final startedAt = _clock().toUtc();
     while (_clock().toUtc().difference(startedAt) < _loginTimeout) {
-      final response = await _send(
-        'POST',
-        _issuer.resolve('/api/accounts/deviceauth/token'),
-        headers: const {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'device_auth_id': deviceCode.deviceAuthId,
-          'user_code': deviceCode.userCode,
-        }),
-      );
-      if (response.statusCode == HttpStatus.ok) {
-        final json = _jsonMap(response.body, 'Codex sign-in');
-        return _exchangeAuthorizationCode(
-          authorizationCode: _requiredResponseString(
-            json,
-            'authorization_code',
-            'Codex sign-in',
-          ),
-          codeVerifier: _requiredResponseString(
-            json,
-            'code_verifier',
-            'Codex sign-in',
-          ),
+      try {
+        final response = await _send(
+          'POST',
+          _issuer.resolve('/api/accounts/deviceauth/token'),
+          headers: const {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'device_auth_id': deviceCode.deviceAuthId,
+            'user_code': deviceCode.userCode,
+          }),
         );
-      }
-      if (response.statusCode != HttpStatus.forbidden &&
-          response.statusCode != HttpStatus.notFound) {
-        _requireSuccess(response, 'Codex sign-in');
+        if (response.statusCode == HttpStatus.ok) {
+          final json = _jsonMap(response.body, 'Codex sign-in');
+          return _exchangeAuthorizationCode(
+            authorizationCode: _requiredResponseString(
+              json,
+              'authorization_code',
+              'Codex sign-in',
+            ),
+            codeVerifier: _requiredResponseString(
+              json,
+              'code_verifier',
+              'Codex sign-in',
+            ),
+          );
+        }
+        if (response.statusCode != HttpStatus.forbidden &&
+            response.statusCode != HttpStatus.notFound) {
+          _requireSuccess(response, 'Codex sign-in');
+        }
+      } on CodexAccountException catch (error) {
+        // Transient transport failures must not abort the wait loop: the user
+        // may still complete browser sign-in while a poll request fails.
+        if (error.failure != CodexAccountFailure.unavailable) {
+          rethrow;
+        }
       }
       final wasCancelled = await Future.any([
         _delay(deviceCode.pollInterval).then((_) => false),
@@ -324,8 +335,8 @@ final class CodexAccountClient {
       'User-Agent': 'wardpulse',
     };
     final responses = await Future.wait([
-      _send('GET', _backend.resolve('/wham/usage'), headers: headers),
-      _send('GET', _backend.resolve('/wham/profiles/me'), headers: headers),
+      _send('GET', _backend.resolve('wham/usage'), headers: headers),
+      _send('GET', _backend.resolve('wham/profiles/me'), headers: headers),
     ]);
     _requireSuccess(responses[0], 'Codex limits');
     _requireSuccess(responses[1], 'Codex activity');
@@ -366,28 +377,43 @@ final class CodexAccountClient {
     if (window == null) {
       return null;
     }
-    final usedPercent = window['used_percent'];
-    final durationSeconds = window['limit_window_seconds'];
-    final resetsAt = window['reset_at'];
-    final duration =
-        durationSeconds is num ? _integerValue(durationSeconds) : null;
-    final reset = resetsAt is num ? _integerValue(resetsAt) : null;
-    if (usedPercent is! num ||
-        !usedPercent.isFinite ||
-        usedPercent < 0 ||
-        duration == null ||
-        duration <= 0 ||
-        reset == null) {
-      throw const CodexAccountException(
-        CodexAccountFailure.invalidResponse,
-        'Codex limits · Invalid rate-limit window',
-      );
+    final usedPercent = switch (window['used_percent']) {
+      final num value when value.isFinite && value >= 0 => value,
+      final String value => double.tryParse(value),
+      _ => null,
+    };
+    if (usedPercent == null || !usedPercent.isFinite || usedPercent < 0) {
+      return null;
+    }
+    final durationSeconds = switch (window['limit_window_seconds']) {
+      final num value when value > 0 => _integerValue(value),
+      final String value => int.tryParse(value),
+      _ => null,
+    };
+    final resetsAt = switch (window['reset_at']) {
+      final num value when value > 0 => _integerValue(value),
+      final String value => int.tryParse(value),
+      _ => null,
+    };
+    final resetAfterSeconds = switch (window['reset_after_seconds']) {
+      final num value => _integerValue(value),
+      final String value => int.tryParse(value),
+      _ => null,
+    };
+    final resolvedReset =
+        resetsAt ??
+        (resetAfterSeconds == null
+            ? null
+            : _clock().toUtc().millisecondsSinceEpoch ~/ 1000 +
+                resetAfterSeconds);
+    if (durationSeconds == null || durationSeconds <= 0) {
+      return null;
     }
 
     return {
       'usedPercent': usedPercent,
-      'windowDurationMins': (duration + 59) ~/ 60,
-      'resetsAt': reset,
+      'windowDurationMins': (durationSeconds + 59) ~/ 60,
+      'resetsAt': resolvedReset,
     };
   }
 
