@@ -52,7 +52,7 @@ Scope:
 - Send `GET` requests only. The key cannot call non-administration endpoints or run model inference, so this adapter cannot initiate billable model work; unrelated administrative privileges may still be present.
 - Fetch completions usage from `GET /v1/organization/usage/completions` and cost from `GET /v1/organization/costs`.
 - Request daily buckets for dashboard cost. Usage also supports hourly buckets and grouping by model, project, or user; cost supports daily buckets and grouping by project, line item, or API key.
-- Follow response pagination. Phase 7 syncs on app start and manual refresh; automatic polling is deferred to MVP hardening and must run no more than once every 15 minutes. After `429`, honor `Retry-After` when present and apply exponential backoff with jitter.
+- Follow response pagination. Phase 7 syncs on app start and manual refresh; automatic polling is deferred to development plan Phase 11 and must run no more than once every 5 minutes (the conservative floor defined there for this adapter). After `429`, honor `Retry-After` when present and apply exponential backoff with jitter.
 - Keep budgets local. This adapter reads reporting data and does not manage provider-side spending limits or spend alerts.
 - Never log the key, authorization header, full account identifiers, or raw response bodies.
 

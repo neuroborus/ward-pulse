@@ -9,7 +9,7 @@ description: Post-change finalization checklist for WardPulse (Rust core, Flutte
 >
 > Run this after implementation or documentation work to keep the monorepo coherent.
 >
-> Last Updated: 2026-07-19
+> Last Updated: 2026-07-24
 
 ## 1. Scope Review
 
@@ -32,7 +32,7 @@ description: Post-change finalization checklist for WardPulse (Rust core, Flutte
 
 ## 3. Security Review
 
-- [ ] No provider credentials, authorization headers, raw prompts, or sensitive raw provider payloads were committed.
+- [ ] No provider credentials, authorization headers, raw prompts, or sensitive raw provider payloads entered the change set.
 - [ ] Logs, fixtures, examples, and docs use redacted or mock data.
 - [ ] Credential rules in `docs/product/SECURITY_MODEL.md` still match implementation assumptions.
 - [ ] Wear OS and watch face surfaces do not gain credential entry or credential storage responsibilities.
@@ -71,7 +71,84 @@ just check-docs
 - [ ] Product, provider, release, or security docs are updated when behavior or boundaries changed.
 - [ ] Placeholder TODOs are acceptable only for intentionally deferred platform generation work.
 
-## 6. Handoff Summary
+## 6. Staging And Commit Boundary
+
+**Finalization never creates a git commit.**
+
+When the user asks to finalize, finish checks, then stage only the files that belong to
+this change set (`git add` the relevant paths). Stop there.
+
+- Do **not** run `git commit`, `git commit --amend`, or any equivalent.
+- Do **not** treat "finalize", "finalization", "handoff", or "stage" as permission to commit.
+- Create a commit only when the user explicitly asks to commit (for example "commit",
+  "create a commit", "закоммить").
+- Draft the commit message for the staged set; leave the actual commit to the user or to a
+  later explicit request.
+
+## 7. Commit Message Draft
+
+Draft commit messages in Conventional Commits form:
+
+```text
+type(scope): imperative summary
+```
+
+Rules:
+
+- Prefer a small single-line message with no body. A subject line alone is the default and the preferred form; do not append details, rationale, or file lists just because they exist.
+- Use `type(scope):` with a lowercase type and a short scope. Do not draft bare subjects such as `docs: …` when a scope applies.
+- Keep the subject imperative, about 72 characters or fewer, and focused on why the change lands.
+- Add a body only when the change is genuinely unclear without it. Treat a body as the exception, not the habit.
+- Do not insert line breaks without a reason. Write each body paragraph as one single line and let the git client wrap it; never hard-wrap a sentence across several lines.
+- Use a line break only to separate the subject from the body, to separate paragraphs, or to list items.
+- Match recent `git log` style. Prefer existing scopes over inventing new ones.
+
+Common types:
+
+| Type | Use for |
+| --- | --- |
+| `feat` | user-visible capability or contract addition |
+| `fix` | bug or incorrect behavior correction |
+| `chore` | planning, maintenance, tooling, or non-user-facing docs/process updates |
+| `docs` | documentation-only product/site prose when `chore(docs)` is too weak a fit |
+| `test` | tests only |
+| `ci` | GitHub Actions or check wiring |
+| `refactor` | internal restructuring without behavior change |
+
+Common scopes:
+
+| Scope | Owns |
+| --- | --- |
+| `docs` | `docs/`, Vocs site, planning, provider/security/release notes |
+| `core` | Rust domain crates |
+| `providers` | provider adapters and contracts spanning providers |
+| `openai` / `codex` / `claude` / `cursor` | one provider family |
+| `phone` | Flutter phone shell |
+| `wear` | Wear OS shell |
+| `watchface` | WFF package |
+| `sync` | phone-to-watch transport |
+| `design` | OpenPencil sources and brand exports |
+| `agents` | `.agents/skills/` and agent workflow |
+| `android` | shared Android harness or toolchain notes |
+
+Preferred examples, single line and no body:
+
+```text
+chore(docs): plan adaptive provider UI, polling, and watch rings
+feat(providers): add on-device Codex usage reporting
+fix(wear): sync live provider data to watch surfaces
+chore(agents): document conventional commit drafting
+```
+
+When a body is genuinely required, keep it on one line:
+
+```text
+chore(docs): plan adaptive provider UI, polling, and watch rings
+
+Record the dual plan/platform model and phases 9–13, set the global refresh floor to 5–60 minutes, and make finalization stage-only with an explicit no-commit rule.
+```
+
+## 8. Handoff Summary
 
 When finalization completes, report:
 
@@ -79,7 +156,7 @@ When finalization completes, report:
 2. Commands run and pass/fail status.
 3. Important files changed.
 4. Remaining risks or intentionally deferred work.
-5. Git staging status: staged, unstaged, and untracked state.
-6. Idiomatic draft commit message for the staged set.
+5. Git staging status after staging: what is staged, what remains unstaged or untracked.
+6. Idiomatic draft commit message for the staged set, using section 7.
 
-Do not create a commit unless the user explicitly asks for one.
+Remind the user that the changes are staged only and that no commit was created.

@@ -17,6 +17,7 @@
 - Keep platform shells responsible for UI, transport, storage, background scheduling, and phone-to-watch propagation.
 - Prefer small, focused changes.
 - Do not generate full Flutter or Gradle projects unless the current task explicitly requires it.
+- Do not create a git commit unless the user explicitly asks to commit. Finalization stages relevant files and drafts a message; it does not commit.
 - Do not commit secrets, provider credentials, authorization headers, raw prompts, or sensitive raw provider payloads.
 - Do not treat WardPulse brand assets as covered by Apache-2.0 unless a file explicitly says so.
 - Keep OpenPencil `.fig` sources with their owner and regenerate runtime exports instead of editing them by hand.

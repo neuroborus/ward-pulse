@@ -1,6 +1,6 @@
 # WardPulse Android — Development Plan
 
-Updated: 2026-07-19
+Updated: 2026-07-24
 
 Product name: **WardPulse**
 
@@ -284,6 +284,11 @@ ward-pulse/
       wear-android.yml
       watchface.yml
 ```
+
+This tree is the initial shape and is not maintained as an inventory. The repository has since
+grown beyond it (for example the `codex/` provider module, the watch summary schema and
+fixture, and the `docs/site/` Vocs workspace). The repository itself and the
+`project-structure` skill are authoritative for the current layout.
 
 ### Repository rules
 
@@ -577,6 +582,10 @@ Alerts
 Last sync
 ```
 
+The implemented app additionally has a Usage screen for plan and purchased allowances.
+Phase 13 replaces the home screen with configurable percent rings while keeping per-metric
+detail screens.
+
 ### Today screen
 
 ```text
@@ -647,6 +656,9 @@ OK
 
 The watch face should support tap-to-open behavior into the Wear OS app where possible.
 
+The static today/week layout above is the accepted v1 (Phase 6). Phase 13 evolves the face
+into configurable percent ring arcs driven by the phone-side ring selection.
+
 ### Watch face rules
 
 - Keep WFF declarative and minimal.
@@ -686,7 +698,9 @@ compact Rust `WatchSummary` view model. Monetary values use integer minor units 
 currency codes rather than presentation strings. The watch payload excludes account IDs,
 credentials, prompts, and raw provider data. Version 3 adds an explicit live/mock data mode and
 only the plan/purchased allowances selected by the phone display preference. Mock data is
-available only in debug builds and must be enabled explicitly on the phone.
+available only in debug builds and must be enabled explicitly on the phone. Phase 13 plans
+schema version 4, which replaces the preference-filtered allowance list with explicitly
+selected ring entries.
 
 ---
 
@@ -742,17 +756,14 @@ for each enabled provider account:
 Effective polling interval:
 
 ```text
-effective_interval = max(user_setting, provider_minimum, app_safe_interval)
+effective_interval = max(user_setting, provider_minimum)
 ```
 
-The app should support these global settings:
+The user setting is one global refresh interval rendered as a slider from 5 to 60 minutes
+(see "Provider polling constants" below), with 5, 15, 30, and 60 minutes as natural detents.
 
-- 5 minutes;
-- 15 minutes;
-- 30 minutes;
-- 60 minutes.
-
-A 1-minute option can exist only for mock/dev builds or providers that explicitly tolerate it.
+A 1-minute cadence can exist only for mock/dev builds or providers whose documented contract
+explicitly tolerates it.
 
 ### Rate limit handling
 
@@ -766,6 +777,30 @@ The sync layer should support:
 - visible stale/rate-limited states in the UI.
 
 The dashboard must keep showing the previous successful snapshot when a sync fails.
+
+### Provider polling constants
+
+Per-provider minimum polling intervals must live in `core/ward-pulse-providers` as named
+constants, one per connection kind, each preceded by a comment linking the documentation or
+observed contract the value is based on. Two kinds of values are kept apart:
+
+- hard limits: documented request-rate ceilings (for example the Cursor Admin API allows
+  20 requests per minute);
+- freshness guidance: how often new data can actually appear (for example Cursor aggregates
+  usage data hourly, so polling faster may keep returning the same values).
+
+Reporting/administration endpoints are rate-limited independently from model inference and
+agent traffic. Polling usage reports does not consume agent capacity and cannot slow down a
+running agent; the constants must state this in their comments so the boundary stays explicit.
+
+The app exposes one global refresh interval as a slider. Its lower bound is the strictest
+hard minimum across supported connections, rounded up; its upper bound is 60 minutes.
+Undocumented contracts get conservative floors rather than optimistic ones. The per-provider
+clamp `effective_interval = max(user_setting, provider_minimum)` still applies. Freshness
+guidance does not clamp the cadence; it is surfaced as a visible note on the affected
+connection rows in Settings instead.
+
+Detailed constants and their sources are defined in Phase 11.
 
 ---
 
@@ -823,6 +858,72 @@ struct ProviderCapabilities {
 ```
 
 The UI should hide or downgrade unavailable metrics instead of showing broken placeholders.
+
+### Provider connection model (research, 2026-07-24)
+
+Every supported provider decomposes into the same two connection kinds, so provider setup and
+presentation should be homogeneous:
+
+- `plan`: a per-user subscription/allowance read (plan windows in percent, purchased tokens or
+  credits), authenticated with a user-level OAuth token or session;
+- `platform`: organization/team usage and cost reporting, authenticated with an
+  administrative API key.
+
+One authorization per connection kind is unavoidable: for every provider the subscription data
+and the organization reporting live behind different credentials and different endpoints. A
+single provider section in Settings groups both connections; neither implies the other.
+
+```text
+Provider   Plan connection                          Platform connection
+OpenAI     Codex device-code OAuth                  Admin API key
+           /backend-api/wham/usage                  /v1/organization/usage/completions
+           (compatibility, implemented)             /v1/organization/costs
+                                                    (official, implemented)
+
+Anthropic  Claude subscription OAuth                Admin API key
+           GET /api/oauth/usage                     /v1/organizations/usage_report/messages
+           utilization % per window + extra usage   /v1/organizations/cost_report
+           (undocumented compatibility)             (official)
+
+Cursor     Dashboard session endpoints              Team/org Admin API key
+           GET /api/usage-summary                   POST /teams/daily-usage-data
+           plan/on-demand percentages               (official, teams and enterprise only)
+           (undocumented compatibility)
+```
+
+Key findings per provider:
+
+- Anthropic mirrors OpenAI exactly. The official Usage & Cost Admin API returns token usage
+  (1m/1h/1d buckets) and daily USD cost as decimal strings, requires an organization Admin API
+  key, and is documented to support polling once per minute. The Claude subscription endpoint
+  `GET /api/oauth/usage` is the same undocumented contract Claude Code's `/usage` command uses:
+  it returns `five_hour`, `seven_day`, and per-model window utilization percentages with reset
+  timestamps plus an `extra_usage` purchased-credit block, and requires the Claude Code OAuth
+  token, the `anthropic-beta: oauth-2025-04-20` header, and a Claude Code user agent. Community
+  monitors observe stable behavior at roughly 3-minute polling. This is a Codex-style
+  compatibility integration and must degrade gracefully.
+- Cursor has no official API for individual accounts. Personal plan usage exists only behind
+  cookie-authenticated dashboard endpoints (`GET /api/usage-summary` and related POST
+  endpoints), which report plan and on-demand usage as percentages of the billing cycle. The
+  official Admin API covers teams and enterprise organizations only, uses Basic auth with a
+  team API key, allows 20 requests per minute, aggregates data hourly, and documents polling at
+  most once per hour. A Cursor plan connection is therefore the riskiest compatibility
+  integration and needs explicit experimental framing.
+- Codex-style plan data is percentage-first. All three plan connections can report usage as a
+  percentage of a window or cycle, which is what compact surfaces (watch rings, summary cards)
+  should standardize on.
+
+Everything normalizes into the existing core model: plan windows and purchased balances map to
+`AllowanceState`, platform reporting maps to `UsageBucket`/cost totals, and each connection gets
+its own capability descriptor so the UI can adapt.
+
+Official references:
+
+- [Anthropic Usage & Cost Admin API](https://platform.claude.com/docs/en/manage-claude/usage-cost-api)
+- [Anthropic usage report reference](https://platform.claude.com/docs/en/api/admin/usage_report/retrieve_messages)
+- [Anthropic cost report reference](https://platform.claude.com/docs/en/api/admin/cost_report/retrieve)
+- [Cursor API overview and rate limits](https://cursor.com/docs/api)
+- [Cursor team Admin API](https://cursor.com/docs/account/teams/admin-api)
 
 ---
 
@@ -1227,7 +1328,6 @@ Deliverables:
 - empty states;
 - offline states;
 - stale data indicators;
-- automatic provider polling with a conservative minimum interval;
 - data deletion;
 - privacy policy draft;
 - legal disclaimer;
@@ -1246,6 +1346,197 @@ paid-first distribution assumptions are documented
 source and brand licensing boundaries are documented
 no credentials appear in logs
 phone and watch flows survive sync failures
+```
+
+### Phase 9 — provider-grouped connections
+
+Status: planned as of 2026-07-24.
+
+Rationale: Codex sign-in and the OpenAI Platform Admin key are one product relationship with
+OpenAI, but Settings presents them as two unrelated rows. Research in section 15 shows every
+provider follows the same dual shape, so Settings should group connections by provider.
+
+Deliverables:
+
+- one Settings section per provider: OpenAI, Anthropic, Cursor;
+- the OpenAI section contains both connections: Codex subscription (device-code OAuth) and
+  Platform reporting (Admin API key);
+- a shared connection row component: connection kind, status, masked credential,
+  connect/disconnect actions;
+- an optional user-defined label for API-key credentials (for example "Work org key"); the
+  label is plain display metadata stored beside the masked credential reference, never inside
+  the secure-storage value and never sent to the watch;
+- a phone-side connection model keyed by provider kind plus connection kind (`plan` or
+  `platform`), feeding the Rust `ProviderAccount.display_name` field;
+- unimplemented connections (Anthropic, Cursor) appear in their provider sections as disabled
+  rows labeled as not yet supported, not as hidden features;
+- `docs/product/PROVIDER_NOTES.md` updated to describe the connection grouping.
+
+Acceptance:
+
+```text
+Settings shows one OpenAI section containing the Codex and Platform rows
+an Admin API key can be saved with and without a custom label
+the label appears in Settings and provider details instead of the generic title
+removing a credential also removes its label
+existing stored credentials survive the regrouping without re-entry
+```
+
+### Phase 10 — capability-adaptive dashboard
+
+Status: planned as of 2026-07-24.
+
+Rationale: with only one connection configured, most phone and watch metrics render as
+"Unknown". The dashboard must adapt to what is actually connected and measurable instead of
+filling the screen with placeholders. This phase covers the phone dashboard; the watch
+surfaces get the same treatment through the ring redesign in Phase 13.
+
+Deliverables:
+
+- dashboard section visibility derives from connected connections plus `ProviderCapabilities`;
+- budget and cost cards render only when a cost-capable platform connection exists;
+- allowance cards render only when a plan-capable connection exists;
+- metrics that no connected provider can report are hidden rather than rendered as `Unknown`;
+- each capability-hidden section keeps a small clickable help affordance (`?` icon): tapping it
+  explains which connection provides the metric and deep-links to that provider section in
+  Settings;
+- an empty dashboard with no connections shows a single "Connect a provider" call to action;
+- `Unknown` remains only for transient states: a connected provider that has not synced yet or
+  a provider that returned an error.
+
+Acceptance:
+
+```text
+with only the OpenAI Admin key connected, plan metrics show no Unknown labels
+with only Codex connected, cost and limit metrics show no Unknown labels
+the ? affordance explains the missing connection and opens Settings
+mock mode still renders the full dashboard
+```
+
+### Phase 11 — polling cadence constants and the global refresh slider
+
+Status: planned as of 2026-07-24.
+
+Rationale: automatic polling needs explicit per-provider cadence floors before it ships.
+Reporting endpoints are rate-limited separately from model inference and agent traffic, so
+frequent report polling never affects a running agent; the constants must document this.
+
+Deliverables:
+
+- named minimum-interval constants in `core/ward-pulse-providers`, one per connection kind,
+  each with a comment linking its source (see section 14);
+- a `const fn` lookup beside `provider_capabilities` returning the minimum poll interval and
+  freshness guidance for a provider connection;
+- one global refresh interval setting rendered as a slider from the strictest hard minimum
+  (rounded up) to 60 minutes;
+- a visible freshness note on Cursor connection rows in Settings explaining that Cursor
+  aggregates usage data hourly, so refreshed values may lag behind actual activity;
+- automatic background polling on the phone (WorkManager), honoring the slider and the
+  per-connection clamp; this absorbs the "automatic provider polling" deliverable from
+  Phase 8;
+- the watch summary re-sent after each successful automatic sync;
+- existing 429/`Retry-After`/backoff handling layered on top of the cadence.
+
+Initial constants (round up when the contract is undocumented):
+
+```text
+Connection                    Basis                                              Floor
+OpenAI platform reporting     no published per-endpoint limit; conservative       5 min
+Codex subscription            unpublished compatibility contract; conservative    5 min
+Anthropic platform reporting  documented to support polling once per minute       1 min
+Claude subscription           undocumented; community-stable at ~3 min            5 min
+Cursor plan (session)         unpublished compatibility contract; conservative    5 min
+Cursor platform (Admin API)   hard 20 req/min; polled at 5 min like the rest      5 min
+```
+
+The strictest hard floor is 5 minutes, so the slider spans 5 to 60 minutes. Cursor aggregates
+usage data hourly on the provider side; instead of clamping Cursor to an hourly cadence, the
+Cursor connection rows in Settings carry a visible note that Cursor refreshes this data
+infrequently, so faster polling may keep returning the same values.
+
+Acceptance:
+
+```text
+constants exist with doc-linked comments and unit tests
+the slider persists and background sync honors it
+each connection never syncs faster than its floor
+a 429 response still slows the affected provider without blocking others
+```
+
+### Phase 12 — Anthropic and Cursor adapters on the connection model
+
+Status: planned as of 2026-07-24.
+
+Rationale: the section 15 research shows both remaining providers fit the plan/platform split
+already proven by Codex plus OpenAI Platform. Anthropic goes first because both of its
+connections have stable, well-understood contracts.
+
+Deliverables:
+
+- Anthropic platform reporting: Admin API key transport for
+  `/v1/organizations/usage_report/messages` (daily buckets for the dashboard; hourly available)
+  and `/v1/organizations/cost_report` (daily buckets only, USD as decimal-string cents), with
+  pagination, Rust normalization, a capability descriptor, and sanitized fixtures;
+- Claude subscription: OAuth token per the Claude Code contract, `GET /api/oauth/usage`
+  normalization of window utilization percentages, reset timestamps, and extra-usage credits
+  into `AllowanceState`; explicitly a compatibility integration that degrades gracefully like
+  Codex;
+- Cursor plan usage: session-authenticated dashboard endpoints normalized into plan and
+  on-demand allowances; framed as experimental, with the sign-in flow owned by the phone and
+  the session token in secure storage;
+- Cursor platform reporting: team Admin API key support for users who administer a team,
+  with the Settings freshness note from Phase 11 on both Cursor connection rows;
+- capability descriptors registered for `ProviderKind::Claude` and `ProviderKind::Cursor`;
+- `docs/product/PROVIDER_NOTES.md` updated per provider with credential type, permissions,
+  rate limits, revocation path, and redaction rules.
+
+Acceptance:
+
+```text
+each new connection can be added, synced, and removed from its provider section
+plan percentages and purchased balances render through the existing allowance cards
+sanitized fixtures cover every new parser
+a failing connection leaves other providers' data visible
+no tokens, cookies, or raw payloads appear in logs
+```
+
+### Phase 13 — configurable watch rings
+
+Status: planned as of 2026-07-24.
+
+Rationale: watch space is limited and must never show `Unknown` filler. Plan data from all
+three providers is percentage-first, so the watch surfaces should standardize on compact
+percent rings. This is primarily a design task and starts in OpenPencil before any code.
+
+Deliverables:
+
+- OpenPencil design sources under `apps/watchface_wff/design/` and `apps/wear_android/design/`
+  covering 1-4 ring layouts on round and square faces plus ambient mode, following
+  `docs/DESIGN_ASSETS.md` ownership rules;
+- a ring binds to exactly one metric: a provider plan window percent, a purchased/credit
+  percent, or a local budget percent, colored by status;
+- a "Watch display" section in phone Settings selects up to four ring slots; metrics from
+  unconnected providers are visible but disabled (grayed) with the same `?` explanation
+  affordance as the dashboard;
+- unselected and unavailable metrics simply do not render on the watch: no placeholders;
+- no time-based rotation of providers in the first iteration: simultaneous static rings are
+  battery-safe and fit WFF's declarative model, while rotation would require animation or
+  frequent updates; rotation may be revisited later with explicit power measurement;
+- watch summary schema version 4: an ordered list of selected ring entries (stable id, short
+  label, percent, status) that still excludes credentials, account ids, and raw provider data;
+- ring selection supersedes the version 3 plan/purchased preference filter for the watch
+  payload; the plan/purchased preference keeps filtering the phone dashboard only;
+- the Wear OS home screen renders the same rings with per-ring detail screens;
+- the WFF face renders up to the supported number of ring arcs with tap-to-open preserved.
+
+Acceptance:
+
+```text
+ring layout designs are exported and reviewed before implementation starts
+schema version 4 validates and sanitized fixtures are updated
+watch face and Wear app show only configured rings
+disabling a provider or ring on the phone removes it from the watch after the next sync
+ambient mode stays readable with rings visible
 ```
 
 ---
@@ -1390,7 +1681,13 @@ architecture proves Rust core can feed both surfaces
 
 Complete Android end-to-end acceptance for on-device Codex reporting: connect the Codex account
 from phone Settings, then verify plan usage and token activity on the phone and watch.
-OpenAI Platform reporting remains a separate optional provider for organization cost data.
+
+After that, start Phase 9 (provider-grouped connections) followed by Phase 10
+(capability-adaptive dashboard): together they remove the "Unknown" placeholder wall for
+single-connection setups and merge the Codex and OpenAI Platform rows into one OpenAI section.
+Phase 11 then makes polling cadence explicit before Phase 12 adds Anthropic and Cursor, and
+Phase 13 redesigns the watch surfaces around configurable percent rings, starting in
+OpenPencil.
 
 Phase 6 passed Watch Face Format acceptance on 2026-07-19:
 
