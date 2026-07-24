@@ -1350,7 +1350,7 @@ phone and watch flows survive sync failures
 
 ### Phase 9 — provider-grouped connections
 
-Status: planned as of 2026-07-24.
+Status: completed as of 2026-07-24.
 
 Rationale: Codex sign-in and the OpenAI Platform Admin key are one product relationship with
 OpenAI, but Settings presents them as two unrelated rows. Research in section 15 shows every
@@ -1679,15 +1679,14 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Complete Android end-to-end acceptance for on-device Codex reporting: connect the Codex account
-from phone Settings, then verify plan usage and token activity on the phone and watch.
+Start Phase 10 (capability-adaptive dashboard): hide metrics that no connected provider can
+report, keep a small `?` affordance that deep-links to the matching Settings connection, and stop
+filling single-connection setups with `Unknown` placeholders. Phase 9 Settings grouping is in
+place.
 
-After that, start Phase 9 (provider-grouped connections) followed by Phase 10
-(capability-adaptive dashboard): together they remove the "Unknown" placeholder wall for
-single-connection setups and merge the Codex and OpenAI Platform rows into one OpenAI section.
-Phase 11 then makes polling cadence explicit before Phase 12 adds Anthropic and Cursor, and
-Phase 13 redesigns the watch surfaces around configurable percent rings, starting in
-OpenPencil.
+Then continue with Phase 11 (polling cadence constants and the global refresh slider), Phase 12
+(Anthropic and Cursor adapters on the connection model), and Phase 13 (configurable watch rings,
+starting in OpenPencil).
 
 Phase 6 passed Watch Face Format acceptance on 2026-07-19:
 

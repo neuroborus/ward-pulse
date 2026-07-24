@@ -41,6 +41,26 @@ separate from monetary budgets because their units and reset rules differ.
 - Exact provider quantities cross shared contracts as decimal strings with an explicit `tokens`
   or `credits` unit.
 
+## Connection grouping
+
+Every provider in Settings is one section with up to two homogeneous connections:
+
+- `plan`: subscription or allowance reads (Codex device-code OAuth today; Claude and Cursor plan
+  rows are reserved and shown as not yet supported);
+- `platform`: organization or team usage and cost reporting (OpenAI Admin API key today;
+  Anthropic and Cursor Admin rows are reserved).
+
+OpenAI therefore shows Codex subscription and Platform reporting together. An optional
+user-defined label for the Platform Admin API key is plain phone-local display metadata:
+
+- stored beside the credential reference, never concatenated into the secure key value;
+- shown in Settings and provider details in place of the generic Platform title;
+- removed when the credential is removed;
+- never sent to Wear OS or the watch face.
+
+Existing stored Admin API keys remain valid after the Settings regrouping; users do not need to
+re-enter them.
+
 ## OpenAI Platform organization reporting
 
 Status: selected as the first live provider contract on 2026-07-19.

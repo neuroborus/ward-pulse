@@ -11,20 +11,25 @@ class ProviderDetailScreen extends StatelessWidget {
     required this.account,
     this.displayPreferences = const ConsumptionDisplayPreferences(),
     this.syncTooltip,
+    this.openAiPlatformLabel,
   });
 
   final ProviderSnapshot account;
   final ConsumptionDisplayPreferences displayPreferences;
   final String? syncTooltip;
+  final String? openAiPlatformLabel;
 
   @override
   Widget build(BuildContext context) {
     final allowances = account.allowances
         .where((allowance) => displayPreferences.allows(allowance.source))
         .toList(growable: false);
+    final title = account.displayTitle(
+      openAiPlatformLabel: openAiPlatformLabel,
+    );
 
     return Scaffold(
-      appBar: AppBar(title: Text(account.providerLabel)),
+      appBar: AppBar(title: Text(title)),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -36,11 +41,11 @@ class ProviderDetailScreen extends StatelessWidget {
               ),
               child: ListTile(
                 leading: const Icon(Icons.account_circle_outlined),
-                title: Text(account.accountId),
+                title: Text(title),
                 subtitle: Text(
                   account.lastSuccessfulSyncAt == null
-                      ? 'No sync'
-                      : 'Synced ${formatUtc(account.lastSuccessfulSyncAt!)}',
+                      ? account.accountId
+                      : '${account.accountId} · Synced ${formatUtc(account.lastSuccessfulSyncAt!)}',
                 ),
                 trailing: StatusPill(
                   status: account.status,

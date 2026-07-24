@@ -228,6 +228,7 @@ final class _MemoryCredentialStore implements ProviderCredentialStore {
   _MemoryCredentialStore([this.value]);
 
   String? value;
+  String? label;
 
   @override
   Future<String?> readOpenAiAdminKey() async => value;
@@ -240,6 +241,18 @@ final class _MemoryCredentialStore implements ProviderCredentialStore {
   @override
   Future<void> deleteOpenAiAdminKey() async {
     value = null;
+    label = null;
+  }
+
+  @override
+  Future<String?> readOpenAiAdminKeyLabel() async => label;
+
+  @override
+  Future<void> writeOpenAiAdminKeyLabel(String? value) async {
+    label = value?.trim();
+    if (label != null && label!.isEmpty) {
+      label = null;
+    }
   }
 }
 

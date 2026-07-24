@@ -10,10 +10,12 @@ class ProvidersScreen extends StatelessWidget {
     super.key,
     required this.snapshot,
     this.displayPreferences = const ConsumptionDisplayPreferences(),
+    this.openAiPlatformLabel,
   });
 
   final DashboardSnapshot snapshot;
   final ConsumptionDisplayPreferences displayPreferences;
+  final String? openAiPlatformLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -41,13 +43,16 @@ class ProvidersScreen extends StatelessWidget {
       separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final account = snapshot.accounts[index];
+        final title = account.displayTitle(
+          openAiPlatformLabel: openAiPlatformLabel,
+        );
 
         return Card(
           margin: EdgeInsets.zero,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           child: ListTile(
             leading: const Icon(Icons.hub),
-            title: Text(account.providerLabel),
+            title: Text(title),
             subtitle: Text(account.accountId),
             trailing: StatusPill(
               status: account.status,
@@ -61,6 +66,7 @@ class ProvidersScreen extends StatelessWidget {
                         account: account,
                         displayPreferences: displayPreferences,
                         syncTooltip: snapshot.syncTooltip,
+                        openAiPlatformLabel: openAiPlatformLabel,
                       ),
                 ),
               );

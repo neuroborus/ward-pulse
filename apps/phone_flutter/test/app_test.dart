@@ -59,7 +59,7 @@ void main() {
     await tester.tap(find.text('Mock'));
     await tester.pumpAndSettle();
 
-    expect(find.text('mock-local'), findsOneWidget);
+    expect(find.textContaining('mock-local'), findsOneWidget);
     expect(find.text('Today'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Usage history'),
@@ -166,17 +166,20 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Not set'), findsWidgets);
-    await tester.tap(find.text('OpenAI Platform credential'));
+    await tester.tap(find.text('Platform reporting'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextFormField), 'secret-admin-key');
+    await tester.enterText(
+      find.byType(TextFormField).first,
+      'secret-admin-key',
+    );
     expect(
-      tester.widget<TextField>(find.byType(TextField)).obscureText,
+      tester.widget<TextField>(find.byType(TextField).first).obscureText,
       isTrue,
     );
     await tester.tap(find.byTooltip('Show API key'));
     await tester.pump();
     expect(
-      tester.widget<TextField>(find.byType(TextField)).obscureText,
+      tester.widget<TextField>(find.byType(TextField).first).obscureText,
       isFalse,
     );
     expect(find.byTooltip('Hide API key'), findsOneWidget);
@@ -186,6 +189,64 @@ void main() {
     expect(credentialStore.value, 'secret-admin-key');
     expect(find.text('••••••••'), findsOneWidget);
     expect(find.text('secret-admin-key'), findsNothing);
+  });
+
+  testWidgets('saves an optional OpenAI Platform label', (tester) async {
+    final snapshot = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final credentialStore = _MemoryCredentialStore();
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(snapshot),
+        credentialStore: credentialStore,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('OpenAI'), findsOneWidget);
+    expect(find.text('Codex subscription'), findsOneWidget);
+    expect(find.text('Anthropic'), findsOneWidget);
+
+    await tester.tap(find.text('Platform reporting'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byType(TextFormField).at(0),
+      'secret-admin-key',
+    );
+    await tester.enterText(find.byType(TextFormField).at(1), 'Work org key');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(credentialStore.value, 'secret-admin-key');
+    expect(credentialStore.label, 'Work org key');
+    expect(find.text('Work org key'), findsOneWidget);
+    expect(find.text('Platform reporting'), findsNothing);
+
+    await tester.scrollUntilVisible(
+      find.text('Cursor'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Cursor'), findsOneWidget);
+    expect(find.text('Coming soon'), findsWidgets);
+
+    await tester.scrollUntilVisible(
+      find.text('Work org key'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Work org key'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove'));
+    await tester.pumpAndSettle();
+
+    expect(credentialStore.value, isNull);
+    expect(credentialStore.label, isNull);
+    expect(find.text('Platform reporting'), findsOneWidget);
   });
 
   testWidgets('keeps credential settings available after a load failure', (
@@ -223,9 +284,9 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
-    expect(find.text('OpenAI Platform credential'), findsOneWidget);
+    expect(find.text('Platform reporting'), findsOneWidget);
     expect(find.text('••••••••'), findsOneWidget);
-    await tester.tap(find.text('OpenAI Platform credential'));
+    await tester.tap(find.text('Platform reporting'));
     await tester.pumpAndSettle();
     expect(find.text('Remove'), findsOneWidget);
   });
@@ -390,6 +451,7 @@ class _MemoryCredentialStore implements ProviderCredentialStore {
   _MemoryCredentialStore([this.value]);
 
   String? value;
+  String? label;
 
   @override
   Future<String?> readOpenAiAdminKey() async => value;
@@ -402,6 +464,18 @@ class _MemoryCredentialStore implements ProviderCredentialStore {
   @override
   Future<void> deleteOpenAiAdminKey() async {
     value = null;
+    label = null;
+  }
+
+  @override
+  Future<String?> readOpenAiAdminKeyLabel() async => label;
+
+  @override
+  Future<void> writeOpenAiAdminKeyLabel(String? value) async {
+    label = value?.trim();
+    if (label != null && label!.isEmpty) {
+      label = null;
+    }
   }
 }
 

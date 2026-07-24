@@ -269,6 +269,18 @@ class ProviderSnapshot {
     };
   }
 
+  /// User-facing title for provider lists and details.
+  ///
+  /// [openAiPlatformLabel] is phone-local display metadata for the Platform
+  /// Admin API key connection and is never part of the watch payload.
+  String displayTitle({String? openAiPlatformLabel}) {
+    final label = openAiPlatformLabel?.trim();
+    if (provider == 'openai' && label != null && label.isNotEmpty) {
+      return label;
+    }
+    return providerLabel;
+  }
+
   ProviderSnapshot _withStatus(ProviderStatus value) {
     return ProviderSnapshot(
       accountId: accountId,

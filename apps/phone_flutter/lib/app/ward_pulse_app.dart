@@ -108,6 +108,7 @@ class _DashboardHostState extends State<DashboardHost> {
   DashboardSnapshot? _currentSnapshot;
   ConsumptionDisplayPreferences _displayPreferences =
       const ConsumptionDisplayPreferences();
+  String? _openAiPlatformLabel;
   bool _mockDataEnabled = false;
   int _selectedIndex = 0;
 
@@ -117,6 +118,15 @@ class _DashboardHostState extends State<DashboardHost> {
       _displayPreferences = value;
     } catch (_) {
       // The default plan view remains available if local preferences fail.
+    }
+  }
+
+  Future<void> _readConnectionMetadata() async {
+    try {
+      _openAiPlatformLabel =
+          await widget.credentialStore.readOpenAiAdminKeyLabel();
+    } catch (_) {
+      _openAiPlatformLabel = null;
     }
   }
 
@@ -150,6 +160,7 @@ class _DashboardHostState extends State<DashboardHost> {
 
   Future<DashboardSnapshot> _loadSnapshot() async {
     await _readDisplayPreferences();
+    await _readConnectionMetadata();
     await _readDebugDataPreference();
     final snapshot = await widget.repository.load();
     _currentSnapshot = snapshot;
@@ -212,6 +223,7 @@ class _DashboardHostState extends State<DashboardHost> {
           body: SafeArea(
             child: switch (state.connectionState) {
               _ when _selectedIndex == 2 => SettingsScreen(
+                key: const ValueKey('settings'),
                 snapshot: snapshot,
                 watchSyncService: widget.watchSyncService,
                 credentialStore: widget.credentialStore,
@@ -222,8 +234,14 @@ class _DashboardHostState extends State<DashboardHost> {
                 mockDataEnabled: _mockDataEnabled,
                 onMockDataEnabledChanged: _updateMockDataEnabled,
                 onCredentialsChanged: () {
-                  widget.repository.invalidate();
-                  _reload();
+                  unawaited(() async {
+                    await _readConnectionMetadata();
+                    if (!mounted) {
+                      return;
+                    }
+                    widget.repository.invalidate();
+                    _reload();
+                  }());
                 },
               ),
               ConnectionState.waiting => const _LoadingView(),
@@ -235,6 +253,7 @@ class _DashboardHostState extends State<DashboardHost> {
                 selectedIndex: _selectedIndex,
                 snapshot: snapshot,
                 displayPreferences: _displayPreferences,
+                openAiPlatformLabel: _openAiPlatformLabel,
               ),
               _ => _ErrorView(
                 failure: const DashboardLoadException(),
@@ -278,11 +297,13 @@ class _SelectedSurface extends StatelessWidget {
     required this.selectedIndex,
     required this.snapshot,
     required this.displayPreferences,
+    this.openAiPlatformLabel,
   });
 
   final int selectedIndex;
   final DashboardSnapshot snapshot;
   final ConsumptionDisplayPreferences displayPreferences;
+  final String? openAiPlatformLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -294,6 +315,7 @@ class _SelectedSurface extends StatelessWidget {
       _ => ProvidersScreen(
         snapshot: snapshot,
         displayPreferences: displayPreferences,
+        openAiPlatformLabel: openAiPlatformLabel,
       ),
     };
   }

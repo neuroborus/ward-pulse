@@ -6,6 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../providers/codex_account_service.dart';
+import '../providers/provider_connection.dart';
+import '../providers/provider_connection_row.dart';
 import '../providers/provider_credential_store.dart';
 import '../sync/codex_account_client.dart';
 import '../sync/watch_sync_service.dart';
@@ -45,6 +47,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool? _hasCredential;
   bool? _hasCodexAccount;
+  String? _openAiPlatformLabel;
   bool _isConnectingCodex = false;
   bool _isSyncing = false;
   String? _syncResult;
@@ -75,16 +78,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadCredentialState() async {
     try {
-      final value = await widget.credentialStore.readOpenAiAdminKey();
+      final values = await Future.wait([
+        widget.credentialStore.readOpenAiAdminKey(),
+        widget.credentialStore.readOpenAiAdminKeyLabel(),
+      ]);
       if (mounted) {
         setState(() {
-          _hasCredential = value != null;
+          _hasCredential = values[0] != null;
+          _openAiPlatformLabel = values[1];
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
           _hasCredential = false;
+          _openAiPlatformLabel = null;
         });
       }
     }
@@ -94,8 +102,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final change = await showDialog<_CredentialChange>(
       context: context,
       builder:
-          (context) =>
-              _CredentialDialog(hasCredential: _hasCredential ?? false),
+          (context) => _CredentialDialog(
+            hasCredential: _hasCredential ?? false,
+            initialLabel: _openAiPlatformLabel,
+          ),
     );
     if (change == null) {
       return;
@@ -104,14 +114,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       if (change.remove) {
         await widget.credentialStore.deleteOpenAiAdminKey();
+      } else if (change.updateLabelOnly) {
+        await widget.credentialStore.writeOpenAiAdminKeyLabel(change.label);
       } else {
         await widget.credentialStore.writeOpenAiAdminKey(change.value!);
+        await widget.credentialStore.writeOpenAiAdminKeyLabel(change.label);
       }
       if (!mounted) {
         return;
       }
       setState(() {
         _hasCredential = !change.remove;
+        _openAiPlatformLabel = change.remove ? null : change.label;
       });
       widget.onCredentialsChanged();
     } catch (_) {
@@ -268,6 +282,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final snapshot = widget.snapshot;
+    final trimmedPlatformLabel = _openAiPlatformLabel?.trim();
+    final openAiPlatformTitle =
+        trimmedPlatformLabel != null && trimmedPlatformLabel.isNotEmpty
+            ? trimmedPlatformLabel
+            : 'Platform reporting';
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -324,13 +343,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           margin: EdgeInsets.zero,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ListTile(
-                leading: const Icon(Icons.account_circle_outlined),
-                title: const Text('Codex account'),
-                subtitle: const Text(
-                  'Experimental · plan limits and token activity',
-                ),
+              _ProviderSectionHeader(
+                title: providerFamilyLabel(ProviderFamily.openai),
+              ),
+              ProviderConnectionRow(
+                icon: Icons.account_circle_outlined,
+                title: 'Codex subscription',
+                subtitle: 'Experimental · plan limits and token activity',
                 trailing: switch ((_hasCodexAccount, _isConnectingCodex)) {
                   (_, true) => const SizedBox.square(
                     dimension: 20,
@@ -349,10 +370,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         : _editCodexAccount,
               ),
               const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.key_outlined),
-                title: const Text('OpenAI Platform credential'),
-                subtitle: const Text('Admin API key · stored on this phone'),
+              ProviderConnectionRow(
+                icon: Icons.key_outlined,
+                title: openAiPlatformTitle,
+                subtitle: 'Admin API key · stored on this phone',
                 trailing: switch (_hasCredential) {
                   null => const SizedBox.square(
                     dimension: 20,
@@ -363,8 +384,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 },
                 onTap: _hasCredential == null ? null : _editCredential,
               ),
-              if (snapshot != null) ...[
-                const Divider(height: 1),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        for (final provider in const [
+          ProviderFamily.anthropic,
+          ProviderFamily.cursor,
+        ]) ...[
+          Card(
+            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ProviderSectionHeader(title: providerFamilyLabel(provider)),
+                for (final connection in providerConnectionCatalog().where(
+                  (entry) => entry.id.provider == provider,
+                )) ...[
+                  if (connection.id.kind == ConnectionKind.platform)
+                    const Divider(height: 1),
+                  ProviderConnectionRow(
+                    icon:
+                        connection.id.kind == ConnectionKind.plan
+                            ? Icons.account_circle_outlined
+                            : Icons.key_outlined,
+                    title: connection.title,
+                    subtitle: connection.subtitle,
+                    trailing: Text(
+                      'Coming soon',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                    ),
+                    enabled: false,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (snapshot != null)
+          Card(
+            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              children: [
                 ListTile(
                   leading: const Icon(Icons.sync_outlined),
                   title: const Text('Sync'),
@@ -386,29 +456,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     tooltip: snapshot.syncTooltip,
                   ),
                 ),
+                if (kDebugMode) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.send_to_mobile_outlined),
+                    title: const Text('Send to watch'),
+                    subtitle: Text(_syncResult ?? 'Development only'),
+                    trailing:
+                        _isSyncing
+                            ? const SizedBox.square(
+                              dimension: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : FilledButton.tonal(
+                              onPressed: _syncWatch,
+                              child: const Text('Sync'),
+                            ),
+                  ),
+                ],
               ],
-              if (kDebugMode && snapshot != null) ...[
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.send_to_mobile_outlined),
-                  title: const Text('Send to watch'),
-                  subtitle: Text(_syncResult ?? 'Development only'),
-                  trailing:
-                      _isSyncing
-                          ? const SizedBox.square(
-                            dimension: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                          : FilledButton.tonal(
-                            onPressed: _syncWatch,
-                            child: const Text('Sync'),
-                          ),
-                ),
-              ],
-            ],
+            ),
           ),
-        ),
       ],
+    );
+  }
+}
+
+class _ProviderSectionHeader extends StatelessWidget {
+  const _ProviderSectionHeader({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+      child: Text(title, style: Theme.of(context).textTheme.titleMedium),
     );
   }
 }
@@ -595,9 +678,10 @@ class _CodexLoginDialogState extends State<_CodexLoginDialog> {
 }
 
 class _CredentialDialog extends StatefulWidget {
-  const _CredentialDialog({required this.hasCredential});
+  const _CredentialDialog({required this.hasCredential, this.initialLabel});
 
   final bool hasCredential;
+  final String? initialLabel;
 
   @override
   State<_CredentialDialog> createState() => _CredentialDialogState();
@@ -606,19 +690,38 @@ class _CredentialDialog extends StatefulWidget {
 class _CredentialDialogState extends State<_CredentialDialog> {
   final _formKey = GlobalKey<FormState>();
   final _controller = TextEditingController();
+  late final TextEditingController _labelController;
   bool _obscureKey = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _labelController = TextEditingController(text: widget.initialLabel ?? '');
+  }
 
   @override
   void dispose() {
     _controller.dispose();
+    _labelController.dispose();
     super.dispose();
   }
 
   void _save() {
+    final key = _controller.text.trim();
+    final label = _labelController.text.trim();
+    final resolvedLabel = label.isEmpty ? null : label;
+    if (key.isEmpty) {
+      if (!widget.hasCredential) {
+        _formKey.currentState?.validate();
+        return;
+      }
+      Navigator.of(context).pop(_CredentialChange.labelOnly(resolvedLabel));
+      return;
+    }
     if (_formKey.currentState?.validate() ?? false) {
       Navigator.of(
         context,
-      ).pop(_CredentialChange.save(_controller.text.trim()));
+      ).pop(_CredentialChange.save(key, label: resolvedLabel));
     }
   }
 
@@ -644,7 +747,10 @@ class _CredentialDialogState extends State<_CredentialDialog> {
               enableSuggestions: false,
               decoration: InputDecoration(
                 border: const OutlineInputBorder(),
-                labelText: 'Admin API key',
+                labelText:
+                    widget.hasCredential
+                        ? 'Admin API key (leave blank to keep)'
+                        : 'Admin API key',
                 suffixIcon: IconButton(
                   tooltip: _obscureKey ? 'Show API key' : 'Hide API key',
                   onPressed: () {
@@ -659,13 +765,28 @@ class _CredentialDialogState extends State<_CredentialDialog> {
                   ),
                 ),
               ),
+              textInputAction: TextInputAction.next,
+              validator: (value) {
+                if (widget.hasCredential) {
+                  return null;
+                }
+                return value == null || value.trim().isEmpty
+                    ? 'Enter an Admin API key'
+                    : null;
+              },
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _labelController,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                labelText: 'Label (optional)',
+                hintText: 'Work org key',
+              ),
               textInputAction: TextInputAction.done,
               onFieldSubmitted: (_) => _save(),
-              validator:
-                  (value) =>
-                      value == null || value.trim().isEmpty
-                          ? 'Enter an Admin API key'
-                          : null,
             ),
           ],
         ),
@@ -689,12 +810,25 @@ class _CredentialDialogState extends State<_CredentialDialog> {
 }
 
 final class _CredentialChange {
-  const _CredentialChange.save(this.value) : remove = false;
+  const _CredentialChange.save(this.value, {this.label})
+    : remove = false,
+      updateLabelOnly = false;
 
-  const _CredentialChange.remove() : value = null, remove = true;
+  const _CredentialChange.labelOnly(this.label)
+    : value = null,
+      remove = false,
+      updateLabelOnly = true;
+
+  const _CredentialChange.remove()
+    : value = null,
+      label = null,
+      remove = true,
+      updateLabelOnly = false;
 
   final String? value;
+  final String? label;
   final bool remove;
+  final bool updateLabelOnly;
 }
 
 enum _CodexAccountAction { reconnect, disconnect }
