@@ -12,7 +12,7 @@ import app.wardpulse.wear.model.ProviderSummary
 import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.Quantity
-import app.wardpulse.wear.model.TokenGlance
+import app.wardpulse.wear.model.CreditsGlance
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.model.WatchDataMode
 import java.time.Instant
@@ -90,7 +90,7 @@ private fun WatchDashboardSummary.toJson() = JSONObject().apply {
     put("generatedAt", generatedAt)
     put("overallStatus", overallStatus.wireName)
     put("rings", JSONArray().apply { rings.forEach { put(it.toJson()) } })
-    put("tokenGlance", tokenGlance?.toJson() ?: JSONObject.NULL)
+    put("creditsGlance", creditsGlance?.toJson() ?: JSONObject.NULL)
     put("today", today.toJson())
     put("week", week.toJson())
     put("allowances", JSONArray().apply { allowances.forEach { put(it.toJson()) } })
@@ -99,7 +99,7 @@ private fun WatchDashboardSummary.toJson() = JSONObject().apply {
     put("isStale", isStale)
 }
 
-private fun TokenGlance.toJson() = JSONObject().apply {
+private fun CreditsGlance.toJson() = JSONObject().apply {
     put("text", text)
     put("label", label)
     put("provider", provider ?: JSONObject.NULL)
@@ -168,7 +168,7 @@ private fun JSONObject.toWatchDashboardSummary(): WatchDashboardSummary {
         overallStatus = getString("overallStatus").toPulseStatus(),
         rings = getJSONArray("rings").mapObjects { it.toRingSummary() }
             .take(MAX_RINGS),
-        tokenGlance = nullableObject("tokenGlance")?.toTokenGlance(),
+        creditsGlance = nullableObject("creditsGlance")?.toCreditsGlance(),
         today = today,
         week = week,
         allowances = getJSONArray("allowances").mapObjects { it.toAllowanceSummary() },
@@ -178,7 +178,7 @@ private fun JSONObject.toWatchDashboardSummary(): WatchDashboardSummary {
     )
 }
 
-private fun JSONObject.toTokenGlance(): TokenGlance {
+private fun JSONObject.toCreditsGlance(): CreditsGlance {
     val text = getString("text")
     require(text.isNotEmpty() && text.length <= 12)
     val label = getString("label")
@@ -187,7 +187,7 @@ private fun JSONObject.toTokenGlance(): TokenGlance {
     if (provider != null) {
         require(provider in PROVIDERS)
     }
-    return TokenGlance(text = text, label = label, provider = provider)
+    return CreditsGlance(text = text, label = label, provider = provider)
 }
 
 private fun JSONObject.toRingSummary(): RingSummary {
@@ -276,7 +276,7 @@ private inline fun <T> JSONArray.mapObjects(transform: (JSONObject) -> T): List<
 
 private fun String.toPulseStatus(): PulseStatus = requireNotNull(PulseStatus.fromWireName(this))
 
-private const val SCHEMA_VERSION = 5
+private const val SCHEMA_VERSION = 6
 private const val MAX_RINGS = 4
 private val CURRENCY_PATTERN = Regex("^[A-Z]{3}$")
 private val PROVIDERS = setOf("openai", "codex", "claude", "cursor", "mock")

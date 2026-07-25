@@ -27,24 +27,21 @@ const CATALOG = {
     id: 'codex',
     used: 0.92,
     color: '#65D78A',
-    tokens: '12M',
-    tokenValue: 12_000_000,
   },
   claude: {
     id: 'claude',
     used: 0.61,
     color: '#E8915A',
-    tokens: '4.1M',
-    tokenValue: 4_100_000,
   },
   cursor: {
     id: 'cursor',
     used: 0.28,
     color: '#67E8D4',
-    tokens: '890K',
-    tokenValue: 890_000,
   },
 }
+
+/** Aggregate remaining purchased credits on the outer strip (not LLM tokens). */
+const CREDITS_GLANCE = '500'
 
 /** One Python round-trip: widths[text] + ascent/descent for baseline math. */
 function loadFontMetrics(fontSize, texts) {
@@ -98,13 +95,13 @@ function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
       transform="rotate(-90 ${cx} ${cy})" />`
 }
 
-function barLabel(layer, { showPlan, showTokens }) {
+function barLabel(layer, { showPlan, showCredits, isOuter }) {
   const parts = []
   if (showPlan && layer.used < 1) {
     parts.push(`${Math.round((1 - layer.used) * 100)}%`)
   }
-  if (showTokens && layer.tokens) {
-    parts.push(layer.tokens)
+  if (showCredits && isOuter) {
+    parts.push(CREDITS_GLANCE)
   }
   return parts.join(' · ')
 }
@@ -113,20 +110,16 @@ function sortByRemaining(layers) {
   return [...layers].sort((a, b) => b.used - a.used)
 }
 
-function sortByTokens(layers) {
-  return [...layers].sort(
-    (a, b) =>
-      (a.tokenValue ?? Number.POSITIVE_INFINITY) -
-      (b.tokenValue ?? Number.POSITIVE_INFINITY),
-  )
-}
-
-function providerBars({ cx, cy, innerR, layers, showPlan, showTokens, size }) {
-  const ordered = showPlan ? sortByRemaining(layers) : sortByTokens(layers)
+function providerBars({ cx, cy, innerR, layers, showPlan, showCredits, size }) {
+  const ordered = showPlan ? sortByRemaining(layers) : layers.slice(0, 1)
   const rows = ordered
-    .map((layer) => ({
+    .map((layer, index) => ({
       layer,
-      text: barLabel(layer, { showPlan, showTokens }),
+      text: barLabel(layer, {
+        showPlan,
+        showCredits,
+        isOuter: index === 0,
+      }),
     }))
     .filter((row) => row.text.length > 0)
   if (rows.length === 0) {
@@ -180,17 +173,16 @@ function faceSvg({
   layers = [],
   ambient = false,
   showPlan = true,
-  showTokens = false,
+  showCredits = false,
 }) {
   const cx = size / 2
   const cy = size / 2
   const outer = size * 0.445
   const gap = size * 0.01
-  const thickness = Math.max(8, size * (ambient ? 0.03 : 0.034))
+  // ~20px on a 450 face — slightly heavier than the first 15.3 review pass for glanceability.
+  const thickness = Math.max(8, size * (ambient ? 0.036 : 0.044))
   const planLayers = sortByRemaining(layers.filter((layer) => layer.used < 1))
-  const stripLayers = showPlan
-    ? planLayers
-    : sortByTokens(layers.filter((layer) => layer.tokens))
+  const stripLayers = showPlan ? planLayers : layers.slice(0, 1)
 
   let ringMarkup = ''
   let innerR = size * 0.3
@@ -228,7 +220,7 @@ function faceSvg({
       innerR,
       layers: stripLayers,
       showPlan,
-      showTokens,
+      showCredits,
       size,
     })
   }
@@ -260,39 +252,39 @@ const one = [CATALOG.codex]
 
 const variants = [
   {
-    file: 'round-3-plan-tokens.svg',
-    name: 'Round · 3 providers · plan + tokens',
+    file: 'round-3-plan-credits.svg',
+    name: 'Round · 3 providers · plan + credits',
     layers: three,
     showPlan: true,
-    showTokens: true,
+    showCredits: true,
   },
   {
-    file: 'round-2-plan-tokens.svg',
-    name: 'Round · 2 providers · plan + tokens',
+    file: 'round-2-plan-credits.svg',
+    name: 'Round · 2 providers · plan + credits',
     layers: two,
     showPlan: true,
-    showTokens: true,
+    showCredits: true,
   },
   {
     file: 'round-1-plan.svg',
     name: 'Round · 1 provider · plan only',
     layers: one,
     showPlan: true,
-    showTokens: false,
+    showCredits: false,
   },
   {
-    file: 'round-1-plan-tokens.svg',
-    name: 'Round · 1 provider · plan + tokens',
+    file: 'round-1-plan-credits.svg',
+    name: 'Round · 1 provider · plan + credits',
     layers: one,
     showPlan: true,
-    showTokens: true,
+    showCredits: true,
   },
   {
-    file: 'round-tokens-only.svg',
-    name: 'Round · tokens only',
-    layers: three,
+    file: 'round-credits-only.svg',
+    name: 'Round · credits only',
+    layers: one,
     showPlan: false,
-    showTokens: true,
+    showCredits: true,
   },
   {
     file: 'round-ambient-3.svg',
@@ -300,14 +292,14 @@ const variants = [
     layers: three,
     ambient: true,
     showPlan: true,
-    showTokens: false,
+    showCredits: false,
   },
 ]
 
 const wffFiles = new Set([
-  'round-3-plan-tokens.svg',
-  'round-1-plan-tokens.svg',
-  'round-tokens-only.svg',
+  'round-3-plan-credits.svg',
+  'round-1-plan-credits.svg',
+  'round-credits-only.svg',
   'round-ambient-3.svg',
 ])
 
@@ -318,7 +310,7 @@ for (const variant of variants) {
     layers: variant.layers,
     ambient: variant.ambient === true,
     showPlan: variant.showPlan,
-    showTokens: variant.showTokens,
+    showCredits: variant.showCredits,
   })
   const wearPath = join(wearDir, variant.file)
   await writeFile(wearPath, svg)

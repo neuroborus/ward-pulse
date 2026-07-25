@@ -1,6 +1,6 @@
 {
   "generatedAt": "2026-06-27T18:42:00Z",
-  "overallStatus": "warning",
+  "overallStatus": "ok",
   "accounts": [
     {
       "accountId": "mock-local",
@@ -227,6 +227,6 @@
   "watchSummary": {
     "todayUsedPercent": 90.0,
     "weekUsedPercent": 28.52,
-    "status": "warning"
+    "status": "ok"
   }
 }

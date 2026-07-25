@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import app.wardpulse.wear.complication.WatchComplicationUpdater
 import app.wardpulse.wear.data.WatchSummaryStore
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.ui.WardPulseApp
@@ -34,6 +35,7 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         storeObserver = store.observe(::reloadSummary)
         reloadSummary()
+        WatchComplicationUpdater.requestUpdate(this)
     }
 
     override fun onStop() {

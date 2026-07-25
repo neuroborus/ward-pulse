@@ -56,7 +56,8 @@ abstract class RingComplicationDataSourceService :
     protected open val previewLabel: String = "Ring"
 
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
-        val ring = WatchSummaryStore(this).load()?.rings?.getOrNull(ringIndex)
+        val summary = WatchSummaryStore(this).load()
+        val ring = summary?.rings?.getOrNull(ringIndex)
         // RANGED_VALUE = remaining capacity (matches WFF arc + design strips).
         val remaining = ring?.let { WatchComplicationText.remainingPercent(it.usedPercent) }
         val label = ring?.label
@@ -67,24 +68,41 @@ abstract class RingComplicationDataSourceService :
                 if (ring == null || remaining == null || remaining <= 0f) {
                     NoDataComplicationData()
                 } else {
+                    // TEXT = remaining digits (WFF strip Template adds '%').
+                    // TITLE = optional credits glance on the outer ring only.
+                    val creditsTitle =
+                        if (ringIndex == 0) {
+                            summary.creditsGlance?.text?.takeIf { it.isNotBlank() }
+                        } else {
+                            null
+                        }
                     ComplicationBuilders.ranged(
                         this,
                         remaining,
-                        title = label,
+                        title = creditsTitle,
                         colorArgb = RingFamily.colorArgb(ring.id),
+                        contentDescription = label,
                     )
                 }
-            ComplicationType.SHORT_TEXT ->
-                if (remaining == null || remaining <= 0f) {
+            ComplicationType.SHORT_TEXT -> {
+                // WFF strip Template adds '%'; TEXT must be digits only.
+                // TITLE carries optional credits glance on the outer ring.
+                val payload = summary?.let {
+                    WatchComplicationText.stripPayload(it, ringIndex)
+                }
+                if (payload == null) {
                     NoDataComplicationData()
                 } else {
                     ComplicationBuilders.shortText(
                         this,
-                        value = WatchComplicationText.percentAmount(remaining),
+                        value = payload.text,
+                        title = payload.title,
                         contentDescription = label
-                            ?: WatchComplicationText.percentLabel(remaining),
+                            ?: WatchComplicationText.stripLabel(summary, ringIndex)
+                            ?: payload.text,
                     )
                 }
+            }
             else -> null
         }
     }
@@ -102,6 +120,7 @@ abstract class RingComplicationDataSourceService :
                 ComplicationBuilders.shortText(
                     this,
                     WatchComplicationText.percentAmount(previewPercent),
+                    title = if (ringIndex == 0) "500" else null,
                 )
             else -> null
         }
@@ -112,21 +131,30 @@ private object ComplicationBuilders {
         context: Context,
         value: String,
         contentDescription: String = value,
+        title: String? = null,
     ): ComplicationData =
         ShortTextComplicationData.Builder(
             text = PlainComplicationText.Builder(value).build(),
             contentDescription = PlainComplicationText.Builder(contentDescription).build(),
-        ).setTapAction(tapAction(context)).build()
+        ).apply {
+            if (!title.isNullOrBlank()) {
+                setTitle(PlainComplicationText.Builder(title).build())
+            }
+        }.setTapAction(tapAction(context)).build()
 
     fun ranged(
         context: Context,
         percent: Float,
         title: String? = null,
         colorArgb: Int = RingFamily.FALLBACK,
+        contentDescription: String? = null,
     ): ComplicationData {
         val value = percent.coerceIn(0f, 100f)
         val amount = WatchComplicationText.percentAmount(value)
-        val description = title?.let { "$it $amount%" } ?: WatchComplicationText.percentLabel(value)
+        val description =
+            contentDescription?.let { "$it $amount%" }
+                ?: title?.let { "$amount% · $it" }
+                ?: WatchComplicationText.percentLabel(value)
         return RangedValueComplicationData.Builder(
             value = value,
             min = 0f,
@@ -190,39 +218,132 @@ class StatusComplicationDataSourceService : ShortTextComplicationDataSourceServi
         WatchComplicationText.status(summary)
 }
 
+/**
+ * Outer sunk strip SHORT_TEXT provider (dedicated — not shared with a RANGED_VALUE slot).
+ *
+ * WFF `length([COMPLICATION.TITLE])` Conditions are unreliable, so TEXT carries the full
+ * human label (`100%`, `100% · 500`, or credits-only `500`). Template is `%s` (no extra `%`).
+ *
+ * Class name kept for WFF primaryProvider continuity; payload field is creditsGlance.
+ */
 class TokensComplicationDataSourceService : SuspendingComplicationDataSourceService() {
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
         if (request.complicationType != ComplicationType.SHORT_TEXT) {
             return null
         }
-        val glance = WatchSummaryStore(this).load()?.tokenGlance
-        return if (glance == null) {
-            NoDataComplicationData()
-        } else {
-            ComplicationBuilders.shortText(
-                this,
-                value = glance.text,
-                contentDescription = glance.label,
-            )
-        }
+        val summary = WatchSummaryStore(this).load() ?: return NoDataComplicationData()
+        val label = WatchComplicationText.stripLabel(summary, 0) ?: return NoDataComplicationData()
+        return ComplicationBuilders.shortText(
+            this,
+            value = label,
+            contentDescription = label,
+        )
     }
 
     override fun getPreviewData(type: ComplicationType): ComplicationData? =
         if (type == ComplicationType.SHORT_TEXT) {
             ComplicationBuilders.shortText(
                 this,
-                value = "67K TOK",
-                contentDescription = "Today tokens",
+                value = "8% · 500",
+                contentDescription = "8% · 500",
             )
         } else {
             null
         }
 }
 
+abstract class RingStripComplicationDataSourceService : SuspendingComplicationDataSourceService() {
+    protected abstract val ringIndex: Int
+    protected abstract val previewText: String
+    protected open val previewTitle: String? = null
+
+    override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
+        if (request.complicationType != ComplicationType.SHORT_TEXT) {
+            return null
+        }
+        val summary = WatchSummaryStore(this).load()
+        val payload = summary?.let { WatchComplicationText.stripPayload(it, ringIndex) }
+        return if (payload == null) {
+            NoDataComplicationData()
+        } else {
+            ComplicationBuilders.shortText(
+                this,
+                value = payload.text,
+                title = payload.title,
+                contentDescription = WatchComplicationText.stripLabel(summary, ringIndex)
+                    ?: payload.text,
+            )
+        }
+    }
+
+    override fun getPreviewData(type: ComplicationType): ComplicationData? =
+        if (type == ComplicationType.SHORT_TEXT) {
+            ComplicationBuilders.shortText(this, previewText, title = previewTitle)
+        } else {
+            null
+        }
+}
+
+class Strip2ComplicationDataSourceService : RingStripComplicationDataSourceService() {
+    override val ringIndex = 1
+    override val previewText = "39"
+}
+
+class Strip3ComplicationDataSourceService : RingStripComplicationDataSourceService() {
+    override val ringIndex = 2
+    override val previewText = "72"
+}
+
+class Strip4ComplicationDataSourceService : RingStripComplicationDataSourceService() {
+    override val ringIndex = 3
+    override val previewText = "75"
+}
+
 object WatchComplicationText {
     /** Remaining capacity 0–100 for RANGED_VALUE / strip-style labels. */
     fun remainingPercent(usedPercent: Double): Float =
         (100.0 - usedPercent.coerceIn(0.0, 100.0)).toFloat().coerceIn(0f, 100f)
+
+    data class StripPayload(
+        /** Remaining digits only — WFF Template appends '%'. */
+        val text: String,
+        /** Optional remaining credits for the outer strip (`8% · 500`). */
+        val title: String? = null,
+    )
+
+    /** Digits (+ optional title) for WFF SHORT_TEXT strip slots. */
+    fun stripPayload(summary: WatchDashboardSummary, index: Int): StripPayload? {
+        val ring = summary.rings.getOrNull(index) ?: return null
+        val remaining = remainingPercent(ring.usedPercent)
+        if (remaining <= 0f) {
+            return null
+        }
+        val credits =
+            if (index == 0) summary.creditsGlance?.text?.takeIf { it.isNotBlank() } else null
+        return StripPayload(text = percentAmount(remaining), title = credits)
+    }
+
+    /**
+     * Human strip label for surface ring [index] (`WATCH_RING_DESIGN.md`):
+     * `8%`, `8% · 500`, or credits-only on strip 0 when there is no plan ring.
+     */
+    fun stripLabel(summary: WatchDashboardSummary?, index: Int): String? {
+        if (summary == null) {
+            return null
+        }
+        val payload = stripPayload(summary, index)
+        if (payload != null) {
+            return if (payload.title != null) {
+                "${payload.text}% · ${payload.title}"
+            } else {
+                "${payload.text}%"
+            }
+        }
+        if (index == 0) {
+            return summary.creditsGlance?.text?.takeIf { it.isNotBlank() }
+        }
+        return null
+    }
 
     /** Remaining-% label for surface ring [index] (payload order, not budget period). */
     fun ringRemainingPercent(summary: WatchDashboardSummary, index: Int): String {
@@ -271,6 +392,9 @@ object WatchComplicationUpdater {
         Ring4ComplicationDataSourceService::class.java,
         StatusComplicationDataSourceService::class.java,
         TokensComplicationDataSourceService::class.java,
+        Strip2ComplicationDataSourceService::class.java,
+        Strip3ComplicationDataSourceService::class.java,
+        Strip4ComplicationDataSourceService::class.java,
     )
 
     fun requestUpdate(context: Context) {

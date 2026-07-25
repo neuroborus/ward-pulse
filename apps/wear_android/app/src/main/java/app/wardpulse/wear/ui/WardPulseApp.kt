@@ -26,6 +26,7 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
+import androidx.wear.compose.material3.TimeTextDefaults
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
@@ -40,7 +41,6 @@ import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.WatchDataMode
 import app.wardpulse.wear.model.WatchDashboardSummary
-import app.wardpulse.wear.ui.theme.WardPulseSuccess
 import app.wardpulse.wear.ui.theme.WardPulseTheme
 
 private const val HOME_ROUTE = "home"
@@ -67,7 +67,9 @@ private data class SummaryRow(
 
 @Composable
 fun WardPulseApp(summary: WatchDashboardSummary?) {
-    AppScaffold {
+    // Straight clock chrome: default curved TimeText + glyph warping looks mangled
+    // on round API 34+ emulators/devices with the Material3 arc renderer.
+    AppScaffold(timeText = { StraightAppTimeText() }) {
         if (summary == null) {
             EmptyDashboardScreen()
             return@AppScaffold
@@ -258,7 +260,7 @@ private fun GlancePage(summary: WatchDashboardSummary) {
                     rings = rings,
                     modifier = Modifier.fillMaxWidth(),
                     diameter = diameter,
-                    tokenGlance = summary.tokenGlance?.text,
+                    creditsGlance = summary.creditsGlance?.text,
                 )
             }
         }
@@ -341,6 +343,20 @@ private fun MenuPage(
     }
 }
 
+@Composable
+private fun StraightAppTimeText() {
+    val timeSource = TimeTextDefaults.rememberTimeSource(TimeTextDefaults.timeFormat())
+    Text(
+        text = timeSource.currentTime(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onBackground,
+        textAlign = TextAlign.Center,
+    )
+}
+
 private fun glanceChrome(summary: WatchDashboardSummary): Pair<PulseStatus, String> = when {
     summary.dataMode == WatchDataMode.MOCK -> PulseStatus.WARNING to "Mock data"
     summary.isStale -> PulseStatus.WARNING to "Stale data"
@@ -393,7 +409,7 @@ private fun SummaryScreen(title: String, rows: List<SummaryRow>) {
 
 @Composable
 private fun statusColor(status: PulseStatus): Color = when (status) {
-    PulseStatus.OK -> WardPulseSuccess
+    PulseStatus.OK -> MaterialTheme.colorScheme.primary
     PulseStatus.WARNING,
     PulseStatus.RATE_LIMITED,
     PulseStatus.STALE,

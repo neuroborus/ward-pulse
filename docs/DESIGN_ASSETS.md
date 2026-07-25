@@ -53,23 +53,36 @@ under `brand/` remain outside the Apache-2.0 source license unless explicitly st
 - On-mark foreground: `#F4FBF8`.
 - Watch-face watermark stroke: `#C5CDD1` (muted further by PartImage alpha + bottom fade).
 - Dark surface: `#101412` (adaptive launcher background).
-- Performance accent: `#006B60` (light) / `#67E8D4` (dark).
-- Success: `#176B3A` (light) / `#65D78A` (dark).
 - Warning: `#E6C349`.
 
-Legacy brand green (`#1F7A5A` sheen) is retired for the app icon; keep it out of new identity
-surfaces.
+### Phone chrome (not provider colors)
 
-### Watch ring families
+Phone Material primary is gray-olive so Codex/OpenAI green and Cursor teal stay reserved for
+metrics:
 
-Used on Wear / WFF concentric remaining arcs (see [product/WATCH_RING_DESIGN.md](product/WATCH_RING_DESIGN.md)):
+- Primary: `#5F675C` (light) / `#A7B09E` (dark).
+- On-primary: `#F4FBF8` (light) / `#1A1F1A` (dark).
+- Primary container: `#E4E7DF` (light) / `#3A4038` (dark).
+- OK status pills use the same olive — not `#65D78A`.
+
+Legacy performance teal/green (`#006B60` / `#67E8D4`) and “success = Codex green” are retired
+from phone chrome. Legacy brand green (`#1F7A5A` sheen) stays out of new identity surfaces.
+
+### Metric family accents
+
+Used on Wear / WFF rings and on phone charts / plan bars / provider section accents
+(see [product/WATCH_RING_DESIGN.md](product/WATCH_RING_DESIGN.md)):
 
 - OpenAI / Codex: `#65D78A`.
 - Anthropic / Claude: `#E8915A`.
 - Cursor: `#67E8D4`.
-- Local budget: `#8AB4F8`.
+- Local / platform budget: `#8AB4F8`.
 
-Provider ring family colors are for metric identity on watch surfaces, not for general chrome.
+Review exports: `tools/render-watch-ring-designs.mjs` → `round-*-plan-credits.svg` (outer strip
+secondary value = remaining purchased credits, never LLM `TOK`). Primary preview:
+`apps/wear_android/design/preview-3-plan-credits.png`.
+
+Family colors are for metric identity, not buttons, nav, or filled chrome.
 **Exception:** the official app logo framing ring intentionally echoes those three families as a
 product metaphor. Do not spread that tri-color chrome into buttons, cards, or other UI.
 

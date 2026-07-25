@@ -9,7 +9,7 @@ object RingFamily {
     const val CLAUDE = 0xFFE8915A.toInt()
     const val CURSOR = 0xFF67E8D4.toInt()
     const val BUDGET = 0xFF8AB4F8.toInt()
-    const val FALLBACK = 0xFF65D78A.toInt()
+    const val FALLBACK = BUDGET
 
     /** ARGB for WFF [COMPLICATION.RANGED_VALUE_COLORS] / Compose strokes. */
     fun colorArgb(ringId: String): Int =

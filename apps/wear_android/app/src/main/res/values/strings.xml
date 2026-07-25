@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">WardPulse</string>
     <string name="today_complication">WardPulse ring 1</string>
@@ -5,5 +6,8 @@
     <string name="ring3_complication">WardPulse ring 3</string>
     <string name="ring4_complication">WardPulse ring 4</string>
     <string name="status_complication">WardPulse status</string>
-    <string name="tokens_complication">WardPulse tokens</string>
+    <string name="tokens_complication">WardPulse strip 1</string>
+    <string name="strip2_complication">WardPulse strip 2</string>
+    <string name="strip3_complication">WardPulse strip 3</string>
+    <string name="strip4_complication">WardPulse strip 4</string>
 </resources>

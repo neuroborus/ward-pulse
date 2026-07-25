@@ -46,7 +46,7 @@ class WatchSummaryStoreTest {
         val encoded = testContext.assets.open("watch_dashboard_summary.json")
             .bufferedReader()
             .use { it.readText() }
-            .replace("\"schemaVersion\": 5,", "\"schemaVersion\": 2,")
+            .replace("\"schemaVersion\": 6,", "\"schemaVersion\": 2,")
             .replace("  \"dataMode\": \"mock\",\n", "")
 
         assertFalse(store.saveEncoded(encoded))

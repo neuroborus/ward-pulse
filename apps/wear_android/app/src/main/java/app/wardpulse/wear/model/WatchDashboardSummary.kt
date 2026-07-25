@@ -86,8 +86,8 @@ data class RingSummary(
     val status: PulseStatus,
 )
 
-/** Compact token activity for the watch-face SHORT_TEXT slot. */
-data class TokenGlance(
+/** Compact remaining purchased credits for the watch-face SHORT_TEXT slot. */
+data class CreditsGlance(
     val text: String,
     val label: String,
     val provider: String?,
@@ -130,7 +130,7 @@ data class WatchDashboardSummary(
     val generatedAt: String,
     val overallStatus: PulseStatus,
     val rings: List<RingSummary>,
-    val tokenGlance: TokenGlance?,
+    val creditsGlance: CreditsGlance?,
     val today: PeriodSummary,
     val week: PeriodSummary,
     val allowances: List<AllowanceSummary>,
@@ -179,7 +179,7 @@ data class WatchDashboardSummary(
 
 object PreviewWatchDashboardSummary {
     val value = WatchDashboardSummary(
-        schemaVersion = 5,
+        schemaVersion = 6,
         dataMode = WatchDataMode.MOCK,
         generatedAt = "2026-06-27T18:42:00Z",
         overallStatus = PulseStatus.OK,
@@ -189,7 +189,7 @@ object PreviewWatchDashboardSummary {
             RingSummary("budget.month", "Month", 26.5, PulseStatus.OK),
             RingSummary("budget.today", "Today", 24.8, PulseStatus.OK),
         ),
-        tokenGlance = TokenGlance(text = "67K TOK", label = "Today tokens", provider = "mock"),
+        creditsGlance = CreditsGlance(text = "500", label = "Credits left", provider = "mock"),
         today = PeriodSummary(
             period = "today",
             spent = Money(1_240, "USD"),

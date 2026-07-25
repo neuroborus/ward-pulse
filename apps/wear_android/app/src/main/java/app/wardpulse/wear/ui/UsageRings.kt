@@ -43,7 +43,7 @@ internal fun UsageRings(
     rings: List<RingSummary>,
     modifier: Modifier = Modifier,
     diameter: Dp = 152.dp,
-    tokenGlance: String? = null,
+    creditsGlance: String? = null,
 ) {
     if (rings.isEmpty()) {
         return
@@ -52,7 +52,8 @@ internal fun UsageRings(
     val trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
     val colors = rings.map { ringFamilyColor(it.id, it.status) }
     val density = LocalDensity.current
-    val strokeWidth = with(density) { 8.dp.toPx() }
+    // Slightly heavier than early 8dp wire — closer to WFF ~20px on 450 face.
+    val strokeWidth = with(density) { 10.dp.toPx() }
     val gap = with(density) { 3.dp.toPx() }
     val wellColor = Color(0xE60B0E0C)
 
@@ -101,8 +102,8 @@ internal fun UsageRings(
                         .coerceAtLeast(0.0)
                         .roundToInt()
                 val label =
-                    if (index == 0 && !tokenGlance.isNullOrBlank()) {
-                        "$remaining% · $tokenGlance"
+                    if (index == 0 && !creditsGlance.isNullOrBlank()) {
+                        "$remaining% · $creditsGlance"
                     } else {
                         "$remaining%"
                     }

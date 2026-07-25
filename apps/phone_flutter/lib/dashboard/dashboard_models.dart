@@ -452,6 +452,12 @@ class AllowanceState {
     return value == null ? null : (value / 100).clamp(0.0, 1.0).toDouble();
   }
 
+  /// Remaining capacity as a 0–1 fraction (matches Wear/WFF remaining arcs).
+  double? get remainingFraction {
+    final used = usedFraction;
+    return used == null ? null : (1.0 - used).clamp(0.0, 1.0).toDouble();
+  }
+
   String get usedPercentLabel {
     final value = usedPercent;
     if (value == null) {
@@ -460,6 +466,17 @@ class AllowanceState {
 
     final places = value.truncateToDouble() == value ? 0 : 1;
     return '${value.toStringAsFixed(places)}%';
+  }
+
+  String get remainingPercentLabel {
+    final value = usedPercent;
+    if (value == null) {
+      return 'Unknown';
+    }
+
+    final remaining = (100.0 - value).clamp(0.0, 100.0);
+    final places = remaining.truncateToDouble() == remaining ? 0 : 1;
+    return '${remaining.toStringAsFixed(places)}%';
   }
 }
 

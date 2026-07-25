@@ -8,10 +8,14 @@ class UsageHistoryChart extends StatelessWidget {
     super.key,
     required this.buckets,
     this.title = 'Usage history',
+    this.accent,
   });
 
   final List<UsageBucket> buckets;
   final String title;
+
+  /// Provider family tint when the series belongs to one account; else theme primary.
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +60,7 @@ class UsageHistoryChart extends StatelessWidget {
                                   : bucket.cost?.minorUnits ?? 0,
                         )
                         .toList(growable: false),
-                    color: colors.primary,
+                    color: accent ?? colors.primary,
                     baselineColor: colors.outlineVariant,
                   ),
                 ),

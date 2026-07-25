@@ -32,11 +32,11 @@ void main() {
     }
   });
 
-  test('only Cursor rows carry the freshness note', () {
+  test('only the Cursor Team Admin API row carries the freshness note', () {
     for (final connection in providerConnectionCatalog()) {
       expect(
         connection.listSubtitle.contains(PollCadence.cursorFreshnessNote),
-        connection.id.provider == ProviderFamily.cursor,
+        connection.id == ProviderConnections.cursorPlatform,
         reason: connection.id.storageKey,
       );
     }

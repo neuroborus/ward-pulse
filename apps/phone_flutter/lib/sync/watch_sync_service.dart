@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import '../dashboard/dashboard_models.dart';
 import '../settings/consumption_display_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
-import 'watch_token_glance.dart';
+import 'watch_credits_glance.dart';
 
 abstract interface class WatchSyncService {
   Future<void> sync(
@@ -50,9 +50,12 @@ class WatchDashboardSummaryPayload {
     final rings = orderWatchRingsForSurface(
       resolveWatchRings(snapshot, ringPreferences),
     );
-    final tokenGlance = resolveWatchTokenGlance(snapshot);
+    final creditsGlance = resolveWatchCreditsGlance(
+      snapshot,
+      displayPreferences,
+    );
     return WatchDashboardSummaryPayload._({
-      'schemaVersion': 5,
+      'schemaVersion': 6,
       'dataMode':
           snapshot.accounts.isNotEmpty &&
                   snapshot.accounts.every(
@@ -74,7 +77,7 @@ class WatchDashboardSummaryPayload {
             'status': ring.status.wireName,
           },
       ],
-      'tokenGlance': tokenGlance?.toJson(),
+      'creditsGlance': creditsGlance?.toJson(),
       'today': _budgetToJson(snapshot.todayTotal),
       'week': _budgetToJson(snapshot.weekTotal),
       'allowances': [
@@ -83,7 +86,8 @@ class WatchDashboardSummaryPayload {
             if (displayPreferences.allows(allowance.source))
               {
                 'source': allowance.source.name,
-                'label': allowance.label,
+                // Disambiguate multi-provider Usage rows on Wear (no schema bump).
+                'label': '${account.providerLabel} · ${allowance.label}',
                 'usedPercent': allowance.usedPercent,
                 'remaining': _quantityToJson(allowance.remaining),
                 if (allowance.unlimited) 'unlimited': true,

@@ -10,22 +10,22 @@
   <rect width="450" height="450" fill="url(#lift)"/>
   
     <circle cx="225" cy="225" r="200.25" fill="none" stroke="#2E3632"
-      stroke-width="10.125" />
+      stroke-width="12.149999999999999" />
     <circle cx="225" cy="225" r="200.25" fill="none" stroke="#8A968F"
-      stroke-width="10.125" stroke-linecap="round"
+      stroke-width="12.149999999999999" stroke-linecap="round"
       stroke-dasharray="100.66 1258.21"
       transform="rotate(-90 225 225)" />
-    <circle cx="225" cy="225" r="182.25" fill="none" stroke="#2E3632"
-      stroke-width="10.125" />
-    <circle cx="225" cy="225" r="182.25" fill="none" stroke="#8A968F"
-      stroke-width="10.125" stroke-linecap="round"
-      stroke-dasharray="446.59 1145.11"
+    <circle cx="225" cy="225" r="179.55" fill="none" stroke="#2E3632"
+      stroke-width="12.149999999999999" />
+    <circle cx="225" cy="225" r="179.55" fill="none" stroke="#8A968F"
+      stroke-width="12.149999999999999" stroke-linecap="round"
+      stroke-dasharray="439.98 1128.15"
       transform="rotate(-90 225 225)" />
-    <circle cx="225" cy="225" r="164.25" fill="none" stroke="#2E3632"
-      stroke-width="10.125" />
-    <circle cx="225" cy="225" r="164.25" fill="none" stroke="#8A968F"
-      stroke-width="10.125" stroke-linecap="round"
-      stroke-dasharray="743.05 1032.01"
+    <circle cx="225" cy="225" r="158.85" fill="none" stroke="#2E3632"
+      stroke-width="12.149999999999999" />
+    <circle cx="225" cy="225" r="158.85" fill="none" stroke="#8A968F"
+      stroke-width="12.149999999999999" stroke-linecap="round"
+      stroke-dasharray="718.62 998.08"
       transform="rotate(-90 225 225)" />
   
     <text x="225" y="254.2" text-anchor="middle"

@@ -48,7 +48,8 @@ pub const ANTHROPIC_PLATFORM_MIN_POLL: Duration = Duration::from_secs(60);
 pub const CLAUDE_PLAN_MIN_POLL: Duration = Duration::from_secs(5 * 60);
 
 /// Cursor plan session endpoints: unpublished compatibility contract, so the
-/// floor is conservative. See [`CURSOR_USAGE_FRESHNESS_NOTE`].
+/// floor is conservative. No freshness note — hourly aggregation is not a
+/// documented personal-plan contract.
 pub const CURSOR_PLAN_MIN_POLL: Duration = Duration::from_secs(5 * 60);
 
 /// Cursor team Admin API, capped at 20 requests per minute
@@ -56,8 +57,8 @@ pub const CURSOR_PLAN_MIN_POLL: Duration = Duration::from_secs(5 * 60);
 /// connections. See [`CURSOR_USAGE_FRESHNESS_NOTE`].
 pub const CURSOR_PLATFORM_MIN_POLL: Duration = Duration::from_secs(5 * 60);
 
-/// Visible Settings note for Cursor rows. Freshness guidance does not clamp
-/// the poll cadence.
+/// Visible Settings note for the Cursor Team Admin API row only. Freshness
+/// guidance does not clamp the poll cadence.
 pub const CURSOR_USAGE_FRESHNESS_NOTE: &str =
     "Cursor aggregates usage about once an hour, so refreshed values may lag.";
 
@@ -89,7 +90,7 @@ pub const fn guidance(connection: ProviderConnectionKind) -> Guidance {
         },
         ProviderConnectionKind::CursorPlan => Guidance {
             min_interval: CURSOR_PLAN_MIN_POLL,
-            freshness_note: Some(CURSOR_USAGE_FRESHNESS_NOTE),
+            freshness_note: None,
         },
         ProviderConnectionKind::CursorPlatform => Guidance {
             min_interval: CURSOR_PLATFORM_MIN_POLL,
@@ -154,11 +155,15 @@ mod tests {
     }
 
     #[test]
-    fn surfaces_cursor_freshness_without_clamping() {
+    fn surfaces_cursor_admin_freshness_without_clamping() {
         let plan = guidance(ProviderConnectionKind::CursorPlan);
-        assert_eq!(plan.freshness_note, Some(CURSOR_USAGE_FRESHNESS_NOTE));
+        assert_eq!(plan.freshness_note, None);
         assert_eq!(plan.min_interval, CURSOR_PLAN_MIN_POLL);
-        assert!(plan.min_interval < Duration::from_secs(60 * 60));
+
+        let platform = guidance(ProviderConnectionKind::CursorPlatform);
+        assert_eq!(platform.freshness_note, Some(CURSOR_USAGE_FRESHNESS_NOTE));
+        assert_eq!(platform.min_interval, CURSOR_PLATFORM_MIN_POLL);
+        assert!(platform.min_interval < Duration::from_secs(60 * 60));
     }
 
     #[test]

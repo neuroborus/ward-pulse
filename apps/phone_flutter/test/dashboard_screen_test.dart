@@ -77,6 +77,7 @@ void main() {
       ),
     );
 
+    expect(find.text('Codex'), findsOneWidget);
     expect(find.text('Purchased credits'), findsOneWidget);
     expect(find.text('Unlimited'), findsOneWidget);
     expect(find.text('Unknown'), findsNothing);
@@ -186,7 +187,9 @@ void main() {
       ),
     );
 
+    expect(find.text('Codex'), findsOneWidget);
     expect(find.text('Weekly plan'), findsOneWidget);
+    expect(find.text('60% left'), findsOneWidget);
     expect(find.text('Model usage'), findsNothing);
     expect(find.text('Unknown'), findsNothing);
 
@@ -196,6 +199,60 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Spend'), findsOneWidget);
+  });
+
+  testWidgets('groups plan cards under each provider without summing', (
+    tester,
+  ) async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    Map<String, dynamic> planAccount(String provider, int usedPercent) {
+      return source.primaryAccount!.toJson()
+        ..['accountId'] = '$provider-local'
+        ..['provider'] = provider
+        ..['allowances'] = [
+          {
+            'id': '$provider-weekly',
+            'source': 'plan',
+            'label': 'Weekly plan',
+            'usedPercent': usedPercent,
+            'used': null,
+            'limit': null,
+            'remaining': null,
+            'unlimited': false,
+            'windowMinutes': 10080,
+            'resetsAt': null,
+            'status': 'ok',
+          },
+        ]
+        ..['buckets'] = <Object>[]
+        ..['modelBreakdown'] = <Object>[];
+    }
+
+    final dashboard =
+        source.toJson()
+          ..['accounts'] = [
+            planAccount('codex', 40),
+            planAccount('claude', 70),
+          ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: wardPulseLightTheme,
+        home: Scaffold(
+          body: DashboardScreen(
+            snapshot: DashboardSnapshot.fromJson(dashboard),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Codex'), findsOneWidget);
+    expect(find.text('Claude'), findsOneWidget);
+    expect(find.text('Weekly plan'), findsNWidgets(2));
+    expect(find.text('60% left'), findsOneWidget);
+    expect(find.text('30% left'), findsOneWidget);
   });
 
   testWidgets('explains missing purchased usage when enabled', (tester) async {
@@ -237,6 +294,7 @@ void main() {
       ),
     );
 
+    expect(find.text('Codex'), findsOneWidget);
     expect(find.text('Weekly plan'), findsOneWidget);
     expect(
       find.text(

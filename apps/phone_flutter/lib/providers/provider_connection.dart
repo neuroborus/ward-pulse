@@ -139,7 +139,6 @@ List<ProviderConnection> providerConnectionCatalog({
       title: 'Cursor plan',
       subtitle: 'Experimental · paste dashboard session token',
       secretHint: 'Paste token',
-      freshnessNote: PollCadence.cursorFreshnessNote,
     ),
     ProviderConnection(
       id: ProviderConnections.cursorPlatform,

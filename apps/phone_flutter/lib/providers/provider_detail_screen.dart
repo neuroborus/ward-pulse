@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../charts/usage_history_chart.dart';
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_screen.dart';
+import '../dashboard/provider_status_color.dart';
 import '../settings/consumption_display_preferences.dart';
 
 class ProviderDetailScreen extends StatelessWidget {
@@ -25,6 +26,7 @@ class ProviderDetailScreen extends StatelessWidget {
         .where((allowance) => displayPreferences.allows(allowance.source))
         .toList(growable: false);
     final title = account.displayTitle(platformLabel: platformLabel);
+    final accent = providerFamilyColor(account.provider);
 
     return Scaffold(
       appBar: AppBar(title: Text(title)),
@@ -62,11 +64,11 @@ class ProviderDetailScreen extends StatelessWidget {
               const EmptyAllowanceCard()
             else
               for (final allowance in allowances) ...[
-                AllowanceSummaryCard(allowance: allowance),
+                AllowanceSummaryCard(allowance: allowance, accent: accent),
                 if (allowance != allowances.last) const SizedBox(height: 12),
               ],
             const SizedBox(height: 16),
-            UsageHistoryChart(buckets: account.buckets),
+            UsageHistoryChart(buckets: account.buckets, accent: accent),
             const SizedBox(height: 16),
             Text('Models', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),

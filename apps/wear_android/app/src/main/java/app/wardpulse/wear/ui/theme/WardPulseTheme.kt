@@ -2,20 +2,18 @@ package app.wardpulse.wear.ui.theme
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.wear.compose.material3.ColorScheme
 import androidx.wear.compose.material3.MaterialTheme
-import androidx.wear.compose.material3.Typography
 
 /**
- * Wear shell theme: graphite chrome, family colors as accents
- * (`docs/product/WATCH_RING_DESIGN.md`). Platform sans until Noto is bundled.
+ * Wear shell theme: gray-olive chrome; provider greens/oranges/teals stay on
+ * rings only (`docs/DESIGN_ASSETS.md`, `WATCH_RING_DESIGN.md`).
  */
 private val WardPulseColorScheme = ColorScheme(
-    primary = Color(0xFF67E8D4),
-    primaryDim = Color(0xFF49CBBB),
-    primaryContainer = Color(0xFF1A3D36),
-    onPrimary = Color(0xFF002F2A),
+    primary = Color(0xFFA7B09E),
+    primaryDim = Color(0xFF8A9282),
+    primaryContainer = Color(0xFF3A4038),
+    onPrimary = Color(0xFF1A1F1A),
     onPrimaryContainer = Color(0xFFF4FBF8),
     secondary = Color(0xFFADCEBC),
     secondaryDim = Color(0xFF91B2A1),
@@ -43,13 +41,10 @@ private val WardPulseColorScheme = ColorScheme(
     onErrorContainer = Color(0xFFFFDAD6),
 )
 
-internal val WardPulseSuccess = Color(0xFF65D78A)
-
 @Composable
 fun WardPulseTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = WardPulseColorScheme,
-        typography = Typography(defaultFontFamily = FontFamily.SansSerif),
         content = content,
     )
 }

@@ -601,10 +601,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   leading: const Icon(Icons.watch_outlined),
                   title: const Text('Watch summary'),
                   subtitle: Text(
-                    _watchSummarySubtitle(
-                      snapshot,
-                      widget.ringPreferences,
-                    ),
+                    _watchSummarySubtitle(snapshot, widget.ringPreferences),
                   ),
                   trailing: StatusPill(
                     status: snapshot.watchSummary.status,
@@ -661,7 +658,8 @@ class _WatchRingTile extends StatelessWidget {
               : Tooltip(message: reason, child: const Icon(Icons.help_outline)),
       title: Text(metric.label),
       subtitle: Text(
-        reason ?? '${metric.usedPercent!.round()}% · ${metric.status.label}',
+        reason ??
+            '${metric.remainingPercent!.round()}% left · ${metric.status.label}',
       ),
       value: selected,
       onChanged: canToggle ? (value) => onChanged(value ?? false) : null,
@@ -1047,7 +1045,7 @@ String _watchSummarySubtitle(
   }
   if (rings.length == 1) {
     final ring = rings.single;
-    return '${ring.label} ${ring.usedPercent!.round()}%';
+    return '${ring.label} ${ring.remainingPercent!.round()}% left';
   }
   return '${rings.length} rings · ${rings.map((ring) => ring.label).join(', ')}';
 }

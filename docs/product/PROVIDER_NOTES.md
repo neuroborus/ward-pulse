@@ -40,6 +40,13 @@ separate from monetary budgets because their units and reset rules differ.
 - WardPulse does not invent a limit, balance, or percentage when the provider omits it.
 - Exact provider quantities cross shared contracts as decimal strings with an explicit `tokens`
   or `credits` unit.
+- Phone dashboard allowance cards are **per account**, grouped under a provider section
+  (family accent + provider name). Plan and purchased values are never summed across
+  providers into one card.
+- Wear / WFF strips may show remaining **purchased credits** via watch summary `creditsGlance`
+  (schema v6). That glance may sum same-unit purchased balances across providers for one
+  compact strip number; it is not a phone-dashboard aggregate. LLM token totals stay on
+  phone history charts — never as face `TOK` labels.
 
 ## Capability-adaptive presentation
 
@@ -67,8 +74,9 @@ comments, and are the single source of truth for cadence:
 - watch summary re-sent after each successful automatic sync;
 - a failed sync keeps the last successful snapshot visible and retries on the next tick, so a
   launch without connectivity still recovers without a manual refresh;
-- Cursor rows show a freshness note that usage may lag about an hour; that note does not clamp the
-  cadence;
+- the Cursor Team Admin API row shows a freshness note that usage may lag about an hour (documented
+  provider-side hourly aggregation); that note does not clamp the cadence and is not shown on the
+  experimental Cursor plan row;
 - existing `429` / `Retry-After` / backoff handling still applies on top of the cadence;
   waits longer than five seconds are not slept in-process — the sync fails as rate-limited and
   the next scheduled tick retries, so a long provider cooldown never stalls the dashboard.
@@ -234,8 +242,8 @@ Status: implemented as an experimental on-device compatibility integration on 20
 
 Cursor has no official personal-account usage API. The phone stores a dashboard session token
 (`WorkosCursorSessionToken`) and calls `GET /api/usage-summary`, normalizing plan and on-demand
-meters into allowances. Settings rows carry the Phase 11 freshness note that Cursor aggregates
-usage about hourly. Never log the cookie or raw response bodies.
+meters into allowances. Do not claim Admin-API hourly aggregation on this experimental row.
+Never log the cookie or raw response bodies.
 
 ## Cursor team Admin API
 
@@ -250,7 +258,8 @@ Scope:
 - Spend is billing-cycle scoped and maps only to the month budget; today and week stay
   unknown until a day-scoped spend source exists.
 - Hard ceiling is 20 requests per minute; WardPulse polls at the global slider cadence (minimum
-  five minutes). Usage aggregates hourly on the provider side.
+  five minutes). Usage aggregates hourly on the provider side; Settings shows that freshness
+  note on this Admin API row only.
 - Never log the key, authorization header, or raw response bodies.
 
 Official references:

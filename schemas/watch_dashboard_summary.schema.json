@@ -10,7 +10,7 @@
     "generatedAt",
     "overallStatus",
     "rings",
-    "tokenGlance",
+    "creditsGlance",
     "today",
     "week",
     "allowances",
@@ -19,7 +19,7 @@
     "isStale"
   ],
   "properties": {
-    "schemaVersion": { "const": 5 },
+    "schemaVersion": { "const": 6 },
     "dataMode": { "enum": ["live", "mock"] },
     "generatedAt": { "type": "string", "format": "date-time" },
     "overallStatus": { "$ref": "dashboard_snapshot.schema.json#/$defs/providerStatus" },
@@ -42,8 +42,8 @@
         }
       }
     },
-    "tokenGlance": {
-      "description": "SHORT_TEXT token activity for the watch face. Null when unavailable.",
+    "creditsGlance": {
+      "description": "SHORT_TEXT remaining purchased credits for the watch strip. Null when unavailable.",
       "anyOf": [
         {
           "type": "object",
@@ -54,13 +54,13 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 12,
-              "description": "Compact glance string, e.g. 1.4B TOK. Never raw payloads."
+              "description": "Compact remaining credits, e.g. 500 or 1.2K. Never TOK / raw payloads."
             },
             "label": {
               "type": "string",
               "minLength": 1,
               "maxLength": 24,
-              "description": "Human label such as Today tokens."
+              "description": "Human label such as Credits left."
             },
             "provider": {
               "anyOf": [

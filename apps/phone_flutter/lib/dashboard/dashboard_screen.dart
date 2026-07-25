@@ -30,9 +30,10 @@ class DashboardScreen extends StatelessWidget {
     final allAllowances = snapshot.accounts
         .expand((account) => account.allowances)
         .toList(growable: false);
-    final allowances = allAllowances
-        .where((allowance) => displayPreferences.allows(allowance.source))
-        .toList(growable: false);
+    final allowanceSections = _providerAllowanceSections(
+      snapshot.accounts,
+      displayPreferences,
+    );
     final historyAccount = _firstAccountWith(
       snapshot.accounts,
       (account) => account.buckets.isNotEmpty,
@@ -55,14 +56,14 @@ class DashboardScreen extends StatelessWidget {
         _SyncHeader(snapshot: snapshot),
         const SizedBox(height: 16),
         if (caps.showAllowances) ...[
-          if (allowances.isEmpty)
+          if (allowanceSections.isEmpty)
             EmptyAllowanceCard(
               availableSources:
                   allAllowances.map((allowance) => allowance.source).toSet(),
               purchasedSelectedWithoutData: showMissingPurchased,
             )
           else ...[
-            _AllowanceCards(allowances: allowances),
+            _ProviderAllowanceSections(sections: allowanceSections),
             if (showMissingPurchased) ...[
               const SizedBox(height: 12),
               const MissingPurchasedUsageCard(),
@@ -85,6 +86,10 @@ class DashboardScreen extends StatelessWidget {
                     ? '${historyAccount.providerLabel} usage history'
                     : 'Usage history',
             buckets: historyAccount?.buckets ?? const <UsageBucket>[],
+            accent:
+                historyAccount == null
+                    ? null
+                    : providerFamilyColor(historyAccount.provider),
           ),
           const SizedBox(height: 16),
         ],
@@ -99,6 +104,10 @@ class DashboardScreen extends StatelessWidget {
           const SizedBox(height: 8),
           _ModelUsagePanel(
             models: modelAccount?.modelBreakdown ?? const <ModelUsage>[],
+            accent:
+                modelAccount == null
+                    ? null
+                    : providerFamilyColor(modelAccount.provider),
           ),
           const SizedBox(height: 16),
         ],
@@ -269,16 +278,28 @@ class MissingPurchasedUsageCard extends StatelessWidget {
 }
 
 class AllowanceSummaryCard extends StatelessWidget {
-  const AllowanceSummaryCard({super.key, required this.allowance});
+  const AllowanceSummaryCard({
+    super.key,
+    required this.allowance,
+    this.accent,
+  });
 
   final AllowanceState allowance;
+
+  /// Provider family tint for the progress fill; defaults to theme primary.
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final progress = allowance.usedFraction;
+    final colors = Theme.of(context).colorScheme;
+    // Plan bars follow Wear/WFF: fill = remaining capacity (full bar = unused).
+    final progress = switch (allowance.source) {
+      AllowanceSource.plan => allowance.remainingFraction,
+      AllowanceSource.purchased => allowance.usedFraction,
+    };
     final headline = switch (allowance.source) {
-      AllowanceSource.plan => '${allowance.usedPercentLabel} used',
+      AllowanceSource.plan => '${allowance.remainingPercentLabel} left',
       AllowanceSource.purchased when allowance.unlimited => 'Unlimited',
       AllowanceSource.purchased =>
         allowance.remaining?.label ?? 'Balance unavailable',
@@ -311,7 +332,12 @@ class AllowanceSummaryCard extends StatelessWidget {
               const SizedBox(height: 14),
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(minHeight: 8, value: progress),
+                child: LinearProgressIndicator(
+                  minHeight: 8,
+                  value: progress,
+                  color: accent ?? colors.primary,
+                  backgroundColor: colors.surfaceContainerHighest,
+                ),
               ),
             ],
             const SizedBox(height: 10),
@@ -520,41 +546,119 @@ class _BudgetCards extends StatelessWidget {
   }
 }
 
-class _AllowanceCards extends StatelessWidget {
-  const _AllowanceCards({required this.allowances});
+class _ProviderAllowanceGroup {
+  const _ProviderAllowanceGroup({
+    required this.account,
+    required this.allowances,
+  });
 
+  final ProviderSnapshot account;
   final List<AllowanceState> allowances;
+}
+
+/// Per-account allowance groups in snapshot order (not cross-provider sums).
+List<_ProviderAllowanceGroup> _providerAllowanceSections(
+  List<ProviderSnapshot> accounts,
+  ConsumptionDisplayPreferences displayPreferences,
+) {
+  final sections = <_ProviderAllowanceGroup>[];
+  for (final account in accounts) {
+    final allowances =
+        account.allowances
+            .where((allowance) => displayPreferences.allows(allowance.source))
+            .toList(growable: false);
+    if (allowances.isEmpty) {
+      continue;
+    }
+    sections.add(
+      _ProviderAllowanceGroup(account: account, allowances: allowances),
+    );
+  }
+  return sections;
+}
+
+class _ProviderAllowanceSections extends StatelessWidget {
+  const _ProviderAllowanceSections({required this.sections});
+
+  final List<_ProviderAllowanceGroup> sections;
 
   @override
   Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < sections.length; i++) ...[
+          if (i > 0) const SizedBox(height: 20),
+          _ProviderAllowanceSection(group: sections[i]),
+        ],
+      ],
+    );
+  }
+}
+
+class _ProviderAllowanceSection extends StatelessWidget {
+  const _ProviderAllowanceSection({required this.group});
+
+  final _ProviderAllowanceGroup group;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final accent = providerFamilyColor(group.account.provider);
     final cards = [
-      for (final allowance in allowances)
-        AllowanceSummaryCard(allowance: allowance),
+      for (final allowance in group.allowances)
+        AllowanceSummaryCard(allowance: allowance, accent: accent),
     ];
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 760) {
-          return Column(
-            children: [
-              for (final card in cards) ...[
-                card,
-                if (card != cards.last) const SizedBox(height: 12),
-              ],
-            ],
-          );
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
           children: [
-            for (final card in cards) ...[
-              Expanded(child: card),
-              if (card != cards.last) const SizedBox(width: 12),
-            ],
+            Container(
+              width: 3,
+              height: 22,
+              decoration: BoxDecoration(
+                color: accent,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                group.account.providerLabel,
+                style: textTheme.titleMedium,
+              ),
+            ),
+            StatusPill(status: group.account.status),
           ],
-        );
-      },
+        ),
+        const SizedBox(height: 12),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < 760) {
+              return Column(
+                children: [
+                  for (final card in cards) ...[
+                    card,
+                    if (card != cards.last) const SizedBox(height: 12),
+                  ],
+                ],
+              );
+            }
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final card in cards) ...[
+                  Expanded(child: card),
+                  if (card != cards.last) const SizedBox(width: 12),
+                ],
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 }
@@ -579,9 +683,10 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _ModelUsagePanel extends StatelessWidget {
-  const _ModelUsagePanel({required this.models});
+  const _ModelUsagePanel({required this.models, this.accent});
 
   final List<ModelUsage> models;
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
@@ -608,7 +713,11 @@ class _ModelUsagePanel extends StatelessWidget {
         child: Column(
           children: [
             for (final model in models) ...[
-              _ModelUsageRow(model: model, maxRequests: maxRequests),
+              _ModelUsageRow(
+                model: model,
+                maxRequests: maxRequests,
+                accent: accent,
+              ),
               if (model != models.last) const Divider(height: 24),
             ],
           ],
@@ -619,13 +728,19 @@ class _ModelUsagePanel extends StatelessWidget {
 }
 
 class _ModelUsageRow extends StatelessWidget {
-  const _ModelUsageRow({required this.model, required this.maxRequests});
+  const _ModelUsageRow({
+    required this.model,
+    required this.maxRequests,
+    this.accent,
+  });
 
   final ModelUsage model;
   final int maxRequests;
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final value =
         maxRequests == 0 || model.requests == null
             ? 0.0
@@ -648,7 +763,12 @@ class _ModelUsageRow extends StatelessWidget {
         const SizedBox(height: 10),
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(minHeight: 8, value: value),
+          child: LinearProgressIndicator(
+            minHeight: 8,
+            value: value,
+            color: accent ?? colors.primary,
+            backgroundColor: colors.surfaceContainerHighest,
+          ),
         ),
         const SizedBox(height: 8),
         Wrap(

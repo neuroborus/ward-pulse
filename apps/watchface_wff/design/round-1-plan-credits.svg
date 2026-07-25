@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="450" height="450" viewBox="0 0 450 450" role="img" aria-label="Round · 1 provider · plan only">
+<svg xmlns="http://www.w3.org/2000/svg" width="450" height="450" viewBox="0 0 450 450" role="img" aria-label="Round · 1 provider · plan + credits">
   <defs>
     <radialGradient id="lift" cx="50%" cy="48%" r="62%">
       <stop offset="0%" stop-color="#18201C"/>
@@ -19,13 +19,13 @@
     <text x="225" y="250.1" text-anchor="middle"
       font-family="Noto Sans, sans-serif" font-size="69.8"
       font-weight="700" fill="#F4FBF8">10:08</text>
-    <rect x="200.9" y="351.0" width="48.1"
+    <rect x="183.4" y="351.0" width="83.2"
       height="22.0" rx="6.0" fill="#0B0E0C"
       fill-opacity="0.92" />
-    <rect x="200.9" y="353.0" width="3.1"
+    <rect x="183.4" y="353.0" width="3.1"
       height="18.0" rx="2.0"
       fill="#65D78A" />
     <text x="226.6" y="367.0"
       text-anchor="middle" font-family="Noto Sans, sans-serif"
-      font-size="14" font-weight="700" fill="#F4FBF8">8%</text>
+      font-size="14" font-weight="700" fill="#F4FBF8">8% · 500</text>
 </svg>

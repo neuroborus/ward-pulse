@@ -1492,8 +1492,9 @@ Deliverables:
   provider connection;
 - one global refresh interval setting rendered as a slider from the strictest hard minimum
   (rounded up) to 60 minutes;
-- a visible freshness note on Cursor connection rows in Settings explaining that Cursor
-  aggregates usage data hourly, so refreshed values may lag behind actual activity;
+- a visible freshness note on the Cursor Team Admin API Settings row explaining that Cursor
+  aggregates team usage data hourly, so refreshed values may lag behind actual activity
+  (not shown on the experimental Cursor plan row — that contract is unpublished);
 - automatic polling on the phone, honoring the slider and the per-connection clamp; this
   absorbs the "automatic provider polling" deliverable from Phase 8. Shipped as an
   in-process scheduler behind `ProviderSyncScheduler`, so cadence is honored while the app
@@ -1514,10 +1515,10 @@ Cursor plan (session)         unpublished compatibility contract; conservative  
 Cursor platform (Admin API)   hard 20 req/min; polled at 5 min like the rest      5 min
 ```
 
-The strictest hard floor is 5 minutes, so the slider spans 5 to 60 minutes. Cursor aggregates
-usage data hourly on the provider side; instead of clamping Cursor to an hourly cadence, the
-Cursor connection rows in Settings carry a visible note that Cursor refreshes this data
-infrequently, so faster polling may keep returning the same values.
+The strictest hard floor is 5 minutes, so the slider spans 5 to 60 minutes. Cursor’s team Admin
+API aggregates usage hourly on the provider side; instead of clamping that connection to an
+hourly cadence, its Settings row carries a visible note that refreshed values may lag. The
+experimental Cursor plan row does not reuse that claim.
 
 Acceptance:
 
@@ -1550,7 +1551,7 @@ Deliverables:
   on-demand allowances; framed as experimental, with the sign-in flow owned by the phone and
   the session token in secure storage;
 - Cursor platform reporting: team Admin API key support for users who administer a team,
-  with the Settings freshness note from Phase 11 on both Cursor connection rows;
+  with the Settings freshness note (hourly aggregation) on the Admin API row only;
 - capability descriptors registered for `ProviderKind::Claude` and `ProviderKind::Cursor`;
 - `docs/product/PROVIDER_NOTES.md` updated per provider with credential type, permissions,
   rate limits, revocation path, and redaction rules.
@@ -1594,11 +1595,14 @@ Deliverables:
   until the tab lands, the existing Settings “Watch display” block is the transitional UI;
 - no time-based rotation in the first iteration: simultaneous static layers are battery-safe;
 - aperture: large time as hero; upper inner rim reserved for future weather; lower chord uses
-  short per-family strips (`%`, tokens, or `% · tokens`) — see `WATCH_RING_DESIGN.md`;
-- optional per-provider tokens on strips when tracked; tokens-only mode has no plan arcs;
-- schema `tokenGlance` may still feed a compact aggregate where strips are not yet wired;
-- watch summary schema version 4+: ordered selected ring entries (stable id, short label,
-  percent, status) without credentials, account ids, or raw provider payloads;
+  short per-family strips (`%`, remaining credits, or `% · credits`) — see `WATCH_RING_DESIGN.md`;
+- optional remaining purchased credits on the outer strip when reported; credits-only mode has
+  no plan arcs; never LLM `TOK` counts on the face;
+- schema `creditsGlance` (v6) feeds the compact remaining-credits aggregate for strip TITLE /
+  credits-only — not LLM token counts;
+- watch summary schema version 6: ordered selected ring entries (stable id, short label,
+  percent, status) plus optional `creditsGlance`, without credentials, account ids, or raw
+  provider payloads;
 - Wear OS home renders the concentric layers; WFF follows the same visual language as far as
   declarative complications allow (implementation may stage from dual arcs toward true shared
   center);
@@ -1608,11 +1612,11 @@ Acceptance:
 
 ```text
 WATCH_RING_DESIGN.md baseline locked 2026-07-25 (time hero, remaining arcs, sunk strips)
-review SVGs/PNGs match that baseline (primary: preview-3-plan-tokens)
-schema version 4/5 validates and sanitized fixtures stay current
+review SVGs/PNGs match that baseline (primary: preview-3-plan-credits)
+schema version 6 validates and sanitized fixtures stay current
 watch surfaces show only configured, available, non-exhausted rings
 arc length = remaining; outer layer is the tightest remaining among selected rings
-token strips / glance only when tokens are tracked and > 0
+credits strip / glance only when purchased credits remain and display prefs allow them
 disabling a provider or ring on the phone removes it after the next sync
 ambient mode stays readable with rings visible
 ```
@@ -1620,13 +1624,15 @@ ambient mode stays readable with rings visible
 Landed so far:
 
 ```text
-schema version 4 + sanitized watch fixture; schema v5 tokenGlance
+schema version 4 + sanitized watch fixture; schema v5 tokenGlance → v6 creditsGlance
 phone Watch display prefs, payload rings, and Settings UI (transitional — moves to Watchface tab)
 Watch ring visual baseline locked (WATCH_RING_DESIGN.md + render-watch-ring-designs.mjs)
 Phone payload sorts tightest-remaining outermost and omits exhausted layers
 Wear Compose UsageRings: remaining arcs + sunk family strips (time stays on system/WFF)
-WFF v2 concentric remaining arcs (WeightedStroke + ColorRamp family colors) + sunk token strip
+WFF v2 concentric remaining arcs (WeightedStroke + ColorRamp family colors) + sunk credits strip
+Outer strip TEXT carries the full label (`100% · 500`) — WFF TITLE Conditions are unreliable
 ```
+
 
 Future (not Phase 13 acceptance — product direction):
 

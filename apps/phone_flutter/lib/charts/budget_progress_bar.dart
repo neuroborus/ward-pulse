@@ -18,7 +18,7 @@ class BudgetProgressBar extends StatelessWidget {
       child: LinearProgressIndicator(
         minHeight: 8,
         value: value ?? 0,
-        color: providerStatusColor(colors, state.status),
+        color: budgetMetricColor(colors, state.status),
         backgroundColor: colors.surfaceContainerHighest,
       ),
     );

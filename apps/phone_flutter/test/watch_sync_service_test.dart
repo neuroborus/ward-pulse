@@ -105,10 +105,19 @@ void main() {
             )
             as Map<String, dynamic>;
 
-    expect(payload['schemaVersion'], 5);
+    expect(payload['schemaVersion'], 6);
+    expect(payload['creditsGlance'], {
+      'text': '12.5',
+      'label': 'Credits left',
+      'provider': 'mock',
+    });
     expect(payload['dataMode'], 'mock');
     expect((payload['allowances'] as List), hasLength(1));
     expect((payload['allowances'] as List).first['source'], 'purchased');
+    expect(
+      (payload['allowances'] as List).first['label'],
+      'Mock · Purchased credits',
+    );
   });
 
   test('sends unlimited purchased usage explicitly', () {

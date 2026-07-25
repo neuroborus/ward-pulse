@@ -486,16 +486,38 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(
-      find.text('Cursor plan'),
-      300,
-      scrollable: find.descendant(
-        of: find.byType(ListView),
-        matching: find.byType(Scrollable),
-      ),
+    final settingsScrollable = find.descendant(
+      of: find.byType(ListView),
+      matching: find.byType(Scrollable),
     );
-    expect(find.textContaining(PollCadence.cursorFreshnessNote), findsWidgets);
-    expect(find.textContaining('Experimental'), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.text('Team Admin API'),
+      300,
+      scrollable: settingsScrollable,
+    );
+
+    final planTile = find.ancestor(
+      of: find.text('Cursor plan'),
+      matching: find.byType(ListTile),
+    );
+    final adminTile = find.ancestor(
+      of: find.text('Team Admin API'),
+      matching: find.byType(ListTile),
+    );
+    expect(
+      find.descendant(
+        of: planTile,
+        matching: find.textContaining(PollCadence.cursorFreshnessNote),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: adminTile,
+        matching: find.textContaining(PollCadence.cursorFreshnessNote),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('enables mock data only from the debug setting', (tester) async {

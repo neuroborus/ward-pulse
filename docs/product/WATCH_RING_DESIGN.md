@@ -7,12 +7,13 @@ do not reintroduce side-by-side ring wireframes, large remaining-% heroes, or bo
 Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 13). Asset ownership: `docs/DESIGN_ASSETS.md`.
 
 Canonical review generator: `tools/render-watch-ring-designs.mjs`  
-Canonical preview: `apps/wear_android/design/preview-3-plan-tokens.png` (and sibling variants).
+Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and sibling variants).
 
 ## Goal
 
 Glanceable **remaining** capacity for up to four user-selected percent metrics, with optional
-per-provider token strips. Not “always show every provider,” and never invent `Unknown` filler.
+remaining purchased **credits** on the outer strip. Not “always show every provider,” and never
+invent `Unknown` filler. Strip secondary values are credits — never LLM `TOK` / token counts.
 
 ## Layer rules
 
@@ -59,9 +60,9 @@ theme `outlineVariant` at runtime).
   │                       10:08                                  │  ← large time (hero)
   │                   WARDPULSE watermark                        │  ← quiet mono, no ring
   │            ┌─ sunk well ──────────────┐                      │
-  │            │▌ 8% · 12M                │                      │  ▌ = family accent
-  │            │▌ 39% · 4.1M               │                      │
-  │            │▌ 72% · 890K               │                      │
+  │            │▌ 8% · 500                │                      │  ▌ = family accent
+  │            │▌ 39%                      │                      │
+  │            │▌ 72%                      │                      │
   │            └──────────────────────────┘                      │
   └──────────────────────────────────────────────────────────────┘
 ```
@@ -76,10 +77,12 @@ Rules:
   - sunk into the surface (dark well, no high-contrast border card);
   - thin left **family accent** bar (color = ring family);
   - measured horizontal padding so Bold labels clear the well edges;
-  - strip order = smallest amount on top (plan: smallest remaining `%`; tokens-only: smallest TOK);
-  - content: `%`, tokens, or `% · tokens`; omit unused halves / omit empty strips.
-- **Tokens-only**: thin framing track, large time, token strips only — no percent arcs.
-- No orphan captions (`Codex left`, floating `TOK`) outside the strip row.
+  - strip order = smallest remaining `%` on top when plan rings exist;
+  - content: `%`, remaining credits, or `% · credits` on the outer strip; omit unused halves /
+    omit empty strips;
+  - credits text is compact (`500`, `1.2K`) — never a `TOK` suffix.
+- **Credits-only**: thin framing track, large time, credits strip only — no percent arcs.
+- No orphan captions (`Codex left`, floating unit labels) outside the strip row.
 - Review art focuses on 1–3 provider families. A local **budget** metric may still occupy a product
   ring slot; do not ship a “4 providers” face variant in review art.
 
@@ -93,18 +96,18 @@ Regenerate with `node tools/render-watch-ring-designs.mjs`, then optional PNG pr
 
 ```sh
 convert -background none -density 144 \
-  apps/wear_android/design/round-3-plan-tokens.svg \
-  apps/wear_android/design/preview-3-plan-tokens.png
-xdg-open apps/wear_android/design/preview-3-plan-tokens.png
+  apps/wear_android/design/round-3-plan-credits.svg \
+  apps/wear_android/design/preview-3-plan-credits.png
+xdg-open apps/wear_android/design/preview-3-plan-credits.png
 ```
 
 | File | Meaning |
 |------|---------|
-| `round-3-plan-tokens.svg` | **Primary baseline** — three providers, plan + tokens |
-| `round-2-plan-tokens.svg` | Two providers |
+| `round-3-plan-credits.svg` | **Primary baseline** — three providers, plan + credits |
+| `round-2-plan-credits.svg` | Two providers |
 | `round-1-plan.svg` | Single plan ring, `%` strip only |
-| `round-1-plan-tokens.svg` | Single plan + tokens |
-| `round-tokens-only.svg` | No plan rings — time + token strips |
+| `round-1-plan-credits.svg` | Single plan + credits |
+| `round-credits-only.svg` | No plan rings — time + credits strip |
 | `round-ambient-3.svg` | Ambient, three muted rings |
 
 Wear: `apps/wear_android/design/`. WFF copies: `apps/watchface_wff/design/`.  
@@ -115,7 +118,7 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
 | Surface | Role |
 |---------|------|
 | Wear OS app | Compose remaining arcs + sunk strips; system time on the watch chrome |
-| WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs in `watchface.xml` |
+| WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs plus sunk `SHORT_TEXT` strips (`%` / `% · credits`) in `watchface.xml`. Outer strip TEXT is the full label (WFF `length(TITLE)` Conditions are unreliable). Keep progress/track `endAngle` below 360° (scale remaining onto 359.9°) — a closed circle collapses to a ROUND tip at 12 o'clock. Strips need their own `BoundingBox` slots (`BoundingArc` clips content to the arc band). |
 | Phone Watchface tab | Slot selection + preview of next payload rings (not Settings) |
 
 ## Non-goals
@@ -125,6 +128,7 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
 - High-contrast bordered strip “cards” or ring-cast drop shadows as strip chrome.
 - Time-based rotation of which metric is “on top” in the first iteration.
 - Brand/marketing chrome, floating badges, or dense face captions.
+- LLM token counts (`TOK`) on the face — those belong on phone history charts, not strips.
 
 ## Future direction (not locked baseline)
 

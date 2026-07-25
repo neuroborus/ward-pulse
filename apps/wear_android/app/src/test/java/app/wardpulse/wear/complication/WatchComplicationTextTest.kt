@@ -1,9 +1,11 @@
 package app.wardpulse.wear.complication
 
+import app.wardpulse.wear.model.CreditsGlance
 import app.wardpulse.wear.model.PreviewWatchDashboardSummary
 import app.wardpulse.wear.model.ProviderSummary
 import app.wardpulse.wear.model.PulseStatus
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class WatchComplicationTextTest {
@@ -19,6 +21,31 @@ class WatchComplicationTextTest {
         assertEquals("0%", WatchComplicationText.percentLabel(0f))
         assertEquals("25", WatchComplicationText.percentAmount(24.8f))
         assertEquals("—", WatchComplicationText.percentAmount(null))
+    }
+
+    @Test
+    fun buildsSunkStripLabelsWithOptionalCredits() {
+        val withCredits = PreviewWatchDashboardSummary.value.copy(
+            creditsGlance = CreditsGlance(text = "500", label = "Credits left", provider = "codex"),
+        )
+        assertEquals(
+            WatchComplicationText.StripPayload(text = "72", title = "500"),
+            WatchComplicationText.stripPayload(withCredits, 0),
+        )
+        assertEquals("72% · 500", WatchComplicationText.stripLabel(withCredits, 0))
+        assertEquals("74%", WatchComplicationText.stripLabel(withCredits, 1))
+
+        val planOnly = withCredits.copy(creditsGlance = null)
+        assertEquals(
+            WatchComplicationText.StripPayload(text = "72", title = null),
+            WatchComplicationText.stripPayload(planOnly, 0),
+        )
+        assertEquals("72%", WatchComplicationText.stripLabel(planOnly, 0))
+
+        val creditsOnly = planOnly.copy(rings = emptyList(), creditsGlance = withCredits.creditsGlance)
+        assertNull(WatchComplicationText.stripPayload(creditsOnly, 0))
+        assertEquals("500", WatchComplicationText.stripLabel(creditsOnly, 0))
+        assertNull(WatchComplicationText.stripLabel(creditsOnly, 1))
     }
 
     @Test

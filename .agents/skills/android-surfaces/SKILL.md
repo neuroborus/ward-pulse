@@ -34,7 +34,8 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   tightest remaining; arc = remaining; large time hero; sunk family strips (not bordered cards);
   family colors (OpenAI/Codex green, Anthropic orange, Cursor teal, budget blue). Future
   multi-profile / hatch / three-ring cap notes there are planning-only until a later phase.
-- Show optional per-provider tokens on strips / `tokenGlance` when today tokens > 0 (not a ring).
+- Show optional remaining purchased credits on the outer strip / `creditsGlance` when reported
+  and Settings shows purchased usage (not a ring; never LLM `TOK`).
 - Keep today, week, usage, providers, alerts (active list only — no rule editing), and last sync
   as secondary detail screens.
 - Store and render the latest successful watch summary.
@@ -48,7 +49,14 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   side-by-side `RING 1` / `RING 2` placeholders).
 - WFF format version 2 (Wear OS 5+): concentric `RANGED_VALUE` arcs with `WeightedStroke`
   colors from Wear `ColorRamp` / `[COMPLICATION.RANGED_VALUE_COLORS]`; arc = remaining.
-- Prefer live arcs for selected layers, optional token-glance strip when present, large time.
+  Keep track/progress `endAngle` under 360° (scale onto 359.9°) — a closed circle collapses
+  to a ROUND tip at 12 o'clock. Prefer simple Transform arithmetic over `clamp()`.
+  `BoundingArc` clips ring-slot content to the arc band — sunk `%` / credits strips must use
+  separate `BoundingBox` SHORT_TEXT slots. Outer strip TEXT = full label (`100% · 500`);
+  inner strips TEXT = remaining digits with Template `%%`. Avoid `length(TITLE)` Conditions —
+  they are unreliable on WFF. Draw strips after `DigitalClock` so the clock does not cover them.
+- Prefer live arcs for selected layers, optional `creditsGlance` on the outer strip when present,
+  large time. Never LLM `TOK` on the face.
 - Support tap-to-open into the Wear OS app where possible.
 - Keep ambient mode readable (dim arcs, strips off).
 

@@ -19,6 +19,8 @@ final class WatchRingMetric {
 
   final String id;
   final String label;
+
+  /// Consumed capacity 0–100 from the provider (Watch/WFF arcs use remaining).
   final double? usedPercent;
   final ProviderStatus status;
 
@@ -26,6 +28,15 @@ final class WatchRingMetric {
   final String? unavailableReason;
 
   bool get isAvailable => usedPercent != null && unavailableReason == null;
+
+  /// Remaining capacity for display — matches Wear/WFF remaining arcs.
+  double? get remainingPercent {
+    final used = usedPercent;
+    if (used == null) {
+      return null;
+    }
+    return (100.0 - used).clamp(0.0, 100.0);
+  }
 }
 
 /// Ordered ring metric ids for Watchface (at most [watchRingSlotCount]).
