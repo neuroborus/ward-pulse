@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,9 +7,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_app.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
+import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
 import 'package:ward_pulse_phone/settings/debug_data_preferences.dart';
+import 'package:ward_pulse_phone/settings/refresh_interval_preferences.dart';
+import 'package:ward_pulse_phone/sync/poll_cadence.dart';
+import 'package:ward_pulse_phone/sync/provider_sync_scheduler.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 
 void main() {
@@ -166,6 +171,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Not set'), findsWidgets);
+    await tester.ensureVisible(find.text('Platform reporting'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Platform reporting'));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -176,17 +183,17 @@ void main() {
       tester.widget<TextField>(find.byType(TextField).first).obscureText,
       isTrue,
     );
-    await tester.tap(find.byTooltip('Show API key'));
+    await tester.tap(find.byTooltip('Show value'));
     await tester.pump();
     expect(
       tester.widget<TextField>(find.byType(TextField).first).obscureText,
       isFalse,
     );
-    expect(find.byTooltip('Hide API key'), findsOneWidget);
+    expect(find.byTooltip('Hide value'), findsOneWidget);
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
-    expect(credentialStore.value, 'secret-admin-key');
+    expect(credentialStore.openAiSecret, 'secret-admin-key');
     expect(find.text('••••••••'), findsOneWidget);
     expect(find.text('secret-admin-key'), findsNothing);
   });
@@ -209,8 +216,9 @@ void main() {
 
     expect(find.text('OpenAI'), findsOneWidget);
     expect(find.text('Codex subscription'), findsOneWidget);
-    expect(find.text('Anthropic'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Platform reporting'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Platform reporting'));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -221,31 +229,42 @@ void main() {
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
-    expect(credentialStore.value, 'secret-admin-key');
-    expect(credentialStore.label, 'Work org key');
+    expect(credentialStore.openAiSecret, 'secret-admin-key');
+    expect(credentialStore.openAiLabel, 'Work org key');
     expect(find.text('Work org key'), findsOneWidget);
     expect(find.text('Platform reporting'), findsNothing);
+
+    final settingsList = find.descendant(
+      of: find.byType(ListView),
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.text('Anthropic'),
+      300,
+      scrollable: settingsList,
+    );
+    expect(find.text('Anthropic'), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.text('Cursor'),
       300,
-      scrollable: find.byType(Scrollable).first,
+      scrollable: settingsList,
     );
     expect(find.text('Cursor'), findsOneWidget);
-    expect(find.text('Coming soon'), findsWidgets);
+    expect(find.text('Not set'), findsWidgets);
 
     await tester.scrollUntilVisible(
       find.text('Work org key'),
       300,
-      scrollable: find.byType(Scrollable).first,
+      scrollable: settingsList,
     );
     await tester.tap(find.text('Work org key'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Remove'));
     await tester.pumpAndSettle();
 
-    expect(credentialStore.value, isNull);
-    expect(credentialStore.label, isNull);
+    expect(credentialStore.openAiSecret, isNull);
+    expect(credentialStore.openAiLabel, isNull);
     expect(find.text('Platform reporting'), findsOneWidget);
   });
 
@@ -253,6 +272,8 @@ void main() {
     tester,
   ) async {
     final credentialStore = _MemoryCredentialStore('invalid-admin-key');
+    final scheduler = _ManualProviderSyncScheduler();
+    addTearDown(scheduler.dispose);
 
     await tester.pumpWidget(
       WardPulseApp(
@@ -261,11 +282,13 @@ void main() {
           'Usage · HTTP 401 · invalid_api_key',
         ),
         credentialStore: credentialStore,
+        syncScheduler: scheduler,
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Dashboard unavailable'), findsOneWidget);
+    expect(scheduler.scheduledInterval, isNotNull);
     expect(
       find.text(DashboardSyncIssue.authentication.message),
       findsOneWidget,
@@ -286,6 +309,8 @@ void main() {
 
     expect(find.text('Platform reporting'), findsOneWidget);
     expect(find.text('••••••••'), findsOneWidget);
+    await tester.ensureVisible(find.text('Platform reporting'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Platform reporting'));
     await tester.pumpAndSettle();
     expect(find.text('Remove'), findsOneWidget);
@@ -352,6 +377,100 @@ void main() {
     expect(preferences.value.purchased, isTrue);
     expect(find.text('Weekly plan'), findsOneWidget);
     expect(find.text('Purchased credits'), findsOneWidget);
+  });
+
+  testWidgets('persists the global refresh interval slider', (tester) async {
+    final snapshot = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final preferences = _MemoryRefreshIntervalPreferenceStore();
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(snapshot),
+        refreshIntervalStore: preferences,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Every ${PollCadence.defaultRefreshMinutes} minutes'),
+      findsOneWidget,
+    );
+
+    final slider = find.byType(Slider);
+    await tester.ensureVisible(slider);
+    await tester.pumpAndSettle();
+    await tester.drag(slider, const Offset(80, 0));
+    await tester.pumpAndSettle();
+
+    expect(
+      preferences.value.minutes,
+      greaterThan(PollCadence.defaultRefreshMinutes),
+    );
+    expect(
+      preferences.value.minutes,
+      lessThanOrEqualTo(PollCadence.maxRefreshMinutes),
+    );
+  });
+
+  testWidgets('resyncs providers and the watch on a scheduled tick', (
+    tester,
+  ) async {
+    final snapshot = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final watchSyncService = _FakeWatchSyncService();
+    final scheduler = _ManualProviderSyncScheduler();
+    addTearDown(scheduler.dispose);
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(snapshot),
+        watchSyncService: watchSyncService,
+        syncScheduler: scheduler,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      scheduler.scheduledInterval,
+      const Duration(minutes: PollCadence.defaultRefreshMinutes),
+    );
+    expect(watchSyncService.syncedSnapshots, hasLength(1));
+
+    scheduler.tick();
+    await tester.pumpAndSettle();
+
+    expect(watchSyncService.syncedSnapshots, hasLength(2));
+  });
+
+  testWidgets('shows Cursor freshness guidance on connection rows', (
+    tester,
+  ) async {
+    final snapshot = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+
+    await tester.pumpWidget(
+      WardPulseApp(repository: ValueDashboardRepository(snapshot)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Cursor plan'),
+      300,
+      scrollable: find.descendant(
+        of: find.byType(ListView),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    expect(find.textContaining(PollCadence.cursorFreshnessNote), findsWidgets);
+    expect(find.textContaining('Experimental'), findsWidgets);
   });
 
   testWidgets('enables mock data only from the debug setting', (tester) async {
@@ -448,34 +567,44 @@ final class _FailingDashboardRepository extends DashboardRepository {
 }
 
 class _MemoryCredentialStore implements ProviderCredentialStore {
-  _MemoryCredentialStore([this.value]);
-
-  String? value;
-  String? label;
-
-  @override
-  Future<String?> readOpenAiAdminKey() async => value;
-
-  @override
-  Future<void> writeOpenAiAdminKey(String value) async {
-    this.value = value;
-  }
-
-  @override
-  Future<void> deleteOpenAiAdminKey() async {
-    value = null;
-    label = null;
-  }
-
-  @override
-  Future<String?> readOpenAiAdminKeyLabel() async => label;
-
-  @override
-  Future<void> writeOpenAiAdminKeyLabel(String? value) async {
-    label = value?.trim();
-    if (label != null && label!.isEmpty) {
-      label = null;
+  _MemoryCredentialStore([String? openAiAdminKey]) {
+    if (openAiAdminKey != null) {
+      _secrets[ProviderConnections.openAiPlatform] = openAiAdminKey;
     }
+  }
+
+  final _secrets = <ProviderConnectionId, String>{};
+  final _labels = <ProviderConnectionId, String>{};
+
+  String? get openAiSecret => _secrets[ProviderConnections.openAiPlatform];
+
+  String? get openAiLabel => _labels[ProviderConnections.openAiPlatform];
+
+  @override
+  Future<String?> readSecret(ProviderConnectionId id) async => _secrets[id];
+
+  @override
+  Future<void> writeSecret(ProviderConnectionId id, String value) async {
+    _secrets[id] = value;
+  }
+
+  @override
+  Future<void> deleteSecret(ProviderConnectionId id) async {
+    _secrets.remove(id);
+    _labels.remove(id);
+  }
+
+  @override
+  Future<String?> readLabel(ProviderConnectionId id) async => _labels[id];
+
+  @override
+  Future<void> writeLabel(ProviderConnectionId id, String? value) async {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      _labels.remove(id);
+      return;
+    }
+    _labels[id] = trimmed;
   }
 }
 
@@ -502,4 +631,38 @@ class _MemoryDebugDataPreferenceStore implements DebugDataPreferenceStore {
   Future<void> writeMockDataEnabled(bool value) async {
     this.value = value;
   }
+}
+
+class _MemoryRefreshIntervalPreferenceStore
+    implements RefreshIntervalPreferenceStore {
+  RefreshIntervalPreference value = const RefreshIntervalPreference();
+
+  @override
+  Future<RefreshIntervalPreference> read() async => value;
+
+  @override
+  Future<void> write(RefreshIntervalPreference value) async {
+    this.value = value;
+  }
+}
+
+class _ManualProviderSyncScheduler implements ProviderSyncScheduler {
+  final _ticks = StreamController<void>.broadcast();
+
+  Duration? scheduledInterval;
+
+  @override
+  Stream<void> get ticks => _ticks.stream;
+
+  @override
+  Future<void> schedule(Duration interval) async {
+    scheduledInterval = interval;
+  }
+
+  @override
+  Future<void> cancel() async {}
+
+  void tick() => _ticks.add(null);
+
+  Future<void> dispose() => _ticks.close();
 }

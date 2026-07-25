@@ -6,37 +6,16 @@ import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_repository.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../providers/codex_account_service.dart';
+import '../providers/provider_connection.dart';
 import '../providers/provider_credential_store.dart';
 import '../providers/providers_screen.dart';
 import '../settings/settings_screen.dart';
 import '../settings/consumption_display_preferences.dart';
 import '../settings/debug_data_preferences.dart';
+import '../settings/refresh_interval_preferences.dart';
+import '../sync/provider_sync_scheduler.dart';
 import '../sync/watch_sync_service.dart';
-
-final ColorScheme _lightColorScheme = ColorScheme.fromSeed(
-  seedColor: const Color(0xFF67E8D4),
-  dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
-  primary: const Color(0xFF006B60),
-  onPrimary: Colors.white,
-  tertiary: const Color(0xFF715D00),
-  onTertiary: Colors.white,
-  tertiaryContainer: const Color(0xFFFFE16B),
-  onTertiaryContainer: const Color(0xFF221B00),
-);
-
-final ColorScheme _darkColorScheme = ColorScheme.fromSeed(
-  seedColor: const Color(0xFF67E8D4),
-  brightness: Brightness.dark,
-  dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
-  primary: const Color(0xFF67E8D4),
-  onPrimary: const Color(0xFF002F2A),
-  primaryContainer: const Color(0xFF155B45),
-  onPrimaryContainer: const Color(0xFFF4FBF8),
-  tertiary: const Color(0xFFE6C349),
-  onTertiary: const Color(0xFF3C2F00),
-  tertiaryContainer: const Color(0xFF574500),
-  onTertiaryContainer: const Color(0xFFFFE17A),
-);
+import 'ward_pulse_theme.dart';
 
 class WardPulseApp extends StatelessWidget {
   const WardPulseApp({
@@ -47,6 +26,8 @@ class WardPulseApp extends StatelessWidget {
     this.codexAccountService = const EmptyCodexAccountService(),
     this.displayPreferenceStore =
         const DefaultConsumptionDisplayPreferenceStore(),
+    this.refreshIntervalStore = const DefaultRefreshIntervalPreferenceStore(),
+    this.syncScheduler = const DisabledProviderSyncScheduler(),
     this.debugDataAvailable = false,
     this.debugDataPreferenceStore = const DisabledDebugDataPreferenceStore(),
   });
@@ -56,6 +37,8 @@ class WardPulseApp extends StatelessWidget {
   final ProviderCredentialStore credentialStore;
   final CodexAccountService codexAccountService;
   final ConsumptionDisplayPreferenceStore displayPreferenceStore;
+  final RefreshIntervalPreferenceStore refreshIntervalStore;
+  final ProviderSyncScheduler syncScheduler;
   final bool debugDataAvailable;
   final DebugDataPreferenceStore debugDataPreferenceStore;
 
@@ -64,14 +47,16 @@ class WardPulseApp extends StatelessWidget {
     return MaterialApp(
       title: 'WardPulse',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorScheme: _lightColorScheme, useMaterial3: true),
-      darkTheme: ThemeData(colorScheme: _darkColorScheme, useMaterial3: true),
+      theme: wardPulseLightTheme,
+      darkTheme: wardPulseDarkTheme,
       home: DashboardHost(
         repository: repository,
         watchSyncService: watchSyncService,
         credentialStore: credentialStore,
         codexAccountService: codexAccountService,
         displayPreferenceStore: displayPreferenceStore,
+        refreshIntervalStore: refreshIntervalStore,
+        syncScheduler: syncScheduler,
         debugDataAvailable: debugDataAvailable,
         debugDataPreferenceStore: debugDataPreferenceStore,
       ),
@@ -87,6 +72,8 @@ class DashboardHost extends StatefulWidget {
     required this.credentialStore,
     required this.codexAccountService,
     required this.displayPreferenceStore,
+    required this.refreshIntervalStore,
+    required this.syncScheduler,
     required this.debugDataAvailable,
     required this.debugDataPreferenceStore,
   });
@@ -96,6 +83,8 @@ class DashboardHost extends StatefulWidget {
   final ProviderCredentialStore credentialStore;
   final CodexAccountService codexAccountService;
   final ConsumptionDisplayPreferenceStore displayPreferenceStore;
+  final RefreshIntervalPreferenceStore refreshIntervalStore;
+  final ProviderSyncScheduler syncScheduler;
   final bool debugDataAvailable;
   final DebugDataPreferenceStore debugDataPreferenceStore;
 
@@ -106,13 +95,39 @@ class DashboardHost extends StatefulWidget {
 class _DashboardHostState extends State<DashboardHost> {
   static const _settingsIndex = 2;
 
+  /// Account ids carried by each platform connection's normalized report.
+  static const _platformAccountIds = {
+    'openai-local': ProviderConnections.openAiPlatform,
+    'anthropic-local': ProviderConnections.anthropicPlatform,
+    'cursor-team-local': ProviderConnections.cursorPlatform,
+  };
+
   late Future<DashboardSnapshot> _snapshot = _loadSnapshot();
   DashboardSnapshot? _currentSnapshot;
   ConsumptionDisplayPreferences _displayPreferences =
       const ConsumptionDisplayPreferences();
-  String? _openAiPlatformLabel;
+  RefreshIntervalPreference _refreshInterval =
+      const RefreshIntervalPreference();
+  Map<String, String> _platformLabels = const {};
   bool _mockDataEnabled = false;
   int _selectedIndex = 0;
+  StreamSubscription<void>? _syncTicks;
+  var _autoSyncInFlight = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncTicks = widget.syncScheduler.ticks.listen((_) {
+      unawaited(_onScheduledSync());
+    });
+  }
+
+  @override
+  void dispose() {
+    unawaited(_syncTicks?.cancel());
+    unawaited(widget.syncScheduler.cancel());
+    super.dispose();
+  }
 
   Future<void> _readDisplayPreferences() async {
     try {
@@ -123,12 +138,26 @@ class _DashboardHostState extends State<DashboardHost> {
     }
   }
 
+  Future<void> _readRefreshInterval() async {
+    try {
+      _refreshInterval = await widget.refreshIntervalStore.read();
+    } catch (_) {
+      _refreshInterval = const RefreshIntervalPreference();
+    }
+  }
+
   Future<void> _readConnectionMetadata() async {
     try {
-      _openAiPlatformLabel =
-          await widget.credentialStore.readOpenAiAdminKeyLabel();
+      final labels = <String, String>{};
+      for (final entry in _platformAccountIds.entries) {
+        final label = await widget.credentialStore.readLabel(entry.value);
+        if (label != null) {
+          labels[entry.key] = label;
+        }
+      }
+      _platformLabels = labels;
     } catch (_) {
-      _openAiPlatformLabel = null;
+      _platformLabels = const {};
     }
   }
 
@@ -160,14 +189,52 @@ class _DashboardHostState extends State<DashboardHost> {
     }
   }
 
+  Future<void> _updateRefreshInterval(RefreshIntervalPreference value) async {
+    await widget.refreshIntervalStore.write(value);
+    if (mounted) {
+      setState(() {
+        _refreshInterval = value;
+      });
+    }
+    await widget.syncScheduler.schedule(value.interval);
+  }
+
   Future<DashboardSnapshot> _loadSnapshot() async {
     await _readDisplayPreferences();
+    await _readRefreshInterval();
     await _readConnectionMetadata();
     await _readDebugDataPreference();
+    // Rescheduling before the load keeps the next tick a full interval away, so
+    // no connection is polled faster than its floor, and a failed load still
+    // retries on the next tick.
+    unawaited(widget.syncScheduler.schedule(_refreshInterval.interval));
     final snapshot = await widget.repository.load();
     _currentSnapshot = snapshot;
     unawaited(_syncWatch(snapshot));
     return snapshot;
+  }
+
+  Future<void> _onScheduledSync() async {
+    if (_autoSyncInFlight || !mounted) {
+      return;
+    }
+    _autoSyncInFlight = true;
+    try {
+      // Do not invalidate: load() already refetches, and clearing caches would
+      // drop stale-with-issue recovery on a failed automatic tick.
+      final snapshot = await widget.repository.load();
+      _currentSnapshot = snapshot;
+      if (mounted) {
+        setState(() {
+          _snapshot = Future.value(snapshot);
+        });
+      }
+      await _syncWatch(snapshot);
+    } catch (_) {
+      // Automatic sync failures keep the last successful snapshot visible.
+    } finally {
+      _autoSyncInFlight = false;
+    }
   }
 
   Future<void> _updateMockDataEnabled(bool value) async {
@@ -238,6 +305,8 @@ class _DashboardHostState extends State<DashboardHost> {
                 codexAccountService: widget.codexAccountService,
                 displayPreferences: _displayPreferences,
                 onDisplayPreferencesChanged: _updateDisplayPreferences,
+                refreshInterval: _refreshInterval,
+                onRefreshIntervalChanged: _updateRefreshInterval,
                 debugDataAvailable: widget.debugDataAvailable,
                 mockDataEnabled: _mockDataEnabled,
                 onMockDataEnabledChanged: _updateMockDataEnabled,
@@ -262,7 +331,7 @@ class _DashboardHostState extends State<DashboardHost> {
                 selectedIndex: _selectedIndex,
                 snapshot: snapshot,
                 displayPreferences: _displayPreferences,
-                openAiPlatformLabel: _openAiPlatformLabel,
+                platformLabels: _platformLabels,
                 onOpenSettings: _openSettings,
               ),
               _ => _ErrorView(
@@ -307,14 +376,14 @@ class _SelectedSurface extends StatelessWidget {
     required this.selectedIndex,
     required this.snapshot,
     required this.displayPreferences,
-    this.openAiPlatformLabel,
+    this.platformLabels = const {},
     this.onOpenSettings,
   });
 
   final int selectedIndex;
   final DashboardSnapshot snapshot;
   final ConsumptionDisplayPreferences displayPreferences;
-  final String? openAiPlatformLabel;
+  final Map<String, String> platformLabels;
   final VoidCallback? onOpenSettings;
 
   @override
@@ -328,7 +397,7 @@ class _SelectedSurface extends StatelessWidget {
       _ => ProvidersScreen(
         snapshot: snapshot,
         displayPreferences: displayPreferences,
-        openAiPlatformLabel: openAiPlatformLabel,
+        platformLabels: platformLabels,
       ),
     };
   }

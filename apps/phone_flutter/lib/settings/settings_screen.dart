@@ -10,8 +10,10 @@ import '../providers/provider_connection.dart';
 import '../providers/provider_connection_row.dart';
 import '../providers/provider_credential_store.dart';
 import '../sync/codex_account_client.dart';
+import '../sync/poll_cadence.dart';
 import '../sync/watch_sync_service.dart';
 import 'consumption_display_preferences.dart';
+import 'refresh_interval_preferences.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
@@ -22,6 +24,8 @@ class SettingsScreen extends StatefulWidget {
     required this.codexAccountService,
     required this.displayPreferences,
     required this.onDisplayPreferencesChanged,
+    required this.refreshInterval,
+    required this.onRefreshIntervalChanged,
     required this.debugDataAvailable,
     required this.mockDataEnabled,
     required this.onMockDataEnabledChanged,
@@ -35,6 +39,9 @@ class SettingsScreen extends StatefulWidget {
   final ConsumptionDisplayPreferences displayPreferences;
   final Future<void> Function(ConsumptionDisplayPreferences value)
   onDisplayPreferencesChanged;
+  final RefreshIntervalPreference refreshInterval;
+  final Future<void> Function(RefreshIntervalPreference value)
+  onRefreshIntervalChanged;
   final bool debugDataAvailable;
   final bool mockDataEnabled;
   final Future<void> Function(bool value) onMockDataEnabledChanged;
@@ -45,12 +52,19 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool? _hasCredential;
+  final Map<String, bool> _hasSecret = {};
+  final Map<String, String?> _labels = {};
   bool? _hasCodexAccount;
-  String? _openAiPlatformLabel;
   bool _isConnectingCodex = false;
   bool _isSyncing = false;
   String? _syncResult;
+  double? _dragRefreshMinutes;
+
+  /// Connections authorized by a pasted secret, in catalog order.
+  static final _secretConnections = providerConnectionCatalog()
+      .where((connection) => connection.secretHint != null)
+      .map((connection) => connection.id)
+      .toList(growable: false);
 
   @override
   void initState() {
@@ -78,33 +92,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadCredentialState() async {
     try {
-      final values = await Future.wait([
-        widget.credentialStore.readOpenAiAdminKey(),
-        widget.credentialStore.readOpenAiAdminKeyLabel(),
-      ]);
+      final secrets = <String, bool>{};
+      final labels = <String, String?>{};
+      for (final id in _secretConnections) {
+        secrets[id.storageKey] =
+            await widget.credentialStore.readSecret(id) != null;
+        labels[id.storageKey] = await widget.credentialStore.readLabel(id);
+      }
       if (mounted) {
         setState(() {
-          _hasCredential = values[0] != null;
-          _openAiPlatformLabel = values[1];
+          _hasSecret
+            ..clear()
+            ..addAll(secrets);
+          _labels
+            ..clear()
+            ..addAll(labels);
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _hasCredential = false;
-          _openAiPlatformLabel = null;
+          for (final id in _secretConnections) {
+            _hasSecret[id.storageKey] = false;
+            _labels[id.storageKey] = null;
+          }
         });
       }
     }
   }
 
-  Future<void> _editCredential() async {
+  Future<void> _editSecret(
+    ProviderConnectionId id, {
+    required bool allowLabel,
+    required String title,
+    required String hint,
+  }) async {
+    final key = id.storageKey;
     final change = await showDialog<_CredentialChange>(
       context: context,
       builder:
           (context) => _CredentialDialog(
-            hasCredential: _hasCredential ?? false,
-            initialLabel: _openAiPlatformLabel,
+            title: title,
+            hint: hint,
+            allowLabel: allowLabel,
+            hasCredential: _hasSecret[key] ?? false,
+            initialLabel: _labels[key],
           ),
     );
     if (change == null) {
@@ -113,19 +145,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     try {
       if (change.remove) {
-        await widget.credentialStore.deleteOpenAiAdminKey();
+        await widget.credentialStore.deleteSecret(id);
       } else if (change.updateLabelOnly) {
-        await widget.credentialStore.writeOpenAiAdminKeyLabel(change.label);
+        await widget.credentialStore.writeLabel(id, change.label);
       } else {
-        await widget.credentialStore.writeOpenAiAdminKey(change.value!);
-        await widget.credentialStore.writeOpenAiAdminKeyLabel(change.label);
+        await widget.credentialStore.writeSecret(id, change.value!);
+        if (allowLabel) {
+          await widget.credentialStore.writeLabel(id, change.label);
+        }
       }
       if (!mounted) {
         return;
       }
       setState(() {
-        _hasCredential = !change.remove;
-        _openAiPlatformLabel = change.remove ? null : change.label;
+        _hasSecret[key] = !change.remove;
+        _labels[key] = change.remove ? null : change.label;
       });
       widget.onCredentialsChanged();
     } catch (_) {
@@ -279,21 +313,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _setRefreshInterval(double minutes) async {
+    final preference = RefreshIntervalPreference(minutes: minutes.round());
+    try {
+      await widget.onRefreshIntervalChanged(preference);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not update refresh interval')),
+        );
+      }
+    }
+  }
+
+  Widget _connectionRow(ProviderConnection connection) {
+    final hint = connection.secretHint;
+    if (hint == null) {
+      return _codexAccountRow(connection);
+    }
+
+    final hasSecret = _hasSecret[connection.id.storageKey];
+    return ProviderConnectionRow(
+      icon:
+          connection.id.kind == ConnectionKind.plan
+              ? Icons.account_circle_outlined
+              : Icons.key_outlined,
+      title: connection.listTitle,
+      subtitle: connection.listSubtitle,
+      trailing: switch (hasSecret) {
+        null => const _RowProgress(),
+        true => const Text('••••••••'),
+        false => const Text('Not set'),
+      },
+      onTap:
+          hasSecret == null
+              ? null
+              : () => _editSecret(
+                connection.id,
+                allowLabel: connection.id.kind == ConnectionKind.platform,
+                title:
+                    '${providerFamilyLabel(connection.id.provider)} · '
+                    '${connection.title}',
+                hint: hint,
+              ),
+    );
+  }
+
+  Widget _codexAccountRow(ProviderConnection connection) {
+    return ProviderConnectionRow(
+      icon: Icons.account_circle_outlined,
+      title: connection.listTitle,
+      subtitle: connection.listSubtitle,
+      trailing: switch ((_hasCodexAccount, _isConnectingCodex)) {
+        (_, true) || (null, _) => const _RowProgress(),
+        (true, _) => const Text('Connected'),
+        (false, _) => const Text('Not connected'),
+      },
+      onTap:
+          _hasCodexAccount == null || _isConnectingCodex
+              ? null
+              : _editCodexAccount,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final snapshot = widget.snapshot;
-    final trimmedPlatformLabel = _openAiPlatformLabel?.trim();
-    final openAiPlatformTitle =
-        trimmedPlatformLabel != null && trimmedPlatformLabel.isNotEmpty
-            ? trimmedPlatformLabel
-            : 'Platform reporting';
+    final catalog = providerConnectionCatalog(platformLabels: _labels);
+    final shownRefreshMinutes =
+        _dragRefreshMinutes?.round() ?? widget.refreshInterval.minutes;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
         Card(
-          margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           child: Column(
             children: [
               SwitchListTile(
@@ -323,12 +416,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         const SizedBox(height: 16),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.schedule_outlined),
+                  title: const Text('Refresh interval'),
+                  subtitle: Text(
+                    'Every $shownRefreshMinutes minutes · some providers '
+                    'publish new data less often',
+                  ),
+                ),
+                Slider(
+                  min: PollCadence.minRefreshMinutes.toDouble(),
+                  max: PollCadence.maxRefreshMinutes.toDouble(),
+                  divisions:
+                      PollCadence.maxRefreshMinutes -
+                      PollCadence.minRefreshMinutes,
+                  label: '$shownRefreshMinutes min',
+                  semanticFormatterCallback:
+                      (value) => '${value.round()} minutes',
+                  value: shownRefreshMinutes.toDouble(),
+                  onChanged: (value) {
+                    setState(() {
+                      _dragRefreshMinutes = value;
+                    });
+                  },
+                  onChangeEnd: (value) async {
+                    await _setRefreshInterval(value);
+                    // Keep a newer drag in place if one started while saving.
+                    if (mounted && _dragRefreshMinutes == value) {
+                      setState(() {
+                        _dragRefreshMinutes = null;
+                      });
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
         if (widget.debugDataAvailable) ...[
           Card(
-            margin: EdgeInsets.zero,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
             child: SwitchListTile(
               secondary: const Icon(Icons.science_outlined),
               title: const Text('Mock data'),
@@ -339,88 +473,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 16),
         ],
-        Card(
-          margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _ProviderSectionHeader(
-                title: providerFamilyLabel(ProviderFamily.openai),
-              ),
-              ProviderConnectionRow(
-                icon: Icons.account_circle_outlined,
-                title: 'Codex subscription',
-                subtitle: 'Experimental · plan limits and token activity',
-                trailing: switch ((_hasCodexAccount, _isConnectingCodex)) {
-                  (_, true) => const SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  (null, _) => const SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  (true, _) => const Text('Connected'),
-                  (false, _) => const Text('Not connected'),
-                },
-                onTap:
-                    _hasCodexAccount == null || _isConnectingCodex
-                        ? null
-                        : _editCodexAccount,
-              ),
-              const Divider(height: 1),
-              ProviderConnectionRow(
-                icon: Icons.key_outlined,
-                title: openAiPlatformTitle,
-                subtitle: 'Admin API key · stored on this phone',
-                trailing: switch (_hasCredential) {
-                  null => const SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  true => const Text('••••••••'),
-                  false => const Text('Not set'),
-                },
-                onTap: _hasCredential == null ? null : _editCredential,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        for (final provider in const [
-          ProviderFamily.anthropic,
-          ProviderFamily.cursor,
-        ]) ...[
+        for (final provider in ProviderFamily.values) ...[
           Card(
-            margin: EdgeInsets.zero,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _ProviderSectionHeader(title: providerFamilyLabel(provider)),
-                for (final connection in providerConnectionCatalog().where(
+                for (final connection in catalog.where(
                   (entry) => entry.id.provider == provider,
                 )) ...[
                   if (connection.id.kind == ConnectionKind.platform)
                     const Divider(height: 1),
-                  ProviderConnectionRow(
-                    icon:
-                        connection.id.kind == ConnectionKind.plan
-                            ? Icons.account_circle_outlined
-                            : Icons.key_outlined,
-                    title: connection.title,
-                    subtitle: connection.subtitle,
-                    trailing: Text(
-                      'Coming soon',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                    ),
-                    enabled: false,
-                  ),
+                  _connectionRow(connection),
                 ],
               ],
             ),
@@ -429,10 +493,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
         if (snapshot != null)
           Card(
-            margin: EdgeInsets.zero,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
             child: Column(
               children: [
                 ListTile(
@@ -478,6 +538,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _RowProgress extends StatelessWidget {
+  const _RowProgress();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox.square(
+      dimension: 20,
+      child: CircularProgressIndicator(strokeWidth: 2),
     );
   }
 }
@@ -678,9 +750,18 @@ class _CodexLoginDialogState extends State<_CodexLoginDialog> {
 }
 
 class _CredentialDialog extends StatefulWidget {
-  const _CredentialDialog({required this.hasCredential, this.initialLabel});
+  const _CredentialDialog({
+    required this.hasCredential,
+    required this.title,
+    required this.hint,
+    required this.allowLabel,
+    this.initialLabel,
+  });
 
   final bool hasCredential;
+  final String title;
+  final String hint;
+  final bool allowLabel;
   final String? initialLabel;
 
   @override
@@ -715,28 +796,38 @@ class _CredentialDialogState extends State<_CredentialDialog> {
         _formKey.currentState?.validate();
         return;
       }
-      Navigator.of(context).pop(_CredentialChange.labelOnly(resolvedLabel));
+      if (widget.allowLabel) {
+        Navigator.of(context).pop(_CredentialChange.labelOnly(resolvedLabel));
+      } else {
+        // Leave blank to keep the stored token; dismiss without a mutation.
+        Navigator.of(context).pop();
+      }
       return;
     }
     if (_formKey.currentState?.validate() ?? false) {
-      Navigator.of(
-        context,
-      ).pop(_CredentialChange.save(key, label: resolvedLabel));
+      Navigator.of(context).pop(
+        _CredentialChange.save(
+          key,
+          label: widget.allowLabel ? resolvedLabel : null,
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('OpenAI Admin API key'),
+      title: Text(widget.title),
       content: Form(
         key: _formKey,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'This privileged key is encrypted on this phone and sent only to OpenAI.',
+            Text(
+              widget.allowLabel
+                  ? 'This key is encrypted on this phone and sent only to the provider.'
+                  : 'This token is encrypted on this phone. Experimental compatibility connection.',
             ),
             const SizedBox(height: 16),
             TextFormField(
@@ -749,10 +840,11 @@ class _CredentialDialogState extends State<_CredentialDialog> {
                 border: const OutlineInputBorder(),
                 labelText:
                     widget.hasCredential
-                        ? 'Admin API key (leave blank to keep)'
-                        : 'Admin API key',
+                        ? 'Value (leave blank to keep)'
+                        : 'Value',
+                hintText: widget.hint,
                 suffixIcon: IconButton(
-                  tooltip: _obscureKey ? 'Show API key' : 'Hide API key',
+                  tooltip: _obscureKey ? 'Show value' : 'Hide value',
                   onPressed: () {
                     setState(() {
                       _obscureKey = !_obscureKey;
@@ -765,29 +857,35 @@ class _CredentialDialogState extends State<_CredentialDialog> {
                   ),
                 ),
               ),
-              textInputAction: TextInputAction.next,
+              textInputAction:
+                  widget.allowLabel
+                      ? TextInputAction.next
+                      : TextInputAction.done,
+              onFieldSubmitted: widget.allowLabel ? null : (_) => _save(),
               validator: (value) {
                 if (widget.hasCredential) {
                   return null;
                 }
                 return value == null || value.trim().isEmpty
-                    ? 'Enter an Admin API key'
+                    ? 'Enter a value'
                     : null;
               },
             ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _labelController,
-              autocorrect: false,
-              enableSuggestions: false,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Label (optional)',
-                hintText: 'Work org key',
+            if (widget.allowLabel) ...[
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _labelController,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Label (optional)',
+                  hintText: 'Work org key',
+                ),
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _save(),
               ),
-              textInputAction: TextInputAction.done,
-              onFieldSubmitted: (_) => _save(),
-            ),
+            ],
           ],
         ),
       ),

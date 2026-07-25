@@ -1,0 +1,26 @@
+{
+  "data": [
+    {
+      "userId": 1,
+      "day": "2026-07-18",
+      "date": 1783814400000,
+      "subscriptionIncludedReqs": 40,
+      "usageBasedReqs": 5,
+      "apiKeyReqs": 0,
+      "composerRequests": 10,
+      "chatRequests": 20,
+      "agentRequests": 2
+    },
+    {
+      "userId": 1,
+      "day": "2026-07-19",
+      "date": 1783900800000,
+      "subscriptionIncludedReqs": 55,
+      "usageBasedReqs": 8,
+      "apiKeyReqs": 1,
+      "composerRequests": 12,
+      "chatRequests": 30,
+      "agentRequests": 4
+    }
+  ]
+}

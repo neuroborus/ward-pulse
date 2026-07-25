@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/sync/openai_reporting_client.dart';
+import 'package:ward_pulse_phone/sync/provider_reporting.dart';
 
 void main() {
   final start = DateTime.utc(2026, 7, 1);
@@ -16,7 +17,9 @@ void main() {
       ],
       '/v1/organization/costs': [_response(_page())],
     });
-    final client = OpenAiReportingClient(transport: transport);
+    final client = OpenAiReportingClient(
+      http: ProviderReportingHttp(transport: transport),
+    );
 
     final reports = await client.fetchDailyReports(
       adminApiKey: 'secret-admin-key',
@@ -54,8 +57,10 @@ void main() {
       '/v1/organization/costs': [_response(_page())],
     });
     final client = OpenAiReportingClient(
-      transport: transport,
-      delay: (duration) async => delays.add(duration),
+      http: ProviderReportingHttp(
+        transport: transport,
+        delay: (duration) async => delays.add(duration),
+      ),
     );
 
     await client.fetchDailyReports(
@@ -65,6 +70,43 @@ void main() {
     );
 
     expect(delays, [const Duration(seconds: 2)]);
+  });
+
+  test('leaves a long Retry-After to the next scheduled sync', () async {
+    final delays = <Duration>[];
+    final transport = _FakeTransport({
+      '/v1/organization/usage/completions': [
+        const ProviderHttpResponse(
+          statusCode: HttpStatus.tooManyRequests,
+          headers: {'retry-after': '600'},
+          body: '{}',
+        ),
+        _response(_page()),
+      ],
+      '/v1/organization/costs': [_response(_page())],
+    });
+    final client = OpenAiReportingClient(
+      http: ProviderReportingHttp(
+        transport: transport,
+        delay: (duration) async => delays.add(duration),
+      ),
+    );
+
+    await expectLater(
+      client.fetchDailyReports(
+        adminApiKey: 'secret-admin-key',
+        start: start,
+        end: end,
+      ),
+      throwsA(
+        isA<ProviderReportingException>().having(
+          (error) => error.failure,
+          'failure',
+          ProviderReportingFailure.rateLimited,
+        ),
+      ),
+    );
+    expect(delays, isEmpty);
   });
 
   test(
@@ -83,9 +125,11 @@ void main() {
         '/v1/organization/costs': [_response(_page())],
       });
       final client = OpenAiReportingClient(
-        transport: transport,
-        delay: (duration) async => delays.add(duration),
-        random: () => 0,
+        http: ProviderReportingHttp(
+          transport: transport,
+          delay: (duration) async => delays.add(duration),
+          random: () => 0,
+        ),
       );
 
       await client.fetchDailyReports(
@@ -109,7 +153,9 @@ void main() {
       ],
       '/v1/organization/costs': [_response(_page())],
     });
-    final client = OpenAiReportingClient(transport: transport);
+    final client = OpenAiReportingClient(
+      http: ProviderReportingHttp(transport: transport),
+    );
 
     await expectLater(
       client.fetchDailyReports(
@@ -118,11 +164,11 @@ void main() {
         end: end,
       ),
       throwsA(
-        isA<OpenAiReportingException>()
+        isA<ProviderReportingException>()
             .having(
               (error) => error.failure,
               'failure',
-              OpenAiReportingFailure.authentication,
+              ProviderReportingFailure.authentication,
             )
             .having(
               (error) => error.toString(),
@@ -151,7 +197,9 @@ void main() {
         ],
         '/v1/organization/costs': [_response(_page())],
       });
-      final client = OpenAiReportingClient(transport: transport);
+      final client = OpenAiReportingClient(
+        http: ProviderReportingHttp(transport: transport),
+      );
 
       await expectLater(
         client.fetchDailyReports(
@@ -160,11 +208,11 @@ void main() {
           end: end,
         ),
         throwsA(
-          isA<OpenAiReportingException>()
+          isA<ProviderReportingException>()
               .having(
                 (error) => error.failure,
                 'failure',
-                OpenAiReportingFailure.invalidResponse,
+                ProviderReportingFailure.invalidResponse,
               )
               .having(
                 (error) => error.details,
@@ -192,7 +240,9 @@ void main() {
       ],
       '/v1/organization/costs': [_response(_page())],
     });
-    final client = OpenAiReportingClient(transport: transport);
+    final client = OpenAiReportingClient(
+      http: ProviderReportingHttp(transport: transport),
+    );
 
     await expectLater(
       client.fetchDailyReports(
@@ -201,11 +251,11 @@ void main() {
         end: end,
       ),
       throwsA(
-        isA<OpenAiReportingException>()
+        isA<ProviderReportingException>()
             .having(
               (error) => error.failure,
               'failure',
-              OpenAiReportingFailure.permissionDenied,
+              ProviderReportingFailure.permissionDenied,
             )
             .having(
               (error) => error.toString(),
@@ -255,6 +305,15 @@ final class _FakeTransport implements ProviderHttpTransport {
       throw StateError('No response configured for ${uri.path}');
     }
     return responses.removeAt(0);
+  }
+
+  @override
+  Future<ProviderHttpResponse> post(
+    Uri uri, {
+    required Map<String, String> headers,
+    String? body,
+  }) {
+    return get(uri, headers: headers);
   }
 }
 

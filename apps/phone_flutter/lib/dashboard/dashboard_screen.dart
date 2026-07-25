@@ -200,8 +200,6 @@ class _CapabilityGapRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: ListTile(
         title: Text(title),
         trailing: IconButton(
@@ -245,8 +243,6 @@ class EmptyAllowanceCard extends StatelessWidget {
     };
 
     return Card(
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: Padding(padding: const EdgeInsets.all(16), child: Text(message)),
     );
   }
@@ -258,8 +254,6 @@ class MissingPurchasedUsageCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: const Padding(
         padding: EdgeInsets.all(16),
         child: Text(
@@ -294,8 +288,6 @@ class AllowanceSummaryCard extends StatelessWidget {
     };
 
     return Card(
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -376,8 +368,6 @@ class BudgetSummaryCard extends StatelessWidget {
     final progress = state.usedFraction;
 
     return Card(
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -407,7 +397,13 @@ class BudgetSummaryCard extends StatelessWidget {
                 children: [
                   if (usedPercentLabel != null)
                     Expanded(child: Text('$usedPercentLabel used')),
-                  if (remaining != null) Text('Left ${remaining.label}'),
+                  if (remaining != null)
+                    Flexible(
+                      child: Text(
+                        'Left ${remaining.label}',
+                        textAlign: TextAlign.end,
+                      ),
+                    ),
                 ],
               ),
             ],
@@ -571,8 +567,6 @@ class _ModelUsagePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     if (models.isEmpty) {
       return Card(
-        margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         child: const Padding(
           padding: EdgeInsets.all(16),
           child: Text('No model data'),
@@ -589,8 +583,6 @@ class _ModelUsagePanel extends StatelessWidget {
     );
 
     return Card(
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -664,8 +656,6 @@ class _AlertsPanel extends StatelessWidget {
     }
 
     return Card(
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: Column(
         children: [
           for (final alert in alerts)
@@ -686,8 +676,6 @@ class _EmptyAlertsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: const Padding(
         padding: EdgeInsets.all(16),
         child: Row(

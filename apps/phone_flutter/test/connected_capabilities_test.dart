@@ -35,31 +35,89 @@ void main() {
     expect(mock.showPlanGap, isFalse);
     expect(mock.showSpendGap, isFalse);
   });
+
+  test('keeps Claude and Cursor plan-only out of spend surfaces', () {
+    final claudePlan = ConnectedCapabilities.fromAccounts([
+      _account('claude', allowances: true),
+    ]);
+    expect(claudePlan.showAllowances, isTrue);
+    expect(claudePlan.showBudgets, isFalse);
+    expect(claudePlan.showSpendGap, isTrue);
+    expect(claudePlan.showUsageHistory, isFalse);
+    expect(claudePlan.showModelUsage, isFalse);
+
+    final cursorTeam = ConnectedCapabilities.fromAccounts([
+      _account('cursor', spent: true, buckets: true),
+    ]);
+    expect(cursorTeam.showBudgets, isTrue);
+    expect(cursorTeam.showAllowances, isFalse);
+    expect(cursorTeam.showUsageHistory, isTrue);
+    expect(cursorTeam.showPlanGap, isTrue);
+  });
 }
 
-ProviderSnapshot _account(String provider) {
+ProviderSnapshot _account(
+  String provider, {
+  bool allowances = false,
+  bool spent = false,
+  bool buckets = false,
+}) {
   return ProviderSnapshot.fromJson({
     'accountId': '$provider-local',
     'provider': provider,
     'status': 'ok',
-    'today': _budget('today'),
+    'today': _budget('today', spent: spent),
     'week': _budget('week'),
     'month': _budget('month'),
     'credits': <Object>[],
-    'allowances': <Object>[],
-    'buckets': <Object>[],
+    'allowances':
+        allowances
+            ? [
+              {
+                'id': '$provider-plan',
+                'label': 'Plan',
+                'source': 'plan',
+                'used': {'value': '1', 'unit': 'tokens'},
+                'limit': {'value': '10', 'unit': 'tokens'},
+                'remaining': {'value': '9', 'unit': 'tokens'},
+                'usedPercent': 10,
+                'unlimited': false,
+                'windowMinutes': null,
+                'resetsAt': null,
+                'status': 'ok',
+              },
+            ]
+            : <Object>[],
+    'buckets':
+        buckets
+            ? [
+              {
+                'startAt': '2026-07-01T00:00:00Z',
+                'endAt': '2026-07-02T00:00:00Z',
+                'cost': null,
+                'inputTokens': null,
+                'outputTokens': null,
+                'cachedTokens': null,
+                'totalTokens': null,
+                'requests': 1,
+                'model': null,
+                'project': null,
+                'user': null,
+              },
+            ]
+            : <Object>[],
     'modelBreakdown': <Object>[],
     'lastSuccessfulSyncAt': null,
     'lastError': null,
   });
 }
 
-Map<String, Object?> _budget(String period) => {
+Map<String, Object?> _budget(String period, {bool spent = false}) => {
   'period': period,
-  'spent': null,
+  'spent': spent ? {'minorUnits': 100, 'currency': 'USD'} : null,
   'limit': null,
   'remaining': null,
   'usedPercent': null,
   'projectedTotal': null,
-  'status': 'unknown',
+  'status': spent ? 'ok' : 'unknown',
 };

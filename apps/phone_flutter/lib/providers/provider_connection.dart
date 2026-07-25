@@ -1,9 +1,11 @@
+import '../sync/poll_cadence.dart';
+
 /// Homogeneous phone-side connection identity for Settings and display metadata.
 ///
 /// Each provider exposes up to two connection kinds (`plan` and `platform`). The
-/// optional [displayName] is plain metadata for API-key connections and feeds
-/// the product `ProviderAccount.display_name` concept without traveling to the
-/// watch or into secure credential values.
+/// optional [ProviderConnection.displayName] is plain metadata for API-key
+/// connections and feeds the product `ProviderAccount.display_name` concept
+/// without traveling to the watch or into secure credential values.
 enum ProviderFamily { openai, anthropic, cursor }
 
 enum ConnectionKind { plan, platform }
@@ -15,6 +17,43 @@ final class ProviderConnectionId {
   final ConnectionKind kind;
 
   String get storageKey => '${provider.name}.${kind.name}';
+
+  @override
+  bool operator ==(Object other) =>
+      other is ProviderConnectionId &&
+      other.provider == provider &&
+      other.kind == kind;
+
+  @override
+  int get hashCode => Object.hash(provider, kind);
+}
+
+/// Canonical connection identities shared by Settings, storage, and sync.
+abstract final class ProviderConnections {
+  static const codexPlan = ProviderConnectionId(
+    provider: ProviderFamily.openai,
+    kind: ConnectionKind.plan,
+  );
+  static const openAiPlatform = ProviderConnectionId(
+    provider: ProviderFamily.openai,
+    kind: ConnectionKind.platform,
+  );
+  static const claudePlan = ProviderConnectionId(
+    provider: ProviderFamily.anthropic,
+    kind: ConnectionKind.plan,
+  );
+  static const anthropicPlatform = ProviderConnectionId(
+    provider: ProviderFamily.anthropic,
+    kind: ConnectionKind.platform,
+  );
+  static const cursorPlan = ProviderConnectionId(
+    provider: ProviderFamily.cursor,
+    kind: ConnectionKind.plan,
+  );
+  static const cursorPlatform = ProviderConnectionId(
+    provider: ProviderFamily.cursor,
+    kind: ConnectionKind.platform,
+  );
 }
 
 final class ProviderConnection {
@@ -22,17 +61,26 @@ final class ProviderConnection {
     required this.id,
     required this.title,
     required this.subtitle,
-    required this.supported,
+    this.secretHint,
     this.displayName,
+    this.freshnessNote,
   });
 
   final ProviderConnectionId id;
   final String title;
   final String subtitle;
-  final bool supported;
+
+  /// Input hint for connections authorized by a pasted secret.
+  ///
+  /// `null` marks a connection that WardPulse authorizes another way, such as
+  /// the Codex subscription sign-in.
+  final String? secretHint;
 
   /// Optional user-defined label for platform API-key connections.
   final String? displayName;
+
+  /// Non-clamping provider freshness guidance shown on the Settings row.
+  final String? freshnessNote;
 
   String get listTitle {
     final label = displayName?.trim();
@@ -41,67 +89,66 @@ final class ProviderConnection {
     }
     return title;
   }
+
+  String get listSubtitle {
+    final note = freshnessNote?.trim();
+    if (note == null || note.isEmpty) {
+      return subtitle;
+    }
+    return '$subtitle\n$note';
+  }
 }
 
 /// Canonical connection catalog shown in Settings.
+///
+/// [platformLabels] holds stored labels keyed by
+/// [ProviderConnectionId.storageKey].
 List<ProviderConnection> providerConnectionCatalog({
-  String? openAiPlatformLabel,
+  Map<String, String?> platformLabels = const {},
 }) {
   return [
     const ProviderConnection(
-      id: ProviderConnectionId(
-        provider: ProviderFamily.openai,
-        kind: ConnectionKind.plan,
-      ),
+      id: ProviderConnections.codexPlan,
       title: 'Codex subscription',
       subtitle: 'Experimental · plan limits and token activity',
-      supported: true,
     ),
     ProviderConnection(
-      id: const ProviderConnectionId(
-        provider: ProviderFamily.openai,
-        kind: ConnectionKind.platform,
-      ),
+      id: ProviderConnections.openAiPlatform,
       title: 'Platform reporting',
       subtitle: 'Admin API key · stored on this phone',
-      supported: true,
-      displayName: openAiPlatformLabel,
+      secretHint: 'sk-admin-…',
+      displayName:
+          platformLabels[ProviderConnections.openAiPlatform.storageKey],
     ),
     const ProviderConnection(
-      id: ProviderConnectionId(
-        provider: ProviderFamily.anthropic,
-        kind: ConnectionKind.plan,
-      ),
+      id: ProviderConnections.claudePlan,
       title: 'Claude subscription',
-      subtitle: 'Not yet supported',
-      supported: false,
+      subtitle: 'Experimental · paste Claude Code OAuth token',
+      secretHint: 'Paste token',
     ),
-    const ProviderConnection(
-      id: ProviderConnectionId(
-        provider: ProviderFamily.anthropic,
-        kind: ConnectionKind.platform,
-      ),
+    ProviderConnection(
+      id: ProviderConnections.anthropicPlatform,
       title: 'Organization reporting',
-      subtitle: 'Not yet supported',
-      supported: false,
+      subtitle: 'Admin API key · stored on this phone',
+      secretHint: 'API key',
+      displayName:
+          platformLabels[ProviderConnections.anthropicPlatform.storageKey],
     ),
     const ProviderConnection(
-      id: ProviderConnectionId(
-        provider: ProviderFamily.cursor,
-        kind: ConnectionKind.plan,
-      ),
+      id: ProviderConnections.cursorPlan,
       title: 'Cursor plan',
-      subtitle: 'Not yet supported',
-      supported: false,
+      subtitle: 'Experimental · paste dashboard session token',
+      secretHint: 'Paste token',
+      freshnessNote: PollCadence.cursorFreshnessNote,
     ),
-    const ProviderConnection(
-      id: ProviderConnectionId(
-        provider: ProviderFamily.cursor,
-        kind: ConnectionKind.platform,
-      ),
+    ProviderConnection(
+      id: ProviderConnections.cursorPlatform,
       title: 'Team Admin API',
-      subtitle: 'Not yet supported',
-      supported: false,
+      subtitle: 'Admin API key · teams and enterprise',
+      secretHint: 'API key',
+      displayName:
+          platformLabels[ProviderConnections.cursorPlatform.storageKey],
+      freshnessNote: PollCadence.cursorFreshnessNote,
     ),
   ];
 }

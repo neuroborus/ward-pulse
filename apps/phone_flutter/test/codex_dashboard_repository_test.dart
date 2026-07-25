@@ -15,7 +15,7 @@ void main() {
   );
 
   test('uses the platform fallback without a Codex account', () async {
-    final repository = CodexDashboardRepository(
+    final repository = codexDashboardRepository(
       accountService: const EmptyCodexAccountService(),
       fallback: ValueDashboardRepository(snapshot),
       loadReport: () async => null,
@@ -30,7 +30,7 @@ void main() {
     const failure = DashboardLoadException(
       details: 'Platform reporting failed',
     );
-    final repository = CodexDashboardRepository(
+    final repository = codexDashboardRepository(
       accountService: const EmptyCodexAccountService(),
       fallback: const _FailingDashboardRepository(failure),
       loadReport: () => report.future,
@@ -45,7 +45,7 @@ void main() {
 
   test('normalizes an on-device Codex report', () async {
     String? receivedReport;
-    final repository = CodexDashboardRepository(
+    final repository = codexDashboardRepository(
       accountService: const EmptyCodexAccountService(),
       fallback: ValueDashboardRepository(snapshot),
       loadReport: () async => '{"sanitized":true}',
@@ -64,7 +64,7 @@ void main() {
   test(
     'does not report a missing platform provider when Codex loads',
     () async {
-      final repository = CodexDashboardRepository(
+      final repository = codexDashboardRepository(
         accountService: const EmptyCodexAccountService(),
         fallback: const _FailingDashboardRepository(
           DashboardLoadException(issue: DashboardSyncIssue.noProviders),
@@ -84,7 +84,7 @@ void main() {
   );
 
   test('surfaces Codex authentication failures', () async {
-    final repository = CodexDashboardRepository(
+    final repository = codexDashboardRepository(
       accountService: const EmptyCodexAccountService(),
       fallback: ValueDashboardRepository(snapshot),
       loadReport:
@@ -121,7 +121,7 @@ void main() {
     final platformSnapshot = DashboardSnapshot.fromJson(platformJson);
     final codexJson = snapshot.toJson();
     (codexJson['accounts'] as List).first['provider'] = 'codex';
-    final repository = CodexDashboardRepository(
+    final repository = codexDashboardRepository(
       accountService: const EmptyCodexAccountService(),
       fallback: ValueDashboardRepository(platformSnapshot),
       loadReport: () async => '{"sanitized":true}',
@@ -155,7 +155,7 @@ void main() {
   test('keeps a live platform snapshot when Codex is forbidden', () async {
     final platformJson = snapshot.toJson();
     (platformJson['accounts'] as List).first['provider'] = 'openai';
-    final repository = CodexDashboardRepository(
+    final repository = codexDashboardRepository(
       accountService: const EmptyCodexAccountService(),
       fallback: ValueDashboardRepository(
         DashboardSnapshot.fromJson(platformJson),

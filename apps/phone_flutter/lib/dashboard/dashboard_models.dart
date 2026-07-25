@@ -59,15 +59,15 @@ extension DashboardSyncIssueMessage on DashboardSyncIssue {
       DashboardSyncIssue.credentialUnavailable =>
         'The saved key could not be read. Re-enter it in Settings.',
       DashboardSyncIssue.authentication =>
-        'OpenAI rejected the key. Check that you pasted the full Admin API key.',
+        'The provider rejected the credential. Check that you pasted the full key or token.',
       DashboardSyncIssue.permissionDenied =>
-        'This key cannot read organization usage. Use an organization Admin API key.',
+        'This credential cannot read the requested usage data. Use a credential with the right permissions.',
       DashboardSyncIssue.rateLimited =>
-        'OpenAI rate limit reached. Try again shortly.',
+        'The provider rate limit was reached. Try again shortly.',
       DashboardSyncIssue.providerUnavailable =>
-        'OpenAI reporting is unavailable. Check your connection and try again.',
+        'Provider reporting is unavailable. Check your connection and try again.',
       DashboardSyncIssue.invalidResponse =>
-        'OpenAI returned an unsupported reporting response.',
+        'The provider returned an unsupported reporting response.',
       DashboardSyncIssue.codexAuthentication =>
         'Codex sign-in expired. Reconnect your ChatGPT account in Settings.',
       DashboardSyncIssue.codexPermissionDenied =>
@@ -271,11 +271,11 @@ class ProviderSnapshot {
 
   /// User-facing title for provider lists and details.
   ///
-  /// [openAiPlatformLabel] is phone-local display metadata for the Platform
-  /// Admin API key connection and is never part of the watch payload.
-  String displayTitle({String? openAiPlatformLabel}) {
-    final label = openAiPlatformLabel?.trim();
-    if (provider == 'openai' && label != null && label.isNotEmpty) {
+  /// [platformLabel] is phone-local display metadata for platform Admin API
+  /// key connections and is never part of the watch payload.
+  String displayTitle({String? platformLabel}) {
+    final label = platformLabel?.trim();
+    if (label != null && label.isNotEmpty) {
       return label;
     }
     return providerLabel;

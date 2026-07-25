@@ -53,17 +53,40 @@ per-provider capability tables below are the source of truth for what each conne
 - With no connections configured, the dashboard shows a single "Connect a provider" call to action.
 - Mock data keeps the full dashboard so the layout stays reviewable without live credentials.
 
+## Polling cadence
+
+Per-connection minimum intervals live in Rust (`ward-pulse-providers::poll`) with doc-linked
+comments, and are the single source of truth for cadence:
+
+- one global refresh slider from 5 to 60 minutes (strictest hard floor rounded up), so a single
+  global cadence already satisfies every per-connection floor;
+- `effective_interval = max(user_setting, provider_minimum)` per connection;
+- automatic sync on the phone runs on an in-process scheduler while the app isolate is alive;
+  polling after Android reclaims the process needs a background Dart entrypoint and is not
+  implemented yet;
+- watch summary re-sent after each successful automatic sync;
+- a failed sync keeps the last successful snapshot visible and retries on the next tick, so a
+  launch without connectivity still recovers without a manual refresh;
+- Cursor rows show a freshness note that usage may lag about an hour; that note does not clamp the
+  cadence;
+- existing `429` / `Retry-After` / backoff handling still applies on top of the cadence;
+  waits longer than five seconds are not slept in-process — the sync fails as rate-limited and
+  the next scheduled tick retries, so a long provider cooldown never stalls the dashboard.
+
+Reporting endpoints are rate-limited independently from model inference: polling usage never slows
+a running agent.
+
 ## Connection grouping
 
 Every provider in Settings is one section with up to two homogeneous connections:
 
-- `plan`: subscription or allowance reads (Codex device-code OAuth today; Claude and Cursor plan
-  rows are reserved and shown as not yet supported);
-- `platform`: organization or team usage and cost reporting (OpenAI Admin API key today;
-  Anthropic and Cursor Admin rows are reserved).
+- `plan`: subscription or allowance reads (Codex device-code OAuth; Claude Code OAuth token
+  paste; Cursor dashboard session token paste);
+- `platform`: organization or team usage and cost reporting (OpenAI, Anthropic, and Cursor Admin
+  API keys).
 
 OpenAI therefore shows Codex subscription and Platform reporting together. An optional
-user-defined label for the Platform Admin API key is plain phone-local display metadata:
+user-defined label for platform Admin API keys is plain phone-local display metadata:
 
 - stored beside the credential reference, never concatenated into the secure key value;
 - shown in Settings and provider details in place of the generic Platform title;
@@ -84,7 +107,10 @@ Scope:
 - Send `GET` requests only. The key cannot call non-administration endpoints or run model inference, so this adapter cannot initiate billable model work; unrelated administrative privileges may still be present.
 - Fetch completions usage from `GET /v1/organization/usage/completions` and cost from `GET /v1/organization/costs`.
 - Request daily buckets for dashboard cost. Usage also supports hourly buckets and grouping by model, project, or user; cost supports daily buckets and grouping by project, line item, or API key.
-- Follow response pagination. Phase 7 syncs on app start and manual refresh; automatic polling is deferred to development plan Phase 11 and must run no more than once every 5 minutes (the conservative floor defined there for this adapter). After `429`, honor `Retry-After` when present and apply exponential backoff with jitter.
+- Follow response pagination. Automatic polling uses the global refresh slider, whose 5-minute
+  lower bound already sits at this adapter's floor, so it never syncs more than once every five
+  minutes. After `429`, honor short `Retry-After` values and otherwise apply exponential
+  backoff with jitter; waits longer than five seconds defer to the next scheduled sync.
 - Keep budgets local. This adapter reads reporting data and does not manage provider-side spending limits or spend alerts.
 - Never log the key, authorization header, full account identifiers, or raw response bodies.
 
@@ -166,3 +192,68 @@ Official references:
 - [Codex app-server authentication and account methods](https://learn.chatgpt.com/docs/app-server#auth-endpoints)
 - [Open-source Codex device-code implementation](https://github.com/openai/codex/blob/main/codex-rs/login/src/device_code_auth.rs)
 - [Open-source Codex backend client](https://github.com/openai/codex/blob/main/codex-rs/backend-client/src/client.rs)
+
+## Anthropic organization reporting
+
+Status: implemented on 2026-07-25.
+
+Scope:
+
+- Use an organization Admin API key (`x-api-key`) against
+  `GET /v1/organizations/usage_report/messages` and `GET /v1/organizations/cost_report`.
+- Request daily buckets (`bucket_width=1d`); usage also supports hourly and minute buckets.
+- Usage requests `group_by[]=model` for model breakdown; cost stays ungrouped.
+- Cost amounts are decimal strings in lowest currency units (cents); WardPulse rounds to integer
+  USD cents after summing.
+- Documented poll floor is one minute; the global slider lower bound remains five minutes.
+- Never log the key, authorization header, or raw response bodies.
+
+Revocation is performed in Anthropic organization Admin API key settings.
+
+Official references:
+
+- [Usage & Cost Admin API](https://platform.claude.com/docs/en/manage-claude/usage-cost-api)
+- [Messages usage report](https://platform.claude.com/docs/en/api/admin/usage_report/retrieve_messages)
+- [Cost report](https://platform.claude.com/docs/en/api/admin/cost_report/retrieve)
+
+## Claude subscription reporting
+
+Status: implemented as an experimental on-device compatibility integration on 2026-07-25.
+
+The phone stores a Claude Code OAuth access token in secure storage (paste today; full OAuth
+device flow can follow). It calls undocumented `GET /api/oauth/usage` with
+`anthropic-beta: oauth-2025-04-20` and a Claude Code user agent, then normalizes `five_hour`,
+`seven_day`, optional per-model weekly windows, and `extra_usage` into `AllowanceState`.
+
+This is the same undocumented contract Claude Code's `/usage` command uses. Endpoint changes may
+require an app update. Never log the token or raw response bodies.
+
+## Cursor plan reporting
+
+Status: implemented as an experimental on-device compatibility integration on 2026-07-25.
+
+Cursor has no official personal-account usage API. The phone stores a dashboard session token
+(`WorkosCursorSessionToken`) and calls `GET /api/usage-summary`, normalizing plan and on-demand
+meters into allowances. Settings rows carry the Phase 11 freshness note that Cursor aggregates
+usage about hourly. Never log the cookie or raw response bodies.
+
+## Cursor team Admin API
+
+Status: implemented on 2026-07-25 for team and enterprise administrators.
+
+Scope:
+
+- Basic auth with a team Admin API key against `POST /teams/daily-usage-data` and
+  `POST /teams/spend`.
+- Spend responses use `teamMemberSpend` with `page` / `pageSize` pagination; WardPulse
+  sums `overallSpendCents` across pages into the month budget only.
+- Spend is billing-cycle scoped and maps only to the month budget; today and week stay
+  unknown until a day-scoped spend source exists.
+- Hard ceiling is 20 requests per minute; WardPulse polls at the global slider cadence (minimum
+  five minutes). Usage aggregates hourly on the provider side.
+- Never log the key, authorization header, or raw response bodies.
+
+Official references:
+
+- [Cursor API overview](https://cursor.com/docs/api)
+- [Team Admin API](https://cursor.com/docs/account/teams/admin-api)

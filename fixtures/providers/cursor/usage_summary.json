@@ -1,0 +1,23 @@
+{
+  "accountId": "cursor-local",
+  "generatedAt": "2026-07-19T12:00:00Z",
+  "billingCycleStart": "2026-07-01T00:00:00Z",
+  "billingCycleEnd": "2026-08-01T00:00:00Z",
+  "membershipType": "pro",
+  "isUnlimited": false,
+  "individualUsage": {
+    "plan": {
+      "enabled": true,
+      "used": 1207,
+      "limit": 2000,
+      "remaining": 793,
+      "totalPercentUsed": 60.35
+    },
+    "onDemand": {
+      "enabled": true,
+      "used": 450,
+      "limit": 1000,
+      "remaining": 550
+    }
+  }
+}

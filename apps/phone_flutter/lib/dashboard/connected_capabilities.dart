@@ -2,8 +2,9 @@ import 'dashboard_models.dart';
 
 /// Phone-side capability aggregate derived from connected provider accounts.
 ///
-/// Mirrors the `CAPABILITIES` constants in the Rust `ward-pulse-providers` crate
-/// for implemented providers, so UI layout decisions stay off the FFI boundary.
+/// OpenAI and Codex stay kind-based (separate `ProviderKind` values). Claude and
+/// Cursor share one kind across plan/platform, so those rows inspect snapshot
+/// fields instead of enabling the union of both connection types.
 final class ConnectedCapabilities {
   const ConnectedCapabilities({
     required this.showBudgets,
@@ -29,6 +30,20 @@ final class ConnectedCapabilities {
         case 'codex':
           showAllowances = true;
           showUsageHistory = true;
+        case 'claude':
+        case 'cursor':
+          if (_hasSpend(account)) {
+            showBudgets = true;
+          }
+          if (account.allowances.isNotEmpty || account.credits.isNotEmpty) {
+            showAllowances = true;
+          }
+          if (account.buckets.isNotEmpty) {
+            showUsageHistory = true;
+          }
+          if (account.modelBreakdown.isNotEmpty) {
+            showModelUsage = true;
+          }
         case 'mock':
           isMock = true;
           showBudgets = true;
@@ -59,4 +74,10 @@ final class ConnectedCapabilities {
 
   bool get showPlanGap => !isMock && !showAllowances;
   bool get showSpendGap => !isMock && !showBudgets;
+}
+
+bool _hasSpend(ProviderSnapshot account) {
+  return account.today.spent != null ||
+      account.week.spent != null ||
+      account.month.spent != null;
 }

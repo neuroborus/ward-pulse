@@ -22,8 +22,6 @@ class UsageHistoryChart extends StatelessWidget {
     final showDates = _spansMultipleUtcDays(buckets);
 
     return Card(
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

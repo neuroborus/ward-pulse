@@ -4,8 +4,17 @@ use std::fmt;
 use std::ptr;
 
 use ward_pulse_core::build_dashboard_snapshot;
-use ward_pulse_core::model::DashboardSnapshot;
+use ward_pulse_core::model::{DashboardSnapshot, ProviderSnapshot};
+use ward_pulse_core::time::DateTimeUtc;
+use ward_pulse_providers::claude::{
+    anthropic_provider_snapshot_from_report_json, claude_provider_snapshot_from_report_json,
+    AnthropicReportError, ClaudeReportError,
+};
 use ward_pulse_providers::codex::{codex_provider_snapshot_from_report_json, CodexReportError};
+use ward_pulse_providers::cursor::{
+    cursor_plan_snapshot_from_report_json, cursor_platform_snapshot_from_report_json,
+    CursorPlanReportError, CursorPlatformReportError,
+};
 use ward_pulse_providers::mock::{
     mock_provider_snapshot_from_usage_fixture, MockUsageFixtureError,
 };
@@ -16,7 +25,11 @@ const MOCK_USAGE_TODAY_FIXTURE: &str =
 
 #[derive(Debug)]
 enum DashboardSnapshotJsonError {
+    Anthropic(AnthropicReportError),
+    Claude(ClaudeReportError),
     Codex(CodexReportError),
+    CursorPlan(CursorPlanReportError),
+    CursorPlatform(CursorPlatformReportError),
     Fixture(MockUsageFixtureError),
     OpenAi(OpenAiReportError),
     EmptySnapshots,
@@ -27,9 +40,22 @@ enum DashboardSnapshotJsonError {
 impl fmt::Display for DashboardSnapshotJsonError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Anthropic(error) => {
+                write!(formatter, "failed to normalize Anthropic report: {error}")
+            }
+            Self::Claude(error) => {
+                write!(formatter, "failed to normalize Claude report: {error}")
+            }
             Self::Codex(error) => {
                 write!(formatter, "failed to normalize Codex report: {error}")
             }
+            Self::CursorPlan(error) => {
+                write!(formatter, "failed to normalize Cursor plan report: {error}")
+            }
+            Self::CursorPlatform(error) => write!(
+                formatter,
+                "failed to normalize Cursor platform report: {error}"
+            ),
             Self::Fixture(error) => {
                 write!(formatter, "failed to build dashboard snapshot: {error}")
             }
@@ -53,7 +79,11 @@ impl fmt::Display for DashboardSnapshotJsonError {
 impl StdError for DashboardSnapshotJsonError {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
+            Self::Anthropic(error) => Some(error),
+            Self::Claude(error) => Some(error),
             Self::Codex(error) => Some(error),
+            Self::CursorPlan(error) => Some(error),
+            Self::CursorPlatform(error) => Some(error),
             Self::Fixture(error) => Some(error),
             Self::OpenAi(error) => Some(error),
             Self::EmptySnapshots => None,
@@ -62,28 +92,68 @@ impl StdError for DashboardSnapshotJsonError {
     }
 }
 
+fn dashboard_json(
+    generated_at: DateTimeUtc,
+    accounts: Vec<ProviderSnapshot>,
+) -> Result<String, DashboardSnapshotJsonError> {
+    let snapshot = build_dashboard_snapshot(generated_at, accounts);
+
+    serde_json::to_string(&snapshot).map_err(DashboardSnapshotJsonError::Serialize)
+}
+
 fn codex_dashboard_snapshot_json(report_json: &str) -> Result<String, DashboardSnapshotJsonError> {
     let report = codex_provider_snapshot_from_report_json(report_json)
         .map_err(DashboardSnapshotJsonError::Codex)?;
-    let snapshot = build_dashboard_snapshot(report.generated_at, vec![report.provider_snapshot]);
 
-    serde_json::to_string(&snapshot).map_err(DashboardSnapshotJsonError::Serialize)
+    dashboard_json(report.generated_at, vec![report.provider_snapshot])
 }
 
 fn dashboard_snapshot_json() -> Result<String, DashboardSnapshotJsonError> {
     let fixture = mock_provider_snapshot_from_usage_fixture("mock-local", MOCK_USAGE_TODAY_FIXTURE)
         .map_err(DashboardSnapshotJsonError::Fixture)?;
-    let snapshot = build_dashboard_snapshot(fixture.generated_at, vec![fixture.provider_snapshot]);
 
-    serde_json::to_string(&snapshot).map_err(DashboardSnapshotJsonError::Serialize)
+    dashboard_json(fixture.generated_at, vec![fixture.provider_snapshot])
 }
 
 fn openai_dashboard_snapshot_json(report_json: &str) -> Result<String, DashboardSnapshotJsonError> {
     let report = openai_provider_snapshot_from_report_json(report_json)
         .map_err(DashboardSnapshotJsonError::OpenAi)?;
-    let snapshot = build_dashboard_snapshot(report.generated_at, vec![report.provider_snapshot]);
 
-    serde_json::to_string(&snapshot).map_err(DashboardSnapshotJsonError::Serialize)
+    dashboard_json(report.generated_at, vec![report.provider_snapshot])
+}
+
+fn anthropic_dashboard_snapshot_json(
+    report_json: &str,
+) -> Result<String, DashboardSnapshotJsonError> {
+    let report = anthropic_provider_snapshot_from_report_json(report_json)
+        .map_err(DashboardSnapshotJsonError::Anthropic)?;
+
+    dashboard_json(report.generated_at, vec![report.provider_snapshot])
+}
+
+fn claude_dashboard_snapshot_json(report_json: &str) -> Result<String, DashboardSnapshotJsonError> {
+    let report = claude_provider_snapshot_from_report_json(report_json)
+        .map_err(DashboardSnapshotJsonError::Claude)?;
+
+    dashboard_json(report.generated_at, vec![report.provider_snapshot])
+}
+
+fn cursor_plan_dashboard_snapshot_json(
+    report_json: &str,
+) -> Result<String, DashboardSnapshotJsonError> {
+    let report = cursor_plan_snapshot_from_report_json(report_json)
+        .map_err(DashboardSnapshotJsonError::CursorPlan)?;
+
+    dashboard_json(report.generated_at, vec![report.provider_snapshot])
+}
+
+fn cursor_platform_dashboard_snapshot_json(
+    report_json: &str,
+) -> Result<String, DashboardSnapshotJsonError> {
+    let report = cursor_platform_snapshot_from_report_json(report_json)
+        .map_err(DashboardSnapshotJsonError::CursorPlatform)?;
+
+    dashboard_json(report.generated_at, vec![report.provider_snapshot])
 }
 
 fn merge_dashboard_snapshots_json(
@@ -101,13 +171,12 @@ fn merge_dashboard_snapshots_json(
         .into_iter()
         .flat_map(|snapshot| snapshot.accounts)
         .collect();
-    let snapshot = build_dashboard_snapshot(generated_at, accounts);
 
-    serde_json::to_string(&snapshot).map_err(DashboardSnapshotJsonError::Serialize)
+    dashboard_json(generated_at, accounts)
 }
 
-fn openai_dashboard_snapshot_result_json(report_json: &str) -> Option<String> {
-    let result = match openai_dashboard_snapshot_json(report_json) {
+fn snapshot_result_json(result: Result<String, DashboardSnapshotJsonError>) -> Option<String> {
+    let envelope = match result {
         Ok(dashboard_json) => serde_json::json!({
             "status": "success",
             "dashboardJson": dashboard_json,
@@ -117,68 +186,13 @@ fn openai_dashboard_snapshot_result_json(report_json: &str) -> Option<String> {
             "message": error.to_string(),
         }),
     };
-
-    serde_json::to_string(&result).ok()
-}
-
-fn codex_dashboard_snapshot_result_json(report_json: &str) -> Option<String> {
-    let result = match codex_dashboard_snapshot_json(report_json) {
-        Ok(dashboard_json) => serde_json::json!({
-            "status": "success",
-            "dashboardJson": dashboard_json,
-        }),
-        Err(error) => serde_json::json!({
-            "status": "error",
-            "message": error.to_string(),
-        }),
-    };
-
-    serde_json::to_string(&result).ok()
-}
-
-fn merge_dashboard_snapshots_result_json(snapshots_json: &str) -> Option<String> {
-    let result = match merge_dashboard_snapshots_json(snapshots_json) {
-        Ok(dashboard_json) => serde_json::json!({
-            "status": "success",
-            "dashboardJson": dashboard_json,
-        }),
-        Err(error) => serde_json::json!({
-            "status": "error",
-            "message": error.to_string(),
-        }),
-    };
-
-    serde_json::to_string(&result).ok()
+    serde_json::to_string(&envelope).ok()
 }
 
 #[no_mangle]
 pub extern "C" fn ward_pulse_dashboard_snapshot_json() -> *mut c_char {
     match std::panic::catch_unwind(|| {
         dashboard_snapshot_json()
-            .ok()
-            .and_then(|snapshot| CString::new(snapshot).ok())
-    }) {
-        Ok(Some(snapshot)) => snapshot.into_raw(),
-        Ok(None) | Err(_) => ptr::null_mut(),
-    }
-}
-
-/// Normalizes OpenAI reporting pages into an owned dashboard snapshot JSON string.
-///
-/// # Safety
-///
-/// `report_json` must be a non-null pointer to a valid, null-terminated UTF-8 string.
-#[no_mangle]
-pub unsafe extern "C" fn ward_pulse_openai_dashboard_snapshot_json(
-    report_json: *const c_char,
-) -> *mut c_char {
-    if report_json.is_null() {
-        return ptr::null_mut();
-    }
-
-    match std::panic::catch_unwind(|| {
-        let report_json = unsafe { CStr::from_ptr(report_json) }.to_str().ok()?;
-        openai_dashboard_snapshot_json(report_json)
             .ok()
             .and_then(|snapshot| CString::new(snapshot).ok())
     }) {
@@ -196,18 +210,9 @@ pub unsafe extern "C" fn ward_pulse_openai_dashboard_snapshot_json(
 pub unsafe extern "C" fn ward_pulse_openai_dashboard_snapshot_result_json(
     report_json: *const c_char,
 ) -> *mut c_char {
-    if report_json.is_null() {
-        return ptr::null_mut();
-    }
-
-    match std::panic::catch_unwind(|| {
-        let report_json = unsafe { CStr::from_ptr(report_json) }.to_str().ok()?;
-        openai_dashboard_snapshot_result_json(report_json)
-            .and_then(|result| CString::new(result).ok())
-    }) {
-        Ok(Some(result)) => result.into_raw(),
-        Ok(None) | Err(_) => ptr::null_mut(),
-    }
+    transform_report_json(report_json, |json| {
+        snapshot_result_json(openai_dashboard_snapshot_json(json))
+    })
 }
 
 /// Normalizes a sanitized Codex account report and returns a JSON result envelope.
@@ -219,14 +224,78 @@ pub unsafe extern "C" fn ward_pulse_openai_dashboard_snapshot_result_json(
 pub unsafe extern "C" fn ward_pulse_codex_dashboard_snapshot_result_json(
     report_json: *const c_char,
 ) -> *mut c_char {
+    transform_report_json(report_json, |json| {
+        snapshot_result_json(codex_dashboard_snapshot_json(json))
+    })
+}
+
+/// Normalizes Anthropic Admin reporting pages and returns a JSON result envelope.
+///
+/// # Safety
+///
+/// `report_json` must be a non-null pointer to a valid, null-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn ward_pulse_anthropic_dashboard_snapshot_result_json(
+    report_json: *const c_char,
+) -> *mut c_char {
+    transform_report_json(report_json, |json| {
+        snapshot_result_json(anthropic_dashboard_snapshot_json(json))
+    })
+}
+
+/// Normalizes a Claude oauth usage report and returns a JSON result envelope.
+///
+/// # Safety
+///
+/// `report_json` must be a non-null pointer to a valid, null-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn ward_pulse_claude_dashboard_snapshot_result_json(
+    report_json: *const c_char,
+) -> *mut c_char {
+    transform_report_json(report_json, |json| {
+        snapshot_result_json(claude_dashboard_snapshot_json(json))
+    })
+}
+
+/// Normalizes a Cursor plan usage summary and returns a JSON result envelope.
+///
+/// # Safety
+///
+/// `report_json` must be a non-null pointer to a valid, null-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn ward_pulse_cursor_plan_dashboard_snapshot_result_json(
+    report_json: *const c_char,
+) -> *mut c_char {
+    transform_report_json(report_json, |json| {
+        snapshot_result_json(cursor_plan_dashboard_snapshot_json(json))
+    })
+}
+
+/// Normalizes Cursor team Admin reporting pages and returns a JSON result envelope.
+///
+/// # Safety
+///
+/// `report_json` must be a non-null pointer to a valid, null-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn ward_pulse_cursor_platform_dashboard_snapshot_result_json(
+    report_json: *const c_char,
+) -> *mut c_char {
+    transform_report_json(report_json, |json| {
+        snapshot_result_json(cursor_platform_dashboard_snapshot_json(json))
+    })
+}
+
+unsafe fn transform_report_json(
+    report_json: *const c_char,
+    transform: fn(&str) -> Option<String>,
+) -> *mut c_char {
     if report_json.is_null() {
         return ptr::null_mut();
     }
 
     match std::panic::catch_unwind(|| {
         let report_json = unsafe { CStr::from_ptr(report_json) }.to_str().ok()?;
-        codex_dashboard_snapshot_result_json(report_json)
-            .and_then(|result| CString::new(result).ok())
+        transform(report_json).and_then(|result| CString::new(result).ok())
     }) {
         Ok(Some(result)) => result.into_raw(),
         Ok(None) | Err(_) => ptr::null_mut(),
@@ -242,18 +311,9 @@ pub unsafe extern "C" fn ward_pulse_codex_dashboard_snapshot_result_json(
 pub unsafe extern "C" fn ward_pulse_merge_dashboard_snapshots_result_json(
     snapshots_json: *const c_char,
 ) -> *mut c_char {
-    if snapshots_json.is_null() {
-        return ptr::null_mut();
-    }
-
-    match std::panic::catch_unwind(|| {
-        let snapshots_json = unsafe { CStr::from_ptr(snapshots_json) }.to_str().ok()?;
-        merge_dashboard_snapshots_result_json(snapshots_json)
-            .and_then(|result| CString::new(result).ok())
-    }) {
-        Ok(Some(result)) => result.into_raw(),
-        Ok(None) | Err(_) => ptr::null_mut(),
-    }
+    transform_report_json(snapshots_json, |json| {
+        snapshot_result_json(merge_dashboard_snapshots_json(json))
+    })
 }
 
 /// Releases a string returned by a WardPulse dashboard snapshot function.
@@ -309,7 +369,7 @@ mod tests {
     }
 
     #[test]
-    fn c_api_normalizes_openai_report_json() {
+    fn result_api_normalizes_openai_report_json() {
         let usage = include_str!("../../../fixtures/providers/openai/usage_completions.json");
         let costs = include_str!("../../../fixtures/providers/openai/costs.json");
         let request = CString::new(
@@ -326,28 +386,24 @@ mod tests {
         )
         .expect("request has no null bytes");
 
-        let value = unsafe { ward_pulse_openai_dashboard_snapshot_json(request.as_ptr()) };
+        let value = unsafe { ward_pulse_openai_dashboard_snapshot_result_json(request.as_ptr()) };
         assert!(!value.is_null());
 
-        let snapshot: serde_json::Value = serde_json::from_str(
+        let result: serde_json::Value = serde_json::from_str(
             unsafe { CStr::from_ptr(value) }
                 .to_str()
-                .expect("dashboard snapshot is UTF-8"),
+                .expect("result is UTF-8"),
         )
-        .expect("parse dashboard snapshot JSON");
+        .expect("parse result JSON");
+        assert_eq!(result["status"], "success");
+
+        let snapshot: serde_json::Value =
+            serde_json::from_str(result["dashboardJson"].as_str().expect("dashboard JSON"))
+                .expect("parse dashboard JSON");
         assert_eq!(snapshot["accounts"][0]["provider"], "openai");
         assert_eq!(snapshot["todayTotal"]["spent"]["minorUnits"], 50);
 
         unsafe { ward_pulse_string_free(value) };
-    }
-
-    #[test]
-    fn c_api_rejects_invalid_openai_report_json() {
-        let request = CString::new("{}").expect("request has no null bytes");
-
-        let value = unsafe { ward_pulse_openai_dashboard_snapshot_json(request.as_ptr()) };
-
-        assert!(value.is_null());
     }
 
     #[test]

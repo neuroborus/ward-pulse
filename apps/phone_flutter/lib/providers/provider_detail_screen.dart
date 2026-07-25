@@ -11,22 +11,20 @@ class ProviderDetailScreen extends StatelessWidget {
     required this.account,
     this.displayPreferences = const ConsumptionDisplayPreferences(),
     this.syncTooltip,
-    this.openAiPlatformLabel,
+    this.platformLabel,
   });
 
   final ProviderSnapshot account;
   final ConsumptionDisplayPreferences displayPreferences;
   final String? syncTooltip;
-  final String? openAiPlatformLabel;
+  final String? platformLabel;
 
   @override
   Widget build(BuildContext context) {
     final allowances = account.allowances
         .where((allowance) => displayPreferences.allows(allowance.source))
         .toList(growable: false);
-    final title = account.displayTitle(
-      openAiPlatformLabel: openAiPlatformLabel,
-    );
+    final title = account.displayTitle(platformLabel: platformLabel);
 
     return Scaffold(
       appBar: AppBar(title: Text(title)),
@@ -35,10 +33,6 @@ class ProviderDetailScreen extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
             Card(
-              margin: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
               child: ListTile(
                 leading: const Icon(Icons.account_circle_outlined),
                 title: Text(title),

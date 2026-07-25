@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/app/ward_pulse_theme.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_screen.dart';
 import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
@@ -37,6 +38,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
             snapshot: DashboardSnapshot.fromJson(dashboard),
@@ -82,6 +84,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
             snapshot: DashboardSnapshot.fromJson(dashboard),
@@ -135,6 +138,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
             snapshot: DashboardSnapshot.fromJson(dashboard),
@@ -175,6 +179,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
             snapshot: DashboardSnapshot.fromJson(dashboard),

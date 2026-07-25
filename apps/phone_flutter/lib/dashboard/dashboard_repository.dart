@@ -77,3 +77,15 @@ class ValueDashboardRepository extends DashboardRepository {
   @override
   Future<DashboardSnapshot> load() async => snapshot;
 }
+
+/// Root fallback when no credential-backed connection is configured.
+final class NoProvidersDashboardRepository extends DashboardRepository {
+  const NoProvidersDashboardRepository();
+
+  @override
+  Future<DashboardSnapshot> load() {
+    return Future.error(
+      const DashboardLoadException(issue: DashboardSyncIssue.noProviders),
+    );
+  }
+}

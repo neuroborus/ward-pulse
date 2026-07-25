@@ -1415,7 +1415,7 @@ mock mode still renders the full dashboard
 
 ### Phase 11 — polling cadence constants and the global refresh slider
 
-Status: planned as of 2026-07-24.
+Status: implemented as of 2026-07-25; headless polling deferred.
 
 Rationale: automatic polling needs explicit per-provider cadence floors before it ships.
 Reporting endpoints are rate-limited separately from model inference and agent traffic, so
@@ -1425,15 +1425,18 @@ Deliverables:
 
 - named minimum-interval constants in `core/ward-pulse-providers`, one per connection kind,
   each with a comment linking its source (see section 14);
-- a `const fn` lookup beside `provider_capabilities` returning the minimum poll interval and
-  freshness guidance for a provider connection;
+- a `const fn` lookup in `ward-pulse-providers::poll`, the cadence counterpart of
+  `provider_capabilities`, returning the minimum poll interval and freshness guidance for a
+  provider connection;
 - one global refresh interval setting rendered as a slider from the strictest hard minimum
   (rounded up) to 60 minutes;
 - a visible freshness note on Cursor connection rows in Settings explaining that Cursor
   aggregates usage data hourly, so refreshed values may lag behind actual activity;
-- automatic background polling on the phone (WorkManager), honoring the slider and the
-  per-connection clamp; this absorbs the "automatic provider polling" deliverable from
-  Phase 8;
+- automatic polling on the phone, honoring the slider and the per-connection clamp; this
+  absorbs the "automatic provider polling" deliverable from Phase 8. Shipped as an
+  in-process scheduler behind `ProviderSyncScheduler`, so cadence is honored while the app
+  isolate is alive. Polling after Android reclaims the process needs a background Dart
+  entrypoint driving the repository without UI, and is deferred to its own change;
 - the watch summary re-sent after each successful automatic sync;
 - existing 429/`Retry-After`/backoff handling layered on top of the cadence.
 
@@ -1458,14 +1461,14 @@ Acceptance:
 
 ```text
 constants exist with doc-linked comments and unit tests
-the slider persists and background sync honors it
+the slider persists and automatic sync honors it while the app runs
 each connection never syncs faster than its floor
 a 429 response still slows the affected provider without blocking others
 ```
 
 ### Phase 12 — Anthropic and Cursor adapters on the connection model
 
-Status: planned as of 2026-07-24.
+Status: implemented as of 2026-07-25.
 
 Rationale: the section 15 research shows both remaining providers fit the plan/platform split
 already proven by Codex plus OpenAI Platform. Anthropic goes first because both of its
@@ -1679,12 +1682,12 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Start Phase 11 (polling cadence constants and the global refresh slider): named per-connection
-floors in Rust, a 5–60 minute global slider, and background phone sync that honors both. Phase 9
-Settings grouping and Phase 10 capability-adaptive dashboard are in place.
+Start Phase 13 (configurable watch rings, starting in OpenPencil): percentage-first rings for
+watch and watch-face surfaces so compact UI never shows `Unknown` filler. Phase 9–12 Settings
+grouping, capability-adaptive dashboard, refresh cadence, and Anthropic/Cursor adapters are in
+place; headless background polling stays open from Phase 11.
 
-Then continue with Phase 12 (Anthropic and Cursor adapters on the connection model) and Phase 13
-(configurable watch rings, starting in OpenPencil).
+Then continue with later watch and polish work as listed below.
 
 Phase 6 passed Watch Face Format acceptance on 2026-07-19:
 

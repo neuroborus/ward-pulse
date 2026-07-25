@@ -38,6 +38,22 @@ final class _WardPulseBindings {
           .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
             'ward_pulse_codex_dashboard_snapshot_result_json',
           ),
+      _anthropicDashboardSnapshotResultJson = library
+          .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
+            'ward_pulse_anthropic_dashboard_snapshot_result_json',
+          ),
+      _claudeDashboardSnapshotResultJson = library
+          .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
+            'ward_pulse_claude_dashboard_snapshot_result_json',
+          ),
+      _cursorPlanDashboardSnapshotResultJson = library
+          .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
+            'ward_pulse_cursor_plan_dashboard_snapshot_result_json',
+          ),
+      _cursorPlatformDashboardSnapshotResultJson = library
+          .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
+            'ward_pulse_cursor_platform_dashboard_snapshot_result_json',
+          ),
       _mergeDashboardSnapshotsResultJson = library
           .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
             'ward_pulse_merge_dashboard_snapshots_result_json',
@@ -53,6 +69,10 @@ final class _WardPulseBindings {
   final _DartDashboardSnapshotJson _dashboardSnapshotJson;
   final _DartJsonTransform _openAiDashboardSnapshotResultJson;
   final _DartJsonTransform _codexDashboardSnapshotResultJson;
+  final _DartJsonTransform _anthropicDashboardSnapshotResultJson;
+  final _DartJsonTransform _claudeDashboardSnapshotResultJson;
+  final _DartJsonTransform _cursorPlanDashboardSnapshotResultJson;
+  final _DartJsonTransform _cursorPlatformDashboardSnapshotResultJson;
   final _DartJsonTransform _mergeDashboardSnapshotsResultJson;
   final _DartStringFree _stringFree;
 
@@ -75,6 +95,31 @@ final class _WardPulseBindings {
 
   String normalizeCodexReportJson(String reportJson) {
     return _normalizeReportJson(reportJson, _codexDashboardSnapshotResultJson);
+  }
+
+  String normalizeAnthropicReportJson(String reportJson) {
+    return _normalizeReportJson(
+      reportJson,
+      _anthropicDashboardSnapshotResultJson,
+    );
+  }
+
+  String normalizeClaudeReportJson(String reportJson) {
+    return _normalizeReportJson(reportJson, _claudeDashboardSnapshotResultJson);
+  }
+
+  String normalizeCursorPlanReportJson(String reportJson) {
+    return _normalizeReportJson(
+      reportJson,
+      _cursorPlanDashboardSnapshotResultJson,
+    );
+  }
+
+  String normalizeCursorPlatformReportJson(String reportJson) {
+    return _normalizeReportJson(
+      reportJson,
+      _cursorPlatformDashboardSnapshotResultJson,
+    );
   }
 
   String mergeDashboardSnapshotsJson(Iterable<String> snapshotsJson) {
@@ -129,6 +174,22 @@ String normalizeOpenAiReportJson(String reportJson) {
 
 String normalizeCodexReportJson(String reportJson) {
   return _bindings.normalizeCodexReportJson(reportJson);
+}
+
+String normalizeAnthropicReportJson(String reportJson) {
+  return _bindings.normalizeAnthropicReportJson(reportJson);
+}
+
+String normalizeClaudeReportJson(String reportJson) {
+  return _bindings.normalizeClaudeReportJson(reportJson);
+}
+
+String normalizeCursorPlanReportJson(String reportJson) {
+  return _bindings.normalizeCursorPlanReportJson(reportJson);
+}
+
+String normalizeCursorPlatformReportJson(String reportJson) {
+  return _bindings.normalizeCursorPlatformReportJson(reportJson);
 }
 
 String mergeDashboardSnapshotsJson(Iterable<String> snapshotsJson) {

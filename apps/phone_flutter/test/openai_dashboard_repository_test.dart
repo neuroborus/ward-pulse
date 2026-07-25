@@ -6,8 +6,10 @@ import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/dashboard/openai_dashboard_repository.dart';
+import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/sync/openai_reporting_client.dart';
+import 'package:ward_pulse_phone/sync/provider_reporting.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_logger.dart';
 
 void main() {
@@ -26,7 +28,7 @@ void main() {
     'uses an explicit fallback when no OpenAI credential is stored',
     () async {
       final logger = _RecordingLogger();
-      final repository = OpenAiDashboardRepository(
+      final repository = openAiDashboardRepository(
         credentialStore: _MemoryCredentialStore(),
         fallback: ValueDashboardRepository(fallbackSnapshot),
         logger: logger,
@@ -40,7 +42,7 @@ void main() {
   );
 
   test('does not use mock data by default without a credential', () async {
-    final repository = OpenAiDashboardRepository(
+    final repository = openAiDashboardRepository(
       credentialStore: _MemoryCredentialStore(),
       logger: const NullProviderSyncLogger(),
     );
@@ -67,9 +69,11 @@ void main() {
     final transport = _FixtureTransport(usage: usage, costs: costs);
     final logger = _RecordingLogger();
     String? normalizedInput;
-    final repository = OpenAiDashboardRepository(
+    final repository = openAiDashboardRepository(
       credentialStore: _MemoryCredentialStore('secret-admin-key'),
-      client: OpenAiReportingClient(transport: transport),
+      client: OpenAiReportingClient(
+        http: ProviderReportingHttp(transport: transport),
+      ),
       fallback: ValueDashboardRepository(fallbackSnapshot),
       logger: logger,
       clock: () => DateTime.utc(2026, 7, 19, 12),
@@ -94,10 +98,12 @@ void main() {
 
   test('does not replace a failed live sync with mock data', () async {
     final logger = _RecordingLogger();
-    final repository = OpenAiDashboardRepository(
+    final repository = openAiDashboardRepository(
       credentialStore: _MemoryCredentialStore('secret-admin-key'),
       client: OpenAiReportingClient(
-        transport: _FixtureTransport(usage: '{}', costs: '{}')..fail = true,
+        http: ProviderReportingHttp(
+          transport: _FixtureTransport(usage: '{}', costs: '{}')..fail = true,
+        ),
       ),
       fallback: ValueDashboardRepository(fallbackSnapshot),
       logger: logger,
@@ -124,10 +130,12 @@ void main() {
       'next_page': null,
     });
     final logger = _RecordingLogger();
-    final repository = OpenAiDashboardRepository(
+    final repository = openAiDashboardRepository(
       credentialStore: _MemoryCredentialStore('secret-admin-key'),
       client: OpenAiReportingClient(
-        transport: _FixtureTransport(usage: page, costs: page),
+        http: ProviderReportingHttp(
+          transport: _FixtureTransport(usage: page, costs: page),
+        ),
       ),
       logger: logger,
       normalizeReport:
@@ -165,9 +173,11 @@ void main() {
         File('../../fixtures/providers/openai/costs.json').readAsStringSync();
     final transport = _FixtureTransport(usage: usage, costs: costs);
     final logger = _RecordingLogger();
-    final repository = OpenAiDashboardRepository(
+    final repository = openAiDashboardRepository(
       credentialStore: _MemoryCredentialStore('secret-admin-key'),
-      client: OpenAiReportingClient(transport: transport),
+      client: OpenAiReportingClient(
+        http: ProviderReportingHttp(transport: transport),
+      ),
       fallback: ValueDashboardRepository(fallbackSnapshot),
       logger: logger,
       normalizeReport: (_) => dashboardFixture,
@@ -204,9 +214,11 @@ void main() {
         'next_page': null,
       });
       final transport = _FixtureTransport(usage: emptyPage, costs: emptyPage);
-      final repository = OpenAiDashboardRepository(
+      final repository = openAiDashboardRepository(
         credentialStore: _MemoryCredentialStore('secret-admin-key'),
-        client: OpenAiReportingClient(transport: transport),
+        client: OpenAiReportingClient(
+          http: ProviderReportingHttp(transport: transport),
+        ),
         fallback: ValueDashboardRepository(fallbackSnapshot),
         logger: const NullProviderSyncLogger(),
         clock: () => DateTime.utc(2026, 8, 1, 12),
@@ -225,34 +237,40 @@ void main() {
 }
 
 final class _MemoryCredentialStore implements ProviderCredentialStore {
-  _MemoryCredentialStore([this.value]);
-
-  String? value;
-  String? label;
-
-  @override
-  Future<String?> readOpenAiAdminKey() async => value;
-
-  @override
-  Future<void> writeOpenAiAdminKey(String value) async {
-    this.value = value;
-  }
-
-  @override
-  Future<void> deleteOpenAiAdminKey() async {
-    value = null;
-    label = null;
-  }
-
-  @override
-  Future<String?> readOpenAiAdminKeyLabel() async => label;
-
-  @override
-  Future<void> writeOpenAiAdminKeyLabel(String? value) async {
-    label = value?.trim();
-    if (label != null && label!.isEmpty) {
-      label = null;
+  _MemoryCredentialStore([String? openAiAdminKey]) {
+    if (openAiAdminKey != null) {
+      _secrets[ProviderConnections.openAiPlatform] = openAiAdminKey;
     }
+  }
+
+  final _secrets = <ProviderConnectionId, String>{};
+  final _labels = <ProviderConnectionId, String>{};
+
+  @override
+  Future<String?> readSecret(ProviderConnectionId id) async => _secrets[id];
+
+  @override
+  Future<void> writeSecret(ProviderConnectionId id, String value) async {
+    _secrets[id] = value;
+  }
+
+  @override
+  Future<void> deleteSecret(ProviderConnectionId id) async {
+    _secrets.remove(id);
+    _labels.remove(id);
+  }
+
+  @override
+  Future<String?> readLabel(ProviderConnectionId id) async => _labels[id];
+
+  @override
+  Future<void> writeLabel(ProviderConnectionId id, String? value) async {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      _labels.remove(id);
+      return;
+    }
+    _labels[id] = trimmed;
   }
 }
 
@@ -283,6 +301,15 @@ final class _FixtureTransport implements ProviderHttpTransport {
       headers: const {},
       body: uri.path.endsWith('/costs') ? costs : usage,
     );
+  }
+
+  @override
+  Future<ProviderHttpResponse> post(
+    Uri uri, {
+    required Map<String, String> headers,
+    String? body,
+  }) async {
+    throw UnsupportedError('POST is unused by the OpenAI client under test');
   }
 }
 

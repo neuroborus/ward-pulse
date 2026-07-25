@@ -4,9 +4,14 @@ WardPulse is local-first. The MVP must not introduce a custom cloud path for pro
 
 ## Credential Rules
 
-- Provider credentials stay on the phone that owns the provider transport. OpenAI Platform keys
-  are entered on the phone; ChatGPT/Codex sign-in uses OpenAI's device-code flow.
-- Phone-held API keys and Codex OAuth tokens are stored with platform-secure storage.
+- Provider credentials stay on the phone that owns the provider transport. OpenAI, Anthropic, and
+  Cursor platform Admin API keys are entered on the phone; ChatGPT/Codex sign-in uses OpenAI's
+  device-code flow. Claude and Cursor plan connections are experimental compatibility
+  integrations: the phone stores a pasted OAuth access token or dashboard session token instead of
+  running a first-party sign-in flow.
+- Phone-held API keys, Codex OAuth tokens, and pasted Claude/Cursor plan tokens are stored with
+  platform-secure storage, keyed per connection so one provider's credential never overwrites
+  another's.
 - Saved credentials are never displayed in full. Credential entry may reveal only the current unsaved value after an explicit user action.
 - Optional user-defined labels for API-key connections are plain phone-local display metadata. They are stored beside the credential reference, never concatenated into the secret value, and never sent to Wear OS.
 - Credentials are never sent to a WardPulse cloud service in the MVP.

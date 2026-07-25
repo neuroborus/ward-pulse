@@ -9,7 +9,6 @@ class ProviderConnectionRow extends StatelessWidget {
     required this.subtitle,
     required this.trailing,
     this.onTap,
-    this.enabled = true,
   });
 
   final IconData icon;
@@ -17,18 +16,16 @@ class ProviderConnectionRow extends StatelessWidget {
   final String subtitle;
   final Widget trailing;
   final VoidCallback? onTap;
-  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return ListTile(
-      enabled: enabled,
-      leading: Icon(icon, color: enabled ? null : colors.outline),
+      leading: Icon(icon),
       title: Text(title),
       subtitle: Text(subtitle),
+      isThreeLine: subtitle.contains('\n'),
       trailing: trailing,
-      onTap: enabled ? onTap : null,
+      onTap: onTap,
     );
   }
 }
