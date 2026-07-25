@@ -59,7 +59,13 @@ class MainActivity : FlutterActivity() {
 
     private fun reportFailure(error: Exception, result: MethodChannel.Result) {
         Log.w(TAG, "Watch sync unavailable (${error.javaClass.simpleName}).")
-        result.error("watch_sync_unavailable", "Watch sync unavailable.", null)
+        // Emulators need Device Manager → Pair Wearable + Wear OS companion;
+        // without that Wearable APIs fail with AvailabilityException.
+        result.error(
+            "watch_sync_unavailable",
+            "Watch sync unavailable. Pair a Wear OS device (or emulator) with this phone first.",
+            null,
+        )
     }
 
     private companion object {

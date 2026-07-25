@@ -1,9 +1,17 @@
 package app.wardpulse.wear.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -13,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.MaterialTheme
@@ -20,28 +29,38 @@ import androidx.wear.compose.material3.Text
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.ui.theme.WardPulseSuccess
-import java.util.Locale
 import kotlin.math.min
+import kotlin.math.roundToInt
+
+private val CodexRing = Color(0xFF65D78A)
+private val ClaudeRing = Color(0xFFE8915A)
+private val CursorRing = Color(0xFF67E8D4)
+private val BudgetRing = Color(0xFF8AB4F8)
 
 /**
- * Concentric percent rings matching `apps/wear_android/design/rings.fig`.
- * Outer ring is selection slot 0; unavailable metrics are omitted by the payload.
+ * Concentric remaining arcs + sunk family strips
+ * (`docs/product/WATCH_RING_DESIGN.md`, baseline 2026-07-25).
+ *
+ * Outer ring is the tightest remaining selected metric. Exhausted layers are omitted upstream.
+ * Watch-face time lives on the system / WFF surface; the Wear app module keeps the aperture for strips.
  */
 @Composable
 internal fun UsageRings(
     rings: List<RingSummary>,
     modifier: Modifier = Modifier,
     diameter: Dp = 152.dp,
+    tokenGlance: String? = null,
 ) {
     if (rings.isEmpty()) {
         return
     }
 
-    val trackColor = MaterialTheme.colorScheme.outlineVariant
-    val colors = rings.map { ringStatusColor(it.status) }
+    val trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+    val colors = rings.map { ringFamilyColor(it.id, it.status) }
     val density = LocalDensity.current
     val strokeWidth = with(density) { 8.dp.toPx() }
-    val gap = with(density) { 6.dp.toPx() }
+    val gap = with(density) { 3.dp.toPx() }
+    val wellColor = Color(0xE60B0E0C)
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.size(diameter)) {
@@ -61,7 +80,9 @@ internal fun UsageRings(
                     size = arcSize,
                     style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
                 )
-                val sweep = (ring.usedPercent.coerceIn(0.0, 100.0) / 100.0 * 360.0).toFloat()
+                val remaining =
+                    (100.0 - ring.usedPercent.coerceIn(0.0, 100.0)).coerceAtLeast(0.0)
+                val sweep = (remaining / 100.0 * 360.0).toFloat()
                 if (sweep > 0f) {
                     drawArc(
                         color = colors[index],
@@ -75,28 +96,26 @@ internal fun UsageRings(
                 }
             }
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            if (rings.size == 1) {
-                Text(
-                    rings.single().usedPercent.compactPercentLabel(),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = colors.single(),
-                )
-                Text(
-                    rings.single().label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                Text(
-                    "${rings.size}",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                Text(
-                    "rings",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+            modifier = Modifier.padding(top = diameter * 0.22f),
+        ) {
+            rings.forEachIndexed { index, ring ->
+                val remaining =
+                    (100.0 - ring.usedPercent.coerceIn(0.0, 100.0))
+                        .coerceAtLeast(0.0)
+                        .roundToInt()
+                val label =
+                    if (index == 0 && !tokenGlance.isNullOrBlank()) {
+                        "$remaining% · $tokenGlance"
+                    } else {
+                        "$remaining%"
+                    }
+                SunkStrip(
+                    text = label,
+                    accent = colors[index],
+                    wellColor = wellColor,
                 )
             }
         }
@@ -104,23 +123,56 @@ internal fun UsageRings(
 }
 
 @Composable
-private fun ringStatusColor(status: PulseStatus): Color = when (status) {
-    PulseStatus.OK -> WardPulseSuccess
-    PulseStatus.WARNING,
-    PulseStatus.RATE_LIMITED,
-    PulseStatus.STALE,
-    -> MaterialTheme.colorScheme.tertiary
-    PulseStatus.ERROR,
-    PulseStatus.AUTH_REQUIRED,
-    -> MaterialTheme.colorScheme.error
-    PulseStatus.UNKNOWN -> MaterialTheme.colorScheme.onSurfaceVariant
+private fun SunkStrip(
+    text: String,
+    accent: Color,
+    wellColor: Color,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .widthIn(min = 56.dp, max = 108.dp)
+            .background(wellColor, RoundedCornerShape(5.dp))
+            .padding(horizontal = 5.dp, vertical = 3.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(end = 5.dp)
+                .width(2.5.dp)
+                .height(12.dp)
+                .background(accent, RoundedCornerShape(1.dp)),
+        )
+        Text(
+            text,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+    }
 }
 
-private fun Double.compactPercentLabel(): String {
-    val formatted = if (this % 1.0 == 0.0) {
-        toLong().toString()
-    } else {
-        String.format(Locale.US, "%.0f", this)
+@Composable
+private fun ringFamilyColor(ringId: String, status: PulseStatus): Color {
+    val family = when {
+        ringId.startsWith("allowance.codex") ||
+            ringId.contains(".codex.") ||
+            ringId.startsWith("allowance.openai") ||
+            ringId.contains(".openai.") -> CodexRing
+        ringId.startsWith("allowance.claude") || ringId.contains(".claude.") -> ClaudeRing
+        ringId.startsWith("allowance.cursor") || ringId.contains(".cursor.") -> CursorRing
+        ringId.startsWith("budget.") -> BudgetRing
+        else -> WardPulseSuccess
     }
-    return "$formatted%"
+    return when (status) {
+        PulseStatus.OK -> family
+        PulseStatus.WARNING,
+        PulseStatus.RATE_LIMITED,
+        PulseStatus.STALE,
+        -> MaterialTheme.colorScheme.tertiary
+        PulseStatus.ERROR,
+        PulseStatus.AUTH_REQUIRED,
+        -> MaterialTheme.colorScheme.error
+        PulseStatus.UNKNOWN -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
 }

@@ -82,6 +82,9 @@ List<WatchRingMetric> watchRingCatalog(DashboardSnapshot? snapshot) {
 }
 
 /// Resolves rings for the watch payload: only available percent metrics.
+///
+/// Order follows Settings selection (or catalog defaults). Use
+/// [orderWatchRingsForSurface] before sending to Wear/WFF.
 List<WatchRingMetric> resolveWatchRings(
   DashboardSnapshot snapshot,
   WatchRingPreferences preferences,
@@ -99,6 +102,20 @@ List<WatchRingMetric> resolveWatchRings(
     for (final id in preferences.clampedIds)
       if (catalog[id] case final metric? when metric.isAvailable) metric,
   ];
+}
+
+/// Display order for Wear/WFF: omit exhausted layers, tightest remaining outermost.
+List<WatchRingMetric> orderWatchRingsForSurface(List<WatchRingMetric> rings) {
+  final active = [
+    for (final ring in rings)
+      if ((ring.usedPercent ?? 0) < 100) ring,
+  ];
+  active.sort((a, b) {
+    final usedA = a.usedPercent ?? 0;
+    final usedB = b.usedPercent ?? 0;
+    return usedB.compareTo(usedA);
+  });
+  return active.take(watchRingSlotCount).toList(growable: false);
 }
 
 WatchRingMetric _budgetMetric(String id, String label, BudgetState? budget) {

@@ -36,10 +36,11 @@ DashboardLoadException _mapCodexError(Object error, ProviderSyncLogger logger) {
       details: details,
     );
   }
-  logger.record(_eventFor(error.failure), details: error.details);
+  final details = error.details ?? loadFailureDetails(error);
+  logger.record(_eventFor(error.failure), details: details);
   return DashboardLoadException(
     issue: _issueFor(error.failure),
-    details: error.details,
+    details: details,
   );
 }
 

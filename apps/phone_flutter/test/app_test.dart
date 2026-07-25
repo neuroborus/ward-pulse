@@ -33,7 +33,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('WardPulse'), findsOneWidget);
-    expect(find.text('Today'), findsWidgets);
 
     final dashboard = find.byType(Scrollable).first;
     await tester.scrollUntilVisible(
@@ -57,6 +56,13 @@ void main() {
       scrollable: dashboard,
     );
     expect(find.text('No alerts'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('Platform spend'),
+      300,
+      scrollable: dashboard,
+    );
+    expect(find.text('Today'), findsWidgets);
 
     await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();

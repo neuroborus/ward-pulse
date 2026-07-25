@@ -1,22 +1,18 @@
 # Wear OS ring layouts
 
-Editable OpenPencil source: `rings.fig` (source of truth). SVG files next to it are
-generated review exports — regenerate instead of editing by hand.
+**Baseline locked 2026-07-25** — see
+[`docs/product/WATCH_RING_DESIGN.md`](../../../docs/product/WATCH_RING_DESIGN.md).
+
+Primary preview: `preview-3-plan-tokens.png`.
 
 ```sh
-# Rebuild the .fig from the checked-in generator (optional)
-node tools/openpencil.mjs eval brand/icons/wardpulse.fig \
-  --stdin -w -o apps/wear_android/design/rings.fig < tools/create-watch-ring-designs.fig.js
+node tools/render-watch-ring-designs.mjs
 
-# Export a frame for review (node ids from `openpencil find`)
-node tools/openpencil.mjs export apps/wear_android/design/rings.fig \
-  --node 0:32 -f svg -o apps/wear_android/design/round-3-rings.svg
+convert -background none -density 144 \
+  apps/wear_android/design/round-3-plan-tokens.svg \
+  apps/wear_android/design/preview-3-plan-tokens.png
+xdg-open apps/wear_android/design/preview-3-plan-tokens.png
 ```
 
-## Layout
-
-- Concentric percent rings, selection order outer → inner (max 4).
-- Status colors: success / warning / error from the Wear theme tokens.
-- Ambient: thinner muted tracks, time + WardPulse label, no filler rings.
-- Round (450) and square (390) share the same slot order.
-- Runtime Compose rendering lives in `UsageRings` and reads schema v4 `rings`.
+Variants: `round-3-plan-tokens`, `round-2-plan-tokens`, `round-1-plan`,
+`round-1-plan-tokens`, `round-tokens-only`, `round-ambient-3`.

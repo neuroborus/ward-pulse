@@ -159,9 +159,22 @@ fn quantity_credits(value: &str) -> Result<Quantity, CodexReportError> {
     }
 
     Ok(Quantity {
-        value: value.to_string(),
+        value: trim_trailing_fraction_zeros(value),
         unit: QuantityUnit::Credits,
     })
+}
+
+/// `500.0000000000` → `500`, `12.50` → `12.5`.
+fn trim_trailing_fraction_zeros(value: &str) -> String {
+    let Some((whole, fraction)) = value.split_once('.') else {
+        return value.to_string();
+    };
+    let trimmed = fraction.trim_end_matches('0');
+    if trimmed.is_empty() {
+        whole.to_string()
+    } else {
+        format!("{whole}.{trimmed}")
+    }
 }
 
 fn plan_allowance(
@@ -376,6 +389,14 @@ mod tests {
     use super::*;
 
     const REPORT_FIXTURE: &str = include_str!("../../../../fixtures/providers/codex/report.json");
+
+    #[test]
+    fn trims_trailing_zeros_from_credit_balance() {
+        assert_eq!(trim_trailing_fraction_zeros("500.0000000000"), "500");
+        assert_eq!(trim_trailing_fraction_zeros("12.50"), "12.5");
+        assert_eq!(trim_trailing_fraction_zeros("12.5"), "12.5");
+        assert_eq!(trim_trailing_fraction_zeros("100"), "100");
+    }
 
     #[test]
     fn normalizes_plan_and_purchased_consumption() {

@@ -64,8 +64,18 @@ data class Quantity(
     val value: String,
     val unit: String,
 ) {
+    /** Display form — strip provider float noise like `500.0000000000`. */
     val label: String
-        get() = "$value $unit"
+        get() = "${formatQuantityValue(value)} $unit"
+}
+
+/** `500.0000000000` → `500`, `12.50` → `12.5`. */
+internal fun formatQuantityValue(value: String): String {
+    if (!value.contains('.')) {
+        return value
+    }
+    val trimmed = value.trimEnd('0')
+    return if (trimmed.endsWith('.')) trimmed.dropLast(1) else trimmed
 }
 
 data class RingSummary(
@@ -73,6 +83,13 @@ data class RingSummary(
     val label: String,
     val usedPercent: Double,
     val status: PulseStatus,
+)
+
+/** Compact token activity for the watch-face SHORT_TEXT slot. */
+data class TokenGlance(
+    val text: String,
+    val label: String,
+    val provider: String?,
 )
 
 data class AllowanceSummary(
@@ -112,6 +129,7 @@ data class WatchDashboardSummary(
     val generatedAt: String,
     val overallStatus: PulseStatus,
     val rings: List<RingSummary>,
+    val tokenGlance: TokenGlance?,
     val today: PeriodSummary,
     val week: PeriodSummary,
     val allowances: List<AllowanceSummary>,
@@ -148,15 +166,17 @@ data class WatchDashboardSummary(
 
 object PreviewWatchDashboardSummary {
     val value = WatchDashboardSummary(
-        schemaVersion = 4,
+        schemaVersion = 5,
         dataMode = WatchDataMode.MOCK,
         generatedAt = "2026-06-27T18:42:00Z",
         overallStatus = PulseStatus.OK,
         rings = listOf(
+            // Surface order: tightest remaining outermost (highest usedPercent first).
+            RingSummary("budget.week", "Week", 28.5, PulseStatus.OK),
+            RingSummary("budget.month", "Month", 26.5, PulseStatus.OK),
             RingSummary("budget.today", "Today", 24.8, PulseStatus.OK),
-            RingSummary("budget.week", "Week", 28.52, PulseStatus.OK),
-            RingSummary("budget.month", "Month", 26.5125, PulseStatus.OK),
         ),
+        tokenGlance = TokenGlance(text = "67K TOK", label = "Today tokens", provider = "mock"),
         today = PeriodSummary(
             period = "today",
             spent = Money(1_240, "USD"),

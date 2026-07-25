@@ -482,7 +482,20 @@ class Quantity {
 
   Map<String, dynamic> toJson() => {'value': value, 'unit': unit};
 
-  String get label => '$value $unit';
+  /// Display form — strip provider float noise like `500.0000000000`.
+  String get label => '${formatQuantityValue(value)} $unit';
+}
+
+/// `500.0000000000` → `500`, `12.50` → `12.5`.
+String formatQuantityValue(String value) {
+  if (!value.contains('.')) {
+    return value;
+  }
+  final trimmed = value.replaceFirst(RegExp(r'0+$'), '');
+  if (trimmed.endsWith('.')) {
+    return trimmed.substring(0, trimmed.length - 1);
+  }
+  return trimmed;
 }
 
 class BudgetState {
@@ -552,6 +565,22 @@ class BudgetState {
 
     final places = value.truncateToDouble() == value ? 0 : 1;
     return '${value.toStringAsFixed(places)}%';
+  }
+
+  /// Why this budget card shows its status — shown on StatusPill tap/hover.
+  String get statusExplanation {
+    if (status != ProviderStatus.unknown) {
+      return status.description;
+    }
+    if (spent != null && limit == null) {
+      return 'Organization/platform API spend has no local budget limit yet, '
+          'so percent used and status stay Unknown. Subscription credit '
+          'purchases are not included in these totals.';
+    }
+    if (spent == null) {
+      return 'No organization/platform API spend was reported for this period.';
+    }
+    return status.description;
   }
 }
 

@@ -22,17 +22,24 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 
 ## Wear OS App
 
-- Prefer configurable percent rings from schema v4 (up to four); never invent `Unknown` filler.
+- Prefer concentric percent layers from schema v4+ (up to four selected metrics today); never
+  invent `Unknown` filler. Unselected, unavailable, or exhausted (`>= 100%`) layers do not render.
+- Follow the **2026-07-25 locked baseline** in `docs/product/WATCH_RING_DESIGN.md`: outer =
+  tightest remaining; arc = remaining; large time hero; sunk family strips (not bordered cards);
+  family colors (OpenAI/Codex green, Anthropic orange, Cursor teal, budget blue). Future
+  multi-profile / hatch / three-ring cap notes there are planning-only until a later phase.
+- Show optional per-provider tokens on strips / `tokenGlance` when today tokens > 0 (not a ring).
 - Keep today, week, usage, providers, alerts, and last sync as secondary detail screens.
 - Store and render the latest successful watch summary.
 - Make stale data explicit.
 - Do not enter, display, or store provider credentials.
-- Keep screens glanceable; avoid long tables.
+- Keep screens glanceable; avoid long tables and cheap floating caption stacks.
 
 ## Watch Face Format
 
-- Keep WFF declarative and minimal.
-- Prefer `RANGED_VALUE` arcs for the first selected rings, with `SHORT_TEXT` fallback, plus status.
+- Keep WFF declarative and minimal; follow the same concentric language as Wear (not
+  side-by-side `RING 1` / `RING 2` placeholders).
+- Prefer live arcs for selected layers, optional token-glance text when present, muted time.
 - Support tap-to-open into the Wear OS app where possible.
 - Keep ambient mode readable.
 

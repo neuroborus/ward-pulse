@@ -3,4 +3,5 @@
     <string name="today_complication">WardPulse today</string>
     <string name="week_complication">WardPulse week</string>
     <string name="status_complication">WardPulse status</string>
+    <string name="tokens_complication">WardPulse tokens</string>
 </resources>

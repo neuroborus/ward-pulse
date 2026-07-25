@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../dashboard/dashboard_models.dart';
 import '../settings/consumption_display_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
+import 'watch_token_glance.dart';
 
 abstract interface class WatchSyncService {
   Future<void> sync(
@@ -46,9 +47,12 @@ class WatchDashboardSummaryPayload {
     ConsumptionDisplayPreferences displayPreferences,
     WatchRingPreferences ringPreferences,
   ) {
-    final rings = resolveWatchRings(snapshot, ringPreferences);
+    final rings = orderWatchRingsForSurface(
+      resolveWatchRings(snapshot, ringPreferences),
+    );
+    final tokenGlance = resolveWatchTokenGlance(snapshot);
     return WatchDashboardSummaryPayload._({
-      'schemaVersion': 4,
+      'schemaVersion': 5,
       'dataMode':
           snapshot.accounts.isNotEmpty &&
                   snapshot.accounts.every(
@@ -63,10 +67,14 @@ class WatchDashboardSummaryPayload {
           {
             'id': ring.id,
             'label': ring.label,
-            'usedPercent': ring.usedPercent,
+            // Round for glanceable surfaces — avoid float noise like 24.800000000000004.
+            'usedPercent': double.parse(
+              (ring.usedPercent ?? 0).toStringAsFixed(1),
+            ),
             'status': ring.status.wireName,
           },
       ],
+      'tokenGlance': tokenGlance?.toJson(),
       'today': _budgetToJson(snapshot.todayTotal),
       'week': _budgetToJson(snapshot.weekTotal),
       'allowances': [

@@ -10,6 +10,7 @@
     "generatedAt",
     "overallStatus",
     "rings",
+    "tokenGlance",
     "today",
     "week",
     "allowances",
@@ -18,7 +19,7 @@
     "isStale"
   ],
   "properties": {
-    "schemaVersion": { "const": 4 },
+    "schemaVersion": { "const": 5 },
     "dataMode": { "enum": ["live", "mock"] },
     "generatedAt": { "type": "string", "format": "date-time" },
     "overallStatus": { "$ref": "dashboard_snapshot.schema.json#/$defs/providerStatus" },
@@ -40,6 +41,37 @@
           "status": { "$ref": "dashboard_snapshot.schema.json#/$defs/providerStatus" }
         }
       }
+    },
+    "tokenGlance": {
+      "description": "SHORT_TEXT token activity for the watch face. Null when unavailable.",
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["text", "label"],
+          "properties": {
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 12,
+              "description": "Compact glance string, e.g. 1.4B TOK. Never raw payloads."
+            },
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 24,
+              "description": "Human label such as Today tokens."
+            },
+            "provider": {
+              "anyOf": [
+                { "$ref": "dashboard_snapshot.schema.json#/$defs/providerKind" },
+                { "type": "null" }
+              ]
+            }
+          }
+        },
+        { "type": "null" }
+      ]
     },
     "today": {
       "allOf": [

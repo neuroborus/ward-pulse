@@ -275,6 +275,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _syncResult = 'Watch summary queued';
         });
       }
+    } on PlatformException catch (error) {
+      if (mounted) {
+        setState(() {
+          _syncResult =
+              error.message?.trim().isNotEmpty == true
+                  ? error.message!
+                  : 'Watch sync unavailable';
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -523,8 +532,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 leading: Icon(Icons.watch_outlined),
                 title: Text('Watch display'),
                 subtitle: Text(
-                  'Up to $watchRingSlotCount percent rings · unavailable '
-                  'metrics stay off the watch',
+                  'Pick up to $watchRingSlotCount metrics for the watch at '
+                  'once · unavailable ones stay off the watch',
                 ),
               ),
               for (final metric in watchRingCatalog(widget.snapshot)) ...[
@@ -588,7 +597,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   leading: const Icon(Icons.watch_outlined),
                   title: const Text('Watch summary'),
                   subtitle: Text(
-                    'Today ${snapshot.todayTotal.usedPercentLabel}',
+                    _watchSummarySubtitle(
+                      snapshot,
+                      widget.ringPreferences,
+                    ),
                   ),
                   trailing: StatusPill(
                     status: snapshot.watchSummary.status,
@@ -1016,6 +1028,24 @@ class _CredentialDialogState extends State<_CredentialDialog> {
       ],
     );
   }
+}
+
+/// Compact preview of what the next watch payload would carry as rings.
+String _watchSummarySubtitle(
+  DashboardSnapshot snapshot,
+  WatchRingPreferences ringPreferences,
+) {
+  final rings = orderWatchRingsForSurface(
+    resolveWatchRings(snapshot, ringPreferences),
+  );
+  if (rings.isEmpty) {
+    return 'No rings selected';
+  }
+  if (rings.length == 1) {
+    final ring = rings.single;
+    return '${ring.label} ${ring.usedPercent!.round()}%';
+  }
+  return '${rings.length} rings · ${rings.map((ring) => ring.label).join(', ')}';
 }
 
 final class _CredentialChange {

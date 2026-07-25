@@ -36,4 +36,11 @@ class WatchDashboardSummaryTest {
         assertEquals("USD 12.40", Money(1_240, "USD").label)
         assertEquals("-USD 0.05", Money(-5, "USD").label)
     }
+
+    @Test
+    fun trimsTrailingZerosFromQuantityLabels() {
+        assertEquals("500 credits", Quantity("500.0000000000", "credits").label)
+        assertEquals("12.5 credits", Quantity("12.50", "credits").label)
+        assertEquals("12.5 credits", Quantity("12.5", "credits").label)
+    }
 }

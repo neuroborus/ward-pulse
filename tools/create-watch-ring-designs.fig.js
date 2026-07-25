@@ -1,9 +1,12 @@
-// OpenPencil / Figma plugin script: ring layout compositions.
+// OpenPencil frame-map inventory only — NOT the visual source of truth.
+// Locked baseline + review SVGs: docs/product/WATCH_RING_DESIGN.md
+//   node tools/render-watch-ring-designs.mjs
 //
-// Wear (default target below):
+// OpenPencil drops ellipse arcData on .fig write (arcs flatten to full circles).
+//
+// Wear:
 //   node tools/openpencil.mjs eval brand/icons/wardpulse.fig \
 //     --stdin -w -o apps/wear_android/design/rings.fig < tools/create-watch-ring-designs.fig.js
-//
 // WFF:
 //   sed "s/const target = 'wear'/const target = 'wff'/" tools/create-watch-ring-designs.fig.js | \
 //     node tools/openpencil.mjs eval brand/icons/wardpulse.fig \
@@ -13,15 +16,20 @@ const target = 'wear'
 
 const SURFACE = { r: 16 / 255, g: 20 / 255, b: 18 / 255 }
 const TRACK = { r: 63 / 255, g: 73 / 255, b: 67 / 255 }
-const SUCCESS = { r: 101 / 255, g: 215 / 255, b: 138 / 255 }
-const WARNING = { r: 230 / 255, g: 195 / 255, b: 73 / 255 }
-const ERROR = { r: 255 / 255, g: 180 / 255, b: 171 / 255 }
 const LABEL = { r: 244 / 255, g: 251 / 255, b: 248 / 255 }
 const MUTED = { r: 190 / 255, g: 201 / 255, b: 193 / 255 }
 
-const STATUS = [SUCCESS, SUCCESS, WARNING, ERROR]
-const SAMPLE = [0.25, 0.48, 0.72, 0.91]
-const LABELS = ['Today', 'Week', 'Month', 'Plan']
+const CODEX = { r: 101 / 255, g: 215 / 255, b: 138 / 255 } // OpenAI / Codex — green
+const CLAUDE = { r: 232 / 255, g: 145 / 255, b: 90 / 255 } // Anthropic — orange
+const CURSOR = { r: 103 / 255, g: 232 / 255, b: 212 / 255 } // Cursor — teal
+const BUDGET = { r: 138 / 255, g: 180 / 255, b: 248 / 255 }
+
+/** Outer → inner by tightest remaining. Arc = remaining. Exhausted omitted. */
+const PROVIDER_LAYERS = [
+  { label: 'Codex', used: 0.92, color: CODEX },
+  { label: 'Claude', used: 0.61, color: CLAUDE },
+  { label: 'Cursor', used: 0.28, color: CURSOR },
+]
 
 function solid(color) {
   return [{ type: 'SOLID', color }]
@@ -32,9 +40,12 @@ async function loadFont() {
   await figma.loadFontAsync({ family: 'Inter', style: 'Medium' })
 }
 
-function addLabel(parent, text, y, size, color) {
+function addLabel(parent, text, y, size, color, style) {
   const node = figma.createText()
-  node.fontName = { family: 'Inter', style: size >= 28 ? 'Medium' : 'Regular' }
+  node.fontName = {
+    family: 'Inter',
+    style: style || (size >= 28 ? 'Medium' : 'Regular'),
+  }
   node.characters = text
   node.fontSize = size
   node.fills = solid(color)
@@ -43,6 +54,7 @@ function addLabel(parent, text, y, size, color) {
   node.x = 0
   node.y = y
   parent.appendChild(node)
+  return node
 }
 
 function addRingArc(parent, cx, cy, diameter, thickness, progress, color, ambient) {
@@ -54,7 +66,7 @@ function addRingArc(parent, cx, cy, diameter, thickness, progress, color, ambien
   track.y = cy - diameter / 2
   track.fills = []
   track.strokes = [{ type: 'SOLID', color: TRACK }]
-  track.strokeWeight = ambient ? thickness * 0.75 : thickness
+  track.strokeWeight = ambient ? thickness * 0.7 : thickness
   track.strokeAlign = 'CENTER'
   track.arcData = {
     startingAngle: -Math.PI / 2,
@@ -63,7 +75,8 @@ function addRingArc(parent, cx, cy, diameter, thickness, progress, color, ambien
   }
   parent.appendChild(track)
 
-  const sweep = Math.max(0.02, Math.min(progress, 1))
+  // `progress` is remaining fraction (1 - used).
+  const sweep = Math.max(0.02, Math.min(progress, 0.999))
   const value = figma.createEllipse()
   value.name = 'value'
   value.resize(diameter, diameter)
@@ -71,7 +84,7 @@ function addRingArc(parent, cx, cy, diameter, thickness, progress, color, ambien
   value.y = cy - diameter / 2
   value.fills = []
   value.strokes = [{ type: 'SOLID', color }]
-  value.strokeWeight = ambient ? thickness * 0.75 : thickness
+  value.strokeWeight = ambient ? thickness * 0.7 : thickness
   value.strokeAlign = 'CENTER'
   value.strokeCap = 'ROUND'
   value.arcData = {
@@ -82,7 +95,17 @@ function addRingArc(parent, cx, cy, diameter, thickness, progress, color, ambien
   parent.appendChild(value)
 }
 
-function makeFace(page, name, size, ringCount, ambient) {
+function visibleLayers(count) {
+  return PROVIDER_LAYERS.filter((layer) => layer.used < 1).slice(0, count)
+}
+
+/**
+ * One composition: rings fill the face; type lives in the aperture only.
+ * No orphan caption bands above/below the ring stack.
+ */
+function makeFace(page, name, size, ringCount, ambient, options) {
+  const opts = options || {}
+  const layers = visibleLayers(ringCount)
   const frame = figma.createFrame()
   frame.name = name
   frame.resize(size, size)
@@ -91,12 +114,12 @@ function makeFace(page, name, size, ringCount, ambient) {
   page.appendChild(frame)
 
   const cx = size / 2
-  const cy = size / 2 - (ambient ? 0 : 8)
-  const outer = size * (ambient ? 0.78 : 0.72)
-  const gap = size * 0.055
-  const thickness = Math.max(6, size * (ambient ? 0.028 : 0.036))
+  const cy = size / 2
+  const outer = size * (ambient ? 0.84 : 0.86)
+  const gap = size * 0.042
+  const thickness = Math.max(7, size * (ambient ? 0.03 : 0.038))
 
-  for (let i = 0; i < ringCount; i += 1) {
+  for (let i = 0; i < layers.length; i += 1) {
     const diameter = outer - i * (thickness + gap) * 2
     addRingArc(
       frame,
@@ -104,75 +127,77 @@ function makeFace(page, name, size, ringCount, ambient) {
       cy,
       diameter,
       thickness,
-      SAMPLE[i],
-      ambient ? MUTED : STATUS[i],
+      1 - layers[i].used,
+      ambient ? MUTED : layers[i].color,
       ambient,
     )
   }
 
-  if (!ambient) {
-    addLabel(frame, 'WARDPULSE', size * 0.08, Math.round(size * 0.045), MUTED)
-    if (ringCount === 1) {
-      addLabel(
-        frame,
-        `${Math.round(SAMPLE[0] * 100)}%`,
-        cy - size * 0.04,
-        Math.round(size * 0.12),
-        LABEL,
-      )
-      addLabel(frame, LABELS[0], cy + size * 0.08, Math.round(size * 0.04), MUTED)
-    } else {
-      addLabel(frame, `${ringCount} rings`, cy - size * 0.02, Math.round(size * 0.055), LABEL)
-      addLabel(
-        frame,
-        LABELS.slice(0, ringCount)
-          .map((label, i) => `${label} ${Math.round(SAMPLE[i] * 100)}%`)
-          .join(' · '),
-        size * 0.86,
-        Math.round(size * 0.032),
-        MUTED,
-      )
-    }
-  } else {
-    addLabel(frame, '10:08', cy - size * 0.06, Math.round(size * 0.14), LABEL)
-    addLabel(frame, 'WARDPULSE', size * 0.78, Math.round(size * 0.04), MUTED)
+  // Inner hole roughly after the innermost stroke.
+  const innerHole =
+    outer - layers.length * (thickness + gap) * 2 + gap + thickness
+
+  if (ambient) {
+    addLabel(frame, '10:08', cy - size * 0.07, Math.round(size * 0.16), LABEL, 'Medium')
+    return
   }
+
+  const outerLayer = layers[0]
+  const remaining = Math.round((1 - outerLayer.used) * 100)
+  const hero = Math.round(layers.length === 1 ? size * 0.15 : size * 0.1)
+  const stackTop = cy - hero * 0.55
+  addLabel(frame, `${remaining}%`, stackTop, hero, LABEL, 'Medium')
+  addLabel(
+    frame,
+    `${outerLayer.label} left`,
+    stackTop + hero * 0.95,
+    Math.round(size * 0.042),
+    MUTED,
+  )
+  if (opts.tokens) {
+    addLabel(
+      frame,
+      opts.tokens,
+      stackTop + hero * 1.35,
+      Math.round(size * 0.04),
+      outerLayer.color,
+      'Medium',
+    )
+  }
+
+  // Tiny time tucked in the top crescent — secondary to the ring stack.
+  addLabel(frame, '10:08', size * 0.11, Math.round(size * 0.04), MUTED, 'Medium')
+
+  // Keep innerHole referenced so layout stays honest if we tighten further.
+  void innerHole
 }
 
-function makeWffSlots(page) {
+function makeBudgetFace(page, name, size) {
   const frame = figma.createFrame()
-  frame.name = 'WFF round · 2 ring slots'
-  frame.resize(450, 450)
+  frame.name = name
+  frame.resize(size, size)
   frame.fills = solid(SURFACE)
+  frame.clipsContent = true
   page.appendChild(frame)
+  // Arc = remaining (75% of Today budget left).
+  addRingArc(frame, size / 2, size / 2, size * 0.86, Math.max(7, size * 0.038), 0.75, BUDGET, false)
+  addLabel(frame, '10:08', size * 0.11, Math.round(size * 0.04), MUTED, 'Medium')
+  addLabel(frame, '75%', size * 0.395, Math.round(size * 0.15), LABEL, 'Medium')
+  addLabel(frame, 'Today left', size * 0.575, Math.round(size * 0.042), MUTED)
+}
 
-  addLabel(frame, 'WARDPULSE', 92, 24, LABEL)
-  addLabel(frame, '10:08', 150, 72, LABEL)
-  addRingArc(frame, 125, 300, 120, 10, SAMPLE[0], SUCCESS, false)
-  addRingArc(frame, 325, 300, 120, 10, SAMPLE[1], SUCCESS, false)
-  const left = figma.createText()
-  left.fontName = { family: 'Inter', style: 'Regular' }
-  left.characters = 'RING 1\n25%'
-  left.fontSize = 16
-  left.fills = solid(MUTED)
-  left.textAlignHorizontal = 'CENTER'
-  left.resize(150, 48)
-  left.x = 50
-  left.y = 360
-  frame.appendChild(left)
-
-  const right = figma.createText()
-  right.fontName = { family: 'Inter', style: 'Regular' }
-  right.characters = 'RING 2\n49%'
-  right.fontSize = 16
-  right.fills = solid(MUTED)
-  right.textAlignHorizontal = 'CENTER'
-  right.resize(150, 48)
-  right.x = 250
-  right.y = 360
-  frame.appendChild(right)
-
-  addLabel(frame, 'OPENAI · OK', 410, 14, SUCCESS)
+function makeWffPage(page) {
+  makeFace(page, 'WFF round · 1 layer + tokens', 450, 1, false, {
+    tokens: '1.4B TOK',
+  })
+  makeFace(page, 'WFF round · 3 providers', 450, 3, false, {
+    tokens: '1.4B TOK',
+  })
+  makeFace(page, 'WFF round · ambient · 2 layers', 450, 2, true)
+  makeFace(page, 'WFF square · 3 providers', 390, 3, false, {
+    tokens: '67K TOK',
+  })
+  makeBudgetFace(page, 'WFF round · budget layer', 450)
 }
 
 await loadFont()
@@ -185,21 +210,27 @@ if (target === 'wff') {
   const wff = figma.createPage()
   wff.name = 'Watch Face Format'
   figma.currentPage = wff
-  makeWffSlots(wff)
+  makeWffPage(wff)
 } else {
   const wear = figma.createPage()
   wear.name = 'Wear OS rings'
   figma.currentPage = wear
   for (const count of [1, 2, 3, 4]) {
-    makeFace(wear, `Round · ${count} ring${count === 1 ? '' : 's'}`, 450, count, false)
-    makeFace(wear, `Square · ${count} ring${count === 1 ? '' : 's'}`, 390, count, false)
+    makeFace(wear, `Round · ${count} layer${count === 1 ? '' : 's'}`, 450, count, false, {
+      tokens: '1.4B TOK',
+    })
+    makeFace(wear, `Square · ${count} layer${count === 1 ? '' : 's'}`, 390, count, false, {
+      tokens: '67K TOK',
+    })
   }
-  makeFace(wear, 'Round · ambient · 3 rings', 450, 3, true)
-  makeFace(wear, 'Square · ambient · 3 rings', 390, 3, true)
+  makeFace(wear, 'Round · ambient · 3 layers', 450, 3, true)
+  makeFace(wear, 'Square · ambient · 3 layers', 390, 3, true)
 }
 
 return {
   target,
   pages: figma.root.children.map((page) => page.name),
-  frames: figma.root.children.flatMap((page) => page.children.map((child) => child.name)),
+  frames: figma.root.children.flatMap((page) =>
+    page.children.map((child) => child.name),
+  ),
 }

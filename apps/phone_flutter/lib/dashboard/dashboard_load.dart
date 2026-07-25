@@ -46,9 +46,17 @@ bool hasLiveAccount(DashboardSnapshot snapshot) {
 
 /// Load failure details safe to log: never raw provider payloads.
 String loadFailureDetails(Object error) {
-  return error is WardPulseBindingsException
-      ? error.message
-      : 'Unexpected ${error.runtimeType}';
+  if (error is WardPulseBindingsException) {
+    return error.message;
+  }
+  final message = error.toString().trim();
+  if (message.isEmpty) {
+    return 'Unexpected ${error.runtimeType}';
+  }
+  // Prefer the exception message (e.g. ArgumentError) while staying short.
+  final clipped =
+      message.length > 240 ? '${message.substring(0, 240)}…' : message;
+  return clipped;
 }
 
 /// Maps a reporting or normalize failure into a dashboard load issue.

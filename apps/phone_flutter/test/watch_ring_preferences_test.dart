@@ -49,4 +49,32 @@ void main() {
     expect(preferences.clampedIds, ['a', 'b', 'c', 'd']);
     expect(jsonEncode(preferences.clampedIds), '["a","b","c","d"]');
   });
+
+  test('surface order puts tightest remaining outermost and drops exhausted', () {
+    const rings = [
+      WatchRingMetric(
+        id: 'a',
+        label: 'A',
+        usedPercent: 20,
+        status: ProviderStatus.ok,
+      ),
+      WatchRingMetric(
+        id: 'b',
+        label: 'B',
+        usedPercent: 100,
+        status: ProviderStatus.ok,
+      ),
+      WatchRingMetric(
+        id: 'c',
+        label: 'C',
+        usedPercent: 80,
+        status: ProviderStatus.ok,
+      ),
+    ];
+
+    expect(orderWatchRingsForSurface(rings).map((ring) => ring.id), [
+      'c',
+      'a',
+    ]);
+  });
 }

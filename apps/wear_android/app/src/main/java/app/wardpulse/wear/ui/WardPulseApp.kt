@@ -1,10 +1,17 @@
 package app.wardpulse.wear.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
@@ -31,7 +38,6 @@ import app.wardpulse.wear.model.WatchDataMode
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.ui.theme.WardPulseSuccess
 import app.wardpulse.wear.ui.theme.WardPulseTheme
-import java.util.Locale
 
 private const val HOME_ROUTE = "home"
 
@@ -81,7 +87,7 @@ fun WardPulseApp(summary: WatchDashboardSummary?) {
                     SummaryScreen(
                         title = ring.label,
                         rows = listOf(
-                            SummaryRow(ring.usedPercent.usedLabel(), "Used", ring.status),
+                            SummaryRow(formatPercentUsedLabel(ring.usedPercent), "Used", ring.status),
                             SummaryRow(ring.status.label, "Status", ring.status),
                         ),
                     )
@@ -101,30 +107,27 @@ fun WardPulseApp(summary: WatchDashboardSummary?) {
 
 @Composable
 private fun EmptyDashboardScreen() {
-    val state = rememberTransformingLazyColumnState()
-    val transformationSpec = rememberTransformationSpec()
-
-    ScreenScaffold(scrollState = state) { contentPadding ->
-        TransformingLazyColumn(
-            state = state,
-            contentPadding = contentPadding,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            item {
-                ListHeader { Text("WardPulse") }
-            }
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .transformedHeight(this, transformationSpec),
-                    transformation = SurfaceTransformation(transformationSpec),
-                ) {
-                    Text("Sync from phone")
-                    Text("No dashboard data yet")
-                }
-            }
-        }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 18.dp, vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text("WardPulse", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Sync from phone",
+            modifier = Modifier.padding(top = 8.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            "No dashboard data yet",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -138,15 +141,15 @@ private fun WatchDashboardSummary.rowsFor(screen: Screen): List<SummaryRow> = wh
     }.ifEmpty { listOf(SummaryRow("No usage data", "Sync from the phone")) }
     Screen.TODAY -> listOf(
         SummaryRow("${today.spent.labelOrUnknown()} / ${today.limit.labelOrUnknown()}", "Budget"),
-        SummaryRow(today.usedPercent.usedLabel(), "${today.remaining.labelOrUnknown()} left"),
+        SummaryRow(formatPercentUsedLabel(today.usedPercent), "${today.remaining.labelOrUnknown()} left"),
         SummaryRow(overallStatus.label, "Overall status", overallStatus),
     )
     Screen.WEEK -> listOf(
         SummaryRow("${week.spent.labelOrUnknown()} / ${week.limit.labelOrUnknown()}", "Budget"),
-        SummaryRow(week.usedPercent.usedLabel(), "${week.remaining.labelOrUnknown()} left"),
+        SummaryRow(formatPercentUsedLabel(week.usedPercent), "${week.remaining.labelOrUnknown()} left"),
         SummaryRow(
-            week.projectedTotal?.label ?: "Unavailable",
-            "Projected total",
+            title = week.projectedTotal?.label ?: "Unavailable",
+            detail = "Projected total",
         ),
     )
     Screen.PROVIDERS -> providers.map {
@@ -180,77 +183,68 @@ private fun HomeScreen(
     onOpen: (Screen) -> Unit,
     onOpenRing: (Int) -> Unit,
 ) {
-    val state = rememberTransformingLazyColumnState()
-    val transformationSpec = rememberTransformationSpec()
+    val status = when {
+        summary.dataMode == WatchDataMode.MOCK -> PulseStatus.WARNING
+        summary.isStale -> PulseStatus.WARNING
+        else -> summary.overallStatus
+    }
+    val statusLabel = when {
+        summary.dataMode == WatchDataMode.MOCK -> "Mock data"
+        summary.isStale -> "Stale data"
+        else -> summary.overallStatus.label
+    }
 
-    ScreenScaffold(scrollState = state) { contentPadding ->
-        TransformingLazyColumn(
-            state = state,
-            contentPadding = contentPadding,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            item {
-                ListHeader { Text("WardPulse") }
-            }
-            item {
-                val status = when {
-                    summary.dataMode == WatchDataMode.MOCK -> PulseStatus.WARNING
-                    summary.isStale -> PulseStatus.WARNING
-                    else -> summary.overallStatus
-                }
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .transformedHeight(this, transformationSpec),
-                    transformation = SurfaceTransformation(transformationSpec),
-                ) {
-                    Text(
-                        when {
-                            summary.dataMode == WatchDataMode.MOCK -> "Mock data"
-                            summary.isStale -> "Stale data"
-                            else -> summary.overallStatus.label
-                        },
-                        color = statusColor(status),
-                    )
-                    if (summary.rings.isEmpty()) {
-                        Text("Choose percent rings in phone Settings")
-                    }
-                }
-            }
-            if (summary.rings.isNotEmpty()) {
-                item {
-                    UsageRings(
-                        rings = summary.rings,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .transformedHeight(this, transformationSpec),
-                    )
-                }
-                items(summary.rings.size) { index ->
-                    val ring = summary.rings[index]
-                    Button(
-                        onClick = { onOpenRing(index) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .transformedHeight(this, transformationSpec),
-                        transformation = SurfaceTransformation(transformationSpec),
-                    ) {
-                        Text(ring.label, color = statusColor(ring.status))
-                        Text(ring.usedPercent.percentLabel())
-                    }
-                }
-            }
-            items(Screen.entries.size) { index ->
-                val destination = Screen.entries[index]
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 14.dp)
+            .padding(top = 28.dp, bottom = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            statusLabel,
+            style = MaterialTheme.typography.titleSmall,
+            color = statusColor(status),
+            textAlign = TextAlign.Center,
+        )
+        if (summary.rings.isEmpty()) {
+            Text(
+                "Choose percent rings in phone Settings",
+                modifier = Modifier.padding(top = 6.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        } else {
+            UsageRings(
+                rings = summary.rings,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp),
+                diameter = if (summary.rings.size == 1) 148.dp else 136.dp,
+                tokenGlance = summary.tokenGlance?.text,
+            )
+            summary.rings.forEachIndexed { index, ring ->
                 Button(
-                    onClick = { onOpen(destination) },
+                    onClick = { onOpenRing(index) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .transformedHeight(this, transformationSpec),
-                    transformation = SurfaceTransformation(transformationSpec),
+                        .padding(top = 6.dp),
                 ) {
-                    Text(destination.label)
+                    Text(ring.label, color = statusColor(ring.status))
+                    Text(formatPercentLabel(ring.usedPercent))
                 }
+            }
+        }
+        Screen.entries.forEach { destination ->
+            Button(
+                onClick = { onOpen(destination) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+            ) {
+                Text(destination.label)
             }
         }
     }
@@ -259,7 +253,7 @@ private fun HomeScreen(
 private val AllowanceSummary.valueLabel: String
     get() = when {
         unlimited -> "Unlimited"
-        usedPercent != null -> usedPercent.usedLabel()
+        usedPercent != null -> formatPercentUsedLabel(usedPercent)
         remaining != null -> remaining.label
         else -> "Unavailable"
     }
@@ -311,17 +305,6 @@ private fun statusColor(status: PulseStatus): Color = when (status) {
 }
 
 private fun Money?.labelOrUnknown(): String = this?.label ?: "Unknown"
-
-private fun Double?.percentLabel(): String = this?.let { value ->
-    val formatted = if (value % 1.0 == 0.0) {
-        value.toLong().toString()
-    } else {
-        String.format(Locale.US, "%.1f", value)
-    }
-    "$formatted%"
-} ?: "Unknown"
-
-private fun Double?.usedLabel(): String = "${percentLabel()} used"
 
 private fun String.toStatus(): PulseStatus = when (this) {
     "error" -> PulseStatus.ERROR

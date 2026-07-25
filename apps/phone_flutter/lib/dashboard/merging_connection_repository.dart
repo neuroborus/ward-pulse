@@ -52,12 +52,27 @@ final class MergingConnectionRepository extends DashboardRepository {
     }
 
     final String normalized;
-    final DashboardSnapshot connectionSnapshot;
     try {
       normalized = _normalizeReport(report);
+    } catch (error) {
+      return _recover(
+        fallback,
+        _mapError(
+          StateError('Normalize failed: ${loadFailureDetails(error)}'),
+        ),
+      );
+    }
+
+    final DashboardSnapshot connectionSnapshot;
+    try {
       connectionSnapshot = DashboardSnapshot.fromJsonString(normalized);
     } catch (error) {
-      return _recover(fallback, _mapError(error));
+      return _recover(
+        fallback,
+        _mapError(
+          StateError('Dashboard parse failed: ${loadFailureDetails(error)}'),
+        ),
+      );
     }
 
     final DashboardSnapshot other;

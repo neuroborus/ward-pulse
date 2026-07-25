@@ -1507,52 +1507,72 @@ no tokens, cookies, or raw payloads appear in logs
 
 Status: in progress as of 2026-07-25.
 
-Rationale: watch space is limited and must never show `Unknown` filler. Plan data from all
-three providers is percentage-first, so the watch surfaces should standardize on compact
-percent rings. Layout briefs and design ownership live under each app's `design/`; OpenPencil
-`.fig` art and exported ring drawables remain open.
+Rationale: watch space is limited and must never show `Unknown` filler. Plan/allowance data
+across connected providers is percentage-first, so Wear and WFF standardize on concentric
+percent rings. This is not “always show every provider”: the user picks up to four metrics;
+unselected or unavailable ones simply do not render. Visual contract: `docs/product/WATCH_RING_DESIGN.md`. Layout ownership under each app's
+`design/` per `docs/DESIGN_ASSETS.md`.
 
 Deliverables:
 
-- OpenPencil design sources under `apps/watchface_wff/design/` and `apps/wear_android/design/`
-  covering 1-4 ring layouts on round and square faces plus ambient mode, following
-  `docs/DESIGN_ASSETS.md` ownership rules (briefs landed; `.fig` art pending);
-- a ring binds to exactly one metric: a provider plan window percent, a purchased/credit
-  percent, or a local budget percent, colored by status;
+- OpenPencil sources under `apps/watchface_wff/design/` and `apps/wear_android/design/` for
+  1–4 concentric layers on round and square plus ambient (WFF art uses the same concentric
+  language as Wear — not the old side-by-side `RING 1` / `RING 2` wireframe);
+- a ring binds to exactly one metric (provider plan window, purchased/credit percent when it
+  has a %, or local budget percent);
+- layer color is primarily **by provider/metric family** (OpenAI/Codex green, Anthropic
+  orange, Cursor teal, local budget blue), with status (warn/error) as a modulation;
+- **arc = remaining**: the colored sweep shrinks as the limit is consumed (not a “used”
+  fill that grows toward full);
+- **sort by remaining**: the tightest remaining limit is the outermost layer; exhausted
+  metrics (`usedPercent >= 100` or rate-limited empty) are omitted rather than drawn as
+  empty/dead rings;
 - a "Watch display" section in phone Settings selects up to four ring slots; metrics from
-  unconnected providers are visible but disabled (grayed) with the same `?` explanation
-  affordance as the dashboard;
-- unselected and unavailable metrics simply do not render on the watch: no placeholders;
-- no time-based rotation of providers in the first iteration: simultaneous static rings are
-  battery-safe and fit WFF's declarative model, while rotation would require animation or
-  frequent updates; rotation may be revisited later with explicit power measurement;
-- watch summary schema version 4: an ordered list of selected ring entries (stable id, short
-  label, percent, status) that still excludes credentials, account ids, and raw provider data;
-- ring selection supersedes the version 3 plan/purchased preference filter for the watch
-  payload; the plan/purchased preference keeps filtering the phone dashboard only;
-- the Wear OS home screen renders the same rings with per-ring detail screens;
-- the WFF face maps complication slots 1–2 to the first two rings as live
-  `RANGED_VALUE` arcs (SHORT_TEXT fallback) with tap-to-open preserved.
+  unconnected providers stay visible but disabled with the same `?` help as the dashboard;
+- no time-based rotation in the first iteration: simultaneous static layers are battery-safe;
+- aperture: large time as hero; upper inner rim reserved for future weather; lower chord uses
+  short per-family strips (`%`, tokens, or `% · tokens`) — see `WATCH_RING_DESIGN.md`;
+- optional per-provider tokens on strips when tracked; tokens-only mode has no plan arcs;
+- schema `tokenGlance` may still feed a compact aggregate where strips are not yet wired;
+- watch summary schema version 4+: ordered selected ring entries (stable id, short label,
+  percent, status) without credentials, account ids, or raw provider payloads;
+- Wear OS home renders the concentric layers; WFF follows the same visual language as far as
+  declarative complications allow (implementation may stage from dual arcs toward true shared
+  center);
+- tap-to-open into the Wear app preserved.
 
 Acceptance:
 
 ```text
-ring layout designs are exported and reviewed before implementation starts
-schema version 4 validates and sanitized fixtures are updated
-watch face and Wear app show only configured rings
-disabling a provider or ring on the phone removes it from the watch after the next sync
+WATCH_RING_DESIGN.md baseline locked 2026-07-25 (time hero, remaining arcs, sunk strips)
+review SVGs/PNGs match that baseline (primary: preview-3-plan-tokens)
+schema version 4/5 validates and sanitized fixtures stay current
+watch surfaces show only configured, available, non-exhausted rings
+arc length = remaining; outer layer is the tightest remaining among selected rings
+token strips / glance only when tokens are tracked and > 0
+disabling a provider or ring on the phone removes it after the next sync
 ambient mode stays readable with rings visible
 ```
 
 Landed so far:
 
 ```text
-schema version 4 + sanitized watch fixture
+schema version 4 + sanitized watch fixture; schema v5 tokenGlance
 phone Watch display prefs, payload rings, and Settings UI
-Wear home/detail + store codec for rings
-Wear Compose concentric UsageRings matching design/rings.fig
-WFF RANGED_VALUE arcs + percent text for the first two rings (v1)
-OpenPencil rings.fig sources + SVG/PNG review exports under each app design/
+Watch ring visual baseline locked (WATCH_RING_DESIGN.md + render-watch-ring-designs.mjs)
+Phone payload sorts tightest-remaining outermost and omits exhausted layers
+Wear Compose UsageRings: remaining arcs + sunk family strips (time stays on system/WFF)
+WFF still on transitional side-by-side complication slots — redesign to concentric pending
+```
+
+Future (not Phase 13 acceptance — product direction):
+
+```text
+Phase 13 / locked baseline stays at up to four Watch display slots (watchRingSlotCount = 4).
+Later: possibly up to three profiles/accounts for the same provider on one device.
+When multi-profile lands, same-provider rings need hatch/pattern as well as family color,
+and the face hard cap should tighten from four rings to three (update WATCH_RING_DESIGN,
+prefs, schema guidance, and acceptance in the same change).
 ```
 
 ---

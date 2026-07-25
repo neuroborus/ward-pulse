@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="450" height="450" viewBox="0 0 450 450" role="img" aria-label="Round · 3 providers · plan + tokens">
+  <defs>
+    <radialGradient id="lift" cx="50%" cy="48%" r="62%">
+      <stop offset="0%" stop-color="#18201C"/>
+      <stop offset="55%" stop-color="#101412"/>
+      <stop offset="100%" stop-color="#0A0D0B"/>
+    </radialGradient>
+  </defs>
+  <rect width="450" height="450" fill="url(#lift)"/>
+  
+    <circle cx="225" cy="225" r="200.25" fill="none" stroke="#2E3632"
+      stroke-width="15.3" />
+    <circle cx="225" cy="225" r="200.25" fill="none" stroke="#65D78A"
+      stroke-width="15.3" stroke-linecap="round"
+      stroke-dasharray="100.66 1258.21"
+      transform="rotate(-90 225 225)" />
+    <circle cx="225" cy="225" r="180.45" fill="none" stroke="#2E3632"
+      stroke-width="15.3" />
+    <circle cx="225" cy="225" r="180.45" fill="none" stroke="#E8915A"
+      stroke-width="15.3" stroke-linecap="round"
+      stroke-dasharray="442.18 1133.80"
+      transform="rotate(-90 225 225)" />
+    <circle cx="225" cy="225" r="160.65" fill="none" stroke="#2E3632"
+      stroke-width="15.3" />
+    <circle cx="225" cy="225" r="160.65" fill="none" stroke="#67E8D4"
+      stroke-width="15.3" stroke-linecap="round"
+      stroke-dasharray="726.76 1009.39"
+      transform="rotate(-90 225 225)" />
+  
+    <text x="225" y="250.1" text-anchor="middle"
+      font-family="Noto Sans, sans-serif" font-size="69.8"
+      font-weight="700" fill="#F4FBF8">10:08</text>
+    <rect x="174.4" y="297.0" width="101.2"
+      height="22.0" rx="6.0" fill="#0B0E0C"
+      fill-opacity="0.92" />
+    <rect x="174.4" y="299.0" width="3.1"
+      height="18.0" rx="2.0"
+      fill="#65D78A" />
+    <text x="226.6" y="313.0"
+      text-anchor="middle" font-family="Noto Sans, sans-serif"
+      font-size="14" font-weight="700" fill="#F4FBF8">8% · 12M</text>
+    <rect x="174.4" y="322.1" width="101.2"
+      height="22.0" rx="6.0" fill="#0B0E0C"
+      fill-opacity="0.92" />
+    <rect x="174.4" y="324.1" width="3.1"
+      height="18.0" rx="2.0"
+      fill="#E8915A" />
+    <text x="226.6" y="338.1"
+      text-anchor="middle" font-family="Noto Sans, sans-serif"
+      font-size="14" font-weight="700" fill="#F4FBF8">39% · 4.1M</text>
+    <rect x="174.4" y="347.3" width="101.2"
+      height="22.0" rx="6.0" fill="#0B0E0C"
+      fill-opacity="0.92" />
+    <rect x="174.4" y="349.3" width="3.1"
+      height="18.0" rx="2.0"
+      fill="#67E8D4" />
+    <text x="226.6" y="363.3"
+      text-anchor="middle" font-family="Noto Sans, sans-serif"
+      font-size="14" font-weight="700" fill="#F4FBF8">72% · 890K</text>
+</svg>

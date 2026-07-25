@@ -4,4 +4,5 @@
     <string name="today_complication">Ring 1 usage</string>
     <string name="week_complication">Ring 2 usage</string>
     <string name="status_complication">Provider status</string>
+    <string name="tokens_complication">Today tokens</string>
 </resources>

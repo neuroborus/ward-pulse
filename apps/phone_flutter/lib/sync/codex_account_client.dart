@@ -75,27 +75,36 @@ final class IoCodexHttpTransport implements CodexHttpTransport {
     required Map<String, String> headers,
     String? body,
   }) async {
-    final request = await _client.openUrl(method, uri).timeout(_timeout);
-    headers.forEach(request.headers.set);
-    if (body != null) {
-      request.write(body);
-    }
-    final response = await request.close().timeout(_timeout);
-    final bytes = <int>[];
-    await for (final chunk in response.timeout(_timeout)) {
-      if (bytes.length + chunk.length > _maximumResponseBytes) {
-        throw const CodexAccountException(
-          CodexAccountFailure.invalidResponse,
-          'Response exceeds 1 MiB.',
-        );
+    try {
+      final request = await _client.openUrl(method, uri).timeout(_timeout);
+      headers.forEach(request.headers.set);
+      if (body != null) {
+        request.write(body);
       }
-      bytes.addAll(chunk);
-    }
+      final response = await request.close().timeout(_timeout);
+      final bytes = <int>[];
+      await for (final chunk in response.timeout(_timeout)) {
+        if (bytes.length + chunk.length > _maximumResponseBytes) {
+          throw const CodexAccountException(
+            CodexAccountFailure.invalidResponse,
+            'Response exceeds 1 MiB.',
+          );
+        }
+        bytes.addAll(chunk);
+      }
 
-    return CodexHttpResponse(
-      statusCode: response.statusCode,
-      body: utf8.decode(bytes),
-    );
+      return CodexHttpResponse(
+        statusCode: response.statusCode,
+        body: utf8.decode(bytes),
+      );
+    } on CodexAccountException {
+      rethrow;
+    } on ArgumentError catch (error) {
+      throw CodexAccountException(
+        CodexAccountFailure.invalidResponse,
+        '${_endpointLabel(uri)} · Invalid request (${error.message})',
+      );
+    }
   }
 }
 
@@ -330,8 +339,8 @@ final class CodexAccountClient {
   Future<CodexReportResult> _fetchReport(CodexAccountSession session) async {
     final headers = {
       'Accept': 'application/json',
-      'Authorization': 'Bearer ${session.accessToken}',
-      'ChatGPT-Account-Id': session.accountId,
+      'Authorization': 'Bearer ${session.accessToken.trim()}',
+      'ChatGPT-Account-Id': session.accountId.trim(),
       'User-Agent': 'wardpulse',
     };
     final responses = await Future.wait([
@@ -348,7 +357,17 @@ final class CodexAccountClient {
       'rateLimits': {'rateLimits': _normalizeRateLimits(limits)},
       'usage': {'dailyUsageBuckets': _normalizeDailyBuckets(profile)},
     };
-    return CodexReportResult(session: session, reportJson: jsonEncode(report));
+    try {
+      return CodexReportResult(
+        session: session,
+        reportJson: jsonEncode(report),
+      );
+    } on JsonUnsupportedObjectError catch (error) {
+      throw CodexAccountException(
+        CodexAccountFailure.invalidResponse,
+        'Codex report · Unsupported value (${error.unsupportedObject.runtimeType})',
+      );
+    }
   }
 
   Map<String, dynamic> _normalizeRateLimits(Map<String, dynamic> response) {
@@ -442,10 +461,11 @@ final class CodexAccountClient {
         .skip(values.length > 31 ? values.length - 31 : 0)
         .map((value) {
           final bucket = _optionalMap(value);
-          final startDate = _nonEmptyString(bucket?['start_date']);
-          final tokens = bucket?['tokens'];
-          final tokenCount = tokens is num ? _integerValue(tokens) : null;
-          if (startDate == null || tokenCount == null || tokenCount < 0) {
+          final startDate = _nonEmptyString(
+            bucket?['start_date'] ?? bucket?['startDate'],
+          );
+          final tokenCount = _nonNegativeInt(bucket?['tokens']);
+          if (startDate == null || tokenCount == null) {
             throw const CodexAccountException(
               CodexAccountFailure.invalidResponse,
               'Codex activity · Invalid daily usage',
@@ -603,10 +623,18 @@ DateTime? _jwtExpiration(String token) {
   try {
     final value = _jwtPayload(token)['exp'];
     final seconds = value is num ? _integerValue(value) : null;
-    return seconds != null
-        ? DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true)
-        : null;
+    if (seconds == null) {
+      return null;
+    }
+    final milliseconds = seconds * 1000;
+    // DateTime only accepts about ±8.64e15 ms; reject absurd JWT exp values.
+    if (milliseconds.abs() > 8640000000000000) {
+      return null;
+    }
+    return DateTime.fromMillisecondsSinceEpoch(milliseconds, isUtc: true);
   } on CodexAccountException {
+    return null;
+  } on ArgumentError {
     return null;
   }
 }
@@ -679,6 +707,15 @@ int? _integerValue(num value) {
   return value.isFinite && value == value.truncateToDouble()
       ? value.toInt()
       : null;
+}
+
+int? _nonNegativeInt(Object? value) {
+  final parsed = switch (value) {
+    final num number => _integerValue(number),
+    final String text => int.tryParse(text.trim()),
+    _ => null,
+  };
+  return parsed != null && parsed >= 0 ? parsed : null;
 }
 
 final _safeTokenPattern = RegExp(r'^[A-Za-z0-9_.-]+$');

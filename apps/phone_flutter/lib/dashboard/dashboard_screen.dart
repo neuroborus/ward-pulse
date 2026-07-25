@@ -78,18 +78,6 @@ class DashboardScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
         ],
-        if (caps.showBudgets) ...[
-          _BudgetCards(snapshot: snapshot),
-          const SizedBox(height: 16),
-        ] else if (caps.showSpendGap) ...[
-          _CapabilityGapRow(
-            title: 'Spend',
-            explanation:
-                'Connect OpenAI Platform reporting in Settings to see cost and limits.',
-            onOpenSettings: onOpenSettings,
-          ),
-          const SizedBox(height: 16),
-        ],
         if (caps.showUsageHistory) ...[
           UsageHistoryChart(
             title:
@@ -117,6 +105,22 @@ class DashboardScreen extends StatelessWidget {
         _SectionHeader(title: 'Alerts'),
         const SizedBox(height: 8),
         _AlertsPanel(alerts: snapshot.alerts),
+        // Platform spend sits below primary plan/token surfaces — $0 + Unknown
+        // is easy to misread as "Codex is empty" when shown near the top.
+        if (caps.showBudgets) ...[
+          const SizedBox(height: 16),
+          _SectionHeader(title: 'Platform spend'),
+          const SizedBox(height: 8),
+          _BudgetCards(snapshot: snapshot),
+        ] else if (caps.showSpendGap) ...[
+          const SizedBox(height: 16),
+          _CapabilityGapRow(
+            title: 'Spend',
+            explanation:
+                'Connect OpenAI Platform reporting in Settings to see cost and limits.',
+            onOpenSettings: onOpenSettings,
+          ),
+        ],
       ],
     );
   }
@@ -141,7 +145,7 @@ class ConnectProviderPrompt extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Add a Codex subscription or OpenAI Platform key in Settings.',
+              'Add an OpenAI, Anthropic, or Cursor connection in Settings.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -328,9 +332,13 @@ class StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final message = tooltip ?? status.description;
 
     return Tooltip(
-      message: tooltip ?? status.description,
+      message: message,
+      // Tap works on phone; hover still works on desktop/emulator with pointer.
+      triggerMode: TooltipTriggerMode.tap,
+      showDuration: const Duration(seconds: 6),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -376,7 +384,10 @@ class BudgetSummaryCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(child: Text(title, style: textTheme.titleMedium)),
-                StatusPill(status: state.status),
+                StatusPill(
+                  status: state.status,
+                  tooltip: state.statusExplanation,
+                ),
               ],
             ),
             if (spentLabel != null) ...[

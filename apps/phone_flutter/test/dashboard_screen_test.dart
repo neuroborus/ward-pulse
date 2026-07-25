@@ -8,6 +8,33 @@ import 'package:ward_pulse_phone/dashboard/dashboard_screen.dart';
 import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
 
 void main() {
+  test('trims trailing zeros from quantity labels', () {
+    expect(
+      const Quantity(value: '500.0000000000', unit: 'credits').label,
+      '500 credits',
+    );
+    expect(
+      const Quantity(value: '12.50', unit: 'credits').label,
+      '12.5 credits',
+    );
+    expect(formatQuantityValue('12.5'), '12.5');
+    expect(formatQuantityValue('100'), '100');
+  });
+
+  test('explains unknown platform spend without a local limit', () {
+    final state = BudgetState.fromJson({
+      'period': 'today',
+      'spent': {'minorUnits': 0, 'currency': 'USD'},
+      'limit': null,
+      'remaining': null,
+      'usedPercent': null,
+      'projectedTotal': null,
+      'status': 'unknown',
+    });
+    expect(state.statusExplanation, contains('no local budget limit'));
+    expect(state.statusExplanation, contains('Subscription credit'));
+  });
+
   testWidgets('shows allowances from every connected provider', (tester) async {
     final source = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
@@ -52,7 +79,6 @@ void main() {
 
     expect(find.text('Purchased credits'), findsOneWidget);
     expect(find.text('Unlimited'), findsOneWidget);
-    expect(find.text('Today'), findsOneWidget);
     expect(find.text('Unknown'), findsNothing);
 
     await tester.scrollUntilVisible(
@@ -67,6 +93,13 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('OpenAI model usage'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('Platform spend'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Today'), findsOneWidget);
   });
 
   testWidgets('hides plan Unknowns for OpenAI-only and offers Settings help', (
@@ -95,7 +128,6 @@ void main() {
     );
 
     expect(find.text('Plan usage'), findsOneWidget);
-    expect(find.text('Today'), findsOneWidget);
     expect(find.text('Unknown'), findsNothing);
 
     await tester.tap(find.byTooltip('Why is this hidden?'));
@@ -107,6 +139,13 @@ void main() {
     await tester.tap(find.text('Open Settings'));
     await tester.pumpAndSettle();
     expect(openedSettings, isTrue);
+
+    await tester.scrollUntilVisible(
+      find.text('Platform spend'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Today'), findsOneWidget);
   });
 
   testWidgets('hides spend Unknowns for Codex-only and offers Settings help', (
@@ -148,9 +187,15 @@ void main() {
     );
 
     expect(find.text('Weekly plan'), findsOneWidget);
-    expect(find.text('Spend'), findsOneWidget);
     expect(find.text('Model usage'), findsNothing);
     expect(find.text('Unknown'), findsNothing);
+
+    await tester.scrollUntilVisible(
+      find.text('Spend'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Spend'), findsOneWidget);
   });
 
   testWidgets('explains missing purchased usage when enabled', (tester) async {

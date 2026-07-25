@@ -15,9 +15,11 @@ import androidx.wear.watchface.complications.datasource.ComplicationRequest
 import androidx.wear.watchface.complications.datasource.SuspendingComplicationDataSourceService
 import app.wardpulse.wear.MainActivity
 import app.wardpulse.wear.data.WatchSummaryStore
+import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.WatchDashboardSummary
+import app.wardpulse.wear.ui.formatPercentAmount
+import app.wardpulse.wear.ui.formatPercentLabel
 import java.util.Locale
-import kotlin.math.roundToInt
 
 abstract class ShortTextComplicationDataSourceService :
     SuspendingComplicationDataSourceService() {
@@ -48,22 +50,31 @@ abstract class RingComplicationDataSourceService :
     protected abstract val ringIndex: Int
     protected abstract val previewPercent: Float
 
+    protected open val previewLabel: String = "Ring"
+
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
-        val percent = WatchSummaryStore(this).load()
-            ?.rings
-            ?.getOrNull(ringIndex)
-            ?.usedPercent
-            ?.toFloat()
+        val ring = WatchSummaryStore(this).load()?.rings?.getOrNull(ringIndex)
+        val percent = ring?.usedPercent?.toFloat()
+        val label = ring?.label
         return when (request.complicationType) {
             // NoData clears a previous arc; null would leave stale complication data.
             ComplicationType.RANGED_VALUE ->
                 if (percent == null) {
                     NoDataComplicationData()
                 } else {
-                    ComplicationBuilders.ranged(this, percent)
+                    ComplicationBuilders.ranged(this, percent, title = label)
                 }
+            // Match RANGED_VALUE: NoData hides the slot. Avoid "—%" under WFF `%s%%`.
             ComplicationType.SHORT_TEXT ->
-                ComplicationBuilders.shortText(this, WatchComplicationText.percentLabel(percent))
+                if (percent == null) {
+                    NoDataComplicationData()
+                } else {
+                    ComplicationBuilders.shortText(
+                        this,
+                        value = WatchComplicationText.percentAmount(percent),
+                        contentDescription = label ?: WatchComplicationText.percentLabel(percent),
+                    )
+                }
             else -> null
         }
     }
@@ -71,32 +82,46 @@ abstract class RingComplicationDataSourceService :
     override fun getPreviewData(type: ComplicationType): ComplicationData? =
         when (type) {
             ComplicationType.RANGED_VALUE ->
-                ComplicationBuilders.ranged(this, previewPercent)
+                ComplicationBuilders.ranged(this, previewPercent, title = previewLabel)
             ComplicationType.SHORT_TEXT ->
                 ComplicationBuilders.shortText(
                     this,
-                    WatchComplicationText.percentLabel(previewPercent),
+                    WatchComplicationText.percentAmount(previewPercent),
                 )
             else -> null
         }
 }
 
 private object ComplicationBuilders {
-    fun shortText(context: Context, value: String): ComplicationData =
+    fun shortText(
+        context: Context,
+        value: String,
+        contentDescription: String = value,
+    ): ComplicationData =
         ShortTextComplicationData.Builder(
             text = PlainComplicationText.Builder(value).build(),
-            contentDescription = PlainComplicationText.Builder(value).build(),
+            contentDescription = PlainComplicationText.Builder(contentDescription).build(),
         ).setTapAction(tapAction(context)).build()
 
-    fun ranged(context: Context, percent: Float): ComplicationData {
+    fun ranged(
+        context: Context,
+        percent: Float,
+        title: String? = null,
+    ): ComplicationData {
         val value = percent.coerceIn(0f, 100f)
-        val label = WatchComplicationText.percentLabel(value)
+        val amount = WatchComplicationText.percentAmount(value)
+        val description = title?.let { "$it $amount%" } ?: WatchComplicationText.percentLabel(value)
         return RangedValueComplicationData.Builder(
             value = value,
             min = 0f,
             max = 100f,
-            contentDescription = PlainComplicationText.Builder(label).build(),
-        ).setText(PlainComplicationText.Builder(label).build())
+            contentDescription = PlainComplicationText.Builder(description).build(),
+        ).setText(PlainComplicationText.Builder(amount).build())
+            .apply {
+                if (!title.isNullOrBlank()) {
+                    setTitle(PlainComplicationText.Builder(title).build())
+                }
+            }
             .setTapAction(tapAction(context))
             .build()
     }
@@ -113,11 +138,13 @@ private object ComplicationBuilders {
 class TodayComplicationDataSourceService : RingComplicationDataSourceService() {
     override val ringIndex = 0
     override val previewPercent = 25f
+    override val previewLabel = "Today"
 }
 
 class WeekComplicationDataSourceService : RingComplicationDataSourceService() {
     override val ringIndex = 1
     override val previewPercent = 49f
+    override val previewLabel = "Week"
 }
 
 class StatusComplicationDataSourceService : ShortTextComplicationDataSourceService() {
@@ -125,6 +152,35 @@ class StatusComplicationDataSourceService : ShortTextComplicationDataSourceServi
 
     override fun text(summary: WatchDashboardSummary) =
         WatchComplicationText.status(summary)
+}
+
+class TokensComplicationDataSourceService : SuspendingComplicationDataSourceService() {
+    override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
+        if (request.complicationType != ComplicationType.SHORT_TEXT) {
+            return null
+        }
+        val glance = WatchSummaryStore(this).load()?.tokenGlance
+        return if (glance == null) {
+            NoDataComplicationData()
+        } else {
+            ComplicationBuilders.shortText(
+                this,
+                value = glance.text,
+                contentDescription = glance.label,
+            )
+        }
+    }
+
+    override fun getPreviewData(type: ComplicationType): ComplicationData? =
+        if (type == ComplicationType.SHORT_TEXT) {
+            ComplicationBuilders.shortText(
+                this,
+                value = "67K TOK",
+                contentDescription = "Today tokens",
+            )
+        } else {
+            null
+        }
 }
 
 object WatchComplicationText {
@@ -135,21 +191,35 @@ object WatchComplicationText {
         percentLabel(summary.rings.getOrNull(1)?.usedPercent?.toFloat())
 
     fun percentLabel(percent: Float?): String =
-        percent?.roundToInt()?.let { "$it%" } ?: "—"
+        formatPercentLabel(percent?.toDouble())
+
+    /** WFF templates treat '%' specially; send digits only for RANGED_VALUE text. */
+    fun percentAmount(percent: Float?): String =
+        formatPercentAmount(percent?.toDouble()) ?: "—"
 
     fun status(summary: WatchDashboardSummary): String {
         val source = when (summary.providers.size) {
             0 -> "NO DATA"
             1 -> summary.providers.single().providerLabel.uppercase(Locale.US)
-            else -> "${summary.providers.size} PROVIDERS"
+            else -> "${summary.providers.size} PRV"
         }
-        val status = when {
-            summary.isStale -> "STALE"
-            summary.providers.size == 1 ->
-                summary.providers.single().status.label.uppercase(Locale.US)
-            else -> summary.overallStatus.label.uppercase(Locale.US)
+        val pulse = when {
+            summary.isStale -> PulseStatus.STALE
+            summary.providers.size == 1 -> summary.providers.single().status
+            else -> summary.overallStatus
         }
-        return "$source · $status"
+        return "$source · ${shortStatus(pulse)}"
+    }
+
+    /** Short labels so the round chin does not clip the status line. */
+    fun shortStatus(status: PulseStatus): String = when (status) {
+        PulseStatus.OK -> "OK"
+        PulseStatus.WARNING -> "WARN"
+        PulseStatus.ERROR -> "ERR"
+        PulseStatus.RATE_LIMITED -> "LIMIT"
+        PulseStatus.AUTH_REQUIRED -> "AUTH"
+        PulseStatus.STALE -> "STALE"
+        PulseStatus.UNKNOWN -> "—"
     }
 }
 
@@ -158,6 +228,7 @@ object WatchComplicationUpdater {
         TodayComplicationDataSourceService::class.java,
         WeekComplicationDataSourceService::class.java,
         StatusComplicationDataSourceService::class.java,
+        TokensComplicationDataSourceService::class.java,
     )
 
     fun requestUpdate(context: Context) {

@@ -124,3 +124,16 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
 - High-contrast bordered strip “cards” or ring-cast drop shadows as strip chrome.
 - Time-based rotation of which metric is “on top” in the first iteration.
 - Brand/marketing chrome, floating badges, or dense face captions.
+
+## Future direction (not locked baseline)
+
+Recorded for planning only. **Do not change today’s Max four rule** until an explicit later
+phase updates this document, `watchRingSlotCount`, and Phase 13 acceptance together.
+
+- **Multi-profile per provider** — up to three profiles/accounts of the same provider may
+  eventually share a device. Same-family rings on one face must then differ by
+  **hatch/pattern** as well as family color (color alone is not enough for two Codex or two
+  Claude windows).
+- **Tighten face cap to three rings** — when multi-profile lands, drop the watch-face hard
+  cap from four slots to **three** concentric plan/budget rings so the composition stays
+  glanceable. Until that phase, Settings and payload remain at four.
