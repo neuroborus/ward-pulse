@@ -53,14 +53,14 @@
                     </Text>
                 </PartText>
 
-                <PartText x="50" y="268" width="150" height="24">
+                <PartText x="65" y="360" width="120" height="20">
                     <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="16" color="#ffbec9c1">RING 1</Font>
+                        <Font family="SYNC_TO_DEVICE" size="14" color="#ffbec9c1">RING 1</Font>
                     </Text>
                 </PartText>
-                <PartText x="250" y="268" width="150" height="24">
+                <PartText x="265" y="360" width="120" height="20">
                     <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="16" color="#ffbec9c1">RING 2</Font>
+                        <Font family="SYNC_TO_DEVICE" size="14" color="#ffbec9c1">RING 2</Font>
                     </Text>
                 </PartText>
             </Group>
@@ -78,25 +78,62 @@
         </Group>
 
         <ComplicationSlot
-            x="50"
-            y="292"
-            width="150"
-            height="56"
+            x="65"
+            y="240"
+            width="120"
+            height="120"
             slotId="101"
             displayName="@string/today_complication"
-            supportedTypes="SHORT_TEXT EMPTY"
+            supportedTypes="RANGED_VALUE SHORT_TEXT EMPTY"
             isCustomizable="FALSE">
             <DefaultProviderPolicy
                 primaryProvider="app.wardpulse/app.wardpulse.wear.complication.TodayComplicationDataSourceService"
-                primaryProviderType="SHORT_TEXT"
+                primaryProviderType="RANGED_VALUE"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="150" height="56" />
-            <Complication type="SHORT_TEXT">
-                <PartText x="0" y="0" width="150" height="56" alpha="255">
+            <BoundingBox x="0" y="0" width="120" height="120" />
+            <Complication type="RANGED_VALUE">
+                <PartDraw x="0" y="0" width="120" height="120" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <Arc
+                        centerX="60"
+                        centerY="60"
+                        width="108"
+                        height="108"
+                        startAngle="0"
+                        endAngle="360">
+                        <Stroke color="#ff3f4943" thickness="8" cap="ROUND" />
+                    </Arc>
+                    <Arc
+                        centerX="60"
+                        centerY="60"
+                        width="108"
+                        height="108"
+                        startAngle="0"
+                        endAngle="0">
+                        <Transform
+                            target="endAngle"
+                            value="[COMPLICATION.RANGED_VALUE_VALUE] * 3.6" />
+                        <Stroke color="#ff65d78a" thickness="8" cap="ROUND" />
+                    </Arc>
+                </PartDraw>
+                <PartText x="0" y="42" width="120" height="36" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" ellipsis="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="36" color="#ff65d78a">
+                        <Font family="SYNC_TO_DEVICE" size="22" color="#ff65d78a">
+                            <Template>
+                                %s
+                                <Parameter expression="[COMPLICATION.TEXT]" />
+                            </Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="36" width="120" height="48" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="28" color="#ff65d78a">
                             <Template>
                                 %s
                                 <Parameter expression="[COMPLICATION.TEXT]" />
@@ -109,25 +146,62 @@
         </ComplicationSlot>
 
         <ComplicationSlot
-            x="250"
-            y="292"
-            width="150"
-            height="56"
+            x="265"
+            y="240"
+            width="120"
+            height="120"
             slotId="102"
             displayName="@string/week_complication"
-            supportedTypes="SHORT_TEXT EMPTY"
+            supportedTypes="RANGED_VALUE SHORT_TEXT EMPTY"
             isCustomizable="FALSE">
             <DefaultProviderPolicy
                 primaryProvider="app.wardpulse/app.wardpulse.wear.complication.WeekComplicationDataSourceService"
-                primaryProviderType="SHORT_TEXT"
+                primaryProviderType="RANGED_VALUE"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="150" height="56" />
-            <Complication type="SHORT_TEXT">
-                <PartText x="0" y="0" width="150" height="56" alpha="255">
+            <BoundingBox x="0" y="0" width="120" height="120" />
+            <Complication type="RANGED_VALUE">
+                <PartDraw x="0" y="0" width="120" height="120" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <Arc
+                        centerX="60"
+                        centerY="60"
+                        width="108"
+                        height="108"
+                        startAngle="0"
+                        endAngle="360">
+                        <Stroke color="#ff3f4943" thickness="8" cap="ROUND" />
+                    </Arc>
+                    <Arc
+                        centerX="60"
+                        centerY="60"
+                        width="108"
+                        height="108"
+                        startAngle="0"
+                        endAngle="0">
+                        <Transform
+                            target="endAngle"
+                            value="[COMPLICATION.RANGED_VALUE_VALUE] * 3.6" />
+                        <Stroke color="#ff65d78a" thickness="8" cap="ROUND" />
+                    </Arc>
+                </PartDraw>
+                <PartText x="0" y="42" width="120" height="36" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" ellipsis="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="36" color="#ff65d78a">
+                        <Font family="SYNC_TO_DEVICE" size="22" color="#ff65d78a">
+                            <Template>
+                                %s
+                                <Parameter expression="[COMPLICATION.TEXT]" />
+                            </Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="36" width="120" height="48" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="28" color="#ff65d78a">
                             <Template>
                                 %s
                                 <Parameter expression="[COMPLICATION.TEXT]" />
@@ -141,7 +215,7 @@
 
         <ComplicationSlot
             x="0"
-            y="360"
+            y="390"
             width="450"
             height="28"
             slotId="103"

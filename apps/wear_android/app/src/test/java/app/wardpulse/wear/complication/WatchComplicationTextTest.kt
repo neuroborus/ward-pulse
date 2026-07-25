@@ -13,6 +13,8 @@ class WatchComplicationTextTest {
 
         assertEquals("25%", WatchComplicationText.today(summary))
         assertEquals("29%", WatchComplicationText.week(summary))
+        assertEquals("—", WatchComplicationText.percentLabel(null))
+        assertEquals("0%", WatchComplicationText.percentLabel(0f))
     }
 
     @Test

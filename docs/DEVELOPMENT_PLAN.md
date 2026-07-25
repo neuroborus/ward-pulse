@@ -1531,8 +1531,8 @@ Deliverables:
 - ring selection supersedes the version 3 plan/purchased preference filter for the watch
   payload; the plan/purchased preference keeps filtering the phone dashboard only;
 - the Wear OS home screen renders the same rings with per-ring detail screens;
-- the WFF face maps complication slots 1–2 to the first two rings with tap-to-open preserved
-  (custom ring-arc drawables pending OpenPencil export).
+- the WFF face maps complication slots 1–2 to the first two rings as live
+  `RANGED_VALUE` arcs (SHORT_TEXT fallback) with tap-to-open preserved.
 
 Acceptance:
 
@@ -1551,7 +1551,7 @@ schema version 4 + sanitized watch fixture
 phone Watch display prefs, payload rings, and Settings UI
 Wear home/detail + store codec for rings
 Wear Compose concentric UsageRings matching design/rings.fig
-WFF labels/complications consume the first two rings (v1 text slots)
+WFF RANGED_VALUE arcs + percent text for the first two rings (v1)
 OpenPencil rings.fig sources + SVG/PNG review exports under each app design/
 ```
 
@@ -1695,9 +1695,9 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Close Phase 13 acceptance on device/emulator (Wear rings + WFF preview), then either bump WFF
-format for live complication arcs or pick up Phase 11 headless background polling. OpenPencil
-ring sources and Wear `UsageRings` are in place; WFF v1 still uses percent text slots.
+Close Phase 13 acceptance on device/emulator (Wear rings + WFF live arcs), then pick up
+Phase 11 headless background polling. OpenPencil sources, Wear `UsageRings`, and WFF
+`RANGED_VALUE` arcs are in place.
 
 Then continue with later watch and polish work as listed below.
 

@@ -32,7 +32,7 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 ## Watch Face Format
 
 - Keep WFF declarative and minimal.
-- Prefer ring complication slots (first selected rings) plus status where supported.
+- Prefer `RANGED_VALUE` arcs for the first selected rings, with `SHORT_TEXT` fallback, plus status.
 - Support tap-to-open into the Wear OS app where possible.
 - Keep ambient mode readable.
 

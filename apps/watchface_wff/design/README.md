@@ -14,9 +14,7 @@ node tools/openpencil.mjs export apps/watchface_wff/design/rings.fig \
 
 ## Layout
 
-- WFF format version 1 stays declarative: ring **values** come from SHORT_TEXT
-  complications (slots 101 / 102) backed by the Wear summary’s first two rings.
-- The OpenPencil frame shows the intended two-slot ring composition for a future
-  format bump that can draw live arcs; v1 ships labels + percent text.
+- WFF format version 1: slots 101 / 102 prefer `RANGED_VALUE` from the Wear ring
+  complications and draw live arcs + percent text; `SHORT_TEXT` remains a fallback.
 - Ambient keeps a thin time layer and the WardPulse label; complication chrome hides.
 - Tap-to-open the Wear app remains on the face group.
