@@ -1,6 +1,6 @@
 # WardPulse Android — Development Plan
 
-Updated: 2026-07-24
+Updated: 2026-07-25
 
 Product name: **WardPulse**
 
@@ -35,6 +35,8 @@ The system should:
 - collect provider usage and cost data through polling where APIs allow it;
 - normalize provider-specific data into one shared usage model;
 - show detailed dashboards on the Android phone;
+- expose a configurable Android home-screen widget for glanceable phone state (own design,
+  not a copy of the watch face);
 - show compact dashboards on Wear OS;
 - expose a lightweight Watch Face Format watch face for glanceable state and quick app launch;
 - support multiple accounts per provider;
@@ -45,12 +47,17 @@ The system should:
 
 ## 2. Product shape
 
-The Android ecosystem has three user-facing surfaces.
+The Android ecosystem has four user-facing surfaces.
 
 ```text
 Android phone app
    ↓
-Main dashboard, settings, credentials, provider sync, charts
+Dashboard → Watchface → Widget → Providers → Settings
+(credentials / polling stay in Settings; glance layout on Watchface + Widget tabs)
+
+Phone home-screen widget
+   ↓
+Configurable glanceable summary on the phone launcher (own visual language)
 
 Wear OS app
    ↓
@@ -58,10 +65,16 @@ Compact dashboard, provider details, alerts, recent sync state
 
 WFF watch face
    ↓
-Glanceable today/week state + tap target to open the Wear OS app
+Glanceable concentric remaining rings + tap target to open the Wear OS app
 ```
 
-The phone app is the primary product surface. It should feel like a compact analytics dashboard rather than a simple counter.
+The phone app is the primary product surface. It should feel like a compact analytics dashboard rather than a simple counter. Primary tab order (Phase 14 target; Watch display may
+still sit under Settings until then): Dashboard → Watchface → Widget → Providers → Settings.
+
+The phone widget is a launcher glance, not a second dashboard. It should answer the same
+pulse question as the watch face, with a **phone-native composition** (rectangular sizes,
+system theming, optional multi-metric rows) rather than transplanting the round watch layout.
+Configuration for that widget lives on the phone **Widget** tab, not in Settings.
 
 The Wear OS app is a compressed dashboard. It should answer the question: "Is my usage normal right now, and do I need to open the phone app?"
 
@@ -486,20 +499,38 @@ Avoid sending long-running sync loops, callbacks, UI state, secure storage, or b
 
 The Flutter phone app is the main Android product surface.
 
-### MVP screens
+### MVP screens / primary navigation
+
+Bottom (or equivalent primary) navigation order:
 
 ```text
-Home / Overview
+Dashboard
+Watchface
+Widget
 Providers
+Settings
+```
+
+Supporting / pushed screens (not primary tabs):
+
+```text
 Provider details
 Budgets & credits
 Charts
-Settings
 Sync status / logs
 About / legal
 ```
 
-### Home / Overview
+**Watchface** and **Widget** sit between Dashboard and Providers — Watchface first, then
+Widget. Surface configuration lives on those tabs, not under Settings.
+
+- **Watchface** — configure Wear / WFF ring slots, preview next watch payload (today’s
+  “Watch display” block moves here out of Settings).
+- **Widget** — configure the phone home-screen widget metrics and preview (Phase 14).
+- **Settings** — credentials, polling, budgets thresholds, diagnostics, legal — not glance
+  surface layout.
+
+### Home / Overview (Dashboard)
 
 Shows:
 
@@ -563,6 +594,9 @@ Settings should include:
 - data deletion;
 - legal disclaimer;
 - open-source license information.
+
+Do **not** keep Watchface or Widget layout controls in Settings once the Watchface / Widget
+tabs exist.
 
 ---
 
@@ -1527,8 +1561,9 @@ Deliverables:
 - **sort by remaining**: the tightest remaining limit is the outermost layer; exhausted
   metrics (`usedPercent >= 100` or rate-limited empty) are omitted rather than drawn as
   empty/dead rings;
-- a "Watch display" section in phone Settings selects up to four ring slots; metrics from
+- the phone **Watchface** tab selects up to four ring slots (not Settings); metrics from
   unconnected providers stay visible but disabled with the same `?` help as the dashboard;
+  until the tab lands, the existing Settings “Watch display” block is the transitional UI;
 - no time-based rotation in the first iteration: simultaneous static layers are battery-safe;
 - aperture: large time as hero; upper inner rim reserved for future weather; lower chord uses
   short per-family strips (`%`, tokens, or `% · tokens`) — see `WATCH_RING_DESIGN.md`;
@@ -1558,7 +1593,7 @@ Landed so far:
 
 ```text
 schema version 4 + sanitized watch fixture; schema v5 tokenGlance
-phone Watch display prefs, payload rings, and Settings UI
+phone Watch display prefs, payload rings, and Settings UI (transitional — moves to Watchface tab)
 Watch ring visual baseline locked (WATCH_RING_DESIGN.md + render-watch-ring-designs.mjs)
 Phone payload sorts tightest-remaining outermost and omits exhausted layers
 Wear Compose UsageRings: remaining arcs + sunk family strips (time stays on system/WFF)
@@ -1568,11 +1603,87 @@ WFF v2 concentric remaining arcs (WeightedStroke + ColorRamp family colors) + su
 Future (not Phase 13 acceptance — product direction):
 
 ```text
-Phase 13 / locked baseline stays at up to four Watch display slots (watchRingSlotCount = 4).
+Phase 13 / locked baseline stays at up to four Watchface ring slots (watchRingSlotCount = 4).
 Later: possibly up to three profiles/accounts for the same provider on one device.
 When multi-profile lands, same-provider rings need hatch/pattern as well as family color,
 and the face hard cap should tighten from four rings to three (update WATCH_RING_DESIGN,
 prefs, schema guidance, and acceptance in the same change).
+```
+
+### Phase 14 — Watchface / Widget tabs and phone home-screen widget
+
+Status: planned (after Phase 13 device acceptance; may run in parallel with Phase 11
+headless polling once the watch ring baseline is closed).
+
+Rationale: glance configuration is a first-class product surface, not a Settings footnote.
+Watchface and Widget each get a primary tab between Dashboard and Providers. The phone
+launcher also needs the same glanceable “pulse” as Wear/WFF, but a round watch composition
+does not fit Android widgets — the widget gets its **own locked visual language** while
+reusing the metric catalog, remaining-% semantics, family colors, and “never invent Unknown
+filler” rules.
+
+#### Navigation / IA
+
+Primary tab order:
+
+```text
+Dashboard → Watchface → Widget → Providers → Settings
+```
+
+- Move today’s Settings “Watch display” block onto the **Watchface** tab (slot picker +
+  payload preview); remove it from Settings.
+- Add the **Widget** tab for widget metric selection + preview; prefs are **independent** of
+  Watchface prefs so phone and watch can differ.
+- Settings keeps credentials, polling, budgets thresholds, diagnostics, and legal only.
+
+#### Widget surface
+
+Visual contract (to lock before implementation): `docs/product/PHONE_WIDGET_DESIGN.md`
+(create in this phase; OpenPencil / SVG review art under `apps/phone_flutter/design/` per
+`docs/DESIGN_ASSETS.md`). Do not copy `WATCH_RING_DESIGN.md` layouts into the widget.
+
+Deliverables:
+
+- Android App Widget hosted by the Flutter phone shell (Glance / RemoteViews / conventional
+  Flutter-home-widget bridge — pick the smallest stack that supports the locked sizes);
+- Widget tab selects which metrics appear (same catalog idea as Watchface: provider plan
+  windows, purchased/credit % when available, local budgets);
+- small / medium / optional large size variants defined in `PHONE_WIDGET_DESIGN.md` (exact
+  slot counts per size land with the design lock — keep denser than the watch, still
+  glanceable);
+- render only configured, available, non-exhausted metrics; omit empty slots rather than
+  inventing `Unknown` filler;
+- **remaining** language for percent metrics (same meaning as watch rings); family colors
+  from the shared palette (OpenAI/Codex green, Anthropic orange, Cursor teal, budget blue);
+- update after provider sync / scheduled refresh without opening the full app; stale state
+  is explicit when the last successful dashboard is too old;
+- tap opens the phone app (Dashboard or the tapped metric’s provider detail when practical);
+- no credentials, account ids, or raw provider payloads on the widget surface or in widget
+  logs;
+- widget tests + emulator smoke for at least one size; sanitized preview fixtures for review art.
+
+Acceptance:
+
+```text
+primary nav is Dashboard → Watchface → Widget → Providers → Settings
+Watchface tab owns ring-slot prefs; Settings no longer hosts Watch display
+Widget tab owns widget prefs independently of Watchface
+PHONE_WIDGET_DESIGN.md baseline locked with review art for the primary sizes
+widget shows only configured, available, non-exhausted metrics
+remaining-% / family colors match the product palette
+tap opens the phone app; no credential UI on the widget
+stale data is labeled after the freshness window
+adding/removing the widget and changing prefs updates the surface without a full reinstall
+```
+
+Non-goals for this phase:
+
+```text
+interactive controls inside the widget (sliders, connect flows)
+copying the concentric watch-face layout onto the phone
+burying Watchface / Widget config under Settings
+iOS widgets
+multi-profile hatch patterns (same future note as Phase 13)
 ```
 
 ---
@@ -1592,6 +1703,7 @@ prefs, schema guidance, and acceptance in the same change).
 
 - widget tests for dashboard cards;
 - widget tests for provider states;
+- widget / App Widget tests for the Phase 14 home-screen surface when landed;
 - snapshot/golden tests for key dashboard screens where practical;
 - integration smoke test on Android emulator.
 
@@ -1719,7 +1831,12 @@ Close Phase 13 acceptance on device/emulator (Wear rings + WFF concentric live a
 pick up Phase 11 headless background polling. OpenPencil sources, Wear `UsageRings`, and
 WFF concentric remaining `RANGED_VALUE` arcs are in place.
 
-Then continue with later watch and polish work as listed below.
+After the watch ring baseline is closed, schedule **Phase 14** (Dashboard → Watchface →
+Widget → Providers → Settings nav; move Watch display out of Settings; phone home-screen
+widget with its own design lock). It may overlap Phase 11 once watch acceptance is done;
+do not block polling work on widget art.
+
+Then continue with later watch / widget polish as listed below.
 
 Phase 6 passed Watch Face Format acceptance on 2026-07-19:
 

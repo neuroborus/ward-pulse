@@ -210,7 +210,8 @@ private fun HomeScreen(
         )
         if (summary.rings.isEmpty()) {
             Text(
-                "Choose percent rings in phone Settings",
+                // Phase 14 moves this UI to the Watchface tab; until then Settings “Watch display”.
+                "Choose percent rings in the phone app",
                 modifier = Modifier.padding(top = 6.dp),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

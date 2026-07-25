@@ -28,7 +28,8 @@ final class WatchRingMetric {
   bool get isAvailable => usedPercent != null && unavailableReason == null;
 }
 
-/// Ordered ring metric ids chosen in Settings (at most [watchRingSlotCount]).
+/// Ordered ring metric ids for Watchface (at most [watchRingSlotCount]).
+/// Transitional UI may still edit these under Settings “Watch display”.
 ///
 /// `selectedIds == null` means unset → use the default available metrics.
 /// An empty list means the user chose zero rings.

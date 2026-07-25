@@ -22,7 +22,8 @@ per-provider token strips. Not “always show every provider,” and never inven
 3. **Outer = tightest remaining** — among selected, available, non-exhausted metrics, sort by
    remaining ascending (equivalently highest `usedPercent` first). The critical limit is outermost.
 4. **Omit exhausted** — `usedPercent >= 100` (or empty/unavailable) does not render.
-5. **Max four** — phone Settings “Watch display” chooses slots; payload carries only the resolved
+5. **Max four** — phone **Watchface** tab chooses slots (transitional UI may still live under
+   Settings “Watch display” until Phase 14 nav lands); payload carries only the resolved
    surface order after omit + sort.
 
 ## Typography
@@ -115,7 +116,7 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
 |---------|------|
 | Wear OS app | Compose remaining arcs + sunk strips; system time on the watch chrome |
 | WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs in `watchface.xml` |
-| Phone Settings | Slot selection + preview of next payload rings |
+| Phone Watchface tab | Slot selection + preview of next payload rings (not Settings) |
 
 ## Non-goals
 
@@ -136,4 +137,4 @@ phase updates this document, `watchRingSlotCount`, and Phase 13 acceptance toget
   Claude windows).
 - **Tighten face cap to three rings** — when multi-profile lands, drop the watch-face hard
   cap from four slots to **three** concentric plan/budget rings so the composition stays
-  glanceable. Until that phase, Settings and payload remain at four.
+  glanceable. Until that phase, Watchface prefs and payload remain at four.
