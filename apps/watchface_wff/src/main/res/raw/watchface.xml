@@ -47,34 +47,21 @@
             <Group x="0" y="0" width="450" height="450" name="summary" alpha="255">
                 <Variant mode="AMBIENT" target="alpha" value="0" />
 
-                <PartText x="0" y="92" width="450" height="36">
-                    <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="24" color="#fff4fbf8">WARDPULSE</Font>
-                    </Text>
-                </PartText>
-
-                <PartText x="65" y="360" width="120" height="20">
-                    <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="14" color="#ffbec9c1">RING 1</Font>
-                    </Text>
-                </PartText>
-                <PartText x="265" y="360" width="120" height="20">
-                    <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="14" color="#ffbec9c1">RING 2</Font>
-                    </Text>
-                </PartText>
+                <!--
+                  Quiet watermark for the locked concentric face (between time and strips).
+                  Current WFF still uses side complication slots; keep the mark centered
+                  so it sits in the gap rather than on a ring slot. Bottom dissolve is in
+                  drawable/wardpulse_mono.png (see tools/fade-watermark-png.py).
+                -->
+                <PartImage x="189" y="250" width="72" height="72" alpha="95">
+                    <Image resource="wardpulse_mono" />
+                </PartImage>
             </Group>
 
-            <PartText x="0" y="277" width="450" height="32" alpha="0">
-                <Variant mode="AMBIENT" target="alpha" value="255" />
-                <Text align="CENTER">
-                    <Font
-                        family="SYNC_TO_DEVICE"
-                        size="18"
-                        weight="THIN"
-                        color="#ffffffff">WARDPULSE</Font>
-                </Text>
-            </PartText>
+            <PartImage x="201" y="258" width="48" height="48" alpha="0">
+                <Variant mode="AMBIENT" target="alpha" value="70" />
+                <Image resource="wardpulse_mono" />
+            </PartImage>
         </Group>
 
         <ComplicationSlot
@@ -117,25 +104,36 @@
                         <Stroke color="#ff65d78a" thickness="8" cap="ROUND" />
                     </Arc>
                 </PartDraw>
-                <PartText x="0" y="42" width="120" height="36" alpha="255">
+                <PartText x="0" y="38" width="120" height="32" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <Text align="CENTER" ellipsis="FALSE">
+                        <Font family="SYNC_TO_DEVICE" size="24" color="#ff65d78a">
+                            <Template>
+                                %s%%
+                                <Parameter expression="[COMPLICATION.TEXT]" />
+                            </Template>
+                        </Font>
+                    </Text>
+                </PartText>
+                <PartText x="0" y="96" width="120" height="18" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" ellipsis="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="22" color="#ff65d78a">
+                        <Font family="SYNC_TO_DEVICE" size="12" color="#ffbec9c1">
                             <Template>
                                 %s
-                                <Parameter expression="[COMPLICATION.TEXT]" />
+                                <Parameter expression="[COMPLICATION.TITLE]" />
                             </Template>
                         </Font>
                     </Text>
                 </PartText>
             </Complication>
             <Complication type="SHORT_TEXT">
-                <PartText x="0" y="36" width="120" height="48" alpha="255">
+                <PartText x="0" y="30" width="120" height="36" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Text align="CENTER" ellipsis="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="28" color="#ff65d78a">
+                    <Text align="CENTER" ellipsis="FALSE">
+                        <Font family="SYNC_TO_DEVICE" size="26" color="#ff65d78a">
                             <Template>
-                                %s
+                                %s%%
                                 <Parameter expression="[COMPLICATION.TEXT]" />
                             </Template>
                         </Font>
@@ -185,23 +183,65 @@
                         <Stroke color="#ff65d78a" thickness="8" cap="ROUND" />
                     </Arc>
                 </PartDraw>
-                <PartText x="0" y="42" width="120" height="36" alpha="255">
+                <PartText x="0" y="38" width="120" height="32" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <Text align="CENTER" ellipsis="FALSE">
+                        <Font family="SYNC_TO_DEVICE" size="24" color="#ff65d78a">
+                            <Template>
+                                %s%%
+                                <Parameter expression="[COMPLICATION.TEXT]" />
+                            </Template>
+                        </Font>
+                    </Text>
+                </PartText>
+                <PartText x="0" y="96" width="120" height="18" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" ellipsis="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="22" color="#ff65d78a">
+                        <Font family="SYNC_TO_DEVICE" size="12" color="#ffbec9c1">
                             <Template>
                                 %s
-                                <Parameter expression="[COMPLICATION.TEXT]" />
+                                <Parameter expression="[COMPLICATION.TITLE]" />
                             </Template>
                         </Font>
                     </Text>
                 </PartText>
             </Complication>
             <Complication type="SHORT_TEXT">
-                <PartText x="0" y="36" width="120" height="48" alpha="255">
+                <PartText x="0" y="30" width="120" height="36" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <Text align="CENTER" ellipsis="FALSE">
+                        <Font family="SYNC_TO_DEVICE" size="26" color="#ff65d78a">
+                            <Template>
+                                %s%%
+                                <Parameter expression="[COMPLICATION.TEXT]" />
+                            </Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <ComplicationSlot
+            x="48"
+            y="348"
+            width="354"
+            height="24"
+            slotId="104"
+            displayName="@string/tokens_complication"
+            supportedTypes="SHORT_TEXT EMPTY"
+            isCustomizable="FALSE">
+            <DefaultProviderPolicy
+                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.TokensComplicationDataSourceService"
+                primaryProviderType="SHORT_TEXT"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <BoundingBox x="0" y="0" width="354" height="24" />
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="0" width="354" height="24" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" ellipsis="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="28" color="#ff65d78a">
+                        <Font family="SYNC_TO_DEVICE" size="15" color="#ff65d78a">
                             <Template>
                                 %s
                                 <Parameter expression="[COMPLICATION.TEXT]" />
@@ -214,9 +254,9 @@
         </ComplicationSlot>
 
         <ComplicationSlot
-            x="0"
-            y="390"
-            width="450"
+            x="48"
+            y="378"
+            width="354"
             height="28"
             slotId="103"
             displayName="@string/status_complication"
@@ -227,12 +267,12 @@
                 primaryProviderType="SHORT_TEXT"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="450" height="28" />
+            <BoundingBox x="0" y="0" width="354" height="28" />
             <Complication type="SHORT_TEXT">
-                <PartText x="0" y="0" width="450" height="28" alpha="255">
+                <PartText x="0" y="0" width="354" height="28" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" ellipsis="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="18" color="#ffbec9c1">
+                        <Font family="SYNC_TO_DEVICE" size="16" color="#ffbec9c1">
                             <Template>
                                 %s
                                 <Parameter expression="[COMPLICATION.TEXT]" />

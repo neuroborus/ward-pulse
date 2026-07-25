@@ -1,20 +1,21 @@
 # Design Assets
 
-WardPulse uses OpenPencil for editable icon sources. Adoption is incremental: existing runtime
-assets stay in place until an OpenPencil source replaces them.
+WardPulse brand marks are generated from `tools/render-brand-icons.mjs`. OpenPencil
+`.fig` sources remain optional for hand editing; runtime builds consume SVG/PNG exports.
 
 ![WardPulse app icon](../brand/icons/wardpulse.svg)
 
+Monochrome watch-face watermark (runtime PNG includes the bottom dissolve):
+
+![WardPulse mono watermark](../brand/icons/previews/wardpulse-mono-on-dark.png)
+
 ## Format And Viewing
 
-OpenPencil stores editable documents as `.fig` files, the same binary document format used by
-Figma. The repository build does not require the OpenPencil desktop app.
-
-For a quick visual check, open the tracked SVG or one of the runtime PNG files in a browser or image
-viewer. On Linux:
+For a quick visual check, open the tracked SVG or a preview PNG:
 
 ```sh
 xdg-open brand/icons/wardpulse.svg
+xdg-open brand/icons/previews/wardpulse-mono-on-dark.png
 ```
 
 The Design Assets page is also available through the local documentation site:
@@ -25,16 +26,18 @@ just docs-dev
 
 OpenPencil installation is optional. Use the [web app](https://app.openpencil.dev/) without
 installing anything, or install a desktop build from the
-[official releases](https://github.com/open-pencil/open-pencil/releases) for offline editing and
-file associations. Open `brand/icons/wardpulse.fig` with `Ctrl+O` on Linux and Windows.
+[official releases](https://github.com/open-pencil/open-pencil/releases) for offline editing.
+`brand/icons/wardpulse.fig` may lag the SVG generator until resynced by hand.
 
 ## Ownership
 
 - Shared WardPulse identity sources belong in `brand/icons/`.
+- Watch-face placement previews live under `brand/watchface/` (not a second SVG source).
 - App-specific sources belong in a `design/` directory under the owning app.
 - Exported runtime assets belong in the consuming platform's normal asset or resource directory.
+- Keep only locked previews under `brand/watchface/` — no scratch placement boards.
 
-Runtime targets are `apps/phone_flutter/assets/` or its Android `res/` tree,
+Runtime targets are `apps/phone_flutter/android/app/src/main/res/`,
 `apps/wear_android/app/src/main/res/`, and `apps/watchface_wff/src/main/res/`.
 
 Do not create a repository-wide design system or duplicate a source file between owners. Files
@@ -42,66 +45,90 @@ under `brand/` remain outside the Apache-2.0 source license unless explicitly st
 
 ## Palette
 
-- Brand primary: `#1F7A5A`.
-- Brand sheen: `#155B45` → `#1F7A5A` → `#2A9D78` → `#1F7A5A` → `#155B45`.
-- On-brand foreground: `#F4FBF8`.
+- App mark body: metallic gray (`#8A9298` → `#2A3035` sheen).
+- App mark framing ring (product metaphor): OpenAI/Codex `#65D78A`, Cursor `#67E8D4`,
+  Anthropic `#E8915A` — three equal arcs around the metal disc.
+- On-mark foreground: `#F4FBF8`.
+- Watch-face watermark stroke: `#C5CDD1` (muted further by PartImage alpha + bottom fade).
+- Dark surface: `#101412` (adaptive launcher background).
 - Performance accent: `#006B60` (light) / `#67E8D4` (dark).
-- Dark surface: `#101412`.
 - Success: `#176B3A` (light) / `#65D78A` (dark).
 - Warning: `#E6C349`.
 
-Use brand color sparingly on graphite surfaces. Use the performance accent for primary actions and
-data visualization; reserve success, warning, and error colors for status meaning. Keep the sheen
-symmetric and limited to identity surfaces; do not apply decorative gradients to data or status UI.
+Legacy brand green (`#1F7A5A` sheen) is retired for the app icon; keep it out of new identity
+surfaces.
+
+### Watch ring families
+
+Used on Wear / WFF concentric remaining arcs (see [product/WATCH_RING_DESIGN.md](product/WATCH_RING_DESIGN.md)):
+
+- OpenAI / Codex: `#65D78A`.
+- Anthropic / Claude: `#E8915A`.
+- Cursor: `#67E8D4`.
+- Local budget: `#8AB4F8`.
+
+Provider ring family colors are for metric identity on watch surfaces, not for general chrome.
+**Exception:** the official app logo framing ring intentionally echoes those three families as a
+product metaphor. Do not spread that tri-color chrome into buttons, cards, or other UI.
 
 ## Mark
 
-The pulse communicates activity and throughput. The small eye signals watchful, local monitoring.
-Keep the eye in the upper-right of the mark and preserve its scale relative to the pulse.
+The metal disc reads as a monitoring instrument. The framing ring ties the product to the watch
+ring language. The pulse communicates activity and throughput. The small eye signals watchful,
+local monitoring — keep it in the upper-right of the mark and preserve its scale relative to the
+pulse.
+
+Use the **color metal+ring** mark for phone and Wear launchers.
+
+### Watch-face watermark (locked)
+
+Quiet branding on WFF — not a second hero. Locked with the concentric face baseline:
+
+- **No framing ring** — straight `WARDPULSE` wordmark above the pulse + eye.
+- **Placement** — between time and sunk strips; upper aperture stays free for weather.
+- **Size / mute** — about 72×72 on the 450 canvas; PartImage `alpha≈95` (~37%).
+- **Bottom dissolve** — content-relative fade toward the strip stack
+  (`tools/fade-watermark-png.py` during `just export-icons`), so the pulse softens into
+  the metrics instead of competing with them.
+- Eye placement matches the color mark; pupil stays inside the almond rim.
+
+Canonical preview: `brand/watchface/preview-face-active-quiet.png`.
 
 ## Source And Runtime Files
 
-Track each editable `.fig` source and its required runtime exports in Git. Prefer one source file
-per independently exported icon so export commands do not depend on unstable node IDs.
+| Role | Path |
+|------|------|
+| Color logo (canonical SVG) | `brand/icons/wardpulse.svg` |
+| Mono watermark (canonical SVG) | `brand/icons/wardpulse-mono.svg` |
+| PNG previews (incl. faded mono) | `brand/icons/previews/` |
+| Face placement preview | `brand/watchface/preview-face-active-quiet.png` |
+| Phone / Wear launcher mipmaps | `mipmap-*/ic_launcher.png` |
+| Phone adaptive foreground | `drawable-*/ic_launcher_foreground.png` |
+| WFF runtime mono (faded PNG) | `apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png` |
 
-The `.fig` file is the source of truth. PNG and SVG exports are generated artifacts: do not edit
-them by hand. Commit runtime exports when an application build consumes them, so normal builds do
-not require OpenPencil.
+Prefer regenerating exports with `just export-icons` rather than editing PNGs by hand. The mono
+drawable must go through `tools/fade-watermark-png.py` (wired in `tools/export-icons.sh`).
+Commit runtime exports when an application build consumes them.
 
-The phone adaptive icon uses a native Android `VectorDrawable` derived from the same mark. Keep its
-geometry and palette aligned when the editable source changes.
+ImageMagick is required; Inkscape is preferred for mono SVG→PNG when available.
+`tools/fade-watermark-png.py` needs Pillow (`pip`/`apt` package `python3-pil`).
 
 ## Setup
 
-The repository pins the OpenPencil CLI as an npm development dependency. Install it with the
-existing workspace toolchain:
+The repository pins the OpenPencil CLI as an npm development dependency for optional `.fig`
+workflows. Install with the existing workspace toolchain:
 
 ```sh
 npm ci
 ```
 
-The root tooling provides a small Node compatibility runner and a narrow security override for the
-current CLI. Do not install a separate global OpenPencil CLI.
-
 ## Export
 
-Regenerate all tracked launcher exports:
+Regenerate SVGs, previews, launcher PNGs, and the faded watch-face mono drawable:
 
 ```sh
 just export-icons
 ```
 
-Export SVG at scale 1 by default:
-
-```sh
-just export-design brand/icons/wardpulse.fig brand/icons/wardpulse.svg
-```
-
-Pass the format and scale for raster platform resources:
-
-```sh
-just export-design brand/icons/wardpulse.fig path/to/ic_launcher.png png 4
-```
-
-Export directly to the owning runtime directory, review the result, and stage the `.fig` source
-with every changed export.
+Do **not** run `just export-design brand/icons/wardpulse.fig …` until the `.fig` is resynced
+to the metal+ring mark — an old `.fig` would overwrite the canonical SVG.
