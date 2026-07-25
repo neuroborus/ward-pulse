@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="450" height="450" viewBox="0 0 450 450">
+  <defs>
+    <clipPath id="clip0">
+      <rect width="450" height="450"/>
+    </clipPath>
+  </defs>
+  <g>
+    <rect width="450" height="450" fill="#101412"/>
+    <g clip-path="url(#clip0)">
+      <g transform="translate(63, 55)">
+        <ellipse cx="162" cy="162" rx="162" ry="162" fill="none" stroke="#3F4943" stroke-width="16.2"/>
+      </g>
+      <g transform="translate(63, 55)">
+        <ellipse cx="162" cy="162" rx="162" ry="162" fill="none" stroke="#65D78A" stroke-width="16.2" stroke-linecap="round"/>
+      </g>
+      <g transform="translate(103.95, 95.95)">
+        <ellipse cx="121.05" cy="121.05" rx="121.05" ry="121.05" fill="none" stroke="#3F4943" stroke-width="16.2"/>
+      </g>
+      <g transform="translate(103.95, 95.95)">
+        <ellipse cx="121.05" cy="121.05" rx="121.05" ry="121.05" fill="none" stroke="#65D78A" stroke-width="16.2" stroke-linecap="round"/>
+      </g>
+      <g transform="translate(144.9, 136.9)">
+        <ellipse cx="80.1" cy="80.1" rx="80.1" ry="80.1" fill="none" stroke="#3F4943" stroke-width="16.2"/>
+      </g>
+      <g transform="translate(144.9, 136.9)">
+        <ellipse cx="80.1" cy="80.1" rx="80.1" ry="80.1" fill="none" stroke="#E6C349" stroke-width="16.2" stroke-linecap="round"/>
+      </g>
+      <g transform="translate(0, 36)">
+        <text x="225" y="20" font-family="Inter" font-size="20" fill="#BEC9C1" text-anchor="middle">WARDPULSE</text>
+      </g>
+      <g transform="translate(0, 208)">
+        <text x="225" y="25" font-family="Inter" font-size="25" fill="#F4FBF8" text-anchor="middle">3 rings</text>
+      </g>
+      <g transform="translate(0, 387)">
+        <text x="225" y="14" font-family="Inter" font-size="14" fill="#BEC9C1" text-anchor="middle">Today 25% · Week 48% · Month 72%</text>
+      </g>
+    </g>
+  </g>
+</svg>

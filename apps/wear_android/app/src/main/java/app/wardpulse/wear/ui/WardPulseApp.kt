@@ -212,28 +212,20 @@ private fun HomeScreen(
                         },
                         color = statusColor(status),
                     )
-                    Text(
-                        if (summary.rings.isEmpty()) {
-                            "Configure rings on the phone"
-                        } else {
-                            "${summary.rings.size} rings"
-                        },
-                    )
+                    if (summary.rings.isEmpty()) {
+                        Text("Choose percent rings in phone Settings")
+                    }
                 }
             }
-            if (summary.rings.isEmpty()) {
+            if (summary.rings.isNotEmpty()) {
                 item {
-                    Card(
+                    UsageRings(
+                        rings = summary.rings,
                         modifier = Modifier
                             .fillMaxWidth()
                             .transformedHeight(this, transformationSpec),
-                        transformation = SurfaceTransformation(transformationSpec),
-                    ) {
-                        Text("No rings")
-                        Text("Choose percent metrics in phone Settings")
-                    }
+                    )
                 }
-            } else {
                 items(summary.rings.size) { index ->
                     val ring = summary.rings[index]
                     Button(

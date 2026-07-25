@@ -1550,8 +1550,9 @@ Landed so far:
 schema version 4 + sanitized watch fixture
 phone Watch display prefs, payload rings, and Settings UI
 Wear home/detail + store codec for rings
-WFF labels/complications consume the first two rings
-design/ ownership briefs for Wear and WFF
+Wear Compose concentric UsageRings matching design/rings.fig
+WFF labels/complications consume the first two rings (v1 text slots)
+OpenPencil rings.fig sources + SVG/PNG review exports under each app design/
 ```
 
 ---
@@ -1694,10 +1695,9 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Finish Phase 13: author OpenPencil 1–4 ring layouts under `apps/wear_android/design/` and
-`apps/watchface_wff/design/`, export ring-arc runtime assets, and polish Wear/WFF visuals to
-match. Schema v4, phone Watch display selection, and ring payload plumbing are in place;
-headless background polling stays open from Phase 11.
+Close Phase 13 acceptance on device/emulator (Wear rings + WFF preview), then either bump WFF
+format for live complication arcs or pick up Phase 11 headless background polling. OpenPencil
+ring sources and Wear `UsageRings` are in place; WFF v1 still uses percent text slots.
 
 Then continue with later watch and polish work as listed below.
 

@@ -53,14 +53,14 @@
                     </Text>
                 </PartText>
 
-                <PartText x="50" y="282" width="150" height="28">
+                <PartText x="50" y="268" width="150" height="24">
                     <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="18" color="#ffbec9c1">RING 1</Font>
+                        <Font family="SYNC_TO_DEVICE" size="16" color="#ffbec9c1">RING 1</Font>
                     </Text>
                 </PartText>
-                <PartText x="250" y="282" width="150" height="28">
+                <PartText x="250" y="268" width="150" height="24">
                     <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="18" color="#ffbec9c1">RING 2</Font>
+                        <Font family="SYNC_TO_DEVICE" size="16" color="#ffbec9c1">RING 2</Font>
                     </Text>
                 </PartText>
             </Group>
@@ -79,9 +79,9 @@
 
         <ComplicationSlot
             x="50"
-            y="312"
+            y="292"
             width="150"
-            height="42"
+            height="56"
             slotId="101"
             displayName="@string/today_complication"
             supportedTypes="SHORT_TEXT EMPTY"
@@ -91,12 +91,12 @@
                 primaryProviderType="SHORT_TEXT"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="150" height="42" />
+            <BoundingBox x="0" y="0" width="150" height="56" />
             <Complication type="SHORT_TEXT">
-                <PartText x="0" y="0" width="150" height="42" alpha="255">
+                <PartText x="0" y="0" width="150" height="56" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" ellipsis="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="34" color="#ffffffff">
+                        <Font family="SYNC_TO_DEVICE" size="36" color="#ff65d78a">
                             <Template>
                                 %s
                                 <Parameter expression="[COMPLICATION.TEXT]" />
@@ -110,9 +110,9 @@
 
         <ComplicationSlot
             x="250"
-            y="312"
+            y="292"
             width="150"
-            height="42"
+            height="56"
             slotId="102"
             displayName="@string/week_complication"
             supportedTypes="SHORT_TEXT EMPTY"
@@ -122,12 +122,12 @@
                 primaryProviderType="SHORT_TEXT"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="150" height="42" />
+            <BoundingBox x="0" y="0" width="150" height="56" />
             <Complication type="SHORT_TEXT">
-                <PartText x="0" y="0" width="150" height="42" alpha="255">
+                <PartText x="0" y="0" width="150" height="56" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" ellipsis="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="34" color="#ffffffff">
+                        <Font family="SYNC_TO_DEVICE" size="36" color="#ff65d78a">
                             <Template>
                                 %s
                                 <Parameter expression="[COMPLICATION.TEXT]" />
@@ -141,7 +141,7 @@
 
         <ComplicationSlot
             x="0"
-            y="374"
+            y="360"
             width="450"
             height="28"
             slotId="103"
@@ -158,7 +158,7 @@
                 <PartText x="0" y="0" width="450" height="28" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
                     <Text align="CENTER" ellipsis="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="18" color="#ff65d78a">
+                        <Font family="SYNC_TO_DEVICE" size="18" color="#ffbec9c1">
                             <Template>
                                 %s
                                 <Parameter expression="[COMPLICATION.TEXT]" />

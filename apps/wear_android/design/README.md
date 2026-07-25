@@ -1,15 +1,22 @@
 # Wear OS ring layouts
 
-OpenPencil sources for WardPulse Wear home rings live here. Editable `.fig` files are the
-source of truth; export runtime assets into `app/src/main/res/` when needed.
+Editable OpenPencil source: `rings.fig` (source of truth). SVG files next to it are
+generated review exports — regenerate instead of editing by hand.
 
-## Layout brief (Phase 13)
+```sh
+# Rebuild the .fig from the checked-in generator (optional)
+node tools/openpencil.mjs eval brand/icons/wardpulse.fig \
+  --stdin -w -o apps/wear_android/design/rings.fig < tools/create-watch-ring-designs.fig.js
 
-- Show 1–4 simultaneous percent rings; never invent an `Unknown` filler ring.
-- Each ring binds one metric: budget today/week/month or a plan/purchased allowance percent.
-- Color rings by status (ok / warning / rate-limited / error), using the Wear theme tokens.
-- Ambient: keep thin ring arcs and a short label readable without fill decoration.
-- Round and square canvases share the same slot order (phone Settings selection order).
+# Export a frame for review (node ids from `openpencil find`)
+node tools/openpencil.mjs export apps/wear_android/design/rings.fig \
+  --node 0:32 -f svg -o apps/wear_android/design/round-3-rings.svg
+```
 
-OpenPencil art for the 1–4 ring compositions lands in this directory before polish of custom
-drawables; Compose currently renders rings from the schema v4 payload.
+## Layout
+
+- Concentric percent rings, selection order outer → inner (max 4).
+- Status colors: success / warning / error from the Wear theme tokens.
+- Ambient: thinner muted tracks, time + WardPulse label, no filler rings.
+- Round (450) and square (390) share the same slot order.
+- Runtime Compose rendering lives in `UsageRings` and reads schema v4 `rings`.
