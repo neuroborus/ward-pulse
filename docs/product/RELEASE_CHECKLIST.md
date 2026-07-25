@@ -21,7 +21,7 @@ This checklist is a gate, not a schedule.
 ## Wear OS
 
 - Wear app runs on emulator.
-- Today, week, providers, alerts, and last sync screens are readable.
+- Today, week, providers, alerts (active list), and last sync screens are readable.
 - Stale data state is visible.
 - Latest successful summary survives sync failure.
 - Missing phone data does not create an implicit mock summary.

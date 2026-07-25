@@ -285,7 +285,7 @@ class AllowanceSummaryCard extends StatelessWidget {
     };
     final detail = switch (allowance.source) {
       AllowanceSource.plan when allowance.resetsAt != null =>
-        'Resets ${formatUtc(allowance.resetsAt!)}',
+        'Resets ${formatLocal(allowance.resetsAt!)}',
       AllowanceSource.plan => 'Reset time unavailable',
       AllowanceSource.purchased when allowance.unlimited => 'No balance limit',
       AllowanceSource.purchased => 'Available balance',
@@ -315,7 +315,13 @@ class AllowanceSummaryCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 10),
-            Text(detail),
+            if (allowance.resetsAt != null)
+              Tooltip(
+                message: formatUtc(allowance.resetsAt!),
+                child: Text(detail),
+              )
+            else
+              Text(detail),
           ],
         ),
       ),
@@ -434,7 +440,7 @@ class _SyncHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final updatedAt = formatUtc(snapshot.generatedAt);
+    final updatedAt = formatLocal(snapshot.generatedAt);
     final syncIssue = snapshot.syncIssue;
 
     return Column(
@@ -442,10 +448,13 @@ class _SyncHeader extends StatelessWidget {
       children: [
         Text('Usage dashboard', style: textTheme.headlineSmall),
         const SizedBox(height: 4),
-        Text(
-          snapshot.overallStatus == ProviderStatus.stale
-              ? 'Showing previous data · Updated $updatedAt'
-              : 'Updated $updatedAt',
+        Tooltip(
+          message: formatUtc(snapshot.generatedAt),
+          child: Text(
+            snapshot.overallStatus == ProviderStatus.stale
+                ? 'Showing previous data · Updated $updatedAt'
+                : 'Updated $updatedAt',
+          ),
         ),
         if (syncIssue != null) ...[
           const SizedBox(height: 8),

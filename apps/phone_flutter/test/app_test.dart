@@ -183,7 +183,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
-    expect(find.text('Not set'), findsWidgets);
+    expect(find.text('Not connected'), findsWidgets);
     await tester.tap(find.text('Platform reporting'));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -205,7 +205,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(credentialStore.openAiSecret, 'secret-admin-key');
-    expect(find.text('••••••••'), findsOneWidget);
+    expect(find.text('Connected'), findsOneWidget);
     expect(find.text('secret-admin-key'), findsNothing);
   });
 
@@ -272,7 +272,7 @@ void main() {
       scrollable: settingsList,
     );
     expect(find.text('Cursor'), findsOneWidget);
-    expect(find.text('Not set'), findsWidgets);
+    expect(find.text('Not connected'), findsWidgets);
 
     await tester.scrollUntilVisible(
       find.text('Work org key'),
@@ -335,7 +335,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Platform reporting'), findsOneWidget);
-    expect(find.text('••••••••'), findsOneWidget);
+    expect(find.text('Connected'), findsOneWidget);
     await tester.tap(find.text('Platform reporting'));
     await tester.pumpAndSettle();
     expect(find.text('Remove'), findsOneWidget);

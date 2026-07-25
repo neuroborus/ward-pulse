@@ -405,8 +405,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       subtitle: connection.listSubtitle,
       trailing: switch (hasSecret) {
         null => const _RowProgress(),
-        true => const Text('••••••••'),
-        false => const Text('Not set'),
+        // Match Codex OAuth row copy: connection state, not "field empty/filled".
+        true => const Text('Connected'),
+        false => const Text('Not connected'),
       },
       onTap:
           hasSecret == null
@@ -586,7 +587,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ListTile(
                   leading: const Icon(Icons.sync_outlined),
                   title: const Text('Sync'),
-                  subtitle: Text(formatUtc(snapshot.generatedAt)),
+                  subtitle: Tooltip(
+                    message: formatUtc(snapshot.generatedAt),
+                    child: Text(formatLocal(snapshot.generatedAt)),
+                  ),
                   trailing: StatusPill(
                     status: snapshot.overallStatus,
                     tooltip: snapshot.syncTooltip,

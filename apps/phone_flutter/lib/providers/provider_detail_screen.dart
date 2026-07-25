@@ -36,11 +36,15 @@ class ProviderDetailScreen extends StatelessWidget {
               child: ListTile(
                 leading: const Icon(Icons.account_circle_outlined),
                 title: Text(title),
-                subtitle: Text(
-                  account.lastSuccessfulSyncAt == null
-                      ? account.accountId
-                      : '${account.accountId} · Synced ${formatUtc(account.lastSuccessfulSyncAt!)}',
-                ),
+                subtitle: switch (account.lastSuccessfulSyncAt) {
+                  null => Text(account.accountId),
+                  final syncedAt => Tooltip(
+                    message: formatUtc(syncedAt),
+                    child: Text(
+                      '${account.accountId} · Synced ${formatLocal(syncedAt)}',
+                    ),
+                  ),
+                },
                 trailing: StatusPill(
                   status: account.status,
                   tooltip: syncTooltip,

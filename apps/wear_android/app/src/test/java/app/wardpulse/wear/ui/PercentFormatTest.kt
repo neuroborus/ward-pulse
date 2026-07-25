@@ -12,5 +12,7 @@ class PercentFormatTest {
         assertEquals("—", formatPercentLabel(null))
         assertEquals("—", formatPercentLabel(Double.NaN))
         assertEquals("100% used", formatPercentUsedLabel(100.0))
+        assertEquals("0%", formatPercentRemainingLabel(100.0))
+        assertEquals("75%", formatPercentRemainingLabel(24.8))
     }
 }

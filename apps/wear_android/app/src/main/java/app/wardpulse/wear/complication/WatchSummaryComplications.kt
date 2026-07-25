@@ -63,7 +63,8 @@ abstract class RingComplicationDataSourceService :
         return when (request.complicationType) {
             // NoData clears a previous arc; null would leave stale complication data.
             ComplicationType.RANGED_VALUE ->
-                if (ring == null || remaining == null) {
+                // remaining <= 0 is exhausted — omit (WFF hides VALUE==0, but avoid ROUND caps).
+                if (ring == null || remaining == null || remaining <= 0f) {
                     NoDataComplicationData()
                 } else {
                     ComplicationBuilders.ranged(
@@ -74,7 +75,7 @@ abstract class RingComplicationDataSourceService :
                     )
                 }
             ComplicationType.SHORT_TEXT ->
-                if (remaining == null) {
+                if (remaining == null || remaining <= 0f) {
                     NoDataComplicationData()
                 } else {
                     ComplicationBuilders.shortText(

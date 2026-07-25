@@ -18,3 +18,7 @@ internal fun formatPercentAmount(percent: Double?): String? {
 
 internal fun formatPercentUsedLabel(percent: Double?): String =
     "${formatPercentLabel(percent)} used"
+
+/** Remaining capacity label — matches arc / strip semantics. */
+internal fun formatPercentRemainingLabel(usedPercent: Double): String =
+    formatPercentLabel((100.0 - usedPercent.coerceIn(0.0, 100.0)).coerceAtLeast(0.0))

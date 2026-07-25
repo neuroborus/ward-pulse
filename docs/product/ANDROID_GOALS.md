@@ -5,11 +5,12 @@ WardPulse starts as an Android ecosystem product with these surfaces:
 - Phone app: primary dashboard, provider setup, credentials, budgets, charts, sync state, and settings.
   Phase 14 primary tabs: Dashboard → Watchface → Widget → Providers → Settings. Watchface and
   Widget configure glance surfaces; Settings does not (until then, ring slots may still live
-  under Settings “Watch display”).
+  under Settings “Watch display”). No phone Alerts tab — active alerts on Dashboard; alert
+  rules / thresholds in Settings on connection rows (independent of current sync).
 - Phone home-screen widget (planned, Phase 14): configurable glanceable summary with its own
   visual language — not a copy of the watch face; configured on the Widget tab, independently
   of Watchface.
-- Wear OS app: compact dashboard for today, week, providers, alerts, and last sync.
+- Wear OS app: compact dashboard for today, week, providers, alerts (active list only), and last sync.
 - Watch Face Format package: glanceable concentric remaining rings and fast launch into the Wear OS app.
 
 ## MVP Goals

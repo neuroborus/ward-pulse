@@ -21,6 +21,9 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 - Phase 14 primary tabs: Dashboard → Watchface → Widget → Providers → Settings. Watchface owns
   Wear/WFF ring-slot prefs; Widget owns phone home-widget prefs. Do not keep those controls in
   Settings once the tabs land (Settings “Watch display” is transitional only).
+- Do not add a phone Alerts tab. Active alerts render on the Dashboard; alert rules and budget
+  thresholds belong in Settings on connection rows / a global budget card (editable even when
+  Not connected). Providers consumes status; it does not own rule creation.
 - Keep analytics UI dense, clear, and operational rather than marketing-like.
 
 ## Wear OS App
@@ -32,7 +35,8 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   family colors (OpenAI/Codex green, Anthropic orange, Cursor teal, budget blue). Future
   multi-profile / hatch / three-ring cap notes there are planning-only until a later phase.
 - Show optional per-provider tokens on strips / `tokenGlance` when today tokens > 0 (not a ring).
-- Keep today, week, usage, providers, alerts, and last sync as secondary detail screens.
+- Keep today, week, usage, providers, alerts (active list only — no rule editing), and last sync
+  as secondary detail screens.
 - Store and render the latest successful watch summary.
 - Make stale data explicit.
 - Do not enter, display, or store provider credentials.

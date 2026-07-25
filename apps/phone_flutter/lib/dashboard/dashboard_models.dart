@@ -742,6 +742,13 @@ class WatchSummary {
   }
 }
 
+/// Device-local wall clock for sync / reset labels.
+String formatLocal(DateTime value) {
+  final local = value.toLocal();
+  return local.toIso8601String().split('.').first.replaceFirst('T', ' ');
+}
+
+/// UTC form for tooltips / secondary disclosure.
 String formatUtc(DateTime value) {
   final utc = value.toUtc();
   final date = utc.toIso8601String().split('.').first.replaceFirst('T', ' ');

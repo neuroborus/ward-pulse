@@ -7,7 +7,7 @@ versioned `WatchDashboardSummary` payload and persists only the latest successfu
 
 ## Ownership
 
-- Today, week, providers, alerts, and last sync screens.
+- Today, week, providers, alerts (active list only — no rule editing), and last sync screens.
 - Local storage of the latest watch summary.
 - Wear-specific navigation, rotary input, shape-aware layouts, and stale data states.
 - Wear Data Layer receiver for `/wardpulse/watch-summary`.

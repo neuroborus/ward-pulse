@@ -149,15 +149,12 @@ private fun SunkStrip(
 @Composable
 private fun ringFamilyColor(ringId: String, status: PulseStatus): Color {
     val family = Color(RingFamily.colorArgb(ringId))
+    // Keep family stroke on warn/stale; only hard failures leave the family palette.
     return when (status) {
-        PulseStatus.OK -> family
-        PulseStatus.WARNING,
-        PulseStatus.RATE_LIMITED,
-        PulseStatus.STALE,
-        -> MaterialTheme.colorScheme.tertiary
         PulseStatus.ERROR,
         PulseStatus.AUTH_REQUIRED,
         -> MaterialTheme.colorScheme.error
         PulseStatus.UNKNOWN -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> family
     }
 }

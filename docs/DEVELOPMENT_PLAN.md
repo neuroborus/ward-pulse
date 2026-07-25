@@ -53,7 +53,7 @@ The Android ecosystem has four user-facing surfaces.
 Android phone app
    ↓
 Dashboard → Watchface → Widget → Providers → Settings
-(credentials / polling stay in Settings; glance layout on Watchface + Widget tabs)
+(credentials / polling / alert rules stay in Settings; glance layout on Watchface + Widget tabs)
 
 Phone home-screen widget
    ↓
@@ -521,14 +521,18 @@ Sync status / logs
 About / legal
 ```
 
+Do **not** add a phone primary tab for Alerts. Active alerts stay on the Dashboard; alert
+**rules** live in Settings (see below). Wear keeps a compact Alerts detail screen for the
+latest computed list only — never rule editing on the watch.
+
 **Watchface** and **Widget** sit between Dashboard and Providers — Watchface first, then
 Widget. Surface configuration lives on those tabs, not under Settings.
 
 - **Watchface** — configure Wear / WFF ring slots, preview next watch payload (today’s
   “Watch display” block moves here out of Settings).
 - **Widget** — configure the phone home-screen widget metrics and preview (Phase 14).
-- **Settings** — credentials, polling, budgets thresholds, diagnostics, legal — not glance
-  surface layout.
+- **Settings** — credentials, polling, alert rules (connection + global budget thresholds),
+  diagnostics, legal — not glance surface layout.
 
 ### Home / Overview (Dashboard)
 
@@ -540,7 +544,7 @@ Shows:
 - remaining budget;
 - additional credits if known;
 - overall provider status;
-- active warnings;
+- active alerts (computed; empty “No alerts” is valid until rules fire);
 - last sync time.
 
 Example:
@@ -589,7 +593,8 @@ Settings should include:
 
 - global minimum polling interval;
 - per-provider enable/disable;
-- budgets and warning thresholds;
+- alert rules: connection-scoped thresholds on each catalog row, plus a global
+  Today / Week / Month budget warn-critical card (not duplicated per provider);
 - local-only diagnostics export;
 - data deletion;
 - legal disclaimer;
@@ -597,6 +602,24 @@ Settings should include:
 
 Do **not** keep Watchface or Widget layout controls in Settings once the Watchface / Widget
 tabs exist.
+
+#### Alerts ownership (phone)
+
+Split runtime output from configuration:
+
+| Concern | Surface | Notes |
+|---------|---------|--------|
+| Active alerts | Dashboard alerts panel (and Wear Alerts detail) | Computed from the latest snapshot + rules |
+| Alert rules / thresholds | Settings, on connection rows (or a sub-screen from them) | Editable whether or not that connection is currently synced |
+| Global budget warn/critical | Settings card (Today / Week / Month) | Not duplicated onto every provider row |
+
+Providers shows connected accounts and may surface status; it is **not** the place to create
+rules (an account row may be absent until the first successful sync). The Settings connection
+catalog already lists every plan/platform row in Not connected / Connected states, so rules
+can be prepared before credentials exist.
+
+Rust remains the owner of alert evaluation (`calculate_alerts` / budget helpers). Platform
+shells only persist rule preferences and render results.
 
 ---
 
@@ -649,11 +672,16 @@ Cursor  68%  Warn
 
 ### Alerts screen
 
+Wear-only detail for the **active** alert list from the last phone sync (not rule editing):
+
 ```text
 High burn rate
 Codex usage is 2.1x normal
 Updated 4m ago
 ```
+
+Empty list is valid: show a short “No active alerts” state. Rule configuration stays on the
+phone Settings connection catalog / budget thresholds card.
 
 ### Wear OS rules
 
@@ -1634,7 +1662,8 @@ Dashboard → Watchface → Widget → Providers → Settings
   payload preview); remove it from Settings.
 - Add the **Widget** tab for widget metric selection + preview; prefs are **independent** of
   Watchface prefs so phone and watch can differ.
-- Settings keeps credentials, polling, budgets thresholds, diagnostics, and legal only.
+- Settings keeps credentials, polling, alert rules (connection + global budget thresholds),
+  diagnostics, and legal only — not Watchface/Widget layout, and not a sixth Alerts tab.
 
 #### Widget surface
 

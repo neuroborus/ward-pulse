@@ -1,22 +1,25 @@
 package app.wardpulse.wear.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.pager.VerticalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.AppScaffold
 import androidx.wear.compose.material3.Button
+import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.Card
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
@@ -34,12 +37,18 @@ import app.wardpulse.wear.model.AllowanceSummary
 import app.wardpulse.wear.model.Money
 import app.wardpulse.wear.model.PreviewWatchDashboardSummary
 import app.wardpulse.wear.model.PulseStatus
+import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.WatchDataMode
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.ui.theme.WardPulseSuccess
 import app.wardpulse.wear.ui.theme.WardPulseTheme
 
 private const val HOME_ROUTE = "home"
+
+private enum class HomePage {
+    Glance,
+    Menu,
+}
 
 private enum class Screen(val route: String, val label: String) {
     USAGE("usage", "Usage"),
@@ -77,7 +86,7 @@ fun WardPulseApp(summary: WatchDashboardSummary?) {
             }
             composable("ring/{index}") { entry ->
                 val index = entry.arguments?.getString("index")?.toIntOrNull()
-                val ring = index?.let { summary.rings.getOrNull(it) }
+                val ring = index?.let { summary.activeRings.getOrNull(it) }
                 if (ring == null) {
                     SummaryScreen(
                         title = "Ring",
@@ -164,7 +173,8 @@ private fun WatchDashboardSummary.rowsFor(screen: Screen): List<SummaryRow> = wh
     }
         .ifEmpty { listOf(SummaryRow("No active alerts", "All providers look normal")) }
     Screen.LAST_SYNC -> listOf(
-        SummaryRow(lastSyncLabel, "Saved locally"),
+        SummaryRow(lastSyncLabel, "Local time"),
+        SummaryRow(lastSyncUtcLabel, "UTC"),
         SummaryRow(
             title = if (isStale) "Stale data" else "Up to date",
             detail = if (isStale) {
@@ -177,78 +187,164 @@ private fun WatchDashboardSummary.rowsFor(screen: Screen): List<SummaryRow> = wh
     )
 }
 
+/** Exhausted layers are omitted on the surface (design: omit usedPercent >= 100). */
+private val WatchDashboardSummary.activeRings: List<RingSummary>
+    get() = rings.filter { it.usedPercent < 100.0 }
+
 @Composable
 private fun HomeScreen(
     summary: WatchDashboardSummary,
     onOpen: (Screen) -> Unit,
     onOpenRing: (Int) -> Unit,
 ) {
-    val status = when {
-        summary.dataMode == WatchDataMode.MOCK -> PulseStatus.WARNING
-        summary.isStale -> PulseStatus.WARNING
-        else -> summary.overallStatus
-    }
-    val statusLabel = when {
-        summary.dataMode == WatchDataMode.MOCK -> "Mock data"
-        summary.isStale -> "Stale data"
-        else -> summary.overallStatus.label
-    }
+    val pages = HomePage.entries
+    val pagerState = rememberPagerState(pageCount = { pages.size })
 
-    Column(
+    VerticalPager(
+        state = pagerState,
+        modifier = Modifier.fillMaxSize(),
+        beyondViewportPageCount = 0,
+    ) { page ->
+        when (pages[page]) {
+            HomePage.Glance -> GlancePage(summary = summary)
+            HomePage.Menu -> MenuPage(
+                summary = summary,
+                onOpen = onOpen,
+                onOpenRing = onOpenRing,
+            )
+        }
+    }
+}
+
+@Composable
+private fun GlancePage(summary: WatchDashboardSummary) {
+    val (status, statusLabel) = glanceChrome(summary)
+    val rings = summary.activeRings
+
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 14.dp)
-            .padding(top = 28.dp, bottom = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .padding(horizontal = 12.dp, vertical = 22.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(
-            statusLabel,
-            style = MaterialTheme.typography.titleSmall,
-            color = statusColor(status),
-            textAlign = TextAlign.Center,
-        )
-        if (summary.rings.isEmpty()) {
+        val diameter = min(maxWidth, maxHeight) * 0.82f
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize(),
+        ) {
             Text(
-                // Phase 14 moves this UI to the Watchface tab; until then Settings “Watch display”.
-                "Choose percent rings in the phone app",
-                modifier = Modifier.padding(top = 6.dp),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                statusLabel,
+                style = MaterialTheme.typography.labelLarge,
+                color = statusColor(status),
                 textAlign = TextAlign.Center,
+                modifier = Modifier.padding(bottom = 4.dp),
             )
-        } else {
-            UsageRings(
-                rings = summary.rings,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 6.dp),
-                diameter = if (summary.rings.size == 1) 148.dp else 136.dp,
-                tokenGlance = summary.tokenGlance?.text,
-            )
-            summary.rings.forEachIndexed { index, ring ->
+            if (rings.isEmpty()) {
+                Text(
+                    if (summary.rings.isEmpty()) {
+                        "Choose percent rings in the phone app"
+                    } else {
+                        "No remaining capacity"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                )
+            } else {
+                UsageRings(
+                    rings = rings,
+                    modifier = Modifier.fillMaxWidth(),
+                    diameter = diameter,
+                    tokenGlance = summary.tokenGlance?.text,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MenuPage(
+    summary: WatchDashboardSummary,
+    onOpen: (Screen) -> Unit,
+    onOpenRing: (Int) -> Unit,
+) {
+    val state = rememberTransformingLazyColumnState()
+    val transformationSpec = rememberTransformationSpec()
+    val rings = summary.activeRings
+    val menuColors = ButtonDefaults.buttonColors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    )
+
+    ScreenScaffold(scrollState = state) { contentPadding ->
+        TransformingLazyColumn(
+            state = state,
+            contentPadding = contentPadding,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(horizontal = 18.dp),
+        ) {
+            item {
+                ListHeader {
+                    Text("Menu", style = MaterialTheme.typography.titleSmall)
+                }
+            }
+            items(rings.size) { index ->
+                val ring = rings[index]
                 Button(
                     onClick = { onOpenRing(index) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 6.dp),
+                        .transformedHeight(this, transformationSpec),
+                    colors = menuColors,
+                    transformation = SurfaceTransformation(transformationSpec),
                 ) {
-                    Text(ring.label, color = statusColor(ring.status))
-                    Text(formatPercentLabel(ring.usedPercent))
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            ring.label,
+                            style = MaterialTheme.typography.labelLarge,
+                            textAlign = TextAlign.Center,
+                        )
+                        Text(
+                            formatPercentRemainingLabel(ring.usedPercent),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+            }
+            items(Screen.entries.size) { index ->
+                val destination = Screen.entries[index]
+                Button(
+                    onClick = { onOpen(destination) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .transformedHeight(this, transformationSpec),
+                    colors = menuColors,
+                    transformation = SurfaceTransformation(transformationSpec),
+                ) {
+                    Text(
+                        destination.label,
+                        modifier = Modifier.fillMaxWidth(),
+                        style = MaterialTheme.typography.labelLarge,
+                        textAlign = TextAlign.Center,
+                    )
                 }
             }
         }
-        Screen.entries.forEach { destination ->
-            Button(
-                onClick = { onOpen(destination) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp),
-            ) {
-                Text(destination.label)
-            }
-        }
     }
+}
+
+private fun glanceChrome(summary: WatchDashboardSummary): Pair<PulseStatus, String> = when {
+    summary.dataMode == WatchDataMode.MOCK -> PulseStatus.WARNING to "Mock data"
+    summary.isStale -> PulseStatus.WARNING to "Stale data"
+    else -> summary.overallStatus to summary.overallStatus.label
 }
 
 private val AllowanceSummary.valueLabel: String
@@ -285,7 +381,10 @@ private fun SummaryScreen(title: String, rows: List<SummaryRow>) {
                         row.title,
                         color = row.status?.let { statusColor(it) } ?: Color.Unspecified,
                     )
-                    Text(row.detail)
+                    Text(
+                        row.detail,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }

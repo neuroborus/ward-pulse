@@ -2,6 +2,7 @@ package app.wardpulse.wear.model
 
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
@@ -137,9 +138,18 @@ data class WatchDashboardSummary(
     val alerts: List<AlertSummary>,
     val isStale: Boolean,
 ) {
+    /** Device-local wall clock for the Last sync screen. */
     val lastSyncLabel: String
         get() = try {
-            LAST_SYNC_FORMAT.format(Instant.parse(generatedAt))
+            LAST_SYNC_LOCAL_FORMAT.format(Instant.parse(generatedAt))
+        } catch (_: DateTimeParseException) {
+            "Unknown"
+        }
+
+    /** UTC disclosure shown alongside [lastSyncLabel]. */
+    val lastSyncUtcLabel: String
+        get() = try {
+            LAST_SYNC_UTC_FORMAT.format(Instant.parse(generatedAt))
         } catch (_: DateTimeParseException) {
             "Unknown"
         }
@@ -157,7 +167,10 @@ data class WatchDashboardSummary(
     }
 
     private companion object {
-        val LAST_SYNC_FORMAT: DateTimeFormatter =
+        val LAST_SYNC_LOCAL_FORMAT: DateTimeFormatter =
+            DateTimeFormatter.ofPattern("MMM d, HH:mm", Locale.US)
+                .withZone(ZoneId.systemDefault())
+        val LAST_SYNC_UTC_FORMAT: DateTimeFormatter =
             DateTimeFormatter.ofPattern("MMM d, HH:mm 'UTC'", Locale.US)
                 .withZone(ZoneOffset.UTC)
         val STALE_AFTER: Duration = Duration.ofHours(2)
