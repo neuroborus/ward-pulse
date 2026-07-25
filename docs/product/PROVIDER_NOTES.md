@@ -41,6 +41,18 @@ separate from monetary budgets because their units and reset rules differ.
 - Exact provider quantities cross shared contracts as decimal strings with an explicit `tokens`
   or `credits` unit.
 
+## Capability-adaptive presentation
+
+The dashboard renders only the metrics that the currently connected providers can report. The
+per-provider capability tables below are the source of truth for what each connection contributes.
+
+- A metric no connected provider supports is hidden, not rendered as a placeholder. One row keeps a
+  `?` affordance that names the connection to add and deep-links to Settings.
+- `Unknown` is reserved for transient provider state: a connection that has not synced yet or whose
+  last sync failed. It stays on the status indicator rather than on values.
+- With no connections configured, the dashboard shows a single "Connect a provider" call to action.
+- Mock data keeps the full dashboard so the layout stays reviewable without live credentials.
+
 ## Connection grouping
 
 Every provider in Settings is one section with up to two homogeneous connections:

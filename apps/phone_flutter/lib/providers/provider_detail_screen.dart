@@ -82,7 +82,7 @@ class ProviderDetailScreen extends StatelessWidget {
                   leading: const Icon(Icons.memory),
                   title: Text(model.model),
                   subtitle: Text('${formatCount(model.requests)} requests'),
-                  trailing: Text(model.cost?.label ?? 'Unknown'),
+                  trailing: model.cost == null ? null : Text(model.cost!.label),
                 ),
               ),
           ],

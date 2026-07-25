@@ -1384,7 +1384,7 @@ existing stored credentials survive the regrouping without re-entry
 
 ### Phase 10 — capability-adaptive dashboard
 
-Status: planned as of 2026-07-24.
+Status: completed as of 2026-07-24.
 
 Rationale: with only one connection configured, most phone and watch metrics render as
 "Unknown". The dashboard must adapt to what is actually connected and measurable instead of
@@ -1679,14 +1679,12 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Start Phase 10 (capability-adaptive dashboard): hide metrics that no connected provider can
-report, keep a small `?` affordance that deep-links to the matching Settings connection, and stop
-filling single-connection setups with `Unknown` placeholders. Phase 9 Settings grouping is in
-place.
+Start Phase 11 (polling cadence constants and the global refresh slider): named per-connection
+floors in Rust, a 5–60 minute global slider, and background phone sync that honors both. Phase 9
+Settings grouping and Phase 10 capability-adaptive dashboard are in place.
 
-Then continue with Phase 11 (polling cadence constants and the global refresh slider), Phase 12
-(Anthropic and Cursor adapters on the connection model), and Phase 13 (configurable watch rings,
-starting in OpenPencil).
+Then continue with Phase 12 (Anthropic and Cursor adapters on the connection model) and Phase 13
+(configurable watch rings, starting in OpenPencil).
 
 Phase 6 passed Watch Face Format acceptance on 2026-07-19:
 

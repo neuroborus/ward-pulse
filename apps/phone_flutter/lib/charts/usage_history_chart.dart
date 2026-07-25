@@ -72,7 +72,7 @@ class UsageHistoryChart extends StatelessWidget {
                   Text(
                     totalCost?.label ??
                         (totalTokens == null
-                            ? 'Unknown'
+                            ? 'No totals'
                             : '${formatCount(totalTokens)} tokens'),
                   ),
                   Expanded(

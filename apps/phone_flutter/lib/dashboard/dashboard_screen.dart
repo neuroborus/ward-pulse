@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../charts/budget_progress_bar.dart';
 import '../charts/usage_history_chart.dart';
 import '../settings/consumption_display_preferences.dart';
+import 'connected_capabilities.dart';
 import 'dashboard_models.dart';
 import 'provider_status_color.dart';
 
@@ -11,14 +12,20 @@ class DashboardScreen extends StatelessWidget {
     super.key,
     required this.snapshot,
     this.displayPreferences = const ConsumptionDisplayPreferences(),
+    this.onOpenSettings,
   });
 
   final DashboardSnapshot snapshot;
   final ConsumptionDisplayPreferences displayPreferences;
+  final VoidCallback? onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
-    final primaryAccount = snapshot.primaryAccount;
+    if (snapshot.accounts.isEmpty) {
+      return ConnectProviderPrompt(onOpenSettings: onOpenSettings);
+    }
+
+    final caps = ConnectedCapabilities.fromAccounts(snapshot.accounts);
     final hasMultipleAccounts = snapshot.accounts.length > 1;
     final allAllowances = snapshot.accounts
         .expand((account) => account.allowances)
@@ -26,7 +33,6 @@ class DashboardScreen extends StatelessWidget {
     final allowances = allAllowances
         .where((allowance) => displayPreferences.allows(allowance.source))
         .toList(growable: false);
-    final hasAllowanceData = allAllowances.isNotEmpty;
     final historyAccount = _firstAccountWith(
       snapshot.accounts,
       (account) => account.buckets.isNotEmpty,
@@ -35,64 +41,175 @@ class DashboardScreen extends StatelessWidget {
       snapshot.accounts,
       (account) => account.modelBreakdown.isNotEmpty,
     );
-
     final hasPurchasedAllowance = allAllowances.any(
       (allowance) => allowance.source == AllowanceSource.purchased,
     );
     final showMissingPurchased =
-        displayPreferences.purchased && !hasPurchasedAllowance;
+        caps.showAllowances &&
+        displayPreferences.purchased &&
+        !hasPurchasedAllowance;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
         _SyncHeader(snapshot: snapshot),
         const SizedBox(height: 16),
-        if (!hasAllowanceData)
-          _BudgetCards(snapshot: snapshot)
-        else if (allowances.isEmpty)
-          EmptyAllowanceCard(
-            availableSources:
-                allAllowances.map((allowance) => allowance.source).toSet(),
-            purchasedSelectedWithoutData: showMissingPurchased,
-          )
-        else ...[
-          _AllowanceCards(allowances: allowances),
-          if (showMissingPurchased) ...[
-            const SizedBox(height: 12),
-            const MissingPurchasedUsageCard(),
+        if (caps.showAllowances) ...[
+          if (allowances.isEmpty)
+            EmptyAllowanceCard(
+              availableSources:
+                  allAllowances.map((allowance) => allowance.source).toSet(),
+              purchasedSelectedWithoutData: showMissingPurchased,
+            )
+          else ...[
+            _AllowanceCards(allowances: allowances),
+            if (showMissingPurchased) ...[
+              const SizedBox(height: 12),
+              const MissingPurchasedUsageCard(),
+            ],
           ],
+          const SizedBox(height: 16),
+        ] else if (caps.showPlanGap) ...[
+          _CapabilityGapRow(
+            title: 'Plan usage',
+            explanation:
+                'Connect a Codex subscription in Settings to see plan limits.',
+            onOpenSettings: onOpenSettings,
+          ),
+          const SizedBox(height: 16),
         ],
-        const SizedBox(height: 16),
-        UsageHistoryChart(
-          title:
-              hasMultipleAccounts && historyAccount != null
-                  ? '${historyAccount.providerLabel} usage history'
-                  : 'Usage history',
-          buckets:
-              historyAccount?.buckets ??
-              primaryAccount?.buckets ??
-              const <UsageBucket>[],
-        ),
-        const SizedBox(height: 16),
-        _SectionHeader(
-          title:
-              hasMultipleAccounts && modelAccount != null
-                  ? '${modelAccount.providerLabel} model usage'
-                  : 'Model usage',
-          trailing: snapshot.accountCountLabel,
-        ),
-        const SizedBox(height: 8),
-        _ModelUsagePanel(
-          models:
-              modelAccount?.modelBreakdown ??
-              primaryAccount?.modelBreakdown ??
-              const <ModelUsage>[],
-        ),
-        const SizedBox(height: 16),
+        if (caps.showBudgets) ...[
+          _BudgetCards(snapshot: snapshot),
+          const SizedBox(height: 16),
+        ] else if (caps.showSpendGap) ...[
+          _CapabilityGapRow(
+            title: 'Spend',
+            explanation:
+                'Connect OpenAI Platform reporting in Settings to see cost and limits.',
+            onOpenSettings: onOpenSettings,
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (caps.showUsageHistory) ...[
+          UsageHistoryChart(
+            title:
+                hasMultipleAccounts && historyAccount != null
+                    ? '${historyAccount.providerLabel} usage history'
+                    : 'Usage history',
+            buckets: historyAccount?.buckets ?? const <UsageBucket>[],
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (caps.showModelUsage) ...[
+          _SectionHeader(
+            title:
+                hasMultipleAccounts && modelAccount != null
+                    ? '${modelAccount.providerLabel} model usage'
+                    : 'Model usage',
+            trailing: snapshot.accountCountLabel,
+          ),
+          const SizedBox(height: 8),
+          _ModelUsagePanel(
+            models: modelAccount?.modelBreakdown ?? const <ModelUsage>[],
+          ),
+          const SizedBox(height: 16),
+        ],
         _SectionHeader(title: 'Alerts'),
         const SizedBox(height: 8),
         _AlertsPanel(alerts: snapshot.alerts),
       ],
+    );
+  }
+}
+
+class ConnectProviderPrompt extends StatelessWidget {
+  const ConnectProviderPrompt({super.key, this.onOpenSettings});
+
+  final VoidCallback? onOpenSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Connect a provider',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Add a Codex subscription or OpenAI Platform key in Settings.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (onOpenSettings != null) ...[
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: onOpenSettings,
+                child: const Text('Open Settings'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CapabilityGapRow extends StatelessWidget {
+  const _CapabilityGapRow({
+    required this.title,
+    required this.explanation,
+    this.onOpenSettings,
+  });
+
+  final String title;
+  final String explanation;
+  final VoidCallback? onOpenSettings;
+
+  Future<void> _showHelp(BuildContext context) async {
+    final open = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text(title),
+            content: Text(explanation),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Close'),
+              ),
+              if (onOpenSettings != null)
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Open Settings'),
+                ),
+            ],
+          ),
+    );
+    if (open == true) {
+      onOpenSettings?.call();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: ListTile(
+        title: Text(title),
+        trailing: IconButton(
+          tooltip: 'Why is this hidden?',
+          onPressed: () => _showHelp(context),
+          icon: const Icon(Icons.help_outline),
+        ),
+      ),
     );
   }
 }
@@ -165,7 +282,8 @@ class AllowanceSummaryCard extends StatelessWidget {
     final headline = switch (allowance.source) {
       AllowanceSource.plan => '${allowance.usedPercentLabel} used',
       AllowanceSource.purchased when allowance.unlimited => 'Unlimited',
-      AllowanceSource.purchased => allowance.remaining?.label ?? 'Unknown',
+      AllowanceSource.purchased =>
+        allowance.remaining?.label ?? 'Balance unavailable',
     };
     final detail = switch (allowance.source) {
       AllowanceSource.plan when allowance.resetsAt != null =>
@@ -209,18 +327,6 @@ class AllowanceSummaryCard extends StatelessWidget {
   }
 }
 
-ProviderSnapshot? _firstAccountWith(
-  List<ProviderSnapshot> accounts,
-  bool Function(ProviderSnapshot account) matches,
-) {
-  for (final account in accounts) {
-    if (matches(account)) {
-      return account;
-    }
-  }
-  return null;
-}
-
 class StatusPill extends StatelessWidget {
   const StatusPill({super.key, required this.status, this.tooltip});
 
@@ -262,6 +368,12 @@ class BudgetSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final spentLabel = state.spent?.label;
+    final limit = state.limit;
+    final remaining = state.remaining;
+    final usedPercentLabel =
+        state.usedPercent == null ? null : state.usedPercentLabel;
+    final progress = state.usedFraction;
 
     return Card(
       margin: EdgeInsets.zero,
@@ -277,22 +389,28 @@ class BudgetSummaryCard extends StatelessWidget {
                 StatusPill(status: state.status),
               ],
             ),
-            const SizedBox(height: 14),
-            Text(
-              state.spent?.label ?? 'Unknown',
-              style: textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 4),
-            Text('Limit ${state.limit?.label ?? 'Unknown'}'),
-            const SizedBox(height: 14),
-            BudgetProgressBar(state: state),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(child: Text('${state.usedPercentLabel} used')),
-                Text('Left ${state.remaining?.label ?? 'Unknown'}'),
-              ],
-            ),
+            if (spentLabel != null) ...[
+              const SizedBox(height: 14),
+              Text(spentLabel, style: textTheme.headlineSmall),
+            ],
+            if (limit != null) ...[
+              const SizedBox(height: 4),
+              Text('Limit ${limit.label}'),
+            ],
+            if (progress != null) ...[
+              const SizedBox(height: 14),
+              BudgetProgressBar(state: state),
+            ],
+            if (usedPercentLabel != null || remaining != null) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  if (usedPercentLabel != null)
+                    Expanded(child: Text('$usedPercentLabel used')),
+                  if (remaining != null) Text('Left ${remaining.label}'),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -582,6 +700,18 @@ class _EmptyAlertsCard extends StatelessWidget {
       ),
     );
   }
+}
+
+ProviderSnapshot? _firstAccountWith(
+  List<ProviderSnapshot> accounts,
+  bool Function(ProviderSnapshot account) matches,
+) {
+  for (final account in accounts) {
+    if (matches(account)) {
+      return account;
+    }
+  }
+  return null;
 }
 
 IconData _statusIcon(ProviderStatus status) {

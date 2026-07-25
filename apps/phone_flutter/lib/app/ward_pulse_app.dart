@@ -104,6 +104,8 @@ class DashboardHost extends StatefulWidget {
 }
 
 class _DashboardHostState extends State<DashboardHost> {
+  static const _settingsIndex = 2;
+
   late Future<DashboardSnapshot> _snapshot = _loadSnapshot();
   DashboardSnapshot? _currentSnapshot;
   ConsumptionDisplayPreferences _displayPreferences =
@@ -194,6 +196,12 @@ class _DashboardHostState extends State<DashboardHost> {
     });
   }
 
+  void _openSettings() {
+    setState(() {
+      _selectedIndex = _settingsIndex;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<DashboardSnapshot>(
@@ -222,7 +230,7 @@ class _DashboardHostState extends State<DashboardHost> {
           ),
           body: SafeArea(
             child: switch (state.connectionState) {
-              _ when _selectedIndex == 2 => SettingsScreen(
+              _ when _selectedIndex == _settingsIndex => SettingsScreen(
                 key: const ValueKey('settings'),
                 snapshot: snapshot,
                 watchSyncService: widget.watchSyncService,
@@ -248,12 +256,14 @@ class _DashboardHostState extends State<DashboardHost> {
               _ when state.hasError => _ErrorView(
                 failure: _dashboardFailure(state.error),
                 onRetry: _reload,
+                onOpenSettings: _openSettings,
               ),
               _ when snapshot != null => _SelectedSurface(
                 selectedIndex: _selectedIndex,
                 snapshot: snapshot,
                 displayPreferences: _displayPreferences,
                 openAiPlatformLabel: _openAiPlatformLabel,
+                onOpenSettings: _openSettings,
               ),
               _ => _ErrorView(
                 failure: const DashboardLoadException(),
@@ -298,12 +308,14 @@ class _SelectedSurface extends StatelessWidget {
     required this.snapshot,
     required this.displayPreferences,
     this.openAiPlatformLabel,
+    this.onOpenSettings,
   });
 
   final int selectedIndex;
   final DashboardSnapshot snapshot;
   final ConsumptionDisplayPreferences displayPreferences;
   final String? openAiPlatformLabel;
+  final VoidCallback? onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -311,6 +323,7 @@ class _SelectedSurface extends StatelessWidget {
       0 => DashboardScreen(
         snapshot: snapshot,
         displayPreferences: displayPreferences,
+        onOpenSettings: onOpenSettings,
       ),
       _ => ProvidersScreen(
         snapshot: snapshot,
@@ -331,13 +344,22 @@ class _LoadingView extends StatelessWidget {
 }
 
 class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.failure, required this.onRetry});
+  const _ErrorView({
+    required this.failure,
+    required this.onRetry,
+    this.onOpenSettings,
+  });
 
   final DashboardLoadException failure;
   final VoidCallback onRetry;
+  final VoidCallback? onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
+    if (failure.issue == DashboardSyncIssue.noProviders) {
+      return ConnectProviderPrompt(onOpenSettings: onOpenSettings);
+    }
+
     final colors = Theme.of(context).colorScheme;
 
     return Center(
