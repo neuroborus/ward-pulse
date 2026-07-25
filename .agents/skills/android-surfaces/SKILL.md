@@ -39,9 +39,11 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 
 - Keep WFF declarative and minimal; follow the same concentric language as Wear (not
   side-by-side `RING 1` / `RING 2` placeholders).
-- Prefer live arcs for selected layers, optional token-glance text when present, muted time.
+- WFF format version 2 (Wear OS 5+): concentric `RANGED_VALUE` arcs with `WeightedStroke`
+  colors from Wear `ColorRamp` / `[COMPLICATION.RANGED_VALUE_COLORS]`; arc = remaining.
+- Prefer live arcs for selected layers, optional token-glance strip when present, large time.
 - Support tap-to-open into the Wear OS app where possible.
-- Keep ambient mode readable.
+- Keep ambient mode readable (dim arcs, strips off).
 
 ## Phone-To-Watch Flow
 

@@ -75,7 +75,7 @@ Android phone, Wear OS, and Watch Face Format in the current product plan.
 | Kotlin Gradle Plugin | 2.3.20 | Flutter Android host activity |
 | Wear Gradle Wrapper | 9.6.1 | Native Wear app build |
 | Wear Android Gradle Plugin | 9.3.0 | Native Wear app build |
-| WFF validator | 1.7.0 | WFF v1 schema validation |
+| WFF validator | 1.7.0 | WFF v2 schema validation |
 | Wear Kotlin Compose plugin | 2.3.21 | Compose compiler; Kotlin compilation is built into AGP |
 | Compose BOM | 2026.06.00 | Wear Compose runtime baseline |
 | Compose for Wear OS | 1.6.2 | Material 3 UI and preview tooling |
@@ -373,9 +373,9 @@ The Phase 6 watch face is a separate resource-only package in `apps/watchface_wf
 
 | Setting | Value | Purpose |
 | --- | --- | --- |
-| Watch Face Format | version 1 | Digital time, ambient variants, and tap-to-open on Wear OS 4+ |
+| Watch Face Format | version 2 | Concentric rings via WeightedStroke + RANGED_VALUE colors (Wear OS 5+) |
 | Application ID | `app.wardpulse.watchface` | Independent watch face package |
-| Minimum SDK | API 33 | Minimum runtime for WFF v1 |
+| Minimum SDK | API 34 | Minimum runtime for WFF v2 |
 | Compile SDK | Android SDK 37.1 | Shared Android build baseline |
 | Target SDK | API 36 | Shared Android target baseline |
 | Android Gradle Plugin | 9.3.0 | Shared Android build plugin |

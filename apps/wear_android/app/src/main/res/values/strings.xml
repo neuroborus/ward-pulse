@@ -1,7 +1,9 @@
 <resources>
     <string name="app_name">WardPulse</string>
-    <string name="today_complication">WardPulse today</string>
-    <string name="week_complication">WardPulse week</string>
+    <string name="today_complication">WardPulse ring 1</string>
+    <string name="week_complication">WardPulse ring 2</string>
+    <string name="ring3_complication">WardPulse ring 3</string>
+    <string name="ring4_complication">WardPulse ring 4</string>
     <string name="status_complication">WardPulse status</string>
     <string name="tokens_complication">WardPulse tokens</string>
 </resources>

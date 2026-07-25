@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import androidx.wear.watchface.complications.data.ColorRamp
 import androidx.wear.watchface.complications.data.ComplicationData
 import androidx.wear.watchface.complications.data.ComplicationType
 import androidx.wear.watchface.complications.data.NoDataComplicationData
@@ -17,6 +18,7 @@ import app.wardpulse.wear.MainActivity
 import app.wardpulse.wear.data.WatchSummaryStore
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.WatchDashboardSummary
+import app.wardpulse.wear.ui.RingFamily
 import app.wardpulse.wear.ui.formatPercentAmount
 import app.wardpulse.wear.ui.formatPercentLabel
 import java.util.Locale
@@ -49,30 +51,37 @@ abstract class RingComplicationDataSourceService :
     SuspendingComplicationDataSourceService() {
     protected abstract val ringIndex: Int
     protected abstract val previewPercent: Float
+    protected abstract val previewColorArgb: Int
 
     protected open val previewLabel: String = "Ring"
 
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
         val ring = WatchSummaryStore(this).load()?.rings?.getOrNull(ringIndex)
-        val percent = ring?.usedPercent?.toFloat()
+        // RANGED_VALUE = remaining capacity (matches WFF arc + design strips).
+        val remaining = ring?.let { WatchComplicationText.remainingPercent(it.usedPercent) }
         val label = ring?.label
         return when (request.complicationType) {
             // NoData clears a previous arc; null would leave stale complication data.
             ComplicationType.RANGED_VALUE ->
-                if (percent == null) {
+                if (ring == null || remaining == null) {
                     NoDataComplicationData()
                 } else {
-                    ComplicationBuilders.ranged(this, percent, title = label)
+                    ComplicationBuilders.ranged(
+                        this,
+                        remaining,
+                        title = label,
+                        colorArgb = RingFamily.colorArgb(ring.id),
+                    )
                 }
-            // Match RANGED_VALUE: NoData hides the slot. Avoid "—%" under WFF `%s%%`.
             ComplicationType.SHORT_TEXT ->
-                if (percent == null) {
+                if (remaining == null) {
                     NoDataComplicationData()
                 } else {
                     ComplicationBuilders.shortText(
                         this,
-                        value = WatchComplicationText.percentAmount(percent),
-                        contentDescription = label ?: WatchComplicationText.percentLabel(percent),
+                        value = WatchComplicationText.percentAmount(remaining),
+                        contentDescription = label
+                            ?: WatchComplicationText.percentLabel(remaining),
                     )
                 }
             else -> null
@@ -82,7 +91,12 @@ abstract class RingComplicationDataSourceService :
     override fun getPreviewData(type: ComplicationType): ComplicationData? =
         when (type) {
             ComplicationType.RANGED_VALUE ->
-                ComplicationBuilders.ranged(this, previewPercent, title = previewLabel)
+                ComplicationBuilders.ranged(
+                    this,
+                    previewPercent,
+                    title = previewLabel,
+                    colorArgb = previewColorArgb,
+                )
             ComplicationType.SHORT_TEXT ->
                 ComplicationBuilders.shortText(
                     this,
@@ -107,6 +121,7 @@ private object ComplicationBuilders {
         context: Context,
         percent: Float,
         title: String? = null,
+        colorArgb: Int = RingFamily.FALLBACK,
     ): ComplicationData {
         val value = percent.coerceIn(0f, 100f)
         val amount = WatchComplicationText.percentAmount(value)
@@ -122,6 +137,8 @@ private object ComplicationBuilders {
                     setTitle(PlainComplicationText.Builder(title).build())
                 }
             }
+            // Drives WFF WeightedStroke via [COMPLICATION.RANGED_VALUE_COLORS].
+            .setColorRamp(ColorRamp(intArrayOf(colorArgb), /* interpolated = */ false))
             .setTapAction(tapAction(context))
             .build()
     }
@@ -135,16 +152,34 @@ private object ComplicationBuilders {
         )
 }
 
+/** Surface ring 0 (outer / tightest remaining). Class name kept for installed faces. */
 class TodayComplicationDataSourceService : RingComplicationDataSourceService() {
     override val ringIndex = 0
-    override val previewPercent = 25f
-    override val previewLabel = "Today"
+    override val previewPercent = 8f
+    override val previewColorArgb = RingFamily.CODEX
+    override val previewLabel = "Ring 1"
 }
 
+/** Surface ring 1. Class name kept for installed faces. */
 class WeekComplicationDataSourceService : RingComplicationDataSourceService() {
     override val ringIndex = 1
-    override val previewPercent = 49f
-    override val previewLabel = "Week"
+    override val previewPercent = 39f
+    override val previewColorArgb = RingFamily.CLAUDE
+    override val previewLabel = "Ring 2"
+}
+
+class Ring3ComplicationDataSourceService : RingComplicationDataSourceService() {
+    override val ringIndex = 2
+    override val previewPercent = 72f
+    override val previewColorArgb = RingFamily.CURSOR
+    override val previewLabel = "Ring 3"
+}
+
+class Ring4ComplicationDataSourceService : RingComplicationDataSourceService() {
+    override val ringIndex = 3
+    override val previewPercent = 75f
+    override val previewColorArgb = RingFamily.BUDGET
+    override val previewLabel = "Ring 4"
 }
 
 class StatusComplicationDataSourceService : ShortTextComplicationDataSourceService() {
@@ -184,11 +219,15 @@ class TokensComplicationDataSourceService : SuspendingComplicationDataSourceServ
 }
 
 object WatchComplicationText {
-    fun today(summary: WatchDashboardSummary): String =
-        percentLabel(summary.rings.getOrNull(0)?.usedPercent?.toFloat())
+    /** Remaining capacity 0–100 for RANGED_VALUE / strip-style labels. */
+    fun remainingPercent(usedPercent: Double): Float =
+        (100.0 - usedPercent.coerceIn(0.0, 100.0)).toFloat().coerceIn(0f, 100f)
 
-    fun week(summary: WatchDashboardSummary): String =
-        percentLabel(summary.rings.getOrNull(1)?.usedPercent?.toFloat())
+    /** Remaining-% label for surface ring [index] (payload order, not budget period). */
+    fun ringRemainingPercent(summary: WatchDashboardSummary, index: Int): String {
+        val used = summary.rings.getOrNull(index)?.usedPercent ?: return "—"
+        return percentLabel(remainingPercent(used))
+    }
 
     fun percentLabel(percent: Float?): String =
         formatPercentLabel(percent?.toDouble())
@@ -227,6 +266,8 @@ object WatchComplicationUpdater {
     private val services = listOf(
         TodayComplicationDataSourceService::class.java,
         WeekComplicationDataSourceService::class.java,
+        Ring3ComplicationDataSourceService::class.java,
+        Ring4ComplicationDataSourceService::class.java,
         StatusComplicationDataSourceService::class.java,
         TokensComplicationDataSourceService::class.java,
     )

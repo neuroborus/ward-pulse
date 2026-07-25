@@ -28,14 +28,8 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.RingSummary
-import app.wardpulse.wear.ui.theme.WardPulseSuccess
 import kotlin.math.min
 import kotlin.math.roundToInt
-
-private val CodexRing = Color(0xFF65D78A)
-private val ClaudeRing = Color(0xFFE8915A)
-private val CursorRing = Color(0xFF67E8D4)
-private val BudgetRing = Color(0xFF8AB4F8)
 
 /**
  * Concentric remaining arcs + sunk family strips
@@ -154,16 +148,7 @@ private fun SunkStrip(
 
 @Composable
 private fun ringFamilyColor(ringId: String, status: PulseStatus): Color {
-    val family = when {
-        ringId.startsWith("allowance.codex") ||
-            ringId.contains(".codex.") ||
-            ringId.startsWith("allowance.openai") ||
-            ringId.contains(".openai.") -> CodexRing
-        ringId.startsWith("allowance.claude") || ringId.contains(".claude.") -> ClaudeRing
-        ringId.startsWith("allowance.cursor") || ringId.contains(".cursor.") -> CursorRing
-        ringId.startsWith("budget.") -> BudgetRing
-        else -> WardPulseSuccess
-    }
+    val family = Color(RingFamily.colorArgb(ringId))
     return when (status) {
         PulseStatus.OK -> family
         PulseStatus.WARNING,

@@ -32,5 +32,5 @@ if ! validator_is_valid; then
 fi
 
 java -jar "${validator_jar}" \
-  1 \
+  2 \
   "${repo_root}/apps/watchface_wff/src/main/res/raw/watchface.xml"

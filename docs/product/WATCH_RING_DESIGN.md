@@ -114,7 +114,7 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
 | Surface | Role |
 |---------|------|
 | Wear OS app | Compose remaining arcs + sunk strips; system time on the watch chrome |
-| WFF watch face | Same language with large time hero; runtime may still stage toward this layout |
+| WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs in `watchface.xml` |
 | Phone Settings | Slot selection + preview of next payload rings |
 
 ## Non-goals

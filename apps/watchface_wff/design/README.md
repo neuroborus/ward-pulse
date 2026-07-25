@@ -8,4 +8,4 @@ node tools/render-watch-ring-designs.mjs
 ```
 
 Representative copies: `round-3-plan-tokens`, `round-1-plan-tokens`, `round-tokens-only`,
-`round-ambient-3`. Runtime WFF may still stage toward this composition.
+`round-ambient-3`. Runtime face: `src/main/res/raw/watchface.xml` (concentric remaining arcs).

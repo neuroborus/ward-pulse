@@ -11,9 +11,10 @@ class WatchComplicationTextTest {
     fun formatsUsagePercentages() {
         val summary = PreviewWatchDashboardSummary.value
 
-        // today/week helpers expose ring slots 0/1 (surface order), not budget periods.
-        assertEquals("29%", WatchComplicationText.today(summary))
-        assertEquals("27%", WatchComplicationText.week(summary))
+        // Preview rings: used 28.5 / 26.5 → remaining 71.5 / 73.5.
+        assertEquals("72%", WatchComplicationText.ringRemainingPercent(summary, 0))
+        assertEquals("74%", WatchComplicationText.ringRemainingPercent(summary, 1))
+        assertEquals(71.5f, WatchComplicationText.remainingPercent(28.5), 0.001f)
         assertEquals("—", WatchComplicationText.percentLabel(null))
         assertEquals("0%", WatchComplicationText.percentLabel(0f))
         assertEquals("25", WatchComplicationText.percentAmount(24.8f))

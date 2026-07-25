@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="watch_face_name">WardPulse</string>
-    <string name="today_complication">Ring 1 usage</string>
-    <string name="week_complication">Ring 2 usage</string>
-    <string name="status_complication">Provider status</string>
+    <string name="ring1_complication">Ring 1 (outer)</string>
+    <string name="ring2_complication">Ring 2</string>
+    <string name="ring3_complication">Ring 3</string>
+    <string name="ring4_complication">Ring 4 (inner)</string>
     <string name="tokens_complication">Today tokens</string>
 </resources>

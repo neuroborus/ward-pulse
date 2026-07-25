@@ -1562,7 +1562,7 @@ phone Watch display prefs, payload rings, and Settings UI
 Watch ring visual baseline locked (WATCH_RING_DESIGN.md + render-watch-ring-designs.mjs)
 Phone payload sorts tightest-remaining outermost and omits exhausted layers
 Wear Compose UsageRings: remaining arcs + sunk family strips (time stays on system/WFF)
-WFF still on transitional side-by-side complication slots — redesign to concentric pending
+WFF v2 concentric remaining arcs (WeightedStroke + ColorRamp family colors) + sunk token strip
 ```
 
 Future (not Phase 13 acceptance — product direction):
@@ -1715,9 +1715,9 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Close Phase 13 acceptance on device/emulator (Wear rings + WFF live arcs), then pick up
-Phase 11 headless background polling. OpenPencil sources, Wear `UsageRings`, and WFF
-`RANGED_VALUE` arcs are in place.
+Close Phase 13 acceptance on device/emulator (Wear rings + WFF concentric live arcs), then
+pick up Phase 11 headless background polling. OpenPencil sources, Wear `UsageRings`, and
+WFF concentric remaining `RANGED_VALUE` arcs are in place.
 
 Then continue with later watch and polish work as listed below.
 
