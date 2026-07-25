@@ -1,8 +1,28 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "dataMode": "mock",
   "generatedAt": "2026-06-27T18:42:00.000Z",
   "overallStatus": "ok",
+  "rings": [
+    {
+      "id": "budget.today",
+      "label": "Today",
+      "usedPercent": 24.8,
+      "status": "ok"
+    },
+    {
+      "id": "budget.week",
+      "label": "Week",
+      "usedPercent": 28.52,
+      "status": "ok"
+    },
+    {
+      "id": "budget.month",
+      "label": "Month",
+      "usedPercent": 26.5125,
+      "status": "ok"
+    }
+  ],
   "today": {
     "period": "today",
     "spent": {

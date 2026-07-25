@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
+import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 
 void main() {
   test('builds the sanitized watch summary fixture', () {
@@ -20,6 +21,7 @@ void main() {
     final payload = WatchDashboardSummaryPayload.fromSnapshot(
       dashboard,
       const ConsumptionDisplayPreferences(),
+      const WatchRingPreferences(),
     );
 
     expect(jsonDecode(payload.encode()), expected);
@@ -38,6 +40,7 @@ void main() {
               WatchDashboardSummaryPayload.fromSnapshot(
                 dashboard,
                 const ConsumptionDisplayPreferences(),
+                const WatchRingPreferences(),
               ).encode(),
             )
             as Map<String, dynamic>;
@@ -97,11 +100,12 @@ void main() {
                   plan: false,
                   purchased: true,
                 ),
+                const WatchRingPreferences(),
               ).encode(),
             )
             as Map<String, dynamic>;
 
-    expect(payload['schemaVersion'], 3);
+    expect(payload['schemaVersion'], 4);
     expect(payload['dataMode'], 'mock');
     expect((payload['allowances'] as List), hasLength(1));
     expect((payload['allowances'] as List).first['source'], 'purchased');
@@ -137,6 +141,7 @@ void main() {
               WatchDashboardSummaryPayload.fromSnapshot(
                 DashboardSnapshot.fromJson(json),
                 const ConsumptionDisplayPreferences(purchased: true),
+                const WatchRingPreferences(),
               ).encode(),
             )
             as Map<String, dynamic>;

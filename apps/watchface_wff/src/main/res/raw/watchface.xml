@@ -55,12 +55,12 @@
 
                 <PartText x="50" y="282" width="150" height="28">
                     <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="18" color="#ffbec9c1">TODAY</Font>
+                        <Font family="SYNC_TO_DEVICE" size="18" color="#ffbec9c1">RING 1</Font>
                     </Text>
                 </PartText>
                 <PartText x="250" y="282" width="150" height="28">
                     <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="18" color="#ffbec9c1">WEEK</Font>
+                        <Font family="SYNC_TO_DEVICE" size="18" color="#ffbec9c1">RING 2</Font>
                     </Text>
                 </PartText>
             </Group>

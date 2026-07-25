@@ -22,7 +22,8 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 
 ## Wear OS App
 
-- Show today, week, providers, alerts, and last sync.
+- Prefer configurable percent rings from schema v4 (up to four); never invent `Unknown` filler.
+- Keep today, week, usage, providers, alerts, and last sync as secondary detail screens.
 - Store and render the latest successful watch summary.
 - Make stale data explicit.
 - Do not enter, display, or store provider credentials.
@@ -31,7 +32,7 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 ## Watch Face Format
 
 - Keep WFF declarative and minimal.
-- Show only today/week/status state where supported.
+- Prefer ring complication slots (first selected rings) plus status where supported.
 - Support tap-to-open into the Wear OS app where possible.
 - Keep ambient mode readable.
 

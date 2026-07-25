@@ -9,6 +9,7 @@
     "dataMode",
     "generatedAt",
     "overallStatus",
+    "rings",
     "today",
     "week",
     "allowances",
@@ -17,10 +18,29 @@
     "isStale"
   ],
   "properties": {
-    "schemaVersion": { "const": 3 },
+    "schemaVersion": { "const": 4 },
     "dataMode": { "enum": ["live", "mock"] },
     "generatedAt": { "type": "string", "format": "date-time" },
     "overallStatus": { "$ref": "dashboard_snapshot.schema.json#/$defs/providerStatus" },
+    "rings": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "usedPercent", "status"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Stable ring metric id. Never an account id or credential."
+          },
+          "label": { "type": "string", "minLength": 1 },
+          "usedPercent": { "type": "number", "minimum": 0 },
+          "status": { "$ref": "dashboard_snapshot.schema.json#/$defs/providerStatus" }
+        }
+      }
+    },
     "today": {
       "allOf": [
         { "$ref": "budget_state.schema.json" },

@@ -63,7 +63,29 @@ fun WardPulseApp(summary: WatchDashboardSummary?) {
             startDestination = HOME_ROUTE,
         ) {
             composable(HOME_ROUTE) {
-                HomeScreen(summary) { navController.navigate(it.route) }
+                HomeScreen(
+                    summary = summary,
+                    onOpen = { navController.navigate(it.route) },
+                    onOpenRing = { index -> navController.navigate("ring/$index") },
+                )
+            }
+            composable("ring/{index}") { entry ->
+                val index = entry.arguments?.getString("index")?.toIntOrNull()
+                val ring = index?.let { summary.rings.getOrNull(it) }
+                if (ring == null) {
+                    SummaryScreen(
+                        title = "Ring",
+                        rows = listOf(SummaryRow("Unavailable", "Choose rings on the phone")),
+                    )
+                } else {
+                    SummaryScreen(
+                        title = ring.label,
+                        rows = listOf(
+                            SummaryRow(ring.usedPercent.usedLabel(), "Used", ring.status),
+                            SummaryRow(ring.status.label, "Status", ring.status),
+                        ),
+                    )
+                }
             }
             Screen.entries.forEach { screen ->
                 composable(screen.route) {
@@ -153,7 +175,11 @@ private fun WatchDashboardSummary.rowsFor(screen: Screen): List<SummaryRow> = wh
 }
 
 @Composable
-private fun HomeScreen(summary: WatchDashboardSummary, onOpen: (Screen) -> Unit) {
+private fun HomeScreen(
+    summary: WatchDashboardSummary,
+    onOpen: (Screen) -> Unit,
+    onOpenRing: (Int) -> Unit,
+) {
     val state = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
 
@@ -187,13 +213,39 @@ private fun HomeScreen(summary: WatchDashboardSummary, onOpen: (Screen) -> Unit)
                         color = statusColor(status),
                     )
                     Text(
-                        summary.allowances.take(2).joinToString(" · ") { allowance ->
-                            allowance.valueLabel
-                        }.ifEmpty {
-                            "Today ${summary.today.usedPercent.percentLabel()} · " +
-                                "Week ${summary.week.usedPercent.percentLabel()}"
+                        if (summary.rings.isEmpty()) {
+                            "Configure rings on the phone"
+                        } else {
+                            "${summary.rings.size} rings"
                         },
                     )
+                }
+            }
+            if (summary.rings.isEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .transformedHeight(this, transformationSpec),
+                        transformation = SurfaceTransformation(transformationSpec),
+                    ) {
+                        Text("No rings")
+                        Text("Choose percent metrics in phone Settings")
+                    }
+                }
+            } else {
+                items(summary.rings.size) { index ->
+                    val ring = summary.rings[index]
+                    Button(
+                        onClick = { onOpenRing(index) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .transformedHeight(this, transformationSpec),
+                        transformation = SurfaceTransformation(transformationSpec),
+                    ) {
+                        Text(ring.label, color = statusColor(ring.status))
+                        Text(ring.usedPercent.percentLabel())
+                    }
                 }
             }
             items(Screen.entries.size) { index ->

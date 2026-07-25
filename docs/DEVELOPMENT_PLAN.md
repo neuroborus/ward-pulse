@@ -1505,17 +1505,18 @@ no tokens, cookies, or raw payloads appear in logs
 
 ### Phase 13 — configurable watch rings
 
-Status: planned as of 2026-07-24.
+Status: in progress as of 2026-07-25.
 
 Rationale: watch space is limited and must never show `Unknown` filler. Plan data from all
 three providers is percentage-first, so the watch surfaces should standardize on compact
-percent rings. This is primarily a design task and starts in OpenPencil before any code.
+percent rings. Layout briefs and design ownership live under each app's `design/`; OpenPencil
+`.fig` art and exported ring drawables remain open.
 
 Deliverables:
 
 - OpenPencil design sources under `apps/watchface_wff/design/` and `apps/wear_android/design/`
   covering 1-4 ring layouts on round and square faces plus ambient mode, following
-  `docs/DESIGN_ASSETS.md` ownership rules;
+  `docs/DESIGN_ASSETS.md` ownership rules (briefs landed; `.fig` art pending);
 - a ring binds to exactly one metric: a provider plan window percent, a purchased/credit
   percent, or a local budget percent, colored by status;
 - a "Watch display" section in phone Settings selects up to four ring slots; metrics from
@@ -1530,7 +1531,8 @@ Deliverables:
 - ring selection supersedes the version 3 plan/purchased preference filter for the watch
   payload; the plan/purchased preference keeps filtering the phone dashboard only;
 - the Wear OS home screen renders the same rings with per-ring detail screens;
-- the WFF face renders up to the supported number of ring arcs with tap-to-open preserved.
+- the WFF face maps complication slots 1–2 to the first two rings with tap-to-open preserved
+  (custom ring-arc drawables pending OpenPencil export).
 
 Acceptance:
 
@@ -1540,6 +1542,16 @@ schema version 4 validates and sanitized fixtures are updated
 watch face and Wear app show only configured rings
 disabling a provider or ring on the phone removes it from the watch after the next sync
 ambient mode stays readable with rings visible
+```
+
+Landed so far:
+
+```text
+schema version 4 + sanitized watch fixture
+phone Watch display prefs, payload rings, and Settings UI
+Wear home/detail + store codec for rings
+WFF labels/complications consume the first two rings
+design/ ownership briefs for Wear and WFF
 ```
 
 ---
@@ -1682,10 +1694,10 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Start Phase 13 (configurable watch rings, starting in OpenPencil): percentage-first rings for
-watch and watch-face surfaces so compact UI never shows `Unknown` filler. Phase 9–12 Settings
-grouping, capability-adaptive dashboard, refresh cadence, and Anthropic/Cursor adapters are in
-place; headless background polling stays open from Phase 11.
+Finish Phase 13: author OpenPencil 1–4 ring layouts under `apps/wear_android/design/` and
+`apps/watchface_wff/design/`, export ring-arc runtime assets, and polish Wear/WFF visuals to
+match. Schema v4, phone Watch display selection, and ring payload plumbing are in place;
+headless background polling stays open from Phase 11.
 
 Then continue with later watch and polish work as listed below.
 

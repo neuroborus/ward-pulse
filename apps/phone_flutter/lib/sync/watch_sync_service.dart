@@ -4,11 +4,13 @@ import 'package:flutter/services.dart';
 
 import '../dashboard/dashboard_models.dart';
 import '../settings/consumption_display_preferences.dart';
+import '../settings/watch_ring_preferences.dart';
 
 abstract interface class WatchSyncService {
   Future<void> sync(
     DashboardSnapshot snapshot,
     ConsumptionDisplayPreferences displayPreferences,
+    WatchRingPreferences ringPreferences,
   );
 }
 
@@ -21,12 +23,14 @@ class MethodChannelWatchSyncService implements WatchSyncService {
   Future<void> sync(
     DashboardSnapshot snapshot,
     ConsumptionDisplayPreferences displayPreferences,
+    WatchRingPreferences ringPreferences,
   ) {
     return _channel.invokeMethod<void>(
       'syncWatchSummary',
       WatchDashboardSummaryPayload.fromSnapshot(
         snapshot,
         displayPreferences,
+        ringPreferences,
       ).encode(),
     );
   }
@@ -40,9 +44,11 @@ class WatchDashboardSummaryPayload {
   factory WatchDashboardSummaryPayload.fromSnapshot(
     DashboardSnapshot snapshot,
     ConsumptionDisplayPreferences displayPreferences,
+    WatchRingPreferences ringPreferences,
   ) {
+    final rings = resolveWatchRings(snapshot, ringPreferences);
     return WatchDashboardSummaryPayload._({
-      'schemaVersion': 3,
+      'schemaVersion': 4,
       'dataMode':
           snapshot.accounts.isNotEmpty &&
                   snapshot.accounts.every(
@@ -52,6 +58,15 @@ class WatchDashboardSummaryPayload {
               : 'live',
       'generatedAt': snapshot.generatedAt.toUtc().toIso8601String(),
       'overallStatus': snapshot.overallStatus.wireName,
+      'rings': [
+        for (final ring in rings)
+          {
+            'id': ring.id,
+            'label': ring.label,
+            'usedPercent': ring.usedPercent,
+            'status': ring.status.wireName,
+          },
+      ],
       'today': _budgetToJson(snapshot.todayTotal),
       'week': _budgetToJson(snapshot.weekTotal),
       'allowances': [

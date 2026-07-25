@@ -10,6 +10,7 @@ import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
+import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/settings/debug_data_preferences.dart';
 import 'package:ward_pulse_phone/settings/refresh_interval_preferences.dart';
 import 'package:ward_pulse_phone/sync/poll_cadence.dart';
@@ -170,9 +171,13 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Not set'), findsWidgets);
-    await tester.ensureVisible(find.text('Platform reporting'));
+    await tester.scrollUntilVisible(
+      find.text('Platform reporting'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
+    expect(find.text('Not set'), findsWidgets);
     await tester.tap(find.text('Platform reporting'));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -214,10 +219,20 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.text('OpenAI'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('OpenAI'), findsOneWidget);
     expect(find.text('Codex subscription'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Platform reporting'));
+    await tester.scrollUntilVisible(
+      find.text('Platform reporting'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Platform reporting'));
     await tester.pumpAndSettle();
@@ -307,10 +322,14 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.text('Platform reporting'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('Platform reporting'), findsOneWidget);
     expect(find.text('••••••••'), findsOneWidget);
-    await tester.ensureVisible(find.text('Platform reporting'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('Platform reporting'));
     await tester.pumpAndSettle();
     expect(find.text('Remove'), findsOneWidget);
@@ -498,6 +517,12 @@ void main() {
     await tester.pumpAndSettle();
 
     final toggle = find.widgetWithText(SwitchListTile, 'Mock data');
+    await tester.scrollUntilVisible(
+      toggle,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
 
     await tester.tap(toggle);
@@ -537,6 +562,7 @@ class _FakeWatchSyncService implements WatchSyncService {
   Future<void> sync(
     DashboardSnapshot snapshot,
     ConsumptionDisplayPreferences displayPreferences,
+    WatchRingPreferences ringPreferences,
   ) async {
     syncedSnapshots.add(snapshot);
   }
@@ -549,6 +575,7 @@ class _FailingWatchSyncService implements WatchSyncService {
   Future<void> sync(
     DashboardSnapshot snapshot,
     ConsumptionDisplayPreferences displayPreferences,
+    WatchRingPreferences ringPreferences,
   ) {
     return Future.error(StateError('Watch unavailable'));
   }

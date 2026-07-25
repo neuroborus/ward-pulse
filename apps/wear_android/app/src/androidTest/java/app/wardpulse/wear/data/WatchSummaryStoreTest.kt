@@ -46,7 +46,7 @@ class WatchSummaryStoreTest {
         val encoded = testContext.assets.open("watch_dashboard_summary.json")
             .bufferedReader()
             .use { it.readText() }
-            .replace("\"schemaVersion\": 3,", "\"schemaVersion\": 2,")
+            .replace("\"schemaVersion\": 4,", "\"schemaVersion\": 2,")
             .replace("  \"dataMode\": \"mock\",\n", "")
 
         assertFalse(store.saveEncoded(encoded))
@@ -71,7 +71,7 @@ class WatchSummaryStoreTest {
     fun invalidSummaryKeepsPreviousState() {
         store.save(PreviewWatchDashboardSummary.value)
 
-        assertFalse(store.saveEncoded("{\"schemaVersion\":3}"))
+        assertFalse(store.saveEncoded("{\"schemaVersion\":3,\"rings\":[]}"))
         assertEquals(PreviewWatchDashboardSummary.value, store.load())
     }
 

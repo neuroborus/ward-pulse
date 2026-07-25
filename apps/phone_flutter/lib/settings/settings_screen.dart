@@ -14,6 +14,7 @@ import '../sync/poll_cadence.dart';
 import '../sync/watch_sync_service.dart';
 import 'consumption_display_preferences.dart';
 import 'refresh_interval_preferences.dart';
+import 'watch_ring_preferences.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
@@ -26,6 +27,8 @@ class SettingsScreen extends StatefulWidget {
     required this.onDisplayPreferencesChanged,
     required this.refreshInterval,
     required this.onRefreshIntervalChanged,
+    required this.ringPreferences,
+    required this.onRingPreferencesChanged,
     required this.debugDataAvailable,
     required this.mockDataEnabled,
     required this.onMockDataEnabledChanged,
@@ -42,6 +45,9 @@ class SettingsScreen extends StatefulWidget {
   final RefreshIntervalPreference refreshInterval;
   final Future<void> Function(RefreshIntervalPreference value)
   onRefreshIntervalChanged;
+  final WatchRingPreferences ringPreferences;
+  final Future<void> Function(WatchRingPreferences value)
+  onRingPreferencesChanged;
   final bool debugDataAvailable;
   final bool mockDataEnabled;
   final Future<void> Function(bool value) onMockDataEnabledChanged;
@@ -259,7 +265,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     try {
-      await widget.watchSyncService.sync(snapshot, widget.displayPreferences);
+      await widget.watchSyncService.sync(
+        snapshot,
+        widget.displayPreferences,
+        widget.ringPreferences,
+      );
       if (mounted) {
         setState(() {
           _syncResult = 'Watch summary queued';
@@ -324,6 +334,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       }
     }
+  }
+
+  Future<void> _toggleRing(WatchRingMetric metric, bool selected) async {
+    if (!metric.isAvailable) {
+      return;
+    }
+    final snapshot = widget.snapshot;
+    final ids = [
+      if (snapshot != null)
+        for (final ring in resolveWatchRings(snapshot, widget.ringPreferences))
+          ring.id
+      else
+        ...widget.ringPreferences.clampedIds,
+    ];
+    if (selected) {
+      if (ids.contains(metric.id) || ids.length >= watchRingSlotCount) {
+        return;
+      }
+      ids.add(metric.id);
+    } else {
+      ids.remove(metric.id);
+    }
+    try {
+      await widget.onRingPreferencesChanged(
+        WatchRingPreferences(selectedIds: ids),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not update watch display')),
+        );
+      }
+    }
+  }
+
+  List<String> get _effectiveRingIds {
+    final snapshot = widget.snapshot;
+    if (snapshot == null) {
+      return widget.ringPreferences.clampedIds;
+    }
+    return [
+      for (final ring in resolveWatchRings(snapshot, widget.ringPreferences))
+        ring.id,
+    ];
   }
 
   Widget _connectionRow(ProviderConnection connection) {
@@ -461,6 +515,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         const SizedBox(height: 16),
+        Card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const ListTile(
+                leading: Icon(Icons.watch_outlined),
+                title: Text('Watch display'),
+                subtitle: Text(
+                  'Up to $watchRingSlotCount percent rings · unavailable '
+                  'metrics stay off the watch',
+                ),
+              ),
+              for (final metric in watchRingCatalog(widget.snapshot)) ...[
+                const Divider(height: 1),
+                _WatchRingTile(
+                  metric: metric,
+                  selected: _effectiveRingIds.contains(metric.id),
+                  atCapacity: _effectiveRingIds.length >= watchRingSlotCount,
+                  onChanged: (value) => _toggleRing(metric, value),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
         if (widget.debugDataAvailable) ...[
           Card(
             child: SwitchListTile(
@@ -538,6 +617,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _WatchRingTile extends StatelessWidget {
+  const _WatchRingTile({
+    required this.metric,
+    required this.selected,
+    required this.atCapacity,
+    required this.onChanged,
+  });
+
+  final WatchRingMetric metric;
+  final bool selected;
+  final bool atCapacity;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final canToggle = metric.isAvailable && (selected || !atCapacity);
+    final reason = metric.unavailableReason;
+    return CheckboxListTile(
+      secondary:
+          reason == null
+              ? const Icon(Icons.data_usage_outlined)
+              : Tooltip(message: reason, child: const Icon(Icons.help_outline)),
+      title: Text(metric.label),
+      subtitle: Text(
+        reason ?? '${metric.usedPercent!.round()}% · ${metric.status.label}',
+      ),
+      value: selected,
+      onChanged: canToggle ? (value) => onChanged(value ?? false) : null,
     );
   }
 }

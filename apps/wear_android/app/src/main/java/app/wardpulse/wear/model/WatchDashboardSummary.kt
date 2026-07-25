@@ -68,6 +68,13 @@ data class Quantity(
         get() = "$value $unit"
 }
 
+data class RingSummary(
+    val id: String,
+    val label: String,
+    val usedPercent: Double,
+    val status: PulseStatus,
+)
+
 data class AllowanceSummary(
     val source: String,
     val label: String,
@@ -104,6 +111,7 @@ data class WatchDashboardSummary(
     val dataMode: WatchDataMode,
     val generatedAt: String,
     val overallStatus: PulseStatus,
+    val rings: List<RingSummary>,
     val today: PeriodSummary,
     val week: PeriodSummary,
     val allowances: List<AllowanceSummary>,
@@ -140,10 +148,15 @@ data class WatchDashboardSummary(
 
 object PreviewWatchDashboardSummary {
     val value = WatchDashboardSummary(
-        schemaVersion = 3,
+        schemaVersion = 4,
         dataMode = WatchDataMode.MOCK,
         generatedAt = "2026-06-27T18:42:00Z",
         overallStatus = PulseStatus.OK,
+        rings = listOf(
+            RingSummary("budget.today", "Today", 24.8, PulseStatus.OK),
+            RingSummary("budget.week", "Week", 28.52, PulseStatus.OK),
+            RingSummary("budget.month", "Month", 26.5125, PulseStatus.OK),
+        ),
         today = PeriodSummary(
             period = "today",
             spent = Money(1_240, "USD"),

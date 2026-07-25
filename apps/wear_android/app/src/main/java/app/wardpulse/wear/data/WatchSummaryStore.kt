@@ -9,6 +9,7 @@ import app.wardpulse.wear.model.AllowanceSummary
 import app.wardpulse.wear.model.Money
 import app.wardpulse.wear.model.PeriodSummary
 import app.wardpulse.wear.model.ProviderSummary
+import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.Quantity
 import app.wardpulse.wear.model.WatchDashboardSummary
@@ -87,12 +88,20 @@ private fun WatchDashboardSummary.toJson() = JSONObject().apply {
     put("dataMode", dataMode.wireName)
     put("generatedAt", generatedAt)
     put("overallStatus", overallStatus.wireName)
+    put("rings", JSONArray().apply { rings.forEach { put(it.toJson()) } })
     put("today", today.toJson())
     put("week", week.toJson())
     put("allowances", JSONArray().apply { allowances.forEach { put(it.toJson()) } })
     put("providers", JSONArray().apply { providers.forEach { put(it.toJson()) } })
     put("alerts", JSONArray().apply { alerts.forEach { put(it.toJson()) } })
     put("isStale", isStale)
+}
+
+private fun RingSummary.toJson() = JSONObject().apply {
+    put("id", id)
+    put("label", label)
+    put("usedPercent", usedPercent)
+    put("status", status.wireName)
 }
 
 private fun PeriodSummary.toJson() = JSONObject().apply {
@@ -149,12 +158,27 @@ private fun JSONObject.toWatchDashboardSummary(): WatchDashboardSummary {
         dataMode = requireNotNull(WatchDataMode.fromWireName(getString("dataMode"))),
         generatedAt = generatedAt,
         overallStatus = getString("overallStatus").toPulseStatus(),
+        rings = getJSONArray("rings").mapObjects { it.toRingSummary() }
+            .take(MAX_RINGS),
         today = today,
         week = week,
         allowances = getJSONArray("allowances").mapObjects { it.toAllowanceSummary() },
         providers = getJSONArray("providers").mapObjects { it.toProviderSummary() },
         alerts = getJSONArray("alerts").mapObjects { it.toAlertSummary() },
         isStale = getBoolean("isStale"),
+    )
+}
+
+private fun JSONObject.toRingSummary(): RingSummary {
+    val id = getString("id")
+    require(id.isNotEmpty())
+    val usedPercent = getDouble("usedPercent")
+    require(usedPercent >= 0.0)
+    return RingSummary(
+        id = id,
+        label = getString("label").also { require(it.isNotEmpty()) },
+        usedPercent = usedPercent,
+        status = getString("status").toPulseStatus(),
     )
 }
 
@@ -231,7 +255,8 @@ private inline fun <T> JSONArray.mapObjects(transform: (JSONObject) -> T): List<
 
 private fun String.toPulseStatus(): PulseStatus = requireNotNull(PulseStatus.fromWireName(this))
 
-private const val SCHEMA_VERSION = 3
+private const val SCHEMA_VERSION = 4
+private const val MAX_RINGS = 4
 private val CURRENCY_PATTERN = Regex("^[A-Z]{3}$")
 private val PROVIDERS = setOf("openai", "codex", "claude", "cursor", "mock")
 private val ALLOWANCE_SOURCES = setOf("plan", "purchased")

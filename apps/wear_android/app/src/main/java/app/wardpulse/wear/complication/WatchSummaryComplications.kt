@@ -75,9 +75,11 @@ class StatusComplicationDataSourceService : WatchSummaryComplicationDataSourceSe
 }
 
 object WatchComplicationText {
-    fun today(summary: WatchDashboardSummary): String = summary.today.usedPercent.percentLabel()
+    fun today(summary: WatchDashboardSummary): String =
+        summary.rings.getOrNull(0)?.usedPercent.percentLabel()
 
-    fun week(summary: WatchDashboardSummary): String = summary.week.usedPercent.percentLabel()
+    fun week(summary: WatchDashboardSummary): String =
+        summary.rings.getOrNull(1)?.usedPercent.percentLabel()
 
     fun status(summary: WatchDashboardSummary): String {
         val source = when (summary.providers.size) {

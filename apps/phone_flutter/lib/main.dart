@@ -12,6 +12,7 @@ import 'providers/provider_credential_store.dart';
 import 'settings/consumption_display_preferences.dart';
 import 'settings/debug_data_preferences.dart';
 import 'settings/refresh_interval_preferences.dart';
+import 'settings/watch_ring_preferences.dart';
 import 'sync/provider_sync_scheduler.dart';
 
 void main() {
@@ -36,6 +37,7 @@ void main() {
       codexAccountService: codexAccountService,
       displayPreferenceStore: SecureConsumptionDisplayPreferenceStore(),
       refreshIntervalStore: SecureRefreshIntervalPreferenceStore(),
+      watchRingPreferenceStore: SecureWatchRingPreferenceStore(),
       syncScheduler: TimerProviderSyncScheduler(),
       debugDataAvailable: kDebugMode,
       debugDataPreferenceStore: debugDataPreferenceStore,

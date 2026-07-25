@@ -13,6 +13,7 @@ import '../settings/settings_screen.dart';
 import '../settings/consumption_display_preferences.dart';
 import '../settings/debug_data_preferences.dart';
 import '../settings/refresh_interval_preferences.dart';
+import '../settings/watch_ring_preferences.dart';
 import '../sync/provider_sync_scheduler.dart';
 import '../sync/watch_sync_service.dart';
 import 'ward_pulse_theme.dart';
@@ -27,6 +28,7 @@ class WardPulseApp extends StatelessWidget {
     this.displayPreferenceStore =
         const DefaultConsumptionDisplayPreferenceStore(),
     this.refreshIntervalStore = const DefaultRefreshIntervalPreferenceStore(),
+    this.watchRingPreferenceStore = const DefaultWatchRingPreferenceStore(),
     this.syncScheduler = const DisabledProviderSyncScheduler(),
     this.debugDataAvailable = false,
     this.debugDataPreferenceStore = const DisabledDebugDataPreferenceStore(),
@@ -38,6 +40,7 @@ class WardPulseApp extends StatelessWidget {
   final CodexAccountService codexAccountService;
   final ConsumptionDisplayPreferenceStore displayPreferenceStore;
   final RefreshIntervalPreferenceStore refreshIntervalStore;
+  final WatchRingPreferenceStore watchRingPreferenceStore;
   final ProviderSyncScheduler syncScheduler;
   final bool debugDataAvailable;
   final DebugDataPreferenceStore debugDataPreferenceStore;
@@ -56,6 +59,7 @@ class WardPulseApp extends StatelessWidget {
         codexAccountService: codexAccountService,
         displayPreferenceStore: displayPreferenceStore,
         refreshIntervalStore: refreshIntervalStore,
+        watchRingPreferenceStore: watchRingPreferenceStore,
         syncScheduler: syncScheduler,
         debugDataAvailable: debugDataAvailable,
         debugDataPreferenceStore: debugDataPreferenceStore,
@@ -73,6 +77,7 @@ class DashboardHost extends StatefulWidget {
     required this.codexAccountService,
     required this.displayPreferenceStore,
     required this.refreshIntervalStore,
+    required this.watchRingPreferenceStore,
     required this.syncScheduler,
     required this.debugDataAvailable,
     required this.debugDataPreferenceStore,
@@ -84,6 +89,7 @@ class DashboardHost extends StatefulWidget {
   final CodexAccountService codexAccountService;
   final ConsumptionDisplayPreferenceStore displayPreferenceStore;
   final RefreshIntervalPreferenceStore refreshIntervalStore;
+  final WatchRingPreferenceStore watchRingPreferenceStore;
   final ProviderSyncScheduler syncScheduler;
   final bool debugDataAvailable;
   final DebugDataPreferenceStore debugDataPreferenceStore;
@@ -108,6 +114,7 @@ class _DashboardHostState extends State<DashboardHost> {
       const ConsumptionDisplayPreferences();
   RefreshIntervalPreference _refreshInterval =
       const RefreshIntervalPreference();
+  WatchRingPreferences _ringPreferences = const WatchRingPreferences();
   Map<String, String> _platformLabels = const {};
   bool _mockDataEnabled = false;
   int _selectedIndex = 0;
@@ -143,6 +150,14 @@ class _DashboardHostState extends State<DashboardHost> {
       _refreshInterval = await widget.refreshIntervalStore.read();
     } catch (_) {
       _refreshInterval = const RefreshIntervalPreference();
+    }
+  }
+
+  Future<void> _readRingPreferences() async {
+    try {
+      _ringPreferences = await widget.watchRingPreferenceStore.read();
+    } catch (_) {
+      _ringPreferences = const WatchRingPreferences();
     }
   }
 
@@ -199,9 +214,23 @@ class _DashboardHostState extends State<DashboardHost> {
     await widget.syncScheduler.schedule(value.interval);
   }
 
+  Future<void> _updateRingPreferences(WatchRingPreferences value) async {
+    await widget.watchRingPreferenceStore.write(value);
+    if (mounted) {
+      setState(() {
+        _ringPreferences = value;
+      });
+    }
+    final snapshot = _currentSnapshot;
+    if (snapshot != null) {
+      unawaited(_syncWatch(snapshot));
+    }
+  }
+
   Future<DashboardSnapshot> _loadSnapshot() async {
     await _readDisplayPreferences();
     await _readRefreshInterval();
+    await _readRingPreferences();
     await _readConnectionMetadata();
     await _readDebugDataPreference();
     // Rescheduling before the load keeps the next tick a full interval away, so
@@ -251,7 +280,11 @@ class _DashboardHostState extends State<DashboardHost> {
 
   Future<void> _syncWatch(DashboardSnapshot snapshot) async {
     try {
-      await widget.watchSyncService.sync(snapshot, _displayPreferences);
+      await widget.watchSyncService.sync(
+        snapshot,
+        _displayPreferences,
+        _ringPreferences,
+      );
     } catch (_) {
       // Watch availability must not block the phone dashboard.
     }
@@ -307,6 +340,8 @@ class _DashboardHostState extends State<DashboardHost> {
                 onDisplayPreferencesChanged: _updateDisplayPreferences,
                 refreshInterval: _refreshInterval,
                 onRefreshIntervalChanged: _updateRefreshInterval,
+                ringPreferences: _ringPreferences,
+                onRingPreferencesChanged: _updateRingPreferences,
                 debugDataAvailable: widget.debugDataAvailable,
                 mockDataEnabled: _mockDataEnabled,
                 onMockDataEnabledChanged: _updateMockDataEnabled,
