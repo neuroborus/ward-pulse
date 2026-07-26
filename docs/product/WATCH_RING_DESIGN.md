@@ -24,8 +24,11 @@ invent `Unknown` filler. Strip secondary values are credits — never LLM `TOK` 
 2. **Arc = remaining** — the colored sweep is `(100 - usedPercent)`. As the limit is consumed, the
    arc shrinks. Do not grow a “used” fill toward a full circle.
 3. **Center / inner = tightest remaining** — among selected, available, non-exhausted metrics,
-   sort by remaining ascending (equivalently highest `usedPercent` first). Payload index 0 is
-   the critical limit: innermost ring and the strip nearest the center. Outer rings are looser.
+   sort by plan remaining ascending (equivalently highest `usedPercent` first). When plan
+   percents tie, secondary sort uses estimated remaining **request-equivalents** from that
+   provider’s purchased credits (`credits /` internal credits-per-request constants — sort only,
+   never shown as requests). Strips still show credits only. Payload index 0 is the critical
+   limit: innermost ring and the strip nearest the center. Outer rings are looser.
 4. **Omit exhausted** — `usedPercent >= 100` (or empty/unavailable) does not render.
 5. **Max four** — phone **Watchface** tab chooses slots (transitional UI may still live under
    Settings “Watch display” until Phase 14 nav lands); payload carries only the resolved

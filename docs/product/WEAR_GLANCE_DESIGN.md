@@ -42,7 +42,9 @@ map face colors to providers.
 Rules:
 
 - One row = one selected ring metric from the watch summary (same set as the face).
-- Row order = **tightest remaining first** (highest `usedPercent` first), matching the face.
+- Row order = **tightest remaining first** (highest `usedPercent` first; equal percents break
+  ties by credit request-runway from internal costs — credits shown, not request counts),
+  matching the face.
 - Mini arc = **remaining** (`100 - usedPercent`), family color from the face palette.
 - Primary line: family/provider + metric label; same wording for the same window kind
   (Codex and Cursor both `Weekly plan`). Claude’s subscription plan windows
@@ -140,7 +142,7 @@ Wear only: `apps/wear_android/design/`. OpenPencil `.fig` inventory optional.
 
 ```text
 text legend + mini remaining arcs (not a face clone)
-row order = tightest remaining first
+row order = tightest remaining first (plan %; credit runway tie-break)
 per-provider credits with explicit credits label (no footer sum)
 OK / !OK inside dual-arrow refresh glyph; same label font size
 optional muted problem detail below the plate (never on the ring)

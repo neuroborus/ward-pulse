@@ -81,6 +81,7 @@ class WatchDashboardSummaryPayload {
   }) {
     final rings = orderWatchRingsForSurface(
       resolveWatchRings(snapshot, ringPreferences),
+      snapshot: snapshot,
     );
     final creditsGlance = resolveWatchCreditsGlance(
       snapshot,

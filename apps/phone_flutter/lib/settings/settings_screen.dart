@@ -1370,6 +1370,7 @@ String _watchSummarySubtitle(
 ) {
   final rings = orderWatchRingsForSurface(
     resolveWatchRings(snapshot, ringPreferences),
+    snapshot: snapshot,
   );
   if (rings.isEmpty) {
     return 'No rings selected';

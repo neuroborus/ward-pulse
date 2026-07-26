@@ -40,7 +40,8 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   (+ watch→phone refresh message).
 - **Watch face / WFF** (and any face-like complication preview) follow
   `docs/product/WATCH_RING_DESIGN.md` (**locked 2026-07-25**): **inner/center = tightest**
-  remaining; arc = remaining; large time hero; sunk family strips (equal width; first strip
+  remaining (plan `%` primary; credit request-runway secondary from internal costs — never show
+  request counts); arc = remaining; large time hero; sunk family strips (equal width; first strip
   nearest center; stroke tuned so 3 strips clear arcs); family colors. Future multi-profile /
   hatch / three-ring cap notes there are planning-only until a later phase.
 - Claude plan windows (`5h` / weekly / Opus / Sonnet) collapse to one watch ring on the phone

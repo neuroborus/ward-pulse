@@ -78,6 +78,94 @@ void main() {
     ]);
   });
 
+  test('equal plan percent prefers lower credit request runway', () {
+    final dash = _twoPlanProvidersSnapshot(
+      codexUsed: 40,
+      claudeUsed: 40,
+      codexCredits: 3,
+      claudeCredits: 12,
+    );
+    final rings = orderWatchRingsForSurface(
+      [
+        const WatchRingMetric(
+          id: 'allowance.claude.plan',
+          label: 'Weekly',
+          usedPercent: 40,
+          status: ProviderStatus.ok,
+        ),
+        const WatchRingMetric(
+          id: 'allowance.codex.codex-weekly',
+          label: 'Weekly plan',
+          usedPercent: 40,
+          status: ProviderStatus.ok,
+        ),
+      ],
+      snapshot: dash,
+    );
+
+    expect(rings.map((ring) => ring.id), [
+      'allowance.codex.codex-weekly',
+      'allowance.claude.plan',
+    ]);
+  });
+
+  test('unlimited credits do not win secondary tightness over finite runway', () {
+    final dash = _twoPlanProvidersSnapshot(
+      codexUsed: 50,
+      claudeUsed: 50,
+      codexCredits: 4,
+      claudeUnlimitedPurchased: true,
+    );
+    final rings = orderWatchRingsForSurface(
+      [
+        const WatchRingMetric(
+          id: 'allowance.claude.plan',
+          label: 'Weekly',
+          usedPercent: 50,
+          status: ProviderStatus.ok,
+        ),
+        const WatchRingMetric(
+          id: 'allowance.codex.codex-weekly',
+          label: 'Weekly plan',
+          usedPercent: 50,
+          status: ProviderStatus.ok,
+        ),
+      ],
+      snapshot: dash,
+    );
+
+    expect(rings.first.id, 'allowance.codex.codex-weekly');
+  });
+
+  test('missing credits on both sides falls through to stable ring id', () {
+    final dash = _twoPlanProvidersSnapshot(
+      codexUsed: 50,
+      claudeUsed: 50,
+    );
+    final rings = orderWatchRingsForSurface(
+      [
+        const WatchRingMetric(
+          id: 'allowance.claude.plan',
+          label: 'Weekly',
+          usedPercent: 50,
+          status: ProviderStatus.ok,
+        ),
+        const WatchRingMetric(
+          id: 'allowance.codex.codex-weekly',
+          label: 'Weekly plan',
+          usedPercent: 50,
+          status: ProviderStatus.ok,
+        ),
+      ],
+      snapshot: dash,
+    );
+
+    expect(rings.map((ring) => ring.id), [
+      'allowance.claude.plan',
+      'allowance.codex.codex-weekly',
+    ]);
+  });
+
   group('Claude plan collapse', () {
     test('catalog exposes one Claude plan slot for multiple windows', () {
       final dash = _claudeCodexSnapshot(
@@ -171,6 +259,7 @@ void main() {
             ],
           ),
         ),
+        snapshot: dash,
       );
 
       expect(rings.map((r) => r.id), [
@@ -190,38 +279,17 @@ DashboardSnapshot _claudeCodexSnapshot({
   final source = DashboardSnapshot.fromJsonString(
     File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
   );
-  Map<String, dynamic> allowance({
-    required String id,
-    required String label,
-    required double usedPercent,
-    required int windowMinutes,
-  }) {
-    return {
-      'id': id,
-      'source': 'plan',
-      'label': label,
-      'usedPercent': usedPercent,
-      'used': null,
-      'limit': null,
-      'remaining': null,
-      'unlimited': false,
-      'windowMinutes': windowMinutes,
-      'resetsAt': null,
-      'status': 'ok',
-    };
-  }
-
   final claude = source.primaryAccount!.toJson()
     ..['accountId'] = 'claude-local'
     ..['provider'] = 'claude'
     ..['allowances'] = [
-      allowance(
+      _planAllowance(
         id: 'claude-five-hour',
         label: '5-hour session',
         usedPercent: fiveHourUsed,
         windowMinutes: 300,
       ),
-      allowance(
+      _planAllowance(
         id: 'claude-seven-day',
         label: 'Weekly plan',
         usedPercent: sevenDayUsed,
@@ -234,7 +302,7 @@ DashboardSnapshot _claudeCodexSnapshot({
     ..['accountId'] = 'codex-local'
     ..['provider'] = 'codex'
     ..['allowances'] = [
-      allowance(
+      _planAllowance(
         id: 'codex-weekly',
         label: 'Weekly plan',
         usedPercent: codexUsed,
@@ -247,4 +315,100 @@ DashboardSnapshot _claudeCodexSnapshot({
   return DashboardSnapshot.fromJson(
     source.toJson()..['accounts'] = [claude, codex],
   );
+}
+
+DashboardSnapshot _twoPlanProvidersSnapshot({
+  required double codexUsed,
+  required double claudeUsed,
+  double? codexCredits,
+  double? claudeCredits,
+  bool claudeUnlimitedPurchased = false,
+}) {
+  final source = DashboardSnapshot.fromJsonString(
+    File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+  );
+  final claudeAllowances = <Map<String, dynamic>>[
+    _planAllowance(
+      id: 'claude-seven-day',
+      label: 'Weekly plan',
+      usedPercent: claudeUsed,
+      windowMinutes: 10080,
+    ),
+  ];
+  if (claudeUnlimitedPurchased) {
+    claudeAllowances.add(_purchasedAllowance(unlimited: true));
+  } else if (claudeCredits != null) {
+    claudeAllowances.add(_purchasedAllowance(remaining: claudeCredits));
+  }
+  final codexAllowances = <Map<String, dynamic>>[
+    _planAllowance(
+      id: 'codex-weekly',
+      label: 'Weekly plan',
+      usedPercent: codexUsed,
+      windowMinutes: 10080,
+    ),
+  ];
+  if (codexCredits != null) {
+    codexAllowances.add(_purchasedAllowance(remaining: codexCredits));
+  }
+
+  final claude = source.primaryAccount!.toJson()
+    ..['accountId'] = 'claude-local'
+    ..['provider'] = 'claude'
+    ..['allowances'] = claudeAllowances
+    ..['buckets'] = <Object>[]
+    ..['modelBreakdown'] = <Object>[];
+  final codex = source.primaryAccount!.toJson()
+    ..['accountId'] = 'codex-local'
+    ..['provider'] = 'codex'
+    ..['allowances'] = codexAllowances
+    ..['buckets'] = <Object>[]
+    ..['modelBreakdown'] = <Object>[];
+
+  return DashboardSnapshot.fromJson(
+    source.toJson()..['accounts'] = [claude, codex],
+  );
+}
+
+Map<String, dynamic> _planAllowance({
+  required String id,
+  required String label,
+  required double usedPercent,
+  required int windowMinutes,
+}) {
+  return {
+    'id': id,
+    'source': 'plan',
+    'label': label,
+    'usedPercent': usedPercent,
+    'used': null,
+    'limit': null,
+    'remaining': null,
+    'unlimited': false,
+    'windowMinutes': windowMinutes,
+    'resetsAt': null,
+    'status': 'ok',
+  };
+}
+
+Map<String, dynamic> _purchasedAllowance({
+  double? remaining,
+  bool unlimited = false,
+}) {
+  return {
+    'id': 'purchased-credits',
+    'source': 'purchased',
+    'label': 'Purchased credits',
+    'usedPercent': null,
+    'used': null,
+    'limit': null,
+    'remaining':
+        remaining == null
+            ? null
+            : {'value': remaining.toString(), 'unit': 'credits'},
+    'unlimited': unlimited,
+    'windowMinutes': null,
+    'resetsAt': null,
+    'status': 'ok',
+  };
 }

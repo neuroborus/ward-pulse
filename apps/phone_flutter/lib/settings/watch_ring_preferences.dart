@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../dashboard/dashboard_models.dart';
+import '../sync/credit_request_runway.dart';
 
 /// Maximum simultaneous rings on watch and watch-face surfaces.
 const watchRingSlotCount = 4;
@@ -251,17 +252,63 @@ List<WatchRingMetric> resolveWatchRings(
 ///
 /// Payload index 0 = critical limit. Face maps that to the **innermost** ring and the
 /// strip nearest the center; Glance keeps the same order top-first.
-List<WatchRingMetric> orderWatchRingsForSurface(List<WatchRingMetric> rings) {
+///
+/// Sort: plan `usedPercent` descending, then credit request-runway ascending
+/// (internal cost estimates; never shown as requests), then stable ring id.
+List<WatchRingMetric> orderWatchRingsForSurface(
+  List<WatchRingMetric> rings, {
+  DashboardSnapshot? snapshot,
+}) {
   final active = [
     for (final ring in rings)
       if ((ring.usedPercent ?? 0) < 100) ring,
   ];
+  final runways = <String, double?>{};
+  if (snapshot != null) {
+    for (final ring in active) {
+      final provider = _providerFromRingId(ring.id);
+      if (provider == null) {
+        continue;
+      }
+      runways.putIfAbsent(
+        provider,
+        () => creditRequestRunwayForProvider(snapshot, provider),
+      );
+    }
+  }
   active.sort((a, b) {
-    final usedA = a.usedPercent ?? 0;
-    final usedB = b.usedPercent ?? 0;
-    return usedB.compareTo(usedA);
+    final usedCmp = (b.usedPercent ?? 0).compareTo(a.usedPercent ?? 0);
+    if (usedCmp != 0) {
+      return usedCmp;
+    }
+    final providerA = _providerFromRingId(a.id);
+    final providerB = _providerFromRingId(b.id);
+    final runwayA = providerA == null ? null : runways[providerA];
+    final runwayB = providerB == null ? null : runways[providerB];
+    // Missing / unlimited → +∞ (no secondary tightness pressure).
+    if (runwayA != null || runwayB != null) {
+      final runwayCmp = (runwayA ?? double.infinity).compareTo(
+        runwayB ?? double.infinity,
+      );
+      if (runwayCmp != 0) {
+        return runwayCmp;
+      }
+    }
+    return a.id.compareTo(b.id);
   });
   return active.take(watchRingSlotCount).toList(growable: false);
+}
+
+/// Owning provider for `allowance.<provider>.…`, or null for budgets / unknown.
+String? _providerFromRingId(String ringId) {
+  if (!ringId.startsWith('allowance.')) {
+    return null;
+  }
+  final parts = ringId.split('.');
+  if (parts.length < 3) {
+    return null;
+  }
+  return parts[1];
 }
 
 WatchRingMetric _allowanceMetric(String provider, AllowanceState allowance) {
