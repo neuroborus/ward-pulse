@@ -28,14 +28,22 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 
 ## Wear OS App
 
-- Prefer concentric percent layers from schema v4+ (up to four selected metrics today); never
-  invent `Unknown` filler. Unselected, unavailable, or exhausted (`>= 100%`) layers do not render.
-- Follow the **2026-07-25 locked baseline** in `docs/product/WATCH_RING_DESIGN.md`: outer =
-  tightest remaining; arc = remaining; large time hero; sunk family strips (not bordered cards);
-  family colors (OpenAI/Codex green, Anthropic orange, Cursor teal, budget blue). Future
-  multi-profile / hatch / three-ring cap notes there are planning-only until a later phase.
-- Show optional remaining purchased credits on the outer strip / `creditsGlance` when reported
-  and Settings shows purchased usage (not a ring; never LLM `TOK`).
+- **App Glance (home page)** follows `docs/product/WEAR_GLANCE_DESIGN.md` (**locked 2026-07-26**):
+  text legend (not a face clone) — mini remaining arcs, tightest-first, per-provider credits.
+  Refresh: `OK`/`!OK` inside dual-arrow glyph; cadence = gray `OK`+disabled; provider limit =
+  gray `!OK`+`Rate limited`+disabled; `Stale` = orange `!OK`+enabled. `Alerts: N` when `N > 0`.
+  Review art: `preview-glance-legend-*.png`. Compose `GlancePage` rewrite pending (still
+  `UsageRings`).
+- **Watch face / WFF** (and any face-like complication preview) follow
+  `docs/product/WATCH_RING_DESIGN.md` (**locked 2026-07-25**): outer = tightest remaining; arc =
+  remaining; large time hero; sunk family strips; family colors. Future multi-profile / hatch /
+  three-ring cap notes there are planning-only until a later phase.
+- Prefer concentric percent layers from schema v4+ on the **face** (up to four selected metrics
+  today); never invent `Unknown` filler. Unselected, unavailable, or exhausted (`>= 100%`)
+  layers do not render.
+- Face outer strip / `creditsGlance` may show a compact remaining-credits aggregate when reported
+  and Settings shows purchased usage (not a ring; never LLM `TOK`). App Glance credits stay
+  **per provider** with an explicit `credits` label.
 - Keep today, week, usage, providers, alerts (active list only — no rule editing), and last sync
   as secondary detail screens.
 - Store and render the latest successful watch summary.

@@ -82,6 +82,13 @@ Review exports: `tools/render-watch-ring-designs.mjs` → `round-*-plan-credits.
 secondary value = remaining purchased credits, never LLM `TOK`). Primary preview:
 `apps/wear_android/design/preview-3-plan-credits.png`.
 
+Wear **app** Glance legend (**baseline locked 2026-07-26**, not the face):
+`tools/render-wear-glance-designs.mjs` → `glance-legend-*.svg` /
+`preview-glance-legend-*.png`. Primary preview:
+`apps/wear_android/design/preview-glance-legend-3.png`. Variants: `3`, `1`, `budget`,
+`stale`, `cadence`, `rate-limit`, `empty`, `exhausted`.
+See [`product/WEAR_GLANCE_DESIGN.md`](product/WEAR_GLANCE_DESIGN.md).
+
 Family colors are for metric identity, not buttons, nav, or filled chrome.
 **Exception:** the official app logo framing ring intentionally echoes those three families as a
 product metaphor. Do not spread that tri-color chrome into buttons, cards, or other UI.

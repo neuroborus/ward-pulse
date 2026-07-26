@@ -117,7 +117,7 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
 
 | Surface | Role |
 |---------|------|
-| Wear OS app | Compose remaining arcs + sunk strips; system time on the watch chrome |
+| Wear OS app Glance | **Not** this face language — locked text legend (`WEAR_GLANCE_DESIGN.md`, 2026-07-26) |
 | WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs plus sunk `SHORT_TEXT` strips (`%` / `% · credits`) in `watchface.xml`. Outer strip TEXT is the full label (WFF `length(TITLE)` Conditions are unreliable). Keep progress/track `endAngle` below 360° (scale remaining onto 359.9°) — a closed circle collapses to a ROUND tip at 12 o'clock. Strips need their own `BoundingBox` slots (`BoundingArc` clips content to the arc band). |
 | Phone Watchface tab | Slot selection + preview of next payload rings (not Settings) |
 
