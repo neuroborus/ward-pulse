@@ -26,21 +26,15 @@ class DashboardScreen extends StatelessWidget {
     }
 
     final caps = ConnectedCapabilities.fromAccounts(snapshot.accounts);
-    final hasMultipleAccounts = snapshot.accounts.length > 1;
     final allAllowances = snapshot.accounts
         .expand((account) => account.allowances)
         .toList(growable: false);
-    final allowanceSections = _providerAllowanceSections(
+    final providerSections = _providerDashboardSections(
       snapshot.accounts,
       displayPreferences,
     );
-    final historyAccount = _firstAccountWith(
-      snapshot.accounts,
-      (account) => account.buckets.isNotEmpty,
-    );
-    final modelAccount = _firstAccountWith(
-      snapshot.accounts,
-      (account) => account.modelBreakdown.isNotEmpty,
+    final hasVisibleAllowances = providerSections.any(
+      (section) => section.allowances.isNotEmpty,
     );
     final hasPurchasedAllowance = allAllowances.any(
       (allowance) => allowance.source == AllowanceSource.purchased,
@@ -56,59 +50,30 @@ class DashboardScreen extends StatelessWidget {
       children: [
         _SyncHeader(snapshot: snapshot),
         const SizedBox(height: 16),
-        if (caps.showAllowances) ...[
-          if (allowanceSections.isEmpty)
-            EmptyAllowanceCard(
-              availableSources:
-                  allAllowances.map((allowance) => allowance.source).toSet(),
-              purchasedSelectedWithoutData: showMissingPurchased,
-            )
-          else ...[
-            _ProviderAllowanceSections(sections: allowanceSections),
-            if (showMissingPurchased) ...[
-              const SizedBox(height: 12),
-              const MissingPurchasedUsageCard(),
-            ],
-          ],
+        if (caps.showAllowances && !hasVisibleAllowances) ...[
+          EmptyAllowanceCard(
+            availableSources:
+                allAllowances.map((allowance) => allowance.source).toSet(),
+            purchasedSelectedWithoutData: showMissingPurchased,
+          ),
           const SizedBox(height: 16),
-        ] else if (caps.showPlanGap) ...[
+        ],
+        if (providerSections.isNotEmpty) ...[
+          _ProviderDashboardSections(
+            sections: providerSections,
+            footer:
+                showMissingPurchased && hasVisibleAllowances
+                    ? const MissingPurchasedUsageCard()
+                    : null,
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (caps.showPlanGap) ...[
           _CapabilityGapRow(
             title: 'Plan usage',
             explanation:
                 'Connect a Codex subscription in Settings to see plan limits.',
             onOpenSettings: onOpenSettings,
-          ),
-          const SizedBox(height: 16),
-        ],
-        if (caps.showUsageHistory) ...[
-          UsageHistoryChart(
-            title:
-                hasMultipleAccounts && historyAccount != null
-                    ? '${historyAccount.providerLabel} usage history'
-                    : 'Usage history',
-            buckets: historyAccount?.buckets ?? const <UsageBucket>[],
-            accent:
-                historyAccount == null
-                    ? null
-                    : providerFamilyColor(historyAccount.provider),
-          ),
-          const SizedBox(height: 16),
-        ],
-        if (caps.showModelUsage) ...[
-          _SectionHeader(
-            title:
-                hasMultipleAccounts && modelAccount != null
-                    ? '${modelAccount.providerLabel} model usage'
-                    : 'Model usage',
-            trailing: snapshot.accountCountLabel,
-          ),
-          const SizedBox(height: 8),
-          _ModelUsagePanel(
-            models: modelAccount?.modelBreakdown ?? const <ModelUsage>[],
-            accent:
-                modelAccount == null
-                    ? null
-                    : providerFamilyColor(modelAccount.provider),
           ),
           const SizedBox(height: 16),
         ],
@@ -547,67 +512,82 @@ class _BudgetCards extends StatelessWidget {
   }
 }
 
-class _ProviderAllowanceGroup {
-  const _ProviderAllowanceGroup({
+class _ProviderDashboardSection {
+  const _ProviderDashboardSection({
     required this.account,
     required this.allowances,
   });
 
   final ProviderSnapshot account;
   final List<AllowanceState> allowances;
+
+  bool get showUsageHistory => account.buckets.isNotEmpty;
+
+  bool get showModelUsage => account.modelBreakdown.isNotEmpty;
 }
 
-/// Per-account allowance groups in snapshot order (not cross-provider sums).
-List<_ProviderAllowanceGroup> _providerAllowanceSections(
+/// Per-account dashboard groups in snapshot order (not cross-provider sums).
+///
+/// Each provider plaque owns its allowances, usage history, and model breakdown.
+List<_ProviderDashboardSection> _providerDashboardSections(
   List<ProviderSnapshot> accounts,
   ConsumptionDisplayPreferences displayPreferences,
 ) {
-  final sections = <_ProviderAllowanceGroup>[];
+  final sections = <_ProviderDashboardSection>[];
   for (final account in accounts) {
     final allowances =
         account.allowances
             .where((allowance) => displayPreferences.allows(allowance.source))
             .toList(growable: false);
-    if (allowances.isEmpty) {
+    final section = _ProviderDashboardSection(
+      account: account,
+      allowances: allowances,
+    );
+    if (allowances.isEmpty &&
+        !section.showUsageHistory &&
+        !section.showModelUsage) {
       continue;
     }
-    sections.add(
-      _ProviderAllowanceGroup(account: account, allowances: allowances),
-    );
+    sections.add(section);
   }
   return sections;
 }
 
-class _ProviderAllowanceSections extends StatelessWidget {
-  const _ProviderAllowanceSections({required this.sections});
+class _ProviderDashboardSections extends StatelessWidget {
+  const _ProviderDashboardSections({required this.sections, this.footer});
 
-  final List<_ProviderAllowanceGroup> sections;
+  final List<_ProviderDashboardSection> sections;
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (var i = 0; i < sections.length; i++) ...[
-          if (i > 0) const SizedBox(height: 20),
-          _ProviderAllowanceSection(group: sections[i]),
+        for (final (index, section) in sections.indexed) ...[
+          if (index > 0) const SizedBox(height: 20),
+          _ProviderDashboardSectionView(section: section),
+        ],
+        if (footer case final footer?) ...[
+          const SizedBox(height: 12),
+          footer,
         ],
       ],
     );
   }
 }
 
-class _ProviderAllowanceSection extends StatelessWidget {
-  const _ProviderAllowanceSection({required this.group});
+class _ProviderDashboardSectionView extends StatelessWidget {
+  const _ProviderDashboardSectionView({required this.section});
 
-  final _ProviderAllowanceGroup group;
+  final _ProviderDashboardSection section;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final accent = providerFamilyColor(group.account.provider);
+    final accent = providerFamilyColor(section.account.provider);
     final cards = [
-      for (final allowance in group.allowances)
+      for (final allowance in section.allowances)
         AllowanceSummaryCard(allowance: allowance, accent: accent),
     ];
 
@@ -627,59 +607,69 @@ class _ProviderAllowanceSection extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                group.account.providerLabel,
+                section.account.providerLabel,
                 style: textTheme.titleMedium,
               ),
             ),
-            StatusPill(status: group.account.status),
+            StatusPill(status: section.account.status),
           ],
         ),
-        const SizedBox(height: 12),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            if (constraints.maxWidth < 760) {
-              return Column(
+        if (cards.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 760) {
+                return Column(
+                  children: [
+                    for (final card in cards) ...[
+                      card,
+                      if (card != cards.last) const SizedBox(height: 12),
+                    ],
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   for (final card in cards) ...[
-                    card,
-                    if (card != cards.last) const SizedBox(height: 12),
+                    Expanded(child: card),
+                    if (card != cards.last) const SizedBox(width: 12),
                   ],
                 ],
               );
-            }
-
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final card in cards) ...[
-                  Expanded(child: card),
-                  if (card != cards.last) const SizedBox(width: 12),
-                ],
-              ],
-            );
-          },
-        ),
+            },
+          ),
+        ],
+        if (section.showUsageHistory) ...[
+          const SizedBox(height: 12),
+          UsageHistoryChart(
+            buckets: section.account.buckets,
+            accent: accent,
+          ),
+        ],
+        if (section.showModelUsage) ...[
+          const SizedBox(height: 12),
+          _SectionHeader(title: 'Model usage'),
+          const SizedBox(height: 8),
+          _ModelUsagePanel(
+            models: section.account.modelBreakdown,
+            accent: accent,
+          ),
+        ],
       ],
     );
   }
 }
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, this.trailing});
+  const _SectionHeader({required this.title});
 
   final String title;
-  final String? trailing;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(title, style: Theme.of(context).textTheme.titleMedium),
-        ),
-        if (trailing != null) Text(trailing!),
-      ],
-    );
+    return Text(title, style: Theme.of(context).textTheme.titleMedium);
   }
 }
 
@@ -829,18 +819,6 @@ class _EmptyAlertsCard extends StatelessWidget {
       ),
     );
   }
-}
-
-ProviderSnapshot? _firstAccountWith(
-  List<ProviderSnapshot> accounts,
-  bool Function(ProviderSnapshot account) matches,
-) {
-  for (final account in accounts) {
-    if (matches(account)) {
-      return account;
-    }
-  }
-  return null;
 }
 
 IconData _statusIcon(ProviderStatus status) {

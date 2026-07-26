@@ -41,10 +41,12 @@ void main() {
     );
     final openAi =
         source.primaryAccount!.toJson()
+          ..['accountId'] = 'openai-local'
           ..['provider'] = 'openai'
           ..['allowances'] = <Object>[];
     final codex =
         source.primaryAccount!.toJson()
+          ..['accountId'] = 'codex-local'
           ..['provider'] = 'codex'
           ..['allowances'] = [
             {
@@ -60,7 +62,9 @@ void main() {
               'resetsAt': null,
               'status': 'ok',
             },
-          ];
+          ]
+          ..['buckets'] = <Object>[]
+          ..['modelBreakdown'] = <Object>[];
     final dashboard = source.toJson()..['accounts'] = [openAi, codex];
 
     await tester.pumpWidget(
@@ -82,18 +86,19 @@ void main() {
     expect(find.text('Unlimited'), findsOneWidget);
     expect(find.text('Unknown'), findsNothing);
 
+    expect(find.text('OpenAI'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('OpenAI usage history'),
+      find.text('Usage history'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('OpenAI usage history'), findsOneWidget);
+    expect(find.text('Usage history'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('OpenAI model usage'),
+      find.text('Model usage'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('OpenAI model usage'), findsOneWidget);
+    expect(find.text('Model usage'), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.text('Platform spend'),
@@ -282,6 +287,65 @@ void main() {
     expect(find.text('Weekly plan'), findsNWidgets(2));
     expect(find.text('60% left'), findsOneWidget);
     expect(find.text('30% left'), findsOneWidget);
+  });
+
+  testWidgets('nests usage history under the owning provider plaque', (
+    tester,
+  ) async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final claude = source.primaryAccount!.toJson()
+      ..['accountId'] = 'claude-local'
+      ..['provider'] = 'claude'
+      ..['allowances'] = [
+        {
+          'id': 'claude-five-hour',
+          'source': 'plan',
+          'label': '5-hour session',
+          'usedPercent': 0,
+          'used': null,
+          'limit': null,
+          'remaining': null,
+          'unlimited': false,
+          'windowMinutes': 300,
+          'resetsAt': null,
+          'status': 'ok',
+        },
+      ]
+      ..['buckets'] = <Object>[]
+      ..['modelBreakdown'] = <Object>[];
+    final codex = source.primaryAccount!.toJson()
+      ..['accountId'] = 'codex-local'
+      ..['provider'] = 'codex'
+      ..['allowances'] = <Object>[]
+      ..['modelBreakdown'] = <Object>[];
+    // Keep fixture buckets on Codex only.
+    final dashboard =
+        source.toJson()..['accounts'] = [claude, codex];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: wardPulseLightTheme,
+        home: Scaffold(
+          body: DashboardScreen(
+            snapshot: DashboardSnapshot.fromJson(dashboard),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Claude'), findsOneWidget);
+    expect(find.text('Codex'), findsOneWidget);
+    expect(find.text('Usage history'), findsOneWidget);
+    expect(find.text('Codex usage history'), findsNothing);
+    expect(find.text('Claude usage history'), findsNothing);
+
+    final claudeHeader = tester.getTopLeft(find.text('Claude'));
+    final codexHeader = tester.getTopLeft(find.text('Codex'));
+    final historyTitle = tester.getTopLeft(find.text('Usage history'));
+    expect(claudeHeader.dy, lessThan(codexHeader.dy));
+    expect(codexHeader.dy, lessThan(historyTitle.dy));
   });
 
   testWidgets('explains missing purchased usage when enabled', (tester) async {

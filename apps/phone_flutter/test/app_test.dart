@@ -141,7 +141,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Stale'), findsOneWidget);
+    // App bar overall status plus the provider plaque on the dashboard.
+    expect(find.text('Stale'), findsWidgets);
     expect(
       find.textContaining('Showing previous data · Updated'),
       findsOneWidget,
@@ -154,7 +155,7 @@ void main() {
       find.byTooltip(DashboardSyncIssue.authentication.message),
       findsWidgets,
     );
-    final staleIcon = find.byIcon(Icons.schedule);
+    final staleIcon = find.byIcon(Icons.schedule).first;
     expect(
       tester.widget<Icon>(staleIcon).color,
       Theme.of(tester.element(staleIcon)).colorScheme.tertiary,

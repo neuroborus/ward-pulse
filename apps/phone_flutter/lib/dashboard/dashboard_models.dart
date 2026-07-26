@@ -163,10 +163,6 @@ class DashboardSnapshot {
     return accounts.isEmpty ? null : accounts.first;
   }
 
-  String get accountCountLabel {
-    return accounts.length == 1 ? '1 account' : '${accounts.length} accounts';
-  }
-
   DashboardSnapshot withStaleStatus({
     DashboardSyncIssue? syncIssue,
     String? syncDetails,
