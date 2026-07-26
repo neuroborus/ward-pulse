@@ -11,8 +11,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.AppScaffold
@@ -64,8 +66,8 @@ private data class SummaryRow(
 
 @Composable
 fun WardPulseApp(summary: WatchDashboardSummary?) {
-    // Straight clock chrome: default curved TimeText + glyph warping looks mangled
-    // on round API 34+ emulators/devices with the Material3 arc renderer.
+    // Straight clock: default curved TimeText warps on round API 34+ shells.
+    // Sized to Glance review art (muted, not a face-style hero).
     AppScaffold(timeText = { StraightAppTimeText() }) {
         if (summary == null) {
             EmptyDashboardScreen()
@@ -301,10 +303,16 @@ private fun StraightAppTimeText() {
         text = timeSource.currentTime(),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 6.dp),
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onBackground,
+            // Review art: ~y=32 top of glyphs on a 450px canvas → ~14dp on 192dp shells.
+            .padding(top = 14.dp),
+        style = MaterialTheme.typography.labelSmall.copy(
+            fontWeight = FontWeight.Bold,
+            fontSize = 7.sp,
+            lineHeight = 9.sp,
+        ),
+        color = Color(0xFF8A968F),
         textAlign = TextAlign.Center,
+        maxLines = 1,
     )
 }
 
