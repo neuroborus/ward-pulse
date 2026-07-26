@@ -1478,7 +1478,7 @@ mock mode still renders the full dashboard
 
 ### Phase 11 — polling cadence constants and the global refresh slider
 
-Status: implemented as of 2026-07-25; headless polling deferred.
+Status: complete as of 2026-07-26 (including headless WorkManager sync).
 
 Rationale: automatic polling needs explicit per-provider cadence floors before it ships.
 Reporting endpoints are rate-limited separately from model inference and agent traffic, so
@@ -1497,10 +1497,10 @@ Deliverables:
   aggregates team usage data hourly, so refreshed values may lag behind actual activity
   (not shown on the experimental Cursor plan row — that contract is unpublished);
 - automatic polling on the phone, honoring the slider and the per-connection clamp; this
-  absorbs the "automatic provider polling" deliverable from Phase 8. Shipped as an
-  in-process scheduler behind `ProviderSyncScheduler`, so cadence is honored while the app
-  isolate is alive. Polling after Android reclaims the process needs a background Dart
-  entrypoint driving the repository without UI, and is deferred to its own change;
+  absorbs the "automatic provider polling" deliverable from Phase 8. In-process
+  `ProviderSyncScheduler` honors the full 5–60 minute slider while the isolate is alive.
+  After process death, a WorkManager-backed Dart entrypoint runs the same sync + watch push
+  at `max(slider, 15 minutes)` (Android periodic floor). Settings explains both cadences;
 - the watch summary re-sent after each successful automatic sync;
 - existing 429/`Retry-After`/backoff handling layered on top of the cadence.
 
@@ -1527,6 +1527,8 @@ Acceptance:
 ```text
 constants exist with doc-linked comments and unit tests
 the slider persists and automatic sync honors it while the app runs
+headless WorkManager sync continues after process death at max(slider, 15 min)
+Settings subtitle states the open-app vs background cadence
 each connection never syncs faster than its floor
 a 429 response still slows the affected provider without blocking others
 ```
@@ -1876,14 +1878,13 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Close Phase 13 acceptance on device/emulator (Wear rings + WFF concentric live arcs), then
-pick up Phase 11 headless background polling. OpenPencil sources, Wear `UsageRings`, and
-WFF concentric remaining `RANGED_VALUE` arcs are in place.
+Close Phase 13 acceptance on device/emulator (Wear rings + WFF concentric live arcs).
+OpenPencil sources, Wear `UsageRings`, WFF concentric remaining `RANGED_VALUE` arcs, and
+Phase 11 headless WorkManager polling are in place.
 
 After the watch ring baseline is closed, schedule **Phase 14** (Dashboard → Watchface →
 Widget → Providers → Settings nav; move Watch display out of Settings; phone home-screen
-widget with its own design lock). It may overlap Phase 11 once watch acceptance is done;
-do not block polling work on widget art.
+widget with its own design lock).
 
 Then continue with later watch / widget polish as listed below.
 

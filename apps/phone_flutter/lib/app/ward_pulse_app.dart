@@ -15,6 +15,7 @@ import '../settings/consumption_display_preferences.dart';
 import '../settings/debug_data_preferences.dart';
 import '../settings/refresh_interval_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
+import '../sync/headless_provider_sync.dart';
 import '../sync/manual_refresh_window.dart';
 import '../sync/provider_sync_scheduler.dart';
 import '../sync/watch_sync_service.dart';
@@ -263,7 +264,7 @@ class _DashboardHostState extends State<DashboardHost> {
         _refreshInterval = value;
       });
     }
-    await widget.syncScheduler.schedule(value.interval);
+    await _scheduleAutoSync(value.interval);
   }
 
   Future<void> _updateRingPreferences(WatchRingPreferences value) async {
@@ -287,12 +288,17 @@ class _DashboardHostState extends State<DashboardHost> {
     await _readDebugDataPreference();
     // Rescheduling before the load keeps the next tick a full interval away, so
     // no connection is polled faster than its floor, and a failed load still
-    // retries on the next tick.
-    unawaited(widget.syncScheduler.schedule(_refreshInterval.interval));
+    // retries on the next tick. Headless WorkManager uses ≥15 minutes.
+    unawaited(_scheduleAutoSync(_refreshInterval.interval));
     final snapshot = await widget.repository.load();
     _currentSnapshot = snapshot;
     unawaited(_syncWatch(snapshot));
     return snapshot;
+  }
+
+  Future<void> _scheduleAutoSync(Duration interval) async {
+    await widget.syncScheduler.schedule(interval);
+    await HeadlessProviderSync.schedule(interval);
   }
 
   Future<void> _onScheduledSync() async {

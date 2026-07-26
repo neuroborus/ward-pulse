@@ -29,9 +29,8 @@ final class DisabledProviderSyncScheduler implements ProviderSyncScheduler {
 
 /// Ticks on an in-process timer while the app isolate is alive.
 ///
-/// Headless polling after Android reclaims the process needs a background Dart
-/// entrypoint and is not implemented yet, so cadence is honored only while
-/// WardPulse is running.
+/// Honors the full 5–60 minute slider. After process death, headless
+/// WorkManager sync uses at least 15 minutes (`HeadlessProviderSync`).
 final class TimerProviderSyncScheduler implements ProviderSyncScheduler {
   final _ticks = StreamController<void>.broadcast();
   Timer? _timer;

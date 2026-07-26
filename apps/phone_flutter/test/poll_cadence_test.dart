@@ -74,6 +74,30 @@ void main() {
     expect(PollCadence.clampMinutes(35), 40);
     expect(PollCadence.clampMinutes(36), 40);
   });
+
+  test('headless interval respects the Android 15-minute WorkManager floor', () {
+    expect(PollCadence.headlessMinRefreshMinutes, 15);
+    expect(
+      PollCadence.headlessInterval(const Duration(minutes: 5)),
+      const Duration(minutes: 15),
+    );
+    expect(
+      PollCadence.headlessInterval(const Duration(minutes: 14)),
+      const Duration(minutes: 15),
+    );
+    expect(
+      PollCadence.headlessInterval(const Duration(minutes: 15)),
+      const Duration(minutes: 15),
+    );
+    expect(
+      PollCadence.headlessInterval(const Duration(minutes: 20)),
+      const Duration(minutes: 20),
+    );
+    expect(
+      PollCadence.headlessInterval(const Duration(minutes: 60)),
+      const Duration(minutes: 60),
+    );
+  });
 }
 
 int _rustMinutes(String source, String constant) {

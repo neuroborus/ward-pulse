@@ -425,7 +425,16 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
     expect(
-      find.textContaining('Every ${PollCadence.defaultRefreshMinutes} minutes'),
+      find.textContaining(
+        'Every ${PollCadence.defaultRefreshMinutes} minutes while WardPulse is open',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(
+        'at least every ${PollCadence.headlessMinRefreshMinutes} minutes '
+        'in the background (Android limit)',
+      ),
       findsOneWidget,
     );
 

@@ -2,46 +2,26 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'app/ward_pulse_app.dart';
-import 'dashboard/codex_dashboard_repository.dart';
 import 'dashboard/dashboard_repository.dart';
-import 'dashboard/live_provider_stack.dart';
-import 'dashboard/openai_dashboard_repository.dart';
-import 'providers/claude_account_service.dart';
-import 'providers/claude_account_store.dart';
-import 'providers/codex_account_service.dart';
-import 'providers/codex_account_store.dart';
-import 'providers/provider_credential_store.dart';
+import 'dashboard/phone_live_bindings.dart';
 import 'settings/consumption_display_preferences.dart';
 import 'settings/debug_data_preferences.dart';
 import 'settings/refresh_interval_preferences.dart';
 import 'settings/watch_ring_preferences.dart';
+import 'sync/headless_provider_sync.dart';
 import 'sync/provider_sync_scheduler.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final credentialStore = SecureProviderCredentialStore();
-  final codexAccountService = MobileCodexAccountService(
-    store: SecureCodexAccountStore(),
-  );
-  final claudeAccountService = MobileClaudeAccountService(
-    store: SecureClaudeAccountStore(),
-  );
-  final openAiAndCodex = codexDashboardRepository(
-    accountService: codexAccountService,
-    fallback: openAiDashboardRepository(credentialStore: credentialStore),
-  );
-  final liveRepository = buildLiveProviderStack(
-    credentialStore: credentialStore,
-    claudeAccountService: claudeAccountService,
-    openAiAndCodex: openAiAndCodex,
-  );
+  await HeadlessProviderSync.ensureInitialized();
+  final live = PhoneLiveBindings.create();
   final debugDataPreferenceStore = SecureDebugDataPreferenceStore();
 
   runApp(
     WardPulseApp(
-      credentialStore: credentialStore,
-      codexAccountService: codexAccountService,
-      claudeAccountService: claudeAccountService,
+      credentialStore: live.credentialStore,
+      codexAccountService: live.codexAccountService,
+      claudeAccountService: live.claudeAccountService,
       displayPreferenceStore: SecureConsumptionDisplayPreferenceStore(),
       refreshIntervalStore: SecureRefreshIntervalPreferenceStore(),
       watchRingPreferenceStore: SecureWatchRingPreferenceStore(),
@@ -51,10 +31,10 @@ void main() {
       repository:
           kDebugMode
               ? DebugDashboardRepository(
-                live: liveRepository,
+                live: live.repository,
                 preferences: debugDataPreferenceStore,
               )
-              : liveRepository,
+              : live.repository,
     ),
   );
 }

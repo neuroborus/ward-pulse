@@ -70,9 +70,9 @@ comments, and are the single source of truth for cadence:
   5–15 by 1 minute, 15–30 by 5, and 30–60 by 10, so a single global cadence already satisfies
   every per-connection floor;
 - `effective_interval = max(user_setting, provider_minimum)` per connection;
-- automatic sync on the phone runs on an in-process scheduler while the app isolate is alive;
-  polling after Android reclaims the process needs a background Dart entrypoint and is not
-  implemented yet;
+- automatic sync on the phone runs on an in-process scheduler while the app isolate is alive
+  (full 5–60 minute slider); after Android reclaims the process, a WorkManager Dart
+  entrypoint continues sync at `max(slider, 15 minutes)` (Android periodic minimum);
 - watch summary re-sent after each successful automatic sync;
 - a failed sync keeps the last successful snapshot visible and retries on the next tick, so a
   launch without connectivity still recovers without a manual refresh;

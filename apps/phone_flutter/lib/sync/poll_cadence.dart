@@ -9,6 +9,12 @@ abstract final class PollCadence {
   static const maxRefreshMinutes = 60;
   static const defaultRefreshMinutes = 15;
 
+  /// Android WorkManager periodic minimum (`PeriodicWorkRequest`).
+  ///
+  /// In-process timer honors the slider down to [minRefreshMinutes]; headless
+  /// sync after process death uses [headlessInterval].
+  static const headlessMinRefreshMinutes = 15;
+
   /// Segmented Settings slider: 5–15 by 1, 15–30 by 5, 30–60 by 10.
   static final refreshIntervalStops = List<int>.unmodifiable([
     for (var minutes = minRefreshMinutes; minutes <= 15; minutes++) minutes,
@@ -23,6 +29,15 @@ abstract final class PollCadence {
   /// Clamps into the slider range and snaps onto a segmented stop.
   static int clampMinutes(int minutes) =>
       _nearestStop(minutes.clamp(minRefreshMinutes, maxRefreshMinutes));
+
+  /// Headless / WorkManager cadence: never below the Android 15-minute floor.
+  static Duration headlessInterval(Duration preferred) {
+    final minutes = preferred.inMinutes;
+    final clamped = minutes < headlessMinRefreshMinutes
+        ? headlessMinRefreshMinutes
+        : clampMinutes(minutes);
+    return Duration(minutes: clamped);
+  }
 
   static int refreshIntervalStopIndex(int minutes) =>
       refreshIntervalStops.indexOf(clampMinutes(minutes));

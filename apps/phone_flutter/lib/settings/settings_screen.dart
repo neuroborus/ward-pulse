@@ -636,8 +636,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   leading: const Icon(Icons.schedule_outlined),
                   title: const Text('Refresh interval'),
                   subtitle: Text(
-                    'Every $shownRefreshMinutes minutes · some providers '
-                    'publish new data less often',
+                    'Every $shownRefreshMinutes minutes while WardPulse is open · '
+                    'at least every ${PollCadence.headlessMinRefreshMinutes} minutes '
+                    'in the background (Android limit) · some providers publish '
+                    'new data less often',
                   ),
                 ),
                 Slider(
