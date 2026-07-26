@@ -12,16 +12,20 @@ Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and si
 ## Goal
 
 Glanceable **remaining** capacity for up to four user-selected percent metrics, with optional
-remaining purchased **credits** on the outer strip. Not “always show every provider,” and never
+remaining purchased **credits** on the center (first) strip. Not “always show every provider,” and never
 invent `Unknown` filler. Strip secondary values are credits — never LLM `TOK` / token counts.
 
 ## Layer rules
 
 1. **One ring = one metric** — provider plan/allowance window with a %, or a local budget %.
+   Claude subscription plan windows are an exception at **selection** time: the phone exposes one
+   Claude plan slot and resolves it to the tightest remaining window (window name lives on Glance,
+   not on face strips).
 2. **Arc = remaining** — the colored sweep is `(100 - usedPercent)`. As the limit is consumed, the
    arc shrinks. Do not grow a “used” fill toward a full circle.
-3. **Outer = tightest remaining** — among selected, available, non-exhausted metrics, sort by
-   remaining ascending (equivalently highest `usedPercent` first). The critical limit is outermost.
+3. **Center / inner = tightest remaining** — among selected, available, non-exhausted metrics,
+   sort by remaining ascending (equivalently highest `usedPercent` first). Payload index 0 is
+   the critical limit: innermost ring and the strip nearest the center. Outer rings are looser.
 4. **Omit exhausted** — `usedPercent >= 100` (or empty/unavailable) does not render.
 5. **Max four** — phone **Watchface** tab chooses slots (transitional UI may still live under
    Settings “Watch display” until Phase 14 nav lands); payload carries only the resolved
@@ -76,11 +80,13 @@ Rules:
 - **Lower strips** — short rounded rectangles, not full-width tablets and not stadium pills:
   - sunk into the surface (dark well, no high-contrast border card);
   - thin left **family accent** bar (color = ring family);
+  - **equal width** for every strip in the stack (wide enough for `% · credits`);
   - measured horizontal padding so Bold labels clear the well edges;
-  - strip order = smallest remaining `%` on top when plan rings exist;
-  - content: `%`, remaining credits, or `% · credits` on the outer strip; omit unused halves /
-    omit empty strips;
-  - credits text is compact (`500`, `1.2K`) — never a `TOK` suffix.
+  - strip order = tightest remaining on top (nearest center) when plan rings exist;
+  - content: `%`, remaining credits, or `% · credits` on the **center** (first) strip; omit
+    unused halves / omit empty strips;
+  - credits text is compact (`500`, `1.2K`) — never a `TOK` suffix;
+  - ring stroke is tuned so a **3-strip** stack clears the arcs (thinner than the first heavy pass).
 - **Credits-only**: thin framing track, large time, credits strip only — no percent arcs.
 - No orphan captions (`Codex left`, floating unit labels) outside the strip row.
 - Review art focuses on 1–3 provider families. A local **budget** metric may still occupy a product
@@ -118,7 +124,7 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
 | Surface | Role |
 |---------|------|
 | Wear OS app Glance | **Not** this face language — locked text legend (`WEAR_GLANCE_DESIGN.md`, 2026-07-26) |
-| WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs plus sunk `SHORT_TEXT` strips (`%` / `% · credits`) in `watchface.xml`. Outer strip TEXT is the full label (WFF `length(TITLE)` Conditions are unreliable). Keep progress/track `endAngle` below 360° (scale remaining onto 359.9°) — a closed circle collapses to a ROUND tip at 12 o'clock. Strips need their own `BoundingBox` slots (`BoundingArc` clips content to the arc band). |
+| WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs plus sunk `SHORT_TEXT` strips (`%` / `% · credits`) in `watchface.xml`. Center (first) strip TEXT is the full label (WFF `length(TITLE)` Conditions are unreliable). Keep progress/track `endAngle` below 360° (scale remaining onto 359.9°) — a closed circle collapses to a ROUND tip at 12 o'clock. Strips need their own `BoundingBox` slots (`BoundingArc` clips content to the arc band). |
 | Phone Watchface tab | Slot selection + preview of next payload rings (not Settings) |
 
 ## Non-goals

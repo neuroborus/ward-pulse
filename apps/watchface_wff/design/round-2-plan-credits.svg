@@ -9,17 +9,17 @@
   </defs>
   <rect width="450" height="450" fill="url(#lift)"/>
   
-    <circle cx="225" cy="225" r="176.85" fill="none" stroke="#2E3632"
-      stroke-width="14.4" />
-    <circle cx="225" cy="225" r="176.85" fill="none" stroke="#65D78A"
-      stroke-width="14.4" stroke-linecap="round"
-      stroke-dasharray="88.89 1111.18"
-      transform="rotate(-90 225 225)" />
     <circle cx="225" cy="225" r="195.75" fill="none" stroke="#2E3632"
       stroke-width="14.4" />
-    <circle cx="225" cy="225" r="195.75" fill="none" stroke="#E8915A"
+    <circle cx="225" cy="225" r="195.75" fill="none" stroke="#65D78A"
       stroke-width="14.4" stroke-linecap="round"
-      stroke-dasharray="479.67 1229.93"
+      stroke-dasharray="98.39 1229.93"
+      transform="rotate(-90 225 225)" />
+    <circle cx="225" cy="225" r="176.85" fill="none" stroke="#2E3632"
+      stroke-width="14.4" />
+    <circle cx="225" cy="225" r="176.85" fill="none" stroke="#E8915A"
+      stroke-width="14.4" stroke-linecap="round"
+      stroke-dasharray="433.36 1111.18"
       transform="rotate(-90 225 225)" />
   
     <text x="225" y="250.1" text-anchor="middle"

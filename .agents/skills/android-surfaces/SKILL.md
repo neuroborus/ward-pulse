@@ -39,15 +39,18 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   a local cooldown. Review art: `preview-glance-legend-*.png`. Compose: `GlanceLegendPage`
   (+ watch→phone refresh message).
 - **Watch face / WFF** (and any face-like complication preview) follow
-  `docs/product/WATCH_RING_DESIGN.md` (**locked 2026-07-25**): outer = tightest remaining; arc =
-  remaining; large time hero; sunk family strips; family colors. Future multi-profile / hatch /
-  three-ring cap notes there are planning-only until a later phase.
+  `docs/product/WATCH_RING_DESIGN.md` (**locked 2026-07-25**): **inner/center = tightest**
+  remaining; arc = remaining; large time hero; sunk family strips (equal width; first strip
+  nearest center; stroke tuned so 3 strips clear arcs); family colors. Future multi-profile /
+  hatch / three-ring cap notes there are planning-only until a later phase.
+- Claude plan windows (`5h` / weekly / Opus / Sonnet) collapse to one watch ring on the phone
+  (`allowance.claude.plan`); Glance shows the active window label. Phone dashboard still lists all.
 - Prefer concentric percent layers from schema v4+ on the **face** (up to four selected metrics
   today); never invent `Unknown` filler. Unselected, unavailable, or exhausted (`>= 100%`)
   layers do not render.
-- Face outer strip / `creditsGlance` may show a compact remaining-credits aggregate when reported
-  and Settings shows purchased usage (not a ring; never LLM `TOK`). App Glance credits stay
-  **per provider** with an explicit `credits` label.
+- Face center (first) strip / `creditsGlance` may show a compact remaining-credits aggregate when
+  reported and Settings shows purchased usage (not a ring; never LLM `TOK`). App Glance credits
+  stay **per provider** with an explicit `credits` label.
 - Keep today, week, usage, providers, alerts (active list only — no rule editing), and last sync
   as secondary detail screens.
 - Store and render the latest successful watch summary.
@@ -64,10 +67,11 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   Keep track/progress `endAngle` under 360° (scale onto 359.9°) — a closed circle collapses
   to a ROUND tip at 12 o'clock. Prefer simple Transform arithmetic over `clamp()`.
   `BoundingArc` clips ring-slot content to the arc band — sunk `%` / credits strips must use
-  separate `BoundingBox` SHORT_TEXT slots. Outer strip TEXT = full label (`100% · 500`);
-  inner strips TEXT = remaining digits with Template `%%`. Avoid `length(TITLE)` Conditions —
-  they are unreliable on WFF. Draw strips after `DigitalClock` so the clock does not cover them.
-- Prefer live arcs for selected layers, optional `creditsGlance` on the outer strip when present,
+  separate `BoundingBox` SHORT_TEXT slots of **equal width**, stacked inside the clear aperture.
+  Center (first) strip TEXT = full label (`100% · 500`); lower strips TEXT = remaining digits
+  with Template `%%`. Avoid `length(TITLE)` Conditions — they are unreliable on WFF. Draw strips
+  after `DigitalClock` so the clock does not cover them.
+- Prefer live arcs for selected layers, optional `creditsGlance` on the center strip when present,
   large time. Never LLM `TOK` on the face.
 - Support tap-to-open into the Wear OS app where possible.
 - Keep ambient mode readable (dim arcs, strips off).

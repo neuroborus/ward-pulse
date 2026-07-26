@@ -50,7 +50,7 @@ void main() {
     expect(jsonEncode(preferences.clampedIds), '["a","b","c","d"]');
   });
 
-  test('surface order puts tightest remaining outermost and drops exhausted', () {
+  test('surface order puts tightest remaining first and drops exhausted', () {
     const rings = [
       WatchRingMetric(
         id: 'a',
@@ -77,4 +77,174 @@ void main() {
       'a',
     ]);
   });
+
+  group('Claude plan collapse', () {
+    test('catalog exposes one Claude plan slot for multiple windows', () {
+      final dash = _claudeCodexSnapshot(
+        fiveHourUsed: 40,
+        sevenDayUsed: 70,
+        codexUsed: 10,
+      );
+      final ids = watchRingCatalog(dash).map((m) => m.id).toList();
+
+      expect(ids.where((id) => id == claudePlanRingId), hasLength(1));
+      expect(ids, isNot(contains('allowance.claude.claude-five-hour')));
+      expect(ids, isNot(contains('allowance.claude.claude-seven-day')));
+      expect(ids, contains('allowance.codex.codex-weekly'));
+    });
+
+    test('picks the tighter window and short Glance label', () {
+      final dash = _claudeCodexSnapshot(
+        fiveHourUsed: 40,
+        sevenDayUsed: 70,
+        codexUsed: 10,
+      );
+      final collapsed = collapseClaudePlanRing(dash.accounts
+          .firstWhere((a) => a.provider == 'claude')
+          .allowances)!;
+
+      expect(collapsed.id, claudePlanRingId);
+      expect(collapsed.label, 'Weekly');
+      expect(collapsed.settingsTitle, 'Claude plan');
+      expect(collapsed.settingsSubtitle, 'Weekly · 30% left · OK');
+      expect(collapsed.usedPercent, 70);
+    });
+
+    test('tie-break prefers 5h over weekly', () {
+      final dash = _claudeCodexSnapshot(
+        fiveHourUsed: 55,
+        sevenDayUsed: 55,
+        codexUsed: 10,
+      );
+      final collapsed = collapseClaudePlanRing(dash.accounts
+          .firstWhere((a) => a.provider == 'claude')
+          .allowances)!;
+
+      expect(collapsed.label, '5h');
+      expect(collapsed.usedPercent, 55);
+    });
+
+    test('prefers non-exhausted window over exhausted tighter weekly', () {
+      final dash = _claudeCodexSnapshot(
+        fiveHourUsed: 40,
+        sevenDayUsed: 100,
+        codexUsed: 10,
+      );
+      final collapsed = collapseClaudePlanRing(dash.accounts
+          .firstWhere((a) => a.provider == 'claude')
+          .allowances)!;
+
+      expect(collapsed.label, '5h');
+      expect(collapsed.usedPercent, 40);
+    });
+
+    test('migrates legacy Claude window ids to one plan slot', () {
+      expect(
+        migrateWatchRingSelectedIds([
+          'budget.today',
+          'allowance.claude.claude-five-hour',
+          'allowance.claude.claude-seven-day',
+          'allowance.codex.codex-weekly',
+        ]),
+        [
+          'budget.today',
+          claudePlanRingId,
+          'allowance.codex.codex-weekly',
+        ],
+      );
+    });
+
+    test('surface has one Claude ring with Codex, not two', () {
+      final dash = _claudeCodexSnapshot(
+        fiveHourUsed: 40,
+        sevenDayUsed: 70,
+        codexUsed: 10,
+      );
+      final rings = orderWatchRingsForSurface(
+        resolveWatchRings(
+          dash,
+          const WatchRingPreferences(
+            selectedIds: [
+              'allowance.codex.codex-weekly',
+              'allowance.claude.claude-five-hour',
+              'allowance.claude.claude-seven-day',
+            ],
+          ),
+        ),
+      );
+
+      expect(rings.map((r) => r.id), [
+        claudePlanRingId,
+        'allowance.codex.codex-weekly',
+      ]);
+      expect(rings.map((r) => r.label), ['Weekly', 'Weekly plan']);
+    });
+  });
+}
+
+DashboardSnapshot _claudeCodexSnapshot({
+  required double fiveHourUsed,
+  required double sevenDayUsed,
+  required double codexUsed,
+}) {
+  final source = DashboardSnapshot.fromJsonString(
+    File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+  );
+  Map<String, dynamic> allowance({
+    required String id,
+    required String label,
+    required double usedPercent,
+    required int windowMinutes,
+  }) {
+    return {
+      'id': id,
+      'source': 'plan',
+      'label': label,
+      'usedPercent': usedPercent,
+      'used': null,
+      'limit': null,
+      'remaining': null,
+      'unlimited': false,
+      'windowMinutes': windowMinutes,
+      'resetsAt': null,
+      'status': 'ok',
+    };
+  }
+
+  final claude = source.primaryAccount!.toJson()
+    ..['accountId'] = 'claude-local'
+    ..['provider'] = 'claude'
+    ..['allowances'] = [
+      allowance(
+        id: 'claude-five-hour',
+        label: '5-hour session',
+        usedPercent: fiveHourUsed,
+        windowMinutes: 300,
+      ),
+      allowance(
+        id: 'claude-seven-day',
+        label: 'Weekly plan',
+        usedPercent: sevenDayUsed,
+        windowMinutes: 10080,
+      ),
+    ]
+    ..['buckets'] = <Object>[]
+    ..['modelBreakdown'] = <Object>[];
+  final codex = source.primaryAccount!.toJson()
+    ..['accountId'] = 'codex-local'
+    ..['provider'] = 'codex'
+    ..['allowances'] = [
+      allowance(
+        id: 'codex-weekly',
+        label: 'Weekly plan',
+        usedPercent: codexUsed,
+        windowMinutes: 10080,
+      ),
+    ]
+    ..['buckets'] = <Object>[]
+    ..['modelBreakdown'] = <Object>[];
+
+  return DashboardSnapshot.fromJson(
+    source.toJson()..['accounts'] = [claude, codex],
+  );
 }

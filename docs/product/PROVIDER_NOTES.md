@@ -238,7 +238,10 @@ authorization-code flow Claude Code uses (`client_id` for Claude Code, redirect
 refresh tokens in secure storage. Refresh is serialized like Codex. Reporting calls undocumented
 `GET /api/oauth/usage` with `anthropic-beta: oauth-2025-04-20` and a Claude Code user agent, then
 normalizes `five_hour`, `seven_day`, optional per-model weekly windows, and `extra_usage` into
-`AllowanceState`.
+`AllowanceState`. Phone dashboard cards still list every window. Watch/Glance rings collapse
+Claude **plan** windows into one slot (`allowance.claude.plan`): the tightest remaining
+non-exhausted window wins; Glance label is the short token (`5h`, `Weekly`, `Opus weekly`,
+`Sonnet weekly`). Purchased `extra_usage` is not in that collapse pool.
 
 This is a compatibility integration, not a published third-party API. Endpoint or OAuth client
 changes may require an app update. Never log tokens, authorization codes, or raw response bodies.

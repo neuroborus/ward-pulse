@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -28,6 +27,7 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.RingSummary
+import app.wardpulse.wear.model.RingSurfaceOrder
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -35,7 +35,8 @@ import kotlin.math.roundToInt
  * Concentric remaining arcs + sunk family strips
  * (`docs/product/WATCH_RING_DESIGN.md`, baseline 2026-07-25).
  *
- * Outer ring is the tightest remaining selected metric. Exhausted layers are omitted upstream.
+ * Payload order is tightest-first: index 0 draws as the **innermost** ring and the strip
+ * nearest the center. Exhausted layers are omitted upstream.
  * Watch-face time lives on the system / WFF surface; the Wear app module keeps the aperture for strips.
  */
 @Composable
@@ -52,17 +53,21 @@ internal fun UsageRings(
     val trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
     val colors = rings.map { ringFamilyColor(it.id, it.status) }
     val density = LocalDensity.current
-    // Slightly heavier than early 8dp wire — closer to WFF ~20px on 450 face.
-    val strokeWidth = with(density) { 10.dp.toPx() }
-    val gap = with(density) { 3.dp.toPx() }
+    // Match WFF ~14px visual stroke on 450 face — keeps 3 equal strips clear of arcs.
+    val strokeWidth = with(density) { 7.dp.toPx() }
+    val gap = with(density) { 2.dp.toPx() }
     val wellColor = Color(0xE60B0E0C)
+    // Fixed strip width (fits `100% · 500`) — equal for every row.
+    val stripWidth = 72.dp
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.size(diameter)) {
             val outer = min(size.width, size.height)
             val center = Offset(size.width / 2f, size.height / 2f)
             rings.forEachIndexed { index, ring ->
-                val inset = index * (strokeWidth + gap)
+                val fromOutside =
+                    RingSurfaceOrder.outerSlotForPayloadIndex(rings.size, index) ?: return@forEachIndexed
+                val inset = fromOutside * (strokeWidth + gap)
                 val diameterPx = (outer - inset * 2f).coerceAtLeast(strokeWidth * 2f)
                 val topLeft = Offset(center.x - diameterPx / 2f, center.y - diameterPx / 2f)
                 val arcSize = Size(diameterPx, diameterPx)
@@ -93,8 +98,8 @@ internal fun UsageRings(
         }
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(3.dp),
-            modifier = Modifier.padding(top = diameter * 0.22f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier.padding(top = diameter * 0.18f),
         ) {
             rings.forEachIndexed { index, ring ->
                 val remaining =
@@ -111,6 +116,7 @@ internal fun UsageRings(
                     text = label,
                     accent = colors[index],
                     wellColor = wellColor,
+                    width = stripWidth,
                 )
             }
         }
@@ -122,19 +128,20 @@ private fun SunkStrip(
     text: String,
     accent: Color,
     wellColor: Color,
+    width: Dp,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .widthIn(min = 56.dp, max = 108.dp)
+            .width(width)
             .background(wellColor, RoundedCornerShape(5.dp))
-            .padding(horizontal = 5.dp, vertical = 3.dp),
+            .padding(horizontal = 5.dp, vertical = 2.dp),
     ) {
         Box(
             modifier = Modifier
                 .padding(end = 5.dp)
                 .width(2.5.dp)
-                .height(12.dp)
+                .height(11.dp)
                 .background(accent, RoundedCornerShape(1.dp)),
         )
         Text(
@@ -142,7 +149,7 @@ private fun SunkStrip(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center,
-            modifier = Modifier.weight(1f, fill = false),
+            modifier = Modifier.weight(1f),
         )
     }
 }

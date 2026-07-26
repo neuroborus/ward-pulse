@@ -201,7 +201,7 @@ object PreviewWatchDashboardSummary {
         generatedAt = "2026-06-27T18:42:00Z",
         overallStatus = PulseStatus.OK,
         rings = listOf(
-            // Surface order: tightest remaining outermost (highest usedPercent first).
+            // Surface order: tightest remaining first (center/inner on face; top on Glance).
             RingSummary("budget.week", "Week", 28.5, PulseStatus.OK),
             RingSummary("budget.month", "Month", 26.5, PulseStatus.OK),
             RingSummary("budget.today", "Today", 24.8, PulseStatus.OK),
@@ -246,7 +246,7 @@ object PreviewWatchDashboardSummary {
         isStale = false,
         rings = listOf(
             RingSummary("allowance.codex.week", "Weekly plan", 92.0, PulseStatus.OK),
-            RingSummary("allowance.claude.window", "5h window", 61.0, PulseStatus.OK),
+            RingSummary("allowance.claude.plan", "5h", 61.0, PulseStatus.OK),
             RingSummary("allowance.cursor.week", "Weekly plan", 28.0, PulseStatus.OK),
         ),
         creditsGlance = CreditsGlance(text = "400", label = "Credits left", provider = "codex"),

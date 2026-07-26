@@ -17,6 +17,7 @@ import androidx.wear.watchface.complications.datasource.SuspendingComplicationDa
 import app.wardpulse.wear.MainActivity
 import app.wardpulse.wear.data.WatchSummaryStore
 import app.wardpulse.wear.model.PulseStatus
+import app.wardpulse.wear.model.RingSurfaceOrder
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.ui.RingFamily
 import app.wardpulse.wear.ui.formatPercentAmount
@@ -57,40 +58,35 @@ abstract class RingComplicationDataSourceService :
 
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
         val summary = WatchSummaryStore(this).load()
-        val ring = summary?.rings?.getOrNull(ringIndex)
-        // RANGED_VALUE = remaining capacity (matches WFF arc + design strips).
+        val rings = summary?.rings.orEmpty()
+        val dataIndex = RingSurfaceOrder.payloadIndexForOuterSlot(rings.size, ringIndex)
+        val ring = dataIndex?.let { rings[it] }
         val remaining = ring?.let { WatchComplicationText.remainingPercent(it.usedPercent) }
         val label = ring?.label
         return when (request.complicationType) {
             // NoData clears a previous arc; null would leave stale complication data.
             ComplicationType.RANGED_VALUE ->
-                // remaining <= 0 is exhausted — omit (WFF hides VALUE==0, but avoid ROUND caps).
                 if (ring == null || remaining == null || remaining <= 0f) {
                     NoDataComplicationData()
                 } else {
-                    // TEXT = remaining digits (WFF strip Template adds '%').
-                    // TITLE = optional credits glance on the outer ring only.
-                    val creditsTitle =
-                        if (ringIndex == 0) {
-                            summary.creditsGlance?.text?.takeIf { it.isNotBlank() }
-                        } else {
-                            null
-                        }
+                    // Credits live on the center strip; keep RANGED_VALUE TITLE empty.
                     ComplicationBuilders.ranged(
                         this,
                         remaining,
-                        title = creditsTitle,
+                        title = null,
                         colorArgb = RingFamily.colorArgb(ring.id),
                         contentDescription = label,
                     )
                 }
             ComplicationType.SHORT_TEXT -> {
-                // WFF strip Template adds '%'; TEXT must be digits only.
-                // TITLE carries optional credits glance on the outer ring.
-                val payload = summary?.let {
-                    WatchComplicationText.stripPayload(it, ringIndex)
-                }
-                if (payload == null) {
+                // Dedicated strip slots own SHORT_TEXT; this path is rarely used.
+                val payload =
+                    if (summary != null && dataIndex != null) {
+                        WatchComplicationText.stripPayload(summary, dataIndex)
+                    } else {
+                        null
+                    }
+                if (payload == null || summary == null || dataIndex == null) {
                     NoDataComplicationData()
                 } else {
                     ComplicationBuilders.shortText(
@@ -98,7 +94,7 @@ abstract class RingComplicationDataSourceService :
                         value = payload.text,
                         title = payload.title,
                         contentDescription = label
-                            ?: WatchComplicationText.stripLabel(summary, ringIndex)
+                            ?: WatchComplicationText.stripLabel(summary, dataIndex)
                             ?: payload.text,
                     )
                 }
@@ -120,7 +116,6 @@ abstract class RingComplicationDataSourceService :
                 ComplicationBuilders.shortText(
                     this,
                     WatchComplicationText.percentAmount(previewPercent),
-                    title = if (ringIndex == 0) "500" else null,
                 )
             else -> null
         }
@@ -181,15 +176,20 @@ private object ComplicationBuilders {
         )
 }
 
-/** Surface ring 0 (outer / tightest remaining). Class name kept for installed faces. */
+/**
+ * Outermost WFF arc slot. Class name kept for installed faces.
+ * Binds payload index (n-1) — loosest remaining when multiple rings are active.
+ */
 class TodayComplicationDataSourceService : RingComplicationDataSourceService() {
     override val ringIndex = 0
-    override val previewPercent = 8f
-    override val previewColorArgb = RingFamily.CODEX
+    override val previewPercent = 72f
+    override val previewColorArgb = RingFamily.CURSOR
     override val previewLabel = "Ring 1"
 }
 
-/** Surface ring 1. Class name kept for installed faces. */
+/**
+ * Second-from-outside WFF arc slot. Class name kept for installed faces.
+ */
 class WeekComplicationDataSourceService : RingComplicationDataSourceService() {
     override val ringIndex = 1
     override val previewPercent = 39f
@@ -197,10 +197,11 @@ class WeekComplicationDataSourceService : RingComplicationDataSourceService() {
     override val previewLabel = "Ring 2"
 }
 
+/** Third-from-outside WFF arc slot (toward center as count grows). */
 class Ring3ComplicationDataSourceService : RingComplicationDataSourceService() {
     override val ringIndex = 2
-    override val previewPercent = 72f
-    override val previewColorArgb = RingFamily.CURSOR
+    override val previewPercent = 8f
+    override val previewColorArgb = RingFamily.CODEX
     override val previewLabel = "Ring 3"
 }
 
@@ -219,7 +220,7 @@ class StatusComplicationDataSourceService : ShortTextComplicationDataSourceServi
 }
 
 /**
- * Outer sunk strip SHORT_TEXT provider (dedicated — not shared with a RANGED_VALUE slot).
+ * Center-most sunk strip SHORT_TEXT provider (payload index 0 / tightest).
  *
  * WFF `length([COMPLICATION.TITLE])` Conditions are unreliable, so TEXT carries the full
  * human label (`100%`, `100% · 500`, or credits-only `500`). Template is `%s` (no extra `%`).
@@ -232,6 +233,7 @@ class TokensComplicationDataSourceService : SuspendingComplicationDataSourceServ
             return null
         }
         val summary = WatchSummaryStore(this).load() ?: return NoDataComplicationData()
+        // Strip stack top (nearest center) = payload index 0 = tightest.
         val label = WatchComplicationText.stripLabel(summary, 0) ?: return NoDataComplicationData()
         return ComplicationBuilders.shortText(
             this,
@@ -307,7 +309,7 @@ object WatchComplicationText {
     data class StripPayload(
         /** Remaining digits only — WFF Template appends '%'. */
         val text: String,
-        /** Optional remaining credits for the outer strip (`8% · 500`). */
+        /** Optional remaining credits for the center (first) strip (`8% · 500`). */
         val title: String? = null,
     )
 

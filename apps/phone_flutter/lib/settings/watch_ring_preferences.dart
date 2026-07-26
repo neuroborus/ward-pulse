@@ -7,6 +7,17 @@ import '../dashboard/dashboard_models.dart';
 /// Maximum simultaneous rings on watch and watch-face surfaces.
 const watchRingSlotCount = 4;
 
+/// Synthetic watch-ring slot: Claude plan windows collapse to the tightest one.
+const claudePlanRingId = 'allowance.claude.plan';
+
+/// Claude plan window allowance ids, tie-break order (shorter / primary first).
+const _claudePlanWindowIds = <String>[
+  'claude-five-hour',
+  'claude-seven-day',
+  'claude-seven-day-opus',
+  'claude-seven-day-sonnet',
+];
+
 /// One selectable percent metric for a watch ring.
 final class WatchRingMetric {
   const WatchRingMetric({
@@ -18,6 +29,8 @@ final class WatchRingMetric {
   });
 
   final String id;
+
+  /// Watch payload / Glance metric label (`5h`, `Weekly plan`, …).
   final String label;
 
   /// Consumed capacity 0–100 from the provider (Watch/WFF arcs use remaining).
@@ -28,6 +41,25 @@ final class WatchRingMetric {
   final String? unavailableReason;
 
   bool get isAvailable => usedPercent != null && unavailableReason == null;
+
+  bool get _isClaudePlanSlot => id == claudePlanRingId;
+
+  /// Settings checkbox title (Claude plan slot keeps a stable name).
+  String get settingsTitle => _isClaudePlanSlot ? 'Claude plan' : label;
+
+  /// Settings checkbox subtitle.
+  String get settingsSubtitle {
+    final reason = unavailableReason;
+    if (reason != null) {
+      return reason;
+    }
+    final remaining = remainingPercent;
+    if (remaining == null) {
+      return status.label;
+    }
+    final left = '${remaining.round()}% left · ${status.label}';
+    return _isClaudePlanSlot ? '$label · $left' : left;
+  }
 
   /// Remaining capacity for display — matches Wear/WFF remaining arcs.
   double? get remainingPercent {
@@ -54,6 +86,105 @@ final class WatchRingPreferences {
   List<String> get clampedIds => (selectedIds ?? const <String>[])
       .take(watchRingSlotCount)
       .toList(growable: false);
+
+  /// Clamped selection with legacy Claude window ids coalesced.
+  List<String> get migratedIds => migrateWatchRingSelectedIds(clampedIds);
+}
+
+String? _claudePlanWindowGlanceLabel(String allowanceId) {
+  return switch (allowanceId) {
+    'claude-five-hour' => '5h',
+    'claude-seven-day' => 'Weekly',
+    'claude-seven-day-opus' => 'Opus weekly',
+    'claude-seven-day-sonnet' => 'Sonnet weekly',
+    _ => null,
+  };
+}
+
+bool _isClaudePlanWindowAllowanceId(String allowanceId) {
+  return _claudePlanWindowIds.contains(allowanceId);
+}
+
+bool _isClaudePlanWindowRingId(String ringId) {
+  const prefix = 'allowance.claude.';
+  if (!ringId.startsWith(prefix)) {
+    return false;
+  }
+  return _isClaudePlanWindowAllowanceId(ringId.substring(prefix.length));
+}
+
+/// Coalesce legacy per-window Claude plan ring ids into [claudePlanRingId].
+List<String> migrateWatchRingSelectedIds(List<String> ids) {
+  final out = <String>[];
+  var sawClaudePlan = false;
+  for (final id in ids) {
+    if (id == claudePlanRingId || _isClaudePlanWindowRingId(id)) {
+      if (!sawClaudePlan) {
+        out.add(claudePlanRingId);
+        sawClaudePlan = true;
+      }
+      continue;
+    }
+    out.add(id);
+  }
+  return out.take(watchRingSlotCount).toList(growable: false);
+}
+
+/// Collapses Claude plan windows into one ring (tightest remaining).
+///
+/// Prefers non-exhausted windows so surface omit-exhausted does not hide a
+/// usable shorter window behind a fully used weekly. Purchased extra usage is
+/// not included.
+WatchRingMetric? collapseClaudePlanRing(Iterable<AllowanceState> allowances) {
+  final windows = [
+    for (final allowance in allowances)
+      if (allowance.source == AllowanceSource.plan &&
+          _isClaudePlanWindowAllowanceId(allowance.id))
+        allowance,
+  ];
+  if (windows.isEmpty) {
+    return null;
+  }
+
+  final withPercent = [
+    for (final window in windows)
+      if (window.usedPercent != null) window,
+  ];
+  if (withPercent.isEmpty) {
+    return WatchRingMetric(
+      id: claudePlanRingId,
+      label: 'Claude plan',
+      usedPercent: null,
+      status: windows.first.status,
+      unavailableReason:
+          'This allowance has no percentage to show as a ring.',
+    );
+  }
+
+  final active = [
+    for (final window in withPercent)
+      if (window.usedPercent! < 100) window,
+  ];
+  final pool = active.isNotEmpty ? active : withPercent;
+  pool.sort(_compareClaudePlanWindows);
+  final winner = pool.first;
+
+  return WatchRingMetric(
+    id: claudePlanRingId,
+    label: _claudePlanWindowGlanceLabel(winner.id) ?? winner.label,
+    usedPercent: winner.usedPercent,
+    status: winner.status,
+  );
+}
+
+int _compareClaudePlanWindows(AllowanceState a, AllowanceState b) {
+  final usedCmp = b.usedPercent!.compareTo(a.usedPercent!);
+  if (usedCmp != 0) {
+    return usedCmp;
+  }
+  return _claudePlanWindowIds
+      .indexOf(a.id)
+      .compareTo(_claudePlanWindowIds.indexOf(b.id));
 }
 
 /// Builds the catalog of ring metrics from the current dashboard snapshot.
@@ -72,21 +203,21 @@ List<WatchRingMetric> watchRingCatalog(DashboardSnapshot? snapshot) {
     if (account.provider == 'mock') {
       continue;
     }
+    if (account.provider == 'claude') {
+      final collapsed = collapseClaudePlanRing(account.allowances);
+      if (collapsed != null) {
+        metrics.add(collapsed);
+      }
+      for (final allowance in account.allowances) {
+        if (_isClaudePlanWindowAllowanceId(allowance.id)) {
+          continue;
+        }
+        metrics.add(_allowanceMetric(account.provider, allowance));
+      }
+      continue;
+    }
     for (final allowance in account.allowances) {
-      final id = 'allowance.${account.provider}.${allowance.id}';
-      final percent = allowance.usedPercent;
-      metrics.add(
-        WatchRingMetric(
-          id: id,
-          label: allowance.label,
-          usedPercent: percent,
-          status: allowance.status,
-          unavailableReason:
-              percent == null
-                  ? 'This allowance has no percentage to show as a ring.'
-                  : null,
-        ),
-      );
+      metrics.add(_allowanceMetric(account.provider, allowance));
     }
   }
 
@@ -111,12 +242,15 @@ List<WatchRingMetric> resolveWatchRings(
     for (final metric in watchRingCatalog(snapshot)) metric.id: metric,
   };
   return [
-    for (final id in preferences.clampedIds)
+    for (final id in preferences.migratedIds)
       if (catalog[id] case final metric? when metric.isAvailable) metric,
   ];
 }
 
-/// Display order for Wear/WFF: omit exhausted layers, tightest remaining outermost.
+/// Display order for Wear/WFF/Glance: omit exhausted layers, tightest remaining first.
+///
+/// Payload index 0 = critical limit. Face maps that to the **innermost** ring and the
+/// strip nearest the center; Glance keeps the same order top-first.
 List<WatchRingMetric> orderWatchRingsForSurface(List<WatchRingMetric> rings) {
   final active = [
     for (final ring in rings)
@@ -128,6 +262,20 @@ List<WatchRingMetric> orderWatchRingsForSurface(List<WatchRingMetric> rings) {
     return usedB.compareTo(usedA);
   });
   return active.take(watchRingSlotCount).toList(growable: false);
+}
+
+WatchRingMetric _allowanceMetric(String provider, AllowanceState allowance) {
+  final percent = allowance.usedPercent;
+  return WatchRingMetric(
+    id: 'allowance.$provider.${allowance.id}',
+    label: allowance.label,
+    usedPercent: percent,
+    status: allowance.status,
+    unavailableReason:
+        percent == null
+            ? 'This allowance has no percentage to show as a ring.'
+            : null,
+  );
 }
 
 WatchRingMetric _budgetMetric(String id, String label, BudgetState? budget) {
@@ -172,8 +320,12 @@ final class SecureWatchRingPreferenceStore implements WatchRingPreferenceStore {
       final ids = [
         for (final entry in decoded)
           if (entry is String && entry.isNotEmpty) entry,
-      ].take(watchRingSlotCount).toList(growable: false);
-      return WatchRingPreferences(selectedIds: ids);
+      ];
+      final migrated = migrateWatchRingSelectedIds(ids);
+      if (!_sameIds(ids.take(watchRingSlotCount).toList(), migrated)) {
+        await _storage.write(key: _key, value: jsonEncode(migrated));
+      }
+      return WatchRingPreferences(selectedIds: migrated);
     } on FormatException {
       return const WatchRingPreferences();
     }
@@ -184,8 +336,23 @@ final class SecureWatchRingPreferenceStore implements WatchRingPreferenceStore {
     if (value.selectedIds == null) {
       return _storage.delete(key: _key);
     }
-    return _storage.write(key: _key, value: jsonEncode(value.clampedIds));
+    return _storage.write(
+      key: _key,
+      value: jsonEncode(value.migratedIds),
+    );
   }
+}
+
+bool _sameIds(List<String> a, List<String> b) {
+  if (a.length != b.length) {
+    return false;
+  }
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 final class DefaultWatchRingPreferenceStore

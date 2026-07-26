@@ -40,7 +40,7 @@ const CATALOG = {
   },
 }
 
-/** Aggregate remaining purchased credits on the outer strip (not LLM tokens). */
+/** Aggregate remaining purchased credits on the center (first) strip (not LLM tokens). */
 const CREDITS_GLANCE = '500'
 
 /** One Python round-trip: widths[text] + ascent/descent for baseline math. */
@@ -95,12 +95,13 @@ function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
       transform="rotate(-90 ${cx} ${cy})" />`
 }
 
-function barLabel(layer, { showPlan, showCredits, isOuter }) {
+function barLabel(layer, { showPlan, showCredits, isFirst }) {
   const parts = []
   if (showPlan && layer.used < 1) {
     parts.push(`${Math.round((1 - layer.used) * 100)}%`)
   }
-  if (showCredits && isOuter) {
+  // First strip (nearest center) carries optional credits.
+  if (showCredits && isFirst) {
     parts.push(CREDITS_GLANCE)
   }
   return parts.join(' · ')
@@ -118,7 +119,7 @@ function providerBars({ cx, cy, innerR, layers, showPlan, showCredits, size }) {
       text: barLabel(layer, {
         showPlan,
         showCredits,
-        isOuter: index === 0,
+        isFirst: index === 0,
       }),
     }))
     .filter((row) => row.text.length > 0)
@@ -177,18 +178,20 @@ function faceSvg({
 }) {
   const cx = size / 2
   const cy = size / 2
-  const outer = size * 0.445
+  const outer = size * 0.435
   const gap = size * 0.01
-  // ~20px on a 450 face — slightly heavier than the first 15.3 review pass for glanceability.
-  const thickness = Math.max(8, size * (ambient ? 0.036 : 0.044))
+  // ~14px on a 450 face — thinner stroke so 3 equal-width strips clear the arcs.
+  const thickness = Math.max(8, size * (ambient ? 0.028 : 0.032))
   const planLayers = sortByRemaining(layers.filter((layer) => layer.used < 1))
   const stripLayers = showPlan ? planLayers : layers.slice(0, 1)
 
   let ringMarkup = ''
   let innerR = size * 0.3
   if (showPlan && planLayers.length > 0) {
+    // planLayers are tightest-first; draw index 0 on the innermost radius (center).
     for (let i = 0; i < planLayers.length; i += 1) {
-      const r = outer - i * (thickness + gap)
+      const fromOutside = planLayers.length - 1 - i
+      const r = outer - fromOutside * (thickness + gap)
       ringMarkup += ringArc({
         cx,
         cy,

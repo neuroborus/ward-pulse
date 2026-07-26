@@ -354,7 +354,7 @@ await mkdir(wearDir, { recursive: true })
 
 const three = [
   { family: FAMILY.codex, metric: 'Weekly plan', used: 0.92, credits: '320' },
-  { family: FAMILY.claude, metric: '5h window', used: 0.61, credits: '80' },
+  { family: FAMILY.claude, metric: '5h', used: 0.61, credits: '80' },
   { family: FAMILY.cursor, metric: 'Weekly plan', used: 0.28 },
 ]
 
@@ -391,7 +391,7 @@ const variants = [
       },
       {
         family: FAMILY.claude,
-        metric: '5h window',
+        metric: '5h',
         used: 0.4,
         credits: '80',
       },

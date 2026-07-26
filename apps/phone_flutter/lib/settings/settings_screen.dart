@@ -459,7 +459,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         for (final ring in resolveWatchRings(snapshot, widget.ringPreferences))
           ring.id
       else
-        ...widget.ringPreferences.clampedIds,
+        ...widget.ringPreferences.migratedIds,
     ];
     if (selected) {
       if (ids.contains(metric.id) || ids.length >= watchRingSlotCount) {
@@ -485,7 +485,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<String> get _effectiveRingIds {
     final snapshot = widget.snapshot;
     if (snapshot == null) {
-      return widget.ringPreferences.clampedIds;
+      return widget.ringPreferences.migratedIds;
     }
     return [
       for (final ring in resolveWatchRings(snapshot, widget.ringPreferences))
@@ -805,11 +805,8 @@ class _WatchRingTile extends StatelessWidget {
           reason == null
               ? const Icon(Icons.data_usage_outlined)
               : Tooltip(message: reason, child: const Icon(Icons.help_outline)),
-      title: Text(metric.label),
-      subtitle: Text(
-        reason ??
-            '${metric.remainingPercent!.round()}% left · ${metric.status.label}',
-      ),
+      title: Text(metric.settingsTitle),
+      subtitle: Text(metric.settingsSubtitle),
       value: selected,
       onChanged: canToggle ? (value) => onChanged(value ?? false) : null,
     );

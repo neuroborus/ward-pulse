@@ -27,10 +27,10 @@ map face colors to providers.
       (↻ OK )                ← OK / !OK inside dual-arrow refresh glyph
       [detail]               ← optional; only for problems (Stale, Rate limited, …)
 
-  (●)  Codex · Weekly plan   ← tightest remaining on top (same as face)
+  (●)  Codex · Weekly plan   ← tightest remaining on top (same payload as face center)
        8% left · 320 credits
 
-  (●)  Claude · 5h window
+  (●)  Claude · 5h
        39% left · 80 credits
 
   (●)  Cursor · Weekly plan
@@ -45,7 +45,9 @@ Rules:
 - Row order = **tightest remaining first** (highest `usedPercent` first), matching the face.
 - Mini arc = **remaining** (`100 - usedPercent`), family color from the face palette.
 - Primary line: family/provider + metric label; same wording for the same window kind
-  (Codex and Cursor both `Weekly plan`).
+  (Codex and Cursor both `Weekly plan`). Claude’s subscription plan windows
+  (`5h`, `Weekly`, optional Opus/Sonnet weekly) collapse to **one** ring on the phone;
+  Glance shows which window is active via the short label (`Claude · 5h` / `Claude · Weekly`).
 - Secondary line: `N% left`; append `· N credits` when that provider reports purchased credits.
   Per provider only — not a footer sum, not face `creditsGlance`, never LLM `TOK`.
 - Empty / exhausted: short copy centered between refresh and Alerts; no placeholder rings.

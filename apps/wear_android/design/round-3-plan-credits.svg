@@ -9,23 +9,23 @@
   </defs>
   <rect width="450" height="450" fill="url(#lift)"/>
   
-    <circle cx="225" cy="225" r="200.25" fill="none" stroke="#2E3632"
-      stroke-width="19.799999999999997" />
-    <circle cx="225" cy="225" r="200.25" fill="none" stroke="#65D78A"
-      stroke-width="19.799999999999997" stroke-linecap="round"
-      stroke-dasharray="100.66 1258.21"
+    <circle cx="225" cy="225" r="157.95" fill="none" stroke="#2E3632"
+      stroke-width="14.4" />
+    <circle cx="225" cy="225" r="157.95" fill="none" stroke="#65D78A"
+      stroke-width="14.4" stroke-linecap="round"
+      stroke-dasharray="79.39 992.43"
       transform="rotate(-90 225 225)" />
-    <circle cx="225" cy="225" r="175.95" fill="none" stroke="#2E3632"
-      stroke-width="19.799999999999997" />
-    <circle cx="225" cy="225" r="175.95" fill="none" stroke="#E8915A"
-      stroke-width="19.799999999999997" stroke-linecap="round"
-      stroke-dasharray="431.16 1105.53"
+    <circle cx="225" cy="225" r="176.85" fill="none" stroke="#2E3632"
+      stroke-width="14.4" />
+    <circle cx="225" cy="225" r="176.85" fill="none" stroke="#E8915A"
+      stroke-width="14.4" stroke-linecap="round"
+      stroke-dasharray="433.36 1111.18"
       transform="rotate(-90 225 225)" />
-    <circle cx="225" cy="225" r="151.65" fill="none" stroke="#2E3632"
-      stroke-width="19.799999999999997" />
-    <circle cx="225" cy="225" r="151.65" fill="none" stroke="#67E8D4"
-      stroke-width="19.799999999999997" stroke-linecap="round"
-      stroke-dasharray="686.05 952.85"
+    <circle cx="225" cy="225" r="195.75" fill="none" stroke="#2E3632"
+      stroke-width="14.4" />
+    <circle cx="225" cy="225" r="195.75" fill="none" stroke="#67E8D4"
+      stroke-width="14.4" stroke-linecap="round"
+      stroke-dasharray="885.55 1229.93"
       transform="rotate(-90 225 225)" />
   
     <text x="225" y="250.1" text-anchor="middle"

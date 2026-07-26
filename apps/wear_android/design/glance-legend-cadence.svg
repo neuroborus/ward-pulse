@@ -58,7 +58,7 @@
       transform="rotate(-90 137.5 245)" />
     <text x="171.5" y="243.5"
       font-family="Noto Sans, sans-serif" font-size="16"
-      font-weight="700" fill="#F4FBF8">Claude · 5h window</text>
+      font-weight="700" fill="#F4FBF8">Claude · 5h</text>
     <text x="171.5" y="263.0"
       font-family="Noto Sans, sans-serif" font-size="14"
       font-weight="700" fill="#8A968F">39% left · 80 credits</text>
