@@ -16,9 +16,10 @@ final _cursorCookieProbeUris = <Uri>[
 
 /// Exact IdP hosts not covered by the apex suffixes below.
 const _cursorSignInIdpHosts = <String>{
-  'accounts.google.com',
+  'accounts.youtube.com',
   'github.com',
   'www.github.com',
+  'challenges.cloudflare.com',
 };
 
 bool _hostMatches(String host, String apex) =>
@@ -33,6 +34,9 @@ bool isCursorSessionCookieHost(Uri url) {
 }
 
 /// Navigation allowlist for the Cursor sign-in WebView.
+///
+/// Google login hops across several Google apexes; cookie capture stays on
+/// [isCursorSessionCookieHost] only.
 bool isAllowedCursorSignInUrl(Uri url) {
   if (!url.isScheme('https') || url.host.isEmpty) {
     return false;
@@ -44,7 +48,12 @@ bool isAllowedCursorSignInUrl(Uri url) {
   if (_cursorSignInIdpHosts.contains(host)) {
     return true;
   }
-  return _hostMatches(host, 'microsoftonline.com') ||
+  return _hostMatches(host, 'google.com') ||
+      _hostMatches(host, 'googleusercontent.com') ||
+      _hostMatches(host, 'gstatic.com') ||
+      _hostMatches(host, 'googleapis.com') ||
+      _hostMatches(host, 'recaptcha.net') ||
+      _hostMatches(host, 'microsoftonline.com') ||
       _hostMatches(host, 'workos.com');
 }
 

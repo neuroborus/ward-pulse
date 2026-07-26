@@ -1,9 +1,16 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import 'cursor_webview_cookies.dart';
+
+/// Fallback Chrome UA when the platform does not expose a WebView default.
+const _chromeMobileUserAgent =
+    'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 '
+    '(KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36';
 
 /// Full-screen Cursor dashboard sign-in (WebView session cookie capture).
 ///
@@ -55,16 +62,68 @@ class _CursorPlanSignInScreenState extends State<CursorPlanSignInScreen> {
           ..setNavigationDelegate(
             NavigationDelegate(
               onNavigationRequest: (request) {
+                // Google/reCAPTCHA load many subframes; blocking them hangs
+                // password / SMS steps. Cookie capture stays on cursor.com.
+                if (!request.isMainFrame) {
+                  return NavigationDecision.navigate;
+                }
                 final uri = Uri.tryParse(request.url);
-                if (uri != null && isAllowedCursorSignInUrl(uri)) {
+                if (uri == null) {
+                  return NavigationDecision.prevent;
+                }
+                if (uri.scheme == 'about') {
+                  return NavigationDecision.navigate;
+                }
+                if (isAllowedCursorSignInUrl(uri)) {
                   return NavigationDecision.navigate;
                 }
                 return NavigationDecision.prevent;
               },
-              onPageFinished: (_) => unawaited(_probeCookies()),
+              onPageFinished: (_) {
+                _enableAndroidThirdPartyCookies();
+                unawaited(_probeCookies());
+              },
             ),
           );
-    unawaited(_start());
+    unawaited(_configureAndStart());
+  }
+
+  Future<void> _configureAndStart() async {
+    await _controller.setUserAgent(await _signInUserAgent());
+    _enableAndroidThirdPartyCookies();
+    if (!mounted) {
+      return;
+    }
+    await _start();
+  }
+
+  /// Prefer the system WebView UA with the `; wv` marker removed — Google
+  /// often stalls embedded WebViews that advertise themselves as such.
+  Future<String> _signInUserAgent() async {
+    try {
+      final current = await _controller.getUserAgent();
+      if (current != null && current.trim().isNotEmpty) {
+        return current.replaceAll('; wv', '');
+      }
+    } catch (_) {}
+    return _chromeMobileUserAgent;
+  }
+
+  void _enableAndroidThirdPartyCookies() {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    final platformController = _controller.platform;
+    final platformCookies = _cookieManager.platform;
+    if (platformController is! AndroidWebViewController ||
+        platformCookies is! AndroidWebViewCookieManager) {
+      return;
+    }
+    unawaited(
+      platformCookies
+          .setAcceptThirdPartyCookies(platformController, true)
+          .catchError((Object _) {}),
+    );
   }
 
   Future<void> _start() async {
@@ -110,7 +169,6 @@ class _CursorPlanSignInScreenState extends State<CursorPlanSignInScreen> {
       }
       _completing = true;
       _poll?.cancel();
-      // Token is already in hand; jar clear is hygiene only.
       try {
         await _cookieManager.clearCookies();
       } catch (_) {}

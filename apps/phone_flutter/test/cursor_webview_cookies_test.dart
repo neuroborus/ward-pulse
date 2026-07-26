@@ -74,7 +74,7 @@ void main() {
   });
 
   group('isAllowedCursorSignInUrl', () {
-    test('allows Cursor, authenticator, and known IdPs', () {
+    test('allows Cursor, authenticator, and Google login hops', () {
       expect(
         isAllowedCursorSignInUrl(Uri.parse('https://cursor.com/dashboard')),
         isTrue,
@@ -90,7 +90,21 @@ void main() {
         isTrue,
       );
       expect(
+        isAllowedCursorSignInUrl(Uri.parse('https://accounts.youtube.com/')),
+        isTrue,
+      );
+      expect(
+        isAllowedCursorSignInUrl(
+          Uri.parse('https://www.google.com/accounts/SetOSID'),
+        ),
+        isTrue,
+      );
+      expect(
         isAllowedCursorSignInUrl(Uri.parse('https://github.com/login')),
+        isTrue,
+      );
+      expect(
+        isAllowedCursorSignInUrl(Uri.parse('https://www.recaptcha.net/')),
         isTrue,
       );
     });
