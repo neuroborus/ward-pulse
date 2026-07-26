@@ -341,7 +341,7 @@ void main() {
     expect(find.text('Remove'), findsOneWidget);
   });
 
-  testWidgets('shows plan usage by default and can include purchases', (
+  testWidgets('shows plan and purchased by default and can hide purchases', (
     tester,
   ) async {
     final json =
@@ -390,18 +390,21 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Weekly plan'), findsOneWidget);
-    expect(find.text('Purchased credits'), findsNothing);
+    expect(find.text('Purchased credits'), findsOneWidget);
 
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
+    expect(find.widgetWithText(SwitchListTile, 'Platform spend'), findsOneWidget);
     await tester.tap(find.widgetWithText(SwitchListTile, 'Purchased usage'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Dashboard'));
     await tester.pumpAndSettle();
 
-    expect(preferences.value.purchased, isTrue);
+    expect(preferences.value.purchased, isFalse);
+    expect(preferences.value.plan, isTrue);
+    expect(preferences.value.platform, isTrue);
     expect(find.text('Weekly plan'), findsOneWidget);
-    expect(find.text('Purchased credits'), findsOneWidget);
+    expect(find.text('Purchased credits'), findsNothing);
   });
 
   testWidgets('persists the global refresh interval slider', (tester) async {

@@ -34,9 +34,10 @@ Platform code owns transport, TLS, background scheduling, secure credential retr
 Providers may report plan allowances, purchased tokens or credits, or both. These values stay
 separate from monetary budgets because their units and reset rules differ.
 
-- Plan usage is visible by default; purchased usage is opt-in.
-- The user may show either source or both, but at least one source remains enabled.
-- The preference filters phone and Wear OS presentation without discarding collected data.
+- Plan usage, purchased usage, and platform spend are all visible by default.
+- The user may hide any surface, but at least one of the three remains enabled.
+- Allowance preferences filter phone and Wear OS presentation; platform spend is
+  phone-dashboard only. Preferences never discard collected data.
 - WardPulse does not invent a limit, balance, or percentage when the provider omits it.
 - Exact provider quantities cross shared contracts as decimal strings with an explicit `tokens`
   or `credits` unit.

@@ -103,6 +103,35 @@ void main() {
     expect(find.text('Today'), findsOneWidget);
   });
 
+  testWidgets('hides platform spend when the display preference is off', (
+    tester,
+  ) async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final openAi =
+        (source.toJson()['accounts'] as List).first as Map<String, dynamic>;
+    openAi['provider'] = 'openai';
+    final dashboard = source.toJson()..['accounts'] = [openAi];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: wardPulseLightTheme,
+        home: Scaffold(
+          body: DashboardScreen(
+            snapshot: DashboardSnapshot.fromJson(dashboard),
+            displayPreferences: const ConsumptionDisplayPreferences(
+              platform: false,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Platform spend'), findsNothing);
+    expect(find.text('Today'), findsNothing);
+  });
+
   testWidgets('hides plan Unknowns for OpenAI-only and offers Settings help', (
     tester,
   ) async {

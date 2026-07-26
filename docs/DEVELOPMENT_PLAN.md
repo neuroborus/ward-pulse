@@ -1368,7 +1368,7 @@ Codex subscription slice:
 phone owns Codex device-code sign-in, secure token storage, refresh, and read-only reporting
 no desktop process, local server, or adb reverse dependency remains
 Rust normalizes plan windows, purchased credits, and daily token buckets without fake money values
-plan usage is displayed by default; users can select plan, purchased usage, or both
+plan, purchased usage, and platform spend are visible by default; at least one surface stays on
 the same filtered allowance summary is propagated to Wear OS through schema version 3
 Android end-to-end acceptance remains: sign in from Settings and verify the live phone/watch UI
 ```

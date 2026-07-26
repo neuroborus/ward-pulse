@@ -302,9 +302,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _setDisplayPreferences(
     ConsumptionDisplayPreferences value,
   ) async {
-    if (!value.plan && !value.purchased) {
+    if (!value.hasVisibleSurface) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Keep at least one usage source visible')),
+        const SnackBar(
+          content: Text('Keep at least one dashboard surface visible'),
+        ),
       );
       return;
     }
@@ -474,6 +476,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged:
                     (value) => _setDisplayPreferences(
                       widget.displayPreferences.copyWith(purchased: value),
+                    ),
+              ),
+              const Divider(height: 1),
+              SwitchListTile(
+                secondary: const Icon(Icons.payments_outlined),
+                title: const Text('Platform spend'),
+                subtitle: const Text(
+                  'Monetary budgets for today, week, and month when reported',
+                ),
+                value: widget.displayPreferences.platform,
+                onChanged:
+                    (value) => _setDisplayPreferences(
+                      widget.displayPreferences.copyWith(platform: value),
                     ),
               ),
             ],

@@ -49,6 +49,7 @@ class DashboardScreen extends StatelessWidget {
         caps.showAllowances &&
         displayPreferences.purchased &&
         !hasPurchasedAllowance;
+    final showPlatformSpend = displayPreferences.platform;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -116,12 +117,12 @@ class DashboardScreen extends StatelessWidget {
         _AlertsPanel(alerts: snapshot.alerts),
         // Platform spend sits below primary plan/token surfaces — $0 + Unknown
         // is easy to misread as "Codex is empty" when shown near the top.
-        if (caps.showBudgets) ...[
+        if (showPlatformSpend && caps.showBudgets) ...[
           const SizedBox(height: 16),
           _SectionHeader(title: 'Platform spend'),
           const SizedBox(height: 8),
           _BudgetCards(snapshot: snapshot),
-        ] else if (caps.showSpendGap) ...[
+        ] else if (showPlatformSpend && caps.showSpendGap) ...[
           const SizedBox(height: 16),
           _CapabilityGapRow(
             title: 'Spend',
