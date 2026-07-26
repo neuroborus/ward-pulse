@@ -6,6 +6,7 @@ import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
+import 'package:ward_pulse_phone/sync/manual_refresh_window.dart';
 
 void main() {
   test('builds the sanitized watch summary fixture', () {
@@ -22,6 +23,8 @@ void main() {
       dashboard,
       const ConsumptionDisplayPreferences(),
       const WatchRingPreferences(),
+      // Match fixture: PollCadence floor already elapsed.
+      clock: dashboard.generatedAt.add(ManualRefreshWindow.floor),
     );
 
     expect(jsonDecode(payload.encode()), expected);
@@ -105,7 +108,7 @@ void main() {
             )
             as Map<String, dynamic>;
 
-    expect(payload['schemaVersion'], 6);
+    expect(payload['schemaVersion'], 7);
     expect(payload['creditsGlance'], {
       'text': '12.5',
       'label': 'Credits left',
@@ -156,5 +159,29 @@ void main() {
             as Map<String, dynamic>;
 
     expect((payload['allowances'] as List).first['unlimited'], isTrue);
+  });
+
+  test('embeds PollCadence floor window for Wear refresh chrome', () {
+    final dashboard = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final lastSync = dashboard.generatedAt;
+    final payload =
+        jsonDecode(
+              WatchDashboardSummaryPayload.fromSnapshot(
+                dashboard,
+                const ConsumptionDisplayPreferences(),
+                const WatchRingPreferences(),
+                manualRefreshAnchorAt: lastSync,
+                clock: lastSync.add(const Duration(minutes: 2)),
+              ).encode(),
+            )
+            as Map<String, dynamic>;
+
+    expect(payload['manualRefreshAllowed'], isFalse);
+    expect(
+      payload['manualRefreshAvailableAt'],
+      lastSync.add(ManualRefreshWindow.floor).toUtc().toIso8601String(),
+    );
   });
 }

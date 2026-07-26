@@ -1,8 +1,10 @@
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "dataMode": "mock",
   "generatedAt": "2026-06-27T18:42:00.000Z",
   "overallStatus": "ok",
+  "manualRefreshAllowed": true,
+  "manualRefreshAvailableAt": null,
   "rings": [
     {
       "id": "budget.week",

@@ -32,8 +32,10 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   text legend (not a face clone) — mini remaining arcs, tightest-first, per-provider credits.
   Refresh: `OK`/`!OK` inside dual-arrow glyph; cadence = gray `OK`+disabled; provider limit =
   gray `!OK`+`Rate limited`+disabled; `Stale` = orange `!OK`+enabled. `Alerts: N` when `N > 0`.
-  Review art: `preview-glance-legend-*.png`. Compose `GlancePage` rewrite pending (still
-  `UsageRings`).
+  Phone owns allowance (`manualRefreshAllowed` / `manualRefreshAvailableAt` on schema v7)
+  from the PollCadence hard floor, not the Settings auto-poll slider. Wear must not invent
+  a local cooldown. Review art: `preview-glance-legend-*.png`. Compose: `GlanceLegendPage`
+  (+ watch→phone refresh message).
 - **Watch face / WFF** (and any face-like complication preview) follow
   `docs/product/WATCH_RING_DESIGN.md` (**locked 2026-07-25**): outer = tightest remaining; arc =
   remaining; large time hero; sunk family strips; family colors. Future multi-profile / hatch /

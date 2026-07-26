@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -5,35 +6,64 @@ import 'package:flutter/services.dart';
 import '../dashboard/dashboard_models.dart';
 import '../settings/consumption_display_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
+import 'manual_refresh_window.dart';
 import 'watch_credits_glance.dart';
 
 abstract interface class WatchSyncService {
   Future<void> sync(
     DashboardSnapshot snapshot,
     ConsumptionDisplayPreferences displayPreferences,
-    WatchRingPreferences ringPreferences,
-  );
+    WatchRingPreferences ringPreferences, {
+    DateTime? manualRefreshAnchorAt,
+  });
+
+  /// Native → Dart: Wear Glance asked the phone to sync providers.
+  void bindWatchRefreshListener(void Function() onRefresh);
+
+  void unbindWatchRefreshListener();
 }
 
 class MethodChannelWatchSyncService implements WatchSyncService {
   const MethodChannelWatchSyncService();
 
   static const _channel = MethodChannel('app.wardpulse/watch_sync');
+  static const _watchRefreshMethod = 'watchRefreshRequested';
+  static const _watchRefreshReadyMethod = 'watchRefreshChannelReady';
 
   @override
   Future<void> sync(
     DashboardSnapshot snapshot,
     ConsumptionDisplayPreferences displayPreferences,
-    WatchRingPreferences ringPreferences,
-  ) {
+    WatchRingPreferences ringPreferences, {
+    DateTime? manualRefreshAnchorAt,
+  }) {
     return _channel.invokeMethod<void>(
       'syncWatchSummary',
       WatchDashboardSummaryPayload.fromSnapshot(
         snapshot,
         displayPreferences,
         ringPreferences,
+        manualRefreshAnchorAt: manualRefreshAnchorAt,
       ).encode(),
     );
+  }
+
+  @override
+  void bindWatchRefreshListener(void Function() onRefresh) {
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == _watchRefreshMethod) {
+        onRefresh();
+      }
+    });
+    // Flush a refresh tap that arrived before the Dart handler was bound.
+    unawaited(
+      _channel.invokeMethod<void>(_watchRefreshReadyMethod).catchError((_) {}),
+    );
+  }
+
+  @override
+  void unbindWatchRefreshListener() {
+    _channel.setMethodCallHandler(null);
   }
 }
 
@@ -45,8 +75,10 @@ class WatchDashboardSummaryPayload {
   factory WatchDashboardSummaryPayload.fromSnapshot(
     DashboardSnapshot snapshot,
     ConsumptionDisplayPreferences displayPreferences,
-    WatchRingPreferences ringPreferences,
-  ) {
+    WatchRingPreferences ringPreferences, {
+    DateTime? manualRefreshAnchorAt,
+    DateTime? clock,
+  }) {
     final rings = orderWatchRingsForSurface(
       resolveWatchRings(snapshot, ringPreferences),
     );
@@ -54,8 +86,12 @@ class WatchDashboardSummaryPayload {
       snapshot,
       displayPreferences,
     );
+    final window = ManualRefreshWindow.fromLastSync(
+      lastSyncAt: manualRefreshAnchorAt ?? snapshot.generatedAt,
+      now: clock,
+    );
     return WatchDashboardSummaryPayload._({
-      'schemaVersion': 6,
+      'schemaVersion': 7,
       'dataMode':
           snapshot.accounts.isNotEmpty &&
                   snapshot.accounts.every(
@@ -65,6 +101,9 @@ class WatchDashboardSummaryPayload {
               : 'live',
       'generatedAt': snapshot.generatedAt.toUtc().toIso8601String(),
       'overallStatus': snapshot.overallStatus.wireName,
+      'manualRefreshAllowed': window.allowed,
+      'manualRefreshAvailableAt':
+          window.availableAt?.toUtc().toIso8601String(),
       'rings': [
         for (final ring in rings)
           {

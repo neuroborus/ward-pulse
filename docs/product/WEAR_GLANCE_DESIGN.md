@@ -79,6 +79,11 @@ Pulse (`OK` / `!OK`) and interactivity are **independent**:
 - When a **specific problem** is known, show it under the control (`Stale`, `Auth required`,
   `Rate limited`, `Mock data`, …). Keep the primary glyph as `OK` / `!OK` only.
 - Cadence cooldown is **not** a problem — do not show `Rate limited` or flip to `!OK` for it.
+- The **phone** decides allowance from the **PollCadence hard floor** (strictest provider
+  minimum, currently 5 minutes) — not the Settings auto-poll slider — and pushes
+  `manualRefreshAllowed` / `manualRefreshAvailableAt` on the watch summary. Wear reflects those
+  flags (and may re-enable when wall clock passes `manualRefreshAvailableAt`); it must not invent
+  a separate local cooldown that can disagree with the phone.
 - **Enabled**: accent stroke + label; tappable → phone refresh request.
 - **Disabled**: muted gray stroke + label; non-interactive.
 
@@ -139,6 +144,7 @@ OK / !OK inside dual-arrow refresh glyph; same label font size
 optional muted problem detail below the plate (never on the ring)
 cadence cooldown = gray OK + disabled (no detail)
 provider rate limit = gray !OK + Rate limited + disabled
+phone owns allowance via summary manualRefreshAllowed / manualRefreshAvailableAt
 Stale = orange !OK + Stale + enabled
 Alerts: N pill; active when N > 0; disabled at 0
 empty / exhausted centered copy between refresh and Alerts
@@ -153,7 +159,8 @@ primary preview: preview-glance-legend-3.png
 |---------|------|
 | Wear OS app Glance (page 1) | This legend + refresh control + Alerts button |
 | Wear OS app Menu / detail | Secondary pages (rings list, Today, Alerts, …) |
-| Phone | Honors refresh requests within cadence / provider limits |
+| Phone | Owns PollCadence floor for Wear taps; pushes `manualRefreshAllowed` /
+  `manualRefreshAvailableAt`; Settings slider drives automatic polling only |
 | WFF / face | [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md) — concentric remaining arcs |
 
 ## Non-goals
@@ -164,4 +171,5 @@ primary preview: preview-glance-legend-3.png
 - Credential entry or settings on Wear.
 - Editing alert rules on Wear (list only).
 - Wear performing provider HTTP sync itself.
+- Wear inventing a local PollCadence / interval cooldown that can disagree with the phone.
 - Treating cadence cooldown as `!OK` or `Rate limited`.

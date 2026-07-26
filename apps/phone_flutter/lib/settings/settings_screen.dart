@@ -11,7 +11,6 @@ import '../providers/provider_connection_row.dart';
 import '../providers/provider_credential_store.dart';
 import '../sync/codex_account_client.dart';
 import '../sync/poll_cadence.dart';
-import '../sync/watch_sync_service.dart';
 import 'consumption_display_preferences.dart';
 import 'refresh_interval_preferences.dart';
 import 'watch_ring_preferences.dart';
@@ -20,7 +19,6 @@ class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
     required this.snapshot,
-    required this.watchSyncService,
     required this.credentialStore,
     required this.codexAccountService,
     required this.displayPreferences,
@@ -29,6 +27,7 @@ class SettingsScreen extends StatefulWidget {
     required this.onRefreshIntervalChanged,
     required this.ringPreferences,
     required this.onRingPreferencesChanged,
+    required this.onSyncWatch,
     required this.debugDataAvailable,
     required this.mockDataEnabled,
     required this.onMockDataEnabledChanged,
@@ -36,7 +35,6 @@ class SettingsScreen extends StatefulWidget {
   });
 
   final DashboardSnapshot? snapshot;
-  final WatchSyncService watchSyncService;
   final ProviderCredentialStore credentialStore;
   final CodexAccountService codexAccountService;
   final ConsumptionDisplayPreferences displayPreferences;
@@ -48,6 +46,7 @@ class SettingsScreen extends StatefulWidget {
   final WatchRingPreferences ringPreferences;
   final Future<void> Function(WatchRingPreferences value)
   onRingPreferencesChanged;
+  final Future<void> Function() onSyncWatch;
   final bool debugDataAvailable;
   final bool mockDataEnabled;
   final Future<void> Function(bool value) onMockDataEnabledChanged;
@@ -254,8 +253,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _syncWatch() async {
-    final snapshot = widget.snapshot;
-    if (snapshot == null) {
+    if (widget.snapshot == null) {
       return;
     }
 
@@ -265,11 +263,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     try {
-      await widget.watchSyncService.sync(
-        snapshot,
-        widget.displayPreferences,
-        widget.ringPreferences,
-      );
+      await widget.onSyncWatch();
       if (mounted) {
         setState(() {
           _syncResult = 'Watch summary queued';

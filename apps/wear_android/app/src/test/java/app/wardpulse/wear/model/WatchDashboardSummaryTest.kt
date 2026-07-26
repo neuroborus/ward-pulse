@@ -39,6 +39,21 @@ class WatchDashboardSummaryTest {
     }
 
     @Test
+    fun manualRefreshHonorsPhoneFlagsAndWallClock() {
+        val blocked =
+            PreviewWatchDashboardSummary.value.copy(
+                manualRefreshAllowed = false,
+                manualRefreshAvailableAt = "2026-06-27T18:47:00Z",
+            )
+        assertFalse(blocked.isManualRefreshAllowed(Instant.parse("2026-06-27T18:46:59Z")))
+        assertTrue(blocked.isManualRefreshAllowed(Instant.parse("2026-06-27T18:47:00Z")))
+
+        val allowed =
+            blocked.copy(manualRefreshAllowed = true, manualRefreshAvailableAt = null)
+        assertTrue(allowed.isManualRefreshAllowed(Instant.parse("2026-06-27T18:42:00Z")))
+    }
+
+    @Test
     fun formatsMoneyFromMinorUnits() {
         assertEquals("USD 12.40", Money(1_240, "USD").label)
         assertEquals("-USD 0.05", Money(-5, "USD").label)

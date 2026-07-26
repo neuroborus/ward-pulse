@@ -1,7 +1,6 @@
 package app.wardpulse.wear.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,7 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.min
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.AppScaffold
@@ -39,7 +37,6 @@ import app.wardpulse.wear.model.Money
 import app.wardpulse.wear.model.PreviewWatchDashboardSummary
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.RingSummary
-import app.wardpulse.wear.model.WatchDataMode
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.ui.theme.WardPulseTheme
 
@@ -208,61 +205,15 @@ private fun HomeScreen(
         beyondViewportPageCount = 0,
     ) { page ->
         when (pages[page]) {
-            HomePage.Glance -> GlancePage(summary = summary)
+            HomePage.Glance -> GlanceLegendPage(
+                summary = summary,
+                onOpenAlerts = { onOpen(Screen.ALERTS) },
+            )
             HomePage.Menu -> MenuPage(
                 summary = summary,
                 onOpen = onOpen,
                 onOpenRing = onOpenRing,
             )
-        }
-    }
-}
-
-@Composable
-private fun GlancePage(summary: WatchDashboardSummary) {
-    val (status, statusLabel) = glanceChrome(summary)
-    val rings = summary.activeRings
-
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 12.dp, vertical = 22.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        val diameter = min(maxWidth, maxHeight) * 0.82f
-
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            Text(
-                statusLabel,
-                style = MaterialTheme.typography.labelLarge,
-                color = statusColor(status),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(bottom = 4.dp),
-            )
-            if (rings.isEmpty()) {
-                Text(
-                    if (summary.rings.isEmpty()) {
-                        "Choose percent rings in the phone app"
-                    } else {
-                        "No remaining capacity"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 8.dp),
-                )
-            } else {
-                UsageRings(
-                    rings = rings,
-                    modifier = Modifier.fillMaxWidth(),
-                    diameter = diameter,
-                    creditsGlance = summary.creditsGlance?.text,
-                )
-            }
         }
     }
 }
@@ -357,12 +308,6 @@ private fun StraightAppTimeText() {
     )
 }
 
-private fun glanceChrome(summary: WatchDashboardSummary): Pair<PulseStatus, String> = when {
-    summary.dataMode == WatchDataMode.MOCK -> PulseStatus.WARNING to "Mock data"
-    summary.isStale -> PulseStatus.WARNING to "Stale data"
-    else -> summary.overallStatus to summary.overallStatus.label
-}
-
 private val AllowanceSummary.valueLabel: String
     get() = when {
         unlimited -> "Unlimited"
@@ -433,6 +378,6 @@ private fun String.toStatus(): PulseStatus = when (this) {
 @Composable
 private fun WardPulsePreview() {
     WardPulseTheme {
-        WardPulseApp(PreviewWatchDashboardSummary.value)
+        WardPulseApp(PreviewWatchDashboardSummary.glanceLegend)
     }
 }

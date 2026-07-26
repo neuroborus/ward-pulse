@@ -1603,9 +1603,9 @@ Deliverables:
   no plan arcs; never LLM `TOK` counts on the face;
 - schema `creditsGlance` (v6) feeds the compact remaining-credits aggregate for strip TITLE /
   credits-only — not LLM token counts;
-- watch summary schema version 6: ordered selected ring entries (stable id, short label,
-  percent, status) plus optional `creditsGlance`, without credentials, account ids, or raw
-  provider payloads;
+- watch summary schema version 7: ordered selected ring entries (stable id, short label,
+  percent, status) plus optional `creditsGlance`, phone-owned `manualRefreshAllowed` /
+  `manualRefreshAvailableAt`, without credentials, account ids, or raw provider payloads;
 - Wear OS **face** / WFF render concentric remaining layers; Wear **app** Glance is the legend
   screen (`WEAR_GLANCE_DESIGN.md`), not a second face;
 - tap-to-open into the Wear app preserved.
@@ -1616,13 +1616,14 @@ Acceptance:
 WATCH_RING_DESIGN.md baseline locked 2026-07-25 (time hero, remaining arcs, sunk strips)
 WEAR_GLANCE_DESIGN.md baseline locked 2026-07-26 (legend rows, OK/!OK refresh, Alerts pill)
 review SVGs/PNGs match those baselines (face: preview-3-plan-credits; Glance: preview-glance-legend-3)
-schema version 6 validates and sanitized fixtures stay current
+schema version 7 validates and sanitized fixtures stay current
 watch surfaces show only configured, available, non-exhausted rings
 arc length = remaining; outer layer is the tightest remaining among selected rings
 credits strip / face glance only when purchased credits remain and display prefs allow them
 App Glance credits are per provider with an explicit credits label (not a footer sum)
 Glance refresh: OK/!OK inside dual-arrow glyph; optional muted problem detail below plate
 cadence cooldown = gray OK + disabled (no detail); provider rate limit = gray !OK + Rate limited + disabled
+phone pushes manualRefreshAllowed / manualRefreshAvailableAt from PollCadence floor (not Settings slider); Wear does not invent cooldown
 Stale = orange !OK + Stale + refresh enabled; Alerts: N active when N > 0, disabled at 0
 metric labels use the same wording pattern across providers for the same window kind
 Wear app Glance Compose matches WEAR_GLANCE_DESIGN.md (text legend — not UsageRings face clone)
@@ -1633,7 +1634,7 @@ ambient mode stays readable with rings visible
 Landed so far:
 
 ```text
-schema version 4 + sanitized watch fixture; schema v5 tokenGlance → v6 creditsGlance
+schema version 4 + sanitized watch fixture; schema v5 tokenGlance → v6 creditsGlance → v7 manual refresh flags
 phone Watch display prefs, payload rings, and Settings UI (transitional — moves to Watchface tab)
 Watch ring visual baseline locked (WATCH_RING_DESIGN.md + render-watch-ring-designs.mjs)
 Wear Glance legend baseline locked 2026-07-26 (WEAR_GLANCE_DESIGN.md + glance-legend-* review art)
@@ -1641,7 +1642,7 @@ Phone payload sorts tightest-remaining outermost and omits exhausted layers
 Wear Compose UsageRings: remaining arcs + sunk family strips (time stays on system/WFF)
 WFF v2 concentric remaining arcs (WeightedStroke + ColorRamp family colors) + sunk credits strip
 Outer strip TEXT carries the full label (`100% · 500`) — WFF TITLE Conditions are unreliable
-Wear Glance Compose rewrite to locked text legend — not landed yet (GlancePage still uses UsageRings)
+Wear Glance Compose text legend landed (GlanceLegendPage; watch→phone refresh request)
 ```
 
 

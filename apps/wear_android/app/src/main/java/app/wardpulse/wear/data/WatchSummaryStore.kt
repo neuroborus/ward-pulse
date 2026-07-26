@@ -97,6 +97,11 @@ private fun WatchDashboardSummary.toJson() = JSONObject().apply {
     put("providers", JSONArray().apply { providers.forEach { put(it.toJson()) } })
     put("alerts", JSONArray().apply { alerts.forEach { put(it.toJson()) } })
     put("isStale", isStale)
+    put("manualRefreshAllowed", manualRefreshAllowed)
+    put(
+        "manualRefreshAvailableAt",
+        manualRefreshAvailableAt ?: JSONObject.NULL,
+    )
 }
 
 private fun CreditsGlance.toJson() = JSONObject().apply {
@@ -175,6 +180,8 @@ private fun JSONObject.toWatchDashboardSummary(): WatchDashboardSummary {
         providers = getJSONArray("providers").mapObjects { it.toProviderSummary() },
         alerts = getJSONArray("alerts").mapObjects { it.toAlertSummary() },
         isStale = getBoolean("isStale"),
+        manualRefreshAllowed = getBoolean("manualRefreshAllowed"),
+        manualRefreshAvailableAt = nullableString("manualRefreshAvailableAt"),
     )
 }
 
@@ -276,7 +283,7 @@ private inline fun <T> JSONArray.mapObjects(transform: (JSONObject) -> T): List<
 
 private fun String.toPulseStatus(): PulseStatus = requireNotNull(PulseStatus.fromWireName(this))
 
-private const val SCHEMA_VERSION = 6
+private const val SCHEMA_VERSION = 7
 private const val MAX_RINGS = 4
 private val CURRENCY_PATTERN = Regex("^[A-Z]{3}$")
 private val PROVIDERS = setOf("openai", "codex", "claude", "cursor", "mock")

@@ -137,7 +137,24 @@ data class WatchDashboardSummary(
     val providers: List<ProviderSummary>,
     val alerts: List<AlertSummary>,
     val isStale: Boolean,
+    /** Phone PollCadence floor — Wear must not invent its own cooldown. */
+    val manualRefreshAllowed: Boolean,
+    /** ISO-8601 instant when refresh becomes allowed; null when already allowed. */
+    val manualRefreshAvailableAt: String?,
 ) {
+    /** Phone flags plus local wall clock (re-enable when [manualRefreshAvailableAt] passes). */
+    fun isManualRefreshAllowed(now: Instant = Instant.now()): Boolean {
+        if (manualRefreshAllowed) {
+            return true
+        }
+        val availableAt = manualRefreshAvailableAt ?: return false
+        return try {
+            !now.isBefore(Instant.parse(availableAt))
+        } catch (_: DateTimeParseException) {
+            false
+        }
+    }
+
     /** Device-local wall clock for the Last sync screen. */
     val lastSyncLabel: String
         get() = try {
@@ -179,7 +196,7 @@ data class WatchDashboardSummary(
 
 object PreviewWatchDashboardSummary {
     val value = WatchDashboardSummary(
-        schemaVersion = 6,
+        schemaVersion = 7,
         dataMode = WatchDataMode.MOCK,
         generatedAt = "2026-06-27T18:42:00Z",
         overallStatus = PulseStatus.OK,
@@ -218,5 +235,47 @@ object PreviewWatchDashboardSummary {
         ),
         alerts = emptyList(),
         isStale = true,
+        manualRefreshAllowed = true,
+        manualRefreshAvailableAt = null,
+    )
+
+    /** Glance legend preview — live providers + per-provider credits. */
+    val glanceLegend = value.copy(
+        dataMode = WatchDataMode.LIVE,
+        generatedAt = "2026-07-26T08:06:00Z",
+        isStale = false,
+        rings = listOf(
+            RingSummary("allowance.codex.week", "Weekly plan", 92.0, PulseStatus.OK),
+            RingSummary("allowance.claude.window", "5h window", 61.0, PulseStatus.OK),
+            RingSummary("allowance.cursor.week", "Weekly plan", 28.0, PulseStatus.OK),
+        ),
+        creditsGlance = CreditsGlance(text = "400", label = "Credits left", provider = "codex"),
+        allowances = listOf(
+            AllowanceSummary(
+                source = "purchased",
+                label = "Codex · Credits",
+                usedPercent = null,
+                remaining = Quantity("320", "credits"),
+                unlimited = false,
+                resetsAt = null,
+                status = PulseStatus.OK,
+            ),
+            AllowanceSummary(
+                source = "purchased",
+                label = "Claude · Credits",
+                usedPercent = null,
+                remaining = Quantity("80", "credits"),
+                unlimited = false,
+                resetsAt = null,
+                status = PulseStatus.OK,
+            ),
+        ),
+        providers = listOf(
+            ProviderSummary(
+                provider = "codex",
+                status = PulseStatus.OK,
+                todaySpent = Money(1_240, "USD"),
+            ),
+        ),
     )
 }

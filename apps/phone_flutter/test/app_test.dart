@@ -593,10 +593,17 @@ class _FakeWatchSyncService implements WatchSyncService {
   Future<void> sync(
     DashboardSnapshot snapshot,
     ConsumptionDisplayPreferences displayPreferences,
-    WatchRingPreferences ringPreferences,
-  ) async {
+    WatchRingPreferences ringPreferences, {
+    DateTime? manualRefreshAnchorAt,
+  }) async {
     syncedSnapshots.add(snapshot);
   }
+
+  @override
+  void bindWatchRefreshListener(void Function() onRefresh) {}
+
+  @override
+  void unbindWatchRefreshListener() {}
 }
 
 class _FailingWatchSyncService implements WatchSyncService {
@@ -606,10 +613,17 @@ class _FailingWatchSyncService implements WatchSyncService {
   Future<void> sync(
     DashboardSnapshot snapshot,
     ConsumptionDisplayPreferences displayPreferences,
-    WatchRingPreferences ringPreferences,
-  ) {
+    WatchRingPreferences ringPreferences, {
+    DateTime? manualRefreshAnchorAt,
+  }) {
     return Future.error(StateError('Watch unavailable'));
   }
+
+  @override
+  void bindWatchRefreshListener(void Function() onRefresh) {}
+
+  @override
+  void unbindWatchRefreshListener() {}
 }
 
 final class _FailingDashboardRepository extends DashboardRepository {

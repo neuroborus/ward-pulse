@@ -16,13 +16,26 @@
     "allowances",
     "providers",
     "alerts",
-    "isStale"
+    "isStale",
+    "manualRefreshAllowed",
+    "manualRefreshAvailableAt"
   ],
   "properties": {
-    "schemaVersion": { "const": 6 },
+    "schemaVersion": { "const": 7 },
     "dataMode": { "enum": ["live", "mock"] },
     "generatedAt": { "type": "string", "format": "date-time" },
     "overallStatus": { "$ref": "dashboard_snapshot.schema.json#/$defs/providerStatus" },
+    "manualRefreshAllowed": {
+      "type": "boolean",
+      "description": "Whether a Wear Glance refresh tap may request a phone sync right now (phone PollCadence hard floor, not the Settings auto-poll slider)."
+    },
+    "manualRefreshAvailableAt": {
+      "description": "When manual refresh becomes allowed again under the PollCadence floor. Null when already allowed.",
+      "anyOf": [
+        { "type": "string", "format": "date-time" },
+        { "type": "null" }
+      ]
+    },
     "rings": {
       "type": "array",
       "maxItems": 4,

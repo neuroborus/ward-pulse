@@ -14,6 +14,7 @@ import '../settings/consumption_display_preferences.dart';
 import '../settings/debug_data_preferences.dart';
 import '../settings/refresh_interval_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
+import '../sync/manual_refresh_window.dart';
 import '../sync/provider_sync_scheduler.dart';
 import '../sync/watch_sync_service.dart';
 import 'ward_pulse_theme.dart';
@@ -121,16 +122,61 @@ class _DashboardHostState extends State<DashboardHost> {
   StreamSubscription<void>? _syncTicks;
   var _autoSyncInFlight = false;
 
+  /// Latest Wear-accepted refresh tap; keeps the PollCadence floor honest while a
+  /// reload is still in flight (before [DashboardSnapshot.generatedAt] advances).
+  DateTime? _wearRefreshAnchorAt;
+
   @override
   void initState() {
     super.initState();
     _syncTicks = widget.syncScheduler.ticks.listen((_) {
       unawaited(_onScheduledSync());
     });
+    widget.watchSyncService.bindWatchRefreshListener(_onWatchRefreshRequested);
+  }
+
+  DateTime get _manualRefreshAnchorAt {
+    final generatedAt = _currentSnapshot?.generatedAt;
+    final wearAnchor = _wearRefreshAnchorAt;
+    if (generatedAt == null && wearAnchor == null) {
+      return DateTime.now().toUtc();
+    }
+    if (generatedAt == null) {
+      return wearAnchor!;
+    }
+    if (wearAnchor == null) {
+      return generatedAt;
+    }
+    return wearAnchor.isAfter(generatedAt) ? wearAnchor : generatedAt;
+  }
+
+  void _onWatchRefreshRequested() {
+    if (!mounted) {
+      return;
+    }
+    final snapshot = _currentSnapshot;
+    final window = ManualRefreshWindow.fromLastSync(
+      lastSyncAt: _manualRefreshAnchorAt,
+    );
+    if (!window.allowed) {
+      // Re-push flags so Wear chrome matches the phone floor without a wasted sync.
+      if (snapshot != null) {
+        unawaited(_syncWatch(snapshot));
+      }
+      return;
+    }
+    _wearRefreshAnchorAt = DateTime.now().toUtc();
+    // Push disabled chrome immediately; the reload will push again with fresh data.
+    if (snapshot != null) {
+      unawaited(_syncWatch(snapshot));
+    }
+    widget.repository.invalidate();
+    _reload();
   }
 
   @override
   void dispose() {
+    widget.watchSyncService.unbindWatchRefreshListener();
     unawaited(_syncTicks?.cancel());
     unawaited(widget.syncScheduler.cancel());
     super.dispose();
@@ -280,14 +326,27 @@ class _DashboardHostState extends State<DashboardHost> {
 
   Future<void> _syncWatch(DashboardSnapshot snapshot) async {
     try {
-      await widget.watchSyncService.sync(
-        snapshot,
-        _displayPreferences,
-        _ringPreferences,
-      );
+      await _queueWatchSummary(snapshot);
     } catch (_) {
       // Watch availability must not block the phone dashboard.
     }
+  }
+
+  Future<void> _queueWatchSummary(DashboardSnapshot snapshot) {
+    return widget.watchSyncService.sync(
+      snapshot,
+      _displayPreferences,
+      _ringPreferences,
+      manualRefreshAnchorAt: _manualRefreshAnchorAt,
+    );
+  }
+
+  Future<void> _onSettingsSyncWatch() async {
+    final snapshot = _currentSnapshot;
+    if (snapshot == null) {
+      return;
+    }
+    await _queueWatchSummary(snapshot);
   }
 
   void _reload() {
@@ -333,7 +392,6 @@ class _DashboardHostState extends State<DashboardHost> {
               _ when _selectedIndex == _settingsIndex => SettingsScreen(
                 key: const ValueKey('settings'),
                 snapshot: snapshot,
-                watchSyncService: widget.watchSyncService,
                 credentialStore: widget.credentialStore,
                 codexAccountService: widget.codexAccountService,
                 displayPreferences: _displayPreferences,
@@ -342,6 +400,7 @@ class _DashboardHostState extends State<DashboardHost> {
                 onRefreshIntervalChanged: _updateRefreshInterval,
                 ringPreferences: _ringPreferences,
                 onRingPreferencesChanged: _updateRingPreferences,
+                onSyncWatch: _onSettingsSyncWatch,
                 debugDataAvailable: widget.debugDataAvailable,
                 mockDataEnabled: _mockDataEnabled,
                 onMockDataEnabledChanged: _updateMockDataEnabled,

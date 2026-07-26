@@ -7,10 +7,13 @@ versioned `WatchDashboardSummary` payload and persists only the latest successfu
 
 ## Ownership
 
+- Home Glance text legend (`WEAR_GLANCE_DESIGN.md`): mini remaining arcs, OK/!OK refresh,
+  Alerts pill; Menu page for secondary screens.
 - Today, week, providers, alerts (active list only — no rule editing), and last sync screens.
 - Local storage of the latest watch summary.
 - Wear-specific navigation, rotary input, shape-aware layouts, and stale data states.
 - Wear Data Layer receiver for `/wardpulse/watch-summary`.
+- Wear → phone refresh request on `/wardpulse/refresh-request`.
 - Today, week, and provider-status complication data sources for the WardPulse watch face.
 
 Provider credentials are never entered or stored on the watch.
