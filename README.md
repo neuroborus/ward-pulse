@@ -15,14 +15,14 @@ This repository is intentionally organized as one product monorepo with separate
 - `schemas/` contains shared JSON schemas for snapshots, accounts, usage buckets, and budgets.
 - `fixtures/` contains sanitized provider fixtures and stable dashboard snapshots.
 - `bindings/` contains platform binding wrappers.
-- `brand/` contains protected product identity assets and store artwork placeholders.
-- `docs/` contains product, architecture, security, and release documentation.
+- `brand/` contains protected product identity, shared OpenPencil sources, and store artwork.
+- `docs/` contains product documentation and the Vocs site workspace.
 - `tools/` contains repeatable local development and validation automation.
 
 ## Current Phase
 
-Phase 7 is in progress: OpenAI Platform organization reporting is selected as the first live
-provider contract. The next slice adds phone-side secure credential storage and transport.
+Phase 7 provider reporting and Phase 8 hardening are in progress. OpenAI Platform organization
+reporting is separate from Codex subscription usage; both are fetched directly by the phone.
 
 ## Useful Commands
 
@@ -40,6 +40,9 @@ just run-phone
 just check-wear
 just validate-watchface
 just check-watchface
+just docs-dev
+just check-docs
+just export-icons
 just build-wear
 just test-wear-device
 just test-phone-watch-sync
@@ -65,7 +68,12 @@ python3 tools/validate-fixtures/validate_json.py
 
 ## Documentation
 
-Start with [docs/README.md](docs/README.md). It is the documentation index and project gate. The development plan lives at [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md), and the verified Android/Flutter environment is recorded in [docs/ANDROID_TOOLCHAIN.md](docs/ANDROID_TOOLCHAIN.md).
+Start with [docs/README.md](docs/README.md). It is the documentation index and project gate. The
+Vocs workflow lives in [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md), the development plan in
+[docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md), and the verified Android/Flutter environment
+in [docs/ANDROID_TOOLCHAIN.md](docs/ANDROID_TOOLCHAIN.md).
+Design asset ownership and OpenPencil exports are documented in
+[docs/DESIGN_ASSETS.md](docs/DESIGN_ASSETS.md).
 
 Repository-wide working agreements for agents and humans live in [AGENTS.md](AGENTS.md).
 

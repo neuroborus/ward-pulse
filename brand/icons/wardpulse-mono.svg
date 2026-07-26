@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="WardPulse mono">
+  <g transform="translate(256, 256) scale(1.22) translate(-256, -256)">
+    <text x="256" y="174.1"
+      fill="#C5CDD1" fill-opacity="0.95"
+      font-family="Noto Sans, DejaVu Sans, sans-serif"
+      font-size="60" font-weight="700"
+      letter-spacing="4.1"
+      text-anchor="middle" dominant-baseline="central">WARDPULSE</text>
+
+  <g fill="none" stroke="#C5CDD1" stroke-opacity="1" fill-opacity="1"
+    stroke-linecap="round" stroke-linejoin="round"
+    transform="translate(256, 256) scale(0.92) translate(-256, -256)">
+    <path transform="translate(128, 214)" d="M0 44 L60 44 L96 0 L160 88 L200 36 L256 36"
+      stroke-width="18"/>
+    <path transform="translate(292, 196)" d="M0 10 C14 0 50 0 64 10 C50 20 14 20 0 10 Z"
+      stroke-width="7"/>
+    <circle cx="324" cy="206" r="3.2" fill="#C5CDD1" stroke="none"/>
+  </g>
+  </g>
+</svg>

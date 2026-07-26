@@ -4,7 +4,8 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import app.wardpulse.wear.model.MockWatchDashboardSummary
+import app.wardpulse.wear.model.PreviewWatchDashboardSummary
+import app.wardpulse.wear.model.WatchDataMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -24,9 +25,9 @@ class WatchSummaryStoreTest {
 
     @Test
     fun persistsLatestSummary() {
-        store.save(MockWatchDashboardSummary.value)
+        store.save(PreviewWatchDashboardSummary.value)
 
-        assertEquals(MockWatchDashboardSummary.value, store.load())
+        assertEquals(PreviewWatchDashboardSummary.value, store.load())
     }
 
     @Test
@@ -37,14 +38,41 @@ class WatchSummaryStoreTest {
 
         assertTrue(store.saveEncoded(encoded))
         assertEquals("2026-06-27T18:42:00.000Z", store.load()?.generatedAt)
+        assertEquals(WatchDataMode.MOCK, store.load()?.dataMode)
+    }
+
+    @Test
+    fun rejectsLegacyPayloadWithoutAnExplicitDataMode() {
+        val encoded = testContext.assets.open("watch_dashboard_summary.json")
+            .bufferedReader()
+            .use { it.readText() }
+            .replace("\"schemaVersion\": 7,", "\"schemaVersion\": 2,")
+            .replace("  \"dataMode\": \"mock\",\n", "")
+
+        assertFalse(store.saveEncoded(encoded))
+        assertNull(store.load())
+    }
+
+    @Test
+    fun preservesUnlimitedPurchasedUsage() {
+        val encoded = testContext.assets.open("watch_dashboard_summary.json")
+            .bufferedReader()
+            .use { it.readText() }
+            .replace(
+                "\"allowances\": []",
+                """"allowances": [{"source":"purchased","label":"Purchased credits","usedPercent":null,"remaining":null,"unlimited":true,"resetsAt":null,"status":"ok"}]""",
+            )
+
+        assertTrue(store.saveEncoded(encoded))
+        assertTrue(store.load()?.allowances?.single()?.unlimited == true)
     }
 
     @Test
     fun invalidSummaryKeepsPreviousState() {
-        store.save(MockWatchDashboardSummary.value)
+        store.save(PreviewWatchDashboardSummary.value)
 
-        assertFalse(store.saveEncoded("{\"schemaVersion\":2}"))
-        assertEquals(MockWatchDashboardSummary.value, store.load())
+        assertFalse(store.saveEncoded("{\"schemaVersion\":3,\"rings\":[]}"))
+        assertEquals(PreviewWatchDashboardSummary.value, store.load())
     }
 
     @Test

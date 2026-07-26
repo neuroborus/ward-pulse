@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../dashboard/dashboard_models.dart';
@@ -6,19 +7,25 @@ class UsageHistoryChart extends StatelessWidget {
   const UsageHistoryChart({
     super.key,
     required this.buckets,
-    required this.totalCost,
+    this.title = 'Usage history',
+    this.accent,
   });
 
   final List<UsageBucket> buckets;
-  final Money? totalCost;
+  final String title;
+
+  /// Provider family tint when the series belongs to one account; else theme primary.
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final totalCost = _totalCost(buckets);
+    final totalTokens = _totalTokens(buckets);
+    final usesTokens = totalCost == null && totalTokens != null;
+    final showDates = _spansMultipleUtcDays(buckets);
 
     return Card(
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -28,7 +35,7 @@ class UsageHistoryChart extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'Usage history',
+                    title,
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
@@ -43,11 +50,17 @@ class UsageHistoryChart extends StatelessWidget {
                 height: 112,
                 width: double.infinity,
                 child: CustomPaint(
+                  key: const ValueKey('usage-history-bars'),
                   painter: _UsageHistoryPainter(
                     values: buckets
-                        .map((bucket) => bucket.cost?.minorUnits ?? 0)
+                        .map(
+                          (bucket) =>
+                              usesTokens
+                                  ? bucket.totalTokens ?? 0
+                                  : bucket.cost?.minorUnits ?? 0,
+                        )
                         .toList(growable: false),
-                    color: colors.primary,
+                    color: accent ?? colors.primary,
                     baselineColor: colors.outlineVariant,
                   ),
                 ),
@@ -55,11 +68,18 @@ class UsageHistoryChart extends StatelessWidget {
               const SizedBox(height: 10),
               Row(
                 children: [
-                  Expanded(child: Text(_timeLabel(buckets.first.startAt))),
-                  Text(totalCost?.label ?? 'Unknown'),
+                  Expanded(
+                    child: Text(_rangeLabel(buckets.first.startAt, showDates)),
+                  ),
+                  Text(
+                    totalCost?.label ??
+                        (totalTokens == null
+                            ? 'No totals'
+                            : '${formatCount(totalTokens)} tokens'),
+                  ),
                   Expanded(
                     child: Text(
-                      _timeLabel(buckets.last.endAt),
+                      _rangeLabel(buckets.last.endAt, showDates),
                       textAlign: TextAlign.end,
                     ),
                   ),
@@ -90,18 +110,23 @@ class _UsageHistoryPainter extends CustomPainter {
       return;
     }
 
-    final baselinePaint = Paint()
-      ..color = baselineColor
-      ..strokeWidth = 1;
+    final baselinePaint =
+        Paint()
+          ..color = baselineColor
+          ..strokeWidth = 1;
     final barPaint = Paint()..color = color;
     final maxValue = values.fold<int>(
       0,
       (current, value) => value > current ? value : current,
     );
-    final barGap = values.length > 1 ? 8.0 : 0.0;
-    final availableWidth = (size.width - barGap * (values.length - 1))
-        .clamp(0.0, size.width)
-        .toDouble();
+    final barGap =
+        values.length > 1
+            ? (size.width / values.length / 4).clamp(2.0, 8.0).toDouble()
+            : 0.0;
+    final availableWidth =
+        (size.width - barGap * (values.length - 1))
+            .clamp(0.0, size.width)
+            .toDouble();
     final barWidth = availableWidth / values.length;
     final radius = Radius.circular(barWidth < 6 ? 2 : 4);
 
@@ -111,13 +136,17 @@ class _UsageHistoryPainter extends CustomPainter {
       baselinePaint,
     );
 
-    if (barWidth <= 0) {
+    if (barWidth <= 0 || maxValue <= 0) {
       return;
     }
 
     for (var index = 0; index < values.length; index += 1) {
-      final fraction = maxValue == 0 ? 0.0 : values[index] / maxValue;
-      final height = (size.height * fraction).clamp(2.0, size.height).toDouble();
+      if (values[index] <= 0) {
+        continue;
+      }
+      final fraction = values[index] / maxValue;
+      final height =
+          (size.height * fraction).clamp(2.0, size.height).toDouble();
       final left = index * (barWidth + barGap);
       final rect = Rect.fromLTWH(left, size.height - height, barWidth, height);
 
@@ -127,7 +156,7 @@ class _UsageHistoryPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_UsageHistoryPainter oldDelegate) {
-    return oldDelegate.values != values ||
+    return !listEquals(oldDelegate.values, values) ||
         oldDelegate.color != color ||
         oldDelegate.baselineColor != baselineColor;
   }
@@ -137,8 +166,58 @@ String _bucketCountLabel(int count) {
   return count == 1 ? '1 bucket' : '$count buckets';
 }
 
-String _timeLabel(DateTime value) {
+Money? _totalCost(List<UsageBucket> buckets) {
+  if (buckets.isEmpty) {
+    return null;
+  }
+
+  final currency = buckets.first.cost?.currency;
+  if (currency == null ||
+      buckets.any((bucket) => bucket.cost?.currency != currency)) {
+    return null;
+  }
+
+  return Money(
+    minorUnits: buckets.fold(
+      0,
+      (total, bucket) => total + bucket.cost!.minorUnits,
+    ),
+    currency: currency,
+  );
+}
+
+int? _totalTokens(List<UsageBucket> buckets) {
+  if (buckets.isEmpty ||
+      buckets.every((bucket) => bucket.totalTokens == null)) {
+    return null;
+  }
+
+  return buckets.fold<int>(
+    0,
+    (total, bucket) => total + (bucket.totalTokens ?? 0),
+  );
+}
+
+bool _spansMultipleUtcDays(List<UsageBucket> buckets) {
+  if (buckets.isEmpty) {
+    return false;
+  }
+
+  final start = buckets.first.startAt.toUtc();
+  final end = buckets.last.endAt.toUtc();
+  return start.year != end.year ||
+      start.month != end.month ||
+      start.day != end.day;
+}
+
+String _rangeLabel(DateTime value, bool showDate) {
   final utc = value.toUtc();
+  if (showDate) {
+    final month = utc.month.toString().padLeft(2, '0');
+    final day = utc.day.toString().padLeft(2, '0');
+    return '${utc.year}-$month-$day';
+  }
+
   final hour = utc.hour.toString().padLeft(2, '0');
   final minute = utc.minute.toString().padLeft(2, '0');
 

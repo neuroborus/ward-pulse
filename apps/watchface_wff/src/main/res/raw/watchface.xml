@@ -1,15 +1,310 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Concentric remaining arcs + sunk % / credits strips
+  (docs/product/WATCH_RING_DESIGN.md, baseline 2026-07-25).
+
+  Visual target: apps/wear_android/design/round-*-plan*.svg
+  — radial lift background, ~14px visual stroke (WeightedStroke thickness
+  compensated), equal-width sunk strips (rx=6) stacked for a clear 3-up aperture.
+
+  BoundingArc clips ring-slot content — strips use BoundingBox slots after clock.
+  Center strip TEXT = full label (100% · 500); lower strips TEXT = digits, Template adds %%.
+-->
 <WatchFace width="450" height="450">
     <Metadata key="CLOCK_TYPE" value="DIGITAL" />
     <Metadata key="PREVIEW_TIME" value="10:08:00" />
 
-    <Scene backgroundColor="#ff000000">
+    <Scene backgroundColor="#ff0a0d0b">
+        <PartDraw x="0" y="0" width="450" height="450" name="lift">
+            <Ellipse x="0" y="0" width="450" height="450">
+                <Fill color="#ff101412">
+                    <RadialGradient
+                        centerX="225"
+                        centerY="216"
+                        radius="279"
+                        colors="#ff18201C #ff101412 #ff0A0D0B"
+                        positions="0.0 0.55 1.0" />
+                </Fill>
+            </Ellipse>
+        </PartDraw>
+        <ComplicationSlot
+            x="0"
+            y="0"
+            width="450"
+            height="450"
+            slotId="101"
+            displayName="@string/ring1_complication"
+            supportedTypes="RANGED_VALUE EMPTY"
+            isCustomizable="FALSE">
+            <DefaultProviderPolicy
+                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.TodayComplicationDataSourceService"
+                primaryProviderType="RANGED_VALUE"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <BoundingArc
+                centerX="225"
+                centerY="225"
+                width="392"
+                height="392"
+                thickness="28"
+                startAngle="0"
+                endAngle="359.9"
+                isRoundEdge="TRUE" />
+            <Complication type="RANGED_VALUE">
+                <Condition>
+                    <Expressions>
+                        <Expression name="hasRing">
+                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]>
+                        </Expression>
+                    </Expressions>
+                    <Compare expression="hasRing">
+                        <Group x="0" y="0" width="450" height="450" name="ring1">
+                            <PartDraw x="0" y="0" width="450" height="450">
+                                <Arc
+                                    centerX="225"
+                                    centerY="225"
+                                    width="392"
+                                    height="392"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke color="#ff2e3632" thickness="28" cap="ROUND" />
+                                </Arc>
+                            </PartDraw>
+                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Arc
+                                    centerX="225"
+                                    centerY="225"
+                                    width="392"
+                                    height="392"
+                                    startAngle="0"
+                                    endAngle="0">
+                                    <Transform
+                                        target="endAngle"
+                                        value="([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9" />
+                                    <WeightedStroke
+                                        thickness="28"
+                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                        cap="ROUND" />
+                                </Arc>
+                            </PartDraw>
+                        </Group>
+                    </Compare>
+                </Condition>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <ComplicationSlot
+            x="0"
+            y="0"
+            width="450"
+            height="450"
+            slotId="102"
+            displayName="@string/ring2_complication"
+            supportedTypes="RANGED_VALUE EMPTY"
+            isCustomizable="FALSE">
+            <DefaultProviderPolicy
+                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.WeekComplicationDataSourceService"
+                primaryProviderType="RANGED_VALUE"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <BoundingArc
+                centerX="225"
+                centerY="225"
+                width="356"
+                height="356"
+                thickness="28"
+                startAngle="0"
+                endAngle="359.9"
+                isRoundEdge="TRUE" />
+            <Complication type="RANGED_VALUE">
+                <Condition>
+                    <Expressions>
+                        <Expression name="hasRing">
+                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]>
+                        </Expression>
+                    </Expressions>
+                    <Compare expression="hasRing">
+                        <Group x="0" y="0" width="450" height="450" name="ring2">
+                            <PartDraw x="0" y="0" width="450" height="450">
+                                <Arc
+                                    centerX="225"
+                                    centerY="225"
+                                    width="356"
+                                    height="356"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke color="#ff2e3632" thickness="28" cap="ROUND" />
+                                </Arc>
+                            </PartDraw>
+                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Arc
+                                    centerX="225"
+                                    centerY="225"
+                                    width="356"
+                                    height="356"
+                                    startAngle="0"
+                                    endAngle="0">
+                                    <Transform
+                                        target="endAngle"
+                                        value="([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9" />
+                                    <WeightedStroke
+                                        thickness="28"
+                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                        cap="ROUND" />
+                                </Arc>
+                            </PartDraw>
+                        </Group>
+                    </Compare>
+                </Condition>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <ComplicationSlot
+            x="0"
+            y="0"
+            width="450"
+            height="450"
+            slotId="105"
+            displayName="@string/ring3_complication"
+            supportedTypes="RANGED_VALUE EMPTY"
+            isCustomizable="FALSE">
+            <DefaultProviderPolicy
+                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.Ring3ComplicationDataSourceService"
+                primaryProviderType="RANGED_VALUE"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <BoundingArc
+                centerX="225"
+                centerY="225"
+                width="320"
+                height="320"
+                thickness="28"
+                startAngle="0"
+                endAngle="359.9"
+                isRoundEdge="TRUE" />
+            <Complication type="RANGED_VALUE">
+                <Condition>
+                    <Expressions>
+                        <Expression name="hasRing">
+                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]>
+                        </Expression>
+                    </Expressions>
+                    <Compare expression="hasRing">
+                        <Group x="0" y="0" width="450" height="450" name="ring3">
+                            <PartDraw x="0" y="0" width="450" height="450">
+                                <Arc
+                                    centerX="225"
+                                    centerY="225"
+                                    width="320"
+                                    height="320"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke color="#ff2e3632" thickness="28" cap="ROUND" />
+                                </Arc>
+                            </PartDraw>
+                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Arc
+                                    centerX="225"
+                                    centerY="225"
+                                    width="320"
+                                    height="320"
+                                    startAngle="0"
+                                    endAngle="0">
+                                    <Transform
+                                        target="endAngle"
+                                        value="([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9" />
+                                    <WeightedStroke
+                                        thickness="28"
+                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                        cap="ROUND" />
+                                </Arc>
+                            </PartDraw>
+                        </Group>
+                    </Compare>
+                </Condition>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <ComplicationSlot
+            x="0"
+            y="0"
+            width="450"
+            height="450"
+            slotId="106"
+            displayName="@string/ring4_complication"
+            supportedTypes="RANGED_VALUE EMPTY"
+            isCustomizable="FALSE">
+            <DefaultProviderPolicy
+                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.Ring4ComplicationDataSourceService"
+                primaryProviderType="RANGED_VALUE"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <BoundingArc
+                centerX="225"
+                centerY="225"
+                width="284"
+                height="284"
+                thickness="28"
+                startAngle="0"
+                endAngle="359.9"
+                isRoundEdge="TRUE" />
+            <Complication type="RANGED_VALUE">
+                <Condition>
+                    <Expressions>
+                        <Expression name="hasRing">
+                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]>
+                        </Expression>
+                    </Expressions>
+                    <Compare expression="hasRing">
+                        <Group x="0" y="0" width="450" height="450" name="ring4">
+                            <PartDraw x="0" y="0" width="450" height="450">
+                                <Arc
+                                    centerX="225"
+                                    centerY="225"
+                                    width="284"
+                                    height="284"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke color="#ff2e3632" thickness="28" cap="ROUND" />
+                                </Arc>
+                            </PartDraw>
+                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Arc
+                                    centerX="225"
+                                    centerY="225"
+                                    width="284"
+                                    height="284"
+                                    startAngle="0"
+                                    endAngle="0">
+                                    <Transform
+                                        target="endAngle"
+                                        value="([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9" />
+                                    <WeightedStroke
+                                        thickness="28"
+                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                        cap="ROUND" />
+                                </Arc>
+                            </PartDraw>
+                        </Group>
+                    </Compare>
+                </Condition>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
         <DigitalClock x="0" y="0" width="450" height="450">
             <TimeText
                 x="0"
-                y="150"
+                y="180"
                 width="450"
-                height="100"
+                height="90"
                 alpha="255"
                 align="CENTER"
                 format="hh:mm"
@@ -17,16 +312,16 @@
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <Font
                     family="SYNC_TO_DEVICE"
-                    size="104"
-                    weight="NORMAL"
+                    size="70"
+                    weight="BOLD"
                     slant="NORMAL"
-                    color="#ffffffff" />
+                    color="#fff4fbf8" />
             </TimeText>
             <TimeText
                 x="0"
-                y="150"
+                y="180"
                 width="450"
-                height="100"
+                height="90"
                 alpha="0"
                 align="CENTER"
                 format="hh:mm"
@@ -34,64 +329,184 @@
                 <Variant mode="AMBIENT" target="alpha" value="255" />
                 <Font
                     family="SYNC_TO_DEVICE"
-                    size="104"
+                    size="81"
                     weight="THIN"
                     slant="NORMAL"
-                    color="#ffffffff" />
+                    color="#fff4fbf8" />
             </TimeText>
         </DigitalClock>
 
         <Group x="0" y="0" width="450" height="450" name="wardpulse">
             <Launch target="app.wardpulse/app.wardpulse.wear.MainActivity" />
-
-            <Group x="0" y="0" width="450" height="450" name="summary" alpha="255">
+            <PartImage x="189" y="248" width="72" height="72" alpha="95">
                 <Variant mode="AMBIENT" target="alpha" value="0" />
-
-                <PartText x="0" y="92" width="450" height="36">
-                    <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="24" color="#ff80b8ff">WARDPULSE</Font>
-                    </Text>
-                </PartText>
-
-                <PartText x="50" y="282" width="150" height="28">
-                    <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="18" color="#ff9aa0aa">TODAY</Font>
-                    </Text>
-                </PartText>
-                <PartText x="50" y="312" width="150" height="42">
-                    <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="34" color="#ffffffff">25%</Font>
-                    </Text>
-                </PartText>
-
-                <PartText x="250" y="282" width="150" height="28">
-                    <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="18" color="#ff9aa0aa">WEEK</Font>
-                    </Text>
-                </PartText>
-                <PartText x="250" y="312" width="150" height="42">
-                    <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="34" color="#ffffffff">29%</Font>
-                    </Text>
-                </PartText>
-
-                <PartText x="0" y="374" width="450" height="28">
-                    <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="18" color="#ff65d78a">STATUS  OK</Font>
-                    </Text>
-                </PartText>
-            </Group>
-
-            <PartText x="0" y="277" width="450" height="32" alpha="0">
-                <Variant mode="AMBIENT" target="alpha" value="255" />
-                <Text align="CENTER">
-                    <Font
-                        family="SYNC_TO_DEVICE"
-                        size="18"
-                        weight="THIN"
-                        color="#ffffffff">WARDPULSE</Font>
-                </Text>
-            </PartText>
+                <Image resource="wardpulse_mono" />
+            </PartImage>
+            <PartImage x="201" y="255" width="48" height="48" alpha="0">
+                <Variant mode="AMBIENT" target="alpha" value="70" />
+                <Image resource="wardpulse_mono" />
+            </PartImage>
         </Group>
+        <!-- Equal-width strips (120), centered; 3-up stack y=318/342/366 clears thinner rings. -->
+        <ComplicationSlot
+            x="165"
+            y="318"
+            width="120"
+            height="20"
+            slotId="104"
+            displayName="@string/strip1_complication"
+            supportedTypes="SHORT_TEXT EMPTY"
+            isCustomizable="FALSE">
+            <DefaultProviderPolicy
+                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.TokensComplicationDataSourceService"
+                primaryProviderType="SHORT_TEXT"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <BoundingBox x="0" y="0" width="120" height="20" />
+            <Complication type="SHORT_TEXT">
+                <Group x="0" y="0" width="120" height="20" name="ring1_strip" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <PartDraw x="0" y="0" width="120" height="20">
+                        <RoundRectangle x="0" y="0" width="120" height="20" cornerRadiusX="6" cornerRadiusY="6">
+                            <Fill color="#eb0b0e0c" />
+                        </RoundRectangle>
+                        <RoundRectangle x="0" y="2" width="3" height="16" cornerRadiusX="2" cornerRadiusY="2">
+                            <Fill color="#ff65d78a" />
+                        </RoundRectangle>
+                    </PartDraw>
+                    <PartText x="6" y="0" width="110" height="20">
+                        <Text align="CENTER" ellipsis="TRUE">
+                            <Font family="SYNC_TO_DEVICE" size="13" weight="BOLD" color="#fff4fbf8">
+                                <Template>%s
+                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                </Template>
+                            </Font>
+                        </Text>
+                    </PartText>
+                </Group>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <ComplicationSlot
+            x="165"
+            y="342"
+            width="120"
+            height="20"
+            slotId="107"
+            displayName="@string/strip2_complication"
+            supportedTypes="SHORT_TEXT EMPTY"
+            isCustomizable="FALSE">
+            <DefaultProviderPolicy
+                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.Strip2ComplicationDataSourceService"
+                primaryProviderType="SHORT_TEXT"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <BoundingBox x="0" y="0" width="120" height="20" />
+            <Complication type="SHORT_TEXT">
+                <Group x="0" y="0" width="120" height="20" name="ring2_strip" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <PartDraw x="0" y="0" width="120" height="20">
+                        <RoundRectangle x="0" y="0" width="120" height="20" cornerRadiusX="6" cornerRadiusY="6">
+                            <Fill color="#eb0b0e0c" />
+                        </RoundRectangle>
+                        <RoundRectangle x="0" y="2" width="3" height="16" cornerRadiusX="2" cornerRadiusY="2">
+                            <Fill color="#ffe8915a" />
+                        </RoundRectangle>
+                    </PartDraw>
+                    <!-- Inner strips: digits only; credits live on strip 1. -->
+                    <PartText x="6" y="0" width="110" height="20">
+                        <Text align="CENTER" ellipsis="TRUE">
+                            <Font family="SYNC_TO_DEVICE" size="13" weight="BOLD" color="#fff4fbf8">
+                                <Template>%s%%
+                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                </Template>
+                            </Font>
+                        </Text>
+                    </PartText>
+                </Group>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <ComplicationSlot
+            x="165"
+            y="366"
+            width="120"
+            height="20"
+            slotId="108"
+            displayName="@string/strip3_complication"
+            supportedTypes="SHORT_TEXT EMPTY"
+            isCustomizable="FALSE">
+            <DefaultProviderPolicy
+                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.Strip3ComplicationDataSourceService"
+                primaryProviderType="SHORT_TEXT"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <BoundingBox x="0" y="0" width="120" height="20" />
+            <Complication type="SHORT_TEXT">
+                <Group x="0" y="0" width="120" height="20" name="ring3_strip" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <PartDraw x="0" y="0" width="120" height="20">
+                        <RoundRectangle x="0" y="0" width="120" height="20" cornerRadiusX="6" cornerRadiusY="6">
+                            <Fill color="#eb0b0e0c" />
+                        </RoundRectangle>
+                        <RoundRectangle x="0" y="2" width="3" height="16" cornerRadiusX="2" cornerRadiusY="2">
+                            <Fill color="#ff67e8d4" />
+                        </RoundRectangle>
+                    </PartDraw>
+                    <PartText x="6" y="0" width="110" height="20">
+                        <Text align="CENTER" ellipsis="TRUE">
+                            <Font family="SYNC_TO_DEVICE" size="13" weight="BOLD" color="#fff4fbf8">
+                                <Template>%s%%
+                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                </Template>
+                            </Font>
+                        </Text>
+                    </PartText>
+                </Group>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <ComplicationSlot
+            x="165"
+            y="390"
+            width="120"
+            height="20"
+            slotId="109"
+            displayName="@string/strip4_complication"
+            supportedTypes="SHORT_TEXT EMPTY"
+            isCustomizable="FALSE">
+            <DefaultProviderPolicy
+                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.Strip4ComplicationDataSourceService"
+                primaryProviderType="SHORT_TEXT"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <BoundingBox x="0" y="0" width="120" height="20" />
+            <Complication type="SHORT_TEXT">
+                <Group x="0" y="0" width="120" height="20" name="ring4_strip" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <PartDraw x="0" y="0" width="120" height="20">
+                        <RoundRectangle x="0" y="0" width="120" height="20" cornerRadiusX="6" cornerRadiusY="6">
+                            <Fill color="#eb0b0e0c" />
+                        </RoundRectangle>
+                        <RoundRectangle x="0" y="2" width="3" height="16" cornerRadiusX="2" cornerRadiusY="2">
+                            <Fill color="#ff8ab4f8" />
+                        </RoundRectangle>
+                    </PartDraw>
+                    <PartText x="6" y="0" width="110" height="20">
+                        <Text align="CENTER" ellipsis="TRUE">
+                            <Font family="SYNC_TO_DEVICE" size="13" weight="BOLD" color="#fff4fbf8">
+                                <Template>%s%%
+                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                </Template>
+                            </Font>
+                        </Text>
+                    </PartText>
+                </Group>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
     </Scene>
 </WatchFace>

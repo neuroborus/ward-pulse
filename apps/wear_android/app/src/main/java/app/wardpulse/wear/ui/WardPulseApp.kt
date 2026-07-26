@@ -1,21 +1,32 @@
 package app.wardpulse.wear.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.VerticalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.AppScaffold
 import androidx.wear.compose.material3.Button
+import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.Card
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
+import androidx.wear.compose.material3.TimeTextDefaults
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
@@ -23,16 +34,23 @@ import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
 import androidx.wear.compose.ui.tooling.preview.WearPreviewDevices
 import androidx.wear.compose.ui.tooling.preview.WearPreviewSquare
-import app.wardpulse.wear.model.MockWatchDashboardSummary
+import app.wardpulse.wear.model.AllowanceSummary
 import app.wardpulse.wear.model.Money
+import app.wardpulse.wear.model.PreviewWatchDashboardSummary
 import app.wardpulse.wear.model.PulseStatus
+import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.ui.theme.WardPulseTheme
-import java.util.Locale
 
 private const val HOME_ROUTE = "home"
 
+private enum class HomePage {
+    Glance,
+    Menu,
+}
+
 private enum class Screen(val route: String, val label: String) {
+    USAGE("usage", "Usage"),
     TODAY("today", "Today"),
     WEEK("week", "Week"),
     PROVIDERS("providers", "Providers"),
@@ -47,15 +65,43 @@ private data class SummaryRow(
 )
 
 @Composable
-fun WardPulseApp(summary: WatchDashboardSummary) {
-    AppScaffold {
+fun WardPulseApp(summary: WatchDashboardSummary?) {
+    // Straight clock: default curved TimeText warps on round API 34+ shells.
+    // Sized to Glance review art (muted, not a face-style hero).
+    AppScaffold(timeText = { StraightAppTimeText() }) {
+        if (summary == null) {
+            EmptyDashboardScreen()
+            return@AppScaffold
+        }
         val navController = rememberSwipeDismissableNavController()
         SwipeDismissableNavHost(
             navController = navController,
             startDestination = HOME_ROUTE,
         ) {
             composable(HOME_ROUTE) {
-                HomeScreen(summary) { navController.navigate(it.route) }
+                HomeScreen(
+                    summary = summary,
+                    onOpen = { navController.navigate(it.route) },
+                    onOpenRing = { index -> navController.navigate("ring/$index") },
+                )
+            }
+            composable("ring/{index}") { entry ->
+                val index = entry.arguments?.getString("index")?.toIntOrNull()
+                val ring = index?.let { summary.activeRings.getOrNull(it) }
+                if (ring == null) {
+                    SummaryScreen(
+                        title = "Ring",
+                        rows = listOf(SummaryRow("Unavailable", "Choose rings on the phone")),
+                    )
+                } else {
+                    SummaryScreen(
+                        title = ring.label,
+                        rows = listOf(
+                            SummaryRow(formatPercentUsedLabel(ring.usedPercent), "Used", ring.status),
+                            SummaryRow(ring.status.label, "Status", ring.status),
+                        ),
+                    )
+                }
             }
             Screen.entries.forEach { screen ->
                 composable(screen.route) {
@@ -69,18 +115,51 @@ fun WardPulseApp(summary: WatchDashboardSummary) {
     }
 }
 
+@Composable
+private fun EmptyDashboardScreen() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 18.dp, vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text("WardPulse", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Sync from phone",
+            modifier = Modifier.padding(top = 8.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            "No dashboard data yet",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
 private fun WatchDashboardSummary.rowsFor(screen: Screen): List<SummaryRow> = when (screen) {
+    Screen.USAGE -> allowances.map { allowance ->
+        SummaryRow(
+            allowance.label,
+            allowance.valueLabel,
+            allowance.status,
+        )
+    }.ifEmpty { listOf(SummaryRow("No usage data", "Sync from the phone")) }
     Screen.TODAY -> listOf(
         SummaryRow("${today.spent.labelOrUnknown()} / ${today.limit.labelOrUnknown()}", "Budget"),
-        SummaryRow(today.usedPercent.usedLabel(), "${today.remaining.labelOrUnknown()} left"),
+        SummaryRow(formatPercentUsedLabel(today.usedPercent), "${today.remaining.labelOrUnknown()} left"),
         SummaryRow(overallStatus.label, "Overall status", overallStatus),
     )
     Screen.WEEK -> listOf(
         SummaryRow("${week.spent.labelOrUnknown()} / ${week.limit.labelOrUnknown()}", "Budget"),
-        SummaryRow(week.usedPercent.usedLabel(), "${week.remaining.labelOrUnknown()} left"),
+        SummaryRow(formatPercentUsedLabel(week.usedPercent), "${week.remaining.labelOrUnknown()} left"),
         SummaryRow(
-            week.projectedTotal?.label ?: "Unavailable",
-            "Projected total",
+            title = week.projectedTotal?.label ?: "Unavailable",
+            detail = "Projected total",
         ),
     )
     Screen.PROVIDERS -> providers.map {
@@ -95,7 +174,8 @@ private fun WatchDashboardSummary.rowsFor(screen: Screen): List<SummaryRow> = wh
     }
         .ifEmpty { listOf(SummaryRow("No active alerts", "All providers look normal")) }
     Screen.LAST_SYNC -> listOf(
-        SummaryRow(lastSyncLabel, "Saved locally"),
+        SummaryRow(lastSyncLabel, "Local time"),
+        SummaryRow(lastSyncUtcLabel, "UTC"),
         SummaryRow(
             title = if (isStale) "Stale data" else "Up to date",
             detail = if (isStale) {
@@ -108,36 +188,90 @@ private fun WatchDashboardSummary.rowsFor(screen: Screen): List<SummaryRow> = wh
     )
 }
 
+/** Exhausted layers are omitted on the surface (design: omit usedPercent >= 100). */
+private val WatchDashboardSummary.activeRings: List<RingSummary>
+    get() = rings.filter { it.usedPercent < 100.0 }
+
 @Composable
-private fun HomeScreen(summary: WatchDashboardSummary, onOpen: (Screen) -> Unit) {
+private fun HomeScreen(
+    summary: WatchDashboardSummary,
+    onOpen: (Screen) -> Unit,
+    onOpenRing: (Int) -> Unit,
+) {
+    val pages = HomePage.entries
+    val pagerState = rememberPagerState(pageCount = { pages.size })
+
+    VerticalPager(
+        state = pagerState,
+        modifier = Modifier.fillMaxSize(),
+        beyondViewportPageCount = 0,
+    ) { page ->
+        when (pages[page]) {
+            HomePage.Glance -> GlanceLegendPage(
+                summary = summary,
+                onOpenAlerts = { onOpen(Screen.ALERTS) },
+            )
+            HomePage.Menu -> MenuPage(
+                summary = summary,
+                onOpen = onOpen,
+                onOpenRing = onOpenRing,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MenuPage(
+    summary: WatchDashboardSummary,
+    onOpen: (Screen) -> Unit,
+    onOpenRing: (Int) -> Unit,
+) {
     val state = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
+    val rings = summary.activeRings
+    val menuColors = ButtonDefaults.buttonColors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    )
 
     ScreenScaffold(scrollState = state) { contentPadding ->
         TransformingLazyColumn(
             state = state,
             contentPadding = contentPadding,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(horizontal = 18.dp),
         ) {
             item {
-                ListHeader { Text("WardPulse") }
+                ListHeader {
+                    Text("Menu", style = MaterialTheme.typography.titleSmall)
+                }
             }
-            item {
-                val status = if (summary.isStale) PulseStatus.WARNING else summary.overallStatus
-                Card(
+            items(rings.size) { index ->
+                val ring = rings[index]
+                Button(
+                    onClick = { onOpenRing(index) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .transformedHeight(this, transformationSpec),
+                    colors = menuColors,
                     transformation = SurfaceTransformation(transformationSpec),
                 ) {
-                    Text(
-                        if (summary.isStale) "Stale data" else summary.overallStatus.label,
-                        color = statusColor(status),
-                    )
-                    Text(
-                        "Today ${summary.today.usedPercent.percentLabel()} · " +
-                            "Week ${summary.week.usedPercent.percentLabel()}",
-                    )
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            ring.label,
+                            style = MaterialTheme.typography.labelLarge,
+                            textAlign = TextAlign.Center,
+                        )
+                        Text(
+                            formatPercentRemainingLabel(ring.usedPercent),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
                 }
             }
             items(Screen.entries.size) { index ->
@@ -147,14 +281,48 @@ private fun HomeScreen(summary: WatchDashboardSummary, onOpen: (Screen) -> Unit)
                     modifier = Modifier
                         .fillMaxWidth()
                         .transformedHeight(this, transformationSpec),
+                    colors = menuColors,
                     transformation = SurfaceTransformation(transformationSpec),
                 ) {
-                    Text(destination.label)
+                    Text(
+                        destination.label,
+                        modifier = Modifier.fillMaxWidth(),
+                        style = MaterialTheme.typography.labelLarge,
+                        textAlign = TextAlign.Center,
+                    )
                 }
             }
         }
     }
 }
+
+@Composable
+private fun StraightAppTimeText() {
+    val timeSource = TimeTextDefaults.rememberTimeSource(TimeTextDefaults.timeFormat())
+    Text(
+        text = timeSource.currentTime(),
+        modifier = Modifier
+            .fillMaxWidth()
+            // Review art: ~y=32 top of glyphs on a 450px canvas → ~14dp on 192dp shells.
+            .padding(top = 14.dp),
+        style = MaterialTheme.typography.labelSmall.copy(
+            fontWeight = FontWeight.Bold,
+            fontSize = 7.sp,
+            lineHeight = 9.sp,
+        ),
+        color = Color(0xFF8A968F),
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+    )
+}
+
+private val AllowanceSummary.valueLabel: String
+    get() = when {
+        unlimited -> "Unlimited"
+        usedPercent != null -> formatPercentUsedLabel(usedPercent)
+        remaining != null -> remaining.label
+        else -> "Unavailable"
+    }
 
 @Composable
 private fun SummaryScreen(title: String, rows: List<SummaryRow>) {
@@ -182,7 +350,10 @@ private fun SummaryScreen(title: String, rows: List<SummaryRow>) {
                         row.title,
                         color = row.status?.let { statusColor(it) } ?: Color.Unspecified,
                     )
-                    Text(row.detail)
+                    Text(
+                        row.detail,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -204,17 +375,6 @@ private fun statusColor(status: PulseStatus): Color = when (status) {
 
 private fun Money?.labelOrUnknown(): String = this?.label ?: "Unknown"
 
-private fun Double?.percentLabel(): String = this?.let { value ->
-    val formatted = if (value % 1.0 == 0.0) {
-        value.toLong().toString()
-    } else {
-        String.format(Locale.US, "%.1f", value)
-    }
-    "$formatted%"
-} ?: "Unknown"
-
-private fun Double?.usedLabel(): String = "${percentLabel()} used"
-
 private fun String.toStatus(): PulseStatus = when (this) {
     "error" -> PulseStatus.ERROR
     "warning" -> PulseStatus.WARNING
@@ -226,6 +386,6 @@ private fun String.toStatus(): PulseStatus = when (this) {
 @Composable
 private fun WardPulsePreview() {
     WardPulseTheme {
-        WardPulseApp(MockWatchDashboardSummary.value)
+        WardPulseApp(PreviewWatchDashboardSummary.glanceLegend)
     }
 }

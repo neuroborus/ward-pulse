@@ -1,0 +1,38 @@
+{
+  "data": [
+    {
+      "starting_at": "2026-07-18T00:00:00Z",
+      "ending_at": "2026-07-19T00:00:00Z",
+      "results": [
+        {
+          "uncached_input_tokens": 1500,
+          "output_tokens": 500,
+          "cache_read_input_tokens": 200,
+          "cache_creation": {
+            "ephemeral_1h_input_tokens": 100,
+            "ephemeral_5m_input_tokens": 50
+          },
+          "model": "claude-example"
+        }
+      ]
+    },
+    {
+      "starting_at": "2026-07-19T00:00:00Z",
+      "ending_at": "2026-07-20T00:00:00Z",
+      "results": [
+        {
+          "uncached_input_tokens": 3000,
+          "output_tokens": 800,
+          "cache_read_input_tokens": 400,
+          "cache_creation": {
+            "ephemeral_1h_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 0
+          },
+          "model": "claude-example-mini"
+        }
+      ]
+    }
+  ],
+  "has_more": false,
+  "next_page": null
+}

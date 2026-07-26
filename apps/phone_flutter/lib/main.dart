@@ -1,7 +1,40 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'app/ward_pulse_app.dart';
+import 'dashboard/dashboard_repository.dart';
+import 'dashboard/phone_live_bindings.dart';
+import 'settings/consumption_display_preferences.dart';
+import 'settings/debug_data_preferences.dart';
+import 'settings/refresh_interval_preferences.dart';
+import 'settings/watch_ring_preferences.dart';
+import 'sync/headless_provider_sync.dart';
+import 'sync/provider_sync_scheduler.dart';
 
-void main() {
-  runApp(const WardPulseApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await HeadlessProviderSync.ensureInitialized();
+  final live = PhoneLiveBindings.create();
+  final debugDataPreferenceStore = SecureDebugDataPreferenceStore();
+
+  runApp(
+    WardPulseApp(
+      credentialStore: live.credentialStore,
+      codexAccountService: live.codexAccountService,
+      claudeAccountService: live.claudeAccountService,
+      displayPreferenceStore: SecureConsumptionDisplayPreferenceStore(),
+      refreshIntervalStore: SecureRefreshIntervalPreferenceStore(),
+      watchRingPreferenceStore: SecureWatchRingPreferenceStore(),
+      syncScheduler: TimerProviderSyncScheduler(),
+      debugDataAvailable: kDebugMode,
+      debugDataPreferenceStore: debugDataPreferenceStore,
+      repository:
+          kDebugMode
+              ? DebugDashboardRepository(
+                live: live.repository,
+                preferences: debugDataPreferenceStore,
+              )
+              : live.repository,
+    ),
+  );
 }

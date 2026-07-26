@@ -22,11 +22,17 @@ pub fn build_dashboard_snapshot(
         BudgetPeriod::Month,
         accounts.iter().map(|account| &account.month),
     );
-    let overall_status = accounts
-        .iter()
-        .map(|account| account.status)
-        .chain([today_total.status, week_total.status, month_total.status])
-        .fold(ProviderStatus::Ok, worst_status);
+    // App-bar / overall pulse reflects connected providers — not local budget
+    // cards. Budget totals without a configured limit stay Unknown and must not
+    // bury Ok provider sync behind a misleading Unknown chrome.
+    let overall_status = if accounts.is_empty() {
+        ProviderStatus::Unknown
+    } else {
+        accounts
+            .iter()
+            .map(|account| account.status)
+            .fold(ProviderStatus::Ok, worst_status)
+    };
 
     let mut alerts = Vec::new();
     alerts.extend(alerts_for_budget_state("Today", &today_total));
@@ -151,6 +157,7 @@ mod tests {
             week: budget_state(BudgetPeriod::Week, usd(0), usd(100)),
             month: budget_state(BudgetPeriod::Month, usd(0), usd(100)),
             credits: Vec::new(),
+            allowances: Vec::new(),
             buckets: Vec::new(),
             model_breakdown: Vec::new(),
             last_successful_sync_at: None,
@@ -187,5 +194,32 @@ mod tests {
         assert_eq!(snapshot.today_total.limit, None);
         assert_eq!(snapshot.today_total.used_percent, None);
         assert_eq!(snapshot.today_total.status, ProviderStatus::Unknown);
+    }
+
+    #[test]
+    fn overall_status_follows_providers_not_unconfigured_budgets() {
+        let open_budget = calculate_budget_state(BudgetPeriod::Today, None, None, None);
+        assert_eq!(open_budget.status, ProviderStatus::Unknown);
+
+        let snapshot = build_dashboard_snapshot(
+            DateTimeUtc::from("2026-06-27T18:42:00Z"),
+            vec![ProviderSnapshot {
+                account_id: "codex".to_string(),
+                provider: crate::model::ProviderKind::Mock,
+                status: ProviderStatus::Ok,
+                today: open_budget.clone(),
+                week: open_budget.clone(),
+                month: open_budget,
+                credits: Vec::new(),
+                allowances: Vec::new(),
+                buckets: Vec::new(),
+                model_breakdown: Vec::new(),
+                last_successful_sync_at: None,
+                last_error: None,
+            }],
+        );
+
+        assert_eq!(snapshot.today_total.status, ProviderStatus::Unknown);
+        assert_eq!(snapshot.overall_status, ProviderStatus::Ok);
     }
 }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="560" viewBox="0 0 1100 560">
+  <rect width="550" height="560" fill="#FFFFFF"/>
+  <rect x="550" width="550" height="560" fill="#101412"/>
+  <text x="275" y="42" text-anchor="middle" font-family="Noto Sans, sans-serif" font-size="20" font-weight="700" fill="#222">White background</text>
+  <text x="825" y="42" text-anchor="middle" font-family="Noto Sans, sans-serif" font-size="20" font-weight="700" fill="#F4FBF8">Dark background</text>
+  <text x="140" y="90" text-anchor="middle" font-family="Noto Sans, sans-serif" font-size="14" fill="#666">Current (green)</text>
+  <text x="400" y="90" text-anchor="middle" font-family="Noto Sans, sans-serif" font-size="14" fill="#666">Exploration (metal + ring)</text>
+  <text x="690" y="90" text-anchor="middle" font-family="Noto Sans, sans-serif" font-size="14" fill="#BEC9C1">Current (green)</text>
+  <text x="950" y="90" text-anchor="middle" font-family="Noto Sans, sans-serif" font-size="14" fill="#BEC9C1">Exploration (metal + ring)</text>
+  <image href="../../icons/wardpulse.svg" x="40" y="120" width="200" height="200"/>
+  <image href="wardpulse-metal-ring.svg" x="300" y="120" width="200" height="200"/>
+  <image href="../../icons/wardpulse.svg" x="590" y="120" width="200" height="200"/>
+  <image href="wardpulse-metal-ring.svg" x="850" y="120" width="200" height="200"/>
+  <text x="550" y="420" text-anchor="middle" font-family="Noto Sans, sans-serif" font-size="13" fill="#888">If a mark is only the white pulse/eye without a disc, it disappears on white — that is not a full app icon.</text>
+</svg>

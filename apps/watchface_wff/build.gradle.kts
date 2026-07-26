@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId = "app.wardpulse.watchface"
-        minSdk = 33
+        minSdk = 34
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"

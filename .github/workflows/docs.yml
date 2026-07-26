@@ -1,0 +1,30 @@
+name: Docs
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "apps/**/README.md"
+      - "bindings/**/README.md"
+      - ".npmrc"
+      - ".nvmrc"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/docs.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run docs:build

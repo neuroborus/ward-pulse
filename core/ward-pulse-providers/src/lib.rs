@@ -1,7 +1,10 @@
+mod allowance;
 pub mod claude;
+pub mod codex;
 pub mod cursor;
 pub mod mock;
 pub mod openai;
+pub mod poll;
 
 use ward_pulse_core::model::ProviderKind;
 
@@ -42,11 +45,13 @@ pub struct ProviderCapabilities {
     pub supports_active_agents: bool,
 }
 
-pub const fn provider_capabilities(provider: ProviderKind) -> Option<ProviderCapabilities> {
+pub const fn provider_capabilities(provider: ProviderKind) -> ProviderCapabilities {
     match provider {
-        ProviderKind::OpenAi => Some(openai::CAPABILITIES),
-        ProviderKind::Mock => Some(mock::CAPABILITIES),
-        ProviderKind::Claude | ProviderKind::Cursor => None,
+        ProviderKind::OpenAi => openai::CAPABILITIES,
+        ProviderKind::Codex => codex::CAPABILITIES,
+        ProviderKind::Claude => claude::CAPABILITIES,
+        ProviderKind::Cursor => cursor::CAPABILITIES,
+        ProviderKind::Mock => mock::CAPABILITIES,
     }
 }
 
@@ -56,7 +61,7 @@ mod tests {
 
     #[test]
     fn distinguishes_usage_and_cost_reporting() {
-        let openai = provider_capabilities(ProviderKind::OpenAi).expect("OpenAI capabilities");
+        let openai = provider_capabilities(ProviderKind::OpenAi);
         assert_eq!(
             (openai.usage_buckets, openai.cost_buckets),
             (
@@ -67,16 +72,28 @@ mod tests {
         assert!(openai.supports_usage_model_breakdown);
         assert!(!openai.supports_cost_model_breakdown);
 
-        let mock = provider_capabilities(ProviderKind::Mock).expect("mock capabilities");
+        let mock = provider_capabilities(ProviderKind::Mock);
         assert_eq!(
             (mock.usage_buckets, mock.cost_buckets),
             (BucketCapabilities::NONE, BucketCapabilities::NONE)
         );
+
+        let codex = provider_capabilities(ProviderKind::Codex);
+        assert_eq!(codex.usage_buckets, BucketCapabilities::DAILY);
+        assert!(codex.supports_tokens);
+        assert!(codex.supports_credits);
     }
 
     #[test]
-    fn leaves_unimplemented_provider_capabilities_unknown() {
-        assert_eq!(provider_capabilities(ProviderKind::Claude), None);
-        assert_eq!(provider_capabilities(ProviderKind::Cursor), None);
+    fn registers_claude_and_cursor_capabilities() {
+        let claude = provider_capabilities(ProviderKind::Claude);
+        assert!(claude.supports_cost);
+        assert!(claude.supports_credits);
+        assert_eq!(claude.usage_buckets, BucketCapabilities::DAILY_AND_HOURLY);
+
+        let cursor = provider_capabilities(ProviderKind::Cursor);
+        assert!(cursor.supports_cost);
+        assert!(cursor.supports_requests);
+        assert_eq!(cursor.usage_buckets, BucketCapabilities::DAILY);
     }
 }

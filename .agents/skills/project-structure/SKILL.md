@@ -10,6 +10,8 @@ Use this skill before adding or moving project files.
 ## Source Of Truth
 
 - Read `docs/README.md` for the documentation gate.
+- Read `docs/DOCUMENTATION.md` when the change affects the Vocs site or documentation workflow.
+- Read `docs/DESIGN_ASSETS.md` when the change affects editable or exported visual assets.
 - Read `docs/DEVELOPMENT_PLAN.md` when the change affects architecture, product scope, or phase sequencing.
 - Read root `AGENTS.md` for repository-wide working agreements.
 - Keep the root clean: `README.md`, `justfile`, repository config, and short operational files only.
@@ -26,15 +28,18 @@ Use this skill before adding or moving project files.
 - `schemas/`: shared JSON contracts.
 - `fixtures/`: sanitized provider and dashboard examples.
 - `bindings/`: generated bindings and thin platform wrappers.
-- `brand/`: protected product identity assets and store artwork placeholders.
+- `brand/`: protected product identity, shared OpenPencil sources, and store artwork placeholders.
 - `tools/`: repeatable local automation.
 - `docs/product/`: durable product, provider, security, and release guidance.
+- `docs/site/`: Vocs workspace, navigation, and thin pages that present authoritative Markdown.
 
 ## Rules
 
 - Do not make Rust depend on Flutter, Android, Google Play APIs, or platform credential storage.
 - Do not make platform apps own shared product math or provider normalization.
 - Do not put long product requirements in root files.
+- Do not duplicate component or durable documentation in Vocs pages; import the owning Markdown file.
+- Keep app-specific OpenPencil sources under their owning app; keep shared identity sources in `brand/icons/`.
 - Do not treat files in `brand/` as Apache-2.0 licensed unless a file explicitly says so.
 - Do not add cross-platform abstractions until they remove real duplication or encode a stable boundary.
 - Prefer lightweight shells until a phase explicitly requires generated Flutter or Gradle projects.

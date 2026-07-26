@@ -6,18 +6,86 @@
   "additionalProperties": false,
   "required": [
     "schemaVersion",
+    "dataMode",
     "generatedAt",
     "overallStatus",
+    "rings",
+    "creditsGlance",
     "today",
     "week",
+    "allowances",
     "providers",
     "alerts",
-    "isStale"
+    "isStale",
+    "manualRefreshAllowed",
+    "manualRefreshAvailableAt"
   ],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 7 },
+    "dataMode": { "enum": ["live", "mock"] },
     "generatedAt": { "type": "string", "format": "date-time" },
     "overallStatus": { "$ref": "dashboard_snapshot.schema.json#/$defs/providerStatus" },
+    "manualRefreshAllowed": {
+      "type": "boolean",
+      "description": "Whether a Wear Glance refresh tap may request a phone sync right now (phone PollCadence hard floor, not the Settings auto-poll slider)."
+    },
+    "manualRefreshAvailableAt": {
+      "description": "When manual refresh becomes allowed again under the PollCadence floor. Null when already allowed.",
+      "anyOf": [
+        { "type": "string", "format": "date-time" },
+        { "type": "null" }
+      ]
+    },
+    "rings": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "usedPercent", "status"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Stable ring metric id. Never an account id or credential."
+          },
+          "label": { "type": "string", "minLength": 1 },
+          "usedPercent": { "type": "number", "minimum": 0 },
+          "status": { "$ref": "dashboard_snapshot.schema.json#/$defs/providerStatus" }
+        }
+      }
+    },
+    "creditsGlance": {
+      "description": "SHORT_TEXT remaining purchased credits for the watch strip. Null when unavailable.",
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["text", "label"],
+          "properties": {
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 12,
+              "description": "Compact remaining credits, e.g. 500 or 1.2K. Never TOK / raw payloads."
+            },
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 24,
+              "description": "Human label such as Credits left."
+            },
+            "provider": {
+              "anyOf": [
+                { "$ref": "dashboard_snapshot.schema.json#/$defs/providerKind" },
+                { "type": "null" }
+              ]
+            }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
     "today": {
       "allOf": [
         { "$ref": "budget_state.schema.json" },
@@ -35,6 +103,28 @@
           "properties": { "period": { "const": "week" } }
         }
       ]
+    },
+    "allowances": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "label", "usedPercent", "remaining", "resetsAt", "status"],
+        "properties": {
+          "source": { "$ref": "dashboard_snapshot.schema.json#/$defs/allowanceSource" },
+          "label": { "type": "string" },
+          "usedPercent": { "type": ["number", "null"], "minimum": 0 },
+          "remaining": {
+            "anyOf": [
+              { "$ref": "dashboard_snapshot.schema.json#/$defs/quantity" },
+              { "type": "null" }
+            ]
+          },
+          "unlimited": { "type": "boolean" },
+          "resetsAt": { "type": ["string", "null"], "format": "date-time" },
+          "status": { "$ref": "dashboard_snapshot.schema.json#/$defs/providerStatus" }
+        }
+      }
     },
     "providers": {
       "type": "array",

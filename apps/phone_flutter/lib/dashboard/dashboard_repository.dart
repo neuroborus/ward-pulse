@@ -1,5 +1,6 @@
 import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 
+import '../settings/debug_data_preferences.dart';
 import 'dashboard_models.dart';
 
 typedef DashboardJsonLoader = String Function();
@@ -8,13 +9,21 @@ abstract class DashboardRepository {
   const DashboardRepository();
 
   Future<DashboardSnapshot> load();
+
+  void invalidate() {}
 }
 
 final class DashboardLoadException implements Exception {
-  const DashboardLoadException();
+  const DashboardLoadException({
+    this.issue = DashboardSyncIssue.dashboardUnavailable,
+    this.details,
+  });
+
+  final DashboardSyncIssue issue;
+  final String? details;
 
   @override
-  String toString() => 'Dashboard data is unavailable.';
+  String toString() => issue.message;
 }
 
 final class RustDashboardRepository extends DashboardRepository {
@@ -34,6 +43,32 @@ final class RustDashboardRepository extends DashboardRepository {
   }
 }
 
+final class DebugDashboardRepository extends DashboardRepository {
+  const DebugDashboardRepository({
+    required DashboardRepository live,
+    required DebugDataPreferenceStore preferences,
+    DashboardRepository mock = const RustDashboardRepository(),
+  }) : _live = live,
+       _mock = mock,
+       _preferences = preferences;
+
+  final DashboardRepository _live;
+  final DashboardRepository _mock;
+  final DebugDataPreferenceStore _preferences;
+
+  @override
+  Future<DashboardSnapshot> load() async {
+    final useMock = await _preferences.readMockDataEnabled();
+    return useMock ? _mock.load() : _live.load();
+  }
+
+  @override
+  void invalidate() {
+    _live.invalidate();
+    _mock.invalidate();
+  }
+}
+
 class ValueDashboardRepository extends DashboardRepository {
   const ValueDashboardRepository(this.snapshot);
 
@@ -41,4 +76,15 @@ class ValueDashboardRepository extends DashboardRepository {
 
   @override
   Future<DashboardSnapshot> load() async => snapshot;
+}
+
+/// Root fallback when no credential-backed connection is configured.
+///
+/// Returns an empty live snapshot (not an error) so the phone can push a
+/// cleared watch summary and Wear Glance refresh still has a handler target.
+final class NoProvidersDashboardRepository extends DashboardRepository {
+  const NoProvidersDashboardRepository();
+
+  @override
+  Future<DashboardSnapshot> load() async => DashboardSnapshot.empty();
 }

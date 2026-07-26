@@ -1,7 +1,31 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 7,
+  "dataMode": "mock",
   "generatedAt": "2026-06-27T18:42:00.000Z",
   "overallStatus": "ok",
+  "manualRefreshAllowed": true,
+  "manualRefreshAvailableAt": null,
+  "rings": [
+    {
+      "id": "budget.week",
+      "label": "Week",
+      "usedPercent": 28.5,
+      "status": "ok"
+    },
+    {
+      "id": "budget.month",
+      "label": "Month",
+      "usedPercent": 26.5,
+      "status": "ok"
+    },
+    {
+      "id": "budget.today",
+      "label": "Today",
+      "usedPercent": 24.8,
+      "status": "ok"
+    }
+  ],
+  "creditsGlance": null,
   "today": {
     "period": "today",
     "spent": {
@@ -41,6 +65,7 @@
     },
     "status": "ok"
   },
+  "allowances": [],
   "providers": [
     {
       "provider": "mock",

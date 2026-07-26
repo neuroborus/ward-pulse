@@ -17,8 +17,10 @@
 - Keep platform shells responsible for UI, transport, storage, background scheduling, and phone-to-watch propagation.
 - Prefer small, focused changes.
 - Do not generate full Flutter or Gradle projects unless the current task explicitly requires it.
+- Do not create a git commit unless the user explicitly asks to commit. Finalization stages relevant files and drafts a message; it does not commit.
 - Do not commit secrets, provider credentials, authorization headers, raw prompts, or sensitive raw provider payloads.
 - Do not treat WardPulse brand assets as covered by Apache-2.0 unless a file explicitly says so.
+- Keep OpenPencil `.fig` sources with their owner and regenerate runtime exports instead of editing them by hand.
 
 ## Required Checks
 
@@ -42,9 +44,17 @@ After local skill changes, run:
 python3 /home/neuroborus/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/<skill-name>
 ```
 
+After durable documentation, Vocs page, or navigation changes, run:
+
+```bash
+just check-docs
+```
+
 ## Documentation
 
 - Start from `docs/README.md` for durable project documentation.
 - Keep root `README.md` short and operational.
 - Keep product, provider, security, and release guidance in `docs/product/`.
+- Keep component-specific guidance beside its owner and expose it through thin pages in `docs/site/`.
+- Update `docs/site/vocs.config.ts` when site navigation changes.
 - Update local skills in `.agents/skills/` when repository workflow or ownership boundaries change.

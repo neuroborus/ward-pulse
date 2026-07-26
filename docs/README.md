@@ -6,6 +6,10 @@ This directory is the documentation gate for the project. Root files should stay
 
 - [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) is the full product and implementation plan.
 - [ANDROID_TOOLCHAIN.md](ANDROID_TOOLCHAIN.md) records the verified Android/Flutter development baseline, SDK package names, AVDs, and setup commands.
+- [DESIGN_ASSETS.md](DESIGN_ASSETS.md) defines OpenPencil source ownership and runtime export workflow.
+- [product/WATCH_RING_DESIGN.md](product/WATCH_RING_DESIGN.md) — **baseline locked 2026-07-25**: Wear / WFF concentric remaining rings, sunk strips, provider colors.
+- [product/WEAR_GLANCE_DESIGN.md](product/WEAR_GLANCE_DESIGN.md) — **baseline locked 2026-07-26**: Wear app Glance text legend (OK/!OK refresh, cadence vs rate-limit, Alerts pill); not a face clone.
+- [DOCUMENTATION.md](DOCUMENTATION.md) defines documentation ownership, Vocs tooling, and contributor workflow.
 - [product/ANDROID_GOALS.md](product/ANDROID_GOALS.md) defines the MVP goal, surfaces, and non-goals.
 - [product/PROVIDER_NOTES.md](product/PROVIDER_NOTES.md) tracks provider integration assumptions and open questions.
 - [product/SECURITY_MODEL.md](product/SECURITY_MODEL.md) defines local-first credential and diagnostics rules.
@@ -22,7 +26,8 @@ Use this index before adding new work:
 4. Platform-specific UI, transport, storage, and background execution belong in `apps/`.
 5. Generated bindings belong in `bindings/*/generated/`; source interfaces belong in `core/ward-pulse-ffi/`.
 6. Sanitized examples belong in `fixtures/`; secrets, raw prompts, auth headers, and sensitive provider payloads must not be committed.
-7. Product identity assets belong in `brand/`; Apache-2.0 source rights and brand rights stay separate.
+7. Shared product-identity OpenPencil sources belong in `brand/`; app-specific design sources stay with their owner.
+8. Apache-2.0 source rights and brand rights stay separate.
 
 ## Documentation Rules
 
@@ -31,3 +36,5 @@ Use this index before adding new work:
 - Update `DEVELOPMENT_PLAN.md` only when the product direction changes.
 - Add focused documents instead of growing one catch-all file.
 - Link new documents from this index before relying on them in implementation.
+- Add a thin page under `site/src/pages/` and update `site/vocs.config.ts` when a document should appear in the Vocs site.
+- Run `just check-docs` after changing durable docs, Vocs pages, or navigation.

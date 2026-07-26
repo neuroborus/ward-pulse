@@ -2,12 +2,20 @@ import 'package:flutter/material.dart';
 
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_screen.dart';
+import '../settings/consumption_display_preferences.dart';
 import 'provider_detail_screen.dart';
 
 class ProvidersScreen extends StatelessWidget {
-  const ProvidersScreen({super.key, required this.snapshot});
+  const ProvidersScreen({
+    super.key,
+    required this.snapshot,
+    this.displayPreferences = const ConsumptionDisplayPreferences(),
+    this.platformLabels = const {},
+  });
 
   final DashboardSnapshot snapshot;
+  final ConsumptionDisplayPreferences displayPreferences;
+  final Map<String, String> platformLabels;
 
   @override
   Widget build(BuildContext context) {
@@ -16,10 +24,6 @@ class ProvidersScreen extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           Card(
-            margin: EdgeInsets.zero,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
             child: const Padding(
               padding: EdgeInsets.all(16),
               child: Text('No providers'),
@@ -35,19 +39,29 @@ class ProvidersScreen extends StatelessWidget {
       separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final account = snapshot.accounts[index];
+        final title = account.displayTitle(
+          platformLabel: platformLabels[account.accountId],
+        );
 
         return Card(
-          margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           child: ListTile(
             leading: const Icon(Icons.hub),
-            title: Text(account.providerLabel),
+            title: Text(title),
             subtitle: Text(account.accountId),
-            trailing: StatusPill(status: account.status),
+            trailing: StatusPill(
+              status: account.status,
+              tooltip: snapshot.syncTooltip,
+            ),
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (context) => ProviderDetailScreen(account: account),
+                  builder:
+                      (context) => ProviderDetailScreen(
+                        account: account,
+                        displayPreferences: displayPreferences,
+                        syncTooltip: snapshot.syncTooltip,
+                        platformLabel: platformLabels[account.accountId],
+                      ),
                 ),
               );
             },

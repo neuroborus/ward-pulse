@@ -1,0 +1,23 @@
+{
+  "accountId": "claude-local",
+  "generatedAt": "2026-07-19T12:00:00Z",
+  "five_hour": {
+    "utilization": 42.5,
+    "resets_at": "2026-07-19T17:00:00Z"
+  },
+  "seven_day": {
+    "utilization": 61.0,
+    "resets_at": "2026-07-25T12:00:00Z"
+  },
+  "seven_day_opus": {
+    "utilization": 12.0,
+    "resets_at": "2026-07-25T12:00:00Z"
+  },
+  "seven_day_sonnet": null,
+  "extra_usage": {
+    "is_enabled": true,
+    "monthly_limit": 1700,
+    "used_credits": 190.0,
+    "utilization": 11.18
+  }
+}

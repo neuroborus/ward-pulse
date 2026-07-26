@@ -33,6 +33,20 @@ snapshot-core:
 validate-fixtures:
     python3 tools/validate-fixtures/validate_json.py
 
+docs-dev:
+    npm run docs:dev
+
+check-docs:
+    npm run docs:build
+
+export-design source output format="svg" scale="1":
+    npm run design:export -- "{{source}}" --format "{{format}}" --scale "{{scale}}" --output "{{output}}"
+
+# Canonical vectors from tools/render-brand-icons.mjs (metal + mono).
+# Rasterizes launcher / watch-face PNGs with ImageMagick. OpenPencil .fig is optional.
+export-icons:
+    tools/export-icons.sh
+
 build-android-rust:
     tools/build-android-rust/build.sh
 
@@ -72,4 +86,4 @@ run-watchface:
     cd apps/watchface_wff && ./gradlew --no-daemon installDebug
     adb -s "$ANDROID_SERIAL" shell am broadcast -a com.google.android.wearable.app.DEBUG_SURFACE --es operation set-watchface --es watchFaceId app.wardpulse.watchface
 
-test-all: check-core check-phone check-wear check-watchface
+test-all: check-core check-phone check-wear check-watchface check-docs

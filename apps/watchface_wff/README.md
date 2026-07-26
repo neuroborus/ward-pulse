@@ -1,10 +1,12 @@
 # WardPulse Watch Face
 
-Declarative Watch Face Format v1 package for a glanceable WardPulse summary.
+Declarative Watch Face Format v2 package for a glanceable WardPulse summary.
 
-The first face shows static, sanitized today/week/status sample values. They are not a
-second live data model. Tapping the face opens the Wear OS app; ambient mode keeps only the
-time and product label.
+The face follows the locked concentric baseline in `docs/product/WATCH_RING_DESIGN.md`:
+remaining arcs (up to four ring slots), large time hero, quiet watermark, and a sunk token
+strip. Ring / token data comes from Wear OS complication providers. Missing rings stay empty
+instead of inventing filler. Tapping the face or a WardPulse complication opens the Wear OS
+app; ambient keeps muted arcs, large time, and a quieter mark (strips off).
 
 ## Commands
 

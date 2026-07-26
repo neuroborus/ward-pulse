@@ -1,0 +1,15 @@
+{
+  "teamMemberSpend": [
+    {
+      "email": "user@example.com",
+      "spendCents": 2450.12,
+      "overallSpendCents": 2450.12
+    },
+    {
+      "email": "other@example.com",
+      "spendCents": 1875.5,
+      "overallSpendCents": 1875.5
+    }
+  ],
+  "totalPages": 1
+}

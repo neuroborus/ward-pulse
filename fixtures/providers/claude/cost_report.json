@@ -1,0 +1,30 @@
+{
+  "data": [
+    {
+      "starting_at": "2026-07-18T00:00:00Z",
+      "ending_at": "2026-07-19T00:00:00Z",
+      "results": [
+        {
+          "amount": "45.20",
+          "currency": "USD",
+          "cost_type": "tokens",
+          "model": "claude-example"
+        }
+      ]
+    },
+    {
+      "starting_at": "2026-07-19T00:00:00Z",
+      "ending_at": "2026-07-20T00:00:00Z",
+      "results": [
+        {
+          "amount": "78.90",
+          "currency": "USD",
+          "cost_type": "tokens",
+          "model": "claude-example-mini"
+        }
+      ]
+    }
+  ],
+  "has_more": false,
+  "next_page": null
+}

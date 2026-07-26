@@ -7,12 +7,19 @@ versioned `WatchDashboardSummary` payload and persists only the latest successfu
 
 ## Ownership
 
-- Today, week, providers, alerts, and last sync screens.
+- Home Glance text legend (`WEAR_GLANCE_DESIGN.md`): mini remaining arcs, OK/!OK refresh,
+  Alerts pill; Menu page for secondary screens.
+- Today, week, providers, alerts (active list only — no rule editing), and last sync screens.
 - Local storage of the latest watch summary.
 - Wear-specific navigation, rotary input, shape-aware layouts, and stale data states.
 - Wear Data Layer receiver for `/wardpulse/watch-summary`.
+- Wear → phone refresh request on `/wardpulse/refresh-request`.
+- Today, week, and provider-status complication data sources for the WardPulse watch face.
 
 Provider credentials are never entered or stored on the watch.
+The app shows a neutral sync prompt until the first valid phone summary arrives; it never creates
+mock state on its own. Mock summaries are accepted only when explicitly marked by a debug phone
+build, and release Wear builds reject them.
 The app marks a summary stale when the phone reports stale data or its generation time is at
 least two hours old, twice the longest planned MVP polling interval.
 
@@ -32,4 +39,5 @@ just run-wear
 ```
 
 `test-wear-device` and `run-wear` require one active Wear AVD. Canonical AVD names and setup
-commands live in [`docs/ANDROID_TOOLCHAIN.md`](../../docs/ANDROID_TOOLCHAIN.md).
+commands live in
+[`docs/ANDROID_TOOLCHAIN.md`](https://github.com/neuroborus/ward-pulse/blob/main/docs/ANDROID_TOOLCHAIN.md).

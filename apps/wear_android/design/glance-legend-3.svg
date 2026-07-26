@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="450" height="450" viewBox="0 0 450 450" role="img" aria-label="Glance · legend · 3 providers · OK refresh">
+  <defs>
+    <radialGradient id="lift" cx="50%" cy="48%" r="62%">
+      <stop offset="0%" stop-color="#18201C"/>
+      <stop offset="55%" stop-color="#101412"/>
+      <stop offset="100%" stop-color="#0A0D0B"/>
+    </radialGradient>
+    <clipPath id="roundClip">
+      <circle cx="225" cy="225" r="225" />
+    </clipPath>
+  </defs>
+  <g clip-path="url(#roundClip)">
+    <rect width="450" height="450" fill="url(#lift)"/>
+    
+    <text x="225" y="48" text-anchor="middle"
+      font-family="Noto Sans, sans-serif" font-size="16"
+      font-weight="700" fill="#8A968F">9:06</text>
+    
+    <circle cx="225" cy="96" r="34" fill="#141916"
+      stroke="#2E3632" stroke-width="1" />
+    
+    <path d="M 208.8 82.4 A 21.15 21.15 0 0 1 242.0 83.4"
+      fill="none" stroke="#65D78A" stroke-width="2.2" stroke-linecap="butt"
+      opacity="1" />
+    <path d="M 245.5 90.9
+      L 239.1 85.9
+      L 245.3 81.4 Z"
+      fill="#65D78A" opacity="1" />
+    
+    <path d="M 241.2 109.6 A 21.15 21.15 0 0 1 208.0 108.6"
+      fill="none" stroke="#65D78A" stroke-width="2.2" stroke-linecap="butt"
+      opacity="1" />
+    <path d="M 204.5 101.1
+      L 210.9 106.1
+      L 204.7 110.6 Z"
+      fill="#65D78A" opacity="1" />
+    <text x="225" y="101.0" text-anchor="middle"
+      font-family="Noto Sans, sans-serif" font-size="13"
+      font-weight="700" fill="#65D78A">OK</text>
+    <circle cx="137.5" cy="191" r="17" fill="none" stroke="#2E3632"
+      stroke-width="5" />
+    <circle cx="137.5" cy="191" r="17" fill="none" stroke="#65D78A"
+      stroke-width="5" stroke-linecap="round"
+      stroke-dasharray="8.55 106.81"
+      transform="rotate(-90 137.5 191)" />
+    <text x="171.5" y="189.5"
+      font-family="Noto Sans, sans-serif" font-size="16"
+      font-weight="700" fill="#F4FBF8">Codex · Weekly plan</text>
+    <text x="171.5" y="209.0"
+      font-family="Noto Sans, sans-serif" font-size="14"
+      font-weight="700" fill="#8A968F">8% left · 320 credits</text>
+    <circle cx="137.5" cy="245" r="17" fill="none" stroke="#2E3632"
+      stroke-width="5" />
+    <circle cx="137.5" cy="245" r="17" fill="none" stroke="#E8915A"
+      stroke-width="5" stroke-linecap="round"
+      stroke-dasharray="41.66 106.81"
+      transform="rotate(-90 137.5 245)" />
+    <text x="171.5" y="243.5"
+      font-family="Noto Sans, sans-serif" font-size="16"
+      font-weight="700" fill="#F4FBF8">Claude · 5h</text>
+    <text x="171.5" y="263.0"
+      font-family="Noto Sans, sans-serif" font-size="14"
+      font-weight="700" fill="#8A968F">39% left · 80 credits</text>
+    <circle cx="137.5" cy="299" r="17" fill="none" stroke="#2E3632"
+      stroke-width="5" />
+    <circle cx="137.5" cy="299" r="17" fill="none" stroke="#67E8D4"
+      stroke-width="5" stroke-linecap="round"
+      stroke-dasharray="76.91 106.81"
+      transform="rotate(-90 137.5 299)" />
+    <text x="171.5" y="297.5"
+      font-family="Noto Sans, sans-serif" font-size="16"
+      font-weight="700" fill="#F4FBF8">Cursor · Weekly plan</text>
+    <text x="171.5" y="317.0"
+      font-family="Noto Sans, sans-serif" font-size="14"
+      font-weight="700" fill="#8A968F">72% left</text>
+    <rect x="161.0" y="372" width="128.0"
+      height="36" rx="18" fill="#171B18" stroke="#2A302C"
+      stroke-width="1"
+      fill-opacity="0.85" />
+    <text x="225" y="396.5" text-anchor="middle"
+      font-family="Noto Sans, sans-serif" font-size="16"
+      font-weight="700" fill="#5A635C">Alerts: 0</text>
+  </g>
+  <circle cx="225" cy="225" r="224.0" fill="none"
+    stroke="#1A201C" stroke-width="2" />
+</svg>
