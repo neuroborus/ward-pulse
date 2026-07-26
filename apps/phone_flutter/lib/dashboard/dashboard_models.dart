@@ -129,6 +129,27 @@ class DashboardSnapshot {
     return details == null ? issue.message : '${issue.message}\n$details';
   }
 
+  /// Idle live dashboard with no connected accounts (clears Wear rings/credits).
+  ///
+  /// Not a sync failure: [accounts] empty is the signal. [overallStatus] stays
+  /// [ProviderStatus.ok] so Glance does not show a false fault chrome.
+  factory DashboardSnapshot.empty({DateTime? generatedAt}) {
+    return DashboardSnapshot(
+      generatedAt: (generatedAt ?? DateTime.now()).toUtc(),
+      overallStatus: ProviderStatus.ok,
+      accounts: const [],
+      todayTotal: const BudgetState.unknownPeriod('today'),
+      weekTotal: const BudgetState.unknownPeriod('week'),
+      monthTotal: const BudgetState.unknownPeriod('month'),
+      alerts: const [],
+      watchSummary: const WatchSummary(
+        todayUsedPercent: null,
+        weekUsedPercent: null,
+        status: ProviderStatus.ok,
+      ),
+    );
+  }
+
   factory DashboardSnapshot.fromJsonString(String source) {
     return DashboardSnapshot.fromJson(_jsonMap(jsonDecode(source)));
   }
@@ -533,6 +554,15 @@ class BudgetState {
     required this.projectedTotal,
     required this.status,
   });
+
+  /// Empty period card when no platform spend connection is present.
+  const BudgetState.unknownPeriod(this.period)
+    : spent = null,
+      limit = null,
+      remaining = null,
+      usedPercent = null,
+      projectedTotal = null,
+      status = ProviderStatus.unknown;
 
   final String period;
   final Money? spent;

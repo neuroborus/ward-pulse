@@ -81,6 +81,55 @@ void main() {
     expect(find.text('4 buckets'), findsOneWidget);
   });
 
+  testWidgets('syncs an empty watch summary when no providers are connected', (
+    tester,
+  ) async {
+    final watchSyncService = _FakeWatchSyncService();
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: const NoProvidersDashboardRepository(),
+        watchSyncService: watchSyncService,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Connect a provider'), findsOneWidget);
+    expect(watchSyncService.syncedSnapshots, hasLength(1));
+    expect(watchSyncService.syncedSnapshots.single.accounts, isEmpty);
+  });
+
+  testWidgets('Wear refresh reloads when the phone has no providers', (
+    tester,
+  ) async {
+    final watchSyncService = _FakeWatchSyncService();
+    var loads = 0;
+    final repository = _CountingDashboardRepository(() {
+      loads += 1;
+      return DashboardSnapshot.empty(
+        generatedAt: DateTime.utc(2026, 7, 26, 12).subtract(
+          Duration(minutes: loads == 1 ? 10 : 0),
+        ),
+      );
+    });
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: repository,
+        watchSyncService: watchSyncService,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(loads, 1);
+    expect(watchSyncService.syncedSnapshots, hasLength(1));
+
+    watchSyncService.refreshHandler!();
+    await tester.pumpAndSettle();
+
+    expect(loads, 2);
+    expect(watchSyncService.syncedSnapshots.length, greaterThanOrEqualTo(2));
+  });
+
   testWidgets('queues a development watch sync', (tester) async {
     final snapshot = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
@@ -603,6 +652,7 @@ void main() {
 
 class _FakeWatchSyncService implements WatchSyncService {
   final syncedSnapshots = <DashboardSnapshot>[];
+  void Function()? refreshHandler;
 
   @override
   Future<void> sync(
@@ -615,10 +665,14 @@ class _FakeWatchSyncService implements WatchSyncService {
   }
 
   @override
-  void bindWatchRefreshListener(void Function() onRefresh) {}
+  void bindWatchRefreshListener(void Function() onRefresh) {
+    refreshHandler = onRefresh;
+  }
 
   @override
-  void unbindWatchRefreshListener() {}
+  void unbindWatchRefreshListener() {
+    refreshHandler = null;
+  }
 }
 
 class _FailingWatchSyncService implements WatchSyncService {
@@ -651,6 +705,15 @@ final class _FailingDashboardRepository extends DashboardRepository {
   Future<DashboardSnapshot> load() {
     return Future.error(DashboardLoadException(issue: issue, details: details));
   }
+}
+
+final class _CountingDashboardRepository extends DashboardRepository {
+  _CountingDashboardRepository(this._load);
+
+  final DashboardSnapshot Function() _load;
+
+  @override
+  Future<DashboardSnapshot> load() async => _load();
 }
 
 class _MemoryCredentialStore implements ProviderCredentialStore {

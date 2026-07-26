@@ -47,16 +47,9 @@ void main() {
       logger: const NullProviderSyncLogger(),
     );
 
-    await expectLater(
-      repository.load(),
-      throwsA(
-        isA<DashboardLoadException>().having(
-          (error) => error.issue,
-          'issue',
-          DashboardSyncIssue.noProviders,
-        ),
-      ),
-    );
+    final snapshot = await repository.load();
+    expect(snapshot.accounts, isEmpty);
+    expect(snapshot.syncIssue, isNull);
   });
 
   test('passes sanitized reporting pages to the Rust boundary', () async {

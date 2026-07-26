@@ -265,12 +265,13 @@ private fun GlanceEmptyCopy(
     summary: WatchDashboardSummary,
     titleStyle: TextStyle,
 ) {
-    val lines =
-        if (summary.rings.isEmpty()) {
+    val lines = when {
+        summary.providers.isEmpty() && summary.rings.isEmpty() ->
+            listOf("Connect a provider", "on your phone")
+        summary.rings.isEmpty() ->
             listOf("Choose percent rings", "in the phone app")
-        } else {
-            listOf("No remaining capacity")
-        }
+        else -> listOf("No remaining capacity")
+    }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         lines.forEach { line ->
             Text(

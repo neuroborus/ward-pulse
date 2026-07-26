@@ -142,19 +142,13 @@ class _DashboardHostState extends State<DashboardHost> {
     widget.watchSyncService.bindWatchRefreshListener(_onWatchRefreshRequested);
   }
 
-  DateTime get _manualRefreshAnchorAt {
-    final generatedAt = _currentSnapshot?.generatedAt;
+  /// Later of snapshot time and the last accepted Wear refresh tap.
+  DateTime _manualRefreshAnchorAt(DashboardSnapshot snapshot) {
     final wearAnchor = _wearRefreshAnchorAt;
-    if (generatedAt == null && wearAnchor == null) {
-      return DateTime.now().toUtc();
+    if (wearAnchor == null || !wearAnchor.isAfter(snapshot.generatedAt)) {
+      return snapshot.generatedAt;
     }
-    if (generatedAt == null) {
-      return wearAnchor!;
-    }
-    if (wearAnchor == null) {
-      return generatedAt;
-    }
-    return wearAnchor.isAfter(generatedAt) ? wearAnchor : generatedAt;
+    return wearAnchor;
   }
 
   void _onWatchRefreshRequested() {
@@ -162,21 +156,23 @@ class _DashboardHostState extends State<DashboardHost> {
       return;
     }
     final snapshot = _currentSnapshot;
+    if (snapshot == null) {
+      // Load in flight / failed — reload; a later empty snapshot clears Wear.
+      widget.repository.invalidate();
+      _reload();
+      return;
+    }
     final window = ManualRefreshWindow.fromLastSync(
-      lastSyncAt: _manualRefreshAnchorAt,
+      lastSyncAt: _manualRefreshAnchorAt(snapshot),
     );
     if (!window.allowed) {
       // Re-push flags so Wear chrome matches the phone floor without a wasted sync.
-      if (snapshot != null) {
-        unawaited(_syncWatch(snapshot));
-      }
+      unawaited(_syncWatch(snapshot));
       return;
     }
     _wearRefreshAnchorAt = DateTime.now().toUtc();
     // Push disabled chrome immediately; the reload will push again with fresh data.
-    if (snapshot != null) {
-      unawaited(_syncWatch(snapshot));
-    }
+    unawaited(_syncWatch(snapshot));
     widget.repository.invalidate();
     _reload();
   }
@@ -349,7 +345,7 @@ class _DashboardHostState extends State<DashboardHost> {
       snapshot,
       _displayPreferences,
       _ringPreferences,
-      manualRefreshAnchorAt: _manualRefreshAnchorAt,
+      manualRefreshAnchorAt: _manualRefreshAnchorAt(snapshot),
     );
   }
 

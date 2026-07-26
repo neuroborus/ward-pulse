@@ -79,13 +79,12 @@ class ValueDashboardRepository extends DashboardRepository {
 }
 
 /// Root fallback when no credential-backed connection is configured.
+///
+/// Returns an empty live snapshot (not an error) so the phone can push a
+/// cleared watch summary and Wear Glance refresh still has a handler target.
 final class NoProvidersDashboardRepository extends DashboardRepository {
   const NoProvidersDashboardRepository();
 
   @override
-  Future<DashboardSnapshot> load() {
-    return Future.error(
-      const DashboardLoadException(issue: DashboardSyncIssue.noProviders),
-    );
-  }
+  Future<DashboardSnapshot> load() async => DashboardSnapshot.empty();
 }
