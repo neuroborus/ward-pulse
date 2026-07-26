@@ -1552,8 +1552,8 @@ Deliverables:
   reset timestamps, and extra-usage credits into `AllowanceState`; explicitly a compatibility
   integration that degrades gracefully like Codex;
 - Cursor plan usage: session-authenticated dashboard endpoints normalized into plan and
-  on-demand allowances; framed as experimental, with the sign-in flow owned by the phone and
-  the session token in secure storage;
+  on-demand allowances; framed as experimental WebView dashboard sign-in (captures
+  `WorkosCursorSessionToken`; Advanced paste remains), with the session token in secure storage;
 - Cursor platform reporting: team Admin API key support for users who administer a team,
   with the Settings freshness note (hourly aggregation) on the Admin API row only;
 - capability descriptors registered for `ProviderKind::Claude` and `ProviderKind::Cursor`;

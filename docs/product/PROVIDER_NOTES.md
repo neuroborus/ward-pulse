@@ -91,7 +91,8 @@ a running agent.
 Every provider in Settings is one section with up to two homogeneous connections:
 
 - `plan`: subscription or allowance reads (Codex device-code OAuth; Claude Code PKCE OAuth
-  with authorization-code paste from the callback page; Cursor dashboard session token paste);
+  with authorization-code paste from the callback page; Cursor dashboard WebView sign-in that
+  captures `WorkosCursorSessionToken`, with optional Advanced paste);
 - `platform`: organization or team usage and cost reporting (OpenAI, Anthropic, and Cursor Admin
   API keys).
 
@@ -248,12 +249,15 @@ changes may require an app update. Never log tokens, authorization codes, or raw
 
 ## Cursor plan reporting
 
-Status: implemented as an experimental on-device compatibility integration on 2026-07-25.
+Status: implemented as an experimental on-device compatibility integration on 2026-07-25;
+dashboard WebView sign-in added 2026-07-26.
 
-Cursor has no official personal-account usage API. The phone stores a dashboard session token
-(`WorkosCursorSessionToken`) and calls `GET /api/usage-summary`, normalizing plan and on-demand
-meters into allowances. Do not claim Admin-API hourly aggregation on this experimental row.
-Never log the cookie or raw response bodies.
+Cursor has no official personal-account usage API and no OAuth grant for plan meters. Settings
+opens an in-app WebView to the Cursor dashboard; after sign-in the phone captures the
+`WorkosCursorSessionToken` cookie (Advanced paste remains for the same value), stores it
+securely, and calls `GET /api/usage-summary`, normalizing plan and on-demand meters into
+allowances. Do not claim Admin-API hourly aggregation on this experimental row. Never log the
+cookie or raw response bodies.
 
 ## Cursor team Admin API
 

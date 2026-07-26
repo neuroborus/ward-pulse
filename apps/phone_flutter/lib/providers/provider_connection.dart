@@ -136,8 +136,7 @@ List<ProviderConnection> providerConnectionCatalog({
     const ProviderConnection(
       id: ProviderConnections.cursorPlan,
       title: 'Cursor plan',
-      subtitle: 'Experimental · paste dashboard session token',
-      secretHint: 'Paste token',
+      subtitle: 'Experimental · dashboard sign-in',
     ),
     ProviderConnection(
       id: ProviderConnections.cursorPlatform,

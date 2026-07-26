@@ -11,7 +11,9 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 
 - Phone app is the primary dashboard and settings surface.
 - Plan auth: Codex = device-code OAuth; Claude = Claude Code PKCE (browser + pasted
-  `CODE#STATE`); Cursor plan = pasted session token. Platform rows stay Admin API keys.
+  `CODE#STATE`); Cursor plan = in-app WebView dashboard sign-in (captures
+  `WorkosCursorSessionToken`; Advanced paste via «?»). Not OAuth. Platform rows stay Admin API
+  keys.
 - Wear OS app is a compact dashboard, not a settings or credential-entry app.
 - WFF watch face is a glanceable status surface and launcher, not a full dashboard.
 

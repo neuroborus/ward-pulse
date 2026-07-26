@@ -22,17 +22,27 @@ void main() {
     expect(providerFamilyLabel(ProviderFamily.openai), 'OpenAI');
   });
 
-  test('OAuth plan rows omit pasted-secret hints', () {
+  test('plan sign-in rows omit pasted-secret hints', () {
     for (final connection in providerConnectionCatalog()) {
-      final oauthPlan =
+      final signInPlan =
           connection.id == ProviderConnections.codexPlan ||
-          connection.id == ProviderConnections.claudePlan;
+          connection.id == ProviderConnections.claudePlan ||
+          connection.id == ProviderConnections.cursorPlan;
       expect(
         connection.secretHint == null,
-        oauthPlan,
+        signInPlan,
         reason: connection.id.storageKey,
       );
     }
+  });
+
+  test('Cursor plan catalog copy is dashboard sign-in, not paste/OAuth', () {
+    final cursorPlan = providerConnectionCatalog().singleWhere(
+      (connection) => connection.id == ProviderConnections.cursorPlan,
+    );
+    expect(cursorPlan.subtitle, 'Experimental · dashboard sign-in');
+    expect(cursorPlan.subtitle.toLowerCase(), isNot(contains('oauth')));
+    expect(cursorPlan.subtitle.toLowerCase(), isNot(contains('paste')));
   });
 
   test('only the Cursor Team Admin API row carries the freshness note', () {

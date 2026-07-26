@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../providers/cursor_session_token.dart';
 import 'provider_reporting.dart';
 
 final class AnthropicReportingClient {
@@ -88,7 +89,9 @@ final class CursorPlanClient {
   Future<String> fetchUsageSummary({required String sessionToken}) async {
     final response = await _http.get(
       _baseUri.replace(path: '/api/usage-summary'),
-      headers: {'Cookie': 'WorkosCursorSessionToken=$sessionToken'},
+      headers: {
+        'Cookie': '$cursorSessionCookieName=$sessionToken',
+      },
       label: 'Cursor usage',
     );
     return response.body;

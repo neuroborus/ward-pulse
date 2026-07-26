@@ -7,9 +7,10 @@ WardPulse is local-first. The MVP must not introduce a custom cloud path for pro
 - Provider credentials stay on the phone that owns the provider transport. OpenAI, Anthropic, and
   Cursor platform Admin API keys are entered on the phone; ChatGPT/Codex sign-in uses OpenAI's
   device-code flow. Claude subscription uses Claude Code's PKCE authorization-code flow (browser
-  plus pasted callback code); Cursor plan remains an experimental pasted session-token
-  compatibility integration.
-- Phone-held API keys, Codex/Claude OAuth tokens, and pasted Cursor plan tokens are stored with
+  plus pasted callback code); Cursor plan uses an experimental in-app WebView dashboard sign-in
+  that captures the `WorkosCursorSessionToken` cookie (optional Advanced paste remains for
+  recovery). This is not OAuth.
+- Phone-held API keys, Codex/Claude OAuth tokens, and Cursor plan session tokens are stored with
   platform-secure storage, keyed per connection so one provider's credential never overwrites
   another's.
 - Saved credentials are never displayed in full. Credential entry may reveal only the current unsaved value after an explicit user action.
@@ -50,6 +51,23 @@ WardPulse is local-first. The MVP must not introduce a custom cloud path for pro
   disconnect removes the local session.
 - This Claude Code OAuth contract is undocumented. Treat the adapter as experimental, keep
   failures isolated, and do not extend it to prompts, conversations, or model execution.
+
+## Cursor Plan Account
+
+- The phone opens Cursor’s dashboard in an in-app WebView restricted to Cursor and known login
+  IdP hosts. After the user signs in, WardPulse reads the `WorkosCursorSessionToken` cookie only
+  from `cursor.com`, stores it in platform-secure storage, and wipes the WebView cookie jar
+  (clear + verify, also on disconnect and before each new sign-in). If a wipe cannot confirm the
+  session cookie is gone, Sign in refuses to proceed and disconnect warns the user. Settings help
+  explains the flow; Advanced paste accepts the same cookie value without DevTools on another
+  device.
+- This is a dashboard session compatibility login, not a published Cursor OAuth grant. Do not
+  label it OAuth in UI or docs.
+- The phone sends authenticated read-only requests only to `GET /api/usage-summary` with that
+  cookie. Session values are never logged, sent to Wear OS, or passed across the Rust FFI
+  boundary. Explicit disconnect deletes the local secret.
+- Treat the adapter as experimental, keep failures isolated, and do not extend it to prompts,
+  agent execution, or arbitrary Cursor dashboard scraping.
 
 ## Phone-to-Watch Sync
 
