@@ -45,7 +45,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun reloadSummary() {
-        summary = currentSummary()
+        // Prefs listeners can run off the main thread; Compose state must not.
+        runOnUiThread {
+            summary = currentSummary()
+        }
     }
 
     private fun currentSummary() = store.load()?.let { saved ->

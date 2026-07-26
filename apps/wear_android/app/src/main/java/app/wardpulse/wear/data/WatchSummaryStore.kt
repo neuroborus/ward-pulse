@@ -22,7 +22,11 @@ import org.json.JSONObject
 
 class WatchSummaryStore(private val preferences: SharedPreferences) {
     constructor(context: Context) : this(
-        context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE),
+        // One process-wide prefs instance for Activity + WearableListenerService.
+        context.applicationContext.getSharedPreferences(
+            PREFERENCES_NAME,
+            Context.MODE_PRIVATE,
+        ),
     )
 
     fun load(): WatchDashboardSummary? =

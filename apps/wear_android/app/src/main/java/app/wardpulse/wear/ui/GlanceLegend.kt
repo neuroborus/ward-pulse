@@ -167,7 +167,11 @@ internal fun GlanceLegendPage(
     val context = LocalContext.current
     val requester = remember { PhoneRefreshRequester(context) }
     var refreshAllowed by remember { mutableStateOf(summary.isManualRefreshAllowed()) }
-    LaunchedEffect(summary.manualRefreshAllowed, summary.manualRefreshAvailableAt) {
+    LaunchedEffect(
+        summary.generatedAt,
+        summary.manualRefreshAllowed,
+        summary.manualRefreshAvailableAt,
+    ) {
         refreshAllowed = summary.isManualRefreshAllowed()
         if (refreshAllowed) {
             return@LaunchedEffect
