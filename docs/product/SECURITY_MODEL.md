@@ -6,10 +6,10 @@ WardPulse is local-first. The MVP must not introduce a custom cloud path for pro
 
 - Provider credentials stay on the phone that owns the provider transport. OpenAI, Anthropic, and
   Cursor platform Admin API keys are entered on the phone; ChatGPT/Codex sign-in uses OpenAI's
-  device-code flow. Claude and Cursor plan connections are experimental compatibility
-  integrations: the phone stores a pasted OAuth access token or dashboard session token instead of
-  running a first-party sign-in flow.
-- Phone-held API keys, Codex OAuth tokens, and pasted Claude/Cursor plan tokens are stored with
+  device-code flow. Claude subscription uses Claude Code's PKCE authorization-code flow (browser
+  plus pasted callback code); Cursor plan remains an experimental pasted session-token
+  compatibility integration.
+- Phone-held API keys, Codex/Claude OAuth tokens, and pasted Cursor plan tokens are stored with
   platform-secure storage, keyed per connection so one provider's credential never overwrites
   another's.
 - Saved credentials are never displayed in full. Credential entry may reveal only the current unsaved value after an explicit user action.
@@ -36,6 +36,20 @@ WardPulse is local-first. The MVP must not introduce a custom cloud path for pro
 - The direct Codex compatibility endpoints are not a published third-party API. Treat this adapter
   as experimental, keep failures isolated, and do not extend it to prompts, conversations, model
   execution, or arbitrary ChatGPT backend access.
+
+## Claude Account
+
+- The phone opens Claude Code's PKCE authorize URL in the external browser. After approval, the
+  user pastes the short-lived authorization code (`CODE#STATE`) from Anthropic's callback page;
+  the phone exchanges it for tokens. Anthropic does not offer a device-code grant for this client.
+- Access and rotating refresh tokens stay in platform-secure storage. Authorization codes and
+  tokens are never logged, sent to Wear OS, or passed across the Rust FFI boundary.
+- Token refresh and session writes are serialized. Anthropic rotates refresh tokens; the phone
+  stores the new refresh token before the next reporting request.
+- The phone sends authenticated read-only requests only to `GET /api/oauth/usage`. Explicit
+  disconnect removes the local session.
+- This Claude Code OAuth contract is undocumented. Treat the adapter as experimental, keep
+  failures isolated, and do not extend it to prompts, conversations, or model execution.
 
 ## Phone-to-Watch Sync
 

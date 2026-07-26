@@ -48,6 +48,10 @@ enum DashboardSyncIssue {
   codexPermissionDenied,
   codexUnavailable,
   codexInvalidResponse,
+  claudeAuthentication,
+  claudePermissionDenied,
+  claudeUnavailable,
+  claudeInvalidResponse,
   dashboardUnavailable,
 }
 
@@ -76,6 +80,14 @@ extension DashboardSyncIssueMessage on DashboardSyncIssue {
         'Codex usage is unavailable. Check your connection and try again.',
       DashboardSyncIssue.codexInvalidResponse =>
         'Codex returned an unsupported usage response.',
+      DashboardSyncIssue.claudeAuthentication =>
+        'Claude sign-in expired. Reconnect your Claude account in Settings.',
+      DashboardSyncIssue.claudePermissionDenied =>
+        'This Claude account cannot access usage reporting.',
+      DashboardSyncIssue.claudeUnavailable =>
+        'Claude usage is unavailable. Check your connection and try again.',
+      DashboardSyncIssue.claudeInvalidResponse =>
+        'Claude returned an unsupported usage response.',
       DashboardSyncIssue.dashboardUnavailable =>
         'Dashboard data could not be loaded.',
     };

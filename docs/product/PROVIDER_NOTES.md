@@ -90,8 +90,8 @@ a running agent.
 
 Every provider in Settings is one section with up to two homogeneous connections:
 
-- `plan`: subscription or allowance reads (Codex device-code OAuth; Claude Code OAuth token
-  paste; Cursor dashboard session token paste);
+- `plan`: subscription or allowance reads (Codex device-code OAuth; Claude Code PKCE OAuth
+  with authorization-code paste from the callback page; Cursor dashboard session token paste);
 - `platform`: organization or team usage and cost reporting (OpenAI, Anthropic, and Cursor Admin
   API keys).
 
@@ -228,15 +228,20 @@ Official references:
 
 ## Claude subscription reporting
 
-Status: implemented as an experimental on-device compatibility integration on 2026-07-25.
+Status: implemented as an experimental on-device compatibility integration on 2026-07-25;
+phone-owned PKCE sign-in landed 2026-07-26.
 
-The phone stores a Claude Code OAuth access token in secure storage (paste today; full OAuth
-device flow can follow). It calls undocumented `GET /api/oauth/usage` with
-`anthropic-beta: oauth-2025-04-20` and a Claude Code user agent, then normalizes `five_hour`,
-`seven_day`, optional per-model weekly windows, and `extra_usage` into `AllowanceState`.
+Anthropic does not publish a device-code grant for Claude Code. The phone runs the same PKCE
+authorization-code flow Claude Code uses (`client_id` for Claude Code, redirect
+`https://platform.claude.com/oauth/code/callback`): open the authorize URL, user pastes the
+`CODE#STATE` value from the callback page, then the phone exchanges it for access and rotating
+refresh tokens in secure storage. Refresh is serialized like Codex. Reporting calls undocumented
+`GET /api/oauth/usage` with `anthropic-beta: oauth-2025-04-20` and a Claude Code user agent, then
+normalizes `five_hour`, `seven_day`, optional per-model weekly windows, and `extra_usage` into
+`AllowanceState`.
 
-This is the same undocumented contract Claude Code's `/usage` command uses. Endpoint changes may
-require an app update. Never log the token or raw response bodies.
+This is a compatibility integration, not a published third-party API. Endpoint or OAuth client
+changes may require an app update. Never log tokens, authorization codes, or raw response bodies.
 
 ## Cursor plan reporting
 

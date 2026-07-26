@@ -86,51 +86,6 @@ void main() {
     });
   });
 
-  group('ClaudeUsageClient', () {
-    test('sends the OAuth token and Claude Code headers', () async {
-      final transport = _FakeTransport({
-        '/api/oauth/usage': [_response('{"five_hour":{}}')],
-      });
-      final client = ClaudeUsageClient(
-        http: ProviderReportingHttp(transport: transport),
-      );
-
-      final body = await client.fetchUsage(oauthToken: 'secret-oauth-token');
-
-      expect(body, '{"five_hour":{}}');
-      final request = transport.requests.single;
-      expect(request.headers['Authorization'], 'Bearer secret-oauth-token');
-      expect(request.headers['anthropic-beta'], 'oauth-2025-04-20');
-      expect(request.headers['User-Agent'], contains('claude-code'));
-    });
-
-    test('maps a forbidden response to permission denied', () async {
-      final transport = _FakeTransport({
-        '/api/oauth/usage': [
-          const ProviderHttpResponse(
-            statusCode: HttpStatus.forbidden,
-            headers: {},
-            body: '{}',
-          ),
-        ],
-      });
-      final client = ClaudeUsageClient(
-        http: ProviderReportingHttp(transport: transport),
-      );
-
-      await expectLater(
-        client.fetchUsage(oauthToken: 'secret-oauth-token'),
-        throwsA(
-          isA<ProviderReportingException>().having(
-            (error) => error.failure,
-            'failure',
-            ProviderReportingFailure.permissionDenied,
-          ),
-        ),
-      );
-    });
-  });
-
   group('CursorPlanClient', () {
     test('sends the session token as a cookie', () async {
       final transport = _FakeTransport({

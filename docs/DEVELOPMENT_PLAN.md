@@ -1545,10 +1545,10 @@ Deliverables:
   `/v1/organizations/usage_report/messages` (daily buckets for the dashboard; hourly available)
   and `/v1/organizations/cost_report` (daily buckets only, USD as decimal-string cents), with
   pagination, Rust normalization, a capability descriptor, and sanitized fixtures;
-- Claude subscription: OAuth token per the Claude Code contract, `GET /api/oauth/usage`
-  normalization of window utilization percentages, reset timestamps, and extra-usage credits
-  into `AllowanceState`; explicitly a compatibility integration that degrades gracefully like
-  Codex;
+- Claude subscription: phone-owned Claude Code PKCE OAuth (authorize URL + pasted `CODE#STATE`),
+  refresh-token storage, `GET /api/oauth/usage` normalization of window utilization percentages,
+  reset timestamps, and extra-usage credits into `AllowanceState`; explicitly a compatibility
+  integration that degrades gracefully like Codex;
 - Cursor plan usage: session-authenticated dashboard endpoints normalized into plan and
   on-demand allowances; framed as experimental, with the sign-in flow owned by the phone and
   the session token in secure storage;

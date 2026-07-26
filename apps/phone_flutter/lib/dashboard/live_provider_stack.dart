@@ -2,12 +2,14 @@ import 'dart:convert';
 
 import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 
+import '../providers/claude_account_service.dart';
 import '../providers/provider_connection.dart';
 import '../providers/provider_credential_store.dart';
 import '../sync/provider_reporting.dart';
 import '../sync/provider_reporting_clients.dart';
 import '../sync/provider_sync_logger.dart';
 import '../sync/report_period.dart';
+import 'claude_dashboard_repository.dart';
 import 'dashboard_load.dart';
 import 'dashboard_repository.dart';
 import 'merging_connection_repository.dart';
@@ -18,13 +20,13 @@ import 'merging_connection_repository.dart';
 /// it, so one unconfigured or failing connection never hides the others.
 DashboardRepository buildLiveProviderStack({
   required ProviderCredentialStore credentialStore,
+  required ClaudeAccountService claudeAccountService,
   required DashboardRepository openAiAndCodex,
   ProviderSyncLogger logger = const DeveloperProviderSyncLogger(),
   DateTime Function()? clock,
 }) {
   final now = clock ?? DateTime.now;
   final anthropicClient = AnthropicReportingClient();
-  final claudeClient = ClaudeUsageClient();
   final cursorPlanClient = CursorPlanClient();
   final cursorPlatformClient = CursorPlatformClient(clock: now);
 
@@ -95,14 +97,10 @@ DashboardRepository buildLiveProviderStack({
     },
   );
 
-  final claude = connect(
+  final claude = claudeDashboardRepository(
+    accountService: claudeAccountService,
     fallback: anthropic,
-    normalizeReport: normalizeClaudeReportJson,
-    loadReport: planReport(
-      connection: ProviderConnections.claudePlan,
-      accountId: 'claude-local',
-      fetch: (token) => claudeClient.fetchUsage(oauthToken: token),
-    ),
+    logger: logger,
   );
 
   final cursorTeam = connect(

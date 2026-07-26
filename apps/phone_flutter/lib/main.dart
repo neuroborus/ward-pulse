@@ -6,6 +6,8 @@ import 'dashboard/codex_dashboard_repository.dart';
 import 'dashboard/dashboard_repository.dart';
 import 'dashboard/live_provider_stack.dart';
 import 'dashboard/openai_dashboard_repository.dart';
+import 'providers/claude_account_service.dart';
+import 'providers/claude_account_store.dart';
 import 'providers/codex_account_service.dart';
 import 'providers/codex_account_store.dart';
 import 'providers/provider_credential_store.dart';
@@ -21,12 +23,16 @@ void main() {
   final codexAccountService = MobileCodexAccountService(
     store: SecureCodexAccountStore(),
   );
+  final claudeAccountService = MobileClaudeAccountService(
+    store: SecureClaudeAccountStore(),
+  );
   final openAiAndCodex = codexDashboardRepository(
     accountService: codexAccountService,
     fallback: openAiDashboardRepository(credentialStore: credentialStore),
   );
   final liveRepository = buildLiveProviderStack(
     credentialStore: credentialStore,
+    claudeAccountService: claudeAccountService,
     openAiAndCodex: openAiAndCodex,
   );
   final debugDataPreferenceStore = SecureDebugDataPreferenceStore();
@@ -35,6 +41,7 @@ void main() {
     WardPulseApp(
       credentialStore: credentialStore,
       codexAccountService: codexAccountService,
+      claudeAccountService: claudeAccountService,
       displayPreferenceStore: SecureConsumptionDisplayPreferenceStore(),
       refreshIntervalStore: SecureRefreshIntervalPreferenceStore(),
       watchRingPreferenceStore: SecureWatchRingPreferenceStore(),

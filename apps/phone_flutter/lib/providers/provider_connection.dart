@@ -123,8 +123,7 @@ List<ProviderConnection> providerConnectionCatalog({
     const ProviderConnection(
       id: ProviderConnections.claudePlan,
       title: 'Claude subscription',
-      subtitle: 'Experimental · paste Claude Code OAuth token',
-      secretHint: 'Paste token',
+      subtitle: 'Experimental · Claude Code OAuth sign-in',
     ),
     ProviderConnection(
       id: ProviderConnections.anthropicPlatform,

@@ -22,11 +22,14 @@ void main() {
     expect(providerFamilyLabel(ProviderFamily.openai), 'OpenAI');
   });
 
-  test('only the Codex subscription is authorized without a pasted secret', () {
+  test('OAuth plan rows omit pasted-secret hints', () {
     for (final connection in providerConnectionCatalog()) {
+      final oauthPlan =
+          connection.id == ProviderConnections.codexPlan ||
+          connection.id == ProviderConnections.claudePlan;
       expect(
         connection.secretHint == null,
-        connection.id == ProviderConnections.codexPlan,
+        oauthPlan,
         reason: connection.id.storageKey,
       );
     }

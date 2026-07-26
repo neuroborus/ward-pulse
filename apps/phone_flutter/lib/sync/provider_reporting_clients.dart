@@ -77,29 +77,6 @@ final class AnthropicReportingClient {
   }
 }
 
-final class ClaudeUsageClient {
-  ClaudeUsageClient({ProviderReportingHttp? http, Uri? baseUri})
-    : _http = http ?? ProviderReportingHttp(),
-      _baseUri = baseUri ?? Uri.parse('https://api.anthropic.com');
-
-  final ProviderReportingHttp _http;
-  final Uri _baseUri;
-
-  Future<String> fetchUsage({required String oauthToken}) async {
-    final response = await _http.get(
-      _baseUri.replace(path: '/api/oauth/usage'),
-      headers: {
-        'Authorization': 'Bearer $oauthToken',
-        'anthropic-beta': 'oauth-2025-04-20',
-        'anthropic-version': '2023-06-01',
-        'User-Agent': 'claude-code/2.0.0',
-      },
-      label: 'Claude usage',
-    );
-    return response.body;
-  }
-}
-
 final class CursorPlanClient {
   CursorPlanClient({ProviderReportingHttp? http, Uri? baseUri})
     : _http = http ?? ProviderReportingHttp(),

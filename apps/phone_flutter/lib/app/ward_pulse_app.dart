@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_repository.dart';
 import '../dashboard/dashboard_screen.dart';
+import '../providers/claude_account_service.dart';
 import '../providers/codex_account_service.dart';
 import '../providers/provider_connection.dart';
 import '../providers/provider_credential_store.dart';
@@ -26,6 +27,7 @@ class WardPulseApp extends StatelessWidget {
     this.watchSyncService = const MethodChannelWatchSyncService(),
     this.credentialStore = const EmptyProviderCredentialStore(),
     this.codexAccountService = const EmptyCodexAccountService(),
+    this.claudeAccountService = const EmptyClaudeAccountService(),
     this.displayPreferenceStore =
         const DefaultConsumptionDisplayPreferenceStore(),
     this.refreshIntervalStore = const DefaultRefreshIntervalPreferenceStore(),
@@ -39,6 +41,7 @@ class WardPulseApp extends StatelessWidget {
   final WatchSyncService watchSyncService;
   final ProviderCredentialStore credentialStore;
   final CodexAccountService codexAccountService;
+  final ClaudeAccountService claudeAccountService;
   final ConsumptionDisplayPreferenceStore displayPreferenceStore;
   final RefreshIntervalPreferenceStore refreshIntervalStore;
   final WatchRingPreferenceStore watchRingPreferenceStore;
@@ -58,6 +61,7 @@ class WardPulseApp extends StatelessWidget {
         watchSyncService: watchSyncService,
         credentialStore: credentialStore,
         codexAccountService: codexAccountService,
+        claudeAccountService: claudeAccountService,
         displayPreferenceStore: displayPreferenceStore,
         refreshIntervalStore: refreshIntervalStore,
         watchRingPreferenceStore: watchRingPreferenceStore,
@@ -76,6 +80,7 @@ class DashboardHost extends StatefulWidget {
     required this.watchSyncService,
     required this.credentialStore,
     required this.codexAccountService,
+    required this.claudeAccountService,
     required this.displayPreferenceStore,
     required this.refreshIntervalStore,
     required this.watchRingPreferenceStore,
@@ -88,6 +93,7 @@ class DashboardHost extends StatefulWidget {
   final WatchSyncService watchSyncService;
   final ProviderCredentialStore credentialStore;
   final CodexAccountService codexAccountService;
+  final ClaudeAccountService claudeAccountService;
   final ConsumptionDisplayPreferenceStore displayPreferenceStore;
   final RefreshIntervalPreferenceStore refreshIntervalStore;
   final WatchRingPreferenceStore watchRingPreferenceStore;
@@ -394,6 +400,7 @@ class _DashboardHostState extends State<DashboardHost> {
                 snapshot: snapshot,
                 credentialStore: widget.credentialStore,
                 codexAccountService: widget.codexAccountService,
+                claudeAccountService: widget.claudeAccountService,
                 displayPreferences: _displayPreferences,
                 onDisplayPreferencesChanged: _updateDisplayPreferences,
                 refreshInterval: _refreshInterval,
