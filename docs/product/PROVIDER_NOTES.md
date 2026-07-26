@@ -66,8 +66,9 @@ per-provider capability tables below are the source of truth for what each conne
 Per-connection minimum intervals live in Rust (`ward-pulse-providers::poll`) with doc-linked
 comments, and are the single source of truth for cadence:
 
-- one global refresh slider from 5 to 60 minutes (strictest hard floor rounded up), so a single
-  global cadence already satisfies every per-connection floor;
+- one global refresh slider from 5 to 60 minutes (strictest hard floor rounded up), segmented as
+  5–15 by 1 minute, 15–30 by 5, and 30–60 by 10, so a single global cadence already satisfies
+  every per-connection floor;
 - `effective_interval = max(user_setting, provider_minimum)` per connection;
 - automatic sync on the phone runs on an in-process scheduler while the app isolate is alive;
   polling after Android reclaims the process needs a background Dart entrypoint and is not

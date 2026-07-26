@@ -1516,10 +1516,11 @@ Cursor plan (session)         unpublished compatibility contract; conservative  
 Cursor platform (Admin API)   hard 20 req/min; polled at 5 min like the rest      5 min
 ```
 
-The strictest hard floor is 5 minutes, so the slider spans 5 to 60 minutes. Cursor’s team Admin
-API aggregates usage hourly on the provider side; instead of clamping that connection to an
-hourly cadence, its Settings row carries a visible note that refreshed values may lag. The
-experimental Cursor plan row does not reuse that claim.
+The strictest hard floor is 5 minutes, so the slider spans 5 to 60 minutes with segmented stops
+  (5–15 by 1, 15–30 by 5, 30–60 by 10). Cursor’s team Admin API aggregates usage hourly on the
+  provider side; instead of clamping that connection to an hourly cadence, its Settings row
+  carries a visible note that refreshed values may lag. The experimental Cursor plan row does
+  not reuse that claim.
 
 Acceptance:
 

@@ -30,10 +30,49 @@ void main() {
     expect(PollCadence.cursorFreshnessNote, _rustFreshnessNote(rust));
   });
 
-  test('clamps a requested interval into the slider range', () {
+  test('exposes segmented refresh stops', () {
+    expect(
+      PollCadence.refreshIntervalStops.first,
+      PollCadence.minRefreshMinutes,
+    );
+    expect(
+      PollCadence.refreshIntervalStops.last,
+      PollCadence.maxRefreshMinutes,
+    );
+    expect(
+      PollCadence.refreshIntervalStops,
+      contains(PollCadence.defaultRefreshMinutes),
+    );
+    expect(PollCadence.refreshIntervalStops, [
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      20,
+      25,
+      30,
+      40,
+      50,
+      60,
+    ]);
+  });
+
+  test('clamps and snaps a requested interval onto a slider stop', () {
     expect(PollCadence.clampMinutes(1), PollCadence.minRefreshMinutes);
     expect(PollCadence.clampMinutes(30), 30);
     expect(PollCadence.clampMinutes(600), PollCadence.maxRefreshMinutes);
+    expect(PollCadence.clampMinutes(17), 15);
+    expect(PollCadence.clampMinutes(18), 20);
+    expect(PollCadence.clampMinutes(33), 30);
+    expect(PollCadence.clampMinutes(35), 40);
+    expect(PollCadence.clampMinutes(36), 40);
   });
 }
 

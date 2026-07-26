@@ -63,7 +63,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isConnectingCodex = false;
   bool _isSyncing = false;
   String? _syncResult;
-  double? _dragRefreshMinutes;
+  int? _dragRefreshMinutes;
 
   /// Connections authorized by a pasted secret, in catalog order.
   static final _secretConnections = providerConnectionCatalog()
@@ -328,8 +328,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _setRefreshInterval(double minutes) async {
-    final preference = RefreshIntervalPreference(minutes: minutes.round());
+  Future<void> _setRefreshInterval(int minutes) async {
+    final preference = RefreshIntervalPreference(
+      minutes: PollCadence.clampMinutes(minutes),
+    );
     try {
       await widget.onRefreshIntervalChanged(preference);
     } catch (_) {
@@ -440,8 +442,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final snapshot = widget.snapshot;
     final catalog = providerConnectionCatalog(platformLabels: _labels);
-    final shownRefreshMinutes =
-        _dragRefreshMinutes?.round() ?? widget.refreshInterval.minutes;
+    final shownRefreshMinutes = PollCadence.clampMinutes(
+      _dragRefreshMinutes ?? widget.refreshInterval.minutes,
+    );
+    final refreshStopIndex = PollCadence.refreshIntervalStopIndex(
+      shownRefreshMinutes,
+    );
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -505,24 +511,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 Slider(
-                  min: PollCadence.minRefreshMinutes.toDouble(),
-                  max: PollCadence.maxRefreshMinutes.toDouble(),
-                  divisions:
-                      PollCadence.maxRefreshMinutes -
-                      PollCadence.minRefreshMinutes,
+                  min: 0,
+                  max: (PollCadence.refreshIntervalStops.length - 1).toDouble(),
+                  divisions: PollCadence.refreshIntervalStops.length - 1,
                   label: '$shownRefreshMinutes min',
-                  semanticFormatterCallback:
-                      (value) => '${value.round()} minutes',
-                  value: shownRefreshMinutes.toDouble(),
+                  semanticFormatterCallback: (value) {
+                    final minutes =
+                        PollCadence.refreshIntervalStops[value.round()];
+                    return '$minutes minutes';
+                  },
+                  value: refreshStopIndex.toDouble(),
                   onChanged: (value) {
                     setState(() {
-                      _dragRefreshMinutes = value;
+                      _dragRefreshMinutes =
+                          PollCadence.refreshIntervalStops[value.round()];
                     });
                   },
                   onChangeEnd: (value) async {
-                    await _setRefreshInterval(value);
+                    final minutes =
+                        PollCadence.refreshIntervalStops[value.round()];
+                    await _setRefreshInterval(minutes);
                     // Keep a newer drag in place if one started while saving.
-                    if (mounted && _dragRefreshMinutes == value) {
+                    if (mounted && _dragRefreshMinutes == minutes) {
                       setState(() {
                         _dragRefreshMinutes = null;
                       });

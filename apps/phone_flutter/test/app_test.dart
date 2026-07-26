@@ -431,16 +431,21 @@ void main() {
     final slider = find.byType(Slider);
     await tester.ensureVisible(slider);
     await tester.pumpAndSettle();
-    await tester.drag(slider, const Offset(80, 0));
+    // Advance one segmented stop past the default (15 → 20).
+    final sliderWidget = tester.widget<Slider>(slider);
+    final nextIndex = (sliderWidget.value + 1).clamp(
+      sliderWidget.min,
+      sliderWidget.max,
+    );
+    sliderWidget.onChanged!(nextIndex);
+    await tester.pump();
+    sliderWidget.onChangeEnd!(nextIndex);
     await tester.pumpAndSettle();
 
+    expect(preferences.value.minutes, 20);
     expect(
-      preferences.value.minutes,
-      greaterThan(PollCadence.defaultRefreshMinutes),
-    );
-    expect(
-      preferences.value.minutes,
-      lessThanOrEqualTo(PollCadence.maxRefreshMinutes),
+      PollCadence.refreshIntervalStops,
+      contains(preferences.value.minutes),
     );
   });
 
