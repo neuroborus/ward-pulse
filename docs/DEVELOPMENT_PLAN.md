@@ -1695,7 +1695,8 @@ When multi-profile lands, same-provider rings need hatch/pattern as well as fami
 
 Status: largely landed (2026-07-27). Primary nav, Watchface + Widget tabs, locked
 `PHONE_WIDGET_DESIGN.md` review art, and the Android App Widget surface are in tree.
-Large (6-slot) size remains deferred.
+Large (6-slot) prefs / tall widget size is unlocked; Claude windows stay expanded on the
+phone widget; exhausted pools render as `0% left`.
 
 Rationale: glance configuration is a first-class product surface, not a Settings footnote.
 Watchface and Widget each get a primary tab between Dashboard and Providers. The phone
@@ -1731,7 +1732,8 @@ Deliverables:
 - Android App Widget hosted by the Flutter phone shell (`home_widget` + RemoteViews);
 - Widget tab selects which metrics appear (same catalog idea as Watchface: provider plan
   windows, purchased/credit % when available, local budgets);
-- small (2) / medium (4) size variants locked; large (6) deferred;
+- small (2) / tall (6) size variants locked (`phoneWidgetSlotCount = 6`);
+  Claude plan windows stay expanded on the phone widget; exhausted pools render as `0% left`;
 - render only configured, available, non-exhausted metrics; omit empty slots rather than
   inventing `Unknown` filler;
 - **remaining** language for percent metrics (same meaning as watch rings); family colors

@@ -1,6 +1,5 @@
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/provider_status_color.dart';
-import '../settings/watch_ring_preferences.dart';
 import 'phone_widget_preferences.dart';
 
 /// One rendered home-widget row (remaining language).
@@ -20,7 +19,7 @@ final class PhoneWidgetRow {
   String get line => '$remainingPercent% left · $label';
 }
 
-/// Snapshot + prefs → home-widget rows (exhausted / unavailable already omitted).
+/// Snapshot + prefs → home-widget rows (unavailable already omitted).
 final class PhoneWidgetPayload {
   const PhoneWidgetPayload({required this.rows, required this.stale});
 
@@ -30,15 +29,14 @@ final class PhoneWidgetPayload {
   bool get isEmpty => rows.isEmpty;
 }
 
-/// Builds the launcher payload. Prefer [orderWatchRingsForSurface] tightest-first.
+/// Builds the launcher payload. Tightest-first; exhausted plan pools stay as 0%.
 PhoneWidgetPayload buildPhoneWidgetPayload(
   DashboardSnapshot snapshot,
   PhoneWidgetPreferences preferences, {
   int maxSlots = phoneWidgetSlotCount,
 }) {
-  final metrics = orderWatchRingsForSurface(
+  final metrics = orderPhoneWidgetMetrics(
     resolvePhoneWidgetMetrics(snapshot, preferences),
-    snapshot: snapshot,
     maxSlots: maxSlots,
   );
   return PhoneWidgetPayload(

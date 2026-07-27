@@ -30,10 +30,7 @@ Future<void> providerSyncOnce() async {
       displayPreferences,
       ringPreferences,
     );
-    await const HomeWidgetPhoneWidgetSyncService().sync(
-      snapshot,
-      widgetPreferences,
-    );
+    await HomeWidgetPhoneWidgetSyncService().sync(snapshot, widgetPreferences);
   } catch (_) {
     // Automatic / headless sync keeps the last successful snapshot visible.
   }

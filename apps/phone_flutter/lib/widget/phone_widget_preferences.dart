@@ -5,10 +5,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../dashboard/dashboard_models.dart';
 import '../settings/watch_ring_preferences.dart';
 
-/// Default medium-size slot cap until phone widget design locks per-size counts.
-///
-/// Denser than [watchRingSlotCount] (3); small/large caps land with the design lock.
-const phoneWidgetSlotCount = 4;
+/// Prefs / payload cap for the phone home-widget (launcher may show fewer rows).
+const phoneWidgetSlotCount = 6;
 
 /// Ordered metric ids for the phone home-screen widget (independent of Watchface).
 ///
@@ -25,38 +23,51 @@ final class PhoneWidgetPreferences {
       .take(phoneWidgetSlotCount)
       .toList(growable: false);
 
-  /// Clamped selection with legacy Claude window ids collapsed to one plan slot.
+  /// Clamped selection; Claude windows stay expanded (no Watchface collapse).
   List<String> get migratedIds => migratePhoneWidgetSelectedIds(clampedIds);
 }
 
-/// Claude plan collapse for widget prefs; purchased meters stay selectable.
+/// Phone-widget prefs migration: keep Claude windows and purchased meters.
+///
+/// Rewrites the retired Watchface-only [claudePlanRingId] into expanded window
+/// ids so an older Claude selection is not dropped on upgrade.
 List<String> migratePhoneWidgetSelectedIds(List<String> ids) {
-  return migrateWatchRingSelectedIds(
-    ids,
-    dropPurchased: false,
-    maxSlots: phoneWidgetSlotCount,
+  final out = <String>[];
+  for (final id in ids) {
+    if (id == claudePlanRingId) {
+      for (final windowId in claudePlanWindowRingIds) {
+        if (!out.contains(windowId)) {
+          out.add(windowId);
+        }
+      }
+      continue;
+    }
+    if (!out.contains(id)) {
+      out.add(id);
+    }
+  }
+  return out.take(phoneWidgetSlotCount).toList(growable: false);
+}
+
+/// Phone home-widget catalog: budgets, every Claude plan window, purchased meters.
+List<WatchRingMetric> phoneWidgetCatalog(DashboardSnapshot? snapshot) {
+  return watchRingCatalog(
+    snapshot,
+    includePurchased: true,
+    collapseClaudePlan: false,
   );
 }
 
-/// Phone home-widget catalog: budgets, plan windows, and purchased meters.
-List<WatchRingMetric> phoneWidgetCatalog(DashboardSnapshot? snapshot) {
-  return watchRingCatalog(snapshot, includePurchased: true);
-}
-
-/// Resolves widget metrics: only available non-exhausted percent metrics, prefs order.
+/// Resolves widget metrics: available percent metrics, prefs order.
+///
+/// Exhausted meters (`usedPercent >= 100`) stay selectable / visible as 0% left
+/// so sibling pools (e.g. Cursor Models + Other Models) remain together.
 List<WatchRingMetric> resolvePhoneWidgetMetrics(
   DashboardSnapshot snapshot,
   PhoneWidgetPreferences preferences,
 ) {
-  bool usable(WatchRingMetric metric) {
-    final used = metric.usedPercent;
-    return metric.isAvailable && used != null && used < 100;
-  }
-
   if (preferences.usesDefaults) {
-    return phoneWidgetCatalog(
-      snapshot,
-    ).where(usable).take(phoneWidgetSlotCount).toList();
+    return _defaultPhoneWidgetMetrics(snapshot);
   }
 
   final catalog = {
@@ -64,8 +75,58 @@ List<WatchRingMetric> resolvePhoneWidgetMetrics(
   };
   return [
     for (final id in preferences.migratedIds)
-      if (catalog[id] case final metric? when usable(metric)) metric,
+      if (catalog[id] case final metric? when metric.isAvailable) metric,
   ];
+}
+
+/// Defaults: plan windows first, then purchased, then budgets.
+List<WatchRingMetric> _defaultPhoneWidgetMetrics(DashboardSnapshot snapshot) {
+  final purchasedIds = _purchasedAllowanceRingIds(snapshot);
+  final plans = <WatchRingMetric>[];
+  final purchased = <WatchRingMetric>[];
+  final budgets = <WatchRingMetric>[];
+  for (final metric in phoneWidgetCatalog(snapshot)) {
+    if (!metric.isAvailable) {
+      continue;
+    }
+    if (metric.id.startsWith('budget.')) {
+      budgets.add(metric);
+    } else if (purchasedIds.contains(metric.id)) {
+      purchased.add(metric);
+    } else {
+      plans.add(metric);
+    }
+  }
+  return [
+    ...plans,
+    ...purchased,
+    ...budgets,
+  ].take(phoneWidgetSlotCount).toList(growable: false);
+}
+
+Set<String> _purchasedAllowanceRingIds(DashboardSnapshot snapshot) {
+  return {
+    for (final account in snapshot.accounts)
+      for (final allowance in account.allowances)
+        if (allowance.source == AllowanceSource.purchased)
+          'allowance.${account.provider}.${allowance.id}',
+  };
+}
+
+/// Display order for the launcher: tightest remaining first; keep 0% left rows.
+List<WatchRingMetric> orderPhoneWidgetMetrics(
+  List<WatchRingMetric> metrics, {
+  int maxSlots = phoneWidgetSlotCount,
+}) {
+  final rows = [...metrics];
+  rows.sort((a, b) {
+    final usedCmp = (b.usedPercent ?? 0).compareTo(a.usedPercent ?? 0);
+    if (usedCmp != 0) {
+      return usedCmp;
+    }
+    return a.id.compareTo(b.id);
+  });
+  return rows.take(maxSlots).toList(growable: false);
 }
 
 /// Short subtitle for Widget tab preview.
@@ -73,10 +134,8 @@ String phoneWidgetPayloadSubtitle(
   DashboardSnapshot snapshot,
   PhoneWidgetPreferences preferences,
 ) {
-  final metrics = orderWatchRingsForSurface(
+  final metrics = orderPhoneWidgetMetrics(
     resolvePhoneWidgetMetrics(snapshot, preferences),
-    snapshot: snapshot,
-    maxSlots: phoneWidgetSlotCount,
   );
   if (metrics.isEmpty) {
     return 'No metrics selected';

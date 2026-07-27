@@ -50,8 +50,9 @@ class WardPulseAppWidget : AppWidgetProvider() {
     ): Int {
         val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
         val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 110)
-        // Small ≈ 2 cells tall; medium and up show the prefs cap (4).
-        return if (minHeight < 100) 2 else 4
+        // Small ≈ 2 cells. Otherwise show the prefs cap — no medium-4 cutoff that
+        // left empty chrome while hiding Claude/Cursor rows.
+        return if (minHeight < 100) 2 else maxRowCount
     }
 
     private fun buildViews(
@@ -69,7 +70,7 @@ class WardPulseAppWidget : AppWidgetProvider() {
             if (stale) View.VISIBLE else View.GONE,
         )
 
-        val storedCount = data.getInt("row_count", 0).coerceIn(0, 4)
+        val storedCount = data.getInt("row_count", 0).coerceIn(0, maxRowCount)
         val rowCount = storedCount.coerceAtMost(maxRows)
         val empty = data.getString("empty", if (storedCount == 0) "1" else "0") == "1" ||
             rowCount == 0
@@ -84,6 +85,8 @@ class WardPulseAppWidget : AppWidgetProvider() {
                 R.id.widget_row_1,
                 R.id.widget_row_2,
                 R.id.widget_row_3,
+                R.id.widget_row_4,
+                R.id.widget_row_5,
             )
         val textIds =
             intArrayOf(
@@ -91,6 +94,8 @@ class WardPulseAppWidget : AppWidgetProvider() {
                 R.id.widget_row_1_text,
                 R.id.widget_row_2_text,
                 R.id.widget_row_3_text,
+                R.id.widget_row_4_text,
+                R.id.widget_row_5_text,
             )
         val accentIds =
             intArrayOf(
@@ -98,9 +103,11 @@ class WardPulseAppWidget : AppWidgetProvider() {
                 R.id.widget_row_1_accent,
                 R.id.widget_row_2_accent,
                 R.id.widget_row_3_accent,
+                R.id.widget_row_4_accent,
+                R.id.widget_row_5_accent,
             )
 
-        for (i in 0 until 4) {
+        for (i in 0 until maxRowCount) {
             if (!empty && i < rowCount) {
                 val text = data.getString("row_${i}_text", "") ?: ""
                 val colorHex = data.getString("row_${i}_color", "ff8ab4f8") ?: "ff8ab4f8"
@@ -126,5 +133,9 @@ class WardPulseAppWidget : AppWidgetProvider() {
             )
         views.setOnClickPendingIntent(R.id.widget_root, pending)
         return views
+    }
+
+    private companion object {
+        const val maxRowCount = 6
     }
 }

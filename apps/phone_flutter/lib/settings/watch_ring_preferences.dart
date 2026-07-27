@@ -120,6 +120,11 @@ bool _isClaudePlanWindowRingId(String ringId) {
   return _isClaudePlanWindowAllowanceId(ringId.substring(prefix.length));
 }
 
+/// Expanded Claude plan window ring ids for phone-widget prefs migration.
+final claudePlanWindowRingIds = [
+  for (final id in _claudePlanWindowIds) 'allowance.claude.$id',
+];
+
 /// Coalesce legacy Claude window ids into [claudePlanRingId] and optionally
 /// drop retired purchased-meter ring ids (Watchface only).
 List<String> migrateWatchRingSelectedIds(
@@ -204,9 +209,13 @@ int _compareClaudePlanWindows(AllowanceState a, AllowanceState b) {
 ///
 /// Purchased meters (Extra usage, on-demand, Codex credits) are excluded by
 /// default — they stay on phone cards / the Widget tab, not Wear rings.
+///
+/// [collapseClaudePlan] keeps Watch/WFF on one Claude slot. The phone widget
+/// passes `false` so every Claude plan window is selectable on its own.
 List<WatchRingMetric> watchRingCatalog(
   DashboardSnapshot? snapshot, {
   bool includePurchased = false,
+  bool collapseClaudePlan = true,
 }) {
   final metrics = <WatchRingMetric>[
     _budgetMetric('budget.today', 'Today', snapshot?.todayTotal),
@@ -222,7 +231,7 @@ List<WatchRingMetric> watchRingCatalog(
     if (account.provider == 'mock') {
       continue;
     }
-    if (account.provider == 'claude') {
+    if (account.provider == 'claude' && collapseClaudePlan) {
       final collapsed = collapseClaudePlanRing(account.allowances);
       if (collapsed != null) {
         metrics.add(collapsed);

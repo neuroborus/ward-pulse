@@ -1,7 +1,8 @@
 # Phone Widget Design
 
-**Status: locked 2026-07-27** — baseline for the phone **Widget** tab and Android App
-Widget. Review art: `apps/phone_flutter/design/` (`widget-medium.svg` primary).
+**Status: locked 2026-07-27** (revised **2026-07-27** — expanded Claude windows,
+six-slot prefs, exhausted plan pools stay visible as `0% left`). Review art:
+`apps/phone_flutter/design/` (`widget-small.svg` / legacy `widget-medium.svg`).
 
 Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 14). Asset ownership: `docs/DESIGN_ASSETS.md`.
 Do **not** copy [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md) layouts onto the phone launcher.
@@ -16,31 +17,41 @@ Configuration lives on the phone **Widget** tab and is **independent** of Watchf
 
 1. **One slot = one percent metric** — local budget (Today / Week / Month), provider plan window,
    or purchased meter (Extra usage, on-demand, credits %) when the provider reports a %.
-2. **Claude plan** collapses to one selectable slot (tightest remaining window), same as Watchface.
-3. **Remaining language** — display `(100 - usedPercent)` for percent metrics; family colors match
+2. **Claude plan windows stay expanded** on the phone widget (`5h`, `Weekly`, Opus/Sonnet weekly
+   when present). Watchface/Glance still collapse Claude to one tightest ring.
+3. **Cursor Models and Other Models** are separate selectable rows whenever the usage-summary
+   reports both pool percents.
+4. **Remaining language** — display `(100 - usedPercent)` for percent metrics; family colors match
    the product palette (OpenAI/Codex green, Anthropic orange, Cursor teal, budget blue).
-4. **Omit** unavailable and exhausted (`usedPercent >= 100`) metrics; never invent `Unknown` filler.
-5. **No credentials**, account ids, or raw provider payloads on the widget or in widget logs.
+5. **Omit** unavailable metrics (no percent). Exhausted plan/purchased meters (`usedPercent >= 100`)
+   stay on the phone widget as **`0% left`** so sibling pools remain visible. Watch/WFF still omit
+   exhausted layers.
+6. **No credentials**, account ids, or raw provider payloads on the widget or in widget logs.
 
 ## Size caps (locked)
 
 | Size | Slots shown | Notes |
 |------|-------------|--------|
-| Small | **2** | denser than a watch ring, still glanceable |
-| Medium | **4** | default; Widget tab prefs cap (`phoneWidgetSlotCount`) |
-| Large | deferred | optional later; do not expand prefs until review art lands |
+| Small | **2** | short resize (minHeight under ~100dp) |
+| Default / tall | **6** | prefs cap (`phoneWidgetSlotCount`); no medium-4 cutoff |
 
-Prefs select up to **four** metrics. The home-screen surface shows the first *N* resolved
-metrics for the current widget size (2 or 4). Unused rows are omitted, not filled.
+Prefs select up to **six** metrics. The home-screen surface shows the first *N*
+resolved metrics for the current widget height (2 or 6). Unused rows are omitted,
+not filled.
+
+Default (unset) selection prefers **plan windows** first (Claude + Cursor + Codex), then
+purchased meters, then local budgets — so 5h / weekly / Cursor Models / Other Models are not
+crowded out by Extra usage.
 
 ## Composition (locked)
 
 ```text
 ┌─ system widget chrome ─────────────────────────┐
 │  WardPulse                          Stale      │
-│  ▌ 46% left · Codex 5h                         │
-│  ▌ 22% left · Claude Extra                     │
-│  ▌ 71% left · Today                            │
+│  ▌ 46% left · 5h                               │
+│  ▌ 22% left · Weekly                           │
+│  ▌ 0% left · Cursor Models                     │
+│  ▌ 71% left · Other Models                     │
 └────────────────────────────────────────────────┘
 ```
 
@@ -58,14 +69,14 @@ copying concentric watch-face arcs onto the launcher
 interactive controls inside the widget
 iOS widgets
 burying Widget config under Settings
-shipping large (6-slot) size before a separate design lock
+collapsing Claude plan windows on the phone widget (Watchface only)
 ```
 
 ## Review art
 
 | File | Role |
 |------|------|
-| `widget-medium.svg` | primary medium (4 rows) |
+| `widget-medium.svg` | historical 4-row preview (runtime default is tall/6) |
 | `widget-small.svg` | small (2 rows) |
 | `widget-empty.svg` | empty selection |
 | `widget-stale.svg` | stale header chrome |

@@ -328,9 +328,7 @@ class _DashboardHostState extends State<DashboardHost> {
       // Evaluate before persisting so a core/FFI failure does not leave the
       // store ahead of in-memory prefs / dashboard alerts.
       final withAlerts =
-          snapshot == null
-              ? null
-              : widget.applyAlertSettings(snapshot, value);
+          snapshot == null ? null : widget.applyAlertSettings(snapshot, value);
       await widget.alertThresholdStore.write(value);
       if (mounted) {
         setState(() {
@@ -430,8 +428,9 @@ class _DashboardHostState extends State<DashboardHost> {
   Future<void> _syncPhoneWidget(DashboardSnapshot snapshot) async {
     try {
       await widget.phoneWidgetSyncService.sync(snapshot, _widgetPreferences);
-    } catch (_) {
+    } catch (error) {
       // Launcher widget updates must not block the phone dashboard.
+      debugPrint('Phone widget sync failed: $error');
     }
   }
 

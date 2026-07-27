@@ -52,10 +52,13 @@
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:visibility="gone">
-        <View
+        <!-- ImageView is RemoteViews-safe; plain View is not and fails inflate. -->
+        <ImageView
             android:id="@+id/widget_row_0_accent"
             android:layout_width="3dp"
             android:layout_height="16dp"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no"
             android:background="@color/ward_pulse_widget_budget" />
         <TextView
             android:id="@+id/widget_row_0_text"
@@ -76,10 +79,12 @@
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:visibility="gone">
-        <View
+        <ImageView
             android:id="@+id/widget_row_1_accent"
             android:layout_width="3dp"
             android:layout_height="16dp"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no"
             android:background="@color/ward_pulse_widget_budget" />
         <TextView
             android:id="@+id/widget_row_1_text"
@@ -100,10 +105,12 @@
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:visibility="gone">
-        <View
+        <ImageView
             android:id="@+id/widget_row_2_accent"
             android:layout_width="3dp"
             android:layout_height="16dp"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no"
             android:background="@color/ward_pulse_widget_budget" />
         <TextView
             android:id="@+id/widget_row_2_text"
@@ -124,13 +131,67 @@
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:visibility="gone">
-        <View
+        <ImageView
             android:id="@+id/widget_row_3_accent"
             android:layout_width="3dp"
             android:layout_height="16dp"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no"
             android:background="@color/ward_pulse_widget_budget" />
         <TextView
             android:id="@+id/widget_row_3_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:textSize="13sp"
+            android:textColor="@color/ward_pulse_widget_on_surface"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_row_4"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+        <ImageView
+            android:id="@+id/widget_row_4_accent"
+            android:layout_width="3dp"
+            android:layout_height="16dp"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no"
+            android:background="@color/ward_pulse_widget_budget" />
+        <TextView
+            android:id="@+id/widget_row_4_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:textSize="13sp"
+            android:textColor="@color/ward_pulse_widget_on_surface"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_row_5"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+        <ImageView
+            android:id="@+id/widget_row_5_accent"
+            android:layout_width="3dp"
+            android:layout_height="16dp"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no"
+            android:background="@color/ward_pulse_widget_budget" />
+        <TextView
+            android:id="@+id/widget_row_5_text"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"

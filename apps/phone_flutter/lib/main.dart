@@ -29,7 +29,7 @@ Future<void> main() async {
       refreshIntervalStore: SecureRefreshIntervalPreferenceStore(),
       watchRingPreferenceStore: SecureWatchRingPreferenceStore(),
       phoneWidgetPreferenceStore: SecurePhoneWidgetPreferenceStore(),
-      phoneWidgetSyncService: const HomeWidgetPhoneWidgetSyncService(),
+      phoneWidgetSyncService: HomeWidgetPhoneWidgetSyncService(),
       alertThresholdStore: SecureAlertThresholdPreferenceStore(),
       syncScheduler: TimerProviderSyncScheduler(),
       debugDataAvailable: kDebugMode,

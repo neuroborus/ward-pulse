@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
 
 import '../dashboard/dashboard_models.dart';
@@ -29,9 +30,63 @@ final class DisabledPhoneWidgetSyncService implements PhoneWidgetSyncService {
   ) async {}
 }
 
+typedef PhoneWidgetPayloadWriter =
+    Future<void> Function(PhoneWidgetPayload payload);
+
+/// Serializes overlapping syncs in one Flutter isolate (latest wins).
+///
+/// Foreground UI and headless WorkManager each get their own isolate, so this
+/// does not cross-engine-lock SharedPreferences writes — only coalesces callers
+/// that share the same engine.
+final class PhoneWidgetSyncCoordinator {
+  PhoneWidgetSyncCoordinator({required PhoneWidgetPayloadWriter write})
+    : _write = write;
+
+  final PhoneWidgetPayloadWriter _write;
+
+  int _epoch = 0;
+  DashboardSnapshot? _latestSnapshot;
+  PhoneWidgetPreferences? _latestPreferences;
+  Future<void> _chain = Future<void>.value();
+
+  /// Queues a write. Overlapping callers coalesce to the newest args.
+  Future<void> sync(
+    DashboardSnapshot snapshot,
+    PhoneWidgetPreferences preferences,
+  ) {
+    _latestSnapshot = snapshot;
+    _latestPreferences = preferences;
+    final epoch = ++_epoch;
+    _chain = _chain.then((_) => _runIfCurrent(epoch));
+    return _chain;
+  }
+
+  Future<void> _runIfCurrent(int epoch) async {
+    if (epoch != _epoch) {
+      return;
+    }
+    final snapshot = _latestSnapshot;
+    final preferences = _latestPreferences;
+    if (snapshot == null || preferences == null) {
+      return;
+    }
+    try {
+      await _write(buildPhoneWidgetPayload(snapshot, preferences));
+    } catch (error) {
+      debugPrint('Phone widget sync failed: $error');
+    }
+  }
+}
+
 /// Writes payload keys for [WardPulseAppWidget] via `home_widget`.
 final class HomeWidgetPhoneWidgetSyncService implements PhoneWidgetSyncService {
-  const HomeWidgetPhoneWidgetSyncService();
+  HomeWidgetPhoneWidgetSyncService({PhoneWidgetSyncCoordinator? coordinator})
+    : _coordinator = coordinator ?? _sharedCoordinator;
+
+  static final PhoneWidgetSyncCoordinator _sharedCoordinator =
+      PhoneWidgetSyncCoordinator(write: writeHomeWidgetPayload);
+
+  final PhoneWidgetSyncCoordinator _coordinator;
 
   static const _maxRows = phoneWidgetSlotCount;
 
@@ -39,8 +94,12 @@ final class HomeWidgetPhoneWidgetSyncService implements PhoneWidgetSyncService {
   Future<void> sync(
     DashboardSnapshot snapshot,
     PhoneWidgetPreferences preferences,
-  ) async {
-    final payload = buildPhoneWidgetPayload(snapshot, preferences);
+  ) {
+    return _coordinator.sync(snapshot, preferences);
+  }
+
+  /// Persists [payload] and asks the launcher to redraw.
+  static Future<void> writeHomeWidgetPayload(PhoneWidgetPayload payload) async {
     await HomeWidget.saveWidgetData<String>('title', 'WardPulse');
     await HomeWidget.saveWidgetData<String>('stale', payload.stale ? '1' : '0');
     await HomeWidget.saveWidgetData<String>(
