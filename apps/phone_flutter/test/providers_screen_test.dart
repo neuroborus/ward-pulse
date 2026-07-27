@@ -3,11 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/providers/claude_account_service.dart';
 import 'package:ward_pulse_phone/providers/codex_account_service.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
+import 'package:ward_pulse_phone/providers/providers_screen.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
-import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
-import 'package:ward_pulse_phone/settings/refresh_interval_preferences.dart';
-import 'package:ward_pulse_phone/settings/settings_screen.dart';
-import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 
 void main() {
   testWidgets('Cursor plan row shows Not connected and help Advanced paste', (
@@ -19,21 +16,10 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: SettingsScreen(
-            snapshot: null,
+          body: ProvidersScreen(
             credentialStore: store,
             codexAccountService: const EmptyCodexAccountService(),
             claudeAccountService: const EmptyClaudeAccountService(),
-            displayPreferences: const ConsumptionDisplayPreferences(),
-            onDisplayPreferencesChanged: (_) async {},
-            refreshInterval: const RefreshIntervalPreference(),
-            onRefreshIntervalChanged: (_) async {},
-            ringPreferences: const WatchRingPreferences(),
-            onRingPreferencesChanged: (_) async {},
-            onSyncWatch: () async {},
-            debugDataAvailable: false,
-            mockDataEnabled: false,
-            onMockDataEnabledChanged: (_) async {},
             onCredentialsChanged: () => credentialsChanged++,
             cursorPlanSignIn: (_) async => null,
           ),
@@ -82,21 +68,10 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: SettingsScreen(
-            snapshot: null,
+          body: ProvidersScreen(
             credentialStore: store,
             codexAccountService: const EmptyCodexAccountService(),
             claudeAccountService: const EmptyClaudeAccountService(),
-            displayPreferences: const ConsumptionDisplayPreferences(),
-            onDisplayPreferencesChanged: (_) async {},
-            refreshInterval: const RefreshIntervalPreference(),
-            onRefreshIntervalChanged: (_) async {},
-            ringPreferences: const WatchRingPreferences(),
-            onRingPreferencesChanged: (_) async {},
-            onSyncWatch: () async {},
-            debugDataAvailable: false,
-            mockDataEnabled: false,
-            onMockDataEnabledChanged: (_) async {},
             onCredentialsChanged: () {},
             cursorPlanSignIn: (_) async {
               signInCalls++;

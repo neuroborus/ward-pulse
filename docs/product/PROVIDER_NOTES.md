@@ -104,7 +104,7 @@ OpenAI therefore shows Codex subscription and Platform reporting together. An op
 user-defined label for platform Admin API keys is plain phone-local display metadata:
 
 - stored beside the credential reference, never concatenated into the secure key value;
-- shown on Providers and provider details in place of the generic Platform title;
+- shown on the Providers connection row in place of the generic Platform title;
 - removed when the credential is removed;
 - never sent to Wear OS or the watch face.
 

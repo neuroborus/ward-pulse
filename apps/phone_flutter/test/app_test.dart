@@ -18,7 +18,7 @@ import 'package:ward_pulse_phone/sync/provider_sync_scheduler.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 
 void main() {
-  testWidgets('renders mock history and opens provider details', (
+  testWidgets('renders mock history and opens Providers catalog', (
     tester,
   ) async {
     final fixture =
@@ -67,18 +67,11 @@ void main() {
     await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Mock'), findsOneWidget);
-    await tester.tap(find.text('Mock'));
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('mock-local'), findsOneWidget);
-    expect(find.text('Today'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Usage history'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.text('4 buckets'), findsOneWidget);
+    expect(find.text('OpenAI'), findsOneWidget);
+    expect(find.text('Anthropic'), findsOneWidget);
+    expect(find.text('Cursor'), findsOneWidget);
+    expect(find.text('Codex subscription'), findsOneWidget);
+    expect(find.text('Not connected'), findsWidgets);
   });
 
   testWidgets('syncs an empty watch summary when no providers are connected', (
@@ -225,7 +218,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Settings'));
+    await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
@@ -273,7 +266,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Settings'));
+    await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
@@ -306,21 +299,21 @@ void main() {
     expect(find.text('Work org key'), findsOneWidget);
     expect(find.text('Platform reporting'), findsNothing);
 
-    final settingsList = find.descendant(
+    final providersList = find.descendant(
       of: find.byType(ListView),
       matching: find.byType(Scrollable),
     );
     await tester.scrollUntilVisible(
       find.text('Anthropic'),
       300,
-      scrollable: settingsList,
+      scrollable: providersList,
     );
     expect(find.text('Anthropic'), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.text('Cursor'),
       300,
-      scrollable: settingsList,
+      scrollable: providersList,
     );
     expect(find.text('Cursor'), findsOneWidget);
     expect(find.text('Not connected'), findsWidgets);
@@ -328,7 +321,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('Work org key'),
       300,
-      scrollable: settingsList,
+      scrollable: providersList,
     );
     await tester.tap(find.text('Work org key'));
     await tester.pumpAndSettle();
@@ -340,7 +333,7 @@ void main() {
     expect(find.text('Platform reporting'), findsOneWidget);
   });
 
-  testWidgets('keeps credential settings available after a load failure', (
+  testWidgets('keeps Providers catalog available after a load failure', (
     tester,
   ) async {
     final credentialStore = _MemoryCredentialStore('invalid-admin-key');
@@ -376,7 +369,7 @@ void main() {
     expect(find.text('Usage · HTTP 401 · invalid_api_key'), findsOneWidget);
     await tester.tap(find.text('Close'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Settings'));
+    await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
@@ -554,7 +547,7 @@ void main() {
       WardPulseApp(repository: ValueDashboardRepository(snapshot)),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Settings'));
+    await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
 
     final settingsScrollable = find.descendant(
@@ -641,9 +634,10 @@ void main() {
     expect(preferences.value, isTrue);
     await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
-    expect(find.text('Codex'), findsWidgets);
-    expect(find.text('Cursor'), findsWidgets);
-    expect(find.text('OpenAI'), findsNothing);
+    expect(find.text('OpenAI'), findsOneWidget);
+    expect(find.text('Anthropic'), findsOneWidget);
+    expect(find.text('Cursor'), findsOneWidget);
+    expect(find.text('Codex subscription'), findsOneWidget);
   });
 
   testWidgets('hides mock data outside debug builds', (tester) async {

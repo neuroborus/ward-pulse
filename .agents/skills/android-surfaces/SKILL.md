@@ -21,7 +21,8 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 
 - Own provider setup, credential entry, secure storage integration, platform transport, sync scheduling, diagnostics export, and Wear Data Layer send.
 - Consume dashboard snapshots from Rust.
-- Show today, week, month, provider list, provider details, charts, budgets, credits, sync status, and settings.
+- Show today, week, month, provider plaques on Dashboard, charts, budgets, credits, sync
+  status, Providers connection hub, and Settings.
 - Phase 14 primary tabs: Dashboard → Watchface → Widget → Providers → Settings. Watchface owns
   Wear/WFF ring-slot prefs; Widget owns phone home-widget prefs. Do not keep those controls in
   Settings once the tabs land (Settings “Watch display” is transitional only).

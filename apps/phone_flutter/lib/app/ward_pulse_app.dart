@@ -7,7 +7,6 @@ import '../dashboard/dashboard_repository.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../providers/claude_account_service.dart';
 import '../providers/codex_account_service.dart';
-import '../providers/provider_connection.dart';
 import '../providers/provider_credential_store.dart';
 import '../providers/providers_screen.dart';
 import '../settings/settings_screen.dart';
@@ -107,14 +106,8 @@ class DashboardHost extends StatefulWidget {
 }
 
 class _DashboardHostState extends State<DashboardHost> {
+  static const _providersIndex = 1;
   static const _settingsIndex = 2;
-
-  /// Account ids carried by each platform connection's normalized report.
-  static const _platformAccountIds = {
-    'openai-local': ProviderConnections.openAiPlatform,
-    'anthropic-local': ProviderConnections.anthropicPlatform,
-    'cursor-team-local': ProviderConnections.cursorPlatform,
-  };
 
   late Future<DashboardSnapshot> _snapshot = _loadSnapshot();
   DashboardSnapshot? _currentSnapshot;
@@ -123,7 +116,6 @@ class _DashboardHostState extends State<DashboardHost> {
   RefreshIntervalPreference _refreshInterval =
       const RefreshIntervalPreference();
   WatchRingPreferences _ringPreferences = const WatchRingPreferences();
-  Map<String, String> _platformLabels = const {};
   bool _mockDataEnabled = false;
   int _selectedIndex = 0;
   StreamSubscription<void>? _syncTicks;
@@ -210,21 +202,6 @@ class _DashboardHostState extends State<DashboardHost> {
     }
   }
 
-  Future<void> _readConnectionMetadata() async {
-    try {
-      final labels = <String, String>{};
-      for (final entry in _platformAccountIds.entries) {
-        final label = await widget.credentialStore.readLabel(entry.value);
-        if (label != null) {
-          labels[entry.key] = label;
-        }
-      }
-      _platformLabels = labels;
-    } catch (_) {
-      _platformLabels = const {};
-    }
-  }
-
   Future<void> _readDebugDataPreference() async {
     if (!widget.debugDataAvailable) {
       _mockDataEnabled = false;
@@ -280,7 +257,6 @@ class _DashboardHostState extends State<DashboardHost> {
     await _readDisplayPreferences();
     await _readRefreshInterval();
     await _readRingPreferences();
-    await _readConnectionMetadata();
     await _readDebugDataPreference();
     // Rescheduling before the load keeps the next tick a full interval away, so
     // no connection is polled faster than its floor, and a failed load still
@@ -369,10 +345,15 @@ class _DashboardHostState extends State<DashboardHost> {
     });
   }
 
-  void _openSettings() {
+  void _openProviders() {
     setState(() {
-      _selectedIndex = _settingsIndex;
+      _selectedIndex = _providersIndex;
     });
+  }
+
+  void _onCredentialsChanged() {
+    widget.repository.invalidate();
+    _reload();
   }
 
   @override
@@ -403,12 +384,16 @@ class _DashboardHostState extends State<DashboardHost> {
           ),
           body: SafeArea(
             child: switch (state.connectionState) {
-              _ when _selectedIndex == _settingsIndex => SettingsScreen(
-                key: const ValueKey('settings'),
-                snapshot: snapshot,
+              _ when _selectedIndex == _providersIndex => ProvidersScreen(
+                key: const ValueKey('providers'),
                 credentialStore: widget.credentialStore,
                 codexAccountService: widget.codexAccountService,
                 claudeAccountService: widget.claudeAccountService,
+                onCredentialsChanged: _onCredentialsChanged,
+              ),
+              _ when _selectedIndex == _settingsIndex => SettingsScreen(
+                key: const ValueKey('settings'),
+                snapshot: snapshot,
                 displayPreferences: _displayPreferences,
                 onDisplayPreferencesChanged: _updateDisplayPreferences,
                 refreshInterval: _refreshInterval,
@@ -419,29 +404,17 @@ class _DashboardHostState extends State<DashboardHost> {
                 debugDataAvailable: widget.debugDataAvailable,
                 mockDataEnabled: _mockDataEnabled,
                 onMockDataEnabledChanged: _updateMockDataEnabled,
-                onCredentialsChanged: () {
-                  unawaited(() async {
-                    await _readConnectionMetadata();
-                    if (!mounted) {
-                      return;
-                    }
-                    widget.repository.invalidate();
-                    _reload();
-                  }());
-                },
               ),
               ConnectionState.waiting => const _LoadingView(),
               _ when state.hasError => _ErrorView(
                 failure: _dashboardFailure(state.error),
                 onRetry: _reload,
-                onOpenSettings: _openSettings,
+                onOpenProviders: _openProviders,
               ),
-              _ when snapshot != null => _SelectedSurface(
-                selectedIndex: _selectedIndex,
+              _ when snapshot != null => DashboardScreen(
                 snapshot: snapshot,
                 displayPreferences: _displayPreferences,
-                platformLabels: _platformLabels,
-                onOpenSettings: _openSettings,
+                onOpenProviders: _openProviders,
               ),
               _ => _ErrorView(
                 failure: const DashboardLoadException(),
@@ -480,38 +453,6 @@ class _DashboardHostState extends State<DashboardHost> {
   }
 }
 
-class _SelectedSurface extends StatelessWidget {
-  const _SelectedSurface({
-    required this.selectedIndex,
-    required this.snapshot,
-    required this.displayPreferences,
-    this.platformLabels = const {},
-    this.onOpenSettings,
-  });
-
-  final int selectedIndex;
-  final DashboardSnapshot snapshot;
-  final ConsumptionDisplayPreferences displayPreferences;
-  final Map<String, String> platformLabels;
-  final VoidCallback? onOpenSettings;
-
-  @override
-  Widget build(BuildContext context) {
-    return switch (selectedIndex) {
-      0 => DashboardScreen(
-        snapshot: snapshot,
-        displayPreferences: displayPreferences,
-        onOpenSettings: onOpenSettings,
-      ),
-      _ => ProvidersScreen(
-        snapshot: snapshot,
-        displayPreferences: displayPreferences,
-        platformLabels: platformLabels,
-      ),
-    };
-  }
-}
-
 class _LoadingView extends StatelessWidget {
   const _LoadingView();
 
@@ -525,17 +466,17 @@ class _ErrorView extends StatelessWidget {
   const _ErrorView({
     required this.failure,
     required this.onRetry,
-    this.onOpenSettings,
+    this.onOpenProviders,
   });
 
   final DashboardLoadException failure;
   final VoidCallback onRetry;
-  final VoidCallback? onOpenSettings;
+  final VoidCallback? onOpenProviders;
 
   @override
   Widget build(BuildContext context) {
     if (failure.issue == DashboardSyncIssue.noProviders) {
-      return ConnectProviderPrompt(onOpenSettings: onOpenSettings);
+      return ConnectProviderPrompt(onOpenProviders: onOpenProviders);
     }
 
     final colors = Theme.of(context).colorScheme;

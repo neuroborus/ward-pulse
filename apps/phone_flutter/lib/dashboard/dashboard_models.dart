@@ -59,9 +59,9 @@ extension DashboardSyncIssueMessage on DashboardSyncIssue {
   String get message {
     return switch (this) {
       DashboardSyncIssue.noProviders =>
-        'Connect a provider in Settings to load dashboard data.',
+        'Connect a provider on the Providers tab to load dashboard data.',
       DashboardSyncIssue.credentialUnavailable =>
-        'The saved key could not be read. Re-enter it in Settings.',
+        'The saved key could not be read. Re-enter it on the Providers tab.',
       DashboardSyncIssue.authentication =>
         'The provider rejected the credential. Check that you pasted the full key or token.',
       DashboardSyncIssue.permissionDenied =>
@@ -73,7 +73,7 @@ extension DashboardSyncIssueMessage on DashboardSyncIssue {
       DashboardSyncIssue.invalidResponse =>
         'The provider returned an unsupported reporting response.',
       DashboardSyncIssue.codexAuthentication =>
-        'Codex sign-in expired. Reconnect your ChatGPT account in Settings.',
+        'Codex sign-in expired. Reconnect your ChatGPT account on the Providers tab.',
       DashboardSyncIssue.codexPermissionDenied =>
         'This Codex account cannot access usage reporting.',
       DashboardSyncIssue.codexUnavailable =>
@@ -81,7 +81,7 @@ extension DashboardSyncIssueMessage on DashboardSyncIssue {
       DashboardSyncIssue.codexInvalidResponse =>
         'Codex returned an unsupported usage response.',
       DashboardSyncIssue.claudeAuthentication =>
-        'Claude sign-in expired. Reconnect your Claude account in Settings.',
+        'Claude sign-in expired. Reconnect your Claude account on the Providers tab.',
       DashboardSyncIssue.claudePermissionDenied =>
         'This Claude account cannot access usage reporting.',
       DashboardSyncIssue.claudeUnavailable =>
@@ -296,18 +296,6 @@ class ProviderSnapshot {
       'mock' => 'Mock',
       _ => provider,
     };
-  }
-
-  /// User-facing title for provider lists and details.
-  ///
-  /// [platformLabel] is phone-local display metadata for platform Admin API
-  /// key connections and is never part of the watch payload.
-  String displayTitle({String? platformLabel}) {
-    final label = platformLabel?.trim();
-    if (label != null && label.isNotEmpty) {
-      return label;
-    }
-    return providerLabel;
   }
 
   ProviderSnapshot _withStatus(ProviderStatus value) {

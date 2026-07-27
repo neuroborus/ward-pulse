@@ -12,17 +12,17 @@ class DashboardScreen extends StatelessWidget {
     super.key,
     required this.snapshot,
     this.displayPreferences = const ConsumptionDisplayPreferences(),
-    this.onOpenSettings,
+    this.onOpenProviders,
   });
 
   final DashboardSnapshot snapshot;
   final ConsumptionDisplayPreferences displayPreferences;
-  final VoidCallback? onOpenSettings;
+  final VoidCallback? onOpenProviders;
 
   @override
   Widget build(BuildContext context) {
     if (snapshot.accounts.isEmpty) {
-      return ConnectProviderPrompt(onOpenSettings: onOpenSettings);
+      return ConnectProviderPrompt(onOpenProviders: onOpenProviders);
     }
 
     final caps = ConnectedCapabilities.fromAccounts(snapshot.accounts);
@@ -72,8 +72,8 @@ class DashboardScreen extends StatelessWidget {
           _CapabilityGapRow(
             title: 'Plan usage',
             explanation:
-                'Connect a Codex subscription in Settings to see plan limits.',
-            onOpenSettings: onOpenSettings,
+                'Connect a Codex subscription on the Providers tab to see plan limits.',
+            onOpenProviders: onOpenProviders,
           ),
           const SizedBox(height: 16),
         ],
@@ -92,8 +92,8 @@ class DashboardScreen extends StatelessWidget {
           _CapabilityGapRow(
             title: 'Spend',
             explanation:
-                'Connect OpenAI Platform reporting in Settings to see cost and limits.',
-            onOpenSettings: onOpenSettings,
+                'Connect OpenAI Platform reporting on the Providers tab to see cost and limits.',
+            onOpenProviders: onOpenProviders,
           ),
         ],
       ],
@@ -102,9 +102,9 @@ class DashboardScreen extends StatelessWidget {
 }
 
 class ConnectProviderPrompt extends StatelessWidget {
-  const ConnectProviderPrompt({super.key, this.onOpenSettings});
+  const ConnectProviderPrompt({super.key, this.onOpenProviders});
 
-  final VoidCallback? onOpenSettings;
+  final VoidCallback? onOpenProviders;
 
   @override
   Widget build(BuildContext context) {
@@ -120,17 +120,17 @@ class ConnectProviderPrompt extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Add an OpenAI, Anthropic, or Cursor connection in Settings.',
+              'Add an OpenAI, Anthropic, or Cursor connection on the Providers tab.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
-            if (onOpenSettings != null) ...[
+            if (onOpenProviders != null) ...[
               const SizedBox(height: 16),
               FilledButton(
-                onPressed: onOpenSettings,
-                child: const Text('Open Settings'),
+                onPressed: onOpenProviders,
+                child: const Text('Open Providers'),
               ),
             ],
           ],
@@ -144,12 +144,12 @@ class _CapabilityGapRow extends StatelessWidget {
   const _CapabilityGapRow({
     required this.title,
     required this.explanation,
-    this.onOpenSettings,
+    this.onOpenProviders,
   });
 
   final String title;
   final String explanation;
-  final VoidCallback? onOpenSettings;
+  final VoidCallback? onOpenProviders;
 
   Future<void> _showHelp(BuildContext context) async {
     final open = await showDialog<bool>(
@@ -163,16 +163,16 @@ class _CapabilityGapRow extends StatelessWidget {
                 onPressed: () => Navigator.of(context).pop(false),
                 child: const Text('Close'),
               ),
-              if (onOpenSettings != null)
+              if (onOpenProviders != null)
                 FilledButton(
                   onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('Open Settings'),
+                  child: const Text('Open Providers'),
                 ),
             ],
           ),
     );
     if (open == true) {
-      onOpenSettings?.call();
+      onOpenProviders?.call();
     }
   }
 

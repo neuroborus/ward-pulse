@@ -631,10 +631,9 @@ helpers) using the persisted user rules. Platform shells persist rule preference
 results. Do not reintroduce automatic alerts from allowance/budget status alone.
 
 **Current gap (2026-07-27):** `build_dashboard_snapshot` still emits alerts from budget /
-purchased allowance `ProviderStatus` without user rules (e.g. Mock Claude Extra ≥ 80%), and
-the phone still keeps the connection catalog under Settings. Both are transitional: move the
-catalog + connection thresholds to Providers, keep Settings systemic, and replace auto-fired
-alerts with rules-backed evaluation.
+purchased allowance `ProviderStatus` without user rules (e.g. Mock Claude Extra ≥ 80%).
+Connection catalog lives on Providers; next: connection alert thresholds UI on Providers,
+Settings stays systemic, and replace auto-fired alerts with rules-backed evaluation.
 
 ---
 
@@ -1376,8 +1375,8 @@ automated Rust, Flutter, FFI, fixture, pagination, retry, and credential-masking
 Remaining acceptance:
 
 ```text
-save a valid OpenAI Admin API key on the phone connection catalog (Providers after Phase 14;
-  Settings until then) on an Android phone or emulator
+save a valid OpenAI Admin API key on the phone connection catalog (Providers tab)
+  on an Android phone or emulator
 refresh and confirm that OpenAI today/week/month cost plus usage/model data are rendered
 confirm the saved key remains masked and no sensitive values appear in logcat
 ```
@@ -1390,8 +1389,8 @@ no desktop process, local server, or adb reverse dependency remains
 Rust normalizes plan windows, purchased credits, and daily token buckets without fake money values
 plan, purchased usage, and platform spend are visible by default; at least one surface stays on
 the same filtered allowance summary is propagated to Wear OS through schema version 3
-Android end-to-end acceptance remains: sign in from the connection catalog (Providers after
-Phase 14; Settings until then) and verify the live phone/watch UI
+Android end-to-end acceptance remains: sign in from the Providers connection catalog
+and verify the live phone/watch UI
 ```
 
 ### Phase 8 — MVP hardening
@@ -1438,12 +1437,12 @@ Status: completed as of 2026-07-24.
 
 Rationale: Codex sign-in and the OpenAI Platform Admin key are one product relationship with
 OpenAI, but Settings then presented them as two unrelated rows. Research in section 15 shows
-every provider follows the same dual shape, so connections were grouped by provider (delivered
-under Settings; **Phase 14** moves that catalog to the Providers tab).
+every provider follows the same dual shape, so connections were grouped by provider (now on
+the Providers tab).
 
 Deliverables:
 
-- one provider section per provider: OpenAI, Anthropic, Cursor (then Settings; later Providers);
+- one provider section per provider: OpenAI, Anthropic, Cursor;
 - the OpenAI section contains both connections: Codex subscription (device-code OAuth) and
   Platform reporting (Admin API key);
 - a shared connection row component: connection kind, status, masked credential,
@@ -1460,16 +1459,16 @@ Deliverables:
 Acceptance:
 
 ```text
-Settings shows one OpenAI section containing the Codex and Platform rows
+Providers shows one OpenAI section containing the Codex and Platform rows
 an Admin API key can be saved with and without a custom label
-the label appears in Settings and provider details instead of the generic title
+the label appears on the Providers connection row instead of the generic title
 removing a credential also removes its label
 existing stored credentials survive the regrouping without re-entry
 ```
 
-Note (2026-07-27): Phase 14 moves this connection catalog from Settings onto the **Providers**
-tab; Settings becomes systemic only. The Phase 9 grouping shape (one section per provider,
-plan + platform rows) is preserved.
+Note (2026-07-27): the connection catalog lives on the **Providers** tab; Settings is
+systemic only. The Phase 9 grouping shape (one section per provider, plan + platform rows)
+is preserved.
 
 ### Phase 10 — capability-adaptive dashboard
 
@@ -1719,8 +1718,8 @@ Dashboard → Watchface → Widget → Providers → Settings
   payload preview); remove it from Settings.
 - Add the **Widget** tab for widget metric selection + preview; prefs are **independent** of
   Watchface prefs so phone and watch can differ.
-- Move the **connection catalog** (credentials / auth, Connected / Not connected rows) and
-  **connection-scoped alert thresholds** onto the **Providers** tab.
+- Move the **connection-scoped alert thresholds** onto the **Providers** tab
+  (connection catalog + credentials already live there).
 - Settings stays **systemic only**: global polling interval, global budget thresholds,
   diagnostics, data deletion, legal — not connections, not credentials, not Watchface/Widget
   layout, and not a sixth Alerts tab.

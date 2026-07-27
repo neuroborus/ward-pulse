@@ -199,7 +199,7 @@ void main() {
     expect(find.text('Today'), findsNothing);
   });
 
-  testWidgets('hides plan Unknowns for OpenAI-only and offers Settings help', (
+  testWidgets('hides plan Unknowns for OpenAI-only and offers Providers help', (
     tester,
   ) async {
     final source = DashboardSnapshot.fromJsonString(
@@ -210,7 +210,7 @@ void main() {
           ..['provider'] = 'openai'
           ..['allowances'] = <Object>[];
     final dashboard = source.toJson()..['accounts'] = [openAi];
-    var openedSettings = false;
+    var openedProviders = false;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -218,7 +218,7 @@ void main() {
         home: Scaffold(
           body: DashboardScreen(
             snapshot: DashboardSnapshot.fromJson(dashboard),
-            onOpenSettings: () => openedSettings = true,
+            onOpenProviders: () => openedProviders = true,
           ),
         ),
       ),
@@ -230,12 +230,14 @@ void main() {
     await tester.tap(find.byTooltip('Why is this hidden?'));
     await tester.pumpAndSettle();
     expect(
-      find.text('Connect a Codex subscription in Settings to see plan limits.'),
+      find.text(
+        'Connect a Codex subscription on the Providers tab to see plan limits.',
+      ),
       findsOneWidget,
     );
-    await tester.tap(find.text('Open Settings'));
+    await tester.tap(find.text('Open Providers'));
     await tester.pumpAndSettle();
-    expect(openedSettings, isTrue);
+    expect(openedProviders, isTrue);
 
     await tester.scrollUntilVisible(
       find.text('Platform spend'),

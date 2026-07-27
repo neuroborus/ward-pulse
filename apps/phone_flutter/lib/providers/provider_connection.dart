@@ -99,7 +99,7 @@ final class ProviderConnection {
   }
 }
 
-/// Canonical connection catalog shown in Settings.
+/// Canonical connection catalog shown on the Providers tab.
 ///
 /// [platformLabels] holds stored labels keyed by
 /// [ProviderConnectionId.storageKey].
