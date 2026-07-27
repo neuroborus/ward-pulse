@@ -45,7 +45,8 @@ Rules:
 - Row order = **tightest remaining first** (highest `usedPercent` first; equal percents break
   ties by credit request-runway from internal costs — credits shown, not request counts),
   matching the face.
-- Mini arc = **remaining** (`100 - usedPercent`), family color from the face palette.
+- Mini arc = **remaining** (`100 - usedPercent`), family color from the face palette;
+  same clockwise-from-12 melt as the watch face (usage gap opens at 12).
 - Primary line: family/provider + metric label; same wording for the same window kind
   (Codex and Cursor both `Weekly plan`). Claude’s subscription plan windows
   (`5h`, `Weekly`, optional Opus/Sonnet weekly) collapse to **one** ring on the phone;

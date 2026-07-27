@@ -51,9 +51,8 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 - Prefer concentric percent layers from schema v4+ on the **face** (up to four selected metrics
   today); never invent `Unknown` filler. Unselected, unavailable, or exhausted (`>= 100%`)
   layers do not render.
-- Face center (first) strip / `creditsGlance` may show a compact remaining-credits aggregate when
-  reported and Settings shows purchased usage (not a ring; never LLM `TOK`). App Glance credits
-  stay **per provider** with an explicit `credits` label.
+- Face strip / `creditsGlance` may show compact remaining credits on the **matching provider**
+  strip (`% · 500`); strip accents use the same family ColorRamp as the matching arc.
 - Keep today, week, usage, providers, alerts (active list only — no rule editing), and last sync
   as secondary detail screens.
 - Store and render the latest successful watch summary.
@@ -67,8 +66,10 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   side-by-side `RING 1` / `RING 2` placeholders).
 - WFF format version 2 (Wear OS 5+): concentric `RANGED_VALUE` arcs with `WeightedStroke`
   colors from Wear `ColorRamp` / `[COMPLICATION.RANGED_VALUE_COLORS]`; arc = remaining.
-  Keep track/progress `endAngle` under 360° (scale onto 359.9°) — a closed circle collapses
-  to a ROUND tip at 12 o'clock. Prefer simple Transform arithmetic over `clamp()`.
+  Keep track spans under 360° (scale onto 359.9°) — a closed circle collapses
+  to a ROUND tip. Remaining melts **clockwise from 12**: Transform `startAngle`
+  with `(1 - value/max) * 359.9` and fixed `endAngle` 359.9. Prefer simple
+  Transform arithmetic over `clamp()`.
   `BoundingArc` clips ring-slot content to the arc band — sunk `%` / credits strips must use
   separate `BoundingBox` SHORT_TEXT slots of **equal width**, stacked inside the clear aperture.
   Center (first) strip TEXT = full label (`100% · 500`); lower strips TEXT = remaining digits

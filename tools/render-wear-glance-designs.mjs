@@ -76,12 +76,14 @@ function miniArc({ cx, cy, r, thickness, remaining, color }) {
   const circ = 2 * Math.PI * r
   const left = Math.max(0.02, Math.min(remaining, 0.999))
   const paint = circ * left
+  const used = circ * (1 - left)
   return `
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
       stroke-width="${thickness}" />
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}"
       stroke-width="${thickness}" stroke-linecap="round"
       stroke-dasharray="${paint.toFixed(2)} ${circ.toFixed(2)}"
+      stroke-dashoffset="${(-used).toFixed(2)}"
       transform="rotate(-90 ${cx} ${cy})" />`
 }
 

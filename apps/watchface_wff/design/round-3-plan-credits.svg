@@ -9,53 +9,56 @@
   </defs>
   <rect width="450" height="450" fill="url(#lift)"/>
   
-    <circle cx="225" cy="225" r="157.95" fill="none" stroke="#2E3632"
-      stroke-width="14.4" />
-    <circle cx="225" cy="225" r="157.95" fill="none" stroke="#65D78A"
-      stroke-width="14.4" stroke-linecap="round"
-      stroke-dasharray="79.39 992.43"
+    <circle cx="225" cy="225" r="134.55" fill="none" stroke="#2E3632"
+      stroke-width="26.1" />
+    <circle cx="225" cy="225" r="134.55" fill="none" stroke="#65D78A"
+      stroke-width="26.1" stroke-linecap="round"
+      stroke-dasharray="67.63 845.40"
+      stroke-dashoffset="-777.77"
       transform="rotate(-90 225 225)" />
-    <circle cx="225" cy="225" r="176.85" fill="none" stroke="#2E3632"
-      stroke-width="14.4" />
-    <circle cx="225" cy="225" r="176.85" fill="none" stroke="#E8915A"
-      stroke-width="14.4" stroke-linecap="round"
-      stroke-dasharray="433.36 1111.18"
+    <circle cx="225" cy="225" r="165.15" fill="none" stroke="#2E3632"
+      stroke-width="26.1" />
+    <circle cx="225" cy="225" r="165.15" fill="none" stroke="#E8915A"
+      stroke-width="26.1" stroke-linecap="round"
+      stroke-dasharray="404.69 1037.67"
+      stroke-dashoffset="-632.98"
       transform="rotate(-90 225 225)" />
     <circle cx="225" cy="225" r="195.75" fill="none" stroke="#2E3632"
-      stroke-width="14.4" />
+      stroke-width="26.1" />
     <circle cx="225" cy="225" r="195.75" fill="none" stroke="#67E8D4"
-      stroke-width="14.4" stroke-linecap="round"
+      stroke-width="26.1" stroke-linecap="round"
       stroke-dasharray="885.55 1229.93"
+      stroke-dashoffset="-344.38"
       transform="rotate(-90 225 225)" />
   
     <text x="225" y="250.1" text-anchor="middle"
       font-family="Noto Sans, sans-serif" font-size="69.8"
       font-weight="700" fill="#F4FBF8">10:08</text>
-    <rect x="183.4" y="297.0" width="83.2"
+    <rect x="177.1" y="288.0" width="95.8"
       height="22.0" rx="6.0" fill="#0B0E0C"
       fill-opacity="0.92" />
-    <rect x="183.4" y="299.0" width="3.1"
+    <rect x="177.1" y="290.0" width="3.1"
       height="18.0" rx="2.0"
       fill="#65D78A" />
-    <text x="226.6" y="313.0"
+    <text x="226.6" y="304.0"
       text-anchor="middle" font-family="Noto Sans, sans-serif"
       font-size="14" font-weight="700" fill="#F4FBF8">8% · 500</text>
-    <rect x="183.4" y="322.1" width="83.2"
+    <rect x="177.1" y="313.1" width="95.8"
       height="22.0" rx="6.0" fill="#0B0E0C"
       fill-opacity="0.92" />
-    <rect x="183.4" y="324.1" width="3.1"
+    <rect x="177.1" y="315.1" width="3.1"
       height="18.0" rx="2.0"
       fill="#E8915A" />
-    <text x="226.6" y="338.1"
+    <text x="226.6" y="329.1"
       text-anchor="middle" font-family="Noto Sans, sans-serif"
       font-size="14" font-weight="700" fill="#F4FBF8">39%</text>
-    <rect x="183.4" y="347.3" width="83.2"
+    <rect x="177.1" y="338.3" width="95.8"
       height="22.0" rx="6.0" fill="#0B0E0C"
       fill-opacity="0.92" />
-    <rect x="183.4" y="349.3" width="3.1"
+    <rect x="177.1" y="340.3" width="3.1"
       height="18.0" rx="2.0"
       fill="#67E8D4" />
-    <text x="226.6" y="363.3"
+    <text x="226.6" y="354.3"
       text-anchor="middle" font-family="Noto Sans, sans-serif"
       font-size="14" font-weight="700" fill="#F4FBF8">72%</text>
 </svg>

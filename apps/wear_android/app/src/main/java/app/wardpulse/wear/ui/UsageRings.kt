@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
+import app.wardpulse.wear.complication.WatchComplicationText
+import app.wardpulse.wear.model.CreditsGlance
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.RingSurfaceOrder
@@ -44,7 +46,7 @@ internal fun UsageRings(
     rings: List<RingSummary>,
     modifier: Modifier = Modifier,
     diameter: Dp = 152.dp,
-    creditsGlance: String? = null,
+    creditsGlance: CreditsGlance? = null,
 ) {
     if (rings.isEmpty()) {
         return
@@ -53,11 +55,11 @@ internal fun UsageRings(
     val trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
     val colors = rings.map { ringFamilyColor(it.id, it.status) }
     val density = LocalDensity.current
-    // Match WFF ~14px visual stroke on 450 face — keeps 3 equal strips clear of arcs.
-    val strokeWidth = with(density) { 7.dp.toPx() }
+    // Match WFF ~25px stroke on 450 face — keeps 3 equal strips clear of arcs.
+    val strokeWidth = with(density) { 12.5.dp.toPx() }
     val gap = with(density) { 2.dp.toPx() }
     val wellColor = Color(0xE60B0E0C)
-    // Fixed strip width (fits `100% · 500`) — equal for every row.
+    // Fixed strip width (fits `100% · 10.0M`) — equal for every row.
     val stripWidth = 72.dp
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
@@ -80,13 +82,14 @@ internal fun UsageRings(
                     size = arcSize,
                     style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
                 )
-                val remaining =
-                    (100.0 - ring.usedPercent.coerceIn(0.0, 100.0)).coerceAtLeast(0.0)
-                val sweep = (remaining / 100.0 * 360.0).toFloat()
+                val remainingFraction =
+                    (1.0 - ring.usedPercent.coerceIn(0.0, 100.0) / 100.0).coerceIn(0.0, 1.0)
+                val sweep = (remainingFraction * 360.0).toFloat()
                 if (sweep > 0f) {
+                    // Remaining ends at 12; usage opens clockwise from 12.
                     drawArc(
                         color = colors[index],
-                        startAngle = -90f,
+                        startAngle = -90f + ((1.0 - remainingFraction) * 360.0).toFloat(),
                         sweepAngle = sweep,
                         useCenter = false,
                         topLeft = topLeft,
@@ -106,9 +109,19 @@ internal fun UsageRings(
                     (100.0 - ring.usedPercent.coerceIn(0.0, 100.0))
                         .coerceAtLeast(0.0)
                         .roundToInt()
+                val credits =
+                    creditsGlance
+                        ?.takeIf { glance ->
+                            val owner = glance.provider
+                            val ringProvider =
+                                WatchComplicationText.providerFromRingId(ring.id)
+                            glance.text.isNotBlank() &&
+                                owner != null &&
+                                owner == ringProvider
+                        }?.text
                 val label =
-                    if (index == 0 && !creditsGlance.isNullOrBlank()) {
-                        "$remaining% · $creditsGlance"
+                    if (!credits.isNullOrBlank()) {
+                        "$remaining% · $credits"
                     } else {
                         "$remaining%"
                     }

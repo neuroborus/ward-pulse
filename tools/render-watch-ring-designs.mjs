@@ -86,22 +86,24 @@ function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
   const paint = circ * left
   const weight = ambient ? thickness * 0.75 : thickness
   const valueColor = ambient ? '#8A968F' : color
+  const used = circ * (1 - left)
   return `
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
       stroke-width="${weight}" />
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${valueColor}"
       stroke-width="${weight}" stroke-linecap="round"
       stroke-dasharray="${paint.toFixed(2)} ${circ.toFixed(2)}"
+      stroke-dashoffset="${(-used).toFixed(2)}"
       transform="rotate(-90 ${cx} ${cy})" />`
 }
 
-function barLabel(layer, { showPlan, showCredits, isFirst }) {
+function barLabel(layer, { showPlan, showCredits }) {
   const parts = []
   if (showPlan && layer.used < 1) {
     parts.push(`${Math.round((1 - layer.used) * 100)}%`)
   }
-  // First strip (nearest center) carries optional credits.
-  if (showCredits && isFirst) {
+  // Credits glue onto the matching provider strip only (review art uses Codex credits).
+  if (showCredits && layer.id === 'codex') {
     parts.push(CREDITS_GLANCE)
   }
   return parts.join(' · ')
@@ -119,7 +121,6 @@ function providerBars({ cx, cy, innerR, layers, showPlan, showCredits, size }) {
       text: barLabel(layer, {
         showPlan,
         showCredits,
-        isFirst: index === 0,
       }),
     }))
     .filter((row) => row.text.length > 0)
@@ -133,19 +134,25 @@ function providerBars({ cx, cy, innerR, layers, showPlan, showCredits, size }) {
   const rx = Math.min(6, barH * 0.28)
   const padX = 12
   const accentW = Math.max(2.5, size * 0.007)
-  const metrics = loadFontMetrics(
-    fontSize,
-    rows.map((row) => row.text),
+  const metrics = loadFontMetrics(fontSize, [
+    '100% · 10.0M',
+    ...rows.map((row) => row.text),
+  ])
+  // Floor width for worst-case center label from compactCreditCount (`100% · 10.0M`).
+  const worstCase = metrics.widths['100% · 10.0M'] ?? fontSize * 0.62 * 12
+  const textW = Math.max(
+    worstCase,
+    ...rows.map((row) => metrics.widths[row.text] ?? 0),
   )
-  const textW = Math.max(...rows.map((row) => metrics.widths[row.text] ?? 0))
-  const barW = Math.min(size * 0.42, textW + padX * 2 + accentW)
+  // Cap so a 3-up stack stays inside the clear aperture (matches WFF strip width 96).
+  const barW = Math.min(size * 0.213, textW + padX * 2 + accentW)
   const textBaseline =
     barH / 2 + (metrics.ascent - metrics.descent) / 2
   const stackH = rows.length * barH + (rows.length - 1) * gap
   const maxBottom = cy + Math.min(innerR * 0.95, size * 0.43)
-  const preferredTop = cy + size * 0.28
+  const preferredTop = cy + size * 0.147
   let y = Math.min(preferredTop, maxBottom - stackH)
-  y = Math.max(y, cy + size * 0.16)
+  y = Math.max(y, cy + size * 0.14)
   const x = cx - barW / 2
   // Center labels in the well to the right of the accent.
   const textX = cx + accentW / 2
@@ -180,8 +187,8 @@ function faceSvg({
   const cy = size / 2
   const outer = size * 0.435
   const gap = size * 0.01
-  // ~14px on a 450 face — thinner stroke so 3 equal-width strips clear the arcs.
-  const thickness = Math.max(8, size * (ambient ? 0.028 : 0.032))
+  // ~25px on a 450 face (~+10% vs the prior 23px stroke).
+  const thickness = Math.max(8, size * (ambient ? 0.052 : 0.058))
   const planLayers = sortByRemaining(layers.filter((layer) => layer.used < 1))
   const stripLayers = showPlan ? planLayers : layers.slice(0, 1)
 

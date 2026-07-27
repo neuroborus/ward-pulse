@@ -347,11 +347,12 @@ private fun MiniRemainingArc(
             size = arcSize,
             style = strokeStyle,
         )
-        val sweep = remainingFraction.coerceIn(0f, 1f) * 360f
+        val remaining = remainingFraction.coerceIn(0f, 1f)
+        val sweep = remaining * 360f
         if (sweep > 0f) {
             drawArc(
                 color = color,
-                startAngle = -90f,
+                startAngle = -90f + (1f - remaining) * 360f,
                 sweepAngle = sweep,
                 useCenter = false,
                 topLeft = topLeft,

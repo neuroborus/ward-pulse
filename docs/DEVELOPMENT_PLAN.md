@@ -1592,7 +1592,8 @@ Deliverables:
 - layer color is primarily **by provider/metric family** (OpenAI/Codex green, Anthropic
   orange, Cursor teal, local budget blue), with status (warn/error) as a modulation;
 - **arc = remaining**: the colored sweep shrinks as the limit is consumed (not a “used”
-  fill that grows toward full);
+  fill that grows toward full); melt is clockwise from 12 (usage gap advances like a
+  clock hand; remaining ends at 12);
 - **sort by remaining**: the tightest remaining plan limit is innermost / nearest center;
   equal plan percents break ties by credit request-runway (internal credits-per-request
   constants; UI still shows credits only). Exhausted metrics (`usedPercent >= 100` or

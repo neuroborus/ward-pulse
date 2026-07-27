@@ -10,22 +10,23 @@
   <rect width="450" height="450" fill="url(#lift)"/>
   
     <circle cx="225" cy="225" r="195.75" fill="none" stroke="#2E3632"
-      stroke-width="14.4" />
+      stroke-width="26.1" />
     <circle cx="225" cy="225" r="195.75" fill="none" stroke="#65D78A"
-      stroke-width="14.4" stroke-linecap="round"
+      stroke-width="26.1" stroke-linecap="round"
       stroke-dasharray="98.39 1229.93"
+      stroke-dashoffset="-1131.54"
       transform="rotate(-90 225 225)" />
   
     <text x="225" y="250.1" text-anchor="middle"
       font-family="Noto Sans, sans-serif" font-size="69.8"
       font-weight="700" fill="#F4FBF8">10:08</text>
-    <rect x="200.9" y="351.0" width="48.1"
+    <rect x="177.1" y="291.1" width="95.8"
       height="22.0" rx="6.0" fill="#0B0E0C"
       fill-opacity="0.92" />
-    <rect x="200.9" y="353.0" width="3.1"
+    <rect x="177.1" y="293.1" width="3.1"
       height="18.0" rx="2.0"
       fill="#65D78A" />
-    <text x="226.6" y="367.0"
+    <text x="226.6" y="307.1"
       text-anchor="middle" font-family="Noto Sans, sans-serif"
       font-size="14" font-weight="700" fill="#F4FBF8">8%</text>
 </svg>

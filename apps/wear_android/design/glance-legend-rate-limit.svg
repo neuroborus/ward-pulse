@@ -46,6 +46,7 @@
     <circle cx="137.5" cy="199" r="17" fill="none" stroke="#65D78A"
       stroke-width="5" stroke-linecap="round"
       stroke-dasharray="8.55 106.81"
+      stroke-dashoffset="-98.27"
       transform="rotate(-90 137.5 199)" />
     <text x="171.5" y="197.5"
       font-family="Noto Sans, sans-serif" font-size="16"
@@ -58,6 +59,7 @@
     <circle cx="137.5" cy="253" r="17" fill="none" stroke="#E8915A"
       stroke-width="5" stroke-linecap="round"
       stroke-dasharray="41.66 106.81"
+      stroke-dashoffset="-65.16"
       transform="rotate(-90 137.5 253)" />
     <text x="171.5" y="251.5"
       font-family="Noto Sans, sans-serif" font-size="16"
@@ -70,6 +72,7 @@
     <circle cx="137.5" cy="307" r="17" fill="none" stroke="#67E8D4"
       stroke-width="5" stroke-linecap="round"
       stroke-dasharray="76.91 106.81"
+      stroke-dashoffset="-29.91"
       transform="rotate(-90 137.5 307)" />
     <text x="171.5" y="305.5"
       font-family="Noto Sans, sans-serif" font-size="16"

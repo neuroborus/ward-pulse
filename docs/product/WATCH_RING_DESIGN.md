@@ -12,8 +12,9 @@ Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and si
 ## Goal
 
 Glanceable **remaining** capacity for up to four user-selected percent metrics, with optional
-remaining purchased **credits** on the center (first) strip. Not “always show every provider,” and never
-invent `Unknown` filler. Strip secondary values are credits — never LLM `TOK` / token counts.
+remaining purchased **credits** on the strip of the **same provider family** (never glued onto a
+tighter unrelated ring). Not “always show every provider,” and never invent `Unknown` filler.
+Strip secondary values are credits — never LLM `TOK` / token counts.
 
 ## Layer rules
 
@@ -22,7 +23,8 @@ invent `Unknown` filler. Strip secondary values are credits — never LLM `TOK` 
    Claude plan slot and resolves it to the tightest remaining window (window name lives on Glance,
    not on face strips).
 2. **Arc = remaining** — the colored sweep is `(100 - usedPercent)`. As the limit is consumed, the
-   arc shrinks. Do not grow a “used” fill toward a full circle.
+   arc shrinks (do not grow a separate “used” fill). Melt is **clockwise from 12**: usage opens a
+   gap at 12 o’clock and advances like a clock hand; remaining stays anchored ending at 12.
 3. **Center / inner = tightest remaining** — among selected, available, non-exhausted metrics,
    sort by plan remaining ascending (equivalently highest `usedPercent` first). When plan
    percents tie, secondary sort uses estimated remaining **request-equivalents** from that
@@ -82,14 +84,19 @@ Rules:
   alpha with a bottom dissolve into the strip stack. Details: `docs/DESIGN_ASSETS.md`.
 - **Lower strips** — short rounded rectangles, not full-width tablets and not stadium pills:
   - sunk into the surface (dark well, no high-contrast border card);
-  - thin left **family accent** bar (color = ring family);
-  - **equal width** for every strip in the stack (wide enough for `% · credits`);
+  - thin left **family accent** bar (same ColorRamp / `ring.id` family as the matching arc);
+    WFF strip slots are `RANGED_VALUE` so accents use `[COMPLICATION.RANGED_VALUE_COLORS]`;
+  - **equal width** for every strip in the stack, sized for the worst-case center
+    label `100% · 10.0M` (compact `K`/`M`/`B`/`T` credits) so wells stay inside the
+    clear aperture and do not cover arcs;
   - measured horizontal padding so Bold labels clear the well edges;
   - strip order = tightest remaining on top (nearest center) when plan rings exist;
-  - content: `%`, remaining credits, or `% · credits` on the **center** (first) strip; omit
-    unused halves / omit empty strips;
+  - content: `%`, or `% · credits` only when credits belong to that strip’s provider family;
+    omit unused halves / omit empty strips; multi-provider credit aggregates do not glue onto a
+    single `%` row;
   - credits text is compact (`500`, `1.2K`) — never a `TOK` suffix;
-  - ring stroke is tuned so a **3-strip** stack clears the arcs (thinner than the first heavy pass).
+  - ring stroke ~25px on the 450 WFF canvas so arcs read clearer while a **3-strip** stack
+    still clears the aperture.
 - **Credits-only**: thin framing track, large time, credits strip only — no percent arcs.
 - No orphan captions (`Codex left`, floating unit labels) outside the strip row.
 - Review art focuses on 1–3 provider families. A local **budget** metric may still occupy a product
@@ -127,7 +134,7 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
 | Surface | Role |
 |---------|------|
 | Wear OS app Glance | **Not** this face language — locked text legend (`WEAR_GLANCE_DESIGN.md`, 2026-07-26) |
-| WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs plus sunk `SHORT_TEXT` strips (`%` / `% · credits`) in `watchface.xml`. Center (first) strip TEXT is the full label (WFF `length(TITLE)` Conditions are unreliable). Keep progress/track `endAngle` below 360° (scale remaining onto 359.9°) — a closed circle collapses to a ROUND tip at 12 o'clock. Strips need their own `BoundingBox` slots (`BoundingArc` clips content to the arc band). |
+| WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs plus sunk `SHORT_TEXT` strips (`%` / `% · credits`) in `watchface.xml`. Center (first) strip TEXT is the full label (WFF `length(TITLE)` Conditions are unreliable). Keep progress/track spans below 360° (scale onto 359.9°) — a closed circle collapses to a ROUND tip. Remaining melt is clockwise from 12: Transform `startAngle` to `(1 - value/max) * 359.9` with fixed `endAngle` 359.9. Strips need their own `BoundingBox` slots (`BoundingArc` clips content to the arc band). |
 | Phone Watchface tab | Slot selection + preview of next payload rings (not Settings) |
 
 ## Non-goals
