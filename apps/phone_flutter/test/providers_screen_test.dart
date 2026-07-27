@@ -5,6 +5,7 @@ import 'package:ward_pulse_phone/providers/codex_account_service.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/providers/providers_screen.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
+import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 
 void main() {
   testWidgets('Cursor plan row shows Not connected and help Advanced paste', (
@@ -21,6 +22,8 @@ void main() {
             codexAccountService: const EmptyCodexAccountService(),
             claudeAccountService: const EmptyClaudeAccountService(),
             onCredentialsChanged: () => credentialsChanged++,
+            alertThresholds: const AlertThresholdPreferences(),
+            onAlertThresholdsChanged: (_) async {},
             cursorPlanSignIn: (_) async => null,
           ),
         ),
@@ -73,6 +76,8 @@ void main() {
             codexAccountService: const EmptyCodexAccountService(),
             claudeAccountService: const EmptyClaudeAccountService(),
             onCredentialsChanged: () {},
+            alertThresholds: const AlertThresholdPreferences(),
+            onAlertThresholdsChanged: (_) async {},
             cursorPlanSignIn: (_) async {
               signInCalls++;
               return 'user_01WEB::eyJhbGciOiJSUzI1NiJ9.payload.signature_padding==';

@@ -9,6 +9,7 @@ import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
+import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/settings/debug_data_preferences.dart';
@@ -186,6 +187,82 @@ void main() {
     );
     expect(find.text('Diagnostics'), findsOneWidget);
     expect(find.text('Sync'), findsWidgets);
+  });
+
+  testWidgets('Settings exposes global budget alert thresholds', (
+    tester,
+  ) async {
+    final snapshot = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final store = _MemoryAlertThresholdStore();
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(snapshot),
+        alertThresholdStore: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Alerts'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Alerts'), findsOneWidget);
+    expect(find.text('Today'), findsWidgets);
+    expect(find.text('Week'), findsOneWidget);
+    expect(find.text('Month'), findsOneWidget);
+
+    await tester.tap(find.text('Off').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('80%').last);
+    await tester.pumpAndSettle();
+
+    expect(store.value.today.warnAt, 80);
+  });
+
+  testWidgets('Providers plan row can save connection alert thresholds', (
+    tester,
+  ) async {
+    final snapshot = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final store = _MemoryAlertThresholdStore();
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(snapshot),
+        alertThresholdStore: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Codex subscription'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byTooltip('Alert thresholds').first);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Alerts ·'), findsOneWidget);
+    await tester.tap(find.text('Off').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('70%').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(
+      store.value.forConnection(ProviderConnections.codexPlan).plan.warnAt,
+      70,
+    );
   });
 
   testWidgets('watch sync failure does not block the dashboard', (
@@ -760,6 +837,18 @@ final class _CountingDashboardRepository extends DashboardRepository {
 
   @override
   Future<DashboardSnapshot> load() async => _load();
+}
+
+class _MemoryAlertThresholdStore implements AlertThresholdPreferenceStore {
+  AlertThresholdPreferences value = const AlertThresholdPreferences();
+
+  @override
+  Future<AlertThresholdPreferences> read() async => value;
+
+  @override
+  Future<void> write(AlertThresholdPreferences next) async {
+    value = next;
+  }
 }
 
 class _MemoryCredentialStore implements ProviderCredentialStore {

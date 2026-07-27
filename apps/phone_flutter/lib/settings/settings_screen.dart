@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../sync/poll_cadence.dart';
+import 'alert_percent_threshold_editor.dart';
+import 'alert_threshold_preferences.dart';
 import 'consumption_display_preferences.dart';
 import 'refresh_interval_preferences.dart';
 import 'watch_ring_preferences.dart';
@@ -22,6 +24,8 @@ class SettingsScreen extends StatefulWidget {
     required this.onRefreshIntervalChanged,
     required this.ringPreferences,
     required this.onRingPreferencesChanged,
+    required this.alertThresholds,
+    required this.onAlertThresholdsChanged,
     required this.onSyncWatch,
     required this.debugDataAvailable,
     required this.mockDataEnabled,
@@ -38,6 +42,12 @@ class SettingsScreen extends StatefulWidget {
   final WatchRingPreferences ringPreferences;
   final Future<void> Function(WatchRingPreferences value)
   onRingPreferencesChanged;
+  final AlertThresholdPreferences alertThresholds;
+  final Future<void> Function(
+    AlertThresholdPreferences Function(AlertThresholdPreferences current)
+    update,
+  )
+  onAlertThresholdsChanged;
   final Future<void> Function() onSyncWatch;
   final bool debugDataAvailable;
   final bool mockDataEnabled;
@@ -138,6 +148,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not update refresh interval')),
+        );
+      }
+    }
+  }
+
+  Future<void> _setAlertThresholds(
+    AlertThresholdPreferences Function(AlertThresholdPreferences current)
+    update,
+  ) async {
+    try {
+      await widget.onAlertThresholdsChanged(update);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not update alert thresholds')),
         );
       }
     }
@@ -290,6 +315,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       });
                     }
                   },
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        const _SettingsSectionHeader(title: 'Alerts'),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Global budgets · off until you set a percent',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                AlertPercentThresholdEditor(
+                  title: 'Today',
+                  value: widget.alertThresholds.today,
+                  onChanged:
+                      (today) => _setAlertThresholds(
+                        (current) => current.copyWith(today: today),
+                      ),
+                ),
+                const SizedBox(height: 16),
+                AlertPercentThresholdEditor(
+                  title: 'Week',
+                  value: widget.alertThresholds.week,
+                  onChanged:
+                      (week) => _setAlertThresholds(
+                        (current) => current.copyWith(week: week),
+                      ),
+                ),
+                const SizedBox(height: 16),
+                AlertPercentThresholdEditor(
+                  title: 'Month',
+                  value: widget.alertThresholds.month,
+                  onChanged:
+                      (month) => _setAlertThresholds(
+                        (current) => current.copyWith(month: month),
+                      ),
                 ),
               ],
             ),

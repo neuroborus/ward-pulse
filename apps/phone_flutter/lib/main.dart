@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'app/ward_pulse_app.dart';
 import 'dashboard/dashboard_repository.dart';
 import 'dashboard/phone_live_bindings.dart';
+import 'settings/alert_threshold_preferences.dart';
 import 'settings/consumption_display_preferences.dart';
 import 'settings/debug_data_preferences.dart';
 import 'settings/refresh_interval_preferences.dart';
@@ -25,6 +26,7 @@ Future<void> main() async {
       displayPreferenceStore: SecureConsumptionDisplayPreferenceStore(),
       refreshIntervalStore: SecureRefreshIntervalPreferenceStore(),
       watchRingPreferenceStore: SecureWatchRingPreferenceStore(),
+      alertThresholdStore: SecureAlertThresholdPreferenceStore(),
       syncScheduler: TimerProviderSyncScheduler(),
       debugDataAvailable: kDebugMode,
       debugDataPreferenceStore: debugDataPreferenceStore,

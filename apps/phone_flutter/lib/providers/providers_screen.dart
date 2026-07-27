@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../settings/alert_percent_threshold_editor.dart';
+import '../settings/alert_threshold_preferences.dart';
+import '../sync/claude_account_client.dart';
+import '../sync/codex_account_client.dart';
 import 'claude_account_service.dart';
 import 'codex_account_service.dart';
 import 'cursor_plan_sign_in_screen.dart';
@@ -10,8 +14,6 @@ import 'cursor_webview_cookies.dart';
 import 'provider_connection.dart';
 import 'provider_connection_row.dart';
 import 'provider_credential_store.dart';
-import '../sync/claude_account_client.dart';
-import '../sync/codex_account_client.dart';
 
 /// Opens Cursor dashboard sign-in and returns a session token, or null.
 typedef CursorPlanSignIn = Future<String?> Function(BuildContext context);
@@ -24,6 +26,8 @@ class ProvidersScreen extends StatefulWidget {
     required this.codexAccountService,
     required this.claudeAccountService,
     required this.onCredentialsChanged,
+    required this.alertThresholds,
+    required this.onAlertThresholdsChanged,
     this.cursorPlanSignIn,
   });
 
@@ -31,6 +35,12 @@ class ProvidersScreen extends StatefulWidget {
   final CodexAccountService codexAccountService;
   final ClaudeAccountService claudeAccountService;
   final VoidCallback onCredentialsChanged;
+  final AlertThresholdPreferences alertThresholds;
+  final Future<void> Function(
+    AlertThresholdPreferences Function(AlertThresholdPreferences current)
+    update,
+  )
+  onAlertThresholdsChanged;
 
   /// Test seam; defaults to [CursorPlanSignInScreen.open].
   final CursorPlanSignIn? cursorPlanSignIn;
@@ -496,6 +506,99 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _editConnectionAlerts(ProviderConnection connection) async {
+    var draft = widget.alertThresholds.forConnection(connection.id);
+    final saved = await showDialog<ConnectionAlertThresholds>(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder: (context, setDialogState) {
+              return AlertDialog(
+                title: Text('Alerts · ${connection.listTitle}'),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Opt-in thresholds for this connection. Off until you pick a percent.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      AlertPercentThresholdEditor(
+                        title: 'Plan',
+                        value: draft.plan,
+                        onChanged:
+                            (plan) => setDialogState(() {
+                              draft = draft.copyWith(plan: plan);
+                            }),
+                      ),
+                      const SizedBox(height: 16),
+                      AlertPercentThresholdEditor(
+                        title: 'Purchased',
+                        value: draft.purchased,
+                        onChanged:
+                            (purchased) => setDialogState(() {
+                              draft = draft.copyWith(purchased: purchased);
+                            }),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pop(draft),
+                    child: const Text('Save'),
+                  ),
+                ],
+              );
+            },
+          ),
+    );
+    if (saved == null || !mounted) {
+      return;
+    }
+    try {
+      await widget.onAlertThresholdsChanged(
+        (current) => current.withConnection(connection.id, saved),
+      );
+    } catch (_) {
+      if (mounted) {
+        _showMessage('Could not update alert thresholds');
+      }
+    }
+  }
+
+  Widget _statusTrailing({
+    required ProviderConnection connection,
+    required Widget status,
+    List<Widget> leading = const [],
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ...leading,
+        if (connection.id.kind == ConnectionKind.plan)
+          IconButton(
+            tooltip: 'Alert thresholds',
+            onPressed: () => _editConnectionAlerts(connection),
+            icon: Icon(
+              widget.alertThresholds.forConnection(connection.id).isEnabled
+                  ? Icons.notifications_active_outlined
+                  : Icons.notifications_none_outlined,
+            ),
+          ),
+        status,
+      ],
+    );
+  }
+
   Widget _connectionRow(ProviderConnection connection) {
     if (connection.id == ProviderConnections.codexPlan) {
       return _codexAccountRow(connection);
@@ -520,12 +623,15 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
               : Icons.key_outlined,
       title: connection.listTitle,
       subtitle: connection.listSubtitle,
-      trailing: switch (hasSecret) {
-        null => const _RowProgress(),
-        // Match OAuth row copy: connection state, not "field empty/filled".
-        true => const Text('Connected'),
-        false => const Text('Not connected'),
-      },
+      trailing: _statusTrailing(
+        connection: connection,
+        status: switch (hasSecret) {
+          null => const _RowProgress(),
+          // Match OAuth row copy: connection state, not "field empty/filled".
+          true => const Text('Connected'),
+          false => const Text('Not connected'),
+        },
+      ),
       onTap:
           hasSecret == null
               ? null
@@ -545,11 +651,14 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
       icon: Icons.account_circle_outlined,
       title: connection.listTitle,
       subtitle: connection.listSubtitle,
-      trailing: switch ((_hasCodexAccount, _isConnectingCodex)) {
-        (_, true) || (null, _) => const _RowProgress(),
-        (true, _) => const Text('Connected'),
-        (false, _) => const Text('Not connected'),
-      },
+      trailing: _statusTrailing(
+        connection: connection,
+        status: switch ((_hasCodexAccount, _isConnectingCodex)) {
+          (_, true) || (null, _) => const _RowProgress(),
+          (true, _) => const Text('Connected'),
+          (false, _) => const Text('Not connected'),
+        },
+      ),
       onTap:
           _hasCodexAccount == null || _isConnectingCodex
               ? null
@@ -562,11 +671,14 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
       icon: Icons.account_circle_outlined,
       title: connection.listTitle,
       subtitle: connection.listSubtitle,
-      trailing: switch ((_hasClaudeAccount, _isConnectingClaude)) {
-        (_, true) || (null, _) => const _RowProgress(),
-        (true, _) => const Text('Connected'),
-        (false, _) => const Text('Not connected'),
-      },
+      trailing: _statusTrailing(
+        connection: connection,
+        status: switch ((_hasClaudeAccount, _isConnectingClaude)) {
+          (_, true) || (null, _) => const _RowProgress(),
+          (true, _) => const Text('Connected'),
+          (false, _) => const Text('Not connected'),
+        },
+      ),
       onTap:
           _hasClaudeAccount == null || _isConnectingClaude
               ? null
@@ -584,16 +696,16 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
       icon: Icons.account_circle_outlined,
       title: connection.listTitle,
       subtitle: connection.listSubtitle,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+      trailing: _statusTrailing(
+        connection: connection,
+        leading: [
           IconButton(
             tooltip: 'About Cursor sign-in',
             onPressed: _isConnectingCursorPlan ? null : _showCursorPlanHelp,
             icon: const Icon(Icons.help_outline),
           ),
-          status,
         ],
+        status: status,
       ),
       onTap:
           _hasCursorPlan == null || _isConnectingCursorPlan

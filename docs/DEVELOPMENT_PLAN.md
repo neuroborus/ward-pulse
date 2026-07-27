@@ -632,10 +632,9 @@ results. Do not reintroduce automatic alerts from allowance/budget status alone.
 
 **Current gap (2026-07-27):** `build_dashboard_snapshot` still emits alerts from budget /
 purchased allowance `ProviderStatus` without user rules (e.g. Mock Claude Extra ≥ 80%).
-Connection catalog lives on Providers; Settings is systemic for connections (Watch display
-remains transitional until the Watchface tab). Next: connection alert thresholds UI on
-Providers, global budget thresholds on Settings, and replace auto-fired alerts with
-rules-backed evaluation.
+Connection catalog and opt-in threshold prefs live on Providers / Settings (Watch display
+remains transitional until the Watchface tab). Next: replace auto-fired alerts with
+`calculate_alerts(snapshot, settings)` using those stored rules.
 
 ---
 
