@@ -1,4 +1,3 @@
-use crate::alerts::{alerts_for_budget_state, alerts_for_purchased_allowance};
 use crate::budget::calculate_budget_state;
 use crate::model::{
     BudgetPeriod, BudgetState, DashboardSnapshot, Money, ProviderSnapshot, ProviderStatus,
@@ -34,16 +33,7 @@ pub fn build_dashboard_snapshot(
             .fold(ProviderStatus::Ok, worst_status)
     };
 
-    let mut alerts = Vec::new();
-    alerts.extend(alerts_for_budget_state("Today", &today_total));
-    alerts.extend(alerts_for_budget_state("Week", &week_total));
-    alerts.extend(alerts_for_budget_state("Month", &month_total));
-    for account in &accounts {
-        for allowance in &account.allowances {
-            alerts.extend(alerts_for_purchased_allowance(account.provider, allowance));
-        }
-    }
-
+    // Alerts stay empty until the shell applies user rules via calculate_alerts.
     let watch_summary = WatchSummary {
         today_used_percent: today_total.used_percent,
         week_used_percent: week_total.used_percent,
@@ -57,7 +47,7 @@ pub fn build_dashboard_snapshot(
         today_total,
         week_total,
         month_total,
-        alerts,
+        alerts: Vec::new(),
         watch_summary,
     }
 }

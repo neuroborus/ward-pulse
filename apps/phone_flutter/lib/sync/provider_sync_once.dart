@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
 
+import '../dashboard/apply_alert_settings.dart';
 import '../dashboard/phone_live_bindings.dart';
+import '../settings/alert_threshold_preferences.dart';
 import '../settings/consumption_display_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
 import 'watch_sync_service.dart';
@@ -15,7 +17,11 @@ Future<void> providerSyncOnce() async {
     final displayPreferences =
         await SecureConsumptionDisplayPreferenceStore().read();
     final ringPreferences = await SecureWatchRingPreferenceStore().read();
-    final snapshot = await live.repository.load();
+    final alertThresholds = await SecureAlertThresholdPreferenceStore().read();
+    final snapshot = applyUserAlertSettings(
+      await live.repository.load(),
+      alertThresholds,
+    );
     await const MethodChannelWatchSyncService().sync(
       snapshot,
       displayPreferences,

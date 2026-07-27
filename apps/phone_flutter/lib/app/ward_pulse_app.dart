@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../dashboard/apply_alert_settings.dart';
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_repository.dart';
 import '../dashboard/dashboard_screen.dart';
@@ -38,6 +39,7 @@ class WardPulseApp extends StatelessWidget {
     this.watchRingPreferenceStore = const DefaultWatchRingPreferenceStore(),
     this.phoneWidgetPreferenceStore = const DefaultPhoneWidgetPreferenceStore(),
     this.alertThresholdStore = const DefaultAlertThresholdPreferenceStore(),
+    this.applyAlertSettings = applyUserAlertSettings,
     this.syncScheduler = const DisabledProviderSyncScheduler(),
     this.debugDataAvailable = false,
     this.debugDataPreferenceStore = const DisabledDebugDataPreferenceStore(),
@@ -53,6 +55,7 @@ class WardPulseApp extends StatelessWidget {
   final WatchRingPreferenceStore watchRingPreferenceStore;
   final PhoneWidgetPreferenceStore phoneWidgetPreferenceStore;
   final AlertThresholdPreferenceStore alertThresholdStore;
+  final ApplyAlertSettings applyAlertSettings;
   final ProviderSyncScheduler syncScheduler;
   final bool debugDataAvailable;
   final DebugDataPreferenceStore debugDataPreferenceStore;
@@ -75,6 +78,7 @@ class WardPulseApp extends StatelessWidget {
         watchRingPreferenceStore: watchRingPreferenceStore,
         phoneWidgetPreferenceStore: phoneWidgetPreferenceStore,
         alertThresholdStore: alertThresholdStore,
+        applyAlertSettings: applyAlertSettings,
         syncScheduler: syncScheduler,
         debugDataAvailable: debugDataAvailable,
         debugDataPreferenceStore: debugDataPreferenceStore,
@@ -96,6 +100,7 @@ class DashboardHost extends StatefulWidget {
     required this.watchRingPreferenceStore,
     required this.phoneWidgetPreferenceStore,
     required this.alertThresholdStore,
+    required this.applyAlertSettings,
     required this.syncScheduler,
     required this.debugDataAvailable,
     required this.debugDataPreferenceStore,
@@ -111,6 +116,7 @@ class DashboardHost extends StatefulWidget {
   final WatchRingPreferenceStore watchRingPreferenceStore;
   final PhoneWidgetPreferenceStore phoneWidgetPreferenceStore;
   final AlertThresholdPreferenceStore alertThresholdStore;
+  final ApplyAlertSettings applyAlertSettings;
   final ProviderSyncScheduler syncScheduler;
   final bool debugDataAvailable;
   final DebugDataPreferenceStore debugDataPreferenceStore;
@@ -308,13 +314,30 @@ class _DashboardHostState extends State<DashboardHost> {
     await previous;
     try {
       final value = update(_alertThresholds);
+      final snapshot = _currentSnapshot;
+      // Evaluate before persisting so a core/FFI failure does not leave the
+      // store ahead of in-memory prefs / dashboard alerts.
+      final withAlerts =
+          snapshot == null
+              ? null
+              : widget.applyAlertSettings(snapshot, value);
       await widget.alertThresholdStore.write(value);
       if (mounted) {
         setState(() {
           _alertThresholds = value;
+          if (withAlerts != null) {
+            _currentSnapshot = withAlerts;
+            _snapshot = Future.value(withAlerts);
+          }
         });
       } else {
         _alertThresholds = value;
+        if (withAlerts != null) {
+          _currentSnapshot = withAlerts;
+        }
+      }
+      if (withAlerts != null) {
+        unawaited(_syncWatch(withAlerts));
       }
     } finally {
       done.complete();
@@ -332,7 +355,10 @@ class _DashboardHostState extends State<DashboardHost> {
     // no connection is polled faster than its floor, and a failed load still
     // retries on the next tick. Headless WorkManager uses ≥15 minutes.
     unawaited(_scheduleAutoSync(_refreshInterval.interval));
-    final snapshot = await widget.repository.load();
+    final snapshot = widget.applyAlertSettings(
+      await widget.repository.load(),
+      _alertThresholds,
+    );
     _currentSnapshot = snapshot;
     unawaited(_syncWatch(snapshot));
     return snapshot;
@@ -351,7 +377,10 @@ class _DashboardHostState extends State<DashboardHost> {
     try {
       // Do not invalidate: load() already refetches, and clearing caches would
       // drop stale-with-issue recovery on a failed automatic tick.
-      final snapshot = await widget.repository.load();
+      final snapshot = widget.applyAlertSettings(
+        await widget.repository.load(),
+        _alertThresholds,
+      );
       _currentSnapshot = snapshot;
       if (mounted) {
         setState(() {

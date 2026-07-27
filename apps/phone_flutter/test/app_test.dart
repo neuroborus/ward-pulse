@@ -267,6 +267,8 @@ void main() {
       WardPulseApp(
         repository: ValueDashboardRepository(snapshot),
         alertThresholdStore: store,
+        // Widget tests do not load libward_pulse_ffi.so; prefs UI only.
+        applyAlertSettings: (current, _) => current,
       ),
     );
     await tester.pumpAndSettle();
@@ -303,6 +305,7 @@ void main() {
       WardPulseApp(
         repository: ValueDashboardRepository(snapshot),
         alertThresholdStore: store,
+        applyAlertSettings: (current, _) => current,
       ),
     );
     await tester.pumpAndSettle();

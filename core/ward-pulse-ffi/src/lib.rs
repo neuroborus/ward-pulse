@@ -3,9 +3,9 @@ use std::ffi::{c_char, CStr, CString};
 use std::fmt;
 use std::ptr;
 
-use ward_pulse_core::build_dashboard_snapshot;
 use ward_pulse_core::model::{DashboardSnapshot, ProviderSnapshot};
 use ward_pulse_core::time::DateTimeUtc;
+use ward_pulse_core::{apply_alert_settings, build_dashboard_snapshot, AlertSettings};
 use ward_pulse_providers::claude::{
     anthropic_provider_snapshot_from_report_json, claude_provider_snapshot_from_report_json,
     AnthropicReportError, ClaudeReportError,
@@ -37,6 +37,7 @@ enum DashboardSnapshotJsonError {
     EmptySnapshots,
     Deserialize(serde_json::Error),
     Serialize(serde_json::Error),
+    AlertSettings(serde_json::Error),
 }
 
 impl fmt::Display for DashboardSnapshotJsonError {
@@ -75,6 +76,9 @@ impl fmt::Display for DashboardSnapshotJsonError {
             Self::Serialize(error) => {
                 write!(formatter, "failed to serialize dashboard snapshot: {error}")
             }
+            Self::AlertSettings(error) => {
+                write!(formatter, "failed to parse alert settings: {error}")
+            }
         }
     }
 }
@@ -91,7 +95,9 @@ impl StdError for DashboardSnapshotJsonError {
             Self::Fixture(error) => Some(error),
             Self::OpenAi(error) => Some(error),
             Self::EmptySnapshots => None,
-            Self::Deserialize(error) | Self::Serialize(error) => Some(error),
+            Self::Deserialize(error) | Self::Serialize(error) | Self::AlertSettings(error) => {
+                Some(error)
+            }
         }
     }
 }
@@ -181,6 +187,25 @@ fn merge_dashboard_snapshots_json(
         .collect();
 
     dashboard_json(generated_at, accounts)
+}
+
+fn apply_alert_settings_json(request_json: &str) -> Result<String, DashboardSnapshotJsonError> {
+    let value: serde_json::Value =
+        serde_json::from_str(request_json).map_err(DashboardSnapshotJsonError::AlertSettings)?;
+    let snapshot: DashboardSnapshot = serde_json::from_value(
+        value
+            .get("snapshot")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+    )
+    .map_err(DashboardSnapshotJsonError::AlertSettings)?;
+    let settings: AlertSettings = match value.get("settings") {
+        Some(settings) => serde_json::from_value(settings.clone())
+            .map_err(DashboardSnapshotJsonError::AlertSettings)?,
+        None => AlertSettings::default(),
+    };
+    let snapshot = apply_alert_settings(snapshot, &settings);
+    serde_json::to_string(&snapshot).map_err(DashboardSnapshotJsonError::Serialize)
 }
 
 fn snapshot_result_json(result: Result<String, DashboardSnapshotJsonError>) -> Option<String> {
@@ -334,6 +359,22 @@ pub unsafe extern "C" fn ward_pulse_merge_dashboard_snapshots_result_json(
 ) -> *mut c_char {
     transform_report_json(snapshots_json, |json| {
         snapshot_result_json(merge_dashboard_snapshots_json(json))
+    })
+}
+
+/// Applies user alert threshold settings to a dashboard snapshot JSON.
+///
+/// Request body: `{ "snapshot": <DashboardSnapshot>, "settings": <AlertSettings> }`.
+///
+/// # Safety
+///
+/// `request_json` must be a non-null pointer to a valid, null-terminated UTF-8 JSON object.
+#[no_mangle]
+pub unsafe extern "C" fn ward_pulse_apply_alert_settings_result_json(
+    request_json: *const c_char,
+) -> *mut c_char {
+    transform_report_json(request_json, |json| {
+        snapshot_result_json(apply_alert_settings_json(json))
     })
 }
 
@@ -506,6 +547,45 @@ mod tests {
         assert_eq!(snapshot["accounts"].as_array().unwrap().len(), 2);
         assert_eq!(snapshot["accounts"][0]["provider"], "mock");
         assert_eq!(snapshot["accounts"][1]["provider"], "codex");
+
+        unsafe { ward_pulse_string_free(value) };
+    }
+
+    #[test]
+    fn result_api_applies_alert_settings() {
+        let snapshot: serde_json::Value = serde_json::from_str(
+            &dashboard_snapshot_json().expect("serialize mock dashboard snapshot"),
+        )
+        .expect("parse mock dashboard snapshot");
+        let request = CString::new(
+            serde_json::json!({
+                "snapshot": snapshot,
+                "settings": {
+                    "today": { "warnAt": 20, "criticalAt": null },
+                    "week": { "warnAt": null, "criticalAt": null },
+                    "month": { "warnAt": null, "criticalAt": null },
+                    "connections": {}
+                }
+            })
+            .to_string(),
+        )
+        .expect("request has no null bytes");
+
+        let value = unsafe { ward_pulse_apply_alert_settings_result_json(request.as_ptr()) };
+        assert!(!value.is_null());
+        let result: serde_json::Value = serde_json::from_str(
+            unsafe { CStr::from_ptr(value) }
+                .to_str()
+                .expect("result is UTF-8"),
+        )
+        .expect("parse result JSON");
+        assert_eq!(result["status"], "success");
+        let applied: serde_json::Value =
+            serde_json::from_str(result["dashboardJson"].as_str().expect("dashboard JSON"))
+                .expect("parse dashboard JSON");
+        let alerts = applied["alerts"].as_array().expect("alerts");
+        assert_eq!(alerts.len(), 1);
+        assert_eq!(alerts[0]["severity"], "warning");
 
         unsafe { ward_pulse_string_free(value) };
     }

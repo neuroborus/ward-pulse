@@ -94,6 +94,12 @@ final class AlertThresholdPreferences {
   final AlertPercentThreshold week;
   final AlertPercentThreshold month;
 
+  bool get hasEnabledRules =>
+      today.isEnabled ||
+      week.isEnabled ||
+      month.isEnabled ||
+      connections.values.any((value) => value.isEnabled);
+
   ConnectionAlertThresholds forConnection(ProviderConnectionId id) {
     return connections[id.storageKey] ?? const ConnectionAlertThresholds();
   }

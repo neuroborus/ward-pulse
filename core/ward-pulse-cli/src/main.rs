@@ -34,6 +34,7 @@ fn mock_dashboard_snapshot() -> Result<DashboardSnapshot, MockUsageFixtureError>
 mod tests {
     use super::*;
     use ward_pulse_core::time::DateTimeUtc;
+    use ward_pulse_core::{apply_alert_settings, AlertSettings, PercentThreshold};
     use ward_pulse_providers::mock::mock_provider_budget_warning_snapshot;
 
     #[test]
@@ -50,9 +51,16 @@ mod tests {
             DateTimeUtc::from("2026-06-27T18:42:00Z"),
             vec![mock_provider_budget_warning_snapshot("mock-local")],
         );
+        let settings = AlertSettings {
+            today: PercentThreshold {
+                warn_at: Some(80),
+                critical_at: None,
+            },
+            ..AlertSettings::default()
+        };
 
         assert_snapshot_matches_fixture(
-            snapshot,
+            apply_alert_settings(snapshot, &settings),
             include_str!("../../../fixtures/snapshots/dashboard_alerts.json"),
         );
     }

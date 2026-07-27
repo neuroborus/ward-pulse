@@ -6,9 +6,28 @@ void main() {
   test('defaults are opt-in off', () {
     const prefs = AlertThresholdPreferences();
     expect(prefs.today.isEnabled, isFalse);
+    expect(prefs.hasEnabledRules, isFalse);
     expect(
       prefs.forConnection(ProviderConnections.codexPlan).isEnabled,
       isFalse,
+    );
+  });
+
+  test('hasEnabledRules is true when any budget or connection rule is set', () {
+    expect(
+      const AlertThresholdPreferences(
+        today: AlertPercentThreshold(warnAt: 80),
+      ).hasEnabledRules,
+      isTrue,
+    );
+    expect(
+      const AlertThresholdPreferences().withConnection(
+        ProviderConnections.codexPlan,
+        const ConnectionAlertThresholds(
+          plan: AlertPercentThreshold(criticalAt: 100),
+        ),
+      ).hasEnabledRules,
+      isTrue,
     );
   });
 

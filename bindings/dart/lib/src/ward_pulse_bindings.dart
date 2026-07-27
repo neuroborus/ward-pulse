@@ -65,6 +65,10 @@ final class _WardPulseBindings {
           .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
             'ward_pulse_merge_dashboard_snapshots_result_json',
           ),
+      _applyAlertSettingsResultJson = library
+          .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
+            'ward_pulse_apply_alert_settings_result_json',
+          ),
       _stringFree = library.lookupFunction<_NativeStringFree, _DartStringFree>(
         'ward_pulse_string_free',
       );
@@ -82,6 +86,7 @@ final class _WardPulseBindings {
   final _DartJsonTransform _cursorPlanDashboardSnapshotResultJson;
   final _DartJsonTransform _cursorPlatformDashboardSnapshotResultJson;
   final _DartJsonTransform _mergeDashboardSnapshotsResultJson;
+  final _DartJsonTransform _applyAlertSettingsResultJson;
   final _DartStringFree _stringFree;
 
   String loadDashboardSnapshotJson() {
@@ -150,6 +155,14 @@ final class _WardPulseBindings {
       for (final snapshotJson in snapshotsJson) jsonDecode(snapshotJson),
     ]);
     return _normalizeReportJson(request, _mergeDashboardSnapshotsResultJson);
+  }
+
+  String applyAlertSettingsJson(String snapshotJson, String settingsJson) {
+    final request = jsonEncode({
+      'snapshot': jsonDecode(snapshotJson),
+      'settings': jsonDecode(settingsJson),
+    });
+    return _normalizeReportJson(request, _applyAlertSettingsResultJson);
   }
 
   String _normalizeReportJson(
@@ -221,4 +234,8 @@ String normalizeCursorPlatformReportJson(String reportJson) {
 
 String mergeDashboardSnapshotsJson(Iterable<String> snapshotsJson) {
   return _bindings.mergeDashboardSnapshotsJson(snapshotsJson);
+}
+
+String applyAlertSettingsJson(String snapshotJson, String settingsJson) {
+  return _bindings.applyAlertSettingsJson(snapshotJson, settingsJson);
 }

@@ -625,15 +625,13 @@ Split runtime output from configuration:
 reported utilization) must **not** invent dashboard alerts by itself. Empty “No alerts” is the
 correct default until the user configures at least one rule.
 
-Rust remains the owner of alert evaluation (`calculate_alerts(snapshot, settings)` / budget
-helpers) using the persisted user rules. Platform shells persist rule preferences and render
-results. Do not reintroduce automatic alerts from allowance/budget status alone.
+Rust remains the owner of alert evaluation (`calculate_alerts(snapshot, settings)` /
+`apply_alert_settings`, exposed to the phone via `ward_pulse_apply_alert_settings_result_json`)
+using the persisted user rules. Platform shells persist rule preferences and render results.
+Do not reintroduce automatic alerts from allowance/budget status alone.
 
-**Current gap (2026-07-27):** `build_dashboard_snapshot` still emits alerts from budget /
-purchased allowance `ProviderStatus` without user rules (e.g. Mock Claude Extra ≥ 80%).
-Connection catalog and opt-in threshold prefs live on Providers / Settings; Watchface and Widget
-tabs own glance layout prefs (App Widget surface + design lock still planned). Next: replace
-auto-fired alerts with `calculate_alerts(snapshot, settings)` using those stored rules.
+`build_dashboard_snapshot` always emits an empty alerts list; the phone host applies stored
+threshold prefs after each load (and on prefs change) before Dashboard / Wear sync.
 
 ---
 
