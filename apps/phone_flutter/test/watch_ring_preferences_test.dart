@@ -269,6 +269,104 @@ void main() {
       expect(rings.map((r) => r.label), ['Weekly', 'Weekly plan']);
     });
   });
+
+  test('includes Cursor Models and Other Models in watch ring catalog', () {
+    final cursor = Map<String, Object?>.from(
+      (snapshot.toJson()['accounts'] as List).first as Map,
+    );
+    cursor['provider'] = 'cursor';
+    cursor['accountId'] = 'cursor-local';
+    cursor['allowances'] = [
+      {
+        'id': 'cursor-plan-models',
+        'source': 'plan',
+        'label': 'Cursor Models',
+        'usedPercent': 47.0,
+        'used': null,
+        'limit': null,
+        'remaining': null,
+        'unlimited': false,
+        'windowMinutes': null,
+        'resetsAt': null,
+        'status': 'ok',
+      },
+      {
+        'id': 'cursor-plan-other',
+        'source': 'plan',
+        'label': 'Other Models',
+        'usedPercent': 100.0,
+        'used': null,
+        'limit': null,
+        'remaining': null,
+        'unlimited': false,
+        'windowMinutes': null,
+        'resetsAt': null,
+        'status': 'rateLimited',
+      },
+      {
+        'id': 'cursor-on-demand',
+        'source': 'purchased',
+        'label': 'On-demand usage',
+        'usedPercent': 45.0,
+        'used': {'value': '4.50', 'unit': 'credits'},
+        'limit': {'value': '10.00', 'unit': 'credits'},
+        'remaining': {'value': '5.50', 'unit': 'credits'},
+        'unlimited': false,
+        'windowMinutes': null,
+        'resetsAt': null,
+        'status': 'ok',
+      },
+    ];
+    final withCursor = DashboardSnapshot.fromJson({
+      ...snapshot.toJson(),
+      'accounts': [cursor],
+      'todayTotal': {
+        'period': 'today',
+        'spent': null,
+        'limit': null,
+        'remaining': null,
+        'usedPercent': null,
+        'projectedTotal': null,
+        'status': 'unknown',
+        'statusExplanation': null,
+      },
+      'weekTotal': {
+        'period': 'week',
+        'spent': null,
+        'limit': null,
+        'remaining': null,
+        'usedPercent': null,
+        'projectedTotal': null,
+        'status': 'unknown',
+        'statusExplanation': null,
+      },
+      'monthTotal': {
+        'period': 'month',
+        'spent': null,
+        'limit': null,
+        'remaining': null,
+        'usedPercent': null,
+        'projectedTotal': null,
+        'status': 'unknown',
+        'statusExplanation': null,
+      },
+    });
+
+    final catalogIds = watchRingCatalog(withCursor).map((ring) => ring.id).toList();
+    expect(catalogIds, contains('allowance.cursor.cursor-plan-models'));
+    expect(catalogIds, contains('allowance.cursor.cursor-plan-other'));
+    expect(catalogIds, contains('allowance.cursor.cursor-on-demand'));
+
+    final surface = orderWatchRingsForSurface(
+      resolveWatchRings(withCursor, const WatchRingPreferences()),
+      snapshot: withCursor,
+    );
+    // Exhausted Other Models (100% used) is omitted from the face.
+    expect(surface.map((ring) => ring.id), [
+      'allowance.cursor.cursor-plan-models',
+      'allowance.cursor.cursor-on-demand',
+    ]);
+  });
 }
 
 DashboardSnapshot _claudeCodexSnapshot({

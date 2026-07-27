@@ -256,9 +256,13 @@ dashboard WebView sign-in added 2026-07-26.
 Cursor has no official personal-account usage API and no OAuth grant for plan meters. Settings
 opens an in-app WebView to the Cursor dashboard; after sign-in the phone captures the
 `WorkosCursorSessionToken` cookie (Advanced paste remains for the same value), stores it
-securely, and calls `GET /api/usage-summary`, normalizing plan and on-demand meters into
-allowances. Do not claim Admin-API hourly aggregation on this experimental row. Never log the
-cookie or raw response bodies.
+securely, and calls `GET /api/usage-summary`, normalizing included plan pools and on-demand
+meters into allowances. When the payload includes `autoPercentUsed` / `apiPercentUsed`, WardPulse
+shows **Cursor Models** and **Other Models** as separate plan bars (same as the Cursor usage UI)
+on the phone and as selectable watch rings. Older combined-only payloads keep a single Plan
+usage bar. Exhausted pools (`usedPercent >= 100`) are omitted from the face like other rings.
+Do not claim Admin-API hourly aggregation on this experimental row. Never log the cookie or
+raw response bodies.
 
 ## Cursor team Admin API
 

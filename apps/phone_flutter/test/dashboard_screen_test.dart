@@ -108,6 +108,65 @@ void main() {
     expect(find.text('Today'), findsOneWidget);
   });
 
+  testWidgets('shows Cursor Models and Other Models plan pools', (tester) async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final cursor =
+        source.primaryAccount!.toJson()
+          ..['accountId'] = 'cursor-local'
+          ..['provider'] = 'cursor'
+          ..['allowances'] = [
+            {
+              'id': 'cursor-plan-models',
+              'source': 'plan',
+              'label': 'Cursor Models',
+              'usedPercent': 47.0,
+              'used': null,
+              'limit': null,
+              'remaining': null,
+              'unlimited': false,
+              'windowMinutes': null,
+              'resetsAt': null,
+              'status': 'ok',
+            },
+            {
+              'id': 'cursor-plan-other',
+              'source': 'plan',
+              'label': 'Other Models',
+              'usedPercent': 100.0,
+              'used': null,
+              'limit': null,
+              'remaining': null,
+              'unlimited': false,
+              'windowMinutes': null,
+              'resetsAt': null,
+              'status': 'rateLimited',
+            },
+          ]
+          ..['buckets'] = <Object>[]
+          ..['modelBreakdown'] = <Object>[];
+    final dashboard = source.toJson()..['accounts'] = [cursor];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: wardPulseLightTheme,
+        home: Scaffold(
+          body: DashboardScreen(
+            snapshot: DashboardSnapshot.fromJson(dashboard),
+            displayPreferences: const ConsumptionDisplayPreferences(plan: true),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Cursor Models'), findsOneWidget);
+    expect(find.text('Other Models'), findsOneWidget);
+    expect(find.text('53% left'), findsOneWidget);
+    expect(find.text('0% left'), findsOneWidget);
+    expect(find.text('Rate limited'), findsOneWidget);
+  });
+
   testWidgets('hides platform spend when the display preference is off', (
     tester,
   ) async {
