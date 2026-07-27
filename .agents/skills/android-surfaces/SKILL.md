@@ -41,11 +41,12 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   a local cooldown. Review art: `preview-glance-legend-*.png`. Compose: `GlanceLegendPage`
   (+ watch→phone refresh message).
 - **Watch face / WFF** (and any face-like complication preview) follow
-  `docs/product/WATCH_RING_DESIGN.md` (**locked 2026-07-25**): **inner/center = tightest**
+  `docs/product/WATCH_RING_DESIGN.md` (**locked 2026-07-25**, melt/strip revision
+  **2026-07-27**): **inner/center = tightest**
   remaining (plan `%` primary; credit request-runway secondary from internal costs — never show
-  request counts); arc = remaining; large time hero; sunk family strips (equal width; first strip
-  nearest center; stroke tuned so 3 strips clear arcs); family colors. Future multi-profile /
-  hatch / three-ring cap notes there are planning-only until a later phase.
+  request counts); arc = remaining (clockwise melt from 12); large time hero; sunk family strips
+  (equal width; first strip nearest center; stroke tuned so 3 strips clear arcs); family colors.
+  Future multi-profile / hatch / three-ring cap notes there are planning-only until a later phase.
 - Claude plan windows (`5h` / weekly / Opus / Sonnet) collapse to one watch ring on the phone
   (`allowance.claude.plan`); Glance shows the active window label. Phone dashboard still lists all.
 - Prefer concentric percent layers from schema v4+ on the **face** (up to four selected metrics
@@ -71,12 +72,12 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   with `(1 - value/max) * 359.9` and fixed `endAngle` 359.9. Prefer simple
   Transform arithmetic over `clamp()`.
   `BoundingArc` clips ring-slot content to the arc band — sunk `%` / credits strips must use
-  separate `BoundingBox` SHORT_TEXT slots of **equal width**, stacked inside the clear aperture.
-  Center (first) strip TEXT = full label (`100% · 500`); lower strips TEXT = remaining digits
-  with Template `%%`. Avoid `length(TITLE)` Conditions — they are unreliable on WFF. Draw strips
-  after `DigitalClock` so the clock does not cover them.
-- Prefer live arcs for selected layers, optional `creditsGlance` on the center strip when present,
-  large time. Never LLM `TOK` on the face.
+  separate `BoundingBox` `RANGED_VALUE` slots of **equal width**, stacked inside the clear
+  aperture. Every strip TEXT = full label (`46%` or `100% · 500`); accents use
+  `[COMPLICATION.RANGED_VALUE_COLORS]`. Avoid `length(TITLE)` Conditions — they are unreliable
+  on WFF. Draw strips after `DigitalClock` so the clock does not cover them.
+- Prefer live arcs for selected layers, optional `creditsGlance` on the **matching provider**
+  strip when present, large time. Never LLM `TOK` on the face.
 - Support tap-to-open into the Wear OS app where possible.
 - Keep ambient mode readable (dim arcs, strips off).
 

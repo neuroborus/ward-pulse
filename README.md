@@ -21,8 +21,9 @@ This repository is intentionally organized as one product monorepo with separate
 
 ## Current Phase
 
-Phase 7 provider reporting and Phase 8 hardening are in progress. OpenAI Platform organization
-reporting is separate from Codex subscription usage; both are fetched directly by the phone.
+Phase 13 (configurable watch rings / WFF face) is in progress on device. Provider reporting
+for Codex, Claude, Cursor plan, and OpenAI Platform continues in parallel; Cursor plan uses
+in-app WebView sign-in (not OAuth).
 
 ## Useful Commands
 

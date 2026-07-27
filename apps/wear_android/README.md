@@ -14,7 +14,8 @@ versioned `WatchDashboardSummary` payload and persists only the latest successfu
 - Wear-specific navigation, rotary input, shape-aware layouts, and stale data states.
 - Wear Data Layer receiver for `/wardpulse/watch-summary`.
 - Wear → phone refresh request on `/wardpulse/refresh-request`.
-- Today, week, and provider-status complication data sources for the WardPulse watch face.
+- Ring + strip `RANGED_VALUE` complication data sources for the WardPulse watch face
+  (family ColorRamp accents; credits only on the matching provider strip).
 
 Provider credentials are never entered or stored on the watch.
 The app shows a neutral sync prompt until the first valid phone summary arrives; it never creates

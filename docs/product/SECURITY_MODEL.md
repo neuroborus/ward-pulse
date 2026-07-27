@@ -72,7 +72,7 @@ WardPulse is local-first. The MVP must not introduce a custom cloud path for pro
 ## Phone-to-Watch Sync
 
 - The version 7 Data Layer payload follows `schemas/watch_dashboard_summary.schema.json` and
-  contains only derived ring metrics, optional compact remaining-credits glance text
+  contains only derived ring metrics, optional compact remaining-credits glance
   (`creditsGlance`), budget, selected allowance, provider-status, alert, freshness, and
   phone-owned manual-refresh allowance fields (`manualRefreshAllowed` /
   `manualRefreshAvailableAt`, driven by the PollCadence hard floor). Ring entries and credits

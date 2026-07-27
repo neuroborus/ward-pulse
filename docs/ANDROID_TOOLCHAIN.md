@@ -369,11 +369,12 @@ API 36.1 image. Compile SDK and runtime system image versions are intentionally 
 
 ## Watch Face Format
 
-The Phase 6 watch face is a separate resource-only package in `apps/watchface_wff/`:
+The watch face is a separate resource-only package in `apps/watchface_wff/` (Phase 13
+concentric baseline — `docs/product/WATCH_RING_DESIGN.md`):
 
 | Setting | Value | Purpose |
 | --- | --- | --- |
-| Watch Face Format | version 2 | Concentric rings via WeightedStroke + RANGED_VALUE colors (Wear OS 5+) |
+| Watch Face Format | version 2 | Concentric remaining arcs + strip accents via WeightedStroke / RANGED_VALUE ColorRamp (Wear OS 5+) |
 | Application ID | `app.wardpulse.watchface` | Independent watch face package |
 | Minimum SDK | API 34 | Minimum runtime for WFF v2 |
 | Compile SDK | Android SDK 37.1 | Shared Android build baseline |

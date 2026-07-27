@@ -1604,10 +1604,12 @@ Deliverables:
 - no time-based rotation in the first iteration: simultaneous static layers are battery-safe;
 - aperture: large time as hero; upper inner rim reserved for future weather; lower chord uses
   short per-family strips (`%`, remaining credits, or `% · credits`) — see `WATCH_RING_DESIGN.md`;
-- optional remaining purchased credits on the center (first) strip when reported; credits-only
-  mode has no plan arcs; never LLM `TOK` counts on the face;
-- schema `creditsGlance` (v6) feeds the compact remaining-credits aggregate for strip TITLE /
-  credits-only — not LLM token counts;
+- optional remaining purchased credits on the **matching provider** strip when
+  `creditsGlance.provider` is set and display prefs show purchased usage (`% · credits`);
+  multi-provider aggregates (`provider` null) and credits-only faces (no plan rings) do not
+  glue credits onto an unrelated `%` strip; never LLM `TOK` on the face;
+- schema `creditsGlance` (v6) feeds that compact remaining-credits glance — not LLM token
+  counts;
 - watch summary schema version 7: ordered selected ring entries (stable id, short label,
   percent, status) plus optional `creditsGlance`, phone-owned `manualRefreshAllowed` /
   `manualRefreshAvailableAt`, without credentials, account ids, or raw provider payloads;
@@ -1618,13 +1620,15 @@ Deliverables:
 Acceptance:
 
 ```text
-WATCH_RING_DESIGN.md baseline locked 2026-07-25 (time hero, remaining arcs, sunk strips)
+WATCH_RING_DESIGN.md baseline locked 2026-07-25 (time hero, remaining arcs, sunk strips);
+  melt/strip-accent revision 2026-07-27 (clockwise-from-12 melt; ColorRamp strip accents)
 WEAR_GLANCE_DESIGN.md baseline locked 2026-07-26 (legend rows, OK/!OK refresh, Alerts pill)
 review SVGs/PNGs match those baselines (face: preview-3-plan-credits; Glance: preview-glance-legend-3)
 schema version 7 validates and sanitized fixtures stay current
 watch surfaces show only configured, available, non-exhausted rings
-arc length = remaining; inner/center layer is the tightest remaining among selected rings
-credits strip / face glance only when purchased credits remain and display prefs allow them
+arc length = remaining; melt clockwise from 12; inner/center = tightest remaining
+credits on matching-provider strip only (`% · credits`) when purchased credits remain and
+  display prefs allow them; credits-only when no plan rings
 App Glance credits are per provider with an explicit credits label (not a footer sum)
 Glance refresh: OK/!OK inside dual-arrow glyph; optional muted problem detail below plate
 cadence cooldown = gray OK + disabled (no detail); provider rate limit = gray !OK + Rate limited + disabled
@@ -1645,8 +1649,10 @@ Watch ring visual baseline locked (WATCH_RING_DESIGN.md + render-watch-ring-desi
 Wear Glance legend baseline locked 2026-07-26 (WEAR_GLANCE_DESIGN.md + glance-legend-* review art)
 Phone payload sorts tightest-remaining first (center/inner on face) and omits exhausted layers
 Wear Compose UsageRings: remaining arcs + sunk family strips (time stays on system/WFF)
-WFF v2 concentric remaining arcs (WeightedStroke + ColorRamp family colors) + sunk credits strip
-Center strip TEXT carries the full label (`100% · 500`) — WFF TITLE Conditions are unreliable
+WFF v2 concentric remaining arcs (WeightedStroke + ColorRamp) + sunk `%` / credits strips
+Strip TEXT carries the full label (`100% · 500`); accents via RANGED_VALUE ColorRamp
+Credits glue only onto the matching provider strip (`creditsGlance.provider`)
+Clockwise-from-12 remaining melt (Transform startAngle; review art regenerated 2026-07-27)
 Wear Glance Compose text legend landed (GlanceLegendPage; watch→phone refresh request)
 ```
 

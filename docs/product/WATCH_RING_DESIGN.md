@@ -1,8 +1,9 @@
 # Watch Ring Design
 
-**Baseline locked 2026-07-25** — accepted visual target for Wear OS and Watch Face Format until
-the next explicit design revision. Implementation and review art must follow this document;
-do not reintroduce side-by-side ring wireframes, large remaining-% heroes, or bordered strip cards.
+**Baseline locked 2026-07-25**; melt / strip-accent revision **2026-07-27** — accepted visual
+target for Wear OS and Watch Face Format until the next explicit design revision.
+Implementation and review art must follow this document; do not reintroduce side-by-side ring
+wireframes, large remaining-% heroes, or bordered strip cards.
 
 Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 13). Asset ownership: `docs/DESIGN_ASSETS.md`.
 
@@ -134,7 +135,7 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
 | Surface | Role |
 |---------|------|
 | Wear OS app Glance | **Not** this face language — locked text legend (`WEAR_GLANCE_DESIGN.md`, 2026-07-26) |
-| WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs plus sunk `SHORT_TEXT` strips (`%` / `% · credits`) in `watchface.xml`. Center (first) strip TEXT is the full label (WFF `length(TITLE)` Conditions are unreliable). Keep progress/track spans below 360° (scale onto 359.9°) — a closed circle collapses to a ROUND tip. Remaining melt is clockwise from 12: Transform `startAngle` to `(1 - value/max) * 359.9` with fixed `endAngle` 359.9. Strips need their own `BoundingBox` slots (`BoundingArc` clips content to the arc band). |
+| WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs plus sunk `RANGED_VALUE` strips (`%` / `% · credits`) in `watchface.xml`. Every strip TEXT is the full label (WFF `length(TITLE)` Conditions are unreliable). Strip accents use `[COMPLICATION.RANGED_VALUE_COLORS]` (family ColorRamp). Keep progress/track spans below 360° (scale onto 359.9°) — a closed circle collapses to a ROUND tip. Remaining melt is clockwise from 12: Transform `startAngle` to `(1 - value/max) * 359.9` with fixed `endAngle` 359.9. Strips need their own `BoundingBox` slots (`BoundingArc` clips content to the arc band). |
 | Phone Watchface tab | Slot selection + preview of next payload rings (not Settings) |
 
 ## Non-goals

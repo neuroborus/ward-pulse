@@ -45,9 +45,10 @@ separate from monetary budgets because their units and reset rules differ.
   (family accent + provider name). Plan and purchased values are never summed across
   providers into one card.
 - Wear / WFF strips may show remaining **purchased credits** via watch summary `creditsGlance`
-  (schema v6). That glance may sum same-unit purchased balances across providers for one
-  compact strip number; it is not a phone-dashboard aggregate. LLM token totals stay on
-  phone history charts — never as face `TOK` labels.
+  (schema v6). When `creditsGlance.provider` is set, the compact number glues onto that
+  provider’s `%` strip (`% · credits`). A multi-provider aggregate (`provider` null) is for
+  credits-only faces and must not glue onto a single unrelated `%` strip. LLM token totals
+  stay on phone history charts — never as face `TOK` labels.
 
 ## Capability-adaptive presentation
 

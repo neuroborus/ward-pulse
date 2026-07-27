@@ -28,6 +28,8 @@ docs/site/.vocs/
 .packages
 build/
 coverage/
+# Library package — consumers resolve deps; app lock lives under apps/phone_flutter/.
+bindings/dart/pubspec.lock
 
 # Android / Gradle
 .gradle/

@@ -78,8 +78,9 @@ Used on Wear / WFF rings and on phone charts / plan bars / provider section acce
 - Cursor: `#67E8D4`.
 - Local / platform budget: `#8AB4F8`.
 
-Review exports: `tools/render-watch-ring-designs.mjs` → `round-*-plan-credits.svg` (center/first
-strip secondary value = remaining purchased credits, never LLM `TOK`). Primary preview:
+Review exports: `tools/render-watch-ring-designs.mjs` → `round-*-plan-credits.svg`
+(matching-provider strip may append remaining purchased credits, never LLM `TOK`;
+remaining arcs melt clockwise from 12). Primary preview:
 `apps/wear_android/design/preview-3-plan-credits.png`.
 
 Wear **app** Glance legend (**baseline locked 2026-07-26**, not the face):

@@ -7,7 +7,9 @@ This directory is the documentation gate for the project. Root files should stay
 - [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) is the full product and implementation plan.
 - [ANDROID_TOOLCHAIN.md](ANDROID_TOOLCHAIN.md) records the verified Android/Flutter development baseline, SDK package names, AVDs, and setup commands.
 - [DESIGN_ASSETS.md](DESIGN_ASSETS.md) defines OpenPencil source ownership and runtime export workflow.
-- [product/WATCH_RING_DESIGN.md](product/WATCH_RING_DESIGN.md) — **baseline locked 2026-07-25**: Wear / WFF concentric remaining rings, sunk strips, provider colors.
+- [product/WATCH_RING_DESIGN.md](product/WATCH_RING_DESIGN.md) — **baseline locked 2026-07-25**
+  (melt/strip-accent revision **2026-07-27**): Wear / WFF concentric remaining rings, clockwise
+  melt from 12, sunk ColorRamp strips, provider colors.
 - [product/WEAR_GLANCE_DESIGN.md](product/WEAR_GLANCE_DESIGN.md) — **baseline locked 2026-07-26**: Wear app Glance text legend (OK/!OK refresh, cadence vs rate-limit, Alerts pill); not a face clone.
 - [DOCUMENTATION.md](DOCUMENTATION.md) defines documentation ownership, Vocs tooling, and contributor workflow.
 - [product/ANDROID_GOALS.md](product/ANDROID_GOALS.md) defines the MVP goal, surfaces, and non-goals.
