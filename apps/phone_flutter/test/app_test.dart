@@ -154,6 +154,40 @@ void main() {
     expect(find.text('Watch summary queued'), findsOneWidget);
   });
 
+  testWidgets('Settings shows systemic sections and transitional Watch copy', (
+    tester,
+  ) async {
+    final snapshot = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+
+    await tester.pumpWidget(
+      WardPulseApp(repository: ValueDashboardRepository(snapshot)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Display'), findsOneWidget);
+    expect(find.text('Refresh'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Watch display'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(
+      find.textContaining('Temporary until the Watchface tab'),
+      findsOneWidget,
+    );
+    await tester.scrollUntilVisible(
+      find.text('Diagnostics'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Diagnostics'), findsOneWidget);
+    expect(find.text('Sync'), findsWidgets);
+  });
+
   testWidgets('watch sync failure does not block the dashboard', (
     tester,
   ) async {

@@ -9,7 +9,9 @@ import 'consumption_display_preferences.dart';
 import 'refresh_interval_preferences.dart';
 import 'watch_ring_preferences.dart';
 
-/// Systemic phone settings: display surfaces, poll cadence, watch rings, diagnostics.
+/// Systemic phone settings: dashboard surfaces, poll cadence, diagnostics, and debug
+/// toggles. Watch ring slots stay here until the Watchface tab (Phase 14). Not
+/// connections or credentials.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
@@ -198,6 +200,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
+        const _SettingsSectionHeader(title: 'Display'),
         Card(
           child: Column(
             children: [
@@ -241,6 +244,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         const SizedBox(height: 16),
+        const _SettingsSectionHeader(title: 'Refresh'),
         Card(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -292,6 +296,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         const SizedBox(height: 16),
+        const _SettingsSectionHeader(title: 'Watch'),
         Card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -300,8 +305,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 leading: Icon(Icons.watch_outlined),
                 title: Text('Watch display'),
                 subtitle: Text(
-                  'Pick up to $watchRingSlotCount metrics for the watch at '
-                  'once · unavailable ones stay off the watch',
+                  'Temporary until the Watchface tab · pick up to '
+                  '$watchRingSlotCount metrics · unavailable ones stay off the watch',
                 ),
               ),
               for (final metric in watchRingCatalog(widget.snapshot)) ...[
@@ -318,6 +323,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: 16),
         if (widget.debugDataAvailable) ...[
+          const _SettingsSectionHeader(title: 'Debug'),
           Card(
             child: SwitchListTile(
               secondary: const Icon(Icons.science_outlined),
@@ -331,7 +337,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 16),
         ],
-        if (snapshot != null)
+        if (snapshot != null) ...[
+          const _SettingsSectionHeader(title: 'Diagnostics'),
           Card(
             child: Column(
               children: [
@@ -380,7 +387,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
+        ],
       ],
+    );
+  }
+}
+
+class _SettingsSectionHeader extends StatelessWidget {
+  const _SettingsSectionHeader({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(title, style: Theme.of(context).textTheme.titleMedium),
     );
   }
 }
