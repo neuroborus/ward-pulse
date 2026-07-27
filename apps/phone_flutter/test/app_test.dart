@@ -191,7 +191,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // App bar overall status plus the provider plaque on the dashboard.
-    expect(find.text('Stale'), findsWidgets);
+    expect(find.byTooltip('Stale'), findsWidgets);
+    expect(find.byIcon(Icons.schedule), findsWidgets);
     expect(
       find.textContaining('Showing previous data · Updated'),
       findsOneWidget,

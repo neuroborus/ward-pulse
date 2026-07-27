@@ -622,7 +622,7 @@ class BudgetState {
     return '${value.toStringAsFixed(places)}%';
   }
 
-  /// Why this budget card shows its status — shown on StatusPill tap/hover.
+  /// Why this budget card shows its status — StatusPill tooltip when set.
   String get statusExplanation {
     if (status != ProviderStatus.unknown) {
       return status.description;

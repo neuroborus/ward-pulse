@@ -108,7 +108,9 @@ void main() {
     expect(find.text('Today'), findsOneWidget);
   });
 
-  testWidgets('shows Cursor Models and Other Models plan pools', (tester) async {
+  testWidgets('shows Cursor Models and Other Models plan pools', (
+    tester,
+  ) async {
     final source = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
     );
@@ -164,7 +166,8 @@ void main() {
     expect(find.text('Other Models'), findsOneWidget);
     expect(find.text('53% left'), findsOneWidget);
     expect(find.text('0% left'), findsOneWidget);
-    expect(find.text('Rate limited'), findsOneWidget);
+    expect(find.byTooltip('Rate limited'), findsOneWidget);
+    expect(find.byIcon(Icons.speed), findsOneWidget);
   });
 
   testWidgets('hides platform spend when the display preference is off', (
@@ -354,34 +357,35 @@ void main() {
     final source = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
     );
-    final claude = source.primaryAccount!.toJson()
-      ..['accountId'] = 'claude-local'
-      ..['provider'] = 'claude'
-      ..['allowances'] = [
-        {
-          'id': 'claude-five-hour',
-          'source': 'plan',
-          'label': '5-hour session',
-          'usedPercent': 0,
-          'used': null,
-          'limit': null,
-          'remaining': null,
-          'unlimited': false,
-          'windowMinutes': 300,
-          'resetsAt': null,
-          'status': 'ok',
-        },
-      ]
-      ..['buckets'] = <Object>[]
-      ..['modelBreakdown'] = <Object>[];
-    final codex = source.primaryAccount!.toJson()
-      ..['accountId'] = 'codex-local'
-      ..['provider'] = 'codex'
-      ..['allowances'] = <Object>[]
-      ..['modelBreakdown'] = <Object>[];
+    final claude =
+        source.primaryAccount!.toJson()
+          ..['accountId'] = 'claude-local'
+          ..['provider'] = 'claude'
+          ..['allowances'] = [
+            {
+              'id': 'claude-five-hour',
+              'source': 'plan',
+              'label': '5-hour session',
+              'usedPercent': 0,
+              'used': null,
+              'limit': null,
+              'remaining': null,
+              'unlimited': false,
+              'windowMinutes': 300,
+              'resetsAt': null,
+              'status': 'ok',
+            },
+          ]
+          ..['buckets'] = <Object>[]
+          ..['modelBreakdown'] = <Object>[];
+    final codex =
+        source.primaryAccount!.toJson()
+          ..['accountId'] = 'codex-local'
+          ..['provider'] = 'codex'
+          ..['allowances'] = <Object>[]
+          ..['modelBreakdown'] = <Object>[];
     // Keep fixture buckets on Codex only.
-    final dashboard =
-        source.toJson()..['accounts'] = [claude, codex];
+    final dashboard = source.toJson()..['accounts'] = [claude, codex];
 
     await tester.pumpWidget(
       MaterialApp(
@@ -405,6 +409,65 @@ void main() {
     final historyTitle = tester.getTopLeft(find.text('Usage history'));
     expect(claudeHeader.dy, lessThan(codexHeader.dy));
     expect(codexHeader.dy, lessThan(historyTitle.dy));
+  });
+
+  testWidgets('keeps Cursor plan and platform under one provider plaque', (
+    tester,
+  ) async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final plan =
+        source.primaryAccount!.toJson()
+          ..['accountId'] = 'cursor-plan'
+          ..['provider'] = 'cursor'
+          ..['status'] = 'ok'
+          ..['allowances'] = [
+            {
+              'id': 'cursor-plan-models',
+              'source': 'plan',
+              'label': 'Cursor Models',
+              'usedPercent': 47,
+              'used': null,
+              'limit': null,
+              'remaining': null,
+              'unlimited': false,
+              'windowMinutes': null,
+              'resetsAt': null,
+              'status': 'ok',
+            },
+          ]
+          ..['buckets'] = <Object>[]
+          ..['modelBreakdown'] = <Object>[];
+    final platform =
+        source.primaryAccount!.toJson()
+          ..['accountId'] = 'cursor-platform'
+          ..['provider'] = 'cursor'
+          ..['status'] = 'warning'
+          ..['allowances'] = <Object>[]
+          ..['modelBreakdown'] = <Object>[];
+    final dashboard = source.toJson()..['accounts'] = [plan, platform];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: wardPulseLightTheme,
+        home: Scaffold(
+          body: DashboardScreen(
+            snapshot: DashboardSnapshot.fromJson(dashboard),
+            displayPreferences: const ConsumptionDisplayPreferences(plan: true),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Cursor'), findsOneWidget);
+    expect(find.text('Cursor Models'), findsOneWidget);
+    expect(find.text('Usage history'), findsOneWidget);
+    expect(find.byTooltip('Warning'), findsOneWidget);
+
+    final cursorHeader = tester.getTopLeft(find.text('Cursor'));
+    final historyTitle = tester.getTopLeft(find.text('Usage history'));
+    expect(cursorHeader.dy, lessThan(historyTitle.dy));
   });
 
   testWidgets('explains missing purchased usage when enabled', (tester) async {

@@ -329,24 +329,23 @@ class StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final message = tooltip ?? status.description;
+    // Short word (OK / Warning) by default; sync/budget callers may override.
+    final message = tooltip ?? status.label;
 
     return Tooltip(
       message: message,
       // Tap works on phone; hover still works on desktop/emulator with pointer.
       triggerMode: TooltipTriggerMode.tap,
       showDuration: const Duration(seconds: 6),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            _statusIcon(status),
-            color: providerStatusColor(colors, status),
-            size: 18,
-          ),
-          const SizedBox(width: 6),
-          Text(status.label),
-        ],
+      child: Padding(
+        // Keep chrome compact while giving the icon a usable tap target.
+        padding: const EdgeInsets.all(6),
+        child: Icon(
+          _statusIcon(status),
+          color: providerStatusColor(colors, status),
+          size: 18,
+          semanticLabel: message,
+        ),
       ),
     );
   }
@@ -513,42 +512,85 @@ class _BudgetCards extends StatelessWidget {
 
 class _ProviderDashboardSection {
   const _ProviderDashboardSection({
-    required this.account,
+    required this.provider,
+    required this.providerLabel,
+    required this.status,
     required this.allowances,
+    required this.buckets,
+    required this.modelBreakdown,
   });
 
-  final ProviderSnapshot account;
+  final String provider;
+  final String providerLabel;
+  final ProviderStatus status;
   final List<AllowanceState> allowances;
+  final List<UsageBucket> buckets;
+  final List<ModelUsage> modelBreakdown;
 
-  bool get showUsageHistory => account.buckets.isNotEmpty;
+  bool get showUsageHistory => buckets.isNotEmpty;
 
-  bool get showModelUsage => account.modelBreakdown.isNotEmpty;
+  bool get showModelUsage => modelBreakdown.isNotEmpty;
 }
 
-/// Per-account dashboard groups in snapshot order (not cross-provider sums).
+/// One plaque per provider family (plan + platform share a header).
 ///
-/// Each provider plaque owns its allowances, usage history, and model breakdown.
+/// Claude/Cursor use one `ProviderKind` for both connections; grouping by kind
+/// keeps allowances, history, and model breakdown under a single accent bar.
 List<_ProviderDashboardSection> _providerDashboardSections(
   List<ProviderSnapshot> accounts,
   ConsumptionDisplayPreferences displayPreferences,
 ) {
-  final sections = <_ProviderDashboardSection>[];
+  final grouped = <String, List<ProviderSnapshot>>{};
   for (final account in accounts) {
-    final allowances = account.allowances
+    grouped
+        .putIfAbsent(account.provider, () => <ProviderSnapshot>[])
+        .add(account);
+  }
+
+  final sections = <_ProviderDashboardSection>[];
+  for (final group in grouped.values) {
+    final allowances = group
+        .expand((account) => account.allowances)
         .where((allowance) => displayPreferences.allows(allowance.source))
         .toList(growable: false);
-    final section = _ProviderDashboardSection(
-      account: account,
-      allowances: allowances,
-    );
-    if (allowances.isEmpty &&
-        !section.showUsageHistory &&
-        !section.showModelUsage) {
+    final buckets = group
+        .expand((account) => account.buckets)
+        .toList(growable: false);
+    final modelBreakdown = group
+        .expand((account) => account.modelBreakdown)
+        .toList(growable: false);
+    if (allowances.isEmpty && buckets.isEmpty && modelBreakdown.isEmpty) {
       continue;
     }
-    sections.add(section);
+    sections.add(
+      _ProviderDashboardSection(
+        provider: group.first.provider,
+        providerLabel: group.first.providerLabel,
+        status: group
+            .map((account) => account.status)
+            .reduce(_worseProviderStatus),
+        allowances: allowances,
+        buckets: buckets,
+        modelBreakdown: modelBreakdown,
+      ),
+    );
   }
   return sections;
+}
+
+ProviderStatus _worseProviderStatus(ProviderStatus left, ProviderStatus right) {
+  return _providerStatusRank(right) > _providerStatusRank(left) ? right : left;
+}
+
+int _providerStatusRank(ProviderStatus status) {
+  return switch (status) {
+    ProviderStatus.error || ProviderStatus.authRequired => 5,
+    ProviderStatus.rateLimited => 4,
+    ProviderStatus.warning => 3,
+    ProviderStatus.stale => 2,
+    ProviderStatus.ok => 1,
+    ProviderStatus.unknown => 0,
+  };
 }
 
 class _ProviderDashboardSections extends StatelessWidget {
@@ -580,7 +622,7 @@ class _ProviderDashboardSectionView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final accent = providerFamilyColor(section.account.provider);
+    final accent = providerFamilyColor(section.provider);
     final cards = [
       for (final allowance in section.allowances)
         AllowanceSummaryCard(allowance: allowance, accent: accent),
@@ -601,12 +643,9 @@ class _ProviderDashboardSectionView extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                section.account.providerLabel,
-                style: textTheme.titleMedium,
-              ),
+              child: Text(section.providerLabel, style: textTheme.titleMedium),
             ),
-            StatusPill(status: section.account.status),
+            StatusPill(status: section.status),
           ],
         ),
         if (cards.isNotEmpty) ...[
@@ -638,16 +677,13 @@ class _ProviderDashboardSectionView extends StatelessWidget {
         ],
         if (section.showUsageHistory) ...[
           const SizedBox(height: 12),
-          UsageHistoryChart(buckets: section.account.buckets, accent: accent),
+          UsageHistoryChart(buckets: section.buckets, accent: accent),
         ],
         if (section.showModelUsage) ...[
           const SizedBox(height: 12),
           _SectionHeader(title: 'Model usage'),
           const SizedBox(height: 8),
-          _ModelUsagePanel(
-            models: section.account.modelBreakdown,
-            accent: accent,
-          ),
+          _ModelUsagePanel(models: section.modelBreakdown, accent: accent),
         ],
       ],
     );
