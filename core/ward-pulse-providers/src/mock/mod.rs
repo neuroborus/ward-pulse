@@ -1,5 +1,11 @@
+mod demo;
+
 use std::error::Error as StdError;
 use std::fmt;
+
+pub use demo::{
+    debug_multi_provider_dashboard, debug_multi_provider_dashboard_json, DebugDemoDashboardError,
+};
 
 use crate::{BucketCapabilities, ProviderCapabilities};
 use serde::Deserialize;

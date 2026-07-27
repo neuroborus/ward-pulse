@@ -15,6 +15,7 @@ abstract interface class WatchSyncService {
     ConsumptionDisplayPreferences displayPreferences,
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
+    bool mockDataMode = false,
   });
 
   /// Native → Dart: Wear Glance asked the phone to sync providers.
@@ -36,6 +37,7 @@ class MethodChannelWatchSyncService implements WatchSyncService {
     ConsumptionDisplayPreferences displayPreferences,
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
+    bool mockDataMode = false,
   }) {
     return _channel.invokeMethod<void>(
       'syncWatchSummary',
@@ -44,6 +46,7 @@ class MethodChannelWatchSyncService implements WatchSyncService {
         displayPreferences,
         ringPreferences,
         manualRefreshAnchorAt: manualRefreshAnchorAt,
+        mockDataMode: mockDataMode,
       ).encode(),
     );
   }
@@ -78,6 +81,7 @@ class WatchDashboardSummaryPayload {
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
     DateTime? clock,
+    bool mockDataMode = false,
   }) {
     final rings = orderWatchRingsForSurface(
       resolveWatchRings(snapshot, ringPreferences),
@@ -91,20 +95,16 @@ class WatchDashboardSummaryPayload {
       lastSyncAt: manualRefreshAnchorAt ?? snapshot.generatedAt,
       now: clock,
     );
+    final isLegacyMockProvider =
+        snapshot.accounts.isNotEmpty &&
+        snapshot.accounts.every((account) => account.provider == 'mock');
     return WatchDashboardSummaryPayload._({
       'schemaVersion': 7,
-      'dataMode':
-          snapshot.accounts.isNotEmpty &&
-                  snapshot.accounts.every(
-                    (account) => account.provider == 'mock',
-                  )
-              ? 'mock'
-              : 'live',
+      'dataMode': mockDataMode || isLegacyMockProvider ? 'mock' : 'live',
       'generatedAt': snapshot.generatedAt.toUtc().toIso8601String(),
       'overallStatus': snapshot.overallStatus.wireName,
       'manualRefreshAllowed': window.allowed,
-      'manualRefreshAvailableAt':
-          window.availableAt?.toUtc().toIso8601String(),
+      'manualRefreshAvailableAt': window.availableAt?.toUtc().toIso8601String(),
       'rings': [
         for (final ring in rings)
           {

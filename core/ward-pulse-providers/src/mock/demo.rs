@@ -1,0 +1,343 @@
+//! Debug multi-provider dashboard built from sanitized provider fixtures.
+//!
+//! Used by the phone Settings "Mock data" toggle so debug builds can exercise
+//! Codex / Claude / Cursor / OpenAI UI without live credentials. A seed reshuffles
+//! utilization so refresh cycles cover healthy, warning, and rate-limited cases.
+
+use std::error::Error as StdError;
+use std::fmt;
+
+use serde_json::json;
+use ward_pulse_core::budget::calculate_budget_state;
+use ward_pulse_core::build_dashboard_snapshot;
+use ward_pulse_core::model::{
+    AllowanceState, BudgetState, DashboardSnapshot, Money, ProviderSnapshot, ProviderStatus,
+};
+use ward_pulse_core::time::DateTimeUtc;
+
+use crate::allowance::{percent_status, worst_status};
+use crate::claude::{
+    anthropic_provider_snapshot_from_report_json, claude_provider_snapshot_from_report_json,
+};
+use crate::codex::codex_provider_snapshot_from_report_json;
+use crate::cursor::{
+    cursor_plan_snapshot_from_report_json, cursor_platform_snapshot_from_report_json,
+};
+use crate::openai::openai_provider_snapshot_from_report_json;
+
+const CODEX_FIXTURE: &str = include_str!("../../../../fixtures/providers/codex/report.json");
+const CLAUDE_OAUTH_FIXTURE: &str =
+    include_str!("../../../../fixtures/providers/claude/oauth_usage.json");
+const CLAUDE_USAGE_FIXTURE: &str =
+    include_str!("../../../../fixtures/providers/claude/usage_report.json");
+const CLAUDE_COST_FIXTURE: &str =
+    include_str!("../../../../fixtures/providers/claude/cost_report.json");
+const CURSOR_PLAN_FIXTURE: &str =
+    include_str!("../../../../fixtures/providers/cursor/usage_summary.json");
+const CURSOR_DAILY_FIXTURE: &str =
+    include_str!("../../../../fixtures/providers/cursor/daily_usage.json");
+const CURSOR_SPEND_FIXTURE: &str = include_str!("../../../../fixtures/providers/cursor/spend.json");
+const OPENAI_USAGE_FIXTURE: &str =
+    include_str!("../../../../fixtures/providers/openai/usage_completions.json");
+const OPENAI_COST_FIXTURE: &str = include_str!("../../../../fixtures/providers/openai/costs.json");
+
+#[derive(Debug)]
+pub enum DebugDemoDashboardError {
+    Build(String),
+    Serialize(serde_json::Error),
+}
+
+impl fmt::Display for DebugDemoDashboardError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Build(message) => {
+                write!(formatter, "failed to build debug demo dashboard: {message}")
+            }
+            Self::Serialize(error) => {
+                write!(
+                    formatter,
+                    "failed to serialize debug demo dashboard: {error}"
+                )
+            }
+        }
+    }
+}
+
+impl StdError for DebugDemoDashboardError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match self {
+            Self::Serialize(error) => Some(error),
+            Self::Build(_) => None,
+        }
+    }
+}
+
+/// Builds a full multi-provider dashboard JSON document for debug Mock data.
+///
+/// Same seed → same snapshot. A new seed (for example each phone refresh) yields
+/// different utilization / status combinations while keeping account shapes stable.
+pub fn debug_multi_provider_dashboard_json(seed: u64) -> Result<String, DebugDemoDashboardError> {
+    let snapshot = debug_multi_provider_dashboard(seed)?;
+    serde_json::to_string(&snapshot).map_err(DebugDemoDashboardError::Serialize)
+}
+
+pub fn debug_multi_provider_dashboard(
+    seed: u64,
+) -> Result<DashboardSnapshot, DebugDemoDashboardError> {
+    let mut rng = SeedRng(seed);
+    let cursor_plan = cursor_plan_account(&mut rng)?;
+    let accounts = vec![
+        scramble_account(&mut rng, openai_account()?, ScrambleMode::Budgets),
+        scramble_account(&mut rng, codex_account()?, ScrambleMode::Allowances),
+        scramble_account(&mut rng, claude_plan_account()?, ScrambleMode::Allowances),
+        scramble_account(
+            &mut rng,
+            anthropic_platform_account()?,
+            ScrambleMode::Budgets,
+        ),
+        scramble_account(&mut rng, cursor_plan, ScrambleMode::Allowances),
+        scramble_account(&mut rng, cursor_platform_account()?, ScrambleMode::Budgets),
+    ];
+
+    // Newest fixture stamp keeps relative ordering; seed is what varies content.
+    let generated_at = accounts
+        .iter()
+        .filter_map(|account| account.last_successful_sync_at.as_ref())
+        .max_by(|left, right| left.as_str().cmp(right.as_str()))
+        .cloned()
+        .unwrap_or_else(|| DateTimeUtc::from("2026-07-19T12:00:00Z"));
+
+    Ok(build_dashboard_snapshot(generated_at, accounts))
+}
+
+#[derive(Clone, Copy)]
+enum ScrambleMode {
+    Allowances,
+    Budgets,
+}
+
+fn scramble_account(
+    rng: &mut SeedRng,
+    mut account: ProviderSnapshot,
+    mode: ScrambleMode,
+) -> ProviderSnapshot {
+    match mode {
+        ScrambleMode::Allowances => {
+            for allowance in &mut account.allowances {
+                scramble_allowance(rng, allowance);
+            }
+            account.status = worst_status(&account.allowances);
+        }
+        ScrambleMode::Budgets => {
+            scramble_budget(rng, &mut account.today);
+            scramble_budget(rng, &mut account.week);
+            scramble_budget(rng, &mut account.month);
+            account.status = worst_budget_status(&account);
+        }
+    }
+
+    // Occasional stale chrome so Wear / phone refresh UI can be exercised.
+    if rng.next_u32() % 11 == 0 {
+        account.status = ProviderStatus::Stale;
+    }
+
+    account
+}
+
+fn scramble_allowance(rng: &mut SeedRng, allowance: &mut AllowanceState) {
+    let used_percent = interesting_percent(rng);
+    allowance.used_percent = Some(used_percent);
+    allowance.status = percent_status(Some(used_percent));
+    if let (Some(limit), Some(used)) = (allowance.limit.clone(), allowance.used.as_mut()) {
+        // Keep quantity units; approximate used from percent when a limit exists.
+        if let Ok(limit_value) = limit.value.parse::<f64>() {
+            used.value = format!("{:.2}", limit_value * (used_percent / 100.0).min(1.0));
+        }
+    }
+    if let (Some(limit), Some(remaining)) = (allowance.limit.clone(), allowance.remaining.as_mut())
+    {
+        if let Ok(limit_value) = limit.value.parse::<f64>() {
+            let left = (limit_value * (1.0 - (used_percent / 100.0).min(1.0))).max(0.0);
+            remaining.value = format!("{left:.2}");
+        }
+    }
+}
+
+fn scramble_budget(rng: &mut SeedRng, budget: &mut BudgetState) {
+    let Some(limit) = budget.limit.clone() else {
+        return;
+    };
+    if limit.minor_units <= 0 {
+        return;
+    }
+    let used_percent = interesting_percent(rng);
+    let spent_units = ((limit.minor_units as f64) * (used_percent / 100.0).min(1.2)).round() as i64;
+    let spent = Money::minor_units(spent_units.max(0), limit.currency.clone());
+    let projected = budget.projected_total.clone().map(|projected| {
+        let bump = ((projected.minor_units as f64) * (0.85 + rng.next_f64() * 0.3)).round() as i64;
+        Money::minor_units(bump.max(spent_units), projected.currency)
+    });
+    *budget = calculate_budget_state(budget.period, Some(spent), Some(limit), projected);
+}
+
+fn worst_budget_status(account: &ProviderSnapshot) -> ProviderStatus {
+    [&account.today, &account.week, &account.month]
+        .into_iter()
+        .map(|budget| budget.status)
+        .fold(ProviderStatus::Ok, |left, right| {
+            if status_rank(right) > status_rank(left) {
+                right
+            } else {
+                left
+            }
+        })
+}
+
+fn status_rank(status: ProviderStatus) -> u8 {
+    match status {
+        ProviderStatus::Error | ProviderStatus::AuthRequired => 5,
+        ProviderStatus::RateLimited => 4,
+        ProviderStatus::Warning => 3,
+        ProviderStatus::Stale => 2,
+        ProviderStatus::Ok => 1,
+        ProviderStatus::Unknown => 0,
+    }
+}
+
+fn interesting_percent(rng: &mut SeedRng) -> f64 {
+    match rng.next_u32() % 10 {
+        0 => 0.0,
+        1 => 100.0,
+        2 => (92.0 + rng.next_f64() * 8.0).min(100.0),
+        3 => 80.0 + rng.next_f64() * 15.0,
+        4 => 45.0 + rng.next_f64() * 20.0,
+        _ => (rng.next_f64() * 100.0 * 10.0).round() / 10.0,
+    }
+}
+
+fn openai_account() -> Result<ProviderSnapshot, DebugDemoDashboardError> {
+    let report = json!({
+        "accountId": "openai-demo",
+        "generatedAt": "2026-07-19T12:00:00Z",
+        "todayStart": 1_784_419_200_i64,
+        "weekStart": 1_783_900_800_i64,
+        "monthStart": 1_782_864_000_i64,
+        "usagePages": [OPENAI_USAGE_FIXTURE],
+        "costPages": [OPENAI_COST_FIXTURE]
+    })
+    .to_string();
+    openai_provider_snapshot_from_report_json(&report)
+        .map(|report| report.provider_snapshot)
+        .map_err(|error| DebugDemoDashboardError::Build(error.to_string()))
+}
+
+fn codex_account() -> Result<ProviderSnapshot, DebugDemoDashboardError> {
+    codex_provider_snapshot_from_report_json(CODEX_FIXTURE)
+        .map(|report| report.provider_snapshot)
+        .map_err(|error| DebugDemoDashboardError::Build(error.to_string()))
+}
+
+fn claude_plan_account() -> Result<ProviderSnapshot, DebugDemoDashboardError> {
+    claude_provider_snapshot_from_report_json(CLAUDE_OAUTH_FIXTURE)
+        .map(|report| report.provider_snapshot)
+        .map_err(|error| DebugDemoDashboardError::Build(error.to_string()))
+}
+
+fn anthropic_platform_account() -> Result<ProviderSnapshot, DebugDemoDashboardError> {
+    let report = json!({
+        "accountId": "anthropic-demo",
+        "generatedAt": "2026-07-19T12:00:00Z",
+        "todayStart": "2026-07-19T00:00:00Z",
+        "weekStart": "2026-07-13T00:00:00Z",
+        "monthStart": "2026-07-01T00:00:00Z",
+        "usagePages": [CLAUDE_USAGE_FIXTURE],
+        "costPages": [CLAUDE_COST_FIXTURE]
+    })
+    .to_string();
+    anthropic_provider_snapshot_from_report_json(&report)
+        .map(|report| report.provider_snapshot)
+        .map_err(|error| DebugDemoDashboardError::Build(error.to_string()))
+}
+
+fn cursor_plan_account(rng: &mut SeedRng) -> Result<ProviderSnapshot, DebugDemoDashboardError> {
+    let mut value: serde_json::Value = serde_json::from_str(CURSOR_PLAN_FIXTURE)
+        .map_err(|error| DebugDemoDashboardError::Build(error.to_string()))?;
+    // Occasionally drop pool meters so the older single "Plan usage" bar appears;
+    // percent values are always applied later by scramble_allowance.
+    if rng.next_u32() % 5 == 0 {
+        if let Some(plan) = value
+            .pointer_mut("/individualUsage/plan")
+            .and_then(|node| node.as_object_mut())
+        {
+            plan.remove("autoPercentUsed");
+            plan.remove("apiPercentUsed");
+            plan.insert("totalPercentUsed".into(), json!(50.0));
+        }
+    }
+    cursor_plan_snapshot_from_report_json(&value.to_string())
+        .map(|report| report.provider_snapshot)
+        .map_err(|error| DebugDemoDashboardError::Build(error.to_string()))
+}
+
+fn cursor_platform_account() -> Result<ProviderSnapshot, DebugDemoDashboardError> {
+    let report = json!({
+        "accountId": "cursor-team-demo",
+        "generatedAt": "2026-07-19T12:00:00Z",
+        "dailyUsagePages": [CURSOR_DAILY_FIXTURE],
+        "spendPages": [CURSOR_SPEND_FIXTURE]
+    })
+    .to_string();
+    cursor_platform_snapshot_from_report_json(&report)
+        .map(|report| report.provider_snapshot)
+        .map_err(|error| DebugDemoDashboardError::Build(error.to_string()))
+}
+
+/// Tiny deterministic PRNG — no extra crate dependency.
+struct SeedRng(u64);
+
+impl SeedRng {
+    fn next_u32(&mut self) -> u32 {
+        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1);
+        (self.0 >> 33) as u32
+    }
+
+    fn next_f64(&mut self) -> f64 {
+        f64::from(self.next_u32()) / f64::from(u32::MAX)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ward_pulse_core::model::ProviderKind;
+
+    #[test]
+    fn builds_all_live_provider_kinds() {
+        let snapshot = debug_multi_provider_dashboard(42).expect("demo dashboard");
+        let kinds: Vec<_> = snapshot
+            .accounts
+            .iter()
+            .map(|account| account.provider)
+            .collect();
+        assert!(kinds.contains(&ProviderKind::OpenAi));
+        assert!(kinds.contains(&ProviderKind::Codex));
+        assert!(kinds.contains(&ProviderKind::Claude));
+        assert!(kinds.contains(&ProviderKind::Cursor));
+        assert!(!kinds.contains(&ProviderKind::Mock));
+        assert!(snapshot.accounts.len() >= 5);
+    }
+
+    #[test]
+    fn same_seed_is_stable() {
+        let left = debug_multi_provider_dashboard_json(7).expect("left");
+        let right = debug_multi_provider_dashboard_json(7).expect("right");
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn different_seeds_diverge() {
+        let left = debug_multi_provider_dashboard_json(1).expect("left");
+        let right = debug_multi_provider_dashboard_json(2).expect("right");
+        assert_ne!(left, right);
+    }
+}

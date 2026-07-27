@@ -5,6 +5,8 @@ import 'package:ffi/ffi.dart';
 
 typedef _NativeDashboardSnapshotJson = Pointer<Utf8> Function();
 typedef _DartDashboardSnapshotJson = Pointer<Utf8> Function();
+typedef _NativeDebugDashboardSnapshotJson = Pointer<Utf8> Function(Uint64);
+typedef _DartDebugDashboardSnapshotJson = Pointer<Utf8> Function(int);
 typedef _NativeJsonTransform = Pointer<Utf8> Function(Pointer<Utf8>);
 typedef _DartJsonTransform = Pointer<Utf8> Function(Pointer<Utf8>);
 typedef _NativeStringFree = Void Function(Pointer<Utf8>);
@@ -30,6 +32,11 @@ final class _WardPulseBindings {
             _NativeDashboardSnapshotJson,
             _DartDashboardSnapshotJson
           >('ward_pulse_dashboard_snapshot_json'),
+      _debugDashboardSnapshotJson = library
+          .lookupFunction<
+            _NativeDebugDashboardSnapshotJson,
+            _DartDebugDashboardSnapshotJson
+          >('ward_pulse_debug_dashboard_snapshot_json'),
       _openAiDashboardSnapshotResultJson = library
           .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
             'ward_pulse_openai_dashboard_snapshot_result_json',
@@ -67,6 +74,7 @@ final class _WardPulseBindings {
   }
 
   final _DartDashboardSnapshotJson _dashboardSnapshotJson;
+  final _DartDebugDashboardSnapshotJson _debugDashboardSnapshotJson;
   final _DartJsonTransform _openAiDashboardSnapshotResultJson;
   final _DartJsonTransform _codexDashboardSnapshotResultJson;
   final _DartJsonTransform _anthropicDashboardSnapshotResultJson;
@@ -80,6 +88,21 @@ final class _WardPulseBindings {
     final value = _dashboardSnapshotJson();
     if (value == nullptr) {
       throw const WardPulseBindingsException();
+    }
+
+    try {
+      return value.toDartString();
+    } finally {
+      _stringFree(value);
+    }
+  }
+
+  String loadDebugDashboardSnapshotJson(int seed) {
+    final value = _debugDashboardSnapshotJson(seed);
+    if (value == nullptr) {
+      throw const WardPulseBindingsException(
+        'The Rust core did not return a debug dashboard snapshot.',
+      );
     }
 
     try {
@@ -166,6 +189,10 @@ final _bindings = _WardPulseBindings.open();
 
 String loadDashboardSnapshotJson() {
   return _bindings.loadDashboardSnapshotJson();
+}
+
+String loadDebugDashboardSnapshotJson(int seed) {
+  return _bindings.loadDebugDashboardSnapshotJson(seed);
 }
 
 String normalizeOpenAiReportJson(String reportJson) {

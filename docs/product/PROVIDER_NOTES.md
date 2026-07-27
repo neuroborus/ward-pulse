@@ -60,7 +60,10 @@ per-provider capability tables below are the source of truth for what each conne
 - `Unknown` is reserved for transient provider state: a connection that has not synced yet or whose
   last sync failed. It stays on the status indicator rather than on values.
 - With no connections configured, the dashboard shows a single "Connect a provider" call to action.
-- Mock data keeps the full dashboard so the layout stays reviewable without live credentials.
+- Debug **Mock data** loads a seeded multi-provider demo (OpenAI, Codex, Claude plan + platform,
+  Cursor plan + platform) so the full dashboard stays reviewable without live credentials.
+  Utilization reshuffles on toggle/refresh (not on automatic sync ticks); the Phase 1 single
+  `provider: mock` golden remains for CLI/FFI regression only.
 
 ## Polling cadence
 

@@ -79,7 +79,8 @@ WardPulse is local-first. The MVP must not introduce a custom cloud path for pro
   glance carry labels and counts —
   never credentials, account identifiers, raw provider payloads, or LLM token totals.
 - Mock payloads are produced only by debug builds after the user explicitly enables mock data.
-- Release Wear builds reject mock payloads.
+  Debug Mock data is a seeded multi-provider demo (OpenAI, Codex, Claude, Cursor), not the
+  legacy single `provider: mock` golden fixture. Release Wear builds reject mock payloads.
 - Account identifiers, credentials, authorization headers, prompts, and raw provider
   payloads are excluded from the watch contract.
 - Google Play services restricts Data Layer data to paired apps with matching application

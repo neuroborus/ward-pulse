@@ -107,17 +107,17 @@ void main() {
     final repository = _CountingDashboardRepository(() {
       loads += 1;
       return DashboardSnapshot.empty(
-        generatedAt: DateTime.utc(2026, 7, 26, 12).subtract(
-          Duration(minutes: loads == 1 ? 10 : 0),
-        ),
+        generatedAt: DateTime.utc(
+          2026,
+          7,
+          26,
+          12,
+        ).subtract(Duration(minutes: loads == 1 ? 10 : 0)),
       );
     });
 
     await tester.pumpWidget(
-      WardPulseApp(
-        repository: repository,
-        watchSyncService: watchSyncService,
-      ),
+      WardPulseApp(repository: repository, watchSyncService: watchSyncService),
     );
     await tester.pumpAndSettle();
     expect(loads, 1);
@@ -444,7 +444,10 @@ void main() {
 
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
-    expect(find.widgetWithText(SwitchListTile, 'Platform spend'), findsOneWidget);
+    expect(
+      find.widgetWithText(SwitchListTile, 'Platform spend'),
+      findsOneWidget,
+    );
     await tester.tap(find.widgetWithText(SwitchListTile, 'Purchased usage'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Dashboard'));
@@ -588,12 +591,23 @@ void main() {
   });
 
   testWidgets('enables mock data only from the debug setting', (tester) async {
-    final mock = DashboardSnapshot.fromJsonString(
+    final liveFixture = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
     );
-    final liveJson = mock.toJson();
+    final liveJson = liveFixture.toJson();
     (liveJson['accounts'] as List).first['provider'] = 'openai';
     final live = DashboardSnapshot.fromJson(liveJson);
+    final mockJson = liveFixture.toJson();
+    final accounts = mockJson['accounts'] as List<dynamic>;
+    accounts.first
+      ..['provider'] = 'codex'
+      ..['accountId'] = 'codex-demo';
+    accounts.add({
+      ...Map<String, dynamic>.from(accounts.first as Map),
+      'provider': 'cursor',
+      'accountId': 'cursor-demo',
+    });
+    final mock = DashboardSnapshot.fromJson(mockJson);
     final preferences = _MemoryDebugDataPreferenceStore();
 
     await tester.pumpWidget(
@@ -626,7 +640,8 @@ void main() {
     expect(preferences.value, isTrue);
     await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
-    expect(find.text('Mock'), findsOneWidget);
+    expect(find.text('Codex'), findsWidgets);
+    expect(find.text('Cursor'), findsWidgets);
     expect(find.text('OpenAI'), findsNothing);
   });
 
@@ -660,6 +675,7 @@ class _FakeWatchSyncService implements WatchSyncService {
     ConsumptionDisplayPreferences displayPreferences,
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
+    bool mockDataMode = false,
   }) async {
     syncedSnapshots.add(snapshot);
   }
@@ -684,6 +700,7 @@ class _FailingWatchSyncService implements WatchSyncService {
     ConsumptionDisplayPreferences displayPreferences,
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
+    bool mockDataMode = false,
   }) {
     return Future.error(StateError('Watch unavailable'));
   }

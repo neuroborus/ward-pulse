@@ -346,6 +346,7 @@ class _DashboardHostState extends State<DashboardHost> {
       _displayPreferences,
       _ringPreferences,
       manualRefreshAnchorAt: _manualRefreshAnchorAt(snapshot),
+      mockDataMode: _mockDataEnabled,
     );
   }
 
@@ -358,6 +359,11 @@ class _DashboardHostState extends State<DashboardHost> {
   }
 
   void _reload() {
+    // Mock demo is cached across auto-sync; refresh should draw a new seed.
+    // Live repos must not clear connection recovery caches on every refresh.
+    if (_mockDataEnabled) {
+      widget.repository.invalidate();
+    }
     setState(() {
       _snapshot = _loadSnapshot();
     });

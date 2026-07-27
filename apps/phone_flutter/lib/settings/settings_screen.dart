@@ -435,9 +435,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!mounted) {
         return;
       }
-      final normalized = token == null
-          ? null
-          : normalizeCursorSessionToken(token);
+      final normalized =
+          token == null ? null : normalizeCursorSessionToken(token);
       if (normalized == null) {
         return;
       }
@@ -910,7 +909,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: SwitchListTile(
               secondary: const Icon(Icons.science_outlined),
               title: const Text('Mock data'),
-              subtitle: const Text('Debug builds only'),
+              subtitle: const Text(
+                'Debug only · full multi-provider demo; refresh draws a new scenario',
+              ),
               value: widget.mockDataEnabled,
               onChanged: _setMockDataEnabled,
             ),
@@ -1630,8 +1631,9 @@ class _ConnectedCursorPlanDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed:
-              () =>
-                  Navigator.of(context).pop(_CursorPlanAccountAction.disconnect),
+              () => Navigator.of(
+                context,
+              ).pop(_CursorPlanAccountAction.disconnect),
           child: const Text('Disconnect'),
         ),
         TextButton(

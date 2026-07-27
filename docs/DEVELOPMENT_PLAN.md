@@ -761,7 +761,11 @@ compact Rust `WatchSummary` view model. Monetary values use integer minor units 
 currency codes rather than presentation strings. The watch payload excludes account IDs,
 credentials, prompts, and raw provider data. Version 3 adds an explicit live/mock data mode and
 only the plan/purchased allowances selected by the phone display preference. Mock data is
-available only in debug builds and must be enabled explicitly on the phone. Phase 13 plans
+available only in debug builds and must be enabled explicitly on the phone. The debug toggle
+loads a seeded multi-provider demo dashboard (OpenAI / Codex / Claude / Cursor fixtures) that
+reshuffles utilization when Mock data is toggled or the phone refreshes (automatic sync keeps the
+current scenario); the Phase 1 single `mock` provider golden remains for
+CLI and FFI regression only. Phase 13 plans
 schema version 4, which replaces the preference-filtered allowance list with explicitly
 selected ring entries.
 

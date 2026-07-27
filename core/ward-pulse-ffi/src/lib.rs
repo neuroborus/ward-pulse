@@ -16,7 +16,8 @@ use ward_pulse_providers::cursor::{
     CursorPlanReportError, CursorPlatformReportError,
 };
 use ward_pulse_providers::mock::{
-    mock_provider_snapshot_from_usage_fixture, MockUsageFixtureError,
+    debug_multi_provider_dashboard_json, mock_provider_snapshot_from_usage_fixture,
+    DebugDemoDashboardError, MockUsageFixtureError,
 };
 use ward_pulse_providers::openai::{openai_provider_snapshot_from_report_json, OpenAiReportError};
 
@@ -30,6 +31,7 @@ enum DashboardSnapshotJsonError {
     Codex(CodexReportError),
     CursorPlan(CursorPlanReportError),
     CursorPlatform(CursorPlatformReportError),
+    DebugDemo(DebugDemoDashboardError),
     Fixture(MockUsageFixtureError),
     OpenAi(OpenAiReportError),
     EmptySnapshots,
@@ -56,6 +58,7 @@ impl fmt::Display for DashboardSnapshotJsonError {
                 formatter,
                 "failed to normalize Cursor platform report: {error}"
             ),
+            Self::DebugDemo(error) => write!(formatter, "{error}"),
             Self::Fixture(error) => {
                 write!(formatter, "failed to build dashboard snapshot: {error}")
             }
@@ -84,6 +87,7 @@ impl StdError for DashboardSnapshotJsonError {
             Self::Codex(error) => Some(error),
             Self::CursorPlan(error) => Some(error),
             Self::CursorPlatform(error) => Some(error),
+            Self::DebugDemo(error) => Some(error),
             Self::Fixture(error) => Some(error),
             Self::OpenAi(error) => Some(error),
             Self::EmptySnapshots => None,
@@ -113,6 +117,10 @@ fn dashboard_snapshot_json() -> Result<String, DashboardSnapshotJsonError> {
         .map_err(DashboardSnapshotJsonError::Fixture)?;
 
     dashboard_json(fixture.generated_at, vec![fixture.provider_snapshot])
+}
+
+fn debug_dashboard_snapshot_json(seed: u64) -> Result<String, DashboardSnapshotJsonError> {
+    debug_multi_provider_dashboard_json(seed).map_err(DashboardSnapshotJsonError::DebugDemo)
 }
 
 fn openai_dashboard_snapshot_json(report_json: &str) -> Result<String, DashboardSnapshotJsonError> {
@@ -193,6 +201,19 @@ fn snapshot_result_json(result: Result<String, DashboardSnapshotJsonError>) -> O
 pub extern "C" fn ward_pulse_dashboard_snapshot_json() -> *mut c_char {
     match std::panic::catch_unwind(|| {
         dashboard_snapshot_json()
+            .ok()
+            .and_then(|snapshot| CString::new(snapshot).ok())
+    }) {
+        Ok(Some(snapshot)) => snapshot.into_raw(),
+        Ok(None) | Err(_) => ptr::null_mut(),
+    }
+}
+
+/// Builds a seeded multi-provider debug dashboard for the phone Mock data toggle.
+#[no_mangle]
+pub extern "C" fn ward_pulse_debug_dashboard_snapshot_json(seed: u64) -> *mut c_char {
+    match std::panic::catch_unwind(|| {
+        debug_dashboard_snapshot_json(seed)
             .ok()
             .and_then(|snapshot| CString::new(snapshot).ok())
     }) {
@@ -346,6 +367,24 @@ mod tests {
         .expect("parse golden dashboard snapshot");
 
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn debug_dashboard_includes_all_providers() {
+        let json = debug_dashboard_snapshot_json(99).expect("debug dashboard");
+        let snapshot: serde_json::Value =
+            serde_json::from_str(&json).expect("parse debug dashboard");
+        let providers: Vec<&str> = snapshot["accounts"]
+            .as_array()
+            .expect("accounts")
+            .iter()
+            .filter_map(|account| account["provider"].as_str())
+            .collect();
+        assert!(providers.contains(&"openai"));
+        assert!(providers.contains(&"codex"));
+        assert!(providers.contains(&"claude"));
+        assert!(providers.contains(&"cursor"));
+        assert!(!providers.contains(&"mock"));
     }
 
     #[test]

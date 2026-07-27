@@ -123,6 +123,33 @@ void main() {
     );
   });
 
+  test(
+    'marks multi-provider debug dashboards as mock dataMode when forced',
+    () {
+      final json =
+          jsonDecode(
+                File(
+                  '../../fixtures/snapshots/dashboard_today.json',
+                ).readAsStringSync(),
+              )
+              as Map<String, dynamic>;
+      (json['accounts'] as List).first['provider'] = 'cursor';
+
+      final payload =
+          jsonDecode(
+                WatchDashboardSummaryPayload.fromSnapshot(
+                  DashboardSnapshot.fromJson(json),
+                  const ConsumptionDisplayPreferences(),
+                  const WatchRingPreferences(),
+                  mockDataMode: true,
+                ).encode(),
+              )
+              as Map<String, dynamic>;
+
+      expect(payload['dataMode'], 'mock');
+    },
+  );
+
   test('sends unlimited purchased usage explicitly', () {
     final json =
         jsonDecode(
