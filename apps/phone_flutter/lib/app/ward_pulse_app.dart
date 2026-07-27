@@ -19,6 +19,7 @@ import '../sync/headless_provider_sync.dart';
 import '../sync/manual_refresh_window.dart';
 import '../sync/provider_sync_scheduler.dart';
 import '../sync/watch_sync_service.dart';
+import '../watchface/watchface_screen.dart';
 import 'ward_pulse_theme.dart';
 
 class WardPulseApp extends StatelessWidget {
@@ -112,8 +113,9 @@ class DashboardHost extends StatefulWidget {
 }
 
 class _DashboardHostState extends State<DashboardHost> {
-  static const _providersIndex = 1;
-  static const _settingsIndex = 2;
+  static const _watchfaceIndex = 1;
+  static const _providersIndex = 2;
+  static const _settingsIndex = 3;
 
   late Future<DashboardSnapshot> _snapshot = _loadSnapshot();
   DashboardSnapshot? _currentSnapshot;
@@ -425,6 +427,12 @@ class _DashboardHostState extends State<DashboardHost> {
           ),
           body: SafeArea(
             child: switch (state.connectionState) {
+              _ when _selectedIndex == _watchfaceIndex => WatchfaceScreen(
+                key: const ValueKey('watchface'),
+                snapshot: snapshot,
+                ringPreferences: _ringPreferences,
+                onRingPreferencesChanged: _updateRingPreferences,
+              ),
               _ when _selectedIndex == _providersIndex => ProvidersScreen(
                 key: const ValueKey('providers'),
                 credentialStore: widget.credentialStore,
@@ -442,7 +450,6 @@ class _DashboardHostState extends State<DashboardHost> {
                 refreshInterval: _refreshInterval,
                 onRefreshIntervalChanged: _updateRefreshInterval,
                 ringPreferences: _ringPreferences,
-                onRingPreferencesChanged: _updateRingPreferences,
                 alertThresholds: _alertThresholds,
                 onAlertThresholdsChanged: _updateAlertThresholds,
                 onSyncWatch: _onSettingsSyncWatch,
@@ -479,6 +486,11 @@ class _DashboardHostState extends State<DashboardHost> {
                 icon: Icon(Icons.dashboard_outlined),
                 selectedIcon: Icon(Icons.dashboard),
                 label: 'Dashboard',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.watch_outlined),
+                selectedIcon: Icon(Icons.watch),
+                label: 'Watchface',
               ),
               NavigationDestination(
                 icon: Icon(Icons.hub_outlined),

@@ -182,8 +182,8 @@ void main() {
 
       expect(collapsed.id, claudePlanRingId);
       expect(collapsed.label, 'Weekly');
-      expect(collapsed.settingsTitle, 'Claude plan');
-      expect(collapsed.settingsSubtitle, 'Weekly · 30% left · OK');
+      expect(collapsed.catalogTitle, 'Claude plan');
+      expect(collapsed.catalogSubtitle, 'Weekly · 30% left · OK');
       expect(collapsed.usedPercent, 70);
     });
 
@@ -397,10 +397,7 @@ void main() {
     claude['allowances'] = allowances;
     final withExtra = DashboardSnapshot.fromJson({
       ...dash.toJson(),
-      'accounts': [
-        claude,
-        ...(dash.toJson()['accounts'] as List).skip(1),
-      ],
+      'accounts': [claude, ...(dash.toJson()['accounts'] as List).skip(1)],
     });
 
     final catalogIds =

@@ -70,8 +70,8 @@ WFF watch face
 Glanceable concentric remaining rings + tap target to open the Wear OS app
 ```
 
-The phone app is the primary product surface. It should feel like a compact analytics dashboard rather than a simple counter. Primary tab order (Phase 14 target; Watch display may
-still sit under Settings until then): Dashboard → Watchface → Widget → Providers → Settings.
+The phone app is the primary product surface. It should feel like a compact analytics dashboard rather than a simple counter. Primary tab order (Widget still planned):
+Dashboard → Watchface → Providers → Settings (target: … → Widget → …).
 
 The phone widget is a launcher glance, not a second dashboard. It should answer the same
 pulse question as the watch face, with a **phone-native composition** (rectangular sizes,
@@ -531,8 +531,7 @@ rule editing on the watch.
 **Watchface** and **Widget** sit between Dashboard and Providers — Watchface first, then
 Widget. Surface configuration lives on those tabs, not under Settings.
 
-- **Watchface** — configure Wear / WFF ring slots, preview next watch payload (today’s
-  “Watch display” block moves here out of Settings).
+- **Watchface** — configure Wear / WFF ring slots and preview the next watch payload.
 - **Widget** — configure the phone home-screen widget metrics and preview (Phase 14).
 - **Providers** — full connection catalog (every plan/platform row, Connected or Not
   connected), credentials / auth, connection-scoped alert thresholds, and live status for
@@ -632,8 +631,8 @@ results. Do not reintroduce automatic alerts from allowance/budget status alone.
 
 **Current gap (2026-07-27):** `build_dashboard_snapshot` still emits alerts from budget /
 purchased allowance `ProviderStatus` without user rules (e.g. Mock Claude Extra ≥ 80%).
-Connection catalog and opt-in threshold prefs live on Providers / Settings (Watch display
-remains transitional until the Watchface tab). Next: replace auto-fired alerts with
+Connection catalog and opt-in threshold prefs live on Providers / Settings; Watchface owns
+ring slots (Widget tab still planned). Next: replace auto-fired alerts with
 `calculate_alerts(snapshot, settings)` using those stored rules.
 
 ---
@@ -1628,7 +1627,6 @@ Deliverables:
   rate-limited empty) are omitted rather than drawn as empty/dead rings;
 - the phone **Watchface** tab selects up to three ring slots (not Settings); metrics from
   unconnected providers stay visible but disabled with the same `?` help as the dashboard;
-  until the tab lands, the existing Settings “Watch display” block is the transitional UI;
   purchased allowances are excluded from the ring catalog (phone cards only; alerts only when
   the user configures thresholds for those meters on Providers);
 - no time-based rotation in the first iteration: simultaneous static layers are battery-safe;
@@ -1672,7 +1670,7 @@ Landed so far:
 
 ```text
 schema version 4 + sanitized watch fixture; schema v5 tokenGlance → v6 creditsGlance → v7 manual refresh flags
-phone Watch display prefs, payload rings, and Settings UI (transitional — moves to Watchface tab)
+phone Watchface tab owns ring-slot prefs + payload preview; Settings is systemic only
 Watch ring visual baseline locked (WATCH_RING_DESIGN.md + render-watch-ring-designs.mjs)
 Wear Glance legend baseline locked 2026-07-26 (WEAR_GLANCE_DESIGN.md + glance-legend-* review art)
 Phone payload sorts tightest-remaining first (center/inner on face) and omits exhausted layers
@@ -1715,12 +1713,11 @@ Primary tab order:
 Dashboard → Watchface → Widget → Providers → Settings
 ```
 
-- Move today’s Settings “Watch display” block onto the **Watchface** tab (slot picker +
-  payload preview); remove it from Settings.
+- **Watchface** owns Wear / WFF ring slots and payload preview (moved off Settings).
 - Add the **Widget** tab for widget metric selection + preview; prefs are **independent** of
   Watchface prefs so phone and watch can differ.
-- Move the **connection-scoped alert thresholds** onto the **Providers** tab
-  (connection catalog + credentials already live there).
+- **Providers** already owns the connection catalog, credentials, and connection alert
+  thresholds.
 - Settings stays **systemic only**: global polling interval, global budget thresholds,
   diagnostics, data deletion, legal — not connections, not credentials, not Watchface/Widget
   layout, and not a sixth Alerts tab.
@@ -1922,9 +1919,9 @@ Close Phase 13 acceptance on device/emulator (Wear rings + WFF concentric live a
 OpenPencil sources, Wear `UsageRings`, WFF concentric remaining `RANGED_VALUE` arcs, and
 Phase 11 headless WorkManager polling are in place.
 
-After the watch ring baseline is closed, schedule **Phase 14** (Dashboard → Watchface →
-Widget → Providers → Settings nav; move Watch display out of Settings; phone home-screen
-widget with its own design lock).
+After the watch ring baseline is closed, finish **Phase 14** (insert the Widget tab into
+Dashboard → Watchface → Providers → Settings; phone home-screen widget with its own design
+lock). Watchface ring-slot prefs already live on the Watchface tab.
 
 Then continue with later watch / widget polish as listed below.
 

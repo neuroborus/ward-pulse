@@ -155,7 +155,7 @@ void main() {
     expect(find.text('Watch summary queued'), findsOneWidget);
   });
 
-  testWidgets('Settings shows systemic sections and transitional Watch copy', (
+  testWidgets('Settings shows systemic sections without Watch display', (
     tester,
   ) async {
     final snapshot = DashboardSnapshot.fromJsonString(
@@ -171,14 +171,10 @@ void main() {
 
     expect(find.text('Display'), findsOneWidget);
     expect(find.text('Refresh'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Watch display'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
+    expect(find.text('Watch display'), findsNothing);
     expect(
       find.textContaining('Temporary until the Watchface tab'),
-      findsOneWidget,
+      findsNothing,
     );
     await tester.scrollUntilVisible(
       find.text('Diagnostics'),
@@ -187,6 +183,44 @@ void main() {
     );
     expect(find.text('Diagnostics'), findsOneWidget);
     expect(find.text('Sync'), findsWidgets);
+    expect(find.text('Watch summary'), findsOneWidget);
+  });
+
+  testWidgets('Watchface tab owns ring slots and payload preview', (
+    tester,
+  ) async {
+    final snapshot = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final store = _MemoryWatchRingStore();
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(snapshot),
+        watchRingPreferenceStore: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Watchface'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ring slots'), findsOneWidget);
+    expect(find.text('Wear & watch face'), findsOneWidget);
+    expect(find.text('Next watch payload'), findsOneWidget);
+    expect(find.text('Today'), findsWidgets);
+
+    await tester.scrollUntilVisible(
+      find.text('Today'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    // Defaults select available metrics; toggling Today off persists an explicit list.
+    final todayTile = find.widgetWithText(CheckboxListTile, 'Today');
+    expect(todayTile, findsOneWidget);
+    await tester.tap(todayTile);
+    await tester.pumpAndSettle();
+
+    expect(store.value.selectedIds, isNotNull);
   });
 
   testWidgets('Settings exposes global budget alert thresholds', (
@@ -837,6 +871,18 @@ final class _CountingDashboardRepository extends DashboardRepository {
 
   @override
   Future<DashboardSnapshot> load() async => _load();
+}
+
+class _MemoryWatchRingStore implements WatchRingPreferenceStore {
+  WatchRingPreferences value = const WatchRingPreferences();
+
+  @override
+  Future<WatchRingPreferences> read() async => value;
+
+  @override
+  Future<void> write(WatchRingPreferences next) async {
+    value = next;
+  }
 }
 
 class _MemoryAlertThresholdStore implements AlertThresholdPreferenceStore {

@@ -52,11 +52,11 @@ final class WatchRingMetric {
 
   bool get _isClaudePlanSlot => id == claudePlanRingId;
 
-  /// Settings checkbox title (Claude plan slot keeps a stable name).
-  String get settingsTitle => _isClaudePlanSlot ? 'Claude plan' : label;
+  /// Catalog checkbox title (Claude plan slot keeps a stable name).
+  String get catalogTitle => _isClaudePlanSlot ? 'Claude plan' : label;
 
-  /// Settings checkbox subtitle.
-  String get settingsSubtitle {
+  /// Catalog checkbox subtitle.
+  String get catalogSubtitle {
     final reason = unavailableReason;
     if (reason != null) {
       return reason;
@@ -80,7 +80,6 @@ final class WatchRingMetric {
 }
 
 /// Ordered ring metric ids for Watchface (at most [watchRingSlotCount]).
-/// Transitional UI may still edit these under Settings “Watch display”.
 ///
 /// `selectedIds == null` means unset → use the default available metrics.
 /// An empty list means the user chose zero rings.
@@ -236,7 +235,7 @@ List<WatchRingMetric> watchRingCatalog(DashboardSnapshot? snapshot) {
 
 /// Resolves rings for the watch payload: only available percent metrics.
 ///
-/// Order follows Settings selection (or catalog defaults). Use
+/// Order follows Watchface selection (or catalog defaults). Use
 /// [orderWatchRingsForSurface] before sending to Wear/WFF.
 List<WatchRingMetric> resolveWatchRings(
   DashboardSnapshot snapshot,
@@ -306,6 +305,25 @@ List<WatchRingMetric> orderWatchRingsForSurface(
     return a.id.compareTo(b.id);
   });
   return active.take(watchRingSlotCount).toList(growable: false);
+}
+
+/// Short subtitle for Watchface preview and Settings diagnostics.
+String watchRingPayloadSubtitle(
+  DashboardSnapshot snapshot,
+  WatchRingPreferences ringPreferences,
+) {
+  final rings = orderWatchRingsForSurface(
+    resolveWatchRings(snapshot, ringPreferences),
+    snapshot: snapshot,
+  );
+  if (rings.isEmpty) {
+    return 'No rings selected';
+  }
+  if (rings.length == 1) {
+    final ring = rings.single;
+    return '${ring.label} ${ring.remainingPercent!.round()}% left';
+  }
+  return '${rings.length} rings · ${rings.map((ring) => ring.label).join(', ')}';
 }
 
 /// Owning provider for `allowance.<provider>.…`, or null for budgets / unknown.

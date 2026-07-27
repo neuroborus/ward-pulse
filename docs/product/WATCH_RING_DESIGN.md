@@ -38,8 +38,7 @@ credits — never LLM `TOK` / token counts.
    never shown as requests). Strips still show credits only. Payload index 0 is the critical
    limit: innermost ring and the strip nearest the center. Outer rings are looser.
 4. **Omit exhausted** — `usedPercent >= 100` (or empty/unavailable) does not render.
-5. **Max three** — phone **Watchface** tab chooses slots (`watchRingSlotCount = 3`; transitional
-   UI may still live under Settings “Watch display” until Phase 14 nav lands); payload carries
+5. **Max three** — phone **Watchface** tab chooses slots (`watchRingSlotCount = 3`); payload carries
    only the resolved surface order after omit + sort. Plan/budget percent metrics only.
 
 ## Typography
