@@ -244,11 +244,7 @@ class MissingPurchasedUsageCard extends StatelessWidget {
 }
 
 class AllowanceSummaryCard extends StatelessWidget {
-  const AllowanceSummaryCard({
-    super.key,
-    required this.allowance,
-    this.accent,
-  });
+  const AllowanceSummaryCard({super.key, required this.allowance, this.accent});
 
   final AllowanceState allowance;
 
@@ -268,7 +264,10 @@ class AllowanceSummaryCard extends StatelessWidget {
       AllowanceSource.plan => '${allowance.remainingPercentLabel} left',
       AllowanceSource.purchased when allowance.unlimited => 'Unlimited',
       AllowanceSource.purchased =>
-        allowance.remaining?.label ?? 'Balance unavailable',
+        allowance.remaining?.label ??
+            (allowance.usedPercent != null
+                ? '${allowance.usedPercentLabel} used'
+                : 'Balance unavailable'),
     };
     final detail = switch (allowance.source) {
       AllowanceSource.plan when allowance.resetsAt != null =>
@@ -535,10 +534,9 @@ List<_ProviderDashboardSection> _providerDashboardSections(
 ) {
   final sections = <_ProviderDashboardSection>[];
   for (final account in accounts) {
-    final allowances =
-        account.allowances
-            .where((allowance) => displayPreferences.allows(allowance.source))
-            .toList(growable: false);
+    final allowances = account.allowances
+        .where((allowance) => displayPreferences.allows(allowance.source))
+        .toList(growable: false);
     final section = _ProviderDashboardSection(
       account: account,
       allowances: allowances,
@@ -568,10 +566,7 @@ class _ProviderDashboardSections extends StatelessWidget {
           if (index > 0) const SizedBox(height: 20),
           _ProviderDashboardSectionView(section: section),
         ],
-        if (footer case final footer?) ...[
-          const SizedBox(height: 12),
-          footer,
-        ],
+        if (footer case final footer?) ...[const SizedBox(height: 12), footer],
       ],
     );
   }
@@ -643,10 +638,7 @@ class _ProviderDashboardSectionView extends StatelessWidget {
         ],
         if (section.showUsageHistory) ...[
           const SizedBox(height: 12),
-          UsageHistoryChart(
-            buckets: section.account.buckets,
-            accent: accent,
-          ),
+          UsageHistoryChart(buckets: section.account.buckets, accent: accent),
         ],
         if (section.showModelUsage) ...[
           const SizedBox(height: 12),

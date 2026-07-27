@@ -1580,7 +1580,9 @@ Status: in progress as of 2026-07-25.
 
 Rationale: watch space is limited and must never show `Unknown` filler. Plan/allowance data
 across connected providers is percentage-first, so Wear and WFF standardize on concentric
-percent rings. This is not “always show every provider”: the user picks up to four metrics;
+percent rings. This is not “always show every provider”: the user picks up to three metrics;
+plan/budget percent only — purchased meters (Extra usage, on-demand, Codex credits) are never
+ring candidates (phone cards + alerts only);
 unselected or unavailable ones simply do not render. Face visual contract:
 `docs/product/WATCH_RING_DESIGN.md`. Wear **app** Glance (tile home) visual contract:
 `docs/product/WEAR_GLANCE_DESIGN.md` (text legend — not a face clone). Layout ownership under each app's
@@ -1589,10 +1591,10 @@ unselected or unavailable ones simply do not render. Face visual contract:
 Deliverables:
 
 - OpenPencil sources under `apps/watchface_wff/design/` and `apps/wear_android/design/` for
-  1–4 concentric layers on round and square plus ambient (WFF art uses the same concentric
+  1–3 concentric layers on round and square plus ambient (WFF art uses the same concentric
   language as Wear — not the old side-by-side `RING 1` / `RING 2` wireframe);
-- a ring binds to exactly one metric (provider plan window, purchased/credit percent when it
-  has a %, or local budget percent);
+- a ring binds to exactly one metric (provider **plan** window with a %, or local budget
+  percent — never purchased Extra usage / on-demand / credit meters);
 - layer color is primarily **by provider/metric family** (OpenAI/Codex green, Anthropic
   orange, Cursor teal, local budget blue), with status (warn/error) as a modulation;
 - **arc = remaining**: the colored sweep shrinks as the limit is consumed (not a “used”
@@ -1602,9 +1604,10 @@ Deliverables:
   equal plan percents break ties by credit request-runway (internal credits-per-request
   constants; UI still shows credits only). Exhausted metrics (`usedPercent >= 100` or
   rate-limited empty) are omitted rather than drawn as empty/dead rings;
-- the phone **Watchface** tab selects up to four ring slots (not Settings); metrics from
+- the phone **Watchface** tab selects up to three ring slots (not Settings); metrics from
   unconnected providers stay visible but disabled with the same `?` help as the dashboard;
   until the tab lands, the existing Settings “Watch display” block is the transitional UI;
+  purchased allowances are excluded from the ring catalog and may appear as dashboard alerts;
 - no time-based rotation in the first iteration: simultaneous static layers are battery-safe;
 - aperture: large time as hero; upper inner rim reserved for future weather; lower chord uses
   short per-family strips (`%`, remaining credits, or `% · credits`) — see `WATCH_RING_DESIGN.md`;
@@ -1664,11 +1667,11 @@ Wear Glance Compose text legend landed (GlanceLegendPage; watch→phone refresh 
 Future (not Phase 13 acceptance — product direction):
 
 ```text
-Phase 13 / locked baseline stays at up to four Watchface ring slots (watchRingSlotCount = 4).
+Phase 13 / locked baseline: up to three Watchface ring slots (watchRingSlotCount = 3);
+  purchased meters are not rings (alerts / phone cards only).
 Later: possibly up to three profiles/accounts for the same provider on one device.
-When multi-profile lands, same-provider rings need hatch/pattern as well as family color,
-and the face hard cap should tighten from four rings to three (update WATCH_RING_DESIGN,
-prefs, schema guidance, and acceptance in the same change).
+When multi-profile lands, same-provider rings need hatch/pattern as well as family color
+  (keep the three-ring face cap unless a later design revision raises it).
 ```
 
 ### Phase 14 — Watchface / Widget tabs and phone home-screen widget

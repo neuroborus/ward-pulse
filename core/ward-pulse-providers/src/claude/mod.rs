@@ -114,16 +114,24 @@ pub fn claude_provider_snapshot_from_report_json(
     }
 
     if let Some(extra) = report.extra_usage.filter(|value| value.is_enabled) {
+        let used = extra.used_credits.map(credits_from_cents);
+        let limit = extra
+            .monthly_limit
+            .map(|cents| credits_from_cents(cents as f64));
+        let remaining = match (extra.used_credits, extra.monthly_limit) {
+            (Some(used_credits), Some(limit_cents)) => Some(credits_from_cents(
+                (limit_cents as f64 - used_credits).max(0.0),
+            )),
+            _ => None,
+        };
         allowances.push(AllowanceState {
             id: "claude-extra-usage".to_string(),
             source: AllowanceSource::Purchased,
             label: "Extra usage".to_string(),
             used_percent: extra.utilization,
-            used: extra.used_credits.map(credits_from_cents),
-            limit: extra
-                .monthly_limit
-                .map(|cents| credits_from_cents(cents as f64)),
-            remaining: None,
+            used,
+            limit,
+            remaining,
             unlimited: false,
             window_minutes: None,
             resets_at: None,
@@ -258,6 +266,16 @@ mod tests {
             .allowances
             .iter()
             .any(|item| item.source == AllowanceSource::Purchased));
+        let extra = snapshot
+            .provider_snapshot
+            .allowances
+            .iter()
+            .find(|item| item.id == "claude-extra-usage")
+            .expect("extra usage");
+        assert_eq!(
+            extra.remaining.as_ref().map(|value| value.value.as_str()),
+            Some("15.10")
+        );
     }
 
     #[test]

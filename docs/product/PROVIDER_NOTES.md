@@ -246,7 +246,9 @@ normalizes `five_hour`, `seven_day`, optional per-model weekly windows, and `ext
 `AllowanceState`. Phone dashboard cards still list every window. Watch/Glance rings collapse
 Claude **plan** windows into one slot (`allowance.claude.plan`): the tightest remaining
 non-exhausted window wins; Glance label is the short token (`5h`, `Weekly`, `Opus weekly`,
-`Sonnet weekly`). Purchased `extra_usage` is not in that collapse pool.
+`Sonnet weekly`). Purchased `extra_usage` is not in that collapse pool and is **not** a watch
+ring candidate — it stays on phone dashboard cards and can surface as a warning/error alert
+when utilization crosses thresholds.
 
 This is a compatibility integration, not a published third-party API. Endpoint or OAuth client
 changes may require an app update. Never log tokens, authorization codes, or raw response bodies.
@@ -262,7 +264,8 @@ opens an in-app WebView to the Cursor dashboard; after sign-in the phone capture
 securely, and calls `GET /api/usage-summary`, normalizing included plan pools and on-demand
 meters into allowances. When the payload includes `autoPercentUsed` / `apiPercentUsed`, WardPulse
 shows **Cursor Models** and **Other Models** as separate plan bars (same as the Cursor usage UI)
-on the phone and as selectable watch rings. Older combined-only payloads keep a single Plan
+on the phone and as selectable watch rings. Purchased on-demand usage is phone-only (and may
+alert); it is not a ring. Older combined-only payloads keep a single Plan
 usage bar. Exhausted pools (`usedPercent >= 100`) are omitted from the face like other rings.
 Do not claim Admin-API hourly aggregation on this experimental row. Never log the cookie or
 raw response bodies.

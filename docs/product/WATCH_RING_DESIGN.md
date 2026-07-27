@@ -1,7 +1,9 @@
 # Watch Ring Design
 
-**Baseline locked 2026-07-25**; melt / strip-accent revision **2026-07-27** — accepted visual
-target for Wear OS and Watch Face Format until the next explicit design revision.
+**Baseline locked 2026-07-25**; melt / strip-accent revision **2026-07-27**; ring-cap /
+purchased-meter revision **2026-07-27** (max three plan/budget rings; Extra usage and other
+purchased meters are not rings) — accepted visual target for Wear OS and Watch Face Format
+until the next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
 wireframes, large remaining-% heroes, or bordered strip cards.
 
@@ -12,10 +14,12 @@ Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and si
 
 ## Goal
 
-Glanceable **remaining** capacity for up to four user-selected percent metrics, with optional
+Glanceable **remaining** capacity for up to **three** user-selected percent metrics, with optional
 remaining purchased **credits** on the strip of the **same provider family** (never glued onto a
-tighter unrelated ring). Not “always show every provider,” and never invent `Unknown` filler.
-Strip secondary values are credits — never LLM `TOK` / token counts.
+tighter unrelated ring). Purchased meters (Claude Extra usage, Cursor on-demand, Codex credits)
+are **not** ring candidates — they stay on the phone dashboard and may appear as alerts. Not
+“always show every provider,” and never invent `Unknown` filler. Strip secondary values are
+credits — never LLM `TOK` / token counts.
 
 ## Layer rules
 
@@ -33,9 +37,9 @@ Strip secondary values are credits — never LLM `TOK` / token counts.
    never shown as requests). Strips still show credits only. Payload index 0 is the critical
    limit: innermost ring and the strip nearest the center. Outer rings are looser.
 4. **Omit exhausted** — `usedPercent >= 100` (or empty/unavailable) does not render.
-5. **Max four** — phone **Watchface** tab chooses slots (transitional UI may still live under
-   Settings “Watch display” until Phase 14 nav lands); payload carries only the resolved
-   surface order after omit + sort.
+5. **Max three** — phone **Watchface** tab chooses slots (`watchRingSlotCount = 3`; transitional
+   UI may still live under Settings “Watch display” until Phase 14 nav lands); payload carries
+   only the resolved surface order after omit + sort. Plan/budget percent metrics only.
 
 ## Typography
 
@@ -63,7 +67,7 @@ theme `outlineVariant` at runtime).
 ## Composition (active)
 
 ```text
-  ┌──── remaining arcs (0–3 typical in review; max 4 slots) ────┐
+  ┌──── remaining arcs (0–3 slots; hard max three) ─────────────┐
   │                                                              │
   │        upper aperture: weather reserve (empty)               │
   │                                                              │
@@ -149,13 +153,10 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
 
 ## Future direction (not locked baseline)
 
-Recorded for planning only. **Do not change today’s Max four rule** until an explicit later
-phase updates this document, `watchRingSlotCount`, and Phase 13 acceptance together.
+Recorded for planning only. Today’s **Max three** rule and “purchased meters are not rings”
+are locked; do not raise the face cap without an explicit later design revision.
 
 - **Multi-profile per provider** — up to three profiles/accounts of the same provider may
   eventually share a device. Same-family rings on one face must then differ by
   **hatch/pattern** as well as family color (color alone is not enough for two Codex or two
   Claude windows).
-- **Tighten face cap to three rings** — when multi-profile lands, drop the watch-face hard
-  cap from four slots to **three** concentric plan/budget rings so the composition stays
-  glanceable. Until that phase, Watchface prefs and payload remain at four.

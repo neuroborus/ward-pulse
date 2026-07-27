@@ -46,11 +46,13 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   remaining (plan `%` primary; credit request-runway secondary from internal costs — never show
   request counts); arc = remaining (clockwise melt from 12); large time hero; sunk family strips
   (equal width; first strip nearest center; stroke tuned so 3 strips clear arcs); family colors.
-  Future multi-profile / hatch / three-ring cap notes there are planning-only until a later phase.
+  Hard cap: **three** concentric plan/budget rings (`watchRingSlotCount = 3`). Purchased meters
+  (Extra usage, on-demand, Codex credits) are not ring candidates — phone cards + alerts only.
+  Future multi-profile / hatch notes there are planning-only until a later phase.
 - Claude plan windows (`5h` / weekly / Opus / Sonnet) collapse to one watch ring on the phone
   (`allowance.claude.plan`); Glance shows the active window label. Phone dashboard still lists all.
-- Prefer concentric percent layers from schema v4+ on the **face** (up to four selected metrics
-  today); never invent `Unknown` filler. Unselected, unavailable, or exhausted (`>= 100%`)
+- Prefer concentric percent layers from schema v4+ on the **face** (up to three selected metrics);
+  never invent `Unknown` filler. Unselected, unavailable, or exhausted (`>= 100%`)
   layers do not render.
 - Face strip / `creditsGlance` may show compact remaining credits on the **matching provider**
   strip (`% · 500`); strip accents use the same family ColorRamp as the matching arc.

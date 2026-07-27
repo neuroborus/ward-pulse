@@ -1,4 +1,4 @@
-use crate::alerts::alerts_for_budget_state;
+use crate::alerts::{alerts_for_budget_state, alerts_for_purchased_allowance};
 use crate::budget::calculate_budget_state;
 use crate::model::{
     BudgetPeriod, BudgetState, DashboardSnapshot, Money, ProviderSnapshot, ProviderStatus,
@@ -38,6 +38,11 @@ pub fn build_dashboard_snapshot(
     alerts.extend(alerts_for_budget_state("Today", &today_total));
     alerts.extend(alerts_for_budget_state("Week", &week_total));
     alerts.extend(alerts_for_budget_state("Month", &month_total));
+    for account in &accounts {
+        for allowance in &account.allowances {
+            alerts.extend(alerts_for_purchased_allowance(account.provider, allowance));
+        }
+    }
 
     let watch_summary = WatchSummary {
         today_used_percent: today_total.used_percent,

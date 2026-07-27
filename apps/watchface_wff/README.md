@@ -3,7 +3,7 @@
 Declarative Watch Face Format v2 package for a glanceable WardPulse summary.
 
 The face follows the locked concentric baseline in `docs/product/WATCH_RING_DESIGN.md`:
-remaining arcs (up to four ring slots; melt clockwise from 12), large time hero, quiet
+remaining arcs (up to three ring slots; melt clockwise from 12), large time hero, quiet
 watermark, and sunk family strips (`%` / `% · credits` on the matching provider). Ring and
 strip data come from Wear OS `RANGED_VALUE` complication providers. Missing rings stay empty
 instead of inventing filler. Tapping the face or a WardPulse complication opens the Wear OS

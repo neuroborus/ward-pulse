@@ -6,7 +6,7 @@ import '../dashboard/dashboard_models.dart';
 import '../sync/credit_request_runway.dart';
 
 /// Maximum simultaneous rings on watch and watch-face surfaces.
-const watchRingSlotCount = 4;
+const watchRingSlotCount = 3;
 
 /// Synthetic watch-ring slot: Claude plan windows collapse to the tightest one.
 const claudePlanRingId = 'allowance.claude.plan';
@@ -18,6 +18,13 @@ const _claudePlanWindowIds = <String>[
   'claude-seven-day-opus',
   'claude-seven-day-sonnet',
 ];
+
+/// Former ring-catalog ids for purchased meters (no longer selectable).
+const _retiredPurchasedRingIds = <String>{
+  'allowance.claude.claude-extra-usage',
+  'allowance.cursor.cursor-on-demand',
+  'allowance.codex.codex-purchased-credits',
+};
 
 /// One selectable percent metric for a watch ring.
 final class WatchRingMetric {
@@ -88,7 +95,7 @@ final class WatchRingPreferences {
       .take(watchRingSlotCount)
       .toList(growable: false);
 
-  /// Clamped selection with legacy Claude window ids coalesced.
+  /// Clamped selection with legacy Claude / purchased ring ids migrated.
   List<String> get migratedIds => migrateWatchRingSelectedIds(clampedIds);
 }
 
@@ -114,11 +121,15 @@ bool _isClaudePlanWindowRingId(String ringId) {
   return _isClaudePlanWindowAllowanceId(ringId.substring(prefix.length));
 }
 
-/// Coalesce legacy per-window Claude plan ring ids into [claudePlanRingId].
+/// Coalesce legacy Claude window ids into [claudePlanRingId] and drop retired
+/// purchased-meter ring ids.
 List<String> migrateWatchRingSelectedIds(List<String> ids) {
   final out = <String>[];
   var sawClaudePlan = false;
   for (final id in ids) {
+    if (_retiredPurchasedRingIds.contains(id)) {
+      continue;
+    }
     if (id == claudePlanRingId || _isClaudePlanWindowRingId(id)) {
       if (!sawClaudePlan) {
         out.add(claudePlanRingId);
@@ -134,8 +145,7 @@ List<String> migrateWatchRingSelectedIds(List<String> ids) {
 /// Collapses Claude plan windows into one ring (tightest remaining).
 ///
 /// Prefers non-exhausted windows so surface omit-exhausted does not hide a
-/// usable shorter window behind a fully used weekly. Purchased extra usage is
-/// not included.
+/// usable shorter window behind a fully used weekly.
 WatchRingMetric? collapseClaudePlanRing(Iterable<AllowanceState> allowances) {
   final windows = [
     for (final allowance in allowances)
@@ -157,8 +167,7 @@ WatchRingMetric? collapseClaudePlanRing(Iterable<AllowanceState> allowances) {
       label: 'Claude plan',
       usedPercent: null,
       status: windows.first.status,
-      unavailableReason:
-          'This allowance has no percentage to show as a ring.',
+      unavailableReason: 'This allowance has no percentage to show as a ring.',
     );
   }
 
@@ -189,6 +198,9 @@ int _compareClaudePlanWindows(AllowanceState a, AllowanceState b) {
 }
 
 /// Builds the catalog of ring metrics from the current dashboard snapshot.
+///
+/// Purchased meters (Extra usage, on-demand, Codex credits) are excluded —
+/// they stay on phone cards and may surface as alerts.
 List<WatchRingMetric> watchRingCatalog(DashboardSnapshot? snapshot) {
   final metrics = <WatchRingMetric>[
     _budgetMetric('budget.today', 'Today', snapshot?.todayTotal),
@@ -209,15 +221,12 @@ List<WatchRingMetric> watchRingCatalog(DashboardSnapshot? snapshot) {
       if (collapsed != null) {
         metrics.add(collapsed);
       }
-      for (final allowance in account.allowances) {
-        if (_isClaudePlanWindowAllowanceId(allowance.id)) {
-          continue;
-        }
-        metrics.add(_allowanceMetric(account.provider, allowance));
-      }
       continue;
     }
     for (final allowance in account.allowances) {
+      if (allowance.source == AllowanceSource.purchased) {
+        continue;
+      }
       metrics.add(_allowanceMetric(account.provider, allowance));
     }
   }
@@ -383,10 +392,7 @@ final class SecureWatchRingPreferenceStore implements WatchRingPreferenceStore {
     if (value.selectedIds == null) {
       return _storage.delete(key: _key);
     }
-    return _storage.write(
-      key: _key,
-      value: jsonEncode(value.migratedIds),
-    );
+    return _storage.write(key: _key, value: jsonEncode(value.migratedIds));
   }
 }
 

@@ -38,7 +38,8 @@
     },
     "rings": {
       "type": "array",
-      "maxItems": 4,
+      "maxItems": 3,
+      "description": "Ordered concentric rings (tightest remaining first). Plan/budget percent only; purchased meters are not rings.",
       "items": {
         "type": "object",
         "additionalProperties": false,

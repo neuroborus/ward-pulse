@@ -41,13 +41,13 @@ void main() {
     expect(rings.map((ring) => ring.id), ['budget.week', 'budget.today']);
   });
 
-  test('clamps stored ids to four slots', () {
+  test('clamps stored ids to three slots', () {
     const preferences = WatchRingPreferences(
       selectedIds: ['a', 'b', 'c', 'd', 'e'],
     );
 
-    expect(preferences.clampedIds, ['a', 'b', 'c', 'd']);
-    expect(jsonEncode(preferences.clampedIds), '["a","b","c","d"]');
+    expect(preferences.clampedIds, ['a', 'b', 'c']);
+    expect(jsonEncode(preferences.clampedIds), '["a","b","c"]');
   });
 
   test('surface order puts tightest remaining first and drops exhausted', () {
@@ -72,10 +72,7 @@ void main() {
       ),
     ];
 
-    expect(orderWatchRingsForSurface(rings).map((ring) => ring.id), [
-      'c',
-      'a',
-    ]);
+    expect(orderWatchRingsForSurface(rings).map((ring) => ring.id), ['c', 'a']);
   });
 
   test('equal plan percent prefers lower credit request runway', () {
@@ -85,23 +82,20 @@ void main() {
       codexCredits: 3,
       claudeCredits: 12,
     );
-    final rings = orderWatchRingsForSurface(
-      [
-        const WatchRingMetric(
-          id: 'allowance.claude.plan',
-          label: 'Weekly',
-          usedPercent: 40,
-          status: ProviderStatus.ok,
-        ),
-        const WatchRingMetric(
-          id: 'allowance.codex.codex-weekly',
-          label: 'Weekly plan',
-          usedPercent: 40,
-          status: ProviderStatus.ok,
-        ),
-      ],
-      snapshot: dash,
-    );
+    final rings = orderWatchRingsForSurface([
+      const WatchRingMetric(
+        id: 'allowance.claude.plan',
+        label: 'Weekly',
+        usedPercent: 40,
+        status: ProviderStatus.ok,
+      ),
+      const WatchRingMetric(
+        id: 'allowance.codex.codex-weekly',
+        label: 'Weekly plan',
+        usedPercent: 40,
+        status: ProviderStatus.ok,
+      ),
+    ], snapshot: dash);
 
     expect(rings.map((ring) => ring.id), [
       'allowance.codex.codex-weekly',
@@ -109,15 +103,16 @@ void main() {
     ]);
   });
 
-  test('unlimited credits do not win secondary tightness over finite runway', () {
-    final dash = _twoPlanProvidersSnapshot(
-      codexUsed: 50,
-      claudeUsed: 50,
-      codexCredits: 4,
-      claudeUnlimitedPurchased: true,
-    );
-    final rings = orderWatchRingsForSurface(
-      [
+  test(
+    'unlimited credits do not win secondary tightness over finite runway',
+    () {
+      final dash = _twoPlanProvidersSnapshot(
+        codexUsed: 50,
+        claudeUsed: 50,
+        codexCredits: 4,
+        claudeUnlimitedPurchased: true,
+      );
+      final rings = orderWatchRingsForSurface([
         const WatchRingMetric(
           id: 'allowance.claude.plan',
           label: 'Weekly',
@@ -130,35 +125,28 @@ void main() {
           usedPercent: 50,
           status: ProviderStatus.ok,
         ),
-      ],
-      snapshot: dash,
-    );
+      ], snapshot: dash);
 
-    expect(rings.first.id, 'allowance.codex.codex-weekly');
-  });
+      expect(rings.first.id, 'allowance.codex.codex-weekly');
+    },
+  );
 
   test('missing credits on both sides falls through to stable ring id', () {
-    final dash = _twoPlanProvidersSnapshot(
-      codexUsed: 50,
-      claudeUsed: 50,
-    );
-    final rings = orderWatchRingsForSurface(
-      [
-        const WatchRingMetric(
-          id: 'allowance.claude.plan',
-          label: 'Weekly',
-          usedPercent: 50,
-          status: ProviderStatus.ok,
-        ),
-        const WatchRingMetric(
-          id: 'allowance.codex.codex-weekly',
-          label: 'Weekly plan',
-          usedPercent: 50,
-          status: ProviderStatus.ok,
-        ),
-      ],
-      snapshot: dash,
-    );
+    final dash = _twoPlanProvidersSnapshot(codexUsed: 50, claudeUsed: 50);
+    final rings = orderWatchRingsForSurface([
+      const WatchRingMetric(
+        id: 'allowance.claude.plan',
+        label: 'Weekly',
+        usedPercent: 50,
+        status: ProviderStatus.ok,
+      ),
+      const WatchRingMetric(
+        id: 'allowance.codex.codex-weekly',
+        label: 'Weekly plan',
+        usedPercent: 50,
+        status: ProviderStatus.ok,
+      ),
+    ], snapshot: dash);
 
     expect(rings.map((ring) => ring.id), [
       'allowance.claude.plan',
@@ -187,9 +175,10 @@ void main() {
         sevenDayUsed: 70,
         codexUsed: 10,
       );
-      final collapsed = collapseClaudePlanRing(dash.accounts
-          .firstWhere((a) => a.provider == 'claude')
-          .allowances)!;
+      final collapsed =
+          collapseClaudePlanRing(
+            dash.accounts.firstWhere((a) => a.provider == 'claude').allowances,
+          )!;
 
       expect(collapsed.id, claudePlanRingId);
       expect(collapsed.label, 'Weekly');
@@ -204,9 +193,10 @@ void main() {
         sevenDayUsed: 55,
         codexUsed: 10,
       );
-      final collapsed = collapseClaudePlanRing(dash.accounts
-          .firstWhere((a) => a.provider == 'claude')
-          .allowances)!;
+      final collapsed =
+          collapseClaudePlanRing(
+            dash.accounts.firstWhere((a) => a.provider == 'claude').allowances,
+          )!;
 
       expect(collapsed.label, '5h');
       expect(collapsed.usedPercent, 55);
@@ -218,9 +208,10 @@ void main() {
         sevenDayUsed: 100,
         codexUsed: 10,
       );
-      final collapsed = collapseClaudePlanRing(dash.accounts
-          .firstWhere((a) => a.provider == 'claude')
-          .allowances)!;
+      final collapsed =
+          collapseClaudePlanRing(
+            dash.accounts.firstWhere((a) => a.provider == 'claude').allowances,
+          )!;
 
       expect(collapsed.label, '5h');
       expect(collapsed.usedPercent, 40);
@@ -234,11 +225,7 @@ void main() {
           'allowance.claude.claude-seven-day',
           'allowance.codex.codex-weekly',
         ]),
-        [
-          'budget.today',
-          claudePlanRingId,
-          'allowance.codex.codex-weekly',
-        ],
+        ['budget.today', claudePlanRingId, 'allowance.codex.codex-weekly'],
       );
     });
 
@@ -268,6 +255,18 @@ void main() {
       ]);
       expect(rings.map((r) => r.label), ['Weekly', 'Weekly plan']);
     });
+  });
+
+  test('drops retired purchased meter ring ids from prefs', () {
+    expect(
+      migrateWatchRingSelectedIds([
+        'allowance.claude.claude-extra-usage',
+        'allowance.cursor.cursor-plan-models',
+        'allowance.cursor.cursor-on-demand',
+        'allowance.codex.codex-purchased-credits',
+      ]),
+      ['allowance.cursor.cursor-plan-models'],
+    );
   });
 
   test('includes Cursor Models and Other Models in watch ring catalog', () {
@@ -352,20 +351,62 @@ void main() {
       },
     });
 
-    final catalogIds = watchRingCatalog(withCursor).map((ring) => ring.id).toList();
+    final catalogIds =
+        watchRingCatalog(withCursor).map((ring) => ring.id).toList();
     expect(catalogIds, contains('allowance.cursor.cursor-plan-models'));
     expect(catalogIds, contains('allowance.cursor.cursor-plan-other'));
-    expect(catalogIds, contains('allowance.cursor.cursor-on-demand'));
+    expect(catalogIds, isNot(contains('allowance.cursor.cursor-on-demand')));
 
     final surface = orderWatchRingsForSurface(
       resolveWatchRings(withCursor, const WatchRingPreferences()),
       snapshot: withCursor,
     );
     // Exhausted Other Models (100% used) is omitted from the face.
+    // Purchased on-demand is never a ring candidate.
     expect(surface.map((ring) => ring.id), [
       'allowance.cursor.cursor-plan-models',
-      'allowance.cursor.cursor-on-demand',
     ]);
+  });
+
+  test('excludes purchased Claude Extra usage from watch ring catalog', () {
+    final dash = _claudeCodexSnapshot(
+      fiveHourUsed: 40,
+      sevenDayUsed: 70,
+      codexUsed: 10,
+    );
+    final claude = Map<String, Object?>.from(
+      (dash.toJson()['accounts'] as List).firstWhere(
+            (account) => (account as Map)['provider'] == 'claude',
+          )
+          as Map,
+    );
+    final allowances = List<Object?>.from(claude['allowances'] as List);
+    allowances.add({
+      'id': 'claude-extra-usage',
+      'source': 'purchased',
+      'label': 'Extra usage',
+      'usedPercent': 84.0,
+      'used': {'value': '84.90', 'unit': 'credits'},
+      'limit': {'value': '100.00', 'unit': 'credits'},
+      'remaining': {'value': '15.10', 'unit': 'credits'},
+      'unlimited': false,
+      'windowMinutes': null,
+      'resetsAt': null,
+      'status': 'warning',
+    });
+    claude['allowances'] = allowances;
+    final withExtra = DashboardSnapshot.fromJson({
+      ...dash.toJson(),
+      'accounts': [
+        claude,
+        ...(dash.toJson()['accounts'] as List).skip(1),
+      ],
+    });
+
+    final catalogIds =
+        watchRingCatalog(withExtra).map((ring) => ring.id).toList();
+    expect(catalogIds, contains(claudePlanRingId));
+    expect(catalogIds, isNot(contains('allowance.claude.claude-extra-usage')));
   });
 }
 
@@ -377,38 +418,40 @@ DashboardSnapshot _claudeCodexSnapshot({
   final source = DashboardSnapshot.fromJsonString(
     File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
   );
-  final claude = source.primaryAccount!.toJson()
-    ..['accountId'] = 'claude-local'
-    ..['provider'] = 'claude'
-    ..['allowances'] = [
-      _planAllowance(
-        id: 'claude-five-hour',
-        label: '5-hour session',
-        usedPercent: fiveHourUsed,
-        windowMinutes: 300,
-      ),
-      _planAllowance(
-        id: 'claude-seven-day',
-        label: 'Weekly plan',
-        usedPercent: sevenDayUsed,
-        windowMinutes: 10080,
-      ),
-    ]
-    ..['buckets'] = <Object>[]
-    ..['modelBreakdown'] = <Object>[];
-  final codex = source.primaryAccount!.toJson()
-    ..['accountId'] = 'codex-local'
-    ..['provider'] = 'codex'
-    ..['allowances'] = [
-      _planAllowance(
-        id: 'codex-weekly',
-        label: 'Weekly plan',
-        usedPercent: codexUsed,
-        windowMinutes: 10080,
-      ),
-    ]
-    ..['buckets'] = <Object>[]
-    ..['modelBreakdown'] = <Object>[];
+  final claude =
+      source.primaryAccount!.toJson()
+        ..['accountId'] = 'claude-local'
+        ..['provider'] = 'claude'
+        ..['allowances'] = [
+          _planAllowance(
+            id: 'claude-five-hour',
+            label: '5-hour session',
+            usedPercent: fiveHourUsed,
+            windowMinutes: 300,
+          ),
+          _planAllowance(
+            id: 'claude-seven-day',
+            label: 'Weekly plan',
+            usedPercent: sevenDayUsed,
+            windowMinutes: 10080,
+          ),
+        ]
+        ..['buckets'] = <Object>[]
+        ..['modelBreakdown'] = <Object>[];
+  final codex =
+      source.primaryAccount!.toJson()
+        ..['accountId'] = 'codex-local'
+        ..['provider'] = 'codex'
+        ..['allowances'] = [
+          _planAllowance(
+            id: 'codex-weekly',
+            label: 'Weekly plan',
+            usedPercent: codexUsed,
+            windowMinutes: 10080,
+          ),
+        ]
+        ..['buckets'] = <Object>[]
+        ..['modelBreakdown'] = <Object>[];
 
   return DashboardSnapshot.fromJson(
     source.toJson()..['accounts'] = [claude, codex],
@@ -450,18 +493,20 @@ DashboardSnapshot _twoPlanProvidersSnapshot({
     codexAllowances.add(_purchasedAllowance(remaining: codexCredits));
   }
 
-  final claude = source.primaryAccount!.toJson()
-    ..['accountId'] = 'claude-local'
-    ..['provider'] = 'claude'
-    ..['allowances'] = claudeAllowances
-    ..['buckets'] = <Object>[]
-    ..['modelBreakdown'] = <Object>[];
-  final codex = source.primaryAccount!.toJson()
-    ..['accountId'] = 'codex-local'
-    ..['provider'] = 'codex'
-    ..['allowances'] = codexAllowances
-    ..['buckets'] = <Object>[]
-    ..['modelBreakdown'] = <Object>[];
+  final claude =
+      source.primaryAccount!.toJson()
+        ..['accountId'] = 'claude-local'
+        ..['provider'] = 'claude'
+        ..['allowances'] = claudeAllowances
+        ..['buckets'] = <Object>[]
+        ..['modelBreakdown'] = <Object>[];
+  final codex =
+      source.primaryAccount!.toJson()
+        ..['accountId'] = 'codex-local'
+        ..['provider'] = 'codex'
+        ..['allowances'] = codexAllowances
+        ..['buckets'] = <Object>[]
+        ..['modelBreakdown'] = <Object>[];
 
   return DashboardSnapshot.fromJson(
     source.toJson()..['accounts'] = [claude, codex],
