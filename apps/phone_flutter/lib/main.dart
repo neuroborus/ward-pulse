@@ -10,6 +10,7 @@ import 'settings/debug_data_preferences.dart';
 import 'settings/refresh_interval_preferences.dart';
 import 'settings/watch_ring_preferences.dart';
 import 'widget/phone_widget_preferences.dart';
+import 'widget/phone_widget_sync.dart';
 import 'sync/headless_provider_sync.dart';
 import 'sync/provider_sync_scheduler.dart';
 
@@ -28,6 +29,7 @@ Future<void> main() async {
       refreshIntervalStore: SecureRefreshIntervalPreferenceStore(),
       watchRingPreferenceStore: SecureWatchRingPreferenceStore(),
       phoneWidgetPreferenceStore: SecurePhoneWidgetPreferenceStore(),
+      phoneWidgetSyncService: const HomeWidgetPhoneWidgetSyncService(),
       alertThresholdStore: SecureAlertThresholdPreferenceStore(),
       syncScheduler: TimerProviderSyncScheduler(),
       debugDataAvailable: kDebugMode,

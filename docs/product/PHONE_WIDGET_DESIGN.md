@@ -1,19 +1,16 @@
 # Phone Widget Design
 
-**Status: draft baseline (2026-07-27)** — visual language and size caps are proposed for
-implementation of the phone **Widget** tab and the future Android App Widget. Review art and
-an explicit lock date land before the home-screen surface ships.
+**Status: locked 2026-07-27** — baseline for the phone **Widget** tab and Android App
+Widget. Review art: `apps/phone_flutter/design/` (`widget-medium.svg` primary).
 
-Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 14). Asset ownership: `docs/DESIGN_ASSETS.md`
-(`apps/phone_flutter/design/` for review art). Do **not** copy
-[`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md) layouts onto the phone launcher.
+Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 14). Asset ownership: `docs/DESIGN_ASSETS.md`.
+Do **not** copy [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md) layouts onto the phone launcher.
 
 ## Goal
 
 A rectangular, glanceable **remaining** summary on the Android home screen — the same pulse
-question as Wear/WFF, with a **phone-native** composition (system theming, optional multi-metric
-rows). Configuration lives on the phone **Widget** tab and is **independent** of Watchface ring
-slots.
+question as Wear/WFF, with a **phone-native** composition (system theming, multi-metric rows).
+Configuration lives on the phone **Widget** tab and is **independent** of Watchface ring slots.
 
 ## Metric rules
 
@@ -25,21 +22,22 @@ slots.
 4. **Omit** unavailable and exhausted (`usedPercent >= 100`) metrics; never invent `Unknown` filler.
 5. **No credentials**, account ids, or raw provider payloads on the widget or in widget logs.
 
-## Proposed size caps (not locked)
+## Size caps (locked)
 
-Until review art locks these numbers, the Widget tab uses the **medium** cap:
+| Size | Slots shown | Notes |
+|------|-------------|--------|
+| Small | **2** | denser than a watch ring, still glanceable |
+| Medium | **4** | default; Widget tab prefs cap (`phoneWidgetSlotCount`) |
+| Large | deferred | optional later; do not expand prefs until review art lands |
 
-| Size | Slots | Notes |
-|------|-------|--------|
-| Small | 2 | denser than a watch ring, still glanceable |
-| Medium | **4** | default tab / prefs cap (`phoneWidgetSlotCount`) |
-| Large (optional) | 6 | only if the design lock keeps it readable |
+Prefs select up to **four** metrics. The home-screen surface shows the first *N* resolved
+metrics for the current widget size (2 or 4). Unused rows are omitted, not filled.
 
-## Composition (draft)
+## Composition (locked)
 
 ```text
 ┌─ system widget chrome ─────────────────────────┐
-│  WardPulse                          stale?     │
+│  WardPulse                          Stale      │
 │  ▌ 46% left · Codex 5h                         │
 │  ▌ 22% left · Claude Extra                     │
 │  ▌ 71% left · Today                            │
@@ -47,8 +45,11 @@ Until review art locks these numbers, the Widget tab uses the **medium** cap:
 ```
 
 - Rows, not concentric arcs.
-- Family accent bar (▌) optional; prefer Material system surfaces over custom card chrome.
-- Tap opens the phone app (Dashboard; provider detail when practical later).
+- Family accent bar (▌) on each metric row.
+- Prefer Material / system widget surfaces over custom card chrome.
+- Empty: title + short “No metrics” line (no filler rows).
+- Stale: show a compact “Stale” label in the header when the last dashboard is stale.
+- Tap opens the phone app (Dashboard).
 
 ## Non-goals
 
@@ -57,10 +58,14 @@ copying concentric watch-face arcs onto the launcher
 interactive controls inside the widget
 iOS widgets
 burying Widget config under Settings
+shipping large (6-slot) size before a separate design lock
 ```
 
-## Open before lock
+## Review art
 
-- Exact small/medium/large slot counts and type scale
-- Stale / empty / zero-metric empty states
-- Review art under `apps/phone_flutter/design/`
+| File | Role |
+|------|------|
+| `widget-medium.svg` | primary medium (4 rows) |
+| `widget-small.svg` | small (2 rows) |
+| `widget-empty.svg` | empty selection |
+| `widget-stale.svg` | stale header chrome |

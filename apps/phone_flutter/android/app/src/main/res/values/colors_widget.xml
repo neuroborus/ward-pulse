@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ward_pulse_widget_surface">#F2F4F1</color>
+    <color name="ward_pulse_widget_on_surface">#1A1F1A</color>
+    <color name="ward_pulse_widget_muted">#5F675C</color>
+    <color name="ward_pulse_widget_stale">#E8915A</color>
+    <color name="ward_pulse_widget_budget">#8AB4F8</color>
+</resources>

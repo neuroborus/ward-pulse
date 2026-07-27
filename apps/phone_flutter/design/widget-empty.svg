@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="120" viewBox="0 0 360 120" role="img" aria-label="Phone widget · empty">
+  <rect width="360" height="120" rx="16" fill="#F2F4F1"/>
+  <text x="20" y="36" font-family="Noto Sans, sans-serif" font-size="16" font-weight="700" fill="#1A1F1A">WardPulse</text>
+  <text x="20" y="72" font-family="Noto Sans, sans-serif" font-size="15" fill="#5F675C">No metrics</text>
+</svg>

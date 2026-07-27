@@ -1693,8 +1693,9 @@ When multi-profile lands, same-provider rings need hatch/pattern as well as fami
 
 ### Phase 14 — Watchface / Widget tabs and phone home-screen widget
 
-Status: planned (after Phase 13 device acceptance; may run in parallel with Phase 11
-headless polling once the watch ring baseline is closed).
+Status: largely landed (2026-07-27). Primary nav, Watchface + Widget tabs, locked
+`PHONE_WIDGET_DESIGN.md` review art, and the Android App Widget surface are in tree.
+Large (6-slot) size remains deferred.
 
 Rationale: glance configuration is a first-class product surface, not a Settings footnote.
 Watchface and Widget each get a primary tab between Dashboard and Providers. The phone
@@ -1712,8 +1713,8 @@ Dashboard → Watchface → Widget → Providers → Settings
 ```
 
 - **Watchface** owns Wear / WFF ring slots and payload preview (moved off Settings).
-- **Widget** owns phone home-widget metric slots and payload preview (prefs independent of
-  Watchface; `PHONE_WIDGET_DESIGN.md` draft baseline; App Widget surface still planned).
+- **Widget** owns phone home-widget metric slots, payload preview, and the Android App Widget
+  (`PHONE_WIDGET_DESIGN.md` locked; prefs independent of Watchface).
 - **Providers** already owns the connection catalog, credentials, and connection alert
   thresholds.
 - Settings stays **systemic only**: global polling interval, global budget thresholds,
@@ -1722,30 +1723,26 @@ Dashboard → Watchface → Widget → Providers → Settings
 
 #### Widget surface
 
-Draft visual contract: `docs/product/PHONE_WIDGET_DESIGN.md` (review art under
-`apps/phone_flutter/design/` per `docs/DESIGN_ASSETS.md` before lock). Do not copy
-`WATCH_RING_DESIGN.md` layouts into the widget. The phone **Widget** tab already owns
-metric prefs independently of Watchface; the Android App Widget surface is still to land.
+Locked visual contract: `docs/product/PHONE_WIDGET_DESIGN.md` (review art under
+`apps/phone_flutter/design/`). Do not copy `WATCH_RING_DESIGN.md` layouts into the widget.
 
 Deliverables:
 
-- Android App Widget hosted by the Flutter phone shell (Glance / RemoteViews / conventional
-  Flutter-home-widget bridge — pick the smallest stack that supports the locked sizes);
+- Android App Widget hosted by the Flutter phone shell (`home_widget` + RemoteViews);
 - Widget tab selects which metrics appear (same catalog idea as Watchface: provider plan
   windows, purchased/credit % when available, local budgets);
-- small / medium / optional large size variants defined in `PHONE_WIDGET_DESIGN.md` (exact
-  slot counts per size land with the design lock — keep denser than the watch, still
-  glanceable);
+- small (2) / medium (4) size variants locked; large (6) deferred;
 - render only configured, available, non-exhausted metrics; omit empty slots rather than
   inventing `Unknown` filler;
 - **remaining** language for percent metrics (same meaning as watch rings); family colors
   from the shared palette (OpenAI/Codex green, Anthropic orange, Cursor teal, budget blue);
 - update after provider sync / scheduled refresh without opening the full app; stale state
   is explicit when the last successful dashboard is too old;
-- tap opens the phone app (Dashboard or the tapped metric’s provider detail when practical);
+- tap opens the phone app (Dashboard);
 - no credentials, account ids, or raw provider payloads on the widget surface or in widget
   logs;
-- widget tests + emulator smoke for at least one size; sanitized preview fixtures for review art.
+- widget payload unit tests; emulator smoke for at least one size; review art in
+  `apps/phone_flutter/design/`.
 
 Acceptance:
 
@@ -1755,7 +1752,7 @@ Watchface tab owns ring-slot prefs; Settings no longer hosts Watch display
 Providers owns connection catalog, credentials, and connection alert thresholds
 Settings is systemic only (polling, global budgets, diagnostics, legal)
 Widget tab owns widget prefs independently of Watchface
-PHONE_WIDGET_DESIGN.md baseline locked with review art for the primary sizes
+PHONE_WIDGET_DESIGN.md baseline locked with review art for small/medium
 widget shows only configured, available, non-exhausted metrics
 remaining-% / family colors match the product palette
 tap opens the phone app; no credential UI on the widget
@@ -1790,7 +1787,7 @@ multi-profile hatch patterns (same future note as Phase 13)
 
 - widget tests for dashboard cards;
 - widget tests for provider states;
-- widget / App Widget tests for the Phase 14 home-screen surface when landed;
+- widget / App Widget payload tests for the Phase 14 home-screen surface;
 - snapshot/golden tests for key dashboard screens where practical;
 - integration smoke test on Android emulator.
 
@@ -1918,11 +1915,9 @@ Close Phase 13 acceptance on device/emulator (Wear rings + WFF concentric live a
 OpenPencil sources, Wear `UsageRings`, WFF concentric remaining `RANGED_VALUE` arcs, and
 Phase 11 headless WorkManager polling are in place.
 
-After the watch ring baseline is closed, finish **Phase 14** App Widget delivery (home-screen
-surface + `PHONE_WIDGET_DESIGN.md` review-art lock). Primary nav and Widget tab prefs already
-land: Dashboard → Watchface → Widget → Providers → Settings.
-
-Then continue with later watch / widget polish as listed below.
+Phase 14 App Widget delivery is in tree (locked `PHONE_WIDGET_DESIGN.md`, Widget tab prefs,
+Android `WardPulseAppWidget`). Remaining: large (6-slot) size if needed, and emulator smoke
+for add/remove/prefs update. Then continue with later watch / widget polish as listed below.
 
 Phase 6 passed Watch Face Format acceptance on 2026-07-19:
 

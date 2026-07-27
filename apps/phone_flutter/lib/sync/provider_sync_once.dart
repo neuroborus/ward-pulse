@@ -5,6 +5,8 @@ import '../dashboard/phone_live_bindings.dart';
 import '../settings/alert_threshold_preferences.dart';
 import '../settings/consumption_display_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
+import '../widget/phone_widget_preferences.dart';
+import '../widget/phone_widget_sync.dart';
 import 'watch_sync_service.dart';
 
 /// One provider sync + watch push with no UI (headless WorkManager tick).
@@ -17,6 +19,7 @@ Future<void> providerSyncOnce() async {
     final displayPreferences =
         await SecureConsumptionDisplayPreferenceStore().read();
     final ringPreferences = await SecureWatchRingPreferenceStore().read();
+    final widgetPreferences = await SecurePhoneWidgetPreferenceStore().read();
     final alertThresholds = await SecureAlertThresholdPreferenceStore().read();
     final snapshot = applyUserAlertSettings(
       await live.repository.load(),
@@ -26,6 +29,10 @@ Future<void> providerSyncOnce() async {
       snapshot,
       displayPreferences,
       ringPreferences,
+    );
+    await const HomeWidgetPhoneWidgetSyncService().sync(
+      snapshot,
+      widgetPreferences,
     );
   } catch (_) {
     // Automatic / headless sync keeps the last successful snapshot visible.

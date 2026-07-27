@@ -34,7 +34,7 @@ installing anything, or install a desktop build from the
 - Shared WardPulse identity sources belong in `brand/icons/`.
 - Watch-face placement previews live under `brand/watchface/` (not a second SVG source).
 - App-specific sources belong in a `design/` directory under the owning app
-  (phone widget review art: `apps/phone_flutter/design/` when Phase 14 locks
+  (phone widget review art: `apps/phone_flutter/design/` — locked with
   `docs/product/PHONE_WIDGET_DESIGN.md`).
 - Exported runtime assets belong in the consuming platform's normal asset or resource directory.
 - Keep only locked previews under `brand/watchface/` — no scratch placement boards.

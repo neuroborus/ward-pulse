@@ -22,6 +22,7 @@ import '../sync/provider_sync_scheduler.dart';
 import '../sync/watch_sync_service.dart';
 import '../watchface/watchface_screen.dart';
 import '../widget/phone_widget_preferences.dart';
+import '../widget/phone_widget_sync.dart';
 import '../widget/widget_screen.dart';
 import 'ward_pulse_theme.dart';
 
@@ -30,6 +31,7 @@ class WardPulseApp extends StatelessWidget {
     super.key,
     required this.repository,
     this.watchSyncService = const MethodChannelWatchSyncService(),
+    this.phoneWidgetSyncService = const DisabledPhoneWidgetSyncService(),
     this.credentialStore = const EmptyProviderCredentialStore(),
     this.codexAccountService = const EmptyCodexAccountService(),
     this.claudeAccountService = const EmptyClaudeAccountService(),
@@ -47,6 +49,7 @@ class WardPulseApp extends StatelessWidget {
 
   final DashboardRepository repository;
   final WatchSyncService watchSyncService;
+  final PhoneWidgetSyncService phoneWidgetSyncService;
   final ProviderCredentialStore credentialStore;
   final CodexAccountService codexAccountService;
   final ClaudeAccountService claudeAccountService;
@@ -70,6 +73,7 @@ class WardPulseApp extends StatelessWidget {
       home: DashboardHost(
         repository: repository,
         watchSyncService: watchSyncService,
+        phoneWidgetSyncService: phoneWidgetSyncService,
         credentialStore: credentialStore,
         codexAccountService: codexAccountService,
         claudeAccountService: claudeAccountService,
@@ -92,6 +96,7 @@ class DashboardHost extends StatefulWidget {
     super.key,
     required this.repository,
     required this.watchSyncService,
+    required this.phoneWidgetSyncService,
     required this.credentialStore,
     required this.codexAccountService,
     required this.claudeAccountService,
@@ -108,6 +113,7 @@ class DashboardHost extends StatefulWidget {
 
   final DashboardRepository repository;
   final WatchSyncService watchSyncService;
+  final PhoneWidgetSyncService phoneWidgetSyncService;
   final ProviderCredentialStore credentialStore;
   final CodexAccountService codexAccountService;
   final ClaudeAccountService claudeAccountService;
@@ -302,6 +308,10 @@ class _DashboardHostState extends State<DashboardHost> {
         _widgetPreferences = value;
       });
     }
+    final snapshot = _currentSnapshot;
+    if (snapshot != null) {
+      unawaited(_syncPhoneWidget(snapshot));
+    }
   }
 
   Future<void> _updateAlertThresholds(
@@ -361,6 +371,7 @@ class _DashboardHostState extends State<DashboardHost> {
     );
     _currentSnapshot = snapshot;
     unawaited(_syncWatch(snapshot));
+    unawaited(_syncPhoneWidget(snapshot));
     return snapshot;
   }
 
@@ -388,6 +399,7 @@ class _DashboardHostState extends State<DashboardHost> {
         });
       }
       await _syncWatch(snapshot);
+      await _syncPhoneWidget(snapshot);
     } catch (_) {
       // Automatic sync failures keep the last successful snapshot visible.
     } finally {
@@ -412,6 +424,14 @@ class _DashboardHostState extends State<DashboardHost> {
       await _queueWatchSummary(snapshot);
     } catch (_) {
       // Watch availability must not block the phone dashboard.
+    }
+  }
+
+  Future<void> _syncPhoneWidget(DashboardSnapshot snapshot) async {
+    try {
+      await widget.phoneWidgetSyncService.sync(snapshot, _widgetPreferences);
+    } catch (_) {
+      // Launcher widget updates must not block the phone dashboard.
     }
   }
 

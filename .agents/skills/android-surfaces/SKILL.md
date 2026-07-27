@@ -24,8 +24,8 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 - Show today, week, month, provider plaques on Dashboard, charts, budgets, credits, sync
   status, Providers connection hub, and Settings.
 - Phase 14 primary tabs: Dashboard → Watchface → Widget → Providers → Settings. Watchface owns
-  Wear/WFF ring-slot prefs; Widget owns phone home-widget prefs. Do not keep those controls in
-  Settings.
+  Wear/WFF ring-slot prefs; Widget owns phone home-widget prefs and the Android App Widget
+  (`PHONE_WIDGET_DESIGN.md` locked). Do not keep those controls in Settings.
 - **Providers** owns the full connection catalog (Connected / Not connected), credentials /
   auth, and **user-configured** connection-scoped alert thresholds (editable before first
   sync). Do not keep the connection catalog under Settings.

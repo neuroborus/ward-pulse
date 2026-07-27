@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120" viewBox="0 0 200 120" role="img" aria-label="Phone widget · small · 2 metrics">
+  <rect width="200" height="120" rx="16" fill="#F2F4F1"/>
+  <text x="16" y="28" font-family="Noto Sans, sans-serif" font-size="14" font-weight="700" fill="#1A1F1A">WardPulse</text>
+  <rect x="16" y="46" width="4" height="20" rx="1" fill="#65D78A"/>
+  <text x="28" y="61" font-family="Noto Sans, sans-serif" font-size="13" fill="#1A1F1A">46% left · Codex 5h</text>
+  <rect x="16" y="78" width="4" height="20" rx="1" fill="#E8915A"/>
+  <text x="28" y="93" font-family="Noto Sans, sans-serif" font-size="13" fill="#1A1F1A">22% left · Extra</text>
+</svg>

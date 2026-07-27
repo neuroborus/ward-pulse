@@ -43,15 +43,20 @@ List<WatchRingMetric> phoneWidgetCatalog(DashboardSnapshot? snapshot) {
   return watchRingCatalog(snapshot, includePurchased: true);
 }
 
-/// Resolves widget metrics: only available percent metrics, prefs order.
+/// Resolves widget metrics: only available non-exhausted percent metrics, prefs order.
 List<WatchRingMetric> resolvePhoneWidgetMetrics(
   DashboardSnapshot snapshot,
   PhoneWidgetPreferences preferences,
 ) {
+  bool usable(WatchRingMetric metric) {
+    final used = metric.usedPercent;
+    return metric.isAvailable && used != null && used < 100;
+  }
+
   if (preferences.usesDefaults) {
     return phoneWidgetCatalog(
       snapshot,
-    ).where((metric) => metric.isAvailable).take(phoneWidgetSlotCount).toList();
+    ).where(usable).take(phoneWidgetSlotCount).toList();
   }
 
   final catalog = {
@@ -59,7 +64,7 @@ List<WatchRingMetric> resolvePhoneWidgetMetrics(
   };
   return [
     for (final id in preferences.migratedIds)
-      if (catalog[id] case final metric? when metric.isAvailable) metric,
+      if (catalog[id] case final metric? when usable(metric)) metric,
   ];
 }
 
