@@ -20,6 +20,8 @@ import '../sync/manual_refresh_window.dart';
 import '../sync/provider_sync_scheduler.dart';
 import '../sync/watch_sync_service.dart';
 import '../watchface/watchface_screen.dart';
+import '../widget/phone_widget_preferences.dart';
+import '../widget/widget_screen.dart';
 import 'ward_pulse_theme.dart';
 
 class WardPulseApp extends StatelessWidget {
@@ -34,6 +36,7 @@ class WardPulseApp extends StatelessWidget {
         const DefaultConsumptionDisplayPreferenceStore(),
     this.refreshIntervalStore = const DefaultRefreshIntervalPreferenceStore(),
     this.watchRingPreferenceStore = const DefaultWatchRingPreferenceStore(),
+    this.phoneWidgetPreferenceStore = const DefaultPhoneWidgetPreferenceStore(),
     this.alertThresholdStore = const DefaultAlertThresholdPreferenceStore(),
     this.syncScheduler = const DisabledProviderSyncScheduler(),
     this.debugDataAvailable = false,
@@ -48,6 +51,7 @@ class WardPulseApp extends StatelessWidget {
   final ConsumptionDisplayPreferenceStore displayPreferenceStore;
   final RefreshIntervalPreferenceStore refreshIntervalStore;
   final WatchRingPreferenceStore watchRingPreferenceStore;
+  final PhoneWidgetPreferenceStore phoneWidgetPreferenceStore;
   final AlertThresholdPreferenceStore alertThresholdStore;
   final ProviderSyncScheduler syncScheduler;
   final bool debugDataAvailable;
@@ -69,6 +73,7 @@ class WardPulseApp extends StatelessWidget {
         displayPreferenceStore: displayPreferenceStore,
         refreshIntervalStore: refreshIntervalStore,
         watchRingPreferenceStore: watchRingPreferenceStore,
+        phoneWidgetPreferenceStore: phoneWidgetPreferenceStore,
         alertThresholdStore: alertThresholdStore,
         syncScheduler: syncScheduler,
         debugDataAvailable: debugDataAvailable,
@@ -89,6 +94,7 @@ class DashboardHost extends StatefulWidget {
     required this.displayPreferenceStore,
     required this.refreshIntervalStore,
     required this.watchRingPreferenceStore,
+    required this.phoneWidgetPreferenceStore,
     required this.alertThresholdStore,
     required this.syncScheduler,
     required this.debugDataAvailable,
@@ -103,6 +109,7 @@ class DashboardHost extends StatefulWidget {
   final ConsumptionDisplayPreferenceStore displayPreferenceStore;
   final RefreshIntervalPreferenceStore refreshIntervalStore;
   final WatchRingPreferenceStore watchRingPreferenceStore;
+  final PhoneWidgetPreferenceStore phoneWidgetPreferenceStore;
   final AlertThresholdPreferenceStore alertThresholdStore;
   final ProviderSyncScheduler syncScheduler;
   final bool debugDataAvailable;
@@ -114,8 +121,9 @@ class DashboardHost extends StatefulWidget {
 
 class _DashboardHostState extends State<DashboardHost> {
   static const _watchfaceIndex = 1;
-  static const _providersIndex = 2;
-  static const _settingsIndex = 3;
+  static const _widgetIndex = 2;
+  static const _providersIndex = 3;
+  static const _settingsIndex = 4;
 
   late Future<DashboardSnapshot> _snapshot = _loadSnapshot();
   DashboardSnapshot? _currentSnapshot;
@@ -124,6 +132,7 @@ class _DashboardHostState extends State<DashboardHost> {
   RefreshIntervalPreference _refreshInterval =
       const RefreshIntervalPreference();
   WatchRingPreferences _ringPreferences = const WatchRingPreferences();
+  PhoneWidgetPreferences _widgetPreferences = const PhoneWidgetPreferences();
   AlertThresholdPreferences _alertThresholds =
       const AlertThresholdPreferences();
   Future<void> _alertThresholdWrite = Future<void>.value();
@@ -213,6 +222,14 @@ class _DashboardHostState extends State<DashboardHost> {
     }
   }
 
+  Future<void> _readWidgetPreferences() async {
+    try {
+      _widgetPreferences = await widget.phoneWidgetPreferenceStore.read();
+    } catch (_) {
+      _widgetPreferences = const PhoneWidgetPreferences();
+    }
+  }
+
   Future<void> _readAlertThresholds() async {
     try {
       _alertThresholds = await widget.alertThresholdStore.read();
@@ -272,6 +289,15 @@ class _DashboardHostState extends State<DashboardHost> {
     }
   }
 
+  Future<void> _updateWidgetPreferences(PhoneWidgetPreferences value) async {
+    await widget.phoneWidgetPreferenceStore.write(value);
+    if (mounted) {
+      setState(() {
+        _widgetPreferences = value;
+      });
+    }
+  }
+
   Future<void> _updateAlertThresholds(
     AlertThresholdPreferences Function(AlertThresholdPreferences current)
     update,
@@ -299,6 +325,7 @@ class _DashboardHostState extends State<DashboardHost> {
     await _readDisplayPreferences();
     await _readRefreshInterval();
     await _readRingPreferences();
+    await _readWidgetPreferences();
     await _readAlertThresholds();
     await _readDebugDataPreference();
     // Rescheduling before the load keeps the next tick a full interval away, so
@@ -433,6 +460,12 @@ class _DashboardHostState extends State<DashboardHost> {
                 ringPreferences: _ringPreferences,
                 onRingPreferencesChanged: _updateRingPreferences,
               ),
+              _ when _selectedIndex == _widgetIndex => WidgetScreen(
+                key: const ValueKey('widget'),
+                snapshot: snapshot,
+                preferences: _widgetPreferences,
+                onPreferencesChanged: _updateWidgetPreferences,
+              ),
               _ when _selectedIndex == _providersIndex => ProvidersScreen(
                 key: const ValueKey('providers'),
                 credentialStore: widget.credentialStore,
@@ -491,6 +524,11 @@ class _DashboardHostState extends State<DashboardHost> {
                 icon: Icon(Icons.watch_outlined),
                 selectedIcon: Icon(Icons.watch),
                 label: 'Watchface',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.widgets_outlined),
+                selectedIcon: Icon(Icons.widgets),
+                label: 'Widget',
               ),
               NavigationDestination(
                 icon: Icon(Icons.hub_outlined),

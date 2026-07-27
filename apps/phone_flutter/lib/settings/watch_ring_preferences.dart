@@ -120,13 +120,17 @@ bool _isClaudePlanWindowRingId(String ringId) {
   return _isClaudePlanWindowAllowanceId(ringId.substring(prefix.length));
 }
 
-/// Coalesce legacy Claude window ids into [claudePlanRingId] and drop retired
-/// purchased-meter ring ids.
-List<String> migrateWatchRingSelectedIds(List<String> ids) {
+/// Coalesce legacy Claude window ids into [claudePlanRingId] and optionally
+/// drop retired purchased-meter ring ids (Watchface only).
+List<String> migrateWatchRingSelectedIds(
+  List<String> ids, {
+  bool dropPurchased = true,
+  int maxSlots = watchRingSlotCount,
+}) {
   final out = <String>[];
   var sawClaudePlan = false;
   for (final id in ids) {
-    if (_retiredPurchasedRingIds.contains(id)) {
+    if (dropPurchased && _retiredPurchasedRingIds.contains(id)) {
       continue;
     }
     if (id == claudePlanRingId || _isClaudePlanWindowRingId(id)) {
@@ -138,7 +142,7 @@ List<String> migrateWatchRingSelectedIds(List<String> ids) {
     }
     out.add(id);
   }
-  return out.take(watchRingSlotCount).toList(growable: false);
+  return out.take(maxSlots).toList(growable: false);
 }
 
 /// Collapses Claude plan windows into one ring (tightest remaining).
@@ -166,7 +170,7 @@ WatchRingMetric? collapseClaudePlanRing(Iterable<AllowanceState> allowances) {
       label: 'Claude plan',
       usedPercent: null,
       status: windows.first.status,
-      unavailableReason: 'This allowance has no percentage to show as a ring.',
+      unavailableReason: 'This allowance has no percentage to show.',
     );
   }
 
@@ -198,9 +202,12 @@ int _compareClaudePlanWindows(AllowanceState a, AllowanceState b) {
 
 /// Builds the catalog of ring metrics from the current dashboard snapshot.
 ///
-/// Purchased meters (Extra usage, on-demand, Codex credits) are excluded —
-/// they stay on phone cards and may surface as alerts.
-List<WatchRingMetric> watchRingCatalog(DashboardSnapshot? snapshot) {
+/// Purchased meters (Extra usage, on-demand, Codex credits) are excluded by
+/// default — they stay on phone cards / the Widget tab, not Wear rings.
+List<WatchRingMetric> watchRingCatalog(
+  DashboardSnapshot? snapshot, {
+  bool includePurchased = false,
+}) {
   final metrics = <WatchRingMetric>[
     _budgetMetric('budget.today', 'Today', snapshot?.todayTotal),
     _budgetMetric('budget.week', 'Week', snapshot?.weekTotal),
@@ -220,10 +227,17 @@ List<WatchRingMetric> watchRingCatalog(DashboardSnapshot? snapshot) {
       if (collapsed != null) {
         metrics.add(collapsed);
       }
+      if (includePurchased) {
+        for (final allowance in account.allowances) {
+          if (allowance.source == AllowanceSource.purchased) {
+            metrics.add(_allowanceMetric(account.provider, allowance));
+          }
+        }
+      }
       continue;
     }
     for (final allowance in account.allowances) {
-      if (allowance.source == AllowanceSource.purchased) {
+      if (allowance.source == AllowanceSource.purchased && !includePurchased) {
         continue;
       }
       metrics.add(_allowanceMetric(account.provider, allowance));
@@ -266,6 +280,7 @@ List<WatchRingMetric> resolveWatchRings(
 List<WatchRingMetric> orderWatchRingsForSurface(
   List<WatchRingMetric> rings, {
   DashboardSnapshot? snapshot,
+  int maxSlots = watchRingSlotCount,
 }) {
   final active = [
     for (final ring in rings)
@@ -304,7 +319,7 @@ List<WatchRingMetric> orderWatchRingsForSurface(
     }
     return a.id.compareTo(b.id);
   });
-  return active.take(watchRingSlotCount).toList(growable: false);
+  return active.take(maxSlots).toList(growable: false);
 }
 
 /// Short subtitle for Watchface preview and Settings diagnostics.
@@ -346,9 +361,7 @@ WatchRingMetric _allowanceMetric(String provider, AllowanceState allowance) {
     usedPercent: percent,
     status: allowance.status,
     unavailableReason:
-        percent == null
-            ? 'This allowance has no percentage to show as a ring.'
-            : null,
+        percent == null ? 'This allowance has no percentage to show.' : null,
   );
 }
 

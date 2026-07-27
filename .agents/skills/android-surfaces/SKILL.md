@@ -25,7 +25,7 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   status, Providers connection hub, and Settings.
 - Phase 14 primary tabs: Dashboard → Watchface → Widget → Providers → Settings. Watchface owns
   Wear/WFF ring-slot prefs; Widget owns phone home-widget prefs. Do not keep those controls in
-  Settings (Watchface tab owns ring slots; Widget tab still planned).
+  Settings.
 - **Providers** owns the full connection catalog (Connected / Not connected), credentials /
   auth, and **user-configured** connection-scoped alert thresholds (editable before first
   sync). Do not keep the connection catalog under Settings.

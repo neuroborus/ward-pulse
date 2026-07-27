@@ -14,6 +14,7 @@ import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/settings/debug_data_preferences.dart';
 import 'package:ward_pulse_phone/settings/refresh_interval_preferences.dart';
+import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
 import 'package:ward_pulse_phone/sync/poll_cadence.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_scheduler.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
@@ -215,6 +216,37 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     // Defaults select available metrics; toggling Today off persists an explicit list.
+    final todayTile = find.widgetWithText(CheckboxListTile, 'Today');
+    expect(todayTile, findsOneWidget);
+    await tester.tap(todayTile);
+    await tester.pumpAndSettle();
+
+    expect(store.value.selectedIds, isNotNull);
+  });
+
+  testWidgets('Widget tab owns metrics independently of Watchface', (
+    tester,
+  ) async {
+    final snapshot = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final store = _MemoryPhoneWidgetStore();
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(snapshot),
+        phoneWidgetPreferenceStore: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Widget'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Widget metrics'), findsOneWidget);
+    expect(find.text('Home screen widget'), findsOneWidget);
+    expect(find.text('Next widget payload'), findsOneWidget);
+    expect(find.textContaining('independent of Watchface'), findsOneWidget);
+
     final todayTile = find.widgetWithText(CheckboxListTile, 'Today');
     expect(todayTile, findsOneWidget);
     await tester.tap(todayTile);
@@ -871,6 +903,18 @@ final class _CountingDashboardRepository extends DashboardRepository {
 
   @override
   Future<DashboardSnapshot> load() async => _load();
+}
+
+class _MemoryPhoneWidgetStore implements PhoneWidgetPreferenceStore {
+  PhoneWidgetPreferences value = const PhoneWidgetPreferences();
+
+  @override
+  Future<PhoneWidgetPreferences> read() async => value;
+
+  @override
+  Future<void> write(PhoneWidgetPreferences next) async {
+    value = next;
+  }
 }
 
 class _MemoryWatchRingStore implements WatchRingPreferenceStore {

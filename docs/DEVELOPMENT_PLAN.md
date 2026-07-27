@@ -70,8 +70,8 @@ WFF watch face
 Glanceable concentric remaining rings + tap target to open the Wear OS app
 ```
 
-The phone app is the primary product surface. It should feel like a compact analytics dashboard rather than a simple counter. Primary tab order (Widget still planned):
-Dashboard → Watchface → Providers → Settings (target: … → Widget → …).
+The phone app is the primary product surface. It should feel like a compact analytics dashboard rather than a simple counter. Primary tab order:
+Dashboard → Watchface → Widget → Providers → Settings.
 
 The phone widget is a launcher glance, not a second dashboard. It should answer the same
 pulse question as the watch face, with a **phone-native composition** (rectangular sizes,
@@ -631,9 +631,9 @@ results. Do not reintroduce automatic alerts from allowance/budget status alone.
 
 **Current gap (2026-07-27):** `build_dashboard_snapshot` still emits alerts from budget /
 purchased allowance `ProviderStatus` without user rules (e.g. Mock Claude Extra ≥ 80%).
-Connection catalog and opt-in threshold prefs live on Providers / Settings; Watchface owns
-ring slots (Widget tab still planned). Next: replace auto-fired alerts with
-`calculate_alerts(snapshot, settings)` using those stored rules.
+Connection catalog and opt-in threshold prefs live on Providers / Settings; Watchface and Widget
+tabs own glance layout prefs (App Widget surface + design lock still planned). Next: replace
+auto-fired alerts with `calculate_alerts(snapshot, settings)` using those stored rules.
 
 ---
 
@@ -1714,8 +1714,8 @@ Dashboard → Watchface → Widget → Providers → Settings
 ```
 
 - **Watchface** owns Wear / WFF ring slots and payload preview (moved off Settings).
-- Add the **Widget** tab for widget metric selection + preview; prefs are **independent** of
-  Watchface prefs so phone and watch can differ.
+- **Widget** owns phone home-widget metric slots and payload preview (prefs independent of
+  Watchface; `PHONE_WIDGET_DESIGN.md` draft baseline; App Widget surface still planned).
 - **Providers** already owns the connection catalog, credentials, and connection alert
   thresholds.
 - Settings stays **systemic only**: global polling interval, global budget thresholds,
@@ -1724,9 +1724,10 @@ Dashboard → Watchface → Widget → Providers → Settings
 
 #### Widget surface
 
-Visual contract (to lock before implementation): `docs/product/PHONE_WIDGET_DESIGN.md`
-(create in this phase; OpenPencil / SVG review art under `apps/phone_flutter/design/` per
-`docs/DESIGN_ASSETS.md`). Do not copy `WATCH_RING_DESIGN.md` layouts into the widget.
+Draft visual contract: `docs/product/PHONE_WIDGET_DESIGN.md` (review art under
+`apps/phone_flutter/design/` per `docs/DESIGN_ASSETS.md` before lock). Do not copy
+`WATCH_RING_DESIGN.md` layouts into the widget. The phone **Widget** tab already owns
+metric prefs independently of Watchface; the Android App Widget surface is still to land.
 
 Deliverables:
 
@@ -1919,9 +1920,9 @@ Close Phase 13 acceptance on device/emulator (Wear rings + WFF concentric live a
 OpenPencil sources, Wear `UsageRings`, WFF concentric remaining `RANGED_VALUE` arcs, and
 Phase 11 headless WorkManager polling are in place.
 
-After the watch ring baseline is closed, finish **Phase 14** (insert the Widget tab into
-Dashboard → Watchface → Providers → Settings; phone home-screen widget with its own design
-lock). Watchface ring-slot prefs already live on the Watchface tab.
+After the watch ring baseline is closed, finish **Phase 14** App Widget delivery (home-screen
+surface + `PHONE_WIDGET_DESIGN.md` review-art lock). Primary nav and Widget tab prefs already
+land: Dashboard → Watchface → Widget → Providers → Settings.
 
 Then continue with later watch / widget polish as listed below.
 
