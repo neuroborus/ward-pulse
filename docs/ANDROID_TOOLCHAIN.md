@@ -440,10 +440,12 @@ flutter build apk --debug
 flutter run
 ```
 
-For Codex acceptance, open **Settings > Codex account**, start sign-in, open the external OpenAI
-page, and enter the one-time code. Plan usage, purchased usage, and platform spend are on by
-default; any can be hidden in Settings if at least one surface remains. The OAuth session stays
-in phone-secure storage and does not require a Codex CLI, local server, or `adb reverse`.
+For Codex acceptance, open the phone **connection catalog** (Providers after Phase 14; Settings
+until then) → Codex / plan row, start sign-in, open the external OpenAI page, and enter the
+one-time code. Plan usage, purchased usage, and platform spend are on by default; any can be
+hidden via Settings consumption-display toggles if at least one surface remains. The OAuth
+session stays in phone-secure storage and does not require a Codex CLI, local server, or
+`adb reverse`.
 
 Run the Wear OS acceptance checks with one canonical Wear AVD active:
 

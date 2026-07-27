@@ -1,6 +1,7 @@
 package app.wardpulse.wear.ui
 
 import app.wardpulse.wear.model.PulseStatus
+import app.wardpulse.wear.model.Quantity
 import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.model.WatchDataMode
@@ -98,24 +99,72 @@ private fun glanceSubtitle(
     return "$left · $credits"
 }
 
+/** Purchased credits for a ring family (`320 credits`), or null. Shared with the face. */
 internal fun purchasedCreditsSuffix(
     summary: WatchDashboardSummary,
     ringId: String,
 ): String? {
+    val remaining = purchasedRemainingForRing(summary, ringId) ?: return null
+    return "${formatQuantityValue(remaining.value)} ${remaining.unit}"
+}
+
+/** Compact face strip credits (`320`, `1.2K`) — same family rule as Glance. */
+internal fun purchasedCreditsCompact(
+    summary: WatchDashboardSummary,
+    ringId: String,
+): String? {
+    val remaining = purchasedRemainingForRing(summary, ringId) ?: return null
+    val value = remaining.value.toDoubleOrNull() ?: return formatQuantityValue(remaining.value)
+    return compactCreditCount(value)
+}
+
+internal fun purchasedRemainingForRing(
+    summary: WatchDashboardSummary,
+    ringId: String,
+): Quantity? {
     val family = glanceFamilyName(ringId) ?: return null
     if (family == "Budget") {
         return null
     }
     val prefix = "$family · "
-    val remaining =
-        summary.allowances
-            .firstOrNull { allowance ->
-                allowance.source == "purchased" &&
-                    !allowance.unlimited &&
-                    allowance.remaining != null &&
-                    allowance.label.startsWith(prefix)
-            }
-            ?.remaining
-            ?: return null
-    return "${formatQuantityValue(remaining.value)} ${remaining.unit}"
+    return summary.allowances
+        .firstOrNull { allowance ->
+            allowance.source == "purchased" &&
+                !allowance.unlimited &&
+                allowance.remaining != null &&
+                allowance.label.startsWith(prefix)
+        }
+        ?.remaining
 }
+
+/** Compact credit count for face strips (matches phone `compactCreditCount`). */
+internal fun compactCreditCount(value: Double): String {
+    val absolute = kotlin.math.abs(value)
+    val sign = if (value < 0) "-" else ""
+    if (absolute < 1000) {
+        val body =
+            if (absolute == kotlin.math.floor(absolute)) {
+                absolute.toLong().toString()
+            } else {
+                String.format(java.util.Locale.US, "%.1f", absolute)
+            }
+        return "$sign$body"
+    }
+    var amount = absolute / 1000
+    var unit = 0
+    val suffixes = arrayOf("K", "M", "B", "T")
+    while (unit < suffixes.lastIndex && roundOneDecimal(amount) >= 1000) {
+        amount /= 1000
+        unit += 1
+    }
+    val rounded = roundOneDecimal(amount)
+    val body =
+        if (rounded == kotlin.math.floor(rounded)) {
+            rounded.toLong().toString()
+        } else {
+            String.format(java.util.Locale.US, "%.1f", rounded)
+        }
+    return "$sign$body${suffixes[unit]}"
+}
+
+private fun roundOneDecimal(value: Double): Double = kotlin.math.round(value * 10) / 10.0

@@ -357,7 +357,8 @@ await mkdir(wearDir, { recursive: true })
 const three = [
   { family: FAMILY.codex, metric: 'Weekly plan', used: 0.92, credits: '320' },
   { family: FAMILY.claude, metric: '5h', used: 0.61, credits: '80' },
-  { family: FAMILY.cursor, metric: 'Weekly plan', used: 0.28 },
+  // Matches fixtures/providers/cursor/usage_summary.json autoPercentUsed.
+  { family: FAMILY.cursor, metric: 'Cursor Models', used: 0.47 },
 ]
 
 const variants = [

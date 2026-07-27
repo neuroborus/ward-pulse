@@ -81,8 +81,8 @@ class GlanceModelsTest {
                                 PulseStatus.OK,
                             ),
                             RingSummary(
-                                "allowance.cursor.week",
-                                "Weekly plan",
+                                "allowance.cursor.cursor-plan-other",
+                                "Other Models",
                                 100.0,
                                 PulseStatus.OK,
                             ),

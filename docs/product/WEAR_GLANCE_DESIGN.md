@@ -33,8 +33,8 @@ map face colors to providers.
   (●)  Claude · 5h
        39% left · 80 credits
 
-  (●)  Cursor · Weekly plan
-       72% left
+  (●)  Cursor · Cursor Models
+       53% left
 
       [ Alerts: 0 ]          ← pill button; disabled when N = 0
 ```
@@ -47,10 +47,11 @@ Rules:
   matching the face.
 - Mini arc = **remaining** (`100 - usedPercent`), family color from the face palette;
   same clockwise-from-12 melt as the watch face (usage gap opens at 12).
-- Primary line: family/provider + metric label; same wording for the same window kind
-  (Codex and Cursor both `Weekly plan`). Claude’s subscription plan windows
-  (`5h`, `Weekly`, optional Opus/Sonnet weekly) collapse to **one** ring on the phone;
-  Glance shows which window is active via the short label (`Claude · 5h` / `Claude · Weekly`).
+- Primary line: family/provider + metric label. Codex keeps `Weekly plan`; Cursor Pro+/Ultra
+  plan pools use `Cursor Models` / `Other Models` (exhausted pools stay off the face).
+  Claude’s subscription plan windows (`5h`, `Weekly`, optional Opus/Sonnet weekly) collapse to
+  **one** ring on the phone; Glance shows which window is active via the short label
+  (`Claude · 5h` / `Claude · Weekly`).
 - Secondary line: `N% left`; append `· N credits` when that provider reports purchased credits.
   Per provider only — not a footer sum, not face `creditsGlance`, never LLM `TOK`.
 - Empty / exhausted: short copy centered between refresh and Alerts; no placeholder rings.
@@ -153,7 +154,7 @@ phone owns allowance via summary manualRefreshAllowed / manualRefreshAvailableAt
 Stale = orange !OK + Stale + enabled
 Alerts: N pill; active when N > 0; disabled at 0
 empty / exhausted centered copy between refresh and Alerts
-metric labels consistent across providers for the same window kind
+metric labels match provider pool names (Codex Weekly plan; Cursor Models / Other Models)
 review art: render-wear-glance-designs.mjs → preview-glance-legend-*.png
 primary preview: preview-glance-legend-3.png
 ```

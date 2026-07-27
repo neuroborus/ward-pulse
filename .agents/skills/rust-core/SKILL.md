@@ -18,6 +18,10 @@ Use this skill for work under `core/` and Rust-owned contracts.
 
 - Provider-specific raw data enters the core; normalized dashboard snapshots leave the core.
 - Rust owns budgets, credits, projections, alerts, model breakdowns, status mapping, and watch summary derivation.
+- Alert evaluation uses **user-configured** rules/thresholds from platform preferences
+  (`calculate_alerts(snapshot, settings)`). Connection-scoped rules are owned by the Providers
+  UI; global budget rules by Settings. Do not invent dashboard alerts from allowance or
+  budget `ProviderStatus` alone; status chrome and the alerts list are separate.
 - Platform code owns HTTP clients, TLS, retries, background execution, secure credential retrieval, encrypted storage, and UI state.
 - Prefer deterministic functions that are easy to fixture-test.
 - Preserve previous successful snapshot semantics when modeling sync failure states.

@@ -25,9 +25,14 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 - Phase 14 primary tabs: Dashboard → Watchface → Widget → Providers → Settings. Watchface owns
   Wear/WFF ring-slot prefs; Widget owns phone home-widget prefs. Do not keep those controls in
   Settings once the tabs land (Settings “Watch display” is transitional only).
-- Do not add a phone Alerts tab. Active alerts render on the Dashboard; alert rules and budget
-  thresholds belong in Settings on connection rows / a global budget card (editable even when
-  Not connected). Providers consumes status; it does not own rule creation.
+- **Providers** owns the full connection catalog (Connected / Not connected), credentials /
+  auth, and **user-configured** connection-scoped alert thresholds (editable before first
+  sync). Do not keep the connection catalog under Settings.
+- **Settings** is systemic only: global polling interval, global Today / Week / Month budget
+  thresholds, diagnostics, data deletion, legal, debug toggles — not connections or credentials.
+- Do not add a phone Alerts tab. Active alerts render on the Dashboard. Thresholds are
+  **user-configured only** — never invent alerts from hard-coded 80%/100% utilization cutoffs.
+  Provider status chrome (Warning / RateLimited) is separate from the alerts list.
 - Keep analytics UI dense, clear, and operational rather than marketing-like.
 
 ## Wear OS App
@@ -47,15 +52,17 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   request counts); arc = remaining (clockwise melt from 12); large time hero; sunk family strips
   (equal width; first strip nearest center; stroke tuned so 3 strips clear arcs); family colors.
   Hard cap: **three** concentric plan/budget rings (`watchRingSlotCount = 3`). Purchased meters
-  (Extra usage, on-demand, Codex credits) are not ring candidates — phone cards + alerts only.
+  (Extra usage, on-demand, Codex credits) are not ring candidates — phone cards only; alerts
+  only via user thresholds on Providers.
   Future multi-profile / hatch notes there are planning-only until a later phase.
 - Claude plan windows (`5h` / weekly / Opus / Sonnet) collapse to one watch ring on the phone
   (`allowance.claude.plan`); Glance shows the active window label. Phone dashboard still lists all.
 - Prefer concentric percent layers from schema v4+ on the **face** (up to three selected metrics);
   never invent `Unknown` filler. Unselected, unavailable, or exhausted (`>= 100%`)
   layers do not render.
-- Face strip / `creditsGlance` may show compact remaining credits on the **matching provider**
-  strip (`% · 500`); strip accents use the same family ColorRamp as the matching arc.
+- Face strips show compact remaining credits per provider family from `allowances` (`% · 500`),
+  same matching rule as Glance; accents use the family ColorRamp. `creditsGlance` is for
+  credits-only faces when there are no plan rings.
 - Keep today, week, usage, providers, alerts (active list only — no rule editing), and last sync
   as secondary detail screens.
 - Store and render the latest successful watch summary.

@@ -294,7 +294,7 @@ mod tests {
 
     #[test]
     fn keeps_an_omitted_on_demand_limit_unknown() {
-        let report = REPORT_FIXTURE.replace("\"limit\": 1000,", "");
+        let report = REPORT_FIXTURE.replace("\"limit\": 100000,", "");
         let snapshot = cursor_plan_snapshot_from_report_json(&report).expect("normalize");
         let on_demand = snapshot
             .provider_snapshot

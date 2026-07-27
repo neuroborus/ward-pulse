@@ -417,7 +417,7 @@ mod tests {
         assert_eq!(
             snapshot.allowances[1].remaining,
             Some(Quantity {
-                value: "12.5".to_string(),
+                value: "500".to_string(),
                 unit: QuantityUnit::Credits,
             })
         );
@@ -448,7 +448,7 @@ mod tests {
     fn preserves_unlimited_purchased_credits() {
         let report_json = REPORT_FIXTURE
             .replace("\"unlimited\": false", "\"unlimited\": true")
-            .replace("\"balance\": \"12.5\"", "\"balance\": null");
+            .replace("\"balance\": \"500\"", "\"balance\": null");
         let report = codex_provider_snapshot_from_report_json(&report_json)
             .expect("normalize unlimited Codex credits");
         let allowance = &report.provider_snapshot.allowances[1];

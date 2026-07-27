@@ -16,8 +16,8 @@
   "seven_day_sonnet": null,
   "extra_usage": {
     "is_enabled": true,
-    "monthly_limit": 1700,
-    "used_credits": 190.0,
-    "utilization": 11.18
+    "monthly_limit": 50000,
+    "used_credits": 12000.0,
+    "utilization": 24.0
   }
 }

@@ -247,7 +247,13 @@ object PreviewWatchDashboardSummary {
         rings = listOf(
             RingSummary("allowance.codex.week", "Weekly plan", 92.0, PulseStatus.OK),
             RingSummary("allowance.claude.plan", "5h", 61.0, PulseStatus.OK),
-            RingSummary("allowance.cursor.week", "Weekly plan", 28.0, PulseStatus.OK),
+            // Matches fixtures/providers/cursor/usage_summary.json autoPercentUsed.
+            RingSummary(
+                "allowance.cursor.cursor-plan-models",
+                "Cursor Models",
+                47.0,
+                PulseStatus.OK,
+            ),
         ),
         creditsGlance = CreditsGlance(text = "400", label = "Credits left", provider = "codex"),
         allowances = listOf(

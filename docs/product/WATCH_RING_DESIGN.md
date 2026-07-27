@@ -14,11 +14,12 @@ Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and si
 
 ## Goal
 
-Glanceable **remaining** capacity for up to **three** user-selected percent metrics, with optional
-remaining purchased **credits** on the strip of the **same provider family** (never glued onto a
-tighter unrelated ring). Purchased meters (Claude Extra usage, Cursor on-demand, Codex credits)
-are **not** ring candidates — they stay on the phone dashboard and may appear as alerts. Not
-“always show every provider,” and never invent `Unknown` filler. Strip secondary values are
+Glanceable **remaining** capacity for up to **three** user-selected percent metrics, with
+remaining purchased **credits** on each strip for that provider family when reported (same
+per-provider source as Glance). Purchased meters (Claude Extra usage, Cursor on-demand, Codex
+credits) are **not** ring candidates — they stay on the phone dashboard and may appear as
+alerts only when the user configures thresholds for those meters on **Providers**.
+Not “always show every provider,” and never invent `Unknown` filler. Strip secondary values are
 credits — never LLM `TOK` / token counts.
 
 ## Layer rules
@@ -96,9 +97,9 @@ Rules:
     clear aperture and do not cover arcs;
   - measured horizontal padding so Bold labels clear the well edges;
   - strip order = tightest remaining on top (nearest center) when plan rings exist;
-  - content: `%`, or `% · credits` only when credits belong to that strip’s provider family;
-    omit unused halves / omit empty strips; multi-provider credit aggregates do not glue onto a
-    single `%` row;
+  - content: `%`, or `% · credits` when that strip’s provider family reports purchased remaining
+    (per-provider from `allowances`, same as Glance — not gated on aggregate `creditsGlance`);
+    omit unused halves / omit empty strips;
   - credits text is compact (`500`, `1.2K`) — never a `TOK` suffix;
   - ring stroke ~25px on the 450 WFF canvas so arcs read clearer while a **3-strip** stack
     still clears the aperture.

@@ -1,9 +1,11 @@
 package app.wardpulse.wear.complication
 
+import app.wardpulse.wear.model.AllowanceSummary
 import app.wardpulse.wear.model.CreditsGlance
 import app.wardpulse.wear.model.PreviewWatchDashboardSummary
 import app.wardpulse.wear.model.ProviderSummary
 import app.wardpulse.wear.model.PulseStatus
+import app.wardpulse.wear.model.Quantity
 import app.wardpulse.wear.model.RingSummary
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -25,53 +27,64 @@ class WatchComplicationTextTest {
     }
 
     @Test
-    fun buildsSunkStripLabelsWithCreditsOnMatchingProviderOnly() {
-        val cursorTightest =
+    fun buildsSunkStripLabelsWithPerProviderCreditsLikeGlance() {
+        val multi =
             PreviewWatchDashboardSummary.value.copy(
                 rings =
                     listOf(
-                        RingSummary("allowance.cursor.plan", "Plan usage", 53.9, PulseStatus.OK),
-                        RingSummary("allowance.claude.plan", "Weekly plan", 0.0, PulseStatus.OK),
-                        RingSummary("allowance.codex.codex-primary", "Weekly plan", 0.0, PulseStatus.OK),
-                    ),
-                creditsGlance =
-                    CreditsGlance(text = "500", label = "Credits left", provider = "codex"),
-            )
-        // Tightest is Cursor — do not glue Codex credits onto it.
-        assertEquals("46%", WatchComplicationText.stripLabel(cursorTightest, 0))
-        assertEquals("100%", WatchComplicationText.stripLabel(cursorTightest, 1))
-        assertEquals("100% · 500", WatchComplicationText.stripLabel(cursorTightest, 2))
-
-        val codexTightest =
-            cursorTightest.copy(
-                rings =
-                    listOf(
+                        RingSummary(
+                            "allowance.cursor.cursor-plan-models",
+                            "Cursor Models",
+                            53.9,
+                            PulseStatus.OK,
+                        ),
+                        RingSummary("allowance.claude.plan", "Weekly", 61.0, PulseStatus.OK),
                         RingSummary("allowance.codex.codex-primary", "Weekly plan", 92.0, PulseStatus.OK),
-                        RingSummary("allowance.cursor.plan", "Plan usage", 28.0, PulseStatus.OK),
+                    ),
+                // Aggregate glance must not gate per-ring credits.
+                creditsGlance =
+                    CreditsGlance(text = "900", label = "Credits left", provider = null),
+                allowances =
+                    listOf(
+                        AllowanceSummary(
+                            source = "purchased",
+                            label = "Codex · Purchased credits",
+                            usedPercent = null,
+                            remaining = Quantity("320", "credits"),
+                            unlimited = false,
+                            resetsAt = null,
+                            status = PulseStatus.OK,
+                        ),
+                        AllowanceSummary(
+                            source = "purchased",
+                            label = "Claude · Extra usage",
+                            usedPercent = null,
+                            remaining = Quantity("80", "credits"),
+                            unlimited = false,
+                            resetsAt = null,
+                            status = PulseStatus.OK,
+                        ),
                     ),
             )
-        assertEquals("8% · 500", WatchComplicationText.stripLabel(codexTightest, 0))
-        assertEquals("72%", WatchComplicationText.stripLabel(codexTightest, 1))
+        // Cursor has no purchased meter — percent only.
+        assertEquals("46%", WatchComplicationText.stripLabel(multi, 0))
+        assertEquals("39% · 80", WatchComplicationText.stripLabel(multi, 1))
+        assertEquals("8% · 320", WatchComplicationText.stripLabel(multi, 2))
 
-        val planOnly = cursorTightest.copy(creditsGlance = null)
+        val planOnly = multi.copy(allowances = emptyList(), creditsGlance = null)
         assertEquals("46%", WatchComplicationText.stripLabel(planOnly, 0))
 
         val creditsOnly =
-            planOnly.copy(rings = emptyList(), creditsGlance = cursorTightest.creditsGlance)
+            planOnly.copy(
+                rings = emptyList(),
+                creditsGlance = CreditsGlance(text = "500", label = "Credits left", provider = "codex"),
+            )
         assertEquals(
             WatchComplicationText.StripPayload(text = "500"),
             WatchComplicationText.stripPayload(creditsOnly, 0),
         )
         assertEquals("500", WatchComplicationText.stripLabel(creditsOnly, 0))
         assertNull(WatchComplicationText.stripLabel(creditsOnly, 1))
-
-        // Multi-provider aggregate (provider null) never glues onto a single % strip.
-        val aggregate =
-            cursorTightest.copy(
-                creditsGlance = CreditsGlance(text = "900", label = "Credits left", provider = null),
-            )
-        assertEquals("46%", WatchComplicationText.stripLabel(aggregate, 0))
-        assertEquals("100%", WatchComplicationText.stripLabel(aggregate, 2))
     }
 
     @Test

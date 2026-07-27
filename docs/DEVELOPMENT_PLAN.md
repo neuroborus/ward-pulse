@@ -53,7 +53,9 @@ The Android ecosystem has four user-facing surfaces.
 Android phone app
    ↓
 Dashboard → Watchface → Widget → Providers → Settings
-(credentials / polling / alert rules stay in Settings; glance layout on Watchface + Widget tabs)
+(connection catalog + credentials + connection alert rules on Providers;
+ systemic prefs — polling, global budgets, diagnostics, legal — on Settings;
+ glance layout on Watchface + Widget tabs)
 
 Phone home-screen widget
    ↓
@@ -522,8 +524,9 @@ About / legal
 ```
 
 Do **not** add a phone primary tab for Alerts. Active alerts stay on the Dashboard; alert
-**rules** live in Settings (see below). Wear keeps a compact Alerts detail screen for the
-latest computed list only — never rule editing on the watch.
+**rules** live on Providers (connection-scoped) and Settings (global budgets only — see
+below). Wear keeps a compact Alerts detail screen for the latest computed list only — never
+rule editing on the watch.
 
 **Watchface** and **Widget** sit between Dashboard and Providers — Watchface first, then
 Widget. Surface configuration lives on those tabs, not under Settings.
@@ -531,8 +534,12 @@ Widget. Surface configuration lives on those tabs, not under Settings.
 - **Watchface** — configure Wear / WFF ring slots, preview next watch payload (today’s
   “Watch display” block moves here out of Settings).
 - **Widget** — configure the phone home-screen widget metrics and preview (Phase 14).
-- **Settings** — credentials, polling, alert rules (connection + global budget thresholds),
-  diagnostics, legal — not glance surface layout.
+- **Providers** — full connection catalog (every plan/platform row, Connected or Not
+  connected), credentials / auth, connection-scoped alert thresholds, and live status for
+  synced accounts.
+- **Settings** — systemic only: global polling interval, global Today / Week / Month budget
+  thresholds, diagnostics, data deletion, legal — not connections, not credentials, not
+  glance layout, not a sixth Alerts tab.
 
 ### Home / Overview (Dashboard)
 
@@ -544,7 +551,7 @@ Shows:
 - remaining budget;
 - additional credits if known;
 - overall provider status;
-- active alerts (computed; empty “No alerts” is valid until rules fire);
+- active alerts (from **user-configured** rules only; empty “No alerts” until rules fire);
 - last sync time.
 
 Example:
@@ -576,32 +583,34 @@ Charts should be useful before they are beautiful. The first implementation can 
 
 ### Providers
 
-Each provider account should show:
+Providers is the **connection hub**, not a read-only status list.
 
-- provider name;
-- account/workspace display name;
-- masked credential reference;
-- connection status;
-- last successful sync;
-- last error;
-- configured budgets;
-- supported metrics for that provider.
+It owns:
+
+- the full connection catalog (every plan/platform row in Not connected / Connected states);
+- credentials / auth entry for each connection (OAuth, session, API key — as today);
+- **user-configured** connection-scoped alert thresholds (plan windows, purchased meters such
+  as Extra usage / on-demand — opt-in; no hard-coded cutoffs);
+- live status, last successful sync, last error, and supported metrics when connected.
+
+Rules can be prepared before the first successful sync because Not connected rows stay visible.
 
 ### Settings
 
-Settings should include:
+Settings is **systemic only** — no connection catalog and no per-provider credentials:
 
 - global minimum polling interval;
-- per-provider enable/disable;
-- alert rules: connection-scoped thresholds on each catalog row, plus a global
-  Today / Week / Month budget warn-critical card (not duplicated per provider);
+- global Today / Week / Month budget warn/critical thresholds (not duplicated onto provider
+  rows);
 - local-only diagnostics export;
 - data deletion;
 - legal disclaimer;
-- open-source license information.
+- open-source license information;
+- debug-only toggles (e.g. Mock data) when present.
 
 Do **not** keep Watchface or Widget layout controls in Settings once the Watchface / Widget
-tabs exist.
+tabs exist. Do **not** keep connection rows or connection alert rules in Settings once they
+live on Providers.
 
 #### Alerts ownership (phone)
 
@@ -609,17 +618,23 @@ Split runtime output from configuration:
 
 | Concern | Surface | Notes |
 |---------|---------|--------|
-| Active alerts | Dashboard alerts panel (and Wear Alerts detail) | Computed from the latest snapshot + rules |
-| Alert rules / thresholds | Settings, on connection rows (or a sub-screen from them) | Editable whether or not that connection is currently synced |
-| Global budget warn/critical | Settings card (Today / Week / Month) | Not duplicated onto every provider row |
+| Active alerts | Dashboard alerts panel (and Wear Alerts detail) | Only rules the user enabled, evaluated against the latest snapshot |
+| Connection alert rules / thresholds | **Providers** (catalog row or detail) | User picks which meters to watch and warn/critical %; editable on Not connected rows too |
+| Global budget warn/critical | **Settings** card (Today / Week / Month) | Systemic; not duplicated onto every provider row |
 
-Providers shows connected accounts and may surface status; it is **not** the place to create
-rules (an account row may be absent until the first successful sync). The Settings connection
-catalog already lists every plan/platform row in Not connected / Connected states, so rules
-can be prepared before credentials exist.
+**Product rule:** alerts are opt-in. Provider status chrome (`Warning` / `RateLimited` from
+reported utilization) must **not** invent dashboard alerts by itself. Empty “No alerts” is the
+correct default until the user configures at least one rule.
 
-Rust remains the owner of alert evaluation (`calculate_alerts` / budget helpers). Platform
-shells only persist rule preferences and render results.
+Rust remains the owner of alert evaluation (`calculate_alerts(snapshot, settings)` / budget
+helpers) using the persisted user rules. Platform shells persist rule preferences and render
+results. Do not reintroduce automatic alerts from allowance/budget status alone.
+
+**Current gap (2026-07-27):** `build_dashboard_snapshot` still emits alerts from budget /
+purchased allowance `ProviderStatus` without user rules (e.g. Mock Claude Extra ≥ 80%), and
+the phone still keeps the connection catalog under Settings. Both are transitional: move the
+catalog + connection thresholds to Providers, keep Settings systemic, and replace auto-fired
+alerts with rules-backed evaluation.
 
 ---
 
@@ -682,7 +697,7 @@ Updated 4m ago
 ```
 
 Empty list is valid: show a short “No active alerts” state. Rule configuration stays on the
-phone Settings connection catalog / budget thresholds card.
+phone: connection thresholds on **Providers**, global budget thresholds on **Settings**.
 
 ### Wear OS rules
 
@@ -865,7 +880,7 @@ hard minimum across supported connections, rounded up; its upper bound is 60 min
 Undocumented contracts get conservative floors rather than optimistic ones. The per-provider
 clamp `effective_interval = max(user_setting, provider_minimum)` still applies. Freshness
 guidance does not clamp the cadence; it is surfaced as a visible note on the affected
-connection rows in Settings instead.
+connection rows on Providers instead.
 
 Detailed constants and their sources are defined in Phase 11.
 
@@ -938,7 +953,7 @@ presentation should be homogeneous:
 
 One authorization per connection kind is unavoidable: for every provider the subscription data
 and the organization reporting live behind different credentials and different endpoints. A
-single provider section in Settings groups both connections; neither implies the other.
+single provider section on Providers groups both connections; neither implies the other.
 
 ```text
 Provider   Plan connection                          Platform connection
@@ -1361,7 +1376,8 @@ automated Rust, Flutter, FFI, fixture, pagination, retry, and credential-masking
 Remaining acceptance:
 
 ```text
-save a valid OpenAI Admin API key in Settings on an Android phone or emulator
+save a valid OpenAI Admin API key on the phone connection catalog (Providers after Phase 14;
+  Settings until then) on an Android phone or emulator
 refresh and confirm that OpenAI today/week/month cost plus usage/model data are rendered
 confirm the saved key remains masked and no sensitive values appear in logcat
 ```
@@ -1374,7 +1390,8 @@ no desktop process, local server, or adb reverse dependency remains
 Rust normalizes plan windows, purchased credits, and daily token buckets without fake money values
 plan, purchased usage, and platform spend are visible by default; at least one surface stays on
 the same filtered allowance summary is propagated to Wear OS through schema version 3
-Android end-to-end acceptance remains: sign in from Settings and verify the live phone/watch UI
+Android end-to-end acceptance remains: sign in from the connection catalog (Providers after
+Phase 14; Settings until then) and verify the live phone/watch UI
 ```
 
 ### Phase 8 — MVP hardening
@@ -1420,12 +1437,13 @@ phone and watch flows survive sync failures
 Status: completed as of 2026-07-24.
 
 Rationale: Codex sign-in and the OpenAI Platform Admin key are one product relationship with
-OpenAI, but Settings presents them as two unrelated rows. Research in section 15 shows every
-provider follows the same dual shape, so Settings should group connections by provider.
+OpenAI, but Settings then presented them as two unrelated rows. Research in section 15 shows
+every provider follows the same dual shape, so connections were grouped by provider (delivered
+under Settings; **Phase 14** moves that catalog to the Providers tab).
 
 Deliverables:
 
-- one Settings section per provider: OpenAI, Anthropic, Cursor;
+- one provider section per provider: OpenAI, Anthropic, Cursor (then Settings; later Providers);
 - the OpenAI section contains both connections: Codex subscription (device-code OAuth) and
   Platform reporting (Admin API key);
 - a shared connection row component: connection kind, status, masked credential,
@@ -1448,6 +1466,10 @@ the label appears in Settings and provider details instead of the generic title
 removing a credential also removes its label
 existing stored credentials survive the regrouping without re-entry
 ```
+
+Note (2026-07-27): Phase 14 moves this connection catalog from Settings onto the **Providers**
+tab; Settings becomes systemic only. The Phase 9 grouping shape (one section per provider,
+plan + platform rows) is preserved.
 
 ### Phase 10 — capability-adaptive dashboard
 
@@ -1582,7 +1604,7 @@ Rationale: watch space is limited and must never show `Unknown` filler. Plan/all
 across connected providers is percentage-first, so Wear and WFF standardize on concentric
 percent rings. This is not “always show every provider”: the user picks up to three metrics;
 plan/budget percent only — purchased meters (Extra usage, on-demand, Codex credits) are never
-ring candidates (phone cards + alerts only);
+ring candidates (phone cards; alerts only via user thresholds);
 unselected or unavailable ones simply do not render. Face visual contract:
 `docs/product/WATCH_RING_DESIGN.md`. Wear **app** Glance (tile home) visual contract:
 `docs/product/WEAR_GLANCE_DESIGN.md` (text legend — not a face clone). Layout ownership under each app's
@@ -1607,16 +1629,15 @@ Deliverables:
 - the phone **Watchface** tab selects up to three ring slots (not Settings); metrics from
   unconnected providers stay visible but disabled with the same `?` help as the dashboard;
   until the tab lands, the existing Settings “Watch display” block is the transitional UI;
-  purchased allowances are excluded from the ring catalog and may appear as dashboard alerts;
+  purchased allowances are excluded from the ring catalog (phone cards only; alerts only when
+  the user configures thresholds for those meters on Providers);
 - no time-based rotation in the first iteration: simultaneous static layers are battery-safe;
 - aperture: large time as hero; upper inner rim reserved for future weather; lower chord uses
   short per-family strips (`%`, remaining credits, or `% · credits`) — see `WATCH_RING_DESIGN.md`;
-- optional remaining purchased credits on the **matching provider** strip when
-  `creditsGlance.provider` is set and display prefs show purchased usage (`% · credits`);
-  multi-provider aggregates (`provider` null) and credits-only faces (no plan rings) do not
-  glue credits onto an unrelated `%` strip; never LLM `TOK` on the face;
-- schema `creditsGlance` (v6) feeds that compact remaining-credits glance — not LLM token
-  counts;
+- remaining purchased credits on each strip for that provider family from watch `allowances`
+  (same per-provider lookup as Glance; compact `% · 320` on the face); never LLM `TOK`;
+- schema `creditsGlance` (v6) remains for credits-only faces (no plan rings) — not the
+  per-strip credit source when plan rings exist;
 - watch summary schema version 7: ordered selected ring entries (stable id, short label,
   percent, status) plus optional `creditsGlance`, phone-owned `manualRefreshAllowed` /
   `manualRefreshAvailableAt`, without credentials, account ids, or raw provider payloads;
@@ -1634,8 +1655,8 @@ review SVGs/PNGs match those baselines (face: preview-3-plan-credits; Glance: pr
 schema version 7 validates and sanitized fixtures stay current
 watch surfaces show only configured, available, non-exhausted rings
 arc length = remaining; melt clockwise from 12; inner/center = tightest remaining
-credits on matching-provider strip only (`% · credits`) when purchased credits remain and
-  display prefs allow them; credits-only when no plan rings
+credits per provider family on face strips (`% · credits`) from allowances, like Glance;
+  creditsGlance for credits-only faces; never LLM TOK
 App Glance credits are per provider with an explicit credits label (not a footer sum)
 Glance refresh: OK/!OK inside dual-arrow glyph; optional muted problem detail below plate
 cadence cooldown = gray OK + disabled (no detail); provider rate limit = gray !OK + Rate limited + disabled
@@ -1658,7 +1679,7 @@ Phone payload sorts tightest-remaining first (center/inner on face) and omits ex
 Wear Compose UsageRings: remaining arcs + sunk family strips (time stays on system/WFF)
 WFF v2 concentric remaining arcs (WeightedStroke + ColorRamp) + sunk `%` / credits strips
 Strip TEXT carries the full label (`100% · 500`); accents via RANGED_VALUE ColorRamp
-Credits glue only onto the matching provider strip (`creditsGlance.provider`)
+Credits per provider family on face strips from allowances (same as Glance); creditsGlance for credits-only
 Clockwise-from-12 remaining melt (Transform startAngle; review art regenerated 2026-07-27)
 Wear Glance Compose text legend landed (GlanceLegendPage; watch→phone refresh request)
 ```
@@ -1668,7 +1689,7 @@ Future (not Phase 13 acceptance — product direction):
 
 ```text
 Phase 13 / locked baseline: up to three Watchface ring slots (watchRingSlotCount = 3);
-  purchased meters are not rings (alerts / phone cards only).
+  purchased meters are not rings (phone cards; alerts only via user thresholds).
 Later: possibly up to three profiles/accounts for the same provider on one device.
 When multi-profile lands, same-provider rings need hatch/pattern as well as family color
   (keep the three-ring face cap unless a later design revision raises it).
@@ -1698,8 +1719,11 @@ Dashboard → Watchface → Widget → Providers → Settings
   payload preview); remove it from Settings.
 - Add the **Widget** tab for widget metric selection + preview; prefs are **independent** of
   Watchface prefs so phone and watch can differ.
-- Settings keeps credentials, polling, alert rules (connection + global budget thresholds),
-  diagnostics, and legal only — not Watchface/Widget layout, and not a sixth Alerts tab.
+- Move the **connection catalog** (credentials / auth, Connected / Not connected rows) and
+  **connection-scoped alert thresholds** onto the **Providers** tab.
+- Settings stays **systemic only**: global polling interval, global budget thresholds,
+  diagnostics, data deletion, legal — not connections, not credentials, not Watchface/Widget
+  layout, and not a sixth Alerts tab.
 
 #### Widget surface
 
@@ -1732,6 +1756,8 @@ Acceptance:
 ```text
 primary nav is Dashboard → Watchface → Widget → Providers → Settings
 Watchface tab owns ring-slot prefs; Settings no longer hosts Watch display
+Providers owns connection catalog, credentials, and connection alert thresholds
+Settings is systemic only (polling, global budgets, diagnostics, legal)
 Widget tab owns widget prefs independently of Watchface
 PHONE_WIDGET_DESIGN.md baseline locked with review art for the primary sizes
 widget shows only configured, available, non-exhausted metrics

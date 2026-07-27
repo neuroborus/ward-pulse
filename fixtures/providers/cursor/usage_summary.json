@@ -17,9 +17,9 @@
     },
     "onDemand": {
       "enabled": true,
-      "used": 450,
-      "limit": 1000,
-      "remaining": 550
+      "used": 45000,
+      "limit": 100000,
+      "remaining": 55000
     }
   }
 }

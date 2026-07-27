@@ -35,7 +35,8 @@ const CATALOG = {
   },
   cursor: {
     id: 'cursor',
-    used: 0.28,
+    // Matches fixtures/providers/cursor/usage_summary.json autoPercentUsed.
+    used: 0.47,
     color: '#67E8D4',
   },
 }

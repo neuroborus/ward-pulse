@@ -274,7 +274,7 @@ mod tests {
             .expect("extra usage");
         assert_eq!(
             extra.remaining.as_ref().map(|value| value.value.as_str()),
-            Some("15.10")
+            Some("380.00")
         );
     }
 

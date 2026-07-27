@@ -25,11 +25,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
-import app.wardpulse.wear.complication.WatchComplicationText
-import app.wardpulse.wear.model.CreditsGlance
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.RingSurfaceOrder
+import app.wardpulse.wear.model.WatchDashboardSummary
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -46,7 +45,7 @@ internal fun UsageRings(
     rings: List<RingSummary>,
     modifier: Modifier = Modifier,
     diameter: Dp = 152.dp,
-    creditsGlance: CreditsGlance? = null,
+    summary: WatchDashboardSummary? = null,
 ) {
     if (rings.isEmpty()) {
         return
@@ -109,16 +108,7 @@ internal fun UsageRings(
                     (100.0 - ring.usedPercent.coerceIn(0.0, 100.0))
                         .coerceAtLeast(0.0)
                         .roundToInt()
-                val credits =
-                    creditsGlance
-                        ?.takeIf { glance ->
-                            val owner = glance.provider
-                            val ringProvider =
-                                WatchComplicationText.providerFromRingId(ring.id)
-                            glance.text.isNotBlank() &&
-                                owner != null &&
-                                owner == ringProvider
-                        }?.text
+                val credits = summary?.let { purchasedCreditsCompact(it, ring.id) }
                 val label =
                     if (!credits.isNullOrBlank()) {
                         "$remaining% · $credits"

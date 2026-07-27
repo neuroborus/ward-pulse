@@ -11,7 +11,8 @@ use serde_json::json;
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::build_dashboard_snapshot;
 use ward_pulse_core::model::{
-    AllowanceState, BudgetState, DashboardSnapshot, Money, ProviderSnapshot, ProviderStatus,
+    AllowanceSource, AllowanceState, BudgetState, DashboardSnapshot, Money, ProviderSnapshot,
+    ProviderStatus, Quantity, QuantityUnit,
 };
 use ward_pulse_core::time::DateTimeUtc;
 
@@ -145,9 +146,15 @@ fn scramble_account(
 }
 
 fn scramble_allowance(rng: &mut SeedRng, allowance: &mut AllowanceState) {
+    if matches!(allowance.source, AllowanceSource::Purchased) {
+        scramble_purchased_credits(rng, allowance);
+        return;
+    }
+
     let used_percent = interesting_percent(rng);
     allowance.used_percent = Some(used_percent);
     allowance.status = percent_status(Some(used_percent));
+
     if let (Some(limit), Some(used)) = (allowance.limit.clone(), allowance.used.as_mut()) {
         // Keep quantity units; approximate used from percent when a limit exists.
         if let Ok(limit_value) = limit.value.parse::<f64>() {
@@ -161,6 +168,61 @@ fn scramble_allowance(rng: &mut SeedRng, allowance: &mut AllowanceState) {
             remaining.value = format!("{left:.2}");
         }
     }
+}
+
+/// Demo purchased limits (Claude Extra / Cursor on-demand).
+const DEMO_CREDIT_LIMITS: &[i64] = &[200, 500, 1_000, 2_500, 5_000, 12_000, 25_000];
+
+/// Demo balance-only remaining pools (Codex).
+const DEMO_CREDIT_BALANCES: &[i64] = &[0, 80, 320, 500, 1_200, 4_500, 12_500, 48_000];
+
+/// Whole, glanceable purchased credits for Mock data (live Codex may be fractional).
+fn scramble_purchased_credits(rng: &mut SeedRng, allowance: &mut AllowanceState) {
+    // Match live Codex: unlimited / balance-only meters have no utilization percent.
+    if allowance.unlimited {
+        allowance.used_percent = None;
+        allowance.status = ProviderStatus::Ok;
+        return;
+    }
+    if allowance.limit.is_none() {
+        if let Some(remaining) = allowance.remaining.as_mut() {
+            *remaining = credits(pick_i64(rng, DEMO_CREDIT_BALANCES));
+        }
+        allowance.used_percent = None;
+        allowance.status = ProviderStatus::Ok;
+        return;
+    }
+
+    let used_percent = interesting_percent(rng);
+    allowance.used_percent = Some(used_percent);
+    allowance.status = percent_status(Some(used_percent));
+
+    let limit = pick_i64(rng, DEMO_CREDIT_LIMITS);
+    let remaining = ((limit as f64) * (1.0 - (used_percent / 100.0).min(1.0)))
+        .round()
+        .clamp(0.0, limit as f64) as i64;
+    let used = limit - remaining;
+
+    if let Some(slot) = allowance.limit.as_mut() {
+        *slot = credits(limit);
+    }
+    if let Some(slot) = allowance.used.as_mut() {
+        *slot = credits(used);
+    }
+    if let Some(slot) = allowance.remaining.as_mut() {
+        *slot = credits(remaining);
+    }
+}
+
+fn credits(value: i64) -> Quantity {
+    Quantity {
+        value: value.to_string(),
+        unit: QuantityUnit::Credits,
+    }
+}
+
+fn pick_i64(rng: &mut SeedRng, choices: &[i64]) -> i64 {
+    choices[(rng.next_u32() as usize) % choices.len()]
 }
 
 fn scramble_budget(rng: &mut SeedRng, budget: &mut BudgetState) {
@@ -339,5 +401,53 @@ mod tests {
         let left = debug_multi_provider_dashboard_json(1).expect("left");
         let right = debug_multi_provider_dashboard_json(2).expect("right");
         assert_ne!(left, right);
+    }
+
+    #[test]
+    fn demo_purchased_credits_are_glanceable_integers() {
+        let snapshot = debug_multi_provider_dashboard(42).expect("demo dashboard");
+        let mut saw_purchased = false;
+        for account in &snapshot.accounts {
+            for allowance in &account.allowances {
+                if !matches!(allowance.source, AllowanceSource::Purchased) || allowance.unlimited {
+                    continue;
+                }
+                saw_purchased = true;
+
+                if let Some(limit) = &allowance.limit {
+                    let value: i64 = limit.value.parse().expect("integer limit");
+                    assert_eq!(limit.unit, QuantityUnit::Credits);
+                    assert!(
+                        DEMO_CREDIT_LIMITS.contains(&value),
+                        "unexpected demo limit {value}"
+                    );
+                }
+
+                for quantity in [allowance.remaining.as_ref(), allowance.used.as_ref()]
+                    .into_iter()
+                    .flatten()
+                {
+                    assert_eq!(quantity.unit, QuantityUnit::Credits);
+                    let value: i64 = quantity.value.parse().expect("integer credits");
+                    assert!(value >= 0, "credits must be non-negative, got {value}");
+                }
+
+                if allowance.limit.is_none() {
+                    assert_eq!(allowance.used_percent, None);
+                    assert_eq!(allowance.status, ProviderStatus::Ok);
+                    if let Some(remaining) = &allowance.remaining {
+                        let value: i64 = remaining.value.parse().expect("integer remaining");
+                        assert!(
+                            DEMO_CREDIT_BALANCES.contains(&value),
+                            "unexpected demo balance {value}"
+                        );
+                    }
+                }
+            }
+        }
+        assert!(
+            saw_purchased,
+            "demo dashboard should include purchased meters"
+        );
     }
 }

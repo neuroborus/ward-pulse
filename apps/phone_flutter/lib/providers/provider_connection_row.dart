@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Shared Settings row for a plan or platform connection.
+/// Shared connection-catalog row for a plan or platform connection.
 class ProviderConnectionRow extends StatelessWidget {
   const ProviderConnectionRow({
     super.key,

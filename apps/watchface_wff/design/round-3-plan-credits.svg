@@ -27,8 +27,8 @@
       stroke-width="26.1" />
     <circle cx="225" cy="225" r="195.75" fill="none" stroke="#67E8D4"
       stroke-width="26.1" stroke-linecap="round"
-      stroke-dasharray="885.55 1229.93"
-      stroke-dashoffset="-344.38"
+      stroke-dasharray="651.86 1229.93"
+      stroke-dashoffset="-578.07"
       transform="rotate(-90 225 225)" />
   
     <text x="225" y="250.1" text-anchor="middle"
@@ -60,5 +60,5 @@
       fill="#67E8D4" />
     <text x="226.6" y="354.3"
       text-anchor="middle" font-family="Noto Sans, sans-serif"
-      font-size="14" font-weight="700" fill="#F4FBF8">72%</text>
+      font-size="14" font-weight="700" fill="#F4FBF8">53%</text>
 </svg>

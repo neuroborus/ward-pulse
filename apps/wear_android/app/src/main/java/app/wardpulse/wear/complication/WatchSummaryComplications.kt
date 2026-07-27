@@ -17,12 +17,12 @@ import androidx.wear.watchface.complications.datasource.SuspendingComplicationDa
 import app.wardpulse.wear.MainActivity
 import app.wardpulse.wear.data.WatchSummaryStore
 import app.wardpulse.wear.model.PulseStatus
-import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.RingSurfaceOrder
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.ui.RingFamily
 import app.wardpulse.wear.ui.formatPercentAmount
 import app.wardpulse.wear.ui.formatPercentLabel
+import app.wardpulse.wear.ui.purchasedCreditsCompact
 import java.util.Locale
 
 abstract class ShortTextComplicationDataSourceService :
@@ -331,8 +331,9 @@ object WatchComplicationText {
 
     /**
      * Human strip label for surface ring [index] (`WATCH_RING_DESIGN.md`):
-     * `8%`, or `8% · 500` only when [CreditsGlance.provider] matches that ring's family.
-     * Credits-only on strip 0 when there is no plan ring.
+     * `8%`, or `8% · 500` when that ring's provider reports purchased credits
+     * (same per-family source as Glance). Credits-only on strip 0 when there is
+     * no plan ring.
      */
     fun stripLabel(summary: WatchDashboardSummary?, index: Int): String? {
         if (summary == null) {
@@ -345,7 +346,7 @@ object WatchComplicationText {
                 return null
             }
             val percent = percentAmount(remaining)
-            val credits = creditsTextForRing(summary, ring)
+            val credits = purchasedCreditsCompact(summary, ring.id)
             return if (credits != null) {
                 "$percent% · $credits"
             } else {
@@ -356,18 +357,6 @@ object WatchComplicationText {
             return summary.creditsGlance?.text?.takeIf { it.isNotBlank() }
         }
         return null
-    }
-
-    /**
-     * Purchased credits glue onto a plan strip only when the glance names that
-     * provider — never onto a tighter unrelated ring (e.g. Cursor % + Codex credits).
-     */
-    fun creditsTextForRing(summary: WatchDashboardSummary, ring: RingSummary): String? {
-        val glance = summary.creditsGlance ?: return null
-        val text = glance.text.takeIf { it.isNotBlank() } ?: return null
-        val owner = glance.provider ?: return null
-        val ringProvider = providerFromRingId(ring.id) ?: return null
-        return if (ringProvider == owner) text else null
     }
 
     /** `allowance.<provider>.…` → provider id; budgets / unknown → null. */
