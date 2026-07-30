@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="360" height="120" viewBox="0 0 360 120" role="img" aria-label="Phone widget · empty">
-  <rect width="360" height="120" rx="16" fill="#F2F4F1"/>
-  <text x="20" y="36" font-family="Noto Sans, sans-serif" font-size="16" font-weight="700" fill="#1A1F1A">WardPulse</text>
-  <text x="20" y="72" font-family="Noto Sans, sans-serif" font-size="15" fill="#5F675C">No metrics</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="88" viewBox="0 0 220 88" role="img" aria-label="Phone widget · empty">
+  <rect width="220" height="88" rx="20" fill="#F2F4F1" stroke="#5F675C" stroke-opacity="0.1"/>
+  <g transform="translate(168, 40)" opacity="0.28" fill="none" stroke="#5F675C" stroke-width="2" stroke-linecap="round">
+    <text x="22" y="0" font-family="Noto Sans, sans-serif" font-size="6" font-weight="700" letter-spacing="0.6" fill="#5F675C" stroke="none" text-anchor="middle">WARDPULSE</text>
+    <path d="M2 14 L12 14 L18 6 L28 22 L36 12 L46 12"/>
+  </g>
+  <text x="14" y="42" font-family="Noto Sans, sans-serif" font-size="13" fill="#5F675C">No metrics</text>
 </svg>

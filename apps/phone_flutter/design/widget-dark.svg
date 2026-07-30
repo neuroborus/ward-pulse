@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="140" viewBox="0 0 280 140" role="img" aria-label="Phone widget · medium · dark · tightest-first">
+  <rect width="280" height="140" rx="20" fill="#101412" stroke="#A7B09E" stroke-opacity="0.14"/>
+  <g transform="translate(230, 10)" opacity="0.45" fill="none" stroke="#C5CDD1" stroke-width="1.6" stroke-linecap="round">
+    <text x="18" y="0" font-family="Noto Sans, sans-serif" font-size="5" font-weight="700" letter-spacing="0.5" fill="#C5CDD1" stroke="none" text-anchor="middle">WARDPULSE</text>
+    <path d="M2 10 L8 10 L12 4 L18 14 L24 8 L30 8"/>
+  </g>
+  <rect x="14" y="32" width="3" height="13" rx="1" fill="#E8915A"/>
+  <text x="24" y="43" font-family="Noto Sans, sans-serif" font-size="12" fill="#F4FBF8">22% left</text>
+  <text x="140" y="43" font-family="Noto Sans, sans-serif" font-size="12" fill="#F4FBF8" text-anchor="middle">Weekly</text>
+  <text x="252" y="43" font-family="Noto Sans, sans-serif" font-size="12" fill="#A7B09E" text-anchor="end">80 credits</text>
+  <rect x="14" y="54" width="3" height="13" rx="1" fill="#65D78A"/>
+  <text x="24" y="65" font-family="Noto Sans, sans-serif" font-size="12" fill="#F4FBF8">46% left</text>
+  <text x="140" y="65" font-family="Noto Sans, sans-serif" font-size="12" fill="#F4FBF8" text-anchor="middle">5h</text>
+  <text x="252" y="65" font-family="Noto Sans, sans-serif" font-size="12" fill="#A7B09E" text-anchor="end">320 credits</text>
+  <rect x="14" y="76" width="3" height="13" rx="1" fill="#67E8D4"/>
+  <text x="24" y="87" font-family="Noto Sans, sans-serif" font-size="12" fill="#F4FBF8">71% left</text>
+  <text x="140" y="87" font-family="Noto Sans, sans-serif" font-size="12" fill="#F4FBF8" text-anchor="middle">Other Models</text>
+  <text x="252" y="87" font-family="Noto Sans, sans-serif" font-size="12" fill="#A7B09E" text-anchor="end">2.1K credits</text>
+</svg>

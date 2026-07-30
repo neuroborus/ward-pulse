@@ -67,8 +67,7 @@ Android phone, Wear OS, and Watch Face Format in the current product plan.
 | Android SDK Build Tools | `build-tools;36.0.0` | Android build baseline |
 | Android SDK Platform Tools | 37.0.0 | `adb` |
 | Android Emulator | 36.6.11.0, build 15507667 | Phone emulator |
-| Android phone system image | `system-images;android-36;google_apis;x86_64`, revision 7 | Phone AVD |
-| Android phone Play Store image | `system-images;android-36;google_apis_playstore;x86_64`, revision 7 | Paired phone AVD |
+| Android phone system image | `system-images;android-36;google_apis_playstore;x86_64`, revision 7 | Phone AVD (Play Store) |
 | Android Wear system image | `system-images;android-36.1;android-wear-signed;x86_64`, revision 1 | Wear OS 6.1 AVDs |
 | Gradle Wrapper | 9.1.0 | Flutter Android build |
 | Android Gradle Plugin | 9.0.1 | Flutter Android runner |
@@ -108,11 +107,9 @@ Flutter SDK:       $HOME/develop/flutter
 Android SDK:       $HOME/Android/Sdk
 Android Studio:    $HOME/.local/opt/android-studio
 Java home:         /usr/lib/jvm/java-21-openjdk-amd64
-Phone AVD:         wardpulse_phone_api36
+Phone AVD:         wardpulse_phone_play_api36
 Phone platform:    android-36
-Phone system image system-images;android-36;google_apis;x86_64
-Paired phone AVD:  wardpulse_phone_play_api36
-Paired phone image system-images;android-36;google_apis_playstore;x86_64
+Phone system image system-images;android-36;google_apis_playstore;x86_64
 Wear compile SDK:  platforms;android-37.1
 Wear system image: system-images;android-36.1;android-wear-signed;x86_64
 Wear round AVD:    wardpulse_wear_round_api36_1
@@ -259,38 +256,8 @@ rustup target list --installed
 
 ## Phone AVD
 
-Create the canonical phone AVD:
-
-```sh
-avdmanager create avd \
-  --name wardpulse_phone_api36 \
-  --package "system-images;android-36;google_apis;x86_64" \
-  --force
-```
-
-Accept the default `no` answer when asked whether to create a custom hardware profile.
-
-List and start it with:
-
-```sh
-emulator -list-avds
-emulator -accel-check
-emulator @wardpulse_phone_api36
-```
-
-Verify the running device from another shell:
-
-```sh
-adb devices -l
-flutter devices
-```
-
-The expected Flutter device is an Android x64 emulator running Android 16 / API 36.
-
-### Phase 5 paired phone AVD
-
-Wear Data Layer emulator pairing requires a phone image with the Play Store. Install the
-image and create a separate AVD without replacing the canonical CLI phone AVD:
+Use **one** phone AVD with the Play Store image. It covers Flutter CLI work and Wear Data
+Layer pairing (a second non-Play phone AVD only caused local confusion).
 
 ```sh
 android --sdk="$ANDROID_HOME" sdk install \
@@ -307,12 +274,28 @@ sed -i 's/^PlayStore.enabled=no$/PlayStore.enabled=yes/' \
   "$HOME/.android/avd/wardpulse_phone_play_api36.avd/config.ini"
 ```
 
-Start `wardpulse_phone_play_api36` and one canonical Wear AVD, then pair them with Android
-Studio's Wear OS emulator pairing assistant. Installing the Google Pixel Watch companion
-from Play Store requires a Google account on the phone AVD; use a dedicated test account.
-The companion's optional `Associate` action is not part of this acceptance flow and is not
-required for Data Layer. Both WardPulse APKs must use application ID `app.wardpulse` and the
-same signing certificate; the Wear Kotlin namespace remains `app.wardpulse.wear`.
+List and start it with:
+
+```sh
+emulator -list-avds
+emulator -accel-check
+emulator @wardpulse_phone_play_api36
+```
+
+Verify the running device from another shell:
+
+```sh
+adb devices -l
+flutter devices
+```
+
+The expected Flutter device is an Android x64 emulator running Android 16 / API 36 with Play
+Store. Start it together with one Wear AVD, then pair them with Android Studio's Wear OS
+emulator pairing assistant. Installing the Google Pixel Watch companion from Play Store
+requires a Google account on the phone AVD; use a dedicated test account. The companion's
+optional `Associate` action is not part of this acceptance flow and is not required for Data
+Layer. Both WardPulse APKs must use application ID `app.wardpulse` and the same signing
+certificate; the Wear Kotlin namespace remains `app.wardpulse.wear`.
 
 ## Wear OS AVDs
 

@@ -86,7 +86,8 @@ Rules:
 - **Time is the hero** — optically centered; not a large remaining %.
 - **Upper inner rim** reserved for a future weather glance (no placeholder chrome yet).
 - **Watermark** — ringless mono `WARDPULSE` + pulse/eye between time and strips; low PartImage
-  alpha with a bottom dissolve into the strip stack. Details: `docs/DESIGN_ASSETS.md`.
+  alpha with a bottom dissolve into the strip stack. Same faded PNG is reused on the phone
+  home widget (day/night tint). Details: `docs/DESIGN_ASSETS.md`.
 - **Lower strips** — short rounded rectangles, not full-width tablets and not stadium pills:
   - sunk into the surface (dark well, no high-contrast border card);
   - thin left **family accent** bar (same ColorRamp / `ring.id` family as the matching arc);

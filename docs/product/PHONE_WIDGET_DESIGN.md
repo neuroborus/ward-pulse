@@ -1,8 +1,8 @@
 # Phone Widget Design
 
-**Status: locked 2026-07-27** (revised **2026-07-27** — expanded Claude windows,
-six-slot prefs, exhausted plan pools stay visible as `0% left`). Review art:
-`apps/phone_flutter/design/` (`widget-small.svg` / legacy `widget-medium.svg`).
+**Status: locked 2026-07-27** (revised **2026-07-28** — hug rows/columns, label-center /
+credits-end, picker preview sample, day/night olive chrome). Review art:
+`apps/phone_flutter/design/` (`widget-small.svg` / `widget-medium.svg` / `widget-dark.svg`).
 
 Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 14). Asset ownership: `docs/DESIGN_ASSETS.md`.
 Do **not** copy [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md) layouts onto the phone launcher.
@@ -23,21 +23,31 @@ Configuration lives on the phone **Widget** tab and is **independent** of Watchf
    reports both pool percents.
 4. **Remaining language** — display `(100 - usedPercent)` for percent metrics; family colors match
    the product palette (OpenAI/Codex green, Anthropic orange, Cursor teal, budget blue).
-5. **Omit** unavailable metrics (no percent). Exhausted plan/purchased meters (`usedPercent >= 100`)
+5. **Purchased credits** — on **plan** rows, when that provider family reports finite purchased
+   remaining credits, show Glance-style columns: `N% left` · label · `N credits` (compact
+   count + `credits` unit). Same per-provider rule as Wear Glance / face strips — not a
+   footer sum, not `creditsGlance`, never LLM `TOK`. Skip on purchased-meter rows (Extra
+   usage / on-demand are the credit pool), budgets, and missing/unlimited balances.
+6. **Omit** unavailable metrics (no percent). Exhausted plan/purchased meters (`usedPercent >= 100`)
    stay on the phone widget as **`0% left`** so sibling pools remain visible. Watch/WFF still omit
    exhausted layers.
-6. **No credentials**, account ids, or raw provider payloads on the widget or in widget logs.
+7. **No credentials**, account ids, or raw provider payloads on the widget or in widget logs.
 
 ## Size caps (locked)
 
 | Size | Slots shown | Notes |
 |------|-------------|--------|
-| Small | **2** | short resize (minHeight under ~100dp) |
-| Default / tall | **6** | prefs cap (`phoneWidgetSlotCount`); no medium-4 cutoff |
+| Short | **1–2** | fewer metrics in Widget tab (~1–2 cells) |
+| Mid | **3–5** | typical place size (`targetCellHeight≈3`) |
+| Tall | **6** | prefs cap (`phoneWidgetSlotCount`) |
 
-Prefs select up to **six** metrics. The home-screen surface shows the first *N*
-resolved metrics for the current widget height (2 or 6). Unused rows are omitted,
-not filled.
+Prefs select up to **six** metrics; the olive card shows as many **complete** resolved
+rows as fit the host cell, and as many **complete** columns as fit the width
+(`wrap_content` hug). Trailing rows / right-hand columns that would clip are omitted —
+never half-cut text. Horizontal drop order: **credits → label → `% left`**. Vertical /
+horizontal resize changes the launcher span; drag handles to the card to reclaim empty
+cells. Newly placed widgets default to ~3 cells tall; **remove and re-add** if an old
+tall span stays stale. Unused slots stay omitted, not filled.
 
 Default (unset) selection prefers **plan windows** first (Claude + Cursor + Codex), then
 purchased meters, then local budgets — so 5h / weekly / Cursor Models / Other Models are not
@@ -46,20 +56,41 @@ crowded out by Extra usage.
 ## Composition (locked)
 
 ```text
-┌─ system widget chrome ─────────────────────────┐
-│  WardPulse                          Stale      │
-│  ▌ 46% left · 5h                               │
-│  ▌ 22% left · Weekly                           │
-│  ▌ 0% left · Cursor Models                     │
-│  ▌ 71% left · Other Models                     │
+┌─ olive card hugs complete rows + columns ──────┐
+│  ▌ 22% left    Weekly        80 credits   ⌇wm  │  ← tightest remaining first
+│  ▌ 46% left      5h         320 credits        │
+│  ▌ 71% left  Other Models   2.1K credits       │
 └────────────────────────────────────────────────┘
+┌─ mid (credits dropped) ────────────────────────┐
+│  ▌ 22% left    Weekly                     ⌇wm  │
+│  ▌ 46% left      5h                            │
+└────────────────────────────────────────────────┘
+┌─ narrow (% only) ──┐
+│  ▌ 22% left   ⌇wm  │
+│  ▌ 46% left        │
+└────────────────────┘
+     (transparent cell beyond the card if the span is larger)
 ```
 
 - Rows, not concentric arcs.
 - Family accent bar (▌) on each metric row.
-- Prefer Material / system widget surfaces over custom card chrome.
-- Empty: title + short “No metrics” line (no filler rows).
-- Stale: show a compact “Stale” label in the header when the last dashboard is stale.
+- **Columns** — `% left` · centered label · credits (end-aligned). Width hide order:
+  credits first, then label; missing credits still reserve the credits column when that
+  column is shown (label stays centered).
+- **Day / night** — olive phone chrome (`#F2F4F1` / `#101412` via `values` /
+  `values-night`), not provider fills. Soft 20dp card + hairline outline; runtime card
+  **hugs** complete content so unused cell area is wallpaper. Widget-picker preview uses a
+  dedicated sample layout (`ward_pulse_app_widget_preview`) that hugs the sample rows
+  (no empty olive band under them) and follows the same day/night colors when the system
+  theme is dark.
+- **Resize** — `horizontal|vertical` with **no** tight `maxResizeHeight` (a span taller than
+  the max makes Pixel drop vertical handles). Height / width decide how many **complete**
+  rows / columns fit. Newly placed widgets use `targetCellHeight≈3`; **remove and re-add**
+  after metric-count changes if the launcher keeps a stale tall span.
+- **Watermark** — same faded mono as the watch face, ~36dp overlay top-end (does not
+  reserve a header band). No dedicated header.
+- Empty: short “No metrics” line (no filler rows).
+- Stale: compact uppercase “STALE” overlay top-start when the last dashboard is stale.
 - Tap opens the phone app (Dashboard).
 
 ## Non-goals
@@ -76,7 +107,8 @@ collapsing Claude plan windows on the phone widget (Watchface only)
 
 | File | Role |
 |------|------|
-| `widget-medium.svg` | historical 4-row preview (runtime default is tall/6) |
-| `widget-small.svg` | small (2 rows) |
+| `widget-medium.svg` | light mid preview (credits + watermark) |
+| `widget-dark.svg` | dark mid preview (same composition) |
+| `widget-small.svg` | short (2 rows); default place size ≈ 2×2 |
 | `widget-empty.svg` | empty selection |
 | `widget-stale.svg` | stale header chrome |

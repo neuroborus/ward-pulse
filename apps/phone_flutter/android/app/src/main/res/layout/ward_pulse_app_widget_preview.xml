@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Widget-picker preview: tightest-first sample, no 0% rows. Sized to fit a typical
+  3-cell pin preview (~240dp) so credits are not clipped. Runtime layout is separate.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:contentDescription="@string/ward_pulse_widget_description">
+
+    <FrameLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/ward_pulse_widget_background"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
+
+        <ImageView
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_gravity="top|end"
+            android:src="@drawable/wardpulse_mono"
+            android:tint="@color/ward_pulse_widget_watermark"
+            android:tintMode="src_in"
+            android:alpha="0.45"
+            android:scaleType="fitCenter"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|start"
+            android:orientation="vertical"
+            android:paddingEnd="20dp">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+                <ImageView
+                    android:layout_width="3dp"
+                    android:layout_height="12dp"
+                    android:contentDescription="@null"
+                    android:importantForAccessibility="no"
+                    android:background="#E8915A" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:minWidth="58dp"
+                    android:text="22% left"
+                    android:textSize="11sp"
+                    android:textColor="@color/ward_pulse_widget_on_surface"
+                    android:maxLines="1" />
+                <TextView
+                    android:layout_width="72dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:gravity="center"
+                    android:text="Weekly"
+                    android:textSize="11sp"
+                    android:textColor="@color/ward_pulse_widget_on_surface"
+                    android:maxLines="1" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:gravity="end"
+                    android:text="80 credits"
+                    android:textSize="11sp"
+                    android:textColor="@color/ward_pulse_widget_muted"
+                    android:maxLines="1" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+                <ImageView
+                    android:layout_width="3dp"
+                    android:layout_height="12dp"
+                    android:contentDescription="@null"
+                    android:importantForAccessibility="no"
+                    android:background="#65D78A" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:minWidth="58dp"
+                    android:text="46% left"
+                    android:textSize="11sp"
+                    android:textColor="@color/ward_pulse_widget_on_surface"
+                    android:maxLines="1" />
+                <TextView
+                    android:layout_width="72dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:gravity="center"
+                    android:text="5h"
+                    android:textSize="11sp"
+                    android:textColor="@color/ward_pulse_widget_on_surface"
+                    android:maxLines="1" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:gravity="end"
+                    android:text="320 credits"
+                    android:textSize="11sp"
+                    android:textColor="@color/ward_pulse_widget_muted"
+                    android:maxLines="1" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+                <ImageView
+                    android:layout_width="3dp"
+                    android:layout_height="12dp"
+                    android:contentDescription="@null"
+                    android:importantForAccessibility="no"
+                    android:background="#67E8D4" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:minWidth="58dp"
+                    android:text="71% left"
+                    android:textSize="11sp"
+                    android:textColor="@color/ward_pulse_widget_on_surface"
+                    android:maxLines="1" />
+                <TextView
+                    android:layout_width="72dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:gravity="center"
+                    android:text="Other"
+                    android:textSize="11sp"
+                    android:textColor="@color/ward_pulse_widget_on_surface"
+                    android:maxLines="1" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:gravity="end"
+                    android:text="2.1K credits"
+                    android:textSize="11sp"
+                    android:textColor="@color/ward_pulse_widget_muted"
+                    android:maxLines="1" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+</FrameLayout>

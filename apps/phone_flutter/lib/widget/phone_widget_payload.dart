@@ -1,5 +1,8 @@
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/provider_status_color.dart';
+import '../settings/watch_ring_preferences.dart';
+import '../sync/credit_request_runway.dart';
+import '../sync/watch_credits_glance.dart';
 import 'phone_widget_preferences.dart';
 
 /// One rendered home-widget row (remaining language).
@@ -8,6 +11,7 @@ final class PhoneWidgetRow {
     required this.label,
     required this.remainingPercent,
     required this.accentArgb,
+    this.creditsSuffix,
   });
 
   final String label;
@@ -16,7 +20,20 @@ final class PhoneWidgetRow {
   /// ARGB int for the family accent bar.
   final int accentArgb;
 
-  String get line => '$remainingPercent% left · $label';
+  /// Glance-style purchased credits for this row's provider (`320 credits`).
+  final String? creditsSuffix;
+
+  /// Fixed percent column for the launcher table layout.
+  String get percentText => '$remainingPercent% left';
+
+  /// Widget-tab / tests line: `% left` · label · optional credits (matches columns).
+  String get line {
+    final credits = creditsSuffix;
+    if (credits == null) {
+      return '$percentText · $label';
+    }
+    return '$percentText · $label · $credits';
+  }
 }
 
 /// Snapshot + prefs → home-widget rows (unavailable already omitted).
@@ -47,9 +64,54 @@ PhoneWidgetPayload buildPhoneWidgetPayload(
           label: metric.label,
           remainingPercent: metric.remainingPercent!.round(),
           accentArgb: phoneWidgetAccentArgb(metric.id),
+          creditsSuffix: phoneWidgetCreditsSuffix(snapshot, metric.id),
         ),
     ],
   );
+}
+
+/// Per-provider purchased credits suffix for a **plan** metric row, or null.
+///
+/// Matches Wear Glance / face strips: append finite purchased `credits` on plan
+/// windows only. Purchased-meter rows (Extra usage, on-demand) already *are* the
+/// credit pool — do not repeat. Budgets and missing/unlimited balances omit.
+String? phoneWidgetCreditsSuffix(DashboardSnapshot snapshot, String metricId) {
+  final provider = providerFromRingId(metricId);
+  if (provider == null) {
+    return null;
+  }
+  if (_isPurchasedMeterMetric(snapshot, provider, metricId)) {
+    return null;
+  }
+  final remaining = purchasedCreditsRemainingForProvider(snapshot, provider);
+  if (remaining == null || remaining <= 0) {
+    return null;
+  }
+  return '${compactCreditCount(remaining)} credits';
+}
+
+bool _isPurchasedMeterMetric(
+  DashboardSnapshot snapshot,
+  String provider,
+  String metricId,
+) {
+  const prefix = 'allowance.';
+  final stem = '$prefix$provider.';
+  if (!metricId.startsWith(stem)) {
+    return false;
+  }
+  final allowanceId = metricId.substring(stem.length);
+  for (final account in snapshot.accounts) {
+    if (account.provider != provider) {
+      continue;
+    }
+    for (final allowance in account.allowances) {
+      if (allowance.id == allowanceId) {
+        return allowance.source == AllowanceSource.purchased;
+      }
+    }
+  }
+  return false;
 }
 
 /// Family accent matching [providerFamilyColor] / budget blue.

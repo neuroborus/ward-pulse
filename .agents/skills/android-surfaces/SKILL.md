@@ -25,8 +25,13 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   status, Providers connection hub, and Settings.
 - Phase 14 primary tabs: Dashboard → Watchface → Widget → Providers → Settings. Watchface owns
   Wear/WFF ring-slot prefs; Widget owns phone home-widget prefs and the Android App Widget
-  (`PHONE_WIDGET_DESIGN.md` locked). Phone widget expands Claude windows and keeps exhausted
-  plan pools as `0% left` (Watchface still collapses Claude / omits exhausted). Do not keep
+  (`PHONE_WIDGET_DESIGN.md` locked). Phone widget **hugs** complete rows/columns inside
+  the resize cell (olive `wrap_content`; hide trailing rows and right-hand columns that
+  would clip — credits → label → `%`; unused cell area is wallpaper until the user shrinks
+  the span), vertical+horizontal resize (default ~3 cells), day/night chrome, overlay face
+  watermark (no header band), expands Claude windows, keeps exhausted plan pools as
+  `0% left`, and appends per-provider purchased credits end-aligned (label centered).
+  Watchface still collapses Claude / omits exhausted. Do not keep
   those controls in Settings.
 - **Providers** owns the full connection catalog (Connected / Not connected), credentials /
   auth, and **user-configured** connection-scoped alert thresholds (editable before first

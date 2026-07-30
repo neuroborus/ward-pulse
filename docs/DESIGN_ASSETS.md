@@ -114,6 +114,8 @@ Quiet branding on WFF — not a second hero. Locked with the concentric face bas
   (`tools/fade-watermark-png.py` during `just export-icons`), so the pulse softens into
   the metrics instead of competing with them.
 - Eye placement matches the color mark; pupil stays inside the almond rim.
+- **Phone home widget** reuses the same faded mono PNG (`wardpulse_mono`), tinted for
+  day/night olive chrome, quiet overlay top-end (does not reserve a header band).
 
 Canonical preview: `brand/watchface/preview-face-active-quiet.png`.
 
@@ -128,6 +130,7 @@ Canonical preview: `brand/watchface/preview-face-active-quiet.png`.
 | Phone / Wear launcher mipmaps | `mipmap-*/ic_launcher.png` |
 | Phone adaptive foreground | `drawable-*/ic_launcher_foreground.png` |
 | WFF runtime mono (faded PNG) | `apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png` |
+| Phone widget mono (same faded PNG) | `apps/phone_flutter/android/app/src/main/res/drawable/wardpulse_mono.png` |
 
 Prefer regenerating exports with `just export-icons` rather than editing PNGs by hand. The mono
 drawable must go through `tools/fade-watermark-png.py` (wired in `tools/export-icons.sh`).

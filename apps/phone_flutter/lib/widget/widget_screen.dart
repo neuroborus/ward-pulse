@@ -81,8 +81,8 @@ class _WidgetScreenState extends State<WidgetScreen> {
                 title: const Text('Home screen widget'),
                 subtitle: Text(
                   'Pick up to $phoneWidgetSlotCount metrics · independent of '
-                  'Watchface · Claude windows stay separate · exhausted pools '
-                  'show as 0% left',
+                  'Watchface · Claude windows stay separate · credits append '
+                  'like Glance · exhausted pools show as 0% left',
                 ),
               ),
               for (final metric in phoneWidgetCatalog(snapshot)) ...[

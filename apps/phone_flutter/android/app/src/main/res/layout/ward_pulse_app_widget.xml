@@ -1,203 +1,348 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+  Olive card hugs complete rows and complete columns (wrap_content). Root stays
+  match_parent/transparent so unused cell area shows wallpaper. Columns drop from
+  the right as width shrinks: credits → label → % left. Watermark overlays top-end.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="12dp"
-    android:background="@drawable/ward_pulse_widget_background">
+    android:contentDescription="@string/ward_pulse_widget_description">
 
-    <LinearLayout
-        android:layout_width="match_parent"
+    <FrameLayout
+        android:id="@+id/widget_card"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:layout_gravity="top|start"
+        android:background="@drawable/ward_pulse_widget_background"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        android:minWidth="96dp">
 
-        <TextView
-            android:id="@+id/widget_title"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/ward_pulse_widget_title"
-            android:textStyle="bold"
-            android:textSize="14sp"
-            android:textColor="@color/ward_pulse_widget_on_surface" />
+        <ImageView
+            android:id="@+id/widget_watermark"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_gravity="top|end"
+            android:src="@drawable/wardpulse_mono"
+            android:tint="@color/ward_pulse_widget_watermark"
+            android:tintMode="src_in"
+            android:alpha="0.55"
+            android:scaleType="fitCenter"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no" />
 
         <TextView
             android:id="@+id/widget_stale"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_gravity="top|start"
             android:text="@string/ward_pulse_widget_stale"
             android:textStyle="bold"
-            android:textSize="12sp"
+            android:textSize="11sp"
+            android:letterSpacing="0.08"
+            android:textAllCaps="true"
             android:textColor="@color/ward_pulse_widget_stale"
             android:visibility="gone" />
-    </LinearLayout>
 
-    <TextView
-        android:id="@+id/widget_empty"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:text="@string/ward_pulse_widget_empty"
-        android:textSize="13sp"
-        android:textColor="@color/ward_pulse_widget_muted"
-        android:visibility="gone" />
-
-    <LinearLayout
-        android:id="@+id/widget_row_0"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:visibility="gone">
-        <!-- ImageView is RemoteViews-safe; plain View is not and fails inflate. -->
-        <ImageView
-            android:id="@+id/widget_row_0_accent"
-            android:layout_width="3dp"
-            android:layout_height="16dp"
-            android:contentDescription="@null"
-            android:importantForAccessibility="no"
-            android:background="@color/ward_pulse_widget_budget" />
-        <TextView
-            android:id="@+id/widget_row_0_text"
-            android:layout_width="match_parent"
+        <LinearLayout
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:textSize="13sp"
-            android:textColor="@color/ward_pulse_widget_on_surface"
-            android:maxLines="1"
-            android:ellipsize="end" />
-    </LinearLayout>
+            android:layout_gravity="top|start"
+            android:orientation="vertical">
 
-    <LinearLayout
-        android:id="@+id/widget_row_1"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:visibility="gone">
-        <ImageView
-            android:id="@+id/widget_row_1_accent"
-            android:layout_width="3dp"
-            android:layout_height="16dp"
-            android:contentDescription="@null"
-            android:importantForAccessibility="no"
-            android:background="@color/ward_pulse_widget_budget" />
-        <TextView
-            android:id="@+id/widget_row_1_text"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:textSize="13sp"
-            android:textColor="@color/ward_pulse_widget_on_surface"
-            android:maxLines="1"
-            android:ellipsize="end" />
-    </LinearLayout>
+            <TextView
+                android:id="@+id/widget_empty"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/ward_pulse_widget_empty"
+                android:textSize="13sp"
+                android:textColor="@color/ward_pulse_widget_muted"
+                android:visibility="gone" />
 
-    <LinearLayout
-        android:id="@+id/widget_row_2"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:visibility="gone">
-        <ImageView
-            android:id="@+id/widget_row_2_accent"
-            android:layout_width="3dp"
-            android:layout_height="16dp"
-            android:contentDescription="@null"
-            android:importantForAccessibility="no"
-            android:background="@color/ward_pulse_widget_budget" />
-        <TextView
-            android:id="@+id/widget_row_2_text"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:textSize="13sp"
-            android:textColor="@color/ward_pulse_widget_on_surface"
-            android:maxLines="1"
-            android:ellipsize="end" />
-    </LinearLayout>
+            <!-- Row 0 -->
+            <LinearLayout
+                android:id="@+id/widget_row_0"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:visibility="gone">
+                <ImageView
+                    android:id="@+id/widget_row_0_accent"
+                    android:layout_width="3dp"
+                    android:layout_height="14dp"
+                    android:contentDescription="@null"
+                    android:importantForAccessibility="no"
+                    android:background="@color/ward_pulse_widget_budget" />
+                <TextView
+                    android:id="@+id/widget_row_0_percent"
+                    android:layout_width="70dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:textSize="12sp"
+                    android:textColor="@color/ward_pulse_widget_on_surface"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+                <TextView
+                    android:id="@+id/widget_row_0_label"
+                    android:layout_width="100dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:gravity="center"
+                    android:textSize="12sp"
+                    android:textColor="@color/ward_pulse_widget_on_surface"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+                <TextView
+                    android:id="@+id/widget_row_0_credits"
+                    android:layout_width="88dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:gravity="end"
+                    android:textSize="12sp"
+                    android:textColor="@color/ward_pulse_widget_muted"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+            </LinearLayout>
 
-    <LinearLayout
-        android:id="@+id/widget_row_3"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:visibility="gone">
-        <ImageView
-            android:id="@+id/widget_row_3_accent"
-            android:layout_width="3dp"
-            android:layout_height="16dp"
-            android:contentDescription="@null"
-            android:importantForAccessibility="no"
-            android:background="@color/ward_pulse_widget_budget" />
-        <TextView
-            android:id="@+id/widget_row_3_text"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:textSize="13sp"
-            android:textColor="@color/ward_pulse_widget_on_surface"
-            android:maxLines="1"
-            android:ellipsize="end" />
-    </LinearLayout>
+            <!-- Row 1 -->
+            <LinearLayout
+                android:id="@+id/widget_row_1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:visibility="gone">
+                <ImageView
+                    android:id="@+id/widget_row_1_accent"
+                    android:layout_width="3dp"
+                    android:layout_height="14dp"
+                    android:contentDescription="@null"
+                    android:importantForAccessibility="no"
+                    android:background="@color/ward_pulse_widget_budget" />
+                <TextView
+                    android:id="@+id/widget_row_1_percent"
+                    android:layout_width="70dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:textSize="12sp"
+                    android:textColor="@color/ward_pulse_widget_on_surface"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+                <TextView
+                    android:id="@+id/widget_row_1_label"
+                    android:layout_width="100dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:gravity="center"
+                    android:textSize="12sp"
+                    android:textColor="@color/ward_pulse_widget_on_surface"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+                <TextView
+                    android:id="@+id/widget_row_1_credits"
+                    android:layout_width="88dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:gravity="end"
+                    android:textSize="12sp"
+                    android:textColor="@color/ward_pulse_widget_muted"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+            </LinearLayout>
 
-    <LinearLayout
-        android:id="@+id/widget_row_4"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:visibility="gone">
-        <ImageView
-            android:id="@+id/widget_row_4_accent"
-            android:layout_width="3dp"
-            android:layout_height="16dp"
-            android:contentDescription="@null"
-            android:importantForAccessibility="no"
-            android:background="@color/ward_pulse_widget_budget" />
-        <TextView
-            android:id="@+id/widget_row_4_text"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:textSize="13sp"
-            android:textColor="@color/ward_pulse_widget_on_surface"
-            android:maxLines="1"
-            android:ellipsize="end" />
-    </LinearLayout>
+            <!-- Row 2 -->
+            <LinearLayout
+                android:id="@+id/widget_row_2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:visibility="gone">
+                <ImageView
+                    android:id="@+id/widget_row_2_accent"
+                    android:layout_width="3dp"
+                    android:layout_height="14dp"
+                    android:contentDescription="@null"
+                    android:importantForAccessibility="no"
+                    android:background="@color/ward_pulse_widget_budget" />
+                <TextView
+                    android:id="@+id/widget_row_2_percent"
+                    android:layout_width="70dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:textSize="12sp"
+                    android:textColor="@color/ward_pulse_widget_on_surface"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+                <TextView
+                    android:id="@+id/widget_row_2_label"
+                    android:layout_width="100dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:gravity="center"
+                    android:textSize="12sp"
+                    android:textColor="@color/ward_pulse_widget_on_surface"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+                <TextView
+                    android:id="@+id/widget_row_2_credits"
+                    android:layout_width="88dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:gravity="end"
+                    android:textSize="12sp"
+                    android:textColor="@color/ward_pulse_widget_muted"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+            </LinearLayout>
 
-    <LinearLayout
-        android:id="@+id/widget_row_5"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:visibility="gone">
-        <ImageView
-            android:id="@+id/widget_row_5_accent"
-            android:layout_width="3dp"
-            android:layout_height="16dp"
-            android:contentDescription="@null"
-            android:importantForAccessibility="no"
-            android:background="@color/ward_pulse_widget_budget" />
-        <TextView
-            android:id="@+id/widget_row_5_text"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:textSize="13sp"
-            android:textColor="@color/ward_pulse_widget_on_surface"
-            android:maxLines="1"
-            android:ellipsize="end" />
-    </LinearLayout>
-</LinearLayout>
+            <!-- Row 3 -->
+            <LinearLayout
+                android:id="@+id/widget_row_3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:visibility="gone">
+                <ImageView
+                    android:id="@+id/widget_row_3_accent"
+                    android:layout_width="3dp"
+                    android:layout_height="14dp"
+                    android:contentDescription="@null"
+                    android:importantForAccessibility="no"
+                    android:background="@color/ward_pulse_widget_budget" />
+                <TextView
+                    android:id="@+id/widget_row_3_percent"
+                    android:layout_width="70dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:textSize="12sp"
+                    android:textColor="@color/ward_pulse_widget_on_surface"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+                <TextView
+                    android:id="@+id/widget_row_3_label"
+                    android:layout_width="100dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:gravity="center"
+                    android:textSize="12sp"
+                    android:textColor="@color/ward_pulse_widget_on_surface"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+                <TextView
+                    android:id="@+id/widget_row_3_credits"
+                    android:layout_width="88dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:gravity="end"
+                    android:textSize="12sp"
+                    android:textColor="@color/ward_pulse_widget_muted"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+            </LinearLayout>
+
+            <!-- Row 4 -->
+            <LinearLayout
+                android:id="@+id/widget_row_4"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:visibility="gone">
+                <ImageView
+                    android:id="@+id/widget_row_4_accent"
+                    android:layout_width="3dp"
+                    android:layout_height="14dp"
+                    android:contentDescription="@null"
+                    android:importantForAccessibility="no"
+                    android:background="@color/ward_pulse_widget_budget" />
+                <TextView
+                    android:id="@+id/widget_row_4_percent"
+                    android:layout_width="70dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:textSize="12sp"
+                    android:textColor="@color/ward_pulse_widget_on_surface"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+                <TextView
+                    android:id="@+id/widget_row_4_label"
+                    android:layout_width="100dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:gravity="center"
+                    android:textSize="12sp"
+                    android:textColor="@color/ward_pulse_widget_on_surface"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+                <TextView
+                    android:id="@+id/widget_row_4_credits"
+                    android:layout_width="88dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:gravity="end"
+                    android:textSize="12sp"
+                    android:textColor="@color/ward_pulse_widget_muted"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+            </LinearLayout>
+
+            <!-- Row 5 -->
+            <LinearLayout
+                android:id="@+id/widget_row_5"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:visibility="gone">
+                <ImageView
+                    android:id="@+id/widget_row_5_accent"
+                    android:layout_width="3dp"
+                    android:layout_height="14dp"
+                    android:contentDescription="@null"
+                    android:importantForAccessibility="no"
+                    android:background="@color/ward_pulse_widget_budget" />
+                <TextView
+                    android:id="@+id/widget_row_5_percent"
+                    android:layout_width="70dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:textSize="12sp"
+                    android:textColor="@color/ward_pulse_widget_on_surface"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+                <TextView
+                    android:id="@+id/widget_row_5_label"
+                    android:layout_width="100dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:gravity="center"
+                    android:textSize="12sp"
+                    android:textColor="@color/ward_pulse_widget_on_surface"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+                <TextView
+                    android:id="@+id/widget_row_5_credits"
+                    android:layout_width="88dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:gravity="end"
+                    android:textSize="12sp"
+                    android:textColor="@color/ward_pulse_widget_muted"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+</FrameLayout>

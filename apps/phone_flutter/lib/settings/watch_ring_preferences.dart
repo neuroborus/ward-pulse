@@ -298,7 +298,7 @@ List<WatchRingMetric> orderWatchRingsForSurface(
   final runways = <String, double?>{};
   if (snapshot != null) {
     for (final ring in active) {
-      final provider = _providerFromRingId(ring.id);
+      final provider = providerFromRingId(ring.id);
       if (provider == null) {
         continue;
       }
@@ -313,8 +313,8 @@ List<WatchRingMetric> orderWatchRingsForSurface(
     if (usedCmp != 0) {
       return usedCmp;
     }
-    final providerA = _providerFromRingId(a.id);
-    final providerB = _providerFromRingId(b.id);
+    final providerA = providerFromRingId(a.id);
+    final providerB = providerFromRingId(b.id);
     final runwayA = providerA == null ? null : runways[providerA];
     final runwayB = providerB == null ? null : runways[providerB];
     // Missing / unlimited → +∞ (no secondary tightness pressure).
@@ -351,7 +351,7 @@ String watchRingPayloadSubtitle(
 }
 
 /// Owning provider for `allowance.<provider>.…`, or null for budgets / unknown.
-String? _providerFromRingId(String ringId) {
+String? providerFromRingId(String ringId) {
   if (!ringId.startsWith('allowance.')) {
     return null;
   }

@@ -100,7 +100,6 @@ final class HomeWidgetPhoneWidgetSyncService implements PhoneWidgetSyncService {
 
   /// Persists [payload] and asks the launcher to redraw.
   static Future<void> writeHomeWidgetPayload(PhoneWidgetPayload payload) async {
-    await HomeWidget.saveWidgetData<String>('title', 'WardPulse');
     await HomeWidget.saveWidgetData<String>('stale', payload.stale ? '1' : '0');
     await HomeWidget.saveWidgetData<String>(
       'empty',
@@ -111,7 +110,15 @@ final class HomeWidgetPhoneWidgetSyncService implements PhoneWidgetSyncService {
     for (var i = 0; i < _maxRows; i++) {
       if (i < rows.length) {
         final row = rows[i];
-        await HomeWidget.saveWidgetData<String>('row_${i}_text', row.line);
+        await HomeWidget.saveWidgetData<String>(
+          'row_${i}_percent',
+          row.percentText,
+        );
+        await HomeWidget.saveWidgetData<String>(
+          'row_${i}_credits',
+          row.creditsSuffix ?? '',
+        );
+        await HomeWidget.saveWidgetData<String>('row_${i}_label', row.label);
         // Hex string — ARGB ints with the high bit set arrive as Long on Android
         // and ClassCastException SharedPreferences.getInt.
         await HomeWidget.saveWidgetData<String>(
@@ -119,7 +126,9 @@ final class HomeWidgetPhoneWidgetSyncService implements PhoneWidgetSyncService {
           row.accentArgb.toRadixString(16).padLeft(8, '0'),
         );
       } else {
-        await HomeWidget.saveWidgetData<String>('row_${i}_text', '');
+        await HomeWidget.saveWidgetData<String>('row_${i}_percent', '');
+        await HomeWidget.saveWidgetData<String>('row_${i}_credits', '');
+        await HomeWidget.saveWidgetData<String>('row_${i}_label', '');
         await HomeWidget.saveWidgetData<String>('row_${i}_color', '');
       }
     }

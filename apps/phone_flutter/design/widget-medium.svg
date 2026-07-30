@@ -1,13 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="360" height="200" viewBox="0 0 360 200" role="img" aria-label="Phone widget · medium · 4 metrics">
-  <rect width="360" height="200" rx="16" fill="#F2F4F1"/>
-  <text x="20" y="32" font-family="Noto Sans, sans-serif" font-size="16" font-weight="700" fill="#1A1F1A">WardPulse</text>
-  <rect x="20" y="52" width="4" height="22" rx="1" fill="#65D78A"/>
-  <text x="32" y="68" font-family="Noto Sans, sans-serif" font-size="15" fill="#1A1F1A">46% left · Codex 5h</text>
-  <rect x="20" y="86" width="4" height="22" rx="1" fill="#E8915A"/>
-  <text x="32" y="102" font-family="Noto Sans, sans-serif" font-size="15" fill="#1A1F1A">22% left · Claude Extra</text>
-  <rect x="20" y="120" width="4" height="22" rx="1" fill="#8AB4F8"/>
-  <text x="32" y="136" font-family="Noto Sans, sans-serif" font-size="15" fill="#1A1F1A">71% left · Today</text>
-  <rect x="20" y="154" width="4" height="22" rx="1" fill="#67E8D4"/>
-  <text x="32" y="170" font-family="Noto Sans, sans-serif" font-size="15" fill="#1A1F1A">58% left · Cursor Auto</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="140" viewBox="0 0 280 140" role="img" aria-label="Phone widget · medium · light · tightest-first">
+  <rect width="280" height="140" rx="20" fill="#F2F4F1" stroke="#5F675C" stroke-opacity="0.1"/>
+  <g transform="translate(230, 10)" opacity="0.4" fill="none" stroke="#5F675C" stroke-width="1.6" stroke-linecap="round">
+    <text x="18" y="0" font-family="Noto Sans, sans-serif" font-size="5" font-weight="700" letter-spacing="0.5" fill="#5F675C" stroke="none" text-anchor="middle">WARDPULSE</text>
+    <path d="M2 10 L8 10 L12 4 L18 14 L24 8 L30 8"/>
+  </g>
+  <rect x="14" y="32" width="3" height="13" rx="1" fill="#E8915A"/>
+  <text x="24" y="43" font-family="Noto Sans, sans-serif" font-size="12" fill="#1A1F1A">22% left</text>
+  <text x="140" y="43" font-family="Noto Sans, sans-serif" font-size="12" fill="#1A1F1A" text-anchor="middle">Weekly</text>
+  <text x="252" y="43" font-family="Noto Sans, sans-serif" font-size="12" fill="#5F675C" text-anchor="end">80 credits</text>
+  <rect x="14" y="54" width="3" height="13" rx="1" fill="#65D78A"/>
+  <text x="24" y="65" font-family="Noto Sans, sans-serif" font-size="12" fill="#1A1F1A">46% left</text>
+  <text x="140" y="65" font-family="Noto Sans, sans-serif" font-size="12" fill="#1A1F1A" text-anchor="middle">5h</text>
+  <text x="252" y="65" font-family="Noto Sans, sans-serif" font-size="12" fill="#5F675C" text-anchor="end">320 credits</text>
+  <rect x="14" y="76" width="3" height="13" rx="1" fill="#67E8D4"/>
+  <text x="24" y="87" font-family="Noto Sans, sans-serif" font-size="12" fill="#1A1F1A">71% left</text>
+  <text x="140" y="87" font-family="Noto Sans, sans-serif" font-size="12" fill="#1A1F1A" text-anchor="middle">Other Models</text>
+  <text x="252" y="87" font-family="Noto Sans, sans-serif" font-size="12" fill="#5F675C" text-anchor="end">2.1K credits</text>
 </svg>

@@ -1695,8 +1695,9 @@ When multi-profile lands, same-provider rings need hatch/pattern as well as fami
 
 Status: largely landed (2026-07-27). Primary nav, Watchface + Widget tabs, locked
 `PHONE_WIDGET_DESIGN.md` review art, and the Android App Widget surface are in tree.
-Large (6-slot) prefs / tall widget size is unlocked; Claude windows stay expanded on the
-phone widget; exhausted pools render as `0% left`.
+Large (6-slot) prefs unlocked; launcher hugs complete rows/columns (1–6 by height;
+credits→label drop by width); Claude windows stay expanded on the phone widget;
+exhausted pools render as `0% left`.
 
 Rationale: glance configuration is a first-class product surface, not a Settings footnote.
 Watchface and Widget each get a primary tab between Dashboard and Providers. The phone
@@ -1732,10 +1733,12 @@ Deliverables:
 - Android App Widget hosted by the Flutter phone shell (`home_widget` + RemoteViews);
 - Widget tab selects which metrics appear (same catalog idea as Watchface: provider plan
   windows, purchased/credit % when available, local budgets);
-- small (2) / tall (6) size variants locked (`phoneWidgetSlotCount = 6`);
-  Claude plan windows stay expanded on the phone widget; exhausted pools render as `0% left`;
-- render only configured, available, non-exhausted metrics; omit empty slots rather than
-  inventing `Unknown` filler;
+- small→tall resize shows 1–6 complete column-rows by allocated height (olive card hugs
+  rows/columns; width drops credits→label→%); day/night chrome + overlay face watermark;
+  prefs cap `phoneWidgetSlotCount = 6`; Claude windows stay expanded; exhausted pools as
+  `0% left`; Glance-style credits end-aligned (label centered);
+- render only configured, available metrics (exhausted stay as `0% left`); omit empty
+  slots rather than inventing `Unknown` filler;
 - **remaining** language for percent metrics (same meaning as watch rings); family colors
   from the shared palette (OpenAI/Codex green, Anthropic orange, Cursor teal, budget blue);
 - update after provider sync / scheduled refresh without opening the full app; stale state
@@ -1755,7 +1758,7 @@ Providers owns connection catalog, credentials, and connection alert thresholds
 Settings is systemic only (polling, global budgets, diagnostics, legal)
 Widget tab owns widget prefs independently of Watchface
 PHONE_WIDGET_DESIGN.md baseline locked with review art for small/medium
-widget shows only configured, available, non-exhausted metrics
+widget shows configured available metrics (exhausted as 0% left); hugs complete rows/columns
 remaining-% / family colors match the product palette
 tap opens the phone app; no credential UI on the widget
 stale data is labeled after the freshness window
