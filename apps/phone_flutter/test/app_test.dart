@@ -578,61 +578,64 @@ void main() {
     expect(find.text('Remove'), findsOneWidget);
   });
 
-  testWidgets('shows plan and purchased surfaces without Settings display toggles', (
-    tester,
-  ) async {
-    final json =
-        jsonDecode(
-              File(
-                '../../fixtures/snapshots/dashboard_today.json',
-              ).readAsStringSync(),
-            )
-            as Map<String, dynamic>;
-    final account = (json['accounts'] as List).first as Map<String, dynamic>;
-    account['provider'] = 'codex';
-    account['allowances'] = [
-      {
-        'id': 'plan',
-        'source': 'plan',
-        'label': 'Weekly plan',
-        'usedPercent': 84.0,
-        'used': null,
-        'limit': null,
-        'remaining': null,
-        'windowMinutes': 10080,
-        'resetsAt': '2026-07-26T09:55:37Z',
-        'status': 'warning',
-      },
-      {
-        'id': 'purchased',
-        'source': 'purchased',
-        'label': 'Purchased credits',
-        'usedPercent': null,
-        'used': null,
-        'limit': null,
-        'remaining': {'value': '12.5', 'unit': 'credits'},
-        'windowMinutes': null,
-        'resetsAt': null,
-        'status': 'ok',
-      },
-    ];
+  testWidgets(
+    'shows plan and purchased surfaces without Settings display toggles',
+    (tester) async {
+      final json =
+          jsonDecode(
+                File(
+                  '../../fixtures/snapshots/dashboard_today.json',
+                ).readAsStringSync(),
+              )
+              as Map<String, dynamic>;
+      final account = (json['accounts'] as List).first as Map<String, dynamic>;
+      account['provider'] = 'codex';
+      account['allowances'] = [
+        {
+          'id': 'plan',
+          'source': 'plan',
+          'label': 'Weekly plan',
+          'usedPercent': 84.0,
+          'used': null,
+          'limit': null,
+          'remaining': null,
+          'windowMinutes': 10080,
+          'resetsAt': '2026-07-26T09:55:37Z',
+          'status': 'warning',
+        },
+        {
+          'id': 'purchased',
+          'source': 'purchased',
+          'label': 'Purchased credits',
+          'usedPercent': null,
+          'used': null,
+          'limit': null,
+          'remaining': {'value': '12.5', 'unit': 'credits'},
+          'windowMinutes': null,
+          'resetsAt': null,
+          'status': 'ok',
+        },
+      ];
 
-    await tester.pumpWidget(
-      WardPulseApp(
-        repository: ValueDashboardRepository(DashboardSnapshot.fromJson(json)),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: ValueDashboardRepository(
+            DashboardSnapshot.fromJson(json),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Weekly plan'), findsOneWidget);
-    expect(find.text('Purchased credits'), findsOneWidget);
+      expect(find.text('Weekly plan'), findsOneWidget);
+      expect(find.text('Purchased credits'), findsOneWidget);
 
-    await tester.tap(find.text('Settings'));
-    await tester.pumpAndSettle();
-    expect(find.text('Display'), findsNothing);
-    expect(find.text('Platform spend'), findsNothing);
-    expect(find.text('Purchased usage'), findsNothing);
-  });
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      expect(find.text('Display'), findsNothing);
+      expect(find.text('Platform spend'), findsNothing);
+      expect(find.text('Purchased usage'), findsNothing);
+    },
+  );
 
   testWidgets('persists the global refresh interval slider', (tester) async {
     final snapshot = DashboardSnapshot.fromJsonString(

@@ -39,8 +39,7 @@ class DashboardScreen extends StatelessWidget {
     final hasPurchasedAllowance = allAllowances.any(
       (allowance) => allowance.source == AllowanceSource.purchased,
     );
-    final showMissingPurchased =
-        caps.showAllowances && !hasPurchasedAllowance;
+    final showMissingPurchased = caps.showAllowances && !hasPurchasedAllowance;
     final showPlatformSpend = true;
 
     return ListView(

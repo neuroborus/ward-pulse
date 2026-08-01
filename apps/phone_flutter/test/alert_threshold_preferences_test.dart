@@ -21,12 +21,14 @@ void main() {
       isTrue,
     );
     expect(
-      const AlertThresholdPreferences().withConnection(
-        ProviderConnections.codexPlan,
-        const ConnectionAlertThresholds(
-          plan: AlertPercentThreshold(at: 100),
-        ),
-      ).hasEnabledRules,
+      const AlertThresholdPreferences()
+          .withConnection(
+            ProviderConnections.codexPlan,
+            const ConnectionAlertThresholds(
+              plan: AlertPercentThreshold(at: 100),
+            ),
+          )
+          .hasEnabledRules,
       isTrue,
     );
   });
@@ -47,10 +49,7 @@ void main() {
 
     final decoded = AlertThresholdPreferences.decode(prefs.encode());
     expect(decoded.today.at, 80);
-    expect(
-      decoded.forConnection(ProviderConnections.codexPlan).plan.at,
-      70,
-    );
+    expect(decoded.forConnection(ProviderConnections.codexPlan).plan.at, 70);
     expect(
       decoded.connections.containsKey(
         ProviderConnections.claudePlan.storageKey,
@@ -66,9 +65,7 @@ void main() {
     );
     expect(decoded.today.at, 80);
 
-    final criticalOnly = AlertPercentThreshold.fromJson({
-      'criticalAt': 100,
-    });
+    final criticalOnly = AlertPercentThreshold.fromJson({'criticalAt': 100});
     expect(criticalOnly.at, 100);
   });
 

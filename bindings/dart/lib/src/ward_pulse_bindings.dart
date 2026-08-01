@@ -27,16 +27,14 @@ final class WardPulseBindingsException implements Exception {
 
 final class _WardPulseBindings {
   _WardPulseBindings(DynamicLibrary library)
-    : _dashboardSnapshotJson = library
-          .lookupFunction<
-            _NativeDashboardSnapshotJson,
-            _DartDashboardSnapshotJson
-          >('ward_pulse_dashboard_snapshot_json'),
-      _debugDashboardSnapshotJson = library
-          .lookupFunction<
-            _NativeDebugDashboardSnapshotJson,
-            _DartDebugDashboardSnapshotJson
-          >('ward_pulse_debug_dashboard_snapshot_json'),
+    : _dashboardSnapshotJson = library.lookupFunction<
+        _NativeDashboardSnapshotJson,
+        _DartDashboardSnapshotJson
+      >('ward_pulse_dashboard_snapshot_json'),
+      _debugDashboardSnapshotJson = library.lookupFunction<
+        _NativeDebugDashboardSnapshotJson,
+        _DartDebugDashboardSnapshotJson
+      >('ward_pulse_debug_dashboard_snapshot_json'),
       _openAiDashboardSnapshotResultJson = library
           .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
             'ward_pulse_openai_dashboard_snapshot_result_json',
