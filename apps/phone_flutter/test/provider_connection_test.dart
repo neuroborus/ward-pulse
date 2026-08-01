@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/sync/poll_cadence.dart';
@@ -54,4 +56,39 @@ void main() {
       );
     }
   });
+
+  test('Rust alert rules key off catalog storage keys', () {
+    final catalogKeys =
+        providerConnectionCatalog()
+            .map((connection) => connection.id.storageKey)
+            .toSet();
+
+    // Mock is debug-only data and has no connection row to configure.
+    final rustKeys = _rustConnectionStorageKeys().where(
+      (key) => key != 'mock.plan',
+    );
+
+    expect(catalogKeys, containsAll(rustKeys));
+  });
+}
+
+/// Rust owns the alert-threshold keys, so this reads them from its source.
+///
+/// Scoped to the `connection_storage_key` body: `provider_label` sits beside it
+/// with identical match-arm shape.
+Set<String> _rustConnectionStorageKeys() {
+  final source =
+      File('../../core/ward-pulse-core/src/alerts/mod.rs').readAsStringSync();
+  final table = RegExp(
+    r'fn connection_storage_key.*?\n\}',
+    dotAll: true,
+  ).firstMatch(source);
+  expect(table, isNotNull, reason: 'connection_storage_key not found in Rust');
+
+  final keys = {
+    for (final match in RegExp(r'=> "([^"]+)"').allMatches(table!.group(0)!))
+      match.group(1)!,
+  };
+  expect(keys, isNotEmpty, reason: 'no storage keys parsed from Rust');
+  return keys;
 }
