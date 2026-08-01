@@ -5,8 +5,8 @@ use std::fmt;
 use serde::Deserialize;
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
-    AllowanceSource, AllowanceState, BudgetPeriod, ProviderKind, ProviderSnapshot, ProviderStatus,
-    Quantity, QuantityUnit, UsageBucket,
+    connection, AllowanceSource, AllowanceState, BudgetPeriod, ProviderKind, ProviderSnapshot,
+    ProviderStatus, Quantity, QuantityUnit, UsageBucket,
 };
 use ward_pulse_core::time::DateTimeUtc;
 
@@ -123,6 +123,7 @@ pub fn codex_provider_snapshot_from_report_json(
     let provider_snapshot = ProviderSnapshot {
         account_id: "codex-local".to_string(),
         provider: ProviderKind::Codex,
+        connection: Some(connection::CODEX_PLAN.to_string()),
         status,
         today: unknown_budget(BudgetPeriod::Today),
         week: unknown_budget(BudgetPeriod::Week),

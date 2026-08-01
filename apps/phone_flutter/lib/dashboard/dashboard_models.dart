@@ -224,6 +224,7 @@ class ProviderSnapshot {
   const ProviderSnapshot({
     required this.accountId,
     required this.provider,
+    this.connection,
     required this.status,
     required this.today,
     required this.week,
@@ -238,6 +239,12 @@ class ProviderSnapshot {
 
   final String accountId;
   final String provider;
+
+  /// Connection storage key stamped by the Rust adapter, when present.
+  ///
+  /// Carried verbatim so the round trip back into the core keeps alert rules
+  /// keyed by connection rather than by provider family.
+  final String? connection;
   final ProviderStatus status;
   final BudgetState today;
   final BudgetState week;
@@ -253,6 +260,7 @@ class ProviderSnapshot {
     return ProviderSnapshot(
       accountId: json['accountId'] as String,
       provider: json['provider'] as String,
+      connection: json['connection'] as String?,
       status: _statusFromJson(json['status']),
       today: BudgetState.fromJson(_jsonMap(json['today'])),
       week: BudgetState.fromJson(_jsonMap(json['week'])),
@@ -275,6 +283,7 @@ class ProviderSnapshot {
   Map<String, dynamic> toJson() => {
     'accountId': accountId,
     'provider': provider,
+    if (connection != null) 'connection': connection,
     'status': status.name,
     'today': today.toJson(),
     'week': week.toJson(),

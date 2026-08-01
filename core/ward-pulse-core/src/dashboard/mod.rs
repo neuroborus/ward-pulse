@@ -120,6 +120,7 @@ mod tests {
         ProviderSnapshot {
             account_id: account_id.to_string(),
             provider: crate::model::ProviderKind::Mock,
+            connection: None,
             status: ProviderStatus::Ok,
             today,
             week: budget_state(BudgetPeriod::Week, usd(0), usd(100)),
@@ -174,6 +175,7 @@ mod tests {
             vec![ProviderSnapshot {
                 account_id: "codex".to_string(),
                 provider: crate::model::ProviderKind::Mock,
+                connection: None,
                 status: ProviderStatus::Ok,
                 today: open_budget.clone(),
                 week: open_budget.clone(),

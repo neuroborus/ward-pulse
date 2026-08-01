@@ -7,7 +7,8 @@ use std::fmt;
 use serde::Deserialize;
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
-    BudgetPeriod, ModelUsage, Money, ProviderKind, ProviderSnapshot, ProviderStatus, UsageBucket,
+    connection, BudgetPeriod, ModelUsage, Money, ProviderKind, ProviderSnapshot, ProviderStatus,
+    UsageBucket,
 };
 use ward_pulse_core::time::DateTimeUtc;
 
@@ -140,6 +141,7 @@ pub fn anthropic_provider_snapshot_from_report_json(
         provider_snapshot: ProviderSnapshot {
             account_id: report.account_id,
             provider: ProviderKind::Claude,
+            connection: Some(connection::ANTHROPIC_PLATFORM.to_string()),
             status: ProviderStatus::Ok,
             today,
             week,

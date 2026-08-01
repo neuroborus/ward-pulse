@@ -5,6 +5,7 @@
     {
       "accountId": "mock-local",
       "provider": "mock",
+      "connection": "mock.plan",
       "status": "ok",
       "today": {
         "period": "today",

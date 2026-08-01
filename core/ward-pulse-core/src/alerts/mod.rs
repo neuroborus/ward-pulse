@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::model::{
-    Alert, AlertSeverity, AllowanceSource, AllowanceState, BudgetState, DashboardSnapshot,
-    ProviderKind, ProviderSnapshot,
+    connection, Alert, AlertSeverity, AllowanceSource, AllowanceState, BudgetState,
+    DashboardSnapshot, ProviderKind, ProviderSnapshot,
 };
 
 /// Opt-in used-% threshold. `None` means the rule is off.
@@ -100,10 +100,11 @@ fn alert_for_budget(
 }
 
 fn alerts_for_account(account: &ProviderSnapshot, settings: &AlertSettings) -> Vec<Alert> {
-    let Some(connection) = settings
-        .connections
-        .get(connection_storage_key(account.provider))
-    else {
+    let key = account
+        .connection
+        .as_deref()
+        .unwrap_or_else(|| fallback_storage_key(account.provider));
+    let Some(connection) = settings.connections.get(key) else {
         return Vec::new();
     };
     if !connection.is_enabled() {
@@ -145,14 +146,15 @@ fn crossed(used_percent: Option<f64>, at: Option<u8>) -> bool {
     }
 }
 
-/// Phone `ProviderConnectionId.storageKey` for allowance-scoped rules.
-fn connection_storage_key(provider: ProviderKind) -> &'static str {
+/// Fallback for snapshots taken before adapters stamped
+/// [`ProviderSnapshot::connection`]: the one connection each kind used to imply.
+fn fallback_storage_key(provider: ProviderKind) -> &'static str {
     match provider {
-        ProviderKind::Codex => "openai.plan",
-        ProviderKind::OpenAi => "openai.platform",
-        ProviderKind::Claude => "anthropic.plan",
-        ProviderKind::Cursor => "cursor.plan",
-        ProviderKind::Mock => "mock.plan",
+        ProviderKind::Codex => connection::CODEX_PLAN,
+        ProviderKind::OpenAi => connection::OPENAI_PLATFORM,
+        ProviderKind::Claude => connection::CLAUDE_PLAN,
+        ProviderKind::Cursor => connection::CURSOR_PLAN,
+        ProviderKind::Mock => connection::MOCK_PLAN,
     }
 }
 
@@ -208,6 +210,7 @@ mod tests {
         ProviderSnapshot {
             account_id: "claude".into(),
             provider: ProviderKind::Claude,
+            connection: None,
             status: ProviderStatus::Warning,
             today: budget(0.0),
             week: budget(0.0),
@@ -285,6 +288,29 @@ mod tests {
         assert_eq!(alerts.len(), 1);
         assert!(alerts[0].message.contains("Extra usage"));
         assert_eq!(alerts[0].severity, AlertSeverity::Warning);
+    }
+
+    #[test]
+    fn platform_and_plan_of_one_family_keep_separate_rules() {
+        let mut account = claude_account(purchased(84.0));
+        account.connection = Some(connection::ANTHROPIC_PLATFORM.to_string());
+        let snapshot = snapshot_with(account, budget(10.0));
+
+        let rule = ConnectionAlertThresholds {
+            purchased: PercentThreshold { at: Some(80) },
+            ..ConnectionAlertThresholds::default()
+        };
+        let plan_only = AlertSettings {
+            connections: HashMap::from([(connection::CLAUDE_PLAN.to_string(), rule.clone())]),
+            ..AlertSettings::default()
+        };
+        let platform_only = AlertSettings {
+            connections: HashMap::from([(connection::ANTHROPIC_PLATFORM.to_string(), rule)]),
+            ..AlertSettings::default()
+        };
+
+        assert!(calculate_alerts(&snapshot, &plan_only).is_empty());
+        assert_eq!(calculate_alerts(&snapshot, &platform_only).len(), 1);
     }
 
     #[test]

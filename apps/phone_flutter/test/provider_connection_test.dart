@@ -72,21 +72,20 @@ void main() {
   });
 }
 
-/// Rust owns the alert-threshold keys, so this reads them from its source.
+/// Rust owns the connection keys, so this reads them from its source.
 ///
-/// Scoped to the `connection_storage_key` body: `provider_label` sits beside it
-/// with identical match-arm shape.
+/// Scoped to the `connection` module so unrelated constants cannot leak in.
 Set<String> _rustConnectionStorageKeys() {
   final source =
-      File('../../core/ward-pulse-core/src/alerts/mod.rs').readAsStringSync();
+      File('../../core/ward-pulse-core/src/model/mod.rs').readAsStringSync();
   final table = RegExp(
-    r'fn connection_storage_key.*?\n\}',
+    r'pub mod connection \{.*?\n\}',
     dotAll: true,
   ).firstMatch(source);
-  expect(table, isNotNull, reason: 'connection_storage_key not found in Rust');
+  expect(table, isNotNull, reason: 'connection module not found in Rust');
 
   final keys = {
-    for (final match in RegExp(r'=> "([^"]+)"').allMatches(table!.group(0)!))
+    for (final match in RegExp(r'= "([^"]+)";').allMatches(table!.group(0)!))
       match.group(1)!,
   };
   expect(keys, isNotEmpty, reason: 'no storage keys parsed from Rust');

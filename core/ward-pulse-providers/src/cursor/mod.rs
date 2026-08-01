@@ -11,7 +11,7 @@ use std::fmt;
 use serde::Deserialize;
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
-    AllowanceSource, AllowanceState, BudgetPeriod, ProviderKind, ProviderSnapshot,
+    connection, AllowanceSource, AllowanceState, BudgetPeriod, ProviderKind, ProviderSnapshot,
 };
 use ward_pulse_core::time::DateTimeUtc;
 
@@ -165,6 +165,7 @@ pub fn cursor_plan_snapshot_from_report_json(
                 .account_id
                 .unwrap_or_else(|| "cursor-local".to_string()),
             provider: ProviderKind::Cursor,
+            connection: Some(connection::CURSOR_PLAN.to_string()),
             status,
             today: unknown_budget(BudgetPeriod::Today),
             week: unknown_budget(BudgetPeriod::Week),

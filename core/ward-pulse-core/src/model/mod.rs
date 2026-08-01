@@ -51,6 +51,22 @@ impl ProviderStatus {
     }
 }
 
+/// Phone `ProviderConnectionId.storageKey` values.
+///
+/// One provider kind can back two connections — a subscription plan and an
+/// organization API — so [`ProviderKind`] alone cannot say which one produced a
+/// snapshot. The adapter that owns a connection stamps its key into
+/// [`ProviderSnapshot::connection`], and user alert rules are keyed by it.
+pub mod connection {
+    pub const CODEX_PLAN: &str = "openai.plan";
+    pub const OPENAI_PLATFORM: &str = "openai.platform";
+    pub const CLAUDE_PLAN: &str = "anthropic.plan";
+    pub const ANTHROPIC_PLATFORM: &str = "anthropic.platform";
+    pub const CURSOR_PLAN: &str = "cursor.plan";
+    pub const CURSOR_PLATFORM: &str = "cursor.platform";
+    pub const MOCK_PLAN: &str = "mock.plan";
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum BudgetPeriod {
@@ -233,6 +249,10 @@ pub struct ProviderErrorSummary {
 pub struct ProviderSnapshot {
     pub account_id: AccountId,
     pub provider: ProviderKind,
+    /// Owning connection, as a [`connection`] key. `None` on snapshots built
+    /// before adapters stamped it; alerts then fall back to the provider's plan.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connection: Option<String>,
     pub status: ProviderStatus,
     pub today: BudgetState,
     pub week: BudgetState,
