@@ -212,11 +212,17 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
 
   Future<void> _editCodexAccount() async {
     if (_hasCodexAccount == true) {
-      final action = await showDialog<_CodexAccountAction>(
+      final action = await showDialog<_AccountAction>(
         context: context,
-        builder: (context) => const _ConnectedCodexAccountDialog(),
+        builder:
+            (context) => const _ConnectedAccountDialog(
+              title: 'Codex account',
+              message:
+                  'WardPulse reads subscription limits and token activity '
+                  'directly on this phone.',
+            ),
       );
-      if (action == _CodexAccountAction.disconnect) {
+      if (action == _AccountAction.disconnect) {
         try {
           await widget.codexAccountService.disconnect();
         } on CodexAccountException catch (error) {
@@ -238,7 +244,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
         }
         return;
       }
-      if (action != _CodexAccountAction.reconnect) {
+      if (action != _AccountAction.reconnect) {
         return;
       }
     }
@@ -282,11 +288,17 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
 
   Future<void> _editClaudeAccount() async {
     if (_hasClaudeAccount == true) {
-      final action = await showDialog<_ClaudeAccountAction>(
+      final action = await showDialog<_AccountAction>(
         context: context,
-        builder: (context) => const _ConnectedClaudeAccountDialog(),
+        builder:
+            (context) => const _ConnectedAccountDialog(
+              title: 'Claude account',
+              message:
+                  'WardPulse reads Claude subscription windows directly on '
+                  'this phone using Claude Code OAuth.',
+            ),
       );
-      if (action == _ClaudeAccountAction.disconnect) {
+      if (action == _AccountAction.disconnect) {
         try {
           await widget.claudeAccountService.disconnect();
         } on ClaudeAccountException catch (error) {
@@ -308,7 +320,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
         }
         return;
       }
-      if (action != _ClaudeAccountAction.reconnect) {
+      if (action != _AccountAction.reconnect) {
         return;
       }
     }
@@ -364,11 +376,18 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
 
   Future<void> _editCursorPlanAccount() async {
     if (_hasCursorPlan == true) {
-      final action = await showDialog<_CursorPlanAccountAction>(
+      final action = await showDialog<_AccountAction>(
         context: context,
-        builder: (context) => const _ConnectedCursorPlanDialog(),
+        builder:
+            (context) => const _ConnectedAccountDialog(
+              title: 'Cursor plan',
+              message:
+                  'WardPulse reads personal plan usage from the Cursor '
+                  'dashboard session stored on this phone.',
+              confirmLabel: 'Sign in again',
+            ),
       );
-      if (action == _CursorPlanAccountAction.disconnect) {
+      if (action == _AccountAction.disconnect) {
         try {
           await widget.credentialStore.deleteSecret(
             ProviderConnections.cursorPlan,
@@ -393,7 +412,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
         }
         return;
       }
-      if (action != _CursorPlanAccountAction.reconnect) {
+      if (action != _AccountAction.reconnect) {
         return;
       }
     }
@@ -870,20 +889,25 @@ class _ProviderSectionHeader extends StatelessWidget {
   }
 }
 
-class _ConnectedCodexAccountDialog extends StatelessWidget {
-  const _ConnectedCodexAccountDialog();
+class _ConnectedAccountDialog extends StatelessWidget {
+  const _ConnectedAccountDialog({
+    required this.title,
+    required this.message,
+    this.confirmLabel = 'Reconnect',
+  });
+
+  final String title;
+  final String message;
+  final String confirmLabel;
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Codex account'),
-      content: const Text(
-        'WardPulse reads subscription limits and token activity directly on this phone.',
-      ),
+      title: Text(title),
+      content: Text(message),
       actions: [
         TextButton(
-          onPressed:
-              () => Navigator.of(context).pop(_CodexAccountAction.disconnect),
+          onPressed: () => Navigator.of(context).pop(_AccountAction.disconnect),
           child: const Text('Disconnect'),
         ),
         TextButton(
@@ -891,14 +915,15 @@ class _ConnectedCodexAccountDialog extends StatelessWidget {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed:
-              () => Navigator.of(context).pop(_CodexAccountAction.reconnect),
-          child: const Text('Reconnect'),
+          onPressed: () => Navigator.of(context).pop(_AccountAction.reconnect),
+          child: Text(confirmLabel),
         ),
       ],
     );
   }
 }
+
+enum _AccountAction { reconnect, disconnect }
 
 class _CodexLoginDialog extends StatefulWidget {
   const _CodexLoginDialog({required this.attempt});
@@ -1045,37 +1070,6 @@ class _CodexLoginDialogState extends State<_CodexLoginDialog> {
           onPressed: _openBrowser,
           icon: const Icon(Icons.open_in_browser),
           label: const Text('Open browser'),
-        ),
-      ],
-    );
-  }
-}
-
-class _ConnectedClaudeAccountDialog extends StatelessWidget {
-  const _ConnectedClaudeAccountDialog();
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Claude account'),
-      content: const Text(
-        'WardPulse reads Claude subscription windows directly on this phone '
-        'using Claude Code OAuth.',
-      ),
-      actions: [
-        TextButton(
-          onPressed:
-              () => Navigator.of(context).pop(_ClaudeAccountAction.disconnect),
-          child: const Text('Disconnect'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed:
-              () => Navigator.of(context).pop(_ClaudeAccountAction.reconnect),
-          child: const Text('Reconnect'),
         ),
       ],
     );
@@ -1415,46 +1409,6 @@ final class _CredentialChange {
   final String? label;
   final bool remove;
   final bool updateLabelOnly;
-}
-
-enum _CodexAccountAction { reconnect, disconnect }
-
-enum _ClaudeAccountAction { reconnect, disconnect }
-
-enum _CursorPlanAccountAction { reconnect, disconnect }
-
-class _ConnectedCursorPlanDialog extends StatelessWidget {
-  const _ConnectedCursorPlanDialog();
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Cursor plan'),
-      content: const Text(
-        'WardPulse reads personal plan usage from the Cursor dashboard '
-        'session stored on this phone.',
-      ),
-      actions: [
-        TextButton(
-          onPressed:
-              () => Navigator.of(
-                context,
-              ).pop(_CursorPlanAccountAction.disconnect),
-          child: const Text('Disconnect'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed:
-              () =>
-                  Navigator.of(context).pop(_CursorPlanAccountAction.reconnect),
-          child: const Text('Sign in again'),
-        ),
-      ],
-    );
-  }
 }
 
 class _CursorPlanHelpDialog extends StatelessWidget {
