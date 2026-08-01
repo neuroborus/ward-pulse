@@ -1,29 +1,11 @@
 import 'package:flutter/material.dart';
 
-final class CredentialChange {
-  const CredentialChange.save(this.value, {this.label})
-    : remove = false,
-      updateLabelOnly = false;
-
-  const CredentialChange.labelOnly(this.label)
-    : value = null,
-      remove = false,
-      updateLabelOnly = true;
-
-  const CredentialChange.remove()
-    : value = null,
-      label = null,
-      remove = true,
-      updateLabelOnly = false;
-
-  final String? value;
-  final String? label;
-  final bool remove;
-  final bool updateLabelOnly;
-}
-
+/// Edits one pasted provider secret, with an optional display label.
+///
+/// Pops a [CredentialChange], or null when dismissed.
 class CredentialDialog extends StatefulWidget {
   const CredentialDialog({
+    super.key,
     required this.hasCredential,
     required this.title,
     required this.hint,
@@ -178,4 +160,27 @@ class _CredentialDialogState extends State<CredentialDialog> {
       ],
     );
   }
+}
+
+/// What [CredentialDialog] was asked to do with the secret.
+final class CredentialChange {
+  const CredentialChange.save(this.value, {this.label})
+    : remove = false,
+      updateLabelOnly = false;
+
+  const CredentialChange.labelOnly(this.label)
+    : value = null,
+      remove = false,
+      updateLabelOnly = true;
+
+  const CredentialChange.remove()
+    : value = null,
+      label = null,
+      remove = true,
+      updateLabelOnly = false;
+
+  final String? value;
+  final String? label;
+  final bool remove;
+  final bool updateLabelOnly;
 }

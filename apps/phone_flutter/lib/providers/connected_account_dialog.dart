@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 /// Confirms what to do with an already connected provider account.
 class ConnectedAccountDialog extends StatelessWidget {
   const ConnectedAccountDialog({
+    super.key,
     required this.title,
     required this.message,
     this.confirmLabel = 'Reconnect',
