@@ -29,3 +29,16 @@ class ProviderConnectionRow extends StatelessWidget {
     );
   }
 }
+
+/// Spinner sized for a catalog row trailing.
+class RowProgress extends StatelessWidget {
+  const RowProgress();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox.square(
+      dimension: 20,
+      child: CircularProgressIndicator(strokeWidth: 2),
+    );
+  }
+}
