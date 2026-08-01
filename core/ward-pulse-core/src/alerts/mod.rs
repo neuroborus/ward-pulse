@@ -2,9 +2,11 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::budget::calculate_budget_state;
+use crate::dashboard::build_dashboard_snapshot;
 use crate::model::{
-    connection, Alert, AlertSeverity, AllowanceSource, AllowanceState, BudgetState,
-    DashboardSnapshot, ProviderKind, ProviderSnapshot,
+    connection, Alert, AlertSeverity, AllowanceSource, AllowanceState, BudgetPeriod, BudgetState,
+    DashboardSnapshot, Money, ProviderKind, ProviderSnapshot,
 };
 
 /// Opt-in used-% threshold. `None` means the rule is off.
@@ -22,7 +24,10 @@ impl PercentThreshold {
     }
 }
 
-/// Connection-scoped rules for plan windows and purchased meters.
+/// Connection-scoped rules: plan windows, purchased meters, and spend budgets.
+///
+/// Budgets are per connection on purpose — a threshold on one organization key
+/// must not fire because another provider spent money.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionAlertThresholds {
@@ -30,11 +35,47 @@ pub struct ConnectionAlertThresholds {
     pub plan: PercentThreshold,
     #[serde(default)]
     pub purchased: PercentThreshold,
+    #[serde(default)]
+    pub today: PercentThreshold,
+    #[serde(default)]
+    pub week: PercentThreshold,
+    #[serde(default)]
+    pub month: PercentThreshold,
+    /// Local spend limits in minor units. Organization keys report spend but no
+    /// budget, so a percentage is only computable once the user sets one.
+    #[serde(default)]
+    pub budget: ConnectionBudget,
+}
+
+/// User-entered spend limits, one per budget period.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionBudget {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub today: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub week: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub month: Option<i64>,
+}
+
+impl ConnectionBudget {
+    fn for_period(&self, period: BudgetPeriod) -> Option<i64> {
+        match period {
+            BudgetPeriod::Today => self.today,
+            BudgetPeriod::Week => self.week,
+            BudgetPeriod::Month => self.month,
+        }
+    }
 }
 
 impl ConnectionAlertThresholds {
     pub fn is_enabled(&self) -> bool {
-        self.plan.is_enabled() || self.purchased.is_enabled()
+        self.plan.is_enabled()
+            || self.purchased.is_enabled()
+            || self.today.is_enabled()
+            || self.week.is_enabled()
+            || self.month.is_enabled()
     }
 }
 
@@ -47,64 +88,82 @@ impl ConnectionAlertThresholds {
 pub struct AlertSettings {
     #[serde(default)]
     pub connections: HashMap<String, ConnectionAlertThresholds>,
-    #[serde(default)]
-    pub today: PercentThreshold,
-    #[serde(default)]
-    pub week: PercentThreshold,
-    #[serde(default)]
-    pub month: PercentThreshold,
 }
 
 /// Evaluates dashboard alerts from user rules only — never from status chrome alone.
 pub fn calculate_alerts(snapshot: &DashboardSnapshot, settings: &AlertSettings) -> Vec<Alert> {
     let mut alerts = Vec::new();
-    alerts.extend(alert_for_budget(
-        "Today",
-        &snapshot.today_total,
-        &settings.today,
-    ));
-    alerts.extend(alert_for_budget(
-        "Week",
-        &snapshot.week_total,
-        &settings.week,
-    ));
-    alerts.extend(alert_for_budget(
-        "Month",
-        &snapshot.month_total,
-        &settings.month,
-    ));
     for account in &snapshot.accounts {
         alerts.extend(alerts_for_account(account, settings));
     }
     alerts
 }
 
-/// Returns a copy of [snapshot] with alerts replaced by [`calculate_alerts`].
+/// Applies local budget limits, then replaces alerts with [`calculate_alerts`].
+///
+/// Limits arrive from the shell because providers do not report them. Rebuilding
+/// the snapshot keeps totals, watch summary, and per-account percentages in step
+/// with the limits the user just set.
 pub fn apply_alert_settings(
     snapshot: DashboardSnapshot,
     settings: &AlertSettings,
 ) -> DashboardSnapshot {
-    let alerts = calculate_alerts(&snapshot, settings);
-    DashboardSnapshot { alerts, ..snapshot }
+    let accounts = snapshot
+        .accounts
+        .into_iter()
+        .map(|account| apply_local_budget(account, settings))
+        .collect();
+    let rebuilt = build_dashboard_snapshot(snapshot.generated_at, accounts);
+    let alerts = calculate_alerts(&rebuilt, settings);
+    DashboardSnapshot { alerts, ..rebuilt }
+}
+
+/// Recomputes the account's budget states against the user's local limits.
+fn apply_local_budget(mut account: ProviderSnapshot, settings: &AlertSettings) -> ProviderSnapshot {
+    let Some(rules) = settings.connections.get(connection_key(&account)) else {
+        return account;
+    };
+    for (period, state) in [
+        (BudgetPeriod::Today, &mut account.today),
+        (BudgetPeriod::Week, &mut account.week),
+        (BudgetPeriod::Month, &mut account.month),
+    ] {
+        let (Some(limit), Some(spent)) = (rules.budget.for_period(period), state.spent.as_ref())
+        else {
+            continue;
+        };
+        *state = calculate_budget_state(
+            period,
+            Some(spent.clone()),
+            Some(Money::minor_units(limit, spent.currency.clone())),
+            state.projected_total.clone(),
+        );
+    }
+    account
 }
 
 fn alert_for_budget(
-    label: &str,
+    provider_label: &str,
+    period: &str,
     state: &BudgetState,
     threshold: &PercentThreshold,
 ) -> Option<Alert> {
     crossed(state.used_percent, threshold.at).then(|| Alert {
         severity: AlertSeverity::Warning,
-        message: format!("{label} budget reached the alert threshold."),
+        message: format!("{provider_label} budget for {period} reached the alert threshold."),
     })
 }
 
-fn alerts_for_account(account: &ProviderSnapshot, settings: &AlertSettings) -> Vec<Alert> {
-    let key = account
+/// Storage key of the connection that produced this account.
+fn connection_key(account: &ProviderSnapshot) -> &str {
+    account
         .connection
         .as_deref()
-        .unwrap_or_else(|| fallback_storage_key(account.provider));
-    let Some(connection) = settings.connections.get(key) else {
+        .unwrap_or_else(|| fallback_storage_key(account.provider))
+}
+
+fn alerts_for_account(account: &ProviderSnapshot, settings: &AlertSettings) -> Vec<Alert> {
+    let Some(connection) = settings.connections.get(connection_key(account)) else {
         return Vec::new();
     };
     if !connection.is_enabled() {
@@ -113,6 +172,13 @@ fn alerts_for_account(account: &ProviderSnapshot, settings: &AlertSettings) -> V
 
     let mut alerts = Vec::new();
     let provider_label = provider_label(account.provider);
+    for (period, state, threshold) in [
+        ("today", &account.today, &connection.today),
+        ("this week", &account.week, &connection.week),
+        ("this month", &account.month, &connection.month),
+    ] {
+        alerts.extend(alert_for_budget(provider_label, period, state, threshold));
+    }
     for allowance in &account.allowances {
         let threshold = match allowance.source {
             AllowanceSource::Plan => &connection.plan,
@@ -250,16 +316,81 @@ mod tests {
     }
 
     #[test]
-    fn fires_budget_alert_from_settings() {
-        let snapshot = snapshot_with(claude_account(purchased(10.0)), budget(85.0));
+    fn fires_budget_alert_from_the_owning_connection() {
+        let mut account = claude_account(purchased(10.0));
+        account.today = budget(85.0);
+        let snapshot = snapshot_with(account, budget(85.0));
         let settings = AlertSettings {
-            today: PercentThreshold { at: Some(80) },
-            ..AlertSettings::default()
+            connections: HashMap::from([(
+                connection::CLAUDE_PLAN.to_string(),
+                ConnectionAlertThresholds {
+                    today: PercentThreshold { at: Some(80) },
+                    ..ConnectionAlertThresholds::default()
+                },
+            )]),
         };
+
         let alerts = calculate_alerts(&snapshot, &settings);
+
         assert_eq!(alerts.len(), 1);
         assert_eq!(alerts[0].severity, AlertSeverity::Warning);
-        assert!(alerts[0].message.contains("Today"));
+        assert!(alerts[0].message.contains("Claude budget for today"));
+    }
+
+    #[test]
+    fn a_local_limit_makes_the_budget_percentage_computable() {
+        // Organization keys report spend without a budget, so nothing can fire
+        // until the user sets a limit.
+        let mut account = claude_account(purchased(10.0));
+        account.today = calculate_budget_state(
+            BudgetPeriod::Today,
+            Some(Money::minor_units(9_000, "USD")),
+            None,
+            None,
+        );
+        assert_eq!(account.today.used_percent, None);
+
+        let snapshot = snapshot_with(account, budget(0.0));
+        let settings = AlertSettings {
+            connections: HashMap::from([(
+                connection::CLAUDE_PLAN.to_string(),
+                ConnectionAlertThresholds {
+                    today: PercentThreshold { at: Some(80) },
+                    budget: ConnectionBudget {
+                        today: Some(10_000),
+                        ..ConnectionBudget::default()
+                    },
+                    ..ConnectionAlertThresholds::default()
+                },
+            )]),
+        };
+
+        let applied = apply_alert_settings(snapshot, &settings);
+
+        assert_eq!(applied.accounts[0].today.used_percent, Some(90.0));
+        assert_eq!(applied.alerts.len(), 1);
+        assert!(applied.alerts[0]
+            .message
+            .contains("Claude budget for today"));
+    }
+
+    #[test]
+    fn budget_alert_ignores_what_other_providers_spent() {
+        // The dashboard total crosses the threshold; this connection does not.
+        let mut account = claude_account(purchased(10.0));
+        account.today = budget(10.0);
+        let snapshot = snapshot_with(account, budget(99.0));
+        let settings = AlertSettings {
+            connections: HashMap::from([(
+                connection::CLAUDE_PLAN.to_string(),
+                ConnectionAlertThresholds {
+                    today: PercentThreshold { at: Some(80) },
+                    ..ConnectionAlertThresholds::default()
+                },
+            )]),
+        };
+
+        assert!(calculate_alerts(&snapshot, &settings).is_empty());
     }
 
     #[test]
@@ -280,10 +411,7 @@ mod tests {
                 ..ConnectionAlertThresholds::default()
             },
         );
-        let settings = AlertSettings {
-            connections,
-            ..AlertSettings::default()
-        };
+        let settings = AlertSettings { connections };
         let alerts = calculate_alerts(&snapshot, &settings);
         assert_eq!(alerts.len(), 1);
         assert!(alerts[0].message.contains("Extra usage"));
@@ -302,11 +430,9 @@ mod tests {
         };
         let plan_only = AlertSettings {
             connections: HashMap::from([(connection::CLAUDE_PLAN.to_string(), rule.clone())]),
-            ..AlertSettings::default()
         };
         let platform_only = AlertSettings {
             connections: HashMap::from([(connection::ANTHROPIC_PLATFORM.to_string(), rule)]),
-            ..AlertSettings::default()
         };
 
         assert!(calculate_alerts(&snapshot, &plan_only).is_empty());
@@ -328,10 +454,7 @@ mod tests {
                 ..ConnectionAlertThresholds::default()
             },
         );
-        let settings = AlertSettings {
-            connections,
-            ..AlertSettings::default()
-        };
+        let settings = AlertSettings { connections };
         assert!(calculate_alerts(&snapshot, &settings).is_empty());
     }
 }

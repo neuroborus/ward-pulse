@@ -222,7 +222,7 @@
   "alerts": [
     {
       "severity": "warning",
-      "message": "Today budget reached the alert threshold."
+      "message": "Mock budget for today reached the alert threshold."
     }
   ],
   "watchSummary": {

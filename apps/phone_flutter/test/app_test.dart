@@ -296,7 +296,7 @@ void main() {
     await tester.tap(platformAlert);
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Alerts · OpenAI Platform'), findsOneWidget);
+    expect(find.textContaining('Alerts · Platform reporting'), findsOneWidget);
     expect(find.text('Today'), findsOneWidget);
     expect(find.text('Week'), findsOneWidget);
     expect(find.text('Month'), findsOneWidget);
@@ -305,10 +305,23 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('20% left').last);
     await tester.pumpAndSettle();
+    // A percentage is meaningless until a local limit exists.
+    await tester.enterText(find.byType(TextField).first, '25');
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
-    expect(store.value.today.at, 80);
+    expect(
+      store.value.forConnection(ProviderConnections.openAiPlatform).today.at,
+      80,
+    );
+    expect(
+      store.value
+          .forConnection(ProviderConnections.openAiPlatform)
+          .budget
+          .today,
+      2500,
+    );
     expect(
       store.value.forConnection(ProviderConnections.codexPlan).plan.at,
       90,
@@ -343,6 +356,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Alerts ·'), findsOneWidget);
+    // A plan connection offers window rules, not spend budgets.
+    expect(find.text('Plan'), findsOneWidget);
+    expect(find.text('Purchased'), findsOneWidget);
+    expect(find.text('Today'), findsNothing);
     await tester.tap(find.text('Off').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('30% left').last);

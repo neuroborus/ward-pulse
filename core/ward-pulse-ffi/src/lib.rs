@@ -567,10 +567,9 @@ mod tests {
             serde_json::json!({
                 "snapshot": snapshot,
                 "settings": {
-                    "today": { "at": 20 },
-                    "week": {},
-                    "month": {},
-                    "connections": {}
+                    "connections": {
+                        "mock.plan": { "today": { "at": 20 } }
+                    }
                 }
             })
             .to_string(),

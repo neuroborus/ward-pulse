@@ -152,6 +152,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
       builder:
           (context) => ConnectionAlertsDialog(
             connectionTitle: connection.listTitle,
+            kind: connection.id.kind,
             thresholds: widget.alertThresholds.forConnection(connection.id),
           ),
     );
@@ -161,21 +162,6 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     await _saveAlertThresholds(
       (current) => current.withConnection(connection.id, saved),
     );
-  }
-
-  Future<void> _editPlatformBudgetAlerts() async {
-    final saved = await showDialog<AlertThresholdPreferences>(
-      context: context,
-      builder:
-          (context) =>
-              PlatformBudgetAlertsDialog(thresholds: widget.alertThresholds),
-    );
-    if (saved == null || !mounted) {
-      return;
-    }
-    // The dialog edits a copy of the whole preferences, so connection rules
-    // ride along untouched and `current` would add nothing.
-    await _saveAlertThresholds((_) => saved);
   }
 
   Future<void> _saveAlertThresholds(
@@ -205,33 +191,22 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     required Widget status,
     List<Widget> leading = const [],
   }) {
-    final isPlan = connection.id.kind == ConnectionKind.plan;
-    final isOpenAiPlatform =
-        connection.id == ProviderConnections.openAiPlatform;
     final alertsEnabled =
-        isPlan
-            ? widget.alertThresholds.forConnection(connection.id).isEnabled
-            : isOpenAiPlatform
-            ? widget.alertThresholds.hasEnabledBudgetRules
-            : false;
+        widget.alertThresholds.forConnection(connection.id).isEnabled;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         ...leading,
-        if (isPlan || isOpenAiPlatform)
-          IconButton(
-            tooltip: 'Alert thresholds',
-            onPressed:
-                isOpenAiPlatform
-                    ? _editPlatformBudgetAlerts
-                    : () => _editConnectionAlerts(connection),
-            icon: Icon(
-              alertsEnabled
-                  ? Icons.notifications_active_outlined
-                  : Icons.notifications_none_outlined,
-            ),
+        IconButton(
+          tooltip: 'Alert thresholds',
+          onPressed: () => _editConnectionAlerts(connection),
+          icon: Icon(
+            alertsEnabled
+                ? Icons.notifications_active_outlined
+                : Icons.notifications_none_outlined,
           ),
+        ),
         status,
       ],
     );

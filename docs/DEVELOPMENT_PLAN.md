@@ -54,7 +54,7 @@ Android phone app
    ↓
 Dashboard → Watchface → Widget → Providers → Settings
 (connection catalog + credentials + connection alert rules on Providers;
- systemic prefs — polling, global budgets, diagnostics, legal — on Settings;
+ systemic prefs — polling, diagnostics, legal — on Settings;
  glance layout on Watchface + Widget tabs)
 
 Phone home-screen widget
@@ -524,8 +524,9 @@ About / legal
 ```
 
 Do **not** add a phone primary tab for Alerts. Active alerts stay on the Dashboard; alert
-**rules** live on Providers (connection-scoped) and Settings (global budgets only — see
-below). Wear keeps a compact Alerts detail screen for the latest computed list only — never
+**rules** live on Providers, scoped to one connection each: a plan exposes usage windows, an
+organization key exposes spend against a limit the user sets. There are no global budget
+rules — a threshold must never fire because a different provider spent money. Wear keeps a compact Alerts detail screen for the latest computed list only — never
 rule editing on the watch.
 
 **Watchface** and **Widget** sit between Dashboard and Providers — Watchface first, then
@@ -591,7 +592,8 @@ It owns:
 - credentials / auth entry for each connection (OAuth, session, API key — as today);
 - **all user-configured** alert thresholds:
   - plan / purchased meters on plan rows (opt-in; no hard-coded cutoffs);
-  - Today / Week / Month budget thresholds on the OpenAI Platform connection row;
+  - Today / Week / Month spend budgets on organization-key rows, each a user-entered
+    limit plus its own threshold (providers do not report a budget);
   - UI speaks **% left**; storage and Rust keep used%;
 - live status, last successful sync, last error, and supported metrics when connected.
 
@@ -694,7 +696,7 @@ Updated 4m ago
 ```
 
 Empty list is valid: show a short “No active alerts” state. Rule configuration stays on the
-phone: connection thresholds on **Providers**, global budget thresholds on **Settings**.
+phone: every threshold is connection-scoped and lives on **Providers**.
 
 ### Wear OS rules
 
@@ -1719,8 +1721,8 @@ Dashboard → Watchface → Widget → Providers → Settings
   (`PHONE_WIDGET_DESIGN.md` locked; prefs independent of Watchface).
 - **Providers** already owns the connection catalog, credentials, and connection alert
   thresholds.
-- Settings stays **systemic only**: global polling interval, global budget thresholds,
-  diagnostics, data deletion, legal — not connections, not credentials, not Watchface/Widget
+- Settings stays **systemic only**: global polling interval, diagnostics, data deletion,
+  legal — not connections, not credentials, not alert rules, not Watchface/Widget
   layout, and not a sixth Alerts tab.
 
 #### Widget surface
@@ -1755,7 +1757,7 @@ Acceptance:
 primary nav is Dashboard → Watchface → Widget → Providers → Settings
 Watchface tab owns ring-slot prefs; Settings no longer hosts Watch display
 Providers owns connection catalog, credentials, and connection alert thresholds
-Settings is systemic only (polling, global budgets, diagnostics, legal)
+Settings is systemic only (polling, diagnostics, legal)
 Widget tab owns widget prefs independently of Watchface
 PHONE_WIDGET_DESIGN.md baseline locked with review art for small/medium
 widget shows configured available metrics (exhausted as 0% left); hugs complete rows/columns

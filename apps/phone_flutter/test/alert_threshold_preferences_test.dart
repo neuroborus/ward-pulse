@@ -5,7 +5,6 @@ import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 void main() {
   test('defaults are opt-in off', () {
     const prefs = AlertThresholdPreferences();
-    expect(prefs.today.isEnabled, isFalse);
     expect(prefs.hasEnabledRules, isFalse);
     expect(
       prefs.forConnection(ProviderConnections.codexPlan).isEnabled,
@@ -13,11 +12,16 @@ void main() {
     );
   });
 
-  test('hasEnabledRules is true when any budget or connection rule is set', () {
+  test('hasEnabledRules is true when any connection rule is set', () {
     expect(
-      const AlertThresholdPreferences(
-        today: AlertPercentThreshold(at: 80),
-      ).hasEnabledRules,
+      const AlertThresholdPreferences()
+          .withConnection(
+            ProviderConnections.openAiPlatform,
+            const ConnectionAlertThresholds(
+              today: AlertPercentThreshold(at: 80),
+            ),
+          )
+          .hasEnabledRules,
       isTrue,
     );
     expect(
@@ -35,7 +39,6 @@ void main() {
 
   test('round-trips JSON and drops empty connection rules', () {
     final prefs = AlertThresholdPreferences(
-      today: const AlertPercentThreshold(at: 80),
       connections: {
         ProviderConnections
             .codexPlan
@@ -48,7 +51,6 @@ void main() {
     );
 
     final decoded = AlertThresholdPreferences.decode(prefs.encode());
-    expect(decoded.today.at, 80);
     expect(decoded.forConnection(ProviderConnections.codexPlan).plan.at, 70);
     expect(
       decoded.connections.containsKey(
@@ -60,23 +62,57 @@ void main() {
 
   test('reads legacy warnAt / criticalAt as a single at threshold', () {
     final decoded = AlertThresholdPreferences.decode(
-      '{"today":{"warnAt":80,"criticalAt":100},"week":{},"month":{},'
-      '"connections":{}}',
+      '{"connections":{"openai.plan":{"plan":{"warnAt":80,"criticalAt":100}}}}',
     );
-    expect(decoded.today.at, 80);
+    expect(decoded.forConnection(ProviderConnections.codexPlan).plan.at, 80);
 
     final criticalOnly = AlertPercentThreshold.fromJson({'criticalAt': 100});
     expect(criticalOnly.at, 100);
   });
 
+  test('drops global budget rules saved before they moved to connections', () {
+    final decoded = AlertThresholdPreferences.decode(
+      '{"today":{"at":80},"week":{},"month":{},"connections":{}}',
+    );
+
+    expect(decoded.hasEnabledRules, isFalse);
+  });
+
   test('encode omits disabled thresholds', () {
-    const prefs = AlertThresholdPreferences(
-      today: AlertPercentThreshold(at: 80),
+    final prefs = const AlertThresholdPreferences().withConnection(
+      ProviderConnections.openAiPlatform,
+      const ConnectionAlertThresholds(today: AlertPercentThreshold(at: 80)),
     );
     expect(prefs.encode(), contains('"today":{"at":80}'));
     expect(prefs.encode(), contains('"week":{}'));
     expect(prefs.encode(), isNot(contains('warnAt')));
     expect(prefs.encode(), isNot(contains('criticalAt')));
+  });
+
+  test('a budget limit alone survives storage', () {
+    // A limit without a percentage is still a setting worth keeping: the user
+    // may add the threshold later, and withConnection drops disabled rules.
+    final prefs = const AlertThresholdPreferences().withConnection(
+      ProviderConnections.openAiPlatform,
+      const ConnectionAlertThresholds(budget: ConnectionBudget(month: 5000)),
+    );
+
+    final decoded = AlertThresholdPreferences.decode(prefs.encode());
+
+    expect(
+      decoded.forConnection(ProviderConnections.openAiPlatform).budget.month,
+      5000,
+    );
+  });
+
+  test('clearing every limit drops the rule', () {
+    final prefs = const AlertThresholdPreferences().withConnection(
+      ProviderConnections.openAiPlatform,
+      const ConnectionAlertThresholds(),
+    );
+
+    expect(prefs.hasEnabledRules, isFalse);
+    expect(prefs.connections, isEmpty);
   });
 
   test('remaining stops map to used percent for storage', () {

@@ -47,31 +47,92 @@ final class AlertPercentThreshold {
   }
 }
 
-/// Connection-scoped rules for plan windows and purchased meters.
+/// User-entered spend limits in minor units, one per budget period.
+///
+/// Organization keys report spend but no budget, so a percentage is only
+/// computable once the user sets a limit.
+final class ConnectionBudget {
+  const ConnectionBudget({this.today, this.week, this.month});
+
+  final int? today;
+  final int? week;
+  final int? month;
+
+  bool get isEmpty => today == null && week == null && month == null;
+
+  Map<String, Object?> toJson() => {
+    if (today != null) 'today': today,
+    if (week != null) 'week': week,
+    if (month != null) 'month': month,
+  };
+
+  static ConnectionBudget fromJson(Object? json) {
+    if (json is! Map) {
+      return const ConnectionBudget();
+    }
+    int? read(Object? value) => value is int && value > 0 ? value : null;
+    return ConnectionBudget(
+      today: read(json['today']),
+      week: read(json['week']),
+      month: read(json['month']),
+    );
+  }
+}
+
+/// Connection-scoped rules: plan windows, purchased meters, spend budgets.
+///
+/// Budgets are per connection so a threshold on one organization key never
+/// fires because a different provider spent money.
 final class ConnectionAlertThresholds {
   const ConnectionAlertThresholds({
     this.plan = const AlertPercentThreshold(),
     this.purchased = const AlertPercentThreshold(),
+    this.today = const AlertPercentThreshold(),
+    this.week = const AlertPercentThreshold(),
+    this.month = const AlertPercentThreshold(),
+    this.budget = const ConnectionBudget(),
   });
 
   final AlertPercentThreshold plan;
   final AlertPercentThreshold purchased;
+  final AlertPercentThreshold today;
+  final AlertPercentThreshold week;
+  final AlertPercentThreshold month;
+  final ConnectionBudget budget;
 
-  bool get isEnabled => plan.isEnabled || purchased.isEnabled;
+  bool get isEnabled =>
+      plan.isEnabled ||
+      purchased.isEnabled ||
+      today.isEnabled ||
+      week.isEnabled ||
+      month.isEnabled ||
+      !budget.isEmpty;
 
   ConnectionAlertThresholds copyWith({
     AlertPercentThreshold? plan,
     AlertPercentThreshold? purchased,
+    AlertPercentThreshold? today,
+    AlertPercentThreshold? week,
+    AlertPercentThreshold? month,
+    ConnectionBudget? budget,
   }) {
     return ConnectionAlertThresholds(
       plan: plan ?? this.plan,
       purchased: purchased ?? this.purchased,
+      today: today ?? this.today,
+      week: week ?? this.week,
+      month: month ?? this.month,
+      budget: budget ?? this.budget,
     );
   }
 
   Map<String, Object?> toJson() => {
     'plan': plan.toJson(),
     'purchased': purchased.toJson(),
+    'today': today.toJson(),
+    'week': week.toJson(),
+    'month': month.toJson(),
+    'budget': budget.toJson(),
   };
 
   static ConnectionAlertThresholds fromJson(Object? json) {
@@ -81,36 +142,25 @@ final class ConnectionAlertThresholds {
     return ConnectionAlertThresholds(
       plan: AlertPercentThreshold.fromJson(json['plan']),
       purchased: AlertPercentThreshold.fromJson(json['purchased']),
+      today: AlertPercentThreshold.fromJson(json['today']),
+      week: AlertPercentThreshold.fromJson(json['week']),
+      month: AlertPercentThreshold.fromJson(json['month']),
+      budget: ConnectionBudget.fromJson(json['budget']),
     );
   }
 }
 
-/// Phone-local alert rules: connection thresholds + budget thresholds.
+/// Phone-local alert rules, one set per connection.
 ///
 /// Defaults are all off (opt-in). Snapshot evaluation stays in Rust.
-/// Budget today/week/month are edited on the OpenAI Platform Providers row.
 final class AlertThresholdPreferences {
-  const AlertThresholdPreferences({
-    this.connections = const {},
-    this.today = const AlertPercentThreshold(),
-    this.week = const AlertPercentThreshold(),
-    this.month = const AlertPercentThreshold(),
-  });
+  const AlertThresholdPreferences({this.connections = const {}});
 
   /// Keyed by [ProviderConnectionId.storageKey].
   final Map<String, ConnectionAlertThresholds> connections;
-  final AlertPercentThreshold today;
-  final AlertPercentThreshold week;
-  final AlertPercentThreshold month;
 
   bool get hasEnabledRules =>
-      today.isEnabled ||
-      week.isEnabled ||
-      month.isEnabled ||
       connections.values.any((value) => value.isEnabled);
-
-  bool get hasEnabledBudgetRules =>
-      today.isEnabled || week.isEnabled || month.isEnabled;
 
   ConnectionAlertThresholds forConnection(ProviderConnectionId id) {
     return connections[id.storageKey] ?? const ConnectionAlertThresholds();
@@ -131,15 +181,9 @@ final class AlertThresholdPreferences {
 
   AlertThresholdPreferences copyWith({
     Map<String, ConnectionAlertThresholds>? connections,
-    AlertPercentThreshold? today,
-    AlertPercentThreshold? week,
-    AlertPercentThreshold? month,
   }) {
     return AlertThresholdPreferences(
       connections: connections ?? this.connections,
-      today: today ?? this.today,
-      week: week ?? this.week,
-      month: month ?? this.month,
     );
   }
 
@@ -148,9 +192,6 @@ final class AlertThresholdPreferences {
       for (final entry in connections.entries)
         if (entry.value.isEnabled) entry.key: entry.value.toJson(),
     },
-    'today': today.toJson(),
-    'week': week.toJson(),
-    'month': month.toJson(),
   };
 
   static AlertThresholdPreferences fromJson(Object? json) {
@@ -171,11 +212,11 @@ final class AlertThresholdPreferences {
         }
       }
     }
+    // Budget rules used to be global (top-level today/week/month). They now
+    // belong to a connection, and an all-providers rule has no equivalent, so
+    // older installs lose them rather than get them attached to a guess.
     return AlertThresholdPreferences(
       connections: Map.unmodifiable(connections),
-      today: AlertPercentThreshold.fromJson(json['today']),
-      week: AlertPercentThreshold.fromJson(json['week']),
-      month: AlertPercentThreshold.fromJson(json['month']),
     );
   }
 

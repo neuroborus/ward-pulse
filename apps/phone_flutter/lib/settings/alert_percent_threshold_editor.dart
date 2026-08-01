@@ -8,12 +8,13 @@ import 'alert_threshold_preferences.dart';
 class AlertPercentThresholdEditor extends StatelessWidget {
   const AlertPercentThresholdEditor({
     super.key,
-    required this.title,
+    this.title,
     required this.value,
     required this.onChanged,
   });
 
-  final String title;
+  /// Heading above the control; omit when the caller already labels the group.
+  final String? title;
   final AlertPercentThreshold value;
   final ValueChanged<AlertPercentThreshold> onChanged;
 
@@ -23,8 +24,10 @@ class AlertPercentThresholdEditor extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(title, style: Theme.of(context).textTheme.titleSmall),
-        const SizedBox(height: 8),
+        if (title != null) ...[
+          Text(title!, style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+        ],
         InputDecorator(
           decoration: const InputDecoration(
             labelText: 'Alert when',
