@@ -243,27 +243,11 @@ fn scramble_budget(rng: &mut SeedRng, budget: &mut BudgetState) {
 }
 
 fn worst_budget_status(account: &ProviderSnapshot) -> ProviderStatus {
-    [&account.today, &account.week, &account.month]
-        .into_iter()
-        .map(|budget| budget.status)
-        .fold(ProviderStatus::Ok, |left, right| {
-            if status_rank(right) > status_rank(left) {
-                right
-            } else {
-                left
-            }
-        })
-}
-
-fn status_rank(status: ProviderStatus) -> u8 {
-    match status {
-        ProviderStatus::Error | ProviderStatus::AuthRequired => 5,
-        ProviderStatus::RateLimited => 4,
-        ProviderStatus::Warning => 3,
-        ProviderStatus::Stale => 2,
-        ProviderStatus::Ok => 1,
-        ProviderStatus::Unknown => 0,
-    }
+    ProviderStatus::worst([
+        account.today.status,
+        account.week.status,
+        account.month.status,
+    ])
 }
 
 fn interesting_percent(rng: &mut SeedRng) -> f64 {

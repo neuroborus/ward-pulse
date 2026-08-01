@@ -10,6 +10,7 @@ use ward_pulse_core::model::{
 };
 use ward_pulse_core::time::DateTimeUtc;
 
+use crate::allowance::worst_status;
 use crate::{BucketCapabilities, ProviderCapabilities};
 
 pub const PROVIDER_NAME: &str = "Codex";
@@ -110,11 +111,7 @@ pub fn codex_provider_snapshot_from_report_json(
         }
     }
 
-    let status = allowances
-        .iter()
-        .map(|allowance| allowance.status)
-        .max_by_key(status_rank)
-        .unwrap_or(ProviderStatus::Unknown);
+    let status = worst_status(&allowances);
     let buckets = report
         .usage
         .daily_usage_buckets
@@ -315,18 +312,6 @@ fn civil_from_days(days_since_epoch: i64) -> Option<(i64, i64, i64)> {
     year += i64::from(month <= 2);
 
     Some((year, month, day))
-}
-
-fn status_rank(status: &ProviderStatus) -> u8 {
-    match status {
-        ProviderStatus::Ok => 1,
-        ProviderStatus::Unknown => 2,
-        ProviderStatus::Stale => 3,
-        ProviderStatus::Warning => 4,
-        ProviderStatus::RateLimited => 5,
-        ProviderStatus::AuthRequired => 6,
-        ProviderStatus::Error => 7,
-    }
 }
 
 #[derive(Debug, Deserialize)]

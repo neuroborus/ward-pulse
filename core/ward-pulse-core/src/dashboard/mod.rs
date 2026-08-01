@@ -24,14 +24,7 @@ pub fn build_dashboard_snapshot(
     // App-bar / overall pulse reflects connected providers — not local budget
     // cards. Budget totals without a configured limit stay Unknown and must not
     // bury Ok provider sync behind a misleading Unknown chrome.
-    let overall_status = if accounts.is_empty() {
-        ProviderStatus::Unknown
-    } else {
-        accounts
-            .iter()
-            .map(|account| account.status)
-            .fold(ProviderStatus::Ok, worst_status)
-    };
+    let overall_status = ProviderStatus::worst(accounts.iter().map(|account| account.status));
 
     // Alerts stay empty until the shell applies user rules via calculate_alerts.
     let watch_summary = WatchSummary {
@@ -104,26 +97,6 @@ impl MoneyTotal {
             Self::Sum(total) => Some(total),
             Self::Empty | Self::MixedCurrencies => None,
         }
-    }
-}
-
-fn worst_status(left: ProviderStatus, right: ProviderStatus) -> ProviderStatus {
-    if status_rank(&right) > status_rank(&left) {
-        right
-    } else {
-        left
-    }
-}
-
-fn status_rank(status: &ProviderStatus) -> u8 {
-    match status {
-        ProviderStatus::Ok => 1,
-        ProviderStatus::Unknown => 2,
-        ProviderStatus::Stale => 3,
-        ProviderStatus::Warning => 4,
-        ProviderStatus::RateLimited => 5,
-        ProviderStatus::AuthRequired => 6,
-        ProviderStatus::Error => 7,
     }
 }
 
