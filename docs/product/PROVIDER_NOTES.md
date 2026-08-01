@@ -29,6 +29,20 @@ Each provider should document:
 
 Platform code owns transport, TLS, background scheduling, secure credential retrieval, retries, and encrypted storage. Rust owns parsing, validation, normalization, error mapping, aggregation, budgets, projections, alerts, and dashboard view models.
 
+### Validation stops short of rejecting timestamps
+
+Rust validates what it can act on. It deliberately does **not** reject a malformed instant:
+`DateTimeUtc` normalizes what it recognizes and passes anything else through unchanged.
+
+The reason is the failure mode, not the type. Instants arrive inside provider payloads, so a
+fallible parse would fail the whole report over one field, and a local-first dashboard would
+show an error page instead of the data it already has. A single odd date is the cheaper loss.
+
+The cost is that `DateTimeUtc` guarantees less than its name suggests, and time ordering relies
+on every producer emitting RFC 3339 in UTC. If a provider ever breaks that, reject at the FFI
+boundary, which already returns an error envelope — not inside the core, which has no way to
+report anything.
+
 ## Consumption display
 
 Providers may report plan allowances, purchased tokens or credits, or both. These values stay

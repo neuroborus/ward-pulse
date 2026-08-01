@@ -8,6 +8,11 @@ use serde::{Deserialize, Serialize};
 /// as text, and `.` sorts before `Z`, so `…:00.000Z` would rank below the very
 /// same instant written `…:00Z`. Dropping sub-second precision on the way in
 /// keeps one shape, so text order matches chronological order.
+///
+/// Malformed input is passed through, not rejected: instants arrive inside
+/// provider payloads, and a fallible parse would fail a whole report over one
+/// field. See `docs/product/PROVIDER_NOTES.md` (Boundary) for the trade-off and
+/// for where to reject if a provider ever breaks the format.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 pub struct DateTimeUtc(String);
