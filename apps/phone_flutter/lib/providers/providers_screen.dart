@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../settings/alert_percent_threshold_editor.dart';
 import '../settings/alert_threshold_preferences.dart';
 import '../sync/claude_account_client.dart';
 import '../sync/codex_account_client.dart';
+import 'alert_threshold_dialogs.dart';
 import 'claude_account_service.dart';
 import 'codex_account_service.dart';
 import 'cursor_plan_sign_in_screen.dart';
@@ -526,154 +526,42 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
   }
 
   Future<void> _editConnectionAlerts(ProviderConnection connection) async {
-    var draft = widget.alertThresholds.forConnection(connection.id);
     final saved = await showDialog<ConnectionAlertThresholds>(
       context: context,
       builder:
-          (context) => StatefulBuilder(
-            builder: (context, setDialogState) {
-              return AlertDialog(
-                title: Text('Alerts · ${connection.listTitle}'),
-                content: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        'Opt-in · fire when remaining capacity reaches the '
-                        'chosen % left. Off until you pick a value.',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      AlertPercentThresholdEditor(
-                        title: 'Plan',
-                        value: draft.plan,
-                        onChanged:
-                            (plan) => setDialogState(() {
-                              draft = draft.copyWith(plan: plan);
-                            }),
-                      ),
-                      const SizedBox(height: 16),
-                      AlertPercentThresholdEditor(
-                        title: 'Purchased',
-                        value: draft.purchased,
-                        onChanged:
-                            (purchased) => setDialogState(() {
-                              draft = draft.copyWith(purchased: purchased);
-                            }),
-                      ),
-                    ],
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Cancel'),
-                  ),
-                  FilledButton(
-                    onPressed: () => Navigator.of(context).pop(draft),
-                    child: const Text('Save'),
-                  ),
-                ],
-              );
-            },
+          (context) => ConnectionAlertsDialog(
+            connectionTitle: connection.listTitle,
+            thresholds: widget.alertThresholds.forConnection(connection.id),
           ),
     );
     if (saved == null || !mounted) {
       return;
     }
-    try {
-      await widget.onAlertThresholdsChanged(
-        (current) => current.withConnection(connection.id, saved),
-      );
-    } catch (_) {
-      if (mounted) {
-        _showMessage('Could not update alert thresholds');
-      }
-    }
+    await _saveAlertThresholds(
+      (current) => current.withConnection(connection.id, saved),
+    );
   }
 
   Future<void> _editPlatformBudgetAlerts() async {
-    var today = widget.alertThresholds.today;
-    var week = widget.alertThresholds.week;
-    var month = widget.alertThresholds.month;
     final saved = await showDialog<AlertThresholdPreferences>(
       context: context,
       builder:
-          (context) => StatefulBuilder(
-            builder: (context, setDialogState) {
-              return AlertDialog(
-                title: const Text('Alerts · OpenAI Platform'),
-                content: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        'Opt-in budget alerts · fire when remaining budget '
-                        'reaches the chosen % left.',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      AlertPercentThresholdEditor(
-                        title: 'Today',
-                        value: today,
-                        onChanged:
-                            (value) => setDialogState(() {
-                              today = value;
-                            }),
-                      ),
-                      const SizedBox(height: 16),
-                      AlertPercentThresholdEditor(
-                        title: 'Week',
-                        value: week,
-                        onChanged:
-                            (value) => setDialogState(() {
-                              week = value;
-                            }),
-                      ),
-                      const SizedBox(height: 16),
-                      AlertPercentThresholdEditor(
-                        title: 'Month',
-                        value: month,
-                        onChanged:
-                            (value) => setDialogState(() {
-                              month = value;
-                            }),
-                      ),
-                    ],
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Cancel'),
-                  ),
-                  FilledButton(
-                    onPressed:
-                        () => Navigator.of(context).pop(
-                          widget.alertThresholds.copyWith(
-                            today: today,
-                            week: week,
-                            month: month,
-                          ),
-                        ),
-                    child: const Text('Save'),
-                  ),
-                ],
-              );
-            },
-          ),
+          (context) =>
+              PlatformBudgetAlertsDialog(thresholds: widget.alertThresholds),
     );
     if (saved == null || !mounted) {
       return;
     }
+    // The dialog edits a copy of the whole preferences, so connection rules
+    // ride along untouched and `current` would add nothing.
+    await _saveAlertThresholds((_) => saved);
+  }
+
+  Future<void> _saveAlertThresholds(
+    AlertThresholdPreferences Function(AlertThresholdPreferences current) edit,
+  ) async {
     try {
-      await widget.onAlertThresholdsChanged((_) => saved);
+      await widget.onAlertThresholdsChanged(edit);
     } catch (_) {
       if (mounted) {
         _showMessage('Could not update alert thresholds');

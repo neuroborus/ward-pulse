@@ -263,6 +263,11 @@ void main() {
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
     );
     final store = _MemoryAlertThresholdStore();
+    // A connection rule the budget dialog must not clobber on save.
+    store.value = store.value.withConnection(
+      ProviderConnections.codexPlan,
+      const ConnectionAlertThresholds(plan: AlertPercentThreshold(at: 90)),
+    );
 
     await tester.pumpWidget(
       WardPulseApp(
@@ -304,6 +309,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(store.value.today.at, 80);
+    expect(
+      store.value.forConnection(ProviderConnections.codexPlan).plan.at,
+      90,
+    );
   });
 
   testWidgets('Providers plan row can save connection alert thresholds', (
