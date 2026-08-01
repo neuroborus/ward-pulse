@@ -6,6 +6,7 @@ import '../settings/consumption_display_preferences.dart';
 import 'connected_capabilities.dart';
 import 'dashboard_models.dart';
 import 'provider_status_color.dart';
+import 'provider_status_severity.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({
@@ -563,9 +564,7 @@ List<_ProviderDashboardSection> _providerDashboardSections(
       _ProviderDashboardSection(
         provider: group.first.provider,
         providerLabel: group.first.providerLabel,
-        status: group
-            .map((account) => account.status)
-            .reduce(_worseProviderStatus),
+        status: worstProviderStatus(group.map((account) => account.status)),
         allowances: allowances,
         buckets: buckets,
         modelBreakdown: modelBreakdown,
@@ -573,21 +572,6 @@ List<_ProviderDashboardSection> _providerDashboardSections(
     );
   }
   return sections;
-}
-
-ProviderStatus _worseProviderStatus(ProviderStatus left, ProviderStatus right) {
-  return _providerStatusRank(right) > _providerStatusRank(left) ? right : left;
-}
-
-int _providerStatusRank(ProviderStatus status) {
-  return switch (status) {
-    ProviderStatus.error || ProviderStatus.authRequired => 5,
-    ProviderStatus.rateLimited => 4,
-    ProviderStatus.warning => 3,
-    ProviderStatus.stale => 2,
-    ProviderStatus.ok => 1,
-    ProviderStatus.unknown => 0,
-  };
 }
 
 class _ProviderDashboardSections extends StatelessWidget {
