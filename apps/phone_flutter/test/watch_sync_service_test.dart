@@ -58,7 +58,7 @@ void main() {
     );
   });
 
-  test('sends only selected allowance sources', () {
+  test('sends all reported allowance sources', () {
     final json =
         jsonDecode(
               File(
@@ -99,10 +99,8 @@ void main() {
         jsonDecode(
               WatchDashboardSummaryPayload.fromSnapshot(
                 DashboardSnapshot.fromJson(json),
-                const ConsumptionDisplayPreferences(
-                  plan: false,
-                  purchased: true,
-                ),
+                // Display prefs no longer filter surfaces.
+                const ConsumptionDisplayPreferences(plan: false),
                 const WatchRingPreferences(),
               ).encode(),
             )
@@ -115,12 +113,10 @@ void main() {
       'provider': 'mock',
     });
     expect(payload['dataMode'], 'mock');
-    expect((payload['allowances'] as List), hasLength(1));
-    expect((payload['allowances'] as List).first['source'], 'purchased');
-    expect(
-      (payload['allowances'] as List).first['label'],
-      'Mock · Purchased credits',
-    );
+    final allowances = payload['allowances'] as List;
+    expect(allowances, hasLength(2));
+    expect(allowances.map((row) => row['source']), ['plan', 'purchased']);
+    expect(allowances.last['label'], 'Mock · Purchased credits');
   });
 
   test(

@@ -7,17 +7,18 @@ use crate::model::{
     ProviderKind, ProviderSnapshot,
 };
 
-/// Opt-in percent thresholds. Null fields mean that rule is disabled.
+/// Opt-in used-% threshold. `None` means the rule is off.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PercentThreshold {
-    pub warn_at: Option<u8>,
-    pub critical_at: Option<u8>,
+    /// Fire when used percent reaches this value.
+    #[serde(default, alias = "warnAt", skip_serializing_if = "Option::is_none")]
+    pub at: Option<u8>,
 }
 
 impl PercentThreshold {
     pub fn is_enabled(&self) -> bool {
-        self.warn_at.is_some() || self.critical_at.is_some()
+        self.at.is_some()
     }
 }
 
@@ -37,7 +38,7 @@ impl ConnectionAlertThresholds {
     }
 }
 
-/// User-configured alert rules from the phone shell (Providers + Settings).
+/// User-configured alert rules from the phone shell (Providers).
 ///
 /// Defaults are all off (opt-in). Keys in [`Self::connections`] match phone
 /// `ProviderConnectionId.storageKey` values (`openai.plan`, …).
@@ -88,20 +89,13 @@ pub fn apply_alert_settings(
 }
 
 fn alerts_for_budget(label: &str, state: &BudgetState, threshold: &PercentThreshold) -> Vec<Alert> {
-    let Some(used) = state.used_percent else {
+    if !crossed(state.used_percent, threshold.at) {
         return Vec::new();
-    };
-    match severity_for_percent(used, threshold) {
-        Some(AlertSeverity::Error) => vec![Alert {
-            severity: AlertSeverity::Error,
-            message: format!("{label} budget has reached the critical threshold."),
-        }],
-        Some(AlertSeverity::Warning) => vec![Alert {
-            severity: AlertSeverity::Warning,
-            message: format!("{label} budget is above the warning threshold."),
-        }],
-        Some(AlertSeverity::Info) | None => Vec::new(),
     }
+    vec![Alert {
+        severity: AlertSeverity::Warning,
+        message: format!("{label} budget reached the alert threshold."),
+    }]
 }
 
 fn alerts_for_account(account: &ProviderSnapshot, settings: &AlertSettings) -> Vec<Alert> {
@@ -134,38 +128,23 @@ fn alert_for_allowance(
     allowance: &AllowanceState,
     threshold: &PercentThreshold,
 ) -> Option<Alert> {
-    let used = allowance.used_percent?;
-    match severity_for_percent(used, threshold)? {
-        AlertSeverity::Error => Some(Alert {
-            severity: AlertSeverity::Error,
-            message: format!(
-                "{provider_label} {} has reached the critical threshold.",
-                allowance.label
-            ),
-        }),
-        AlertSeverity::Warning => Some(Alert {
-            severity: AlertSeverity::Warning,
-            message: format!(
-                "{provider_label} {} is above the warning threshold.",
-                allowance.label
-            ),
-        }),
-        AlertSeverity::Info => None,
+    if !crossed(allowance.used_percent, threshold.at) {
+        return None;
     }
+    Some(Alert {
+        severity: AlertSeverity::Warning,
+        message: format!(
+            "{provider_label} {} reached the alert threshold.",
+            allowance.label
+        ),
+    })
 }
 
-fn severity_for_percent(used_percent: f64, threshold: &PercentThreshold) -> Option<AlertSeverity> {
-    if let Some(critical) = threshold.critical_at {
-        if used_percent >= f64::from(critical) {
-            return Some(AlertSeverity::Error);
-        }
+fn crossed(used_percent: Option<f64>, at: Option<u8>) -> bool {
+    match (used_percent, at) {
+        (Some(used), Some(threshold)) => used >= f64::from(threshold),
+        _ => false,
     }
-    if let Some(warn) = threshold.warn_at {
-        if used_percent >= f64::from(warn) {
-            return Some(AlertSeverity::Warning);
-        }
-    }
-    None
 }
 
 /// Phone `ProviderConnectionId.storageKey` for allowance-scoped rules.
@@ -270,28 +249,23 @@ mod tests {
     }
 
     #[test]
-    fn fires_budget_warn_and_critical_from_settings() {
+    fn fires_budget_alert_from_settings() {
         let snapshot = snapshot_with(claude_account(purchased(10.0)), budget(85.0));
         let settings = AlertSettings {
-            today: PercentThreshold {
-                warn_at: Some(80),
-                critical_at: Some(100),
-            },
+            today: PercentThreshold { at: Some(80) },
             ..AlertSettings::default()
         };
         let alerts = calculate_alerts(&snapshot, &settings);
         assert_eq!(alerts.len(), 1);
         assert_eq!(alerts[0].severity, AlertSeverity::Warning);
+        assert!(alerts[0].message.contains("Today"));
+    }
 
-        let critical = AlertSettings {
-            today: PercentThreshold {
-                warn_at: Some(80),
-                critical_at: Some(85),
-            },
-            ..AlertSettings::default()
-        };
-        let alerts = calculate_alerts(&snapshot, &critical);
-        assert_eq!(alerts[0].severity, AlertSeverity::Error);
+    #[test]
+    fn accepts_legacy_warn_at_json_field() {
+        let threshold: PercentThreshold =
+            serde_json::from_str(r#"{"warnAt":80,"criticalAt":100}"#).unwrap();
+        assert_eq!(threshold.at, Some(80));
     }
 
     #[test]
@@ -301,10 +275,7 @@ mod tests {
         connections.insert(
             "anthropic.plan".into(),
             ConnectionAlertThresholds {
-                purchased: PercentThreshold {
-                    warn_at: Some(80),
-                    critical_at: None,
-                },
+                purchased: PercentThreshold { at: Some(80) },
                 ..ConnectionAlertThresholds::default()
             },
         );
@@ -329,10 +300,7 @@ mod tests {
         connections.insert(
             "anthropic.plan".into(),
             ConnectionAlertThresholds {
-                purchased: PercentThreshold {
-                    warn_at: Some(80),
-                    critical_at: None,
-                },
+                purchased: PercentThreshold { at: Some(80) },
                 ..ConnectionAlertThresholds::default()
             },
         );

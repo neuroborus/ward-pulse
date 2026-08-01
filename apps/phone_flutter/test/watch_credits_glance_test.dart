@@ -11,11 +11,11 @@ void main() {
     expect(compactCreditCount(1_400_000), '1.4M');
   });
 
-  test('resolves remaining purchased credits when enabled', () {
+  test('resolves remaining purchased credits', () {
     final snapshot = _snapshotWithPurchased(remaining: '500');
     final glance = resolveWatchCreditsGlance(
       snapshot,
-      const ConsumptionDisplayPreferences(plan: true, purchased: true),
+      const ConsumptionDisplayPreferences(),
     );
     expect(glance, isNotNull);
     expect(glance!.text, '500');
@@ -23,22 +23,11 @@ void main() {
     expect(glance.provider, 'codex');
   });
 
-  test('omits credits glance when purchased display is off', () {
-    final snapshot = _snapshotWithPurchased(remaining: '500');
-    expect(
-      resolveWatchCreditsGlance(
-        snapshot,
-        const ConsumptionDisplayPreferences(plan: true, purchased: false),
-      ),
-      isNull,
-    );
-  });
-
   test('shows infinity for unlimited purchased credits', () {
     final snapshot = _snapshotWithPurchased(remaining: null, unlimited: true);
     final glance = resolveWatchCreditsGlance(
       snapshot,
-      const ConsumptionDisplayPreferences(purchased: true),
+      const ConsumptionDisplayPreferences(),
     );
     expect(glance?.text, '∞');
   });

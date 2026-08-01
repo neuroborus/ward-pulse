@@ -170,7 +170,8 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Display'), findsOneWidget);
+    expect(find.text('Display'), findsNothing);
+    expect(find.text('Alerts'), findsNothing);
     expect(find.text('Refresh'), findsOneWidget);
     expect(find.text('Watch display'), findsNothing);
     expect(
@@ -255,7 +256,7 @@ void main() {
     expect(store.value.selectedIds, isNotNull);
   });
 
-  testWidgets('Settings exposes global budget alert thresholds', (
+  testWidgets('Providers Platform row can save budget alert thresholds', (
     tester,
   ) async {
     final snapshot = DashboardSnapshot.fromJsonString(
@@ -272,25 +273,37 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Settings'));
+    await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.text('Alerts'),
+      find.text('Platform reporting'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('Alerts'), findsOneWidget);
-    expect(find.text('Today'), findsWidgets);
+    final platformAlert = find.descendant(
+      of: find.ancestor(
+        of: find.text('Platform reporting'),
+        matching: find.byType(ListTile),
+      ),
+      matching: find.byTooltip('Alert thresholds'),
+    );
+    await tester.tap(platformAlert);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Alerts · OpenAI Platform'), findsOneWidget);
+    expect(find.text('Today'), findsOneWidget);
     expect(find.text('Week'), findsOneWidget);
     expect(find.text('Month'), findsOneWidget);
 
     await tester.tap(find.text('Off').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('80%').last);
+    await tester.tap(find.text('20% left').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
-    expect(store.value.today.warnAt, 80);
+    expect(store.value.today.at, 80);
   });
 
   testWidgets('Providers plan row can save connection alert thresholds', (
@@ -323,13 +336,13 @@ void main() {
     expect(find.textContaining('Alerts ·'), findsOneWidget);
     await tester.tap(find.text('Off').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('70%').last);
+    await tester.tap(find.text('30% left').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
     expect(
-      store.value.forConnection(ProviderConnections.codexPlan).plan.warnAt,
+      store.value.forConnection(ProviderConnections.codexPlan).plan.at,
       70,
     );
   });
@@ -565,7 +578,7 @@ void main() {
     expect(find.text('Remove'), findsOneWidget);
   });
 
-  testWidgets('shows plan and purchased by default and can hide purchases', (
+  testWidgets('shows plan and purchased surfaces without Settings display toggles', (
     tester,
   ) async {
     final json =
@@ -603,12 +616,10 @@ void main() {
         'status': 'ok',
       },
     ];
-    final preferences = _MemoryDisplayPreferenceStore();
 
     await tester.pumpWidget(
       WardPulseApp(
         repository: ValueDashboardRepository(DashboardSnapshot.fromJson(json)),
-        displayPreferenceStore: preferences,
       ),
     );
     await tester.pumpAndSettle();
@@ -618,20 +629,9 @@ void main() {
 
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
-    expect(
-      find.widgetWithText(SwitchListTile, 'Platform spend'),
-      findsOneWidget,
-    );
-    await tester.tap(find.widgetWithText(SwitchListTile, 'Purchased usage'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Dashboard'));
-    await tester.pumpAndSettle();
-
-    expect(preferences.value.purchased, isFalse);
-    expect(preferences.value.plan, isTrue);
-    expect(preferences.value.platform, isTrue);
-    expect(find.text('Weekly plan'), findsOneWidget);
-    expect(find.text('Purchased credits'), findsNothing);
+    expect(find.text('Display'), findsNothing);
+    expect(find.text('Platform spend'), findsNothing);
+    expect(find.text('Purchased usage'), findsNothing);
   });
 
   testWidgets('persists the global refresh interval slider', (tester) async {
@@ -983,19 +983,6 @@ class _MemoryCredentialStore implements ProviderCredentialStore {
       return;
     }
     _labels[id] = trimmed;
-  }
-}
-
-class _MemoryDisplayPreferenceStore
-    implements ConsumptionDisplayPreferenceStore {
-  ConsumptionDisplayPreferences value = const ConsumptionDisplayPreferences();
-
-  @override
-  Future<ConsumptionDisplayPreferences> read() async => value;
-
-  @override
-  Future<void> write(ConsumptionDisplayPreferences value) async {
-    this.value = value;
   }
 }
 

@@ -263,21 +263,6 @@ class _DashboardHostState extends State<DashboardHost> {
     }
   }
 
-  Future<void> _updateDisplayPreferences(
-    ConsumptionDisplayPreferences value,
-  ) async {
-    await widget.displayPreferenceStore.write(value);
-    if (mounted) {
-      setState(() {
-        _displayPreferences = value;
-      });
-    }
-    final snapshot = _currentSnapshot;
-    if (snapshot != null) {
-      unawaited(_syncWatch(snapshot));
-    }
-  }
-
   Future<void> _updateRefreshInterval(RefreshIntervalPreference value) async {
     await widget.refreshIntervalStore.write(value);
     if (mounted) {
@@ -526,13 +511,9 @@ class _DashboardHostState extends State<DashboardHost> {
               _ when _selectedIndex == _settingsIndex => SettingsScreen(
                 key: const ValueKey('settings'),
                 snapshot: snapshot,
-                displayPreferences: _displayPreferences,
-                onDisplayPreferencesChanged: _updateDisplayPreferences,
                 refreshInterval: _refreshInterval,
                 onRefreshIntervalChanged: _updateRefreshInterval,
                 ringPreferences: _ringPreferences,
-                alertThresholds: _alertThresholds,
-                onAlertThresholdsChanged: _updateAlertThresholds,
                 onSyncWatch: _onSettingsSyncWatch,
                 debugDataAvailable: widget.debugDataAvailable,
                 mockDataEnabled: _mockDataEnabled,

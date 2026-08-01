@@ -534,11 +534,12 @@ Widget. Surface configuration lives on those tabs, not under Settings.
 - **Watchface** — configure Wear / WFF ring slots and preview the next watch payload.
 - **Widget** — configure the phone home-screen widget metrics and preview (Phase 14).
 - **Providers** — full connection catalog (every plan/platform row, Connected or Not
-  connected), credentials / auth, connection-scoped alert thresholds, and live status for
-  synced accounts.
-- **Settings** — systemic only: global polling interval, global Today / Week / Month budget
-  thresholds, diagnostics, data deletion, legal — not connections, not credentials, not
-  glance layout, not a sixth Alerts tab.
+  connected), credentials / auth, **all** user alert thresholds (plan/purchased per
+  connection; Today/Week/Month budgets on OpenAI Platform), and live status for synced
+  accounts. Threshold UI speaks **% left**.
+- **Settings** — systemic only: global polling interval, diagnostics, data deletion,
+  legal, debug toggles — not connections, credentials, display surface toggles, alert
+  rules, glance layout, or a sixth Alerts tab.
 
 ### Home / Overview (Dashboard)
 
@@ -588,19 +589,19 @@ It owns:
 
 - the full connection catalog (every plan/platform row in Not connected / Connected states);
 - credentials / auth entry for each connection (OAuth, session, API key — as today);
-- **user-configured** connection-scoped alert thresholds (plan windows, purchased meters such
-  as Extra usage / on-demand — opt-in; no hard-coded cutoffs);
+- **all user-configured** alert thresholds:
+  - plan / purchased meters on plan rows (opt-in; no hard-coded cutoffs);
+  - Today / Week / Month budget thresholds on the OpenAI Platform connection row;
+  - UI speaks **% left**; storage and Rust keep used%;
 - live status, last successful sync, last error, and supported metrics when connected.
 
 Rules can be prepared before the first successful sync because Not connected rows stay visible.
 
 ### Settings
 
-Settings is **systemic only** — no connection catalog and no per-provider credentials:
+Settings is **systemic only** — no connection catalog, credentials, display toggles, or alerts:
 
 - global minimum polling interval;
-- global Today / Week / Month budget warn/critical thresholds (not duplicated onto provider
-  rows);
 - local-only diagnostics export;
 - data deletion;
 - legal disclaimer;
@@ -608,8 +609,7 @@ Settings is **systemic only** — no connection catalog and no per-provider cred
 - debug-only toggles (e.g. Mock data) when present.
 
 Do **not** keep Watchface or Widget layout controls in Settings once the Watchface / Widget
-tabs exist. Do **not** keep connection rows or connection alert rules in Settings once they
-live on Providers.
+tabs exist. Do **not** keep connection rows or alert rules in Settings — they live on Providers.
 
 #### Alerts ownership (phone)
 
@@ -618,8 +618,8 @@ Split runtime output from configuration:
 | Concern | Surface | Notes |
 |---------|---------|--------|
 | Active alerts | Dashboard alerts panel (and Wear Alerts detail) | Only rules the user enabled, evaluated against the latest snapshot |
-| Connection alert rules / thresholds | **Providers** (catalog row or detail) | User picks which meters to watch and warn/critical %; editable on Not connected rows too |
-| Global budget warn/critical | **Settings** card (Today / Week / Month) | Systemic; not duplicated onto every provider row |
+| Plan / purchased alert rules | **Providers** (plan catalog rows) | One opt-in threshold per meter as **% left** |
+| Today / Week / Month budget rules | **Providers** (OpenAI Platform row) | Same remaining-% editor; not under Settings |
 
 **Product rule:** alerts are opt-in. Provider status chrome (`Warning` / `RateLimited` from
 reported utilization) must **not** invent dashboard alerts by itself. Empty “No alerts” is the

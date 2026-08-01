@@ -34,10 +34,12 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   Watchface still collapses Claude / omits exhausted. Do not keep
   those controls in Settings.
 - **Providers** owns the full connection catalog (Connected / Not connected), credentials /
-  auth, and **user-configured** connection-scoped alert thresholds (editable before first
-  sync). Do not keep the connection catalog under Settings.
-- **Settings** is systemic only: global polling interval, global Today / Week / Month budget
-  thresholds, diagnostics, data deletion, legal, debug toggles — not connections or credentials.
+  auth, and **all user-configured** alert thresholds (plan/purchased per connection;
+  Today/Week/Month budgets on OpenAI Platform). One threshold per meter; UI speaks
+  **% left** (storage/Rust keep used% as `at`). Editable before first sync. Do not keep
+  alert rules under Settings.
+- **Settings** is systemic only: global polling interval, diagnostics, data deletion,
+  legal, debug toggles — not connections, credentials, display surface toggles, or alerts.
 - Do not add a phone Alerts tab. Active alerts render on the Dashboard. Thresholds are
   **user-configured only** — never invent alerts from hard-coded 80%/100% utilization cutoffs.
   Provider status chrome (Warning / RateLimited) is separate from the alerts list.

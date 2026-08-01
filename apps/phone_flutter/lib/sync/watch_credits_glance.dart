@@ -21,15 +21,12 @@ final class WatchCreditsGlance {
   };
 }
 
-/// Remaining purchased credits when Settings shows purchased usage.
+/// Remaining purchased credits for the watch-face strip (always considered;
+/// Settings no longer hides purchased surfaces).
 WatchCreditsGlance? resolveWatchCreditsGlance(
   DashboardSnapshot snapshot,
-  ConsumptionDisplayPreferences displayPreferences,
+  ConsumptionDisplayPreferences _,
 ) {
-  if (!displayPreferences.purchased) {
-    return null;
-  }
-
   String? unit;
   final providers = <String>{};
   double total = 0;

@@ -16,7 +16,7 @@ void main() {
   test('hasEnabledRules is true when any budget or connection rule is set', () {
     expect(
       const AlertThresholdPreferences(
-        today: AlertPercentThreshold(warnAt: 80),
+        today: AlertPercentThreshold(at: 80),
       ).hasEnabledRules,
       isTrue,
     );
@@ -24,7 +24,7 @@ void main() {
       const AlertThresholdPreferences().withConnection(
         ProviderConnections.codexPlan,
         const ConnectionAlertThresholds(
-          plan: AlertPercentThreshold(criticalAt: 100),
+          plan: AlertPercentThreshold(at: 100),
         ),
       ).hasEnabledRules,
       isTrue,
@@ -33,12 +33,12 @@ void main() {
 
   test('round-trips JSON and drops empty connection rules', () {
     final prefs = AlertThresholdPreferences(
-      today: const AlertPercentThreshold(warnAt: 80, criticalAt: 100),
+      today: const AlertPercentThreshold(at: 80),
       connections: {
         ProviderConnections
             .codexPlan
             .storageKey: const ConnectionAlertThresholds(
-          plan: AlertPercentThreshold(warnAt: 70),
+          plan: AlertPercentThreshold(at: 70),
         ),
         ProviderConnections.claudePlan.storageKey:
             const ConnectionAlertThresholds(),
@@ -46,10 +46,9 @@ void main() {
     );
 
     final decoded = AlertThresholdPreferences.decode(prefs.encode());
-    expect(decoded.today.warnAt, 80);
-    expect(decoded.today.criticalAt, 100);
+    expect(decoded.today.at, 80);
     expect(
-      decoded.forConnection(ProviderConnections.codexPlan).plan.warnAt,
+      decoded.forConnection(ProviderConnections.codexPlan).plan.at,
       70,
     );
     expect(
@@ -60,16 +59,48 @@ void main() {
     );
   });
 
-  test('normalized raises critical to match warn', () {
-    const raw = AlertPercentThreshold(warnAt: 90, criticalAt: 50);
-    expect(raw.normalized.criticalAt, 90);
+  test('reads legacy warnAt / criticalAt as a single at threshold', () {
+    final decoded = AlertThresholdPreferences.decode(
+      '{"today":{"warnAt":80,"criticalAt":100},"week":{},"month":{},'
+      '"connections":{}}',
+    );
+    expect(decoded.today.at, 80);
+
+    final criticalOnly = AlertPercentThreshold.fromJson({
+      'criticalAt': 100,
+    });
+    expect(criticalOnly.at, 100);
+  });
+
+  test('encode omits disabled thresholds', () {
+    const prefs = AlertThresholdPreferences(
+      today: AlertPercentThreshold(at: 80),
+    );
+    expect(prefs.encode(), contains('"today":{"at":80}'));
+    expect(prefs.encode(), contains('"week":{}'));
+    expect(prefs.encode(), isNot(contains('warnAt')));
+    expect(prefs.encode(), isNot(contains('criticalAt')));
+  });
+
+  test('remaining stops map to used percent for storage', () {
+    expect(alertRemainingToUsed(null), isNull);
+    expect(alertRemainingToUsed(50), 50);
+    expect(alertRemainingToUsed(30), 70);
+    expect(alertRemainingToUsed(20), 80);
+    expect(alertRemainingToUsed(10), 90);
+    expect(alertRemainingToUsed(0), 100);
+
+    expect(alertUsedToRemaining(null), isNull);
+    expect(alertUsedToRemaining(70), 30);
+    expect(alertUsedToRemaining(100), 0);
+    expect(alertUsedToRemaining(75), isNull);
   });
 
   test('withConnection removes disabled rules', () {
     final enabled = const AlertThresholdPreferences().withConnection(
       ProviderConnections.cursorPlan,
       const ConnectionAlertThresholds(
-        purchased: AlertPercentThreshold(criticalAt: 100),
+        purchased: AlertPercentThreshold(at: 100),
       ),
     );
     expect(

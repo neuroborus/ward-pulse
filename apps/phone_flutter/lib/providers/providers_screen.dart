@@ -521,7 +521,8 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        'Opt-in thresholds for this connection. Off until you pick a percent.',
+                        'Opt-in · fire when remaining capacity reaches the '
+                        'chosen % left. Off until you pick a value.',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
@@ -575,21 +576,120 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     }
   }
 
+  Future<void> _editPlatformBudgetAlerts() async {
+    var today = widget.alertThresholds.today;
+    var week = widget.alertThresholds.week;
+    var month = widget.alertThresholds.month;
+    final saved = await showDialog<AlertThresholdPreferences>(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder: (context, setDialogState) {
+              return AlertDialog(
+                title: const Text('Alerts · OpenAI Platform'),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Opt-in budget alerts · fire when remaining budget '
+                        'reaches the chosen % left.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      AlertPercentThresholdEditor(
+                        title: 'Today',
+                        value: today,
+                        onChanged:
+                            (value) => setDialogState(() {
+                              today = value;
+                            }),
+                      ),
+                      const SizedBox(height: 16),
+                      AlertPercentThresholdEditor(
+                        title: 'Week',
+                        value: week,
+                        onChanged:
+                            (value) => setDialogState(() {
+                              week = value;
+                            }),
+                      ),
+                      const SizedBox(height: 16),
+                      AlertPercentThresholdEditor(
+                        title: 'Month',
+                        value: month,
+                        onChanged:
+                            (value) => setDialogState(() {
+                              month = value;
+                            }),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed:
+                        () => Navigator.of(context).pop(
+                          widget.alertThresholds.copyWith(
+                            today: today,
+                            week: week,
+                            month: month,
+                          ),
+                        ),
+                    child: const Text('Save'),
+                  ),
+                ],
+              );
+            },
+          ),
+    );
+    if (saved == null || !mounted) {
+      return;
+    }
+    try {
+      await widget.onAlertThresholdsChanged((_) => saved);
+    } catch (_) {
+      if (mounted) {
+        _showMessage('Could not update alert thresholds');
+      }
+    }
+  }
+
   Widget _statusTrailing({
     required ProviderConnection connection,
     required Widget status,
     List<Widget> leading = const [],
   }) {
+    final isPlan = connection.id.kind == ConnectionKind.plan;
+    final isOpenAiPlatform =
+        connection.id == ProviderConnections.openAiPlatform;
+    final alertsEnabled =
+        isPlan
+            ? widget.alertThresholds.forConnection(connection.id).isEnabled
+            : isOpenAiPlatform
+            ? widget.alertThresholds.hasEnabledBudgetRules
+            : false;
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         ...leading,
-        if (connection.id.kind == ConnectionKind.plan)
+        if (isPlan || isOpenAiPlatform)
           IconButton(
             tooltip: 'Alert thresholds',
-            onPressed: () => _editConnectionAlerts(connection),
+            onPressed:
+                isOpenAiPlatform
+                    ? _editPlatformBudgetAlerts
+                    : () => _editConnectionAlerts(connection),
             icon: Icon(
-              widget.alertThresholds.forConnection(connection.id).isEnabled
+              alertsEnabled
                   ? Icons.notifications_active_outlined
                   : Icons.notifications_none_outlined,
             ),

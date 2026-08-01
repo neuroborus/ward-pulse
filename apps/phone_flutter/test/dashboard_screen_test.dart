@@ -170,7 +170,7 @@ void main() {
     expect(find.byIcon(Icons.speed), findsOneWidget);
   });
 
-  testWidgets('hides platform spend when the display preference is off', (
+  testWidgets('always shows platform spend when budgets are available', (
     tester,
   ) async {
     final source = DashboardSnapshot.fromJsonString(
@@ -187,6 +187,7 @@ void main() {
         home: Scaffold(
           body: DashboardScreen(
             snapshot: DashboardSnapshot.fromJson(dashboard),
+            // Display prefs no longer hide surfaces.
             displayPreferences: const ConsumptionDisplayPreferences(
               platform: false,
             ),
@@ -195,8 +196,13 @@ void main() {
       ),
     );
 
-    expect(find.text('Platform spend'), findsNothing);
-    expect(find.text('Today'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('Platform spend'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Platform spend'), findsOneWidget);
+    expect(find.text('Today'), findsWidgets);
   });
 
   testWidgets('hides plan Unknowns for OpenAI-only and offers Providers help', (

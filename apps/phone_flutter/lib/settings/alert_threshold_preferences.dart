@@ -4,38 +4,46 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../providers/provider_connection.dart';
 
-/// Discrete opt-in percent stops for alert rules (null = off).
-const alertThresholdStops = <int?>[null, 50, 70, 80, 90, 100];
+/// Discrete remaining-% stops shown in the UI (null = off).
+///
+/// Maps to used% for storage/Rust: `100 - remaining` → 50/70/80/90/100.
+const alertRemainingStops = <int?>[null, 50, 30, 20, 10, 0];
 
-/// Opt-in warn/critical percents. Null fields mean that rule is disabled.
+/// UI remaining → stored used percent.
+int? alertRemainingToUsed(int? remainingLeft) {
+  if (remainingLeft == null) {
+    return null;
+  }
+  return 100 - remainingLeft;
+}
+
+/// Stored used percent → UI remaining (null if not a known stop).
+int? alertUsedToRemaining(int? used) {
+  if (used == null) {
+    return null;
+  }
+  final remaining = 100 - used;
+  return alertRemainingStops.contains(remaining) ? remaining : null;
+}
+
+/// Opt-in used-% threshold for Rust. Null = off.
 final class AlertPercentThreshold {
-  const AlertPercentThreshold({this.warnAt, this.criticalAt});
+  const AlertPercentThreshold({this.at});
 
-  final int? warnAt;
-  final int? criticalAt;
+  final int? at;
 
-  bool get isEnabled => warnAt != null || criticalAt != null;
+  bool get isEnabled => at != null;
 
-  Map<String, Object?> toJson() => {'warnAt': warnAt, 'criticalAt': criticalAt};
+  Map<String, Object?> toJson() => {if (at != null) 'at': at};
 
   static AlertPercentThreshold fromJson(Object? json) {
     if (json is! Map) {
       return const AlertPercentThreshold();
     }
+    // Prefer `at`; accept legacy warnAt / criticalAt from older installs.
     return AlertPercentThreshold(
-      warnAt: _clampPercent(json['warnAt']),
-      criticalAt: _clampPercent(json['criticalAt']),
-    ).normalized;
-  }
-
-  /// Ensures critical ≥ warn when both are set.
-  AlertPercentThreshold get normalized {
-    final warn = warnAt;
-    final critical = criticalAt;
-    if (warn == null || critical == null || critical >= warn) {
-      return this;
-    }
-    return AlertPercentThreshold(warnAt: warn, criticalAt: warn);
+      at: _clampPercent(json['at'] ?? json['warnAt'] ?? json['criticalAt']),
+    );
   }
 }
 
@@ -77,9 +85,10 @@ final class ConnectionAlertThresholds {
   }
 }
 
-/// Phone-local alert rules: connection thresholds + global budget thresholds.
+/// Phone-local alert rules: connection thresholds + budget thresholds.
 ///
 /// Defaults are all off (opt-in). Snapshot evaluation stays in Rust.
+/// Budget today/week/month are edited on the OpenAI Platform Providers row.
 final class AlertThresholdPreferences {
   const AlertThresholdPreferences({
     this.connections = const {},
@@ -99,6 +108,9 @@ final class AlertThresholdPreferences {
       week.isEnabled ||
       month.isEnabled ||
       connections.values.any((value) => value.isEnabled);
+
+  bool get hasEnabledBudgetRules =>
+      today.isEnabled || week.isEnabled || month.isEnabled;
 
   ConnectionAlertThresholds forConnection(ProviderConnectionId id) {
     return connections[id.storageKey] ?? const ConnectionAlertThresholds();

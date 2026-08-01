@@ -561,9 +561,9 @@ mod tests {
             serde_json::json!({
                 "snapshot": snapshot,
                 "settings": {
-                    "today": { "warnAt": 20, "criticalAt": null },
-                    "week": { "warnAt": null, "criticalAt": null },
-                    "month": { "warnAt": null, "criticalAt": null },
+                    "today": { "at": 20 },
+                    "week": {},
+                    "month": {},
                     "connections": {}
                 }
             })

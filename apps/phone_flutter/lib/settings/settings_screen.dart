@@ -5,25 +5,19 @@ import 'package:flutter/services.dart';
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../sync/poll_cadence.dart';
-import 'alert_percent_threshold_editor.dart';
-import 'alert_threshold_preferences.dart';
-import 'consumption_display_preferences.dart';
 import 'refresh_interval_preferences.dart';
 import 'watch_ring_preferences.dart';
 
-/// Systemic phone settings: dashboard surfaces, poll cadence, global budgets,
-/// diagnostics, and debug toggles. Not connections, credentials, or Watchface layout.
+/// Systemic phone settings: poll cadence, diagnostics, and debug toggles.
+/// Not connections, credentials, Watchface/Widget layout, or alert thresholds
+/// (those live on Providers).
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
     required this.snapshot,
-    required this.displayPreferences,
-    required this.onDisplayPreferencesChanged,
     required this.refreshInterval,
     required this.onRefreshIntervalChanged,
     required this.ringPreferences,
-    required this.alertThresholds,
-    required this.onAlertThresholdsChanged,
     required this.onSyncWatch,
     required this.debugDataAvailable,
     required this.mockDataEnabled,
@@ -31,19 +25,10 @@ class SettingsScreen extends StatefulWidget {
   });
 
   final DashboardSnapshot? snapshot;
-  final ConsumptionDisplayPreferences displayPreferences;
-  final Future<void> Function(ConsumptionDisplayPreferences value)
-  onDisplayPreferencesChanged;
   final RefreshIntervalPreference refreshInterval;
   final Future<void> Function(RefreshIntervalPreference value)
   onRefreshIntervalChanged;
   final WatchRingPreferences ringPreferences;
-  final AlertThresholdPreferences alertThresholds;
-  final Future<void> Function(
-    AlertThresholdPreferences Function(AlertThresholdPreferences current)
-    update,
-  )
-  onAlertThresholdsChanged;
   final Future<void> Function() onSyncWatch;
   final bool debugDataAvailable;
   final bool mockDataEnabled;
@@ -99,29 +84,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _setDisplayPreferences(
-    ConsumptionDisplayPreferences value,
-  ) async {
-    if (!value.hasVisibleSurface) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Keep at least one dashboard surface visible'),
-        ),
-      );
-      return;
-    }
-
-    try {
-      await widget.onDisplayPreferencesChanged(value);
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not update display settings')),
-        );
-      }
-    }
-  }
-
   Future<void> _setMockDataEnabled(bool value) async {
     try {
       await widget.onMockDataEnabledChanged(value);
@@ -149,21 +111,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _setAlertThresholds(
-    AlertThresholdPreferences Function(AlertThresholdPreferences current)
-    update,
-  ) async {
-    try {
-      await widget.onAlertThresholdsChanged(update);
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not update alert thresholds')),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final snapshot = widget.snapshot;
@@ -177,50 +124,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
-        const _SettingsSectionHeader(title: 'Display'),
-        Card(
-          child: Column(
-            children: [
-              SwitchListTile(
-                secondary: const Icon(Icons.speed_outlined),
-                title: const Text('Plan usage'),
-                subtitle: const Text('Subscription rate limits'),
-                value: widget.displayPreferences.plan,
-                onChanged:
-                    (value) => _setDisplayPreferences(
-                      widget.displayPreferences.copyWith(plan: value),
-                    ),
-              ),
-              const Divider(height: 1),
-              SwitchListTile(
-                secondary: const Icon(Icons.toll_outlined),
-                title: const Text('Purchased usage'),
-                subtitle: const Text(
-                  'Purchased tokens or credits, when the provider reports them',
-                ),
-                value: widget.displayPreferences.purchased,
-                onChanged:
-                    (value) => _setDisplayPreferences(
-                      widget.displayPreferences.copyWith(purchased: value),
-                    ),
-              ),
-              const Divider(height: 1),
-              SwitchListTile(
-                secondary: const Icon(Icons.payments_outlined),
-                title: const Text('Platform spend'),
-                subtitle: const Text(
-                  'Monetary budgets for today, week, and month when reported',
-                ),
-                value: widget.displayPreferences.platform,
-                onChanged:
-                    (value) => _setDisplayPreferences(
-                      widget.displayPreferences.copyWith(platform: value),
-                    ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
         const _SettingsSectionHeader(title: 'Refresh'),
         Card(
           child: Padding(
@@ -267,51 +170,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       });
                     }
                   },
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        const _SettingsSectionHeader(title: 'Alerts'),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Global budgets · off until you set a percent',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                AlertPercentThresholdEditor(
-                  title: 'Today',
-                  value: widget.alertThresholds.today,
-                  onChanged:
-                      (today) => _setAlertThresholds(
-                        (current) => current.copyWith(today: today),
-                      ),
-                ),
-                const SizedBox(height: 16),
-                AlertPercentThresholdEditor(
-                  title: 'Week',
-                  value: widget.alertThresholds.week,
-                  onChanged:
-                      (week) => _setAlertThresholds(
-                        (current) => current.copyWith(week: week),
-                      ),
-                ),
-                const SizedBox(height: 16),
-                AlertPercentThresholdEditor(
-                  title: 'Month',
-                  value: widget.alertThresholds.month,
-                  onChanged:
-                      (month) => _setAlertThresholds(
-                        (current) => current.copyWith(month: month),
-                      ),
                 ),
               ],
             ),

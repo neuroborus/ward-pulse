@@ -2,6 +2,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../dashboard/dashboard_models.dart';
 
+/// Which consumption surfaces appear on Dashboard / watch payloads.
+///
+/// Always-on for plan, purchased, and platform — Settings no longer toggles these.
 class ConsumptionDisplayPreferences {
   const ConsumptionDisplayPreferences({
     this.plan = true,
@@ -13,13 +16,11 @@ class ConsumptionDisplayPreferences {
   final bool purchased;
   final bool platform;
 
-  bool get hasVisibleSurface => plan || purchased || platform;
+  bool get hasVisibleSurface => true;
 
   bool allows(AllowanceSource source) {
-    return switch (source) {
-      AllowanceSource.plan => plan,
-      AllowanceSource.purchased => purchased,
-    };
+    // Surfaces are not user-hideable; always include reported allowances.
+    return true;
   }
 
   ConsumptionDisplayPreferences copyWith({
@@ -27,11 +28,7 @@ class ConsumptionDisplayPreferences {
     bool? purchased,
     bool? platform,
   }) {
-    return ConsumptionDisplayPreferences(
-      plan: plan ?? this.plan,
-      purchased: purchased ?? this.purchased,
-      platform: platform ?? this.platform,
-    );
+    return const ConsumptionDisplayPreferences();
   }
 }
 
@@ -54,27 +51,16 @@ final class SecureConsumptionDisplayPreferenceStore
 
   @override
   Future<ConsumptionDisplayPreferences> read() async {
-    final values = await Future.wait([
-      _storage.read(key: _planKey),
-      _storage.read(key: _purchasedKey),
-      _storage.read(key: _platformKey),
-    ]);
-    final preferences = ConsumptionDisplayPreferences(
-      plan: values[0] == null || values[0] == 'true',
-      purchased: values[1] == null || values[1] == 'true',
-      platform: values[2] == null || values[2] == 'true',
-    );
-    return preferences.hasVisibleSurface
-        ? preferences
-        : const ConsumptionDisplayPreferences();
+    // Legacy keys may exist; ignore them and always show all surfaces.
+    return const ConsumptionDisplayPreferences();
   }
 
   @override
   Future<void> write(ConsumptionDisplayPreferences value) {
     return Future.wait([
-      _storage.write(key: _planKey, value: value.plan.toString()),
-      _storage.write(key: _purchasedKey, value: value.purchased.toString()),
-      _storage.write(key: _platformKey, value: value.platform.toString()),
+      _storage.write(key: _planKey, value: 'true'),
+      _storage.write(key: _purchasedKey, value: 'true'),
+      _storage.write(key: _platformKey, value: 'true'),
     ]);
   }
 }

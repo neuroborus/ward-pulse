@@ -52,10 +52,7 @@ mod tests {
             vec![mock_provider_budget_warning_snapshot("mock-local")],
         );
         let settings = AlertSettings {
-            today: PercentThreshold {
-                warn_at: Some(80),
-                critical_at: None,
-            },
+            today: PercentThreshold { at: Some(80) },
             ..AlertSettings::default()
         };
 

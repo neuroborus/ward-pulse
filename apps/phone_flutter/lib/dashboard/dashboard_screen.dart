@@ -40,10 +40,8 @@ class DashboardScreen extends StatelessWidget {
       (allowance) => allowance.source == AllowanceSource.purchased,
     );
     final showMissingPurchased =
-        caps.showAllowances &&
-        displayPreferences.purchased &&
-        !hasPurchasedAllowance;
-    final showPlatformSpend = displayPreferences.platform;
+        caps.showAllowances && !hasPurchasedAllowance;
+    final showPlatformSpend = true;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
