@@ -14,7 +14,7 @@ typedef CursorPlanSignIn = Future<String?> Function(BuildContext context);
 
 /// Screen-owned trailing so every catalog row keeps the same chrome.
 typedef ConnectionTrailingBuilder =
-    Widget Function({required List<Widget> leading, required Widget status});
+    Widget Function({List<Widget> leading, required Widget status});
 
 /// Cursor plan row: WebView sign-in, token paste, and disconnect.
 ///
@@ -42,16 +42,16 @@ class CursorPlanRow extends StatefulWidget {
 }
 
 class _CursorPlanRowState extends State<CursorPlanRow> {
-  bool? _hasCursorPlan;
-  bool _isConnectingCursorPlan = false;
+  bool? _hasAccount;
+  bool _isConnecting = false;
 
   @override
   void initState() {
     super.initState();
-    _loadCursorPlanState();
+    _loadState();
   }
 
-  Future<void> _loadCursorPlanState() async {
+  Future<void> _loadState() async {
     try {
       final value =
           await widget.credentialStore.readSecret(
@@ -60,20 +60,20 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
           null;
       if (mounted) {
         setState(() {
-          _hasCursorPlan = value;
+          _hasAccount = value;
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _hasCursorPlan = false;
+          _hasAccount = false;
         });
       }
     }
   }
 
-  Future<void> _editCursorPlanAccount() async {
-    if (_hasCursorPlan == true) {
+  Future<void> _editAccount() async {
+    if (_hasAccount == true) {
       final action = await showDialog<AccountAction>(
         context: context,
         builder:
@@ -104,7 +104,7 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
         }
         if (mounted) {
           setState(() {
-            _hasCursorPlan = false;
+            _hasAccount = false;
           });
           widget.onCredentialsChanged();
         }
@@ -115,12 +115,12 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
       }
     }
 
-    await _runCursorPlanSignIn();
+    await _runSignIn();
   }
 
-  Future<void> _runCursorPlanSignIn() async {
+  Future<void> _runSignIn() async {
     setState(() {
-      _isConnectingCursorPlan = true;
+      _isConnecting = true;
     });
     try {
       final signIn = widget.signIn ?? CursorPlanSignInScreen.open;
@@ -141,7 +141,7 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
         return;
       }
       setState(() {
-        _hasCursorPlan = true;
+        _hasAccount = true;
       });
       widget.onCredentialsChanged();
     } catch (_) {
@@ -151,23 +151,23 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
     } finally {
       if (mounted) {
         setState(() {
-          _isConnectingCursorPlan = false;
+          _isConnecting = false;
         });
       }
     }
   }
 
-  Future<void> _showCursorPlanHelp() async {
+  Future<void> _showHelp() async {
     final paste = await showDialog<bool>(
       context: context,
       builder: (context) => const _CursorPlanHelpDialog(),
     );
     if (paste == true && mounted) {
-      await _pasteCursorPlanToken();
+      await _pasteToken();
     }
   }
 
-  Future<void> _pasteCursorPlanToken() async {
+  Future<void> _pasteToken() async {
     const id = ProviderConnections.cursorPlan;
     final change = await showDialog<CredentialChange>(
       context: context,
@@ -176,7 +176,7 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
             title: 'Cursor plan · Paste token',
             hint: cursorSessionCookieName,
             allowLabel: false,
-            hasCredential: _hasCursorPlan ?? false,
+            hasCredential: _hasAccount ?? false,
           ),
     );
     if (change == null) {
@@ -207,7 +207,7 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
         return;
       }
       setState(() {
-        _hasCursorPlan = !change.remove;
+        _hasAccount = !change.remove;
       });
       widget.onCredentialsChanged();
     } catch (_) {
@@ -219,7 +219,7 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
 
   @override
   Widget build(BuildContext context) {
-    final status = switch ((_hasCursorPlan, _isConnectingCursorPlan)) {
+    final status = switch ((_hasAccount, _isConnecting)) {
       (_, true) || (null, _) => const RowProgress(),
       (true, _) => const Text('Connected'),
       (false, _) => const Text('Not connected'),
@@ -232,16 +232,13 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
         leading: [
           IconButton(
             tooltip: 'About Cursor sign-in',
-            onPressed: _isConnectingCursorPlan ? null : _showCursorPlanHelp,
+            onPressed: _isConnecting ? null : _showHelp,
             icon: const Icon(Icons.help_outline),
           ),
         ],
         status: status,
       ),
-      onTap:
-          _hasCursorPlan == null || _isConnectingCursorPlan
-              ? null
-              : _editCursorPlanAccount,
+      onTap: _hasAccount == null || _isConnecting ? null : _editAccount,
     );
   }
 
