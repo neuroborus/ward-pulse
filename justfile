@@ -12,6 +12,11 @@ lint-core:
 test-core:
     cd core && cargo test --workspace
 
+# Dart formatting for the phone shell and the bindings package it consumes.
+fmt-phone:
+    cd apps/phone_flutter && dart format lib test
+    cd bindings/dart && dart format lib
+
 lint-phone:
     cd apps/phone_flutter && flutter analyze
 
@@ -19,6 +24,8 @@ test-phone:
     cd apps/phone_flutter && flutter test
 
 check-phone:
+    cd apps/phone_flutter && dart format --output=none --set-exit-if-changed lib test
+    cd bindings/dart && dart format --output=none --set-exit-if-changed lib
     just lint-phone
     just test-phone
 

@@ -45,6 +45,9 @@ jobs:
       - run: cargo install cargo-ndk --version 4.1.2 --locked
         working-directory: .
       - run: flutter pub get --enforce-lockfile
+      - run: dart format --output=none --set-exit-if-changed lib test
+      - run: dart format --output=none --set-exit-if-changed lib
+        working-directory: bindings/dart
       - run: flutter analyze
       - run: flutter test
       - run: tools/build-android-rust/build.sh

@@ -50,8 +50,11 @@ cd core && cargo test --workspace
 - [ ] If Flutter code changed and the project is generated, run:
 
 ```bash
-cd apps/phone_flutter && flutter analyze && flutter test
+just check-phone
 ```
+
+  This runs `dart format --set-exit-if-changed` over `apps/phone_flutter` and `bindings/dart`,
+  then `flutter analyze` and `flutter test`. Use `just fmt-phone` to apply formatting.
 
 - [ ] If Android/Wear/WFF Gradle projects are generated, run the relevant Gradle test/build task.
 - [ ] If schemas or fixtures changed, validate fixture shape manually or with `tools/validate-fixtures/` when available.
