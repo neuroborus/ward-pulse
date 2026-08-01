@@ -58,17 +58,17 @@ pub struct AlertSettings {
 /// Evaluates dashboard alerts from user rules only — never from status chrome alone.
 pub fn calculate_alerts(snapshot: &DashboardSnapshot, settings: &AlertSettings) -> Vec<Alert> {
     let mut alerts = Vec::new();
-    alerts.extend(alerts_for_budget(
+    alerts.extend(alert_for_budget(
         "Today",
         &snapshot.today_total,
         &settings.today,
     ));
-    alerts.extend(alerts_for_budget(
+    alerts.extend(alert_for_budget(
         "Week",
         &snapshot.week_total,
         &settings.week,
     ));
-    alerts.extend(alerts_for_budget(
+    alerts.extend(alert_for_budget(
         "Month",
         &snapshot.month_total,
         &settings.month,
@@ -88,14 +88,15 @@ pub fn apply_alert_settings(
     DashboardSnapshot { alerts, ..snapshot }
 }
 
-fn alerts_for_budget(label: &str, state: &BudgetState, threshold: &PercentThreshold) -> Vec<Alert> {
-    if !crossed(state.used_percent, threshold.at) {
-        return Vec::new();
-    }
-    vec![Alert {
+fn alert_for_budget(
+    label: &str,
+    state: &BudgetState,
+    threshold: &PercentThreshold,
+) -> Option<Alert> {
+    crossed(state.used_percent, threshold.at).then(|| Alert {
         severity: AlertSeverity::Warning,
         message: format!("{label} budget reached the alert threshold."),
-    }]
+    })
 }
 
 fn alerts_for_account(account: &ProviderSnapshot, settings: &AlertSettings) -> Vec<Alert> {
@@ -128,10 +129,7 @@ fn alert_for_allowance(
     allowance: &AllowanceState,
     threshold: &PercentThreshold,
 ) -> Option<Alert> {
-    if !crossed(allowance.used_percent, threshold.at) {
-        return None;
-    }
-    Some(Alert {
+    crossed(allowance.used_percent, threshold.at).then(|| Alert {
         severity: AlertSeverity::Warning,
         message: format!(
             "{provider_label} {} reached the alert threshold.",
