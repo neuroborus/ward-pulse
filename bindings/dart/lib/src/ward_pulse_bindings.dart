@@ -3,10 +3,10 @@ import 'dart:ffi';
 
 import 'package:ffi/ffi.dart';
 
-typedef _NativeDashboardSnapshotJson = Pointer<Utf8> Function();
-typedef _DartDashboardSnapshotJson = Pointer<Utf8> Function();
-typedef _NativeDebugDashboardSnapshotJson = Pointer<Utf8> Function(Uint64);
-typedef _DartDebugDashboardSnapshotJson = Pointer<Utf8> Function(int);
+typedef _NativeSnapshotResultJson = Pointer<Utf8> Function();
+typedef _DartSnapshotResultJson = Pointer<Utf8> Function();
+typedef _NativeSeededResultJson = Pointer<Utf8> Function(Uint64);
+typedef _DartSeededResultJson = Pointer<Utf8> Function(int);
 typedef _NativeJsonTransform = Pointer<Utf8> Function(Pointer<Utf8>);
 typedef _DartJsonTransform = Pointer<Utf8> Function(Pointer<Utf8>);
 typedef _NativeStringFree = Void Function(Pointer<Utf8>);
@@ -27,14 +27,14 @@ final class WardPulseBindingsException implements Exception {
 
 final class _WardPulseBindings {
   _WardPulseBindings(DynamicLibrary library)
-    : _dashboardSnapshotJson = library.lookupFunction<
-        _NativeDashboardSnapshotJson,
-        _DartDashboardSnapshotJson
-      >('ward_pulse_dashboard_snapshot_json'),
-      _debugDashboardSnapshotJson = library.lookupFunction<
-        _NativeDebugDashboardSnapshotJson,
-        _DartDebugDashboardSnapshotJson
-      >('ward_pulse_debug_dashboard_snapshot_json'),
+    : _dashboardSnapshotResultJson = library
+          .lookupFunction<_NativeSnapshotResultJson, _DartSnapshotResultJson>(
+            'ward_pulse_dashboard_snapshot_result_json',
+          ),
+      _debugDashboardSnapshotResultJson = library
+          .lookupFunction<_NativeSeededResultJson, _DartSeededResultJson>(
+            'ward_pulse_debug_dashboard_snapshot_result_json',
+          ),
       _openAiDashboardSnapshotResultJson = library
           .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
             'ward_pulse_openai_dashboard_snapshot_result_json',
@@ -75,8 +75,8 @@ final class _WardPulseBindings {
     return _WardPulseBindings(DynamicLibrary.open(_libraryName));
   }
 
-  final _DartDashboardSnapshotJson _dashboardSnapshotJson;
-  final _DartDebugDashboardSnapshotJson _debugDashboardSnapshotJson;
+  final _DartSnapshotResultJson _dashboardSnapshotResultJson;
+  final _DartSeededResultJson _debugDashboardSnapshotResultJson;
   final _DartJsonTransform _openAiDashboardSnapshotResultJson;
   final _DartJsonTransform _codexDashboardSnapshotResultJson;
   final _DartJsonTransform _anthropicDashboardSnapshotResultJson;
@@ -88,31 +88,11 @@ final class _WardPulseBindings {
   final _DartStringFree _stringFree;
 
   String loadDashboardSnapshotJson() {
-    final value = _dashboardSnapshotJson();
-    if (value == nullptr) {
-      throw const WardPulseBindingsException();
-    }
-
-    try {
-      return value.toDartString();
-    } finally {
-      _stringFree(value);
-    }
+    return _decodeResultJson(_dashboardSnapshotResultJson());
   }
 
   String loadDebugDashboardSnapshotJson(int seed) {
-    final value = _debugDashboardSnapshotJson(seed);
-    if (value == nullptr) {
-      throw const WardPulseBindingsException(
-        'The Rust core did not return a debug dashboard snapshot.',
-      );
-    }
-
-    try {
-      return value.toDartString();
-    } finally {
-      _stringFree(value);
-    }
+    return _decodeResultJson(_debugDashboardSnapshotResultJson(seed));
   }
 
   String normalizeOpenAiReportJson(String reportJson) {
@@ -169,29 +149,33 @@ final class _WardPulseBindings {
   ) {
     final request = reportJson.toNativeUtf8();
     try {
-      final value = normalize(request);
-      if (value == nullptr) {
+      return _decodeResultJson(normalize(request));
+    } finally {
+      malloc.free(request);
+    }
+  }
+
+  /// Unwraps the result envelope every entry point returns, then frees it.
+  String _decodeResultJson(Pointer<Utf8> value) {
+    if (value == nullptr) {
+      throw const WardPulseBindingsException();
+    }
+
+    try {
+      final result = jsonDecode(value.toDartString());
+      if (result is! Map<String, dynamic>) {
         throw const WardPulseBindingsException();
       }
 
-      try {
-        final result = jsonDecode(value.toDartString());
-        if (result is! Map<String, dynamic>) {
-          throw const WardPulseBindingsException();
-        }
-
-        return switch (result['status']) {
-          'success' when result['dashboardJson'] is String =>
-            result['dashboardJson'] as String,
-          'error' when result['message'] is String =>
-            throw WardPulseBindingsException(result['message'] as String),
-          _ => throw const WardPulseBindingsException(),
-        };
-      } finally {
-        _stringFree(value);
-      }
+      return switch (result['status']) {
+        'success' when result['dashboardJson'] is String =>
+          result['dashboardJson'] as String,
+        'error' when result['message'] is String =>
+          throw WardPulseBindingsException(result['message'] as String),
+        _ => throw const WardPulseBindingsException(),
+      };
     } finally {
-      malloc.free(request);
+      _stringFree(value);
     }
   }
 }

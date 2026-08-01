@@ -222,27 +222,28 @@ fn snapshot_result_json(result: Result<String, DashboardSnapshotJsonError>) -> O
     serde_json::to_string(&envelope).ok()
 }
 
+/// Builds the bundled mock dashboard and returns a JSON result envelope.
 #[no_mangle]
-pub extern "C" fn ward_pulse_dashboard_snapshot_json() -> *mut c_char {
-    match std::panic::catch_unwind(|| {
-        dashboard_snapshot_json()
-            .ok()
-            .and_then(|snapshot| CString::new(snapshot).ok())
-    }) {
-        Ok(Some(snapshot)) => snapshot.into_raw(),
-        Ok(None) | Err(_) => ptr::null_mut(),
-    }
+pub extern "C" fn ward_pulse_dashboard_snapshot_result_json() -> *mut c_char {
+    result_json_into_raw(dashboard_snapshot_json)
 }
 
-/// Builds a seeded multi-provider debug dashboard for the phone Mock data toggle.
+/// Builds a seeded multi-provider debug dashboard for the phone Mock data toggle
+/// and returns a JSON result envelope.
 #[no_mangle]
-pub extern "C" fn ward_pulse_debug_dashboard_snapshot_json(seed: u64) -> *mut c_char {
+pub extern "C" fn ward_pulse_debug_dashboard_snapshot_result_json(seed: u64) -> *mut c_char {
+    result_json_into_raw(move || debug_dashboard_snapshot_json(seed))
+}
+
+/// Wraps a snapshot build in the shared result envelope and hands the string
+/// to the caller, who releases it with [`ward_pulse_string_free`].
+fn result_json_into_raw(
+    build: impl FnOnce() -> Result<String, DashboardSnapshotJsonError> + std::panic::UnwindSafe,
+) -> *mut c_char {
     match std::panic::catch_unwind(|| {
-        debug_dashboard_snapshot_json(seed)
-            .ok()
-            .and_then(|snapshot| CString::new(snapshot).ok())
+        snapshot_result_json(build()).and_then(|result| CString::new(result).ok())
     }) {
-        Ok(Some(snapshot)) => snapshot.into_raw(),
+        Ok(Some(result)) => result.into_raw(),
         Ok(None) | Err(_) => ptr::null_mut(),
     }
 }
@@ -429,15 +430,20 @@ mod tests {
     }
 
     #[test]
-    fn c_api_returns_owned_snapshot_json() {
-        let value = ward_pulse_dashboard_snapshot_json();
+    fn c_api_returns_owned_snapshot_envelope() {
+        let value = ward_pulse_dashboard_snapshot_result_json();
         assert!(!value.is_null());
 
         let json = unsafe { CStr::from_ptr(value) }
             .to_str()
-            .expect("dashboard snapshot is UTF-8");
+            .expect("dashboard envelope is UTF-8");
+        let envelope: serde_json::Value =
+            serde_json::from_str(json).expect("parse dashboard envelope JSON");
+        assert_eq!(envelope["status"], "success");
+
         let snapshot: serde_json::Value =
-            serde_json::from_str(json).expect("parse dashboard snapshot JSON");
+            serde_json::from_str(envelope["dashboardJson"].as_str().expect("dashboard JSON"))
+                .expect("parse dashboard snapshot JSON");
         assert_eq!(snapshot["accounts"][0]["accountId"], "mock-local");
 
         unsafe { ward_pulse_string_free(value) };
