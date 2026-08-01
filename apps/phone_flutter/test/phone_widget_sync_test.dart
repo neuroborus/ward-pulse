@@ -81,19 +81,27 @@ void main() {
     },
   );
 
-  test('write failures are swallowed so the chain continues', () async {
-    var attempts = 0;
-    final coordinator = PhoneWidgetSyncCoordinator(
-      write: (payload) async {
-        attempts++;
-        if (attempts == 1) {
-          throw StateError('platform unavailable');
-        }
-      },
-    );
+  test(
+    'a failed write reaches the caller without poisoning the queue',
+    () async {
+      var attempts = 0;
+      final coordinator = PhoneWidgetSyncCoordinator(
+        write: (payload) async {
+          attempts++;
+          if (attempts == 1) {
+            throw StateError('platform unavailable');
+          }
+        },
+      );
 
-    await coordinator.sync(snapshot, const PhoneWidgetPreferences());
-    await coordinator.sync(snapshot, const PhoneWidgetPreferences());
-    expect(attempts, 2);
-  });
+      await expectLater(
+        coordinator.sync(snapshot, const PhoneWidgetPreferences()),
+        throwsStateError,
+      );
+
+      // The next caller must still get a write, not the previous failure.
+      await coordinator.sync(snapshot, const PhoneWidgetPreferences());
+      expect(attempts, 2);
+    },
+  );
 }

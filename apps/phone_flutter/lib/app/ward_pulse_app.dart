@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 
@@ -415,7 +416,10 @@ class _DashboardHostState extends State<DashboardHost> {
       await widget.phoneWidgetSyncService.sync(snapshot, _widgetPreferences);
     } catch (error) {
       // Launcher widget updates must not block the phone dashboard.
-      debugPrint('Phone widget sync failed: $error');
+      developer.log(
+        'dashboard refresh could not update the widget: $error',
+        name: phoneWidgetLogName,
+      );
     }
   }
 

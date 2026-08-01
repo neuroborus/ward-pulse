@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
 
 import '../dashboard/dashboard_models.dart';
@@ -11,7 +10,14 @@ const phoneWidgetProviderName = 'WardPulseAppWidget';
 /// Fully-qualified Android provider for [HomeWidget.updateWidget].
 const phoneWidgetQualifiedAndroidName = 'app.wardpulse.WardPulseAppWidget';
 
+/// `developer.log` channel for launcher-widget failures.
+const phoneWidgetLogName = 'WardPulse.PhoneWidget';
+
 /// Pushes [snapshot] metrics onto the Android home-screen widget.
+///
+/// Throws when the write fails. Callers decide what a stale launcher tile is
+/// worth to them: the foreground app keeps rendering, the headless worker keeps
+/// its run green.
 abstract interface class PhoneWidgetSyncService {
   Future<void> sync(
     DashboardSnapshot snapshot,
@@ -50,6 +56,9 @@ final class PhoneWidgetSyncCoordinator {
   Future<void> _chain = Future<void>.value();
 
   /// Queues a write. Overlapping callers coalesce to the newest args.
+  ///
+  /// A failure reaches the caller but must not poison the queue, so the chain
+  /// continues from a settled future while the returned one still throws.
   Future<void> sync(
     DashboardSnapshot snapshot,
     PhoneWidgetPreferences preferences,
@@ -57,8 +66,9 @@ final class PhoneWidgetSyncCoordinator {
     _latestSnapshot = snapshot;
     _latestPreferences = preferences;
     final epoch = ++_epoch;
-    _chain = _chain.then((_) => _runIfCurrent(epoch));
-    return _chain;
+    final run = _chain.then((_) => _runIfCurrent(epoch));
+    _chain = run.catchError((_) {});
+    return run;
   }
 
   Future<void> _runIfCurrent(int epoch) async {
@@ -70,11 +80,7 @@ final class PhoneWidgetSyncCoordinator {
     if (snapshot == null || preferences == null) {
       return;
     }
-    try {
-      await _write(buildPhoneWidgetPayload(snapshot, preferences));
-    } catch (error) {
-      debugPrint('Phone widget sync failed: $error');
-    }
+    await _write(buildPhoneWidgetPayload(snapshot, preferences));
   }
 }
 

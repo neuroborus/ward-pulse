@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/widgets.dart';
 
 import '../dashboard/apply_alert_settings.dart';
@@ -30,7 +32,18 @@ Future<void> providerSyncOnce() async {
       displayPreferences,
       ringPreferences,
     );
-    await HomeWidgetPhoneWidgetSyncService().sync(snapshot, widgetPreferences);
+    try {
+      await HomeWidgetPhoneWidgetSyncService().sync(
+        snapshot,
+        widgetPreferences,
+      );
+    } catch (error) {
+      // The outer catch would swallow this without a word; name the cause.
+      developer.log(
+        'headless sync could not update the widget: $error',
+        name: phoneWidgetLogName,
+      );
+    }
   } catch (_) {
     // Automatic / headless sync keeps the last successful snapshot visible.
   }
