@@ -9,7 +9,7 @@ description: Post-change finalization checklist for WardPulse (Rust core, Flutte
 >
 > Run this after implementation or documentation work to keep the monorepo coherent.
 >
-> Last Updated: 2026-07-24
+> Last Updated: 2026-08-01
 
 ## 1. Scope Review
 
@@ -65,7 +65,36 @@ just check-phone
 just check-docs
 ```
 
-## 5. Documentation Review
+## 5. Emulator Check
+
+Automated gates do not exercise the app. Unit tests use fakes, so they never load
+`libward_pulse_ffi.so`, never resolve an exported symbol, and never render a screen.
+
+Run the app on an emulator when the change could only fail there:
+
+- [ ] FFI surface changed — exported symbol names, argument or return shapes, or the
+      Dart binding. Symbols resolve at **run time**, so a mismatch survives every build.
+- [ ] The serialized snapshot contract changed — a new or renamed field, or a different
+      value shape. Host-side round trips do not prove the Android build agrees.
+- [ ] UI, widget, watch face, or phone-to-watch payload behaviour changed.
+- [ ] Background scheduling, secure storage, or WebView sign-in changed.
+
+Skip it, and say so, for changes that cannot reach a device: pure refactors behind an
+unchanged contract, comments and docs, tests, CI wiring, lockfiles.
+
+```bash
+adb devices -l                     # phone and Wear AVDs are usually already running
+tools/build-android-rust/build.sh  # Rust .so for Android ABIs — slow
+cd apps/phone_flutter && flutter build apk --debug
+adb -s <serial> install -r build/app/outputs/flutter-apk/app-debug.apk
+adb -s <serial> shell am start -n app.wardpulse/.MainActivity
+adb -s <serial> logcat -d | grep -i wardpulse
+```
+
+Report what was exercised on device and what was not. "Tests pass" is not evidence that
+the app runs; only the device is.
+
+## 6. Documentation Review
 
 - [ ] `docs/README.md` links any new durable document.
 - [ ] The Vocs page and `docs/site/vocs.config.ts` navigation are updated for documentation exposed on the site.
@@ -74,7 +103,7 @@ just check-docs
 - [ ] Product, provider, release, or security docs are updated when behavior or boundaries changed.
 - [ ] Placeholder TODOs are acceptable only for intentionally deferred platform generation work.
 
-## 6. Staging And Commit Boundary
+## 7. Staging And Commit Boundary
 
 **Finalization never creates a git commit.**
 
@@ -88,7 +117,7 @@ this change set (`git add` the relevant paths). Stop there.
 - Draft the commit message for the staged set; leave the actual commit to the user or to a
   later explicit request.
 
-## 7. Commit Message Draft
+## 8. Commit Message Draft
 
 Draft commit messages in Conventional Commits form:
 
@@ -151,15 +180,16 @@ chore(docs): plan adaptive provider UI, polling, and watch rings
 Record the dual plan/platform model and phases 9–13, set the global refresh floor to 5–60 minutes, and make finalization stage-only with an explicit no-commit rule.
 ```
 
-## 8. Handoff Summary
+## 9. Handoff Summary
 
 When finalization completes, report:
 
-1. Relevant checklist sections completed or skipped with reason.
+1. Relevant checklist sections completed or skipped with reason, including whether the
+   change was exercised on an emulator.
 2. Commands run and pass/fail status.
 3. Important files changed.
 4. Remaining risks or intentionally deferred work.
 5. Git staging status after staging: what is staged, what remains unstaged or untracked.
-6. Idiomatic draft commit message for the staged set, using section 7.
+6. Idiomatic draft commit message for the staged set, using section 8.
 
 Remind the user that the changes are staged only and that no commit was created.
