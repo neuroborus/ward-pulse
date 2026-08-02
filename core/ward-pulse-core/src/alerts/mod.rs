@@ -199,10 +199,21 @@ fn alert_for_allowance(
     crossed(allowance.used_percent, threshold.at).then(|| Alert {
         severity: AlertSeverity::Warning,
         message: format!(
-            "{provider_label} {} reached the alert threshold.",
-            allowance.label
+            "{} reached the alert threshold.",
+            qualified_label(provider_label, &allowance.label)
         ),
     })
+}
+
+/// Names a pool as `Codex Weekly plan`, but leaves `Cursor Models` alone.
+///
+/// Pool labels keep each provider's own wording, so a few already open with the
+/// family name and must not carry it twice.
+fn qualified_label(provider_label: &str, label: &str) -> String {
+    if label.split(' ').next() == Some(provider_label) {
+        return label.to_string();
+    }
+    format!("{provider_label} {label}")
 }
 
 fn crossed(used_percent: Option<f64>, at: Option<u8>) -> bool {
@@ -414,8 +425,50 @@ mod tests {
         let settings = AlertSettings { connections };
         let alerts = calculate_alerts(&snapshot, &settings);
         assert_eq!(alerts.len(), 1);
-        assert!(alerts[0].message.contains("Extra usage"));
+        assert_eq!(
+            alerts[0].message,
+            "Claude Extra usage reached the alert threshold."
+        );
         assert_eq!(alerts[0].severity, AlertSeverity::Warning);
+    }
+
+    /// Both pools belong to Cursor, but only one already names it — the rule is
+    /// per label, not per provider.
+    #[test]
+    fn allowance_alert_does_not_repeat_a_family_already_in_the_label() {
+        let pool = |label: &str| AllowanceState {
+            source: AllowanceSource::Plan,
+            label: label.into(),
+            ..purchased(95.0)
+        };
+        let account = ProviderSnapshot {
+            provider: ProviderKind::Cursor,
+            allowances: vec![pool("Cursor Models"), pool("Other Models")],
+            ..claude_account(purchased(95.0))
+        };
+        let snapshot = snapshot_with(account, budget(10.0));
+        let settings = AlertSettings {
+            connections: HashMap::from([(
+                connection::CURSOR_PLAN.to_string(),
+                ConnectionAlertThresholds {
+                    plan: PercentThreshold { at: Some(80) },
+                    ..ConnectionAlertThresholds::default()
+                },
+            )]),
+        };
+
+        let alerts = calculate_alerts(&snapshot, &settings);
+
+        assert_eq!(
+            alerts
+                .iter()
+                .map(|alert| alert.message.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "Cursor Models reached the alert threshold.",
+                "Cursor Other Models reached the alert threshold.",
+            ]
+        );
     }
 
     #[test]
