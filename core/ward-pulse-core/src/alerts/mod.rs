@@ -6,7 +6,7 @@ use crate::budget::calculate_budget_state;
 use crate::dashboard::build_dashboard_snapshot;
 use crate::model::{
     connection, Alert, AlertSeverity, AllowanceSource, AllowanceState, BudgetPeriod, BudgetState,
-    DashboardSnapshot, Money, ProviderKind, ProviderSnapshot,
+    DashboardSnapshot, Money, ProviderKind, ProviderSnapshot, ProviderStatus,
 };
 
 /// Opt-in used-% threshold. `None` means the rule is off.
@@ -70,6 +70,14 @@ impl ConnectionBudget {
 }
 
 impl ConnectionAlertThresholds {
+    /// Rule governing an allowance, chosen by where its capacity comes from.
+    fn for_allowance(&self, source: AllowanceSource) -> &PercentThreshold {
+        match source {
+            AllowanceSource::Plan => &self.plan,
+            AllowanceSource::Purchased => &self.purchased,
+        }
+    }
+
     pub fn is_enabled(&self) -> bool {
         self.plan.is_enabled()
             || self.purchased.is_enabled()
@@ -112,6 +120,7 @@ pub fn apply_alert_settings(
         .accounts
         .into_iter()
         .map(|account| apply_local_budget(account, settings))
+        .map(|account| raise_crossed_thresholds(account, settings))
         .collect();
     let rebuilt = build_dashboard_snapshot(snapshot.generated_at, accounts);
     let alerts = calculate_alerts(&rebuilt, settings);
@@ -138,6 +147,51 @@ fn apply_local_budget(mut account: ProviderSnapshot, settings: &AlertSettings) -
             Some(Money::minor_units(limit, spent.currency.clone())),
             state.projected_total.clone(),
         );
+    }
+    account
+}
+
+/// Raises every card whose own threshold is crossed to Warning.
+///
+/// A provider only reports whether a pool works, so without this the dashboard
+/// shows a healthy check beside its own alert for the same window. Budget cards
+/// already carry a percentage-driven status
+/// (`budget::DEFAULT_BUDGET_WARN_AT_PERCENT`) but a user line can sit below that
+/// fixed one, so they need the same treatment.
+///
+/// Raising goes through [`ProviderStatus::worst`], so a provider status that
+/// already ranks higher — rate limited, auth required — is never softened.
+fn raise_crossed_thresholds(
+    mut account: ProviderSnapshot,
+    settings: &AlertSettings,
+) -> ProviderSnapshot {
+    let Some(connection) = settings.connections.get(connection_key(&account)) else {
+        return account;
+    };
+
+    let mut window_crossed = false;
+    for allowance in &mut account.allowances {
+        let threshold = connection.for_allowance(allowance.source);
+        if crossed(allowance.used_percent, threshold.at) {
+            allowance.status = ProviderStatus::worst([allowance.status, ProviderStatus::Warning]);
+            window_crossed = true;
+        }
+    }
+    // The account follows its windows, the way adapters already derive it, but
+    // never its budgets: `build_dashboard_snapshot` keeps the overall pulse about
+    // connected providers rather than local spend cards.
+    if window_crossed {
+        account.status = ProviderStatus::worst([account.status, ProviderStatus::Warning]);
+    }
+
+    for (state, threshold) in [
+        (&mut account.today, &connection.today),
+        (&mut account.week, &connection.week),
+        (&mut account.month, &connection.month),
+    ] {
+        if crossed(state.used_percent, threshold.at) {
+            state.status = ProviderStatus::worst([state.status, ProviderStatus::Warning]);
+        }
     }
     account
 }
@@ -180,10 +234,7 @@ fn alerts_for_account(account: &ProviderSnapshot, settings: &AlertSettings) -> V
         alerts.extend(alert_for_budget(provider_label, period, state, threshold));
     }
     for allowance in &account.allowances {
-        let threshold = match allowance.source {
-            AllowanceSource::Plan => &connection.plan,
-            AllowanceSource::Purchased => &connection.purchased,
-        };
+        let threshold = connection.for_allowance(allowance.source);
         if let Some(alert) = alert_for_allowance(provider_label, allowance, threshold) {
             alerts.push(alert);
         }
@@ -327,6 +378,29 @@ mod tests {
     }
 
     #[test]
+    fn a_window_without_a_threshold_keeps_the_status_its_provider_reported() {
+        let mut account = claude_account(purchased(84.0));
+        account.status = ProviderStatus::Ok;
+        account.allowances[0].status = ProviderStatus::Ok;
+        // The connection has a rule, but not one that governs this window.
+        let settings = AlertSettings {
+            connections: HashMap::from([(
+                connection::CLAUDE_PLAN.to_string(),
+                ConnectionAlertThresholds {
+                    today: PercentThreshold { at: Some(80) },
+                    ..ConnectionAlertThresholds::default()
+                },
+            )]),
+        };
+
+        let applied = apply_alert_settings(snapshot_with(account, budget(10.0)), &settings);
+
+        let account = &applied.accounts[0];
+        assert_eq!(account.allowances[0].status, ProviderStatus::Ok);
+        assert_eq!(account.status, ProviderStatus::Ok);
+    }
+
+    #[test]
     fn fires_budget_alert_from_the_owning_connection() {
         let mut account = claude_account(purchased(10.0));
         account.today = budget(85.0);
@@ -402,6 +476,90 @@ mod tests {
         };
 
         assert!(calculate_alerts(&snapshot, &settings).is_empty());
+    }
+
+    #[test]
+    fn a_crossed_threshold_raises_the_window_and_its_account() {
+        let mut account = claude_account(purchased(84.0));
+        account.status = ProviderStatus::Ok;
+        account.allowances[0].status = ProviderStatus::Ok;
+        let settings = AlertSettings {
+            connections: HashMap::from([(
+                connection::CLAUDE_PLAN.to_string(),
+                ConnectionAlertThresholds {
+                    purchased: PercentThreshold { at: Some(80) },
+                    ..ConnectionAlertThresholds::default()
+                },
+            )]),
+        };
+
+        let applied = apply_alert_settings(snapshot_with(account, budget(10.0)), &settings);
+
+        let account = &applied.accounts[0];
+        assert_eq!(account.allowances[0].status, ProviderStatus::Warning);
+        assert_eq!(account.status, ProviderStatus::Warning);
+    }
+
+    /// A user line can sit below the fixed 80% warn, so the card would otherwise
+    /// stay Ok next to its own alert. The overall pulse stays out of it: budgets
+    /// are local spend cards, not connected-provider health.
+    ///
+    /// The percentage only exists once the local limit is applied, so this also
+    /// pins that raising runs after [`apply_local_budget`], not before.
+    #[test]
+    fn a_crossed_budget_raises_its_card_but_not_the_overall_pulse() {
+        let mut account = claude_account(purchased(10.0));
+        account.status = ProviderStatus::Ok;
+        account.today = calculate_budget_state(
+            BudgetPeriod::Today,
+            Some(Money::minor_units(5_000, "USD")),
+            None,
+            None,
+        );
+        assert_eq!(account.today.used_percent, None);
+        let settings = AlertSettings {
+            connections: HashMap::from([(
+                connection::CLAUDE_PLAN.to_string(),
+                ConnectionAlertThresholds {
+                    today: PercentThreshold { at: Some(50) },
+                    budget: ConnectionBudget {
+                        today: Some(10_000),
+                        ..ConnectionBudget::default()
+                    },
+                    ..ConnectionAlertThresholds::default()
+                },
+            )]),
+        };
+
+        let applied = apply_alert_settings(snapshot_with(account, budget(0.0)), &settings);
+
+        assert_eq!(applied.accounts[0].today.used_percent, Some(50.0));
+
+        assert_eq!(applied.accounts[0].today.status, ProviderStatus::Warning);
+        assert_eq!(applied.accounts[0].status, ProviderStatus::Ok);
+        assert_eq!(applied.overall_status, ProviderStatus::Ok);
+    }
+
+    #[test]
+    fn raising_never_softens_a_worse_provider_status() {
+        let mut account = claude_account(purchased(84.0));
+        account.allowances[0].status = ProviderStatus::RateLimited;
+        let settings = AlertSettings {
+            connections: HashMap::from([(
+                connection::CLAUDE_PLAN.to_string(),
+                ConnectionAlertThresholds {
+                    purchased: PercentThreshold { at: Some(80) },
+                    ..ConnectionAlertThresholds::default()
+                },
+            )]),
+        };
+
+        let applied = apply_alert_settings(snapshot_with(account, budget(10.0)), &settings);
+
+        assert_eq!(
+            applied.accounts[0].allowances[0].status,
+            ProviderStatus::RateLimited
+        );
     }
 
     #[test]
