@@ -74,10 +74,12 @@ fun glanceLegendRows(summary: WatchDashboardSummary): List<GlanceLegendRowModel>
 }
 
 internal fun glancePrimaryLabel(ring: RingSummary): String {
-    if (ring.label.contains(" · ")) {
+    val family = glanceFamilyName(ring.id) ?: return ring.label
+    // Already named: composed by the phone (`Family · Pool`), or a pool name that
+    // opens with its own family (`Cursor Models`).
+    if (ring.label.contains(" · ") || ring.label.substringBefore(' ') == family) {
         return ring.label
     }
-    val family = glanceFamilyName(ring.id) ?: return ring.label
     return "$family · ${ring.label}"
 }
 

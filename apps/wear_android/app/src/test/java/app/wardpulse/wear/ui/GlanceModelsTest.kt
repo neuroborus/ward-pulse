@@ -107,6 +107,12 @@ class GlanceModelsTest {
                                 PulseStatus.OK,
                             ),
                             RingSummary(
+                                "allowance.cursor.cursor-plan-models",
+                                "Cursor Models",
+                                76.0,
+                                PulseStatus.OK,
+                            ),
+                            RingSummary(
                                 "allowance.cursor.cursor-plan-other",
                                 "Other Models",
                                 100.0,
@@ -133,11 +139,13 @@ class GlanceModelsTest {
                         ),
                 ),
             )
-        assertEquals(2, rows.size)
+        assertEquals(3, rows.size)
         assertEquals("Codex · Weekly plan", rows[0].title)
         assertEquals("8% left · 320 credits", rows[0].subtitle)
-        assertEquals("Budget · Today", rows[1].title)
-        assertEquals("60% left", rows[1].subtitle)
+        // The pool name already opens with its family — do not name it twice.
+        assertEquals("Cursor Models", rows[1].title)
+        assertEquals("Budget · Today", rows[2].title)
+        assertEquals("60% left", rows[2].subtitle)
     }
 
     private fun baseSummary(
