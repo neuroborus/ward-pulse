@@ -19,6 +19,7 @@ import app.wardpulse.wear.data.WatchSummaryStore
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.RingSurfaceOrder
 import app.wardpulse.wear.model.WatchDashboardSummary
+import app.wardpulse.wear.model.WatchDataMode
 import app.wardpulse.wear.ui.RingFamily
 import app.wardpulse.wear.ui.formatPercentAmount
 import app.wardpulse.wear.ui.formatPercentLabel
@@ -381,9 +382,14 @@ object WatchComplicationText {
         formatPercentAmount(percent?.toDouble()) ?: "—"
 
     fun status(summary: WatchDashboardSummary): String {
-        val source = when (summary.providers.size) {
-            0 -> "NO DATA"
-            1 -> summary.providers.single().providerLabel.uppercase(Locale.US)
+        val source = when {
+            // Mock outranks the provider names, matching the Glance detail order
+            // (`WEAR_GLANCE_DESIGN.md`): the demo impersonates real families, so
+            // nothing else here would say the numbers are not real.
+            summary.dataMode == WatchDataMode.MOCK -> "MOCK"
+            summary.providers.isEmpty() -> "NO DATA"
+            summary.providers.size == 1 ->
+                summary.providers.single().providerLabel.uppercase(Locale.US)
             else -> "${summary.providers.size} PRV"
         }
         val pulse = when {

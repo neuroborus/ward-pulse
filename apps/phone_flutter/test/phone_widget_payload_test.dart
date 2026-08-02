@@ -128,7 +128,7 @@ void main() {
     );
     expect(
       payload.rows.map((row) => row.label),
-      containsAll(['Cursor Models', 'Other Models']),
+      containsAll(['Cursor Models', 'Cursor · Other Models']),
     );
     expect(
       payload.rows
@@ -222,8 +222,8 @@ void main() {
     expect(payload.rows, hasLength(1));
     expect(payload.rows.single.creditsSuffix, '320 credits');
     expect(payload.rows.single.percentText, '60% left');
-    expect(payload.rows.single.label, '5h');
-    expect(payload.rows.single.line, '60% left · 5h · 320 credits');
+    expect(payload.rows.single.label, 'Claude · 5h');
+    expect(payload.rows.single.line, '60% left · Claude · 5h · 320 credits');
     expect(phoneWidgetCreditsSuffix(withCredits, 'budget.today'), isNull);
     expect(
       phoneWidgetCreditsSuffix(

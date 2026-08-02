@@ -61,7 +61,7 @@ PhoneWidgetPayload buildPhoneWidgetPayload(
     rows: [
       for (final metric in metrics)
         PhoneWidgetRow(
-          label: metric.label,
+          label: metric.catalogTitle,
           remainingPercent: metric.remainingPercent!.round(),
           accentArgb: phoneWidgetAccentArgb(metric.id),
           creditsSuffix: phoneWidgetCreditsSuffix(snapshot, metric.id),

@@ -209,7 +209,9 @@ class WardPulseAppWidget : AppWidgetProvider() {
                 views.setViewVisibility(rowIds[i], View.VISIBLE)
                 views.setTextViewText(percentIds[i], percent)
                 views.setTextViewText(creditsIds[i], credits)
-                views.setTextViewText(labelIds[i], label)
+                // The payload carries `Family · Pool`; the label column is two lines,
+                // so the separator becomes the line break instead of eating width.
+                views.setTextViewText(labelIds[i], label.replace(" · ", "\n"))
                 views.setViewVisibility(
                     labelIds[i],
                     if (showLabel) View.VISIBLE else View.GONE,
@@ -260,7 +262,7 @@ class WardPulseAppWidget : AppWidgetProvider() {
         const val LABEL_COL_DP = 100
         const val CREDITS_COL_DP = 88
         const val COL_GAP_DP = 6
-        const val ROW_CONTENT_DP = 17
+        const val ROW_CONTENT_DP = 31
         const val ROW_GAP_DP = 5
         const val FIT_SLACK_DP = 6
 

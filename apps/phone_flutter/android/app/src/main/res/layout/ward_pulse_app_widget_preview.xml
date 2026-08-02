@@ -58,14 +58,14 @@
                     android:textColor="@color/ward_pulse_widget_on_surface"
                     android:maxLines="1" />
                 <TextView
-                    android:layout_width="72dp"
+                    android:layout_width="92dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:gravity="center"
-                    android:text="Weekly"
+                    android:text="Claude\nWeekly plan"
                     android:textSize="11sp"
                     android:textColor="@color/ward_pulse_widget_on_surface"
-                    android:maxLines="1" />
+                    android:lines="2" />
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -99,14 +99,14 @@
                     android:textColor="@color/ward_pulse_widget_on_surface"
                     android:maxLines="1" />
                 <TextView
-                    android:layout_width="72dp"
+                    android:layout_width="92dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:gravity="center"
-                    android:text="5h"
+                    android:text="Claude\n5-hour session"
                     android:textSize="11sp"
                     android:textColor="@color/ward_pulse_widget_on_surface"
-                    android:maxLines="1" />
+                    android:lines="2" />
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -140,14 +140,14 @@
                     android:textColor="@color/ward_pulse_widget_on_surface"
                     android:maxLines="1" />
                 <TextView
-                    android:layout_width="72dp"
+                    android:layout_width="92dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:gravity="center"
-                    android:text="Other"
+                    android:text="Cursor Models"
                     android:textSize="11sp"
                     android:textColor="@color/ward_pulse_widget_on_surface"
-                    android:maxLines="1" />
+                    android:lines="2" />
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

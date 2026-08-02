@@ -7,6 +7,7 @@ import app.wardpulse.wear.model.ProviderSummary
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.Quantity
 import app.wardpulse.wear.model.RingSummary
+import app.wardpulse.wear.model.WatchDataMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -91,6 +92,7 @@ class WatchComplicationTextTest {
     fun identifiesTheLiveProviderAndStatus() {
         val summary =
             PreviewWatchDashboardSummary.value.copy(
+                dataMode = WatchDataMode.LIVE,
                 overallStatus = PulseStatus.UNKNOWN,
                 providers =
                     listOf(
@@ -114,10 +116,32 @@ class WatchComplicationTextTest {
         )
     }
 
+    /// The demo impersonates real families, so the provider name cannot reveal
+    /// that the numbers are fake — only `dataMode` can.
+    @Test
+    fun marksMockDataEvenWhenItWearsAProviderName() {
+        val summary =
+            PreviewWatchDashboardSummary.value.copy(
+                dataMode = WatchDataMode.MOCK,
+                providers =
+                    listOf(
+                        ProviderSummary(
+                            provider = "claude",
+                            status = PulseStatus.OK,
+                            todaySpent = null,
+                        ),
+                    ),
+                isStale = false,
+            )
+
+        assertEquals("MOCK · OK", WatchComplicationText.status(summary))
+    }
+
     @Test
     fun shortensRateLimitedStatusForRoundChin() {
         val summary =
             PreviewWatchDashboardSummary.value.copy(
+                dataMode = WatchDataMode.LIVE,
                 providers =
                     listOf(
                         ProviderSummary(

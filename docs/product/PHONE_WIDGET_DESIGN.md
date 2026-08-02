@@ -1,7 +1,8 @@
 # Phone Widget Design
 
 **Status: locked 2026-07-27** (revised **2026-07-28** — hug rows/columns, label-center /
-credits-end, picker preview sample, day/night olive chrome). Review art:
+credits-end, picker preview sample, day/night olive chrome; revised **2026-08-02** —
+two-line label carrying the provider family). Review art:
 `apps/phone_flutter/design/` (`widget-small.svg` / `widget-medium.svg` / `widget-dark.svg`).
 
 Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 14). Asset ownership: `docs/DESIGN_ASSETS.md`.
@@ -57,9 +58,11 @@ crowded out by Extra usage.
 
 ```text
 ┌─ olive card hugs complete rows + columns ──────┐
-│  ▌ 22% left    Weekly        80 credits   ⌇wm  │  ← tightest remaining first
-│  ▌ 46% left      5h         320 credits        │
-│  ▌ 71% left  Other Models   2.1K credits       │
+│  ▌ 22% left     Claude       80 credits   ⌇wm  │  ← tightest remaining first
+│  ▌            Weekly plan                      │
+│  ▌ 46% left     Claude      320 credits        │
+│  ▌           5-hour session                    │
+│  ▌ 71% left  Cursor Models  2.1K credits       │
 └────────────────────────────────────────────────┘
 ┌─ mid (credits dropped) ────────────────────────┐
 │  ▌ 22% left    Weekly                     ⌇wm  │
@@ -77,6 +80,13 @@ crowded out by Extra usage.
 - **Columns** — `% left` · centered label · credits (end-aligned). Width hide order:
   credits first, then label; missing credits still reserve the credits column when that
   column is shown (label stays centered).
+- **Label is two lines** (revised **2026-08-02**) — family on top, pool below, never
+  truncated. The provider must be readable on the launcher, where nothing else names it:
+  colour alone cannot tell one `Weekly plan` from another. The column keeps its fixed
+  width, so the cost is height, not width: rows are `ROW_CONTENT_DP` 31 instead of 17 and
+  the card hugs taller. Every row reserves both lines (`android:lines="2"`), so a label
+  that already carries its family — `Cursor Models` — leaves the second line empty rather
+  than making rows uneven.
 - **Day / night** — olive phone chrome (`#F2F4F1` / `#101412` via `values` /
   `values-night`), not provider fills. Soft 20dp card + hairline outline; runtime card
   **hugs** complete content so unused cell area is wallpaper. Widget-picker preview uses a
@@ -104,6 +114,14 @@ collapsing Claude plan windows on the phone widget (Watchface only)
 ```
 
 ## Review art
+
+Canonical review generator: `tools/render-phone-widget-designs.mjs` — it reads the accent and
+chrome colours straight from `res/values{,-night}/colors_widget.xml`, so the boards cannot drift
+from the app without the resource moving too.
+
+```sh
+node tools/render-phone-widget-designs.mjs
+```
 
 | File | Role |
 |------|------|
