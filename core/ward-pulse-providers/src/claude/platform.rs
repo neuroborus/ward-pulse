@@ -73,7 +73,7 @@ pub fn anthropic_provider_snapshot_from_report_json(
 ) -> Result<AnthropicReportSnapshot, AnthropicReportError> {
     let report: RawReport =
         serde_json::from_str(report_json).map_err(AnthropicReportError::ReportJson)?;
-    let mut usage_by_bucket = BTreeMap::<(String, String), UsageTotals>::new();
+    let mut usage_by_bucket = BTreeMap::<(DateTimeUtc, DateTimeUtc), UsageTotals>::new();
     let mut model_breakdown = BTreeMap::<String, UsageTotals>::new();
 
     for page_json in &report.usage_pages {
@@ -95,7 +95,7 @@ pub fn anthropic_provider_snapshot_from_report_json(
         }
     }
 
-    let mut cost_by_bucket = BTreeMap::<(String, String), i64>::new();
+    let mut cost_by_bucket = BTreeMap::<(DateTimeUtc, DateTimeUtc), i64>::new();
     for page_json in &report.cost_pages {
         let page: RawCostPage =
             serde_json::from_str(page_json).map_err(AnthropicReportError::CostsJson)?;
@@ -158,12 +158,12 @@ pub fn anthropic_provider_snapshot_from_report_json(
 
 fn budget_for(
     period: BudgetPeriod,
-    start: &str,
-    costs: &BTreeMap<(String, String), i64>,
+    start: &DateTimeUtc,
+    costs: &BTreeMap<(DateTimeUtc, DateTimeUtc), i64>,
 ) -> Result<ward_pulse_core::model::BudgetState, AnthropicReportError> {
     let total = costs
         .iter()
-        .filter(|((bucket_start, _), _)| bucket_start.as_str() >= start)
+        .filter(|((bucket_start, _), _)| bucket_start >= start)
         .try_fold(0_i64, |total, (_, value)| {
             total
                 .checked_add(*value)
@@ -178,8 +178,8 @@ fn budget_for(
 }
 
 fn merge_buckets(
-    usage: &BTreeMap<(String, String), UsageTotals>,
-    costs: &BTreeMap<(String, String), i64>,
+    usage: &BTreeMap<(DateTimeUtc, DateTimeUtc), UsageTotals>,
+    costs: &BTreeMap<(DateTimeUtc, DateTimeUtc), i64>,
 ) -> Result<Vec<UsageBucket>, AnthropicReportError> {
     let mut keys: Vec<_> = usage.keys().cloned().chain(costs.keys().cloned()).collect();
     keys.sort();
@@ -190,8 +190,8 @@ fn merge_buckets(
             let totals = usage.get(&(start.clone(), end.clone())).copied();
             let cost = costs.get(&(start.clone(), end.clone())).copied();
             Ok(UsageBucket {
-                start_at: DateTimeUtc::new(start),
-                end_at: DateTimeUtc::new(end),
+                start_at: start,
+                end_at: end,
                 cost: cost.map(|minor| Money::minor_units(minor, "USD")),
                 input_tokens: totals.map(|value| value.input_tokens),
                 output_tokens: totals.map(|value| value.output_tokens),
@@ -273,9 +273,9 @@ impl UsageTotals {
 struct RawReport {
     account_id: String,
     generated_at: DateTimeUtc,
-    today_start: String,
-    week_start: String,
-    month_start: String,
+    today_start: DateTimeUtc,
+    week_start: DateTimeUtc,
+    month_start: DateTimeUtc,
     usage_pages: Vec<String>,
     cost_pages: Vec<String>,
 }
@@ -287,8 +287,8 @@ struct RawUsagePage {
 
 #[derive(Debug, Deserialize)]
 struct RawUsageBucket {
-    starting_at: String,
-    ending_at: String,
+    starting_at: DateTimeUtc,
+    ending_at: DateTimeUtc,
     results: Vec<RawUsageResult>,
 }
 
@@ -321,8 +321,8 @@ struct RawCostPage {
 
 #[derive(Debug, Deserialize)]
 struct RawCostBucket {
-    starting_at: String,
-    ending_at: String,
+    starting_at: DateTimeUtc,
+    ending_at: DateTimeUtc,
     results: Vec<RawCostResult>,
 }
 
@@ -358,6 +358,51 @@ mod tests {
         assert_eq!(snapshot.provider_snapshot.provider, ProviderKind::Claude);
         assert!(snapshot.provider_snapshot.today.spent.is_some());
         assert!(!snapshot.provider_snapshot.buckets.is_empty());
+    }
+
+    /// Anthropic reports whole seconds today and the phone writes period bounds
+    /// with milliseconds, which compares correctly by luck. The reverse shape
+    /// would not: `…00.000Z` ranks below `…00Z`, so the boundary bucket would
+    /// drop out of the total and no longer merge with its twin. Canonicalizing
+    /// on the way in removes the luck.
+    #[test]
+    fn a_boundary_bucket_counts_whatever_shape_the_provider_sends() {
+        let costs = serde_json::json!({
+            "data": [{
+                "starting_at": "2026-07-19T00:00:00.000Z",
+                "ending_at": "2026-07-20T00:00:00.000Z",
+                "results": [{"amount": "100", "currency": "usd"}]
+            }, {
+                "starting_at": "2026-07-19T00:00:00Z",
+                "ending_at": "2026-07-20T00:00:00Z",
+                "results": [{"amount": "40", "currency": "usd"}]
+            }]
+        })
+        .to_string();
+        let report = serde_json::json!({
+            "accountId": "anthropic-local",
+            "generatedAt": "2026-07-19T12:00:00Z",
+            "todayStart": "2026-07-19T00:00:00Z",
+            "weekStart": "2026-07-13T00:00:00Z",
+            "monthStart": "2026-07-01T00:00:00Z",
+            "usagePages": [],
+            "costPages": [costs]
+        })
+        .to_string();
+
+        let snapshot =
+            anthropic_provider_snapshot_from_report_json(&report).expect("normalize Anthropic");
+
+        // Both shapes name the same instant, so they are one bucket, summed once.
+        assert_eq!(
+            snapshot.provider_snapshot.today.spent,
+            Some(Money::minor_units(140, "USD"))
+        );
+        assert_eq!(snapshot.provider_snapshot.buckets.len(), 1);
+        assert_eq!(
+            snapshot.provider_snapshot.buckets[0].start_at.as_str(),
+            "2026-07-19T00:00:00Z"
+        );
     }
 
     #[test]

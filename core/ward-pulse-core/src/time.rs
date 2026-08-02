@@ -9,11 +9,14 @@ use serde::{Deserialize, Serialize};
 /// same instant written `…:00Z`. Dropping sub-second precision on the way in
 /// keeps one shape, so text order matches chronological order.
 ///
+/// `Ord` compares that canonical text, so adapters can sort buckets and range
+/// compare against a period start without re-deriving the rule on raw strings.
+///
 /// Malformed input is passed through, not rejected: instants arrive inside
 /// provider payloads, and a fallible parse would fail a whole report over one
 /// field. See `docs/product/PROVIDER_NOTES.md` (Boundary) for the trade-off and
 /// for where to reject if a provider ever breaks the format.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(transparent)]
 pub struct DateTimeUtc(String);
 
@@ -83,7 +86,7 @@ mod tests {
         let earlier = DateTimeUtc::from("2026-08-01T10:00:00.000Z");
         let later = DateTimeUtc::from("2026-08-01T10:00:01Z");
 
-        assert!(earlier.as_str() < later.as_str());
+        assert!(earlier < later);
     }
 
     #[test]
