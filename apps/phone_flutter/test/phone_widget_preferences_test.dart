@@ -252,5 +252,11 @@ void main() {
       containsAll(['5h', 'Weekly', 'Cursor Models', 'Other Models']),
     );
     expect(labels.indexOf('5h'), lessThan(labels.indexOf('Extra usage')));
+
+    // The preview names families too, or two `Weekly plan` rows read alike.
+    expect(
+      phoneWidgetPayloadSubtitle(snapshot, const PhoneWidgetPreferences()),
+      contains('Cursor · Other Models'),
+    );
   });
 }

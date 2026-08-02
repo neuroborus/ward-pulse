@@ -296,16 +296,7 @@ class ProviderSnapshot {
     'lastError': lastError?.toJson(),
   };
 
-  String get providerLabel {
-    return switch (provider) {
-      'openai' => 'OpenAI',
-      'codex' => 'Codex',
-      'claude' => 'Claude',
-      'cursor' => 'Cursor',
-      'mock' => 'Mock',
-      _ => provider,
-    };
-  }
+  String get providerLabel => providerDisplayLabel(provider);
 
   ProviderSnapshot _withStatus(ProviderStatus value) {
     return ProviderSnapshot(
@@ -793,6 +784,16 @@ class WatchSummary {
     );
   }
 }
+
+/// Display name for a raw provider key (`cursor` → `Cursor`).
+String providerDisplayLabel(String provider) => switch (provider) {
+  'openai' => 'OpenAI',
+  'codex' => 'Codex',
+  'claude' => 'Claude',
+  'cursor' => 'Cursor',
+  'mock' => 'Mock',
+  _ => provider,
+};
 
 /// Device-local wall clock for sync / reset labels.
 String formatLocal(DateTime value) {

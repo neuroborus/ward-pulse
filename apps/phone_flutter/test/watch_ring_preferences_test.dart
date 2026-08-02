@@ -368,6 +368,35 @@ void main() {
     ]);
   });
 
+  test('catalog titles name the family without repeating it', () {
+    WatchRingMetric metric(String id, String label) => WatchRingMetric(
+      id: id,
+      label: label,
+      usedPercent: 10,
+      status: ProviderStatus.ok,
+    );
+
+    // The collision this exists for: one `Weekly plan` per provider.
+    expect(
+      metric('allowance.codex.codex-weekly', 'Weekly plan').catalogTitle,
+      'Codex · Weekly plan',
+    );
+    expect(
+      metric('allowance.claude.claude-seven-day', 'Weekly plan').catalogTitle,
+      'Claude · Weekly plan',
+    );
+    // Already opens with its family.
+    expect(
+      metric(
+        'allowance.cursor.cursor-plan-models',
+        'Cursor Models',
+      ).catalogTitle,
+      'Cursor Models',
+    );
+    // Budgets belong to no family.
+    expect(metric('budget.today', 'Today').catalogTitle, 'Today');
+  });
+
   test('excludes purchased Claude Extra usage from watch ring catalog', () {
     final dash = _claudeCodexSnapshot(
       fiveHourUsed: 40,

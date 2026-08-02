@@ -142,9 +142,10 @@ String phoneWidgetPayloadSubtitle(
   }
   if (metrics.length == 1) {
     final metric = metrics.single;
-    return '${metric.label} ${metric.remainingPercent!.round()}% left';
+    return '${metric.catalogTitle} ${metric.remainingPercent!.round()}% left';
   }
-  return '${metrics.length} metrics · ${metrics.map((m) => m.label).join(', ')}';
+  return '${metrics.length} metrics · '
+      '${metrics.map((m) => m.catalogTitle).join(', ')}';
 }
 
 abstract interface class PhoneWidgetPreferenceStore {

@@ -52,8 +52,21 @@ final class WatchRingMetric {
 
   bool get _isClaudePlanSlot => id == claudePlanRingId;
 
-  /// Catalog checkbox title (Claude plan slot keeps a stable name).
-  String get catalogTitle => _isClaudePlanSlot ? 'Claude plan' : label;
+  /// Catalog checkbox title, qualified by family so that a `Weekly plan` from
+  /// two providers stays apart. The Claude plan slot is synthetic — its label
+  /// follows the tightest window, so it keeps a stable name instead.
+  String get catalogTitle {
+    if (_isClaudePlanSlot) {
+      return 'Claude plan';
+    }
+    final provider = providerFromRingId(id);
+    if (provider == null) {
+      return label;
+    }
+    final family = providerDisplayLabel(provider);
+    // A few pool names already open with the family (`Cursor Models`).
+    return label.split(' ').first == family ? label : '$family · $label';
+  }
 
   /// Catalog checkbox subtitle.
   String get catalogSubtitle {
@@ -345,9 +358,10 @@ String watchRingPayloadSubtitle(
   }
   if (rings.length == 1) {
     final ring = rings.single;
-    return '${ring.label} ${ring.remainingPercent!.round()}% left';
+    return '${ring.catalogTitle} ${ring.remainingPercent!.round()}% left';
   }
-  return '${rings.length} rings · ${rings.map((ring) => ring.label).join(', ')}';
+  return '${rings.length} rings · '
+      '${rings.map((ring) => ring.catalogTitle).join(', ')}';
 }
 
 /// Owning provider for `allowance.<provider>.…`, or null for budgets / unknown.
