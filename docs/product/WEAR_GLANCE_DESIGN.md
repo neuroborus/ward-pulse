@@ -85,6 +85,11 @@ Pulse (`OK` / `!OK`) and interactivity are **independent**:
 - When a **specific problem** is known, show it under the control (`Stale`, `Auth required`,
   `Rate limited`, `Mock data`, …). Keep the primary glyph as `OK` / `!OK` only.
 - Cadence cooldown is **not** a problem — do not show `Rate limited` or flip to `!OK` for it.
+- Only **one** detail fits, so problems have a precedence: `Mock data`, then `Stale`, then
+  `Rate limited`, then the remaining statuses. Trustworthiness of the numbers outranks the
+  reason a refresh failed, because a rate limit already shows as a gray disabled control while
+  age has no other channel. Precedence changes the detail line only — the control still follows
+  the rate limit.
 - The **phone** decides allowance from the **PollCadence hard floor** (strictest provider
   minimum, currently 5 minutes) — not the Settings auto-poll slider — and pushes
   `manualRefreshAllowed` / `manualRefreshAvailableAt` on the watch summary. Wear reflects those

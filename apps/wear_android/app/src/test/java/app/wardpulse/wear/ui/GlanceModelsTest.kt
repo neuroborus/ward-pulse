@@ -56,6 +56,32 @@ class GlanceModelsTest {
     }
 
     @Test
+    fun refreshChrome_staleOutranksRateLimited() {
+        val chrome =
+            glanceRefreshChrome(
+                baseSummary(overall = PulseStatus.RATE_LIMITED, isStale = true),
+                refreshAllowed = true,
+            )
+        assertEquals("Stale", chrome.detail)
+        // The rate limit still blocks the tap; only the detail line changes.
+        assertFalse(chrome.enabled)
+    }
+
+    @Test
+    fun refreshChrome_mockOutranksRateLimited() {
+        val chrome =
+            glanceRefreshChrome(
+                baseSummary(
+                    overall = PulseStatus.RATE_LIMITED,
+                    dataMode = WatchDataMode.MOCK,
+                ),
+                refreshAllowed = true,
+            )
+        assertEquals("Mock data", chrome.detail)
+        assertFalse(chrome.enabled)
+    }
+
+    @Test
     fun refreshChrome_unknownShowsDetail() {
         val chrome =
             glanceRefreshChrome(
@@ -117,6 +143,7 @@ class GlanceModelsTest {
     private fun baseSummary(
         overall: PulseStatus = PulseStatus.OK,
         isStale: Boolean = false,
+        dataMode: WatchDataMode = WatchDataMode.LIVE,
         rings: List<RingSummary> =
             listOf(
                 RingSummary("budget.today", "Today", 24.8, PulseStatus.OK),
@@ -135,7 +162,7 @@ class GlanceModelsTest {
             )
         return WatchDashboardSummary(
             schemaVersion = 7,
-            dataMode = WatchDataMode.LIVE,
+            dataMode = dataMode,
             generatedAt = "2026-07-26T10:00:00Z",
             overallStatus = overall,
             rings = rings,
