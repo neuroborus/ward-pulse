@@ -116,8 +116,10 @@ class WatchComplicationTextTest {
         )
     }
 
-    /// The demo impersonates real families, so the provider name cannot reveal
-    /// that the numbers are fake — only `dataMode` can.
+    /**
+     * The demo impersonates real families, so the provider name cannot reveal
+     * that the numbers are fake — only `dataMode` can.
+     */
     @Test
     fun marksMockDataEvenWhenItWearsAProviderName() {
         val summary =
