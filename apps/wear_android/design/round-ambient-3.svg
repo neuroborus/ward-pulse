@@ -9,26 +9,26 @@
   </defs>
   <rect width="450" height="450" fill="url(#lift)"/>
   
-    <circle cx="225" cy="225" r="139.95" fill="none" stroke="#2E3632"
-      stroke-width="17.549999999999997" />
-    <circle cx="225" cy="225" r="139.95" fill="none" stroke="#8A968F"
-      stroke-width="17.549999999999997" stroke-linecap="round"
-      stroke-dasharray="70.35 879.33"
-      stroke-dashoffset="-808.99"
+    <circle cx="225" cy="225" r="148.04999999999998" fill="none" stroke="#2E3632"
+      stroke-width="13.60125" />
+    <circle cx="225" cy="225" r="148.04999999999998" fill="none" stroke="#8A968F"
+      stroke-width="13.60125" stroke-linecap="round"
+      stroke-dasharray="74.42 930.23"
+      stroke-dashoffset="-855.81"
       transform="rotate(-90 225 225)" />
-    <circle cx="225" cy="225" r="167.85" fill="none" stroke="#2E3632"
-      stroke-width="17.549999999999997" />
-    <circle cx="225" cy="225" r="167.85" fill="none" stroke="#8A968F"
-      stroke-width="17.549999999999997" stroke-linecap="round"
-      stroke-dasharray="411.31 1054.63"
-      stroke-dashoffset="-643.33"
+    <circle cx="225" cy="225" r="169.965" fill="none" stroke="#2E3632"
+      stroke-width="13.60125" />
+    <circle cx="225" cy="225" r="169.965" fill="none" stroke="#8A968F"
+      stroke-width="13.60125" stroke-linecap="round"
+      stroke-dasharray="416.49 1067.92"
+      stroke-dashoffset="-651.43"
       transform="rotate(-90 225 225)" />
-    <circle cx="225" cy="225" r="195.75" fill="none" stroke="#2E3632"
-      stroke-width="17.549999999999997" />
-    <circle cx="225" cy="225" r="195.75" fill="none" stroke="#8A968F"
-      stroke-width="17.549999999999997" stroke-linecap="round"
-      stroke-dasharray="651.86 1229.93"
-      stroke-dashoffset="-578.07"
+    <circle cx="225" cy="225" r="191.88" fill="none" stroke="#2E3632"
+      stroke-width="13.60125" />
+    <circle cx="225" cy="225" r="191.88" fill="none" stroke="#8A968F"
+      stroke-width="13.60125" stroke-linecap="round"
+      stroke-dasharray="638.98 1205.62"
+      stroke-dashoffset="-566.64"
       transform="rotate(-90 225 225)" />
   
     <text x="225" y="254.2" text-anchor="middle"

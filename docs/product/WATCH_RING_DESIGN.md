@@ -2,8 +2,9 @@
 
 **Baseline locked 2026-07-25**; melt / strip-accent revision **2026-07-27**; ring-cap /
 purchased-meter revision **2026-07-27** (max three plan/budget rings; Extra usage and other
-purchased meters are not rings) — accepted visual target for Wear OS and Watch Face Format
-until the next explicit design revision.
+purchased meters are not rings); band-width revision **2026-08-02** (see Ring geometry) —
+accepted visual target for Wear OS and Watch Face Format until the next explicit design
+revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
 wireframes, large remaining-% heroes, or bordered strip cards.
 
@@ -101,12 +102,47 @@ Rules:
     (per-provider from `allowances`, same as Glance — not gated on aggregate `creditsGlance`);
     omit unused halves / omit empty strips;
   - credits text is compact (`500`, `1.2K`) — never a `TOK` suffix;
-  - ring stroke ~25px on the 450 WFF canvas so arcs read clearer while a **3-strip** stack
-    still clears the aperture.
+  - ring band **18.8 units** on the 450 WFF canvas so arcs read clearer while a **3-strip**
+    stack still clears the aperture (see Ring geometry for why that is not the nominal 25).
 - **Credits-only**: thin framing track, large time, credits strip only — no percent arcs.
 - No orphan captions (`Codex left`, floating unit labels) outside the strip row.
 - Review art focuses on 1–3 provider families. A local **budget** metric may still occupy a product
   ring slot; do not ship a “4 providers” face variant in review art.
+
+## Ring geometry (revised 2026-08-02)
+
+Numbers here are **measured off a device screenshot**, never read off `watchface.xml`. Two
+things the file does not say:
+
+- WFF draws a band at roughly **half the nominal `thickness`** — `thickness="25"` rendered a
+  10 px band on a 384 px round watch, which is why arcs read thinner than every review board;
+- `width` sets the band's **outer edge**, not its centre line, so the stroke grows inward.
+
+| | Value |
+|---|---|
+| Nominal `thickness` | 40 |
+| Rendered band | 20.2 units (17 px at 384) |
+| Ring pitch (outer edge to outer edge) | 24 units |
+| Outer edges, outer to inner | 202 / 178 / 154 / 130 |
+| Gap between bands | 3.5–4.8 units |
+| Strip clearance to the inner band | 8.4 units |
+
+Widening the band alone is not enough: at the original 18-unit pitch a thickness of 40 made
+neighbouring bands touch, and a first attempt at pitch 21 still left a 0.8-unit hairline
+because the band renders 20.2, not the 18.8 a 0.44 factor predicted. Measure after every
+change — the factor is not exact.
+
+The strip stack was resized with the rings — 88x18 boxes stepping 21 units from y=283, a
+stack pitch of its own that has nothing to do with the 24-unit ring pitch. The previous 96x20
+stack reached radius 142.3 and would have cut into the widened inner band.
+
+Only three strips render, matching the three-ring cap. A fourth slot exists in the markup for
+both rings and strips; neither is drawn, and the fourth strip's geometry is not kept clear of
+the third band.
+
+`tools/render-watch-ring-designs.mjs` carries the same measured values, so review art shows
+what the watch shows. Before that revision the generator drew the nominal 26, roughly 2.3x
+the real band.
 
 ## Ambient
 

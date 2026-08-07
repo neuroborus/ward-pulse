@@ -9,26 +9,26 @@
   </defs>
   <rect width="450" height="450" fill="url(#lift)"/>
   
-    <circle cx="225" cy="225" r="134.55" fill="none" stroke="#2E3632"
-      stroke-width="26.1" />
-    <circle cx="225" cy="225" r="134.55" fill="none" stroke="#65D78A"
-      stroke-width="26.1" stroke-linecap="round"
-      stroke-dasharray="67.63 845.40"
-      stroke-dashoffset="-777.77"
+    <circle cx="225" cy="225" r="143.91" fill="none" stroke="#2E3632"
+      stroke-width="20.205000000000002" />
+    <circle cx="225" cy="225" r="143.91" fill="none" stroke="#65D78A"
+      stroke-width="20.205000000000002" stroke-linecap="round"
+      stroke-dasharray="72.34 904.21"
+      stroke-dashoffset="-831.88"
       transform="rotate(-90 225 225)" />
-    <circle cx="225" cy="225" r="165.15" fill="none" stroke="#2E3632"
-      stroke-width="26.1" />
-    <circle cx="225" cy="225" r="165.15" fill="none" stroke="#E8915A"
-      stroke-width="26.1" stroke-linecap="round"
-      stroke-dasharray="404.69 1037.67"
-      stroke-dashoffset="-632.98"
+    <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#2E3632"
+      stroke-width="20.205000000000002" />
+    <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#E8915A"
+      stroke-width="20.205000000000002" stroke-linecap="round"
+      stroke-dasharray="411.42 1054.92"
+      stroke-dashoffset="-643.50"
       transform="rotate(-90 225 225)" />
-    <circle cx="225" cy="225" r="195.75" fill="none" stroke="#2E3632"
-      stroke-width="26.1" />
-    <circle cx="225" cy="225" r="195.75" fill="none" stroke="#67E8D4"
-      stroke-width="26.1" stroke-linecap="round"
-      stroke-dasharray="651.86 1229.93"
-      stroke-dashoffset="-578.07"
+    <circle cx="225" cy="225" r="191.88" fill="none" stroke="#2E3632"
+      stroke-width="20.205000000000002" />
+    <circle cx="225" cy="225" r="191.88" fill="none" stroke="#67E8D4"
+      stroke-width="20.205000000000002" stroke-linecap="round"
+      stroke-dasharray="638.98 1205.62"
+      stroke-dashoffset="-566.64"
       transform="rotate(-90 225 225)" />
   
     <text x="225" y="250.1" text-anchor="middle"

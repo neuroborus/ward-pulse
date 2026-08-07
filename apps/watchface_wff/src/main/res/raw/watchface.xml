@@ -47,9 +47,9 @@
             <BoundingArc
                 centerX="225"
                 centerY="225"
-                width="392"
-                height="392"
-                thickness="25"
+                width="404"
+                height="404"
+                thickness="40"
                 startAngle="0"
                 endAngle="359.9"
                 isRoundEdge="TRUE" />
@@ -66,11 +66,11 @@
                                 <Arc
                                     centerX="225"
                                     centerY="225"
-                                    width="392"
-                                    height="392"
+                                    width="404"
+                                    height="404"
                                     startAngle="0"
                                     endAngle="359.9">
-                                    <Stroke color="#ff2e3632" thickness="25" cap="ROUND" />
+                                    <Stroke color="#ff2e3632" thickness="40" cap="ROUND" />
                                 </Arc>
                             </PartDraw>
                             <PartDraw x="0" y="0" width="450" height="450" alpha="255">
@@ -78,15 +78,15 @@
                                 <Arc
                                     centerX="225"
                                     centerY="225"
-                                    width="392"
-                                    height="392"
+                                    width="404"
+                                    height="404"
                                     startAngle="0"
                                     endAngle="359.9">
                                     <Transform
                                         target="startAngle"
                                         value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
                                     <WeightedStroke
-                                        thickness="25"
+                                        thickness="40"
                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                         cap="ROUND" />
                                 </Arc>
@@ -117,7 +117,7 @@
                 centerY="225"
                 width="356"
                 height="356"
-                thickness="25"
+                thickness="40"
                 startAngle="0"
                 endAngle="359.9"
                 isRoundEdge="TRUE" />
@@ -138,7 +138,7 @@
                                     height="356"
                                     startAngle="0"
                                     endAngle="359.9">
-                                    <Stroke color="#ff2e3632" thickness="25" cap="ROUND" />
+                                    <Stroke color="#ff2e3632" thickness="40" cap="ROUND" />
                                 </Arc>
                             </PartDraw>
                             <PartDraw x="0" y="0" width="450" height="450" alpha="255">
@@ -154,7 +154,7 @@
                                         target="startAngle"
                                         value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
                                     <WeightedStroke
-                                        thickness="25"
+                                        thickness="40"
                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                         cap="ROUND" />
                                 </Arc>
@@ -183,9 +183,9 @@
             <BoundingArc
                 centerX="225"
                 centerY="225"
-                width="320"
-                height="320"
-                thickness="25"
+                width="308"
+                height="308"
+                thickness="40"
                 startAngle="0"
                 endAngle="359.9"
                 isRoundEdge="TRUE" />
@@ -202,11 +202,11 @@
                                 <Arc
                                     centerX="225"
                                     centerY="225"
-                                    width="320"
-                                    height="320"
+                                    width="308"
+                                    height="308"
                                     startAngle="0"
                                     endAngle="359.9">
-                                    <Stroke color="#ff2e3632" thickness="25" cap="ROUND" />
+                                    <Stroke color="#ff2e3632" thickness="40" cap="ROUND" />
                                 </Arc>
                             </PartDraw>
                             <PartDraw x="0" y="0" width="450" height="450" alpha="255">
@@ -214,15 +214,15 @@
                                 <Arc
                                     centerX="225"
                                     centerY="225"
-                                    width="320"
-                                    height="320"
+                                    width="308"
+                                    height="308"
                                     startAngle="0"
                                     endAngle="359.9">
                                     <Transform
                                         target="startAngle"
                                         value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
                                     <WeightedStroke
-                                        thickness="25"
+                                        thickness="40"
                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                         cap="ROUND" />
                                 </Arc>
@@ -251,9 +251,9 @@
             <BoundingArc
                 centerX="225"
                 centerY="225"
-                width="284"
-                height="284"
-                thickness="25"
+                width="260"
+                height="260"
+                thickness="40"
                 startAngle="0"
                 endAngle="359.9"
                 isRoundEdge="TRUE" />
@@ -270,11 +270,11 @@
                                 <Arc
                                     centerX="225"
                                     centerY="225"
-                                    width="284"
-                                    height="284"
+                                    width="260"
+                                    height="260"
                                     startAngle="0"
                                     endAngle="359.9">
-                                    <Stroke color="#ff2e3632" thickness="25" cap="ROUND" />
+                                    <Stroke color="#ff2e3632" thickness="40" cap="ROUND" />
                                 </Arc>
                             </PartDraw>
                             <PartDraw x="0" y="0" width="450" height="450" alpha="255">
@@ -282,15 +282,15 @@
                                 <Arc
                                     centerX="225"
                                     centerY="225"
-                                    width="284"
-                                    height="284"
+                                    width="260"
+                                    height="260"
                                     startAngle="0"
                                     endAngle="359.9">
                                     <Transform
                                         target="startAngle"
                                         value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
                                     <WeightedStroke
-                                        thickness="25"
+                                        thickness="40"
                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                         cap="ROUND" />
                                 </Arc>
@@ -305,7 +305,7 @@
         <DigitalClock x="0" y="0" width="450" height="450">
             <TimeText
                 x="0"
-                y="180"
+                y="160"
                 width="450"
                 height="90"
                 alpha="255"
@@ -322,7 +322,7 @@
             </TimeText>
             <TimeText
                 x="0"
-                y="180"
+                y="160"
                 width="450"
                 height="90"
                 alpha="0"
@@ -342,22 +342,23 @@
         <Group x="0" y="0" width="450" height="450" name="wardpulse">
             <Launch target="app.wardpulse/app.wardpulse.wear.MainActivity" />
             <!-- Between time and strips; keep bottom edge above strip stack (y=291). -->
-            <PartImage x="201" y="252" width="48" height="40" alpha="95">
+            <PartImage x="192" y="237" width="66" height="55" alpha="95">
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <Image resource="wardpulse_mono" />
             </PartImage>
-            <PartImage x="207" y="256" width="36" height="32" alpha="0">
+            <PartImage x="198" y="242" width="54" height="45" alpha="0">
                 <Variant mode="AMBIENT" target="alpha" value="70" />
                 <Image resource="wardpulse_mono" />
             </PartImage>
         </Group>
-        <!-- Equal-width strips (96) at x=177; y=291/315/339/363.
+        <!-- Equal-width strips (88) at x=181; y=283/304/325/346 — kept inside the
+             inner ring aperture after the 2026-08-02 band widening.
              Sized for "100% · 10.0M". RANGED_VALUE + ColorRamp accents match ring families. -->
         <ComplicationSlot
-            x="177"
-            y="291"
-            width="96"
-            height="20"
+            x="181"
+            y="283"
+            width="88"
+            height="18"
             slotId="104"
             displayName="@string/strip1_complication"
             supportedTypes="RANGED_VALUE EMPTY"
@@ -367,20 +368,20 @@
                 primaryProviderType="RANGED_VALUE"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="96" height="20" />
+            <BoundingBox x="0" y="0" width="88" height="18" />
             <Complication type="RANGED_VALUE">
-                <Group x="0" y="0" width="96" height="20" name="ring1_strip" alpha="255">
+                <Group x="0" y="0" width="88" height="18" name="ring1_strip" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <PartDraw x="0" y="0" width="96" height="20">
-                        <RoundRectangle x="0" y="0" width="96" height="20" cornerRadiusX="6" cornerRadiusY="6">
+                    <PartDraw x="0" y="0" width="88" height="18">
+                        <RoundRectangle x="0" y="0" width="88" height="18" cornerRadiusX="6" cornerRadiusY="6">
                             <Fill color="#eb0b0e0c" />
                         </RoundRectangle>
                         <!-- Family accent from ColorRamp (same path as matching ring). -->
                         <Arc
                             centerX="1.5"
-                            centerY="10"
+                            centerY="9"
                             width="3"
-                            height="16"
+                            height="14"
                             startAngle="0"
                             endAngle="359.9">
                             <WeightedStroke
@@ -389,7 +390,7 @@
                                 cap="BUTT" />
                         </Arc>
                     </PartDraw>
-                    <PartText x="6" y="0" width="86" height="20">
+                    <PartText x="6" y="0" width="78" height="18">
                         <Text align="CENTER" ellipsis="TRUE">
                             <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
                                 <Template>%s
@@ -404,10 +405,10 @@
         </ComplicationSlot>
 
         <ComplicationSlot
-            x="177"
-            y="315"
-            width="96"
-            height="20"
+            x="181"
+            y="304"
+            width="88"
+            height="18"
             slotId="107"
             displayName="@string/strip2_complication"
             supportedTypes="RANGED_VALUE EMPTY"
@@ -417,20 +418,20 @@
                 primaryProviderType="RANGED_VALUE"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="96" height="20" />
+            <BoundingBox x="0" y="0" width="88" height="18" />
             <Complication type="RANGED_VALUE">
-                <Group x="0" y="0" width="96" height="20" name="ring2_strip" alpha="255">
+                <Group x="0" y="0" width="88" height="18" name="ring2_strip" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <PartDraw x="0" y="0" width="96" height="20">
-                        <RoundRectangle x="0" y="0" width="96" height="20" cornerRadiusX="6" cornerRadiusY="6">
+                    <PartDraw x="0" y="0" width="88" height="18">
+                        <RoundRectangle x="0" y="0" width="88" height="18" cornerRadiusX="6" cornerRadiusY="6">
                             <Fill color="#eb0b0e0c" />
                         </RoundRectangle>
                         <!-- Family accent from ColorRamp (same path as matching ring). -->
                         <Arc
                             centerX="1.5"
-                            centerY="10"
+                            centerY="9"
                             width="3"
-                            height="16"
+                            height="14"
                             startAngle="0"
                             endAngle="359.9">
                             <WeightedStroke
@@ -439,7 +440,7 @@
                                 cap="BUTT" />
                         </Arc>
                     </PartDraw>
-                    <PartText x="6" y="0" width="86" height="20">
+                    <PartText x="6" y="0" width="78" height="18">
                         <Text align="CENTER" ellipsis="TRUE">
                             <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
                                 <Template>%s
@@ -454,10 +455,10 @@
         </ComplicationSlot>
 
         <ComplicationSlot
-            x="177"
-            y="339"
-            width="96"
-            height="20"
+            x="181"
+            y="325"
+            width="88"
+            height="18"
             slotId="108"
             displayName="@string/strip3_complication"
             supportedTypes="RANGED_VALUE EMPTY"
@@ -467,20 +468,20 @@
                 primaryProviderType="RANGED_VALUE"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="96" height="20" />
+            <BoundingBox x="0" y="0" width="88" height="18" />
             <Complication type="RANGED_VALUE">
-                <Group x="0" y="0" width="96" height="20" name="ring3_strip" alpha="255">
+                <Group x="0" y="0" width="88" height="18" name="ring3_strip" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <PartDraw x="0" y="0" width="96" height="20">
-                        <RoundRectangle x="0" y="0" width="96" height="20" cornerRadiusX="6" cornerRadiusY="6">
+                    <PartDraw x="0" y="0" width="88" height="18">
+                        <RoundRectangle x="0" y="0" width="88" height="18" cornerRadiusX="6" cornerRadiusY="6">
                             <Fill color="#eb0b0e0c" />
                         </RoundRectangle>
                         <!-- Family accent from ColorRamp (same path as matching ring). -->
                         <Arc
                             centerX="1.5"
-                            centerY="10"
+                            centerY="9"
                             width="3"
-                            height="16"
+                            height="14"
                             startAngle="0"
                             endAngle="359.9">
                             <WeightedStroke
@@ -489,7 +490,7 @@
                                 cap="BUTT" />
                         </Arc>
                     </PartDraw>
-                    <PartText x="6" y="0" width="86" height="20">
+                    <PartText x="6" y="0" width="78" height="18">
                         <Text align="CENTER" ellipsis="TRUE">
                             <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
                                 <Template>%s
@@ -504,10 +505,10 @@
         </ComplicationSlot>
 
         <ComplicationSlot
-            x="177"
-            y="363"
-            width="96"
-            height="20"
+            x="181"
+            y="346"
+            width="88"
+            height="18"
             slotId="109"
             displayName="@string/strip4_complication"
             supportedTypes="RANGED_VALUE EMPTY"
@@ -517,20 +518,20 @@
                 primaryProviderType="RANGED_VALUE"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="96" height="20" />
+            <BoundingBox x="0" y="0" width="88" height="18" />
             <Complication type="RANGED_VALUE">
-                <Group x="0" y="0" width="96" height="20" name="ring4_strip" alpha="255">
+                <Group x="0" y="0" width="88" height="18" name="ring4_strip" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <PartDraw x="0" y="0" width="96" height="20">
-                        <RoundRectangle x="0" y="0" width="96" height="20" cornerRadiusX="6" cornerRadiusY="6">
+                    <PartDraw x="0" y="0" width="88" height="18">
+                        <RoundRectangle x="0" y="0" width="88" height="18" cornerRadiusX="6" cornerRadiusY="6">
                             <Fill color="#eb0b0e0c" />
                         </RoundRectangle>
                         <!-- Family accent from ColorRamp (same path as matching ring). -->
                         <Arc
                             centerX="1.5"
-                            centerY="10"
+                            centerY="9"
                             width="3"
-                            height="16"
+                            height="14"
                             startAngle="0"
                             endAngle="359.9">
                             <WeightedStroke
@@ -539,7 +540,7 @@
                                 cap="BUTT" />
                         </Arc>
                     </PartDraw>
-                    <PartText x="6" y="0" width="86" height="20">
+                    <PartText x="6" y="0" width="78" height="18">
                         <Text align="CENTER" ellipsis="TRUE">
                             <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
                                 <Template>%s

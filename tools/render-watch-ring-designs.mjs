@@ -186,10 +186,12 @@ function faceSvg({
 }) {
   const cx = size / 2
   const cy = size / 2
-  const outer = size * 0.435
-  const gap = size * 0.01
-  // ~25px on a 450 face (~+10% vs the prior 23px stroke).
-  const thickness = Math.max(8, size * (ambient ? 0.052 : 0.058))
+  // Measured off the device, not taken from watchface.xml: `thickness="40"`
+  // renders a 20.2-unit band on a 450 face at a 24-unit pitch, and `width` sets
+  // the band's outer edge, so the outermost centre line sits at 202 - 20.2/2.
+  const outer = size * 0.4264
+  const gap = size * 0.0084
+  const thickness = Math.max(8, size * (ambient ? 0.0403 : 0.0449))
   const planLayers = sortByRemaining(layers.filter((layer) => layer.used < 1))
   const stripLayers = showPlan ? planLayers : layers.slice(0, 1)
 
