@@ -226,13 +226,10 @@ fn pick_i64(rng: &mut SeedRng, choices: &[i64]) -> i64 {
 }
 
 fn scramble_budget(rng: &mut SeedRng, budget: &mut BudgetState) {
-    let Some(limit) = budget.limit.clone() else {
+    let used_percent = interesting_percent(rng);
+    let Some(limit) = budget_limit(budget, used_percent) else {
         return;
     };
-    if limit.minor_units <= 0 {
-        return;
-    }
-    let used_percent = interesting_percent(rng);
     let spent_units = ((limit.minor_units as f64) * (used_percent / 100.0).min(1.2)).round() as i64;
     let spent = Money::minor_units(spent_units.max(0), limit.currency.clone());
     let projected = budget.projected_total.clone().map(|projected| {
@@ -240,6 +237,24 @@ fn scramble_budget(rng: &mut SeedRng, budget: &mut BudgetState) {
         Money::minor_units(bump.max(spent_units), projected.currency)
     });
     *budget = calculate_budget_state(budget.period, Some(spent), Some(limit), projected);
+}
+
+/// Ceiling to scramble the budget against.
+///
+/// Demo platform accounts are built by the real adapters, and providers report
+/// spend but never a budget, so every `limit` arrives as `None` and the budget
+/// rings could never fill. Stand in for the local limit a user would set,
+/// derived from the fixture's own spend so the invented ceiling stays in scale.
+fn budget_limit(budget: &BudgetState, used_percent: f64) -> Option<Money> {
+    match budget.limit.clone() {
+        Some(limit) if limit.minor_units > 0 => Some(limit),
+        _ => {
+            let spent = budget.spent.as_ref()?;
+            // Clamp the divisor so a 0% draw cannot blow the ceiling up.
+            let units = ((spent.minor_units as f64) * 100.0 / used_percent.max(5.0)).round() as i64;
+            (units > 0).then(|| Money::minor_units(units, spent.currency.clone()))
+        }
+    }
 }
 
 fn worst_budget_status(account: &ProviderSnapshot) -> ProviderStatus {
@@ -356,6 +371,35 @@ impl SeedRng {
 mod tests {
     use super::*;
     use ward_pulse_core::model::ProviderKind;
+
+    /// Providers never report a budget, so without a stand-in limit every budget
+    /// ring stays unavailable and the demo cannot exercise them at all.
+    #[test]
+    fn platform_budgets_get_a_percentage_to_show() {
+        let snapshot = debug_multi_provider_dashboard(42).expect("demo dashboard");
+        let mut checked = 0;
+        for account in &snapshot.accounts {
+            for state in [&account.today, &account.week, &account.month] {
+                // Spend without a percentage is the state that hid the rings. A
+                // period the provider never reports stays absent on purpose, the
+                // way Cursor leaves day and week.
+                if state.spent.is_none() {
+                    continue;
+                }
+                checked += 1;
+                assert!(
+                    state.used_percent.is_some(),
+                    "{:?} {:?} has spend but no percentage",
+                    account.provider,
+                    state.period
+                );
+            }
+        }
+        assert!(
+            checked >= 4,
+            "too few spend-reporting periods to prove anything"
+        );
+    }
 
     #[test]
     fn builds_all_live_provider_kinds() {
