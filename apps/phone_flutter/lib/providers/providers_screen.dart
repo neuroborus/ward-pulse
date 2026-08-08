@@ -164,6 +164,26 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     );
   }
 
+  Future<void> _editConnectionBudget(ProviderConnection connection) async {
+    final saved = await showDialog<ConnectionBudget>(
+      context: context,
+      builder:
+          (context) => ConnectionBudgetDialog(
+            connectionTitle: connection.listTitle,
+            budget: widget.alertThresholds.forConnection(connection.id).budget,
+          ),
+    );
+    if (saved == null || !mounted) {
+      return;
+    }
+    await _saveAlertThresholds(
+      (current) => current.withConnection(
+        connection.id,
+        current.forConnection(connection.id).copyWith(budget: saved),
+      ),
+    );
+  }
+
   Future<void> _saveAlertThresholds(
     AlertThresholdPreferences Function(AlertThresholdPreferences current) edit,
   ) async {
@@ -191,18 +211,27 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     required Widget status,
     List<Widget> leading = const [],
   }) {
-    final alertsEnabled =
-        widget.alertThresholds.forConnection(connection.id).isEnabled;
+    final settings = widget.alertThresholds.forConnection(connection.id);
+    // Only a connection that reports spend can be held to a limit.
+    final offersBudget = connection.id.kind == ConnectionKind.platform;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         ...leading,
+        if (offersBudget)
+          IconButton(
+            tooltip: 'Budget limits',
+            onPressed: () => _editConnectionBudget(connection),
+            icon: Icon(
+              settings.budget.isEmpty ? Icons.savings_outlined : Icons.savings,
+            ),
+          ),
         IconButton(
           tooltip: 'Alert thresholds',
           onPressed: () => _editConnectionAlerts(connection),
           icon: Icon(
-            alertsEnabled
+            settings.hasAlertRules
                 ? Icons.notifications_active_outlined
                 : Icons.notifications_none_outlined,
           ),

@@ -11,6 +11,7 @@ class AlertPercentThresholdEditor extends StatelessWidget {
     this.title,
     required this.value,
     required this.onChanged,
+    this.disabledReason,
   });
 
   /// Heading above the control; omit when the caller already labels the group.
@@ -18,9 +19,13 @@ class AlertPercentThresholdEditor extends StatelessWidget {
   final AlertPercentThreshold value;
   final ValueChanged<AlertPercentThreshold> onChanged;
 
+  /// Non-null greys out the control and says why the rule cannot fire.
+  final String? disabledReason;
+
   @override
   Widget build(BuildContext context) {
     final remaining = alertUsedToRemaining(value.at);
+    final enabled = disabledReason == null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -29,10 +34,12 @@ class AlertPercentThresholdEditor extends StatelessWidget {
           const SizedBox(height: 8),
         ],
         InputDecorator(
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Alert when',
-            border: OutlineInputBorder(),
+            border: const OutlineInputBorder(),
             isDense: true,
+            enabled: enabled,
+            helperText: disabledReason,
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<int?>(
@@ -46,9 +53,11 @@ class AlertPercentThresholdEditor extends StatelessWidget {
                   ),
               ],
               onChanged:
-                  (next) => onChanged(
-                    AlertPercentThreshold(at: alertRemainingToUsed(next)),
-                  ),
+                  enabled
+                      ? (next) => onChanged(
+                        AlertPercentThreshold(at: alertRemainingToUsed(next)),
+                      )
+                      : null,
             ),
           ),
         ),

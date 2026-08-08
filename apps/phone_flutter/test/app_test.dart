@@ -256,7 +256,7 @@ void main() {
     expect(store.value.selectedIds, isNotNull);
   });
 
-  testWidgets('Providers Platform row can save budget alert thresholds', (
+  testWidgets('Providers Platform row saves a budget limit and its alert', (
     tester,
   ) async {
     final snapshot = DashboardSnapshot.fromJsonString(
@@ -286,14 +286,24 @@ void main() {
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    final platformAlert = find.descendant(
+    Finder platformButton(String tooltip) => find.descendant(
       of: find.ancestor(
         of: find.text('Platform reporting'),
         matching: find.byType(ListTile),
       ),
-      matching: find.byTooltip('Alert thresholds'),
+      matching: find.byTooltip(tooltip),
     );
-    await tester.tap(platformAlert);
+
+    // The limit comes first: a percentage is meaningless without one.
+    await tester.tap(platformButton('Budget limits'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Budget · Platform reporting'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).first, '25');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(platformButton('Alert thresholds'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Alerts · Platform reporting'), findsOneWidget);
@@ -304,9 +314,6 @@ void main() {
     await tester.tap(find.text('Off').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('20% left').last);
-    await tester.pumpAndSettle();
-    // A percentage is meaningless until a local limit exists.
-    await tester.enterText(find.byType(TextField).first, '25');
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();

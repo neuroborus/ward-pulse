@@ -536,8 +536,9 @@ Widget. Surface configuration lives on those tabs, not under Settings.
 - **Widget** — configure the phone home-screen widget metrics and preview (Phase 14).
 - **Providers** — full connection catalog (every plan/platform row, Connected or Not
   connected), credentials / auth, **all** user alert thresholds (plan/purchased per
-  connection; Today/Week/Month budgets on OpenAI Platform), and live status for synced
-  accounts. Threshold UI speaks **% left**.
+  connection; Today/Week/Month on platform connections), the spend limits those budget
+  thresholds need — their own row entry, because a limit is a ceiling and not a rule —
+  and live status for synced accounts. Threshold UI speaks **% left**.
 - **Settings** — systemic only: global polling interval, diagnostics, data deletion,
   legal, debug toggles — not connections, credentials, display surface toggles, alert
   rules, glance layout, or a sixth Alerts tab.

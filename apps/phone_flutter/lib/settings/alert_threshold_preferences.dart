@@ -100,13 +100,16 @@ final class ConnectionAlertThresholds {
   final AlertPercentThreshold month;
   final ConnectionBudget budget;
 
-  bool get isEnabled =>
+  /// True when a percent rule can fire. A budget alone is a ceiling, not a rule.
+  bool get hasAlertRules =>
       plan.isEnabled ||
       purchased.isEnabled ||
       today.isEnabled ||
       week.isEnabled ||
-      month.isEnabled ||
-      !budget.isEmpty;
+      month.isEnabled;
+
+  /// Worth storing: a bare budget still reaches Rust and shapes the dashboard.
+  bool get isEnabled => hasAlertRules || !budget.isEmpty;
 
   ConnectionAlertThresholds copyWith({
     AlertPercentThreshold? plan,

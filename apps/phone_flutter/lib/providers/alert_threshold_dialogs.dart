@@ -27,23 +27,11 @@ class ConnectionAlertsDialog extends StatefulWidget {
 
 class _ConnectionAlertsDialogState extends State<ConnectionAlertsDialog> {
   late var _draft = widget.thresholds;
-  late final _limits = {
-    for (final period in _BudgetPeriod.values)
-      period: TextEditingController(text: _amountText(period.limitOf(_draft))),
-  };
-
-  @override
-  void dispose() {
-    for (final controller in _limits.values) {
-      controller.dispose();
-    }
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     final isPlan = widget.kind == ConnectionKind.plan;
-    return _ThresholdsDialog(
+    return _ConnectionDialog(
       title: 'Alerts · ${widget.connectionTitle}',
       intro:
           isPlan
@@ -77,39 +65,78 @@ class _ConnectionAlertsDialogState extends State<ConnectionAlertsDialog> {
   List<Widget> _budgetEditors() {
     return [
       for (final period in _BudgetPeriod.values)
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(period.label, style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 8),
-            // The limit comes first: without it there is no percentage to alert on.
-            TextField(
-              controller: _limits[period],
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'Budget',
-                helperText: 'Providers do not report one; set your own',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              onChanged:
-                  (text) => setState(() {
-                    _draft = period.withLimit(_draft, _minorUnits(text));
-                  }),
-            ),
-            const SizedBox(height: 8),
-            AlertPercentThresholdEditor(
-              value: period.thresholdOf(_draft),
-              onChanged:
-                  (value) => setState(
-                    () => _draft = period.withThreshold(_draft, value),
-                  ),
-            ),
-          ],
+        AlertPercentThresholdEditor(
+          title: period.label,
+          value: period.thresholdOf(_draft),
+          // The limit comes first: without it there is no percentage to alert on.
+          disabledReason:
+              period.limitOf(_draft.budget) == null
+                  ? 'Set this period’s limit under Budget limits'
+                  : null,
+          onChanged:
+              (value) =>
+                  setState(() => _draft = period.withThreshold(_draft, value)),
         ),
     ];
+  }
+}
+
+/// Edits the [ConnectionBudget] of one connection.
+///
+/// Pops the edited budget, or null when dismissed.
+class ConnectionBudgetDialog extends StatefulWidget {
+  const ConnectionBudgetDialog({
+    super.key,
+    required this.connectionTitle,
+    required this.budget,
+  });
+
+  final String connectionTitle;
+  final ConnectionBudget budget;
+
+  @override
+  State<ConnectionBudgetDialog> createState() => _ConnectionBudgetDialogState();
+}
+
+class _ConnectionBudgetDialogState extends State<ConnectionBudgetDialog> {
+  late var _draft = widget.budget;
+  late final _limits = {
+    for (final period in _BudgetPeriod.values)
+      period: TextEditingController(text: _amountText(period.limitOf(_draft))),
+  };
+
+  @override
+  void dispose() {
+    for (final controller in _limits.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _ConnectionDialog(
+      title: 'Budget · ${widget.connectionTitle}',
+      intro:
+          'Your own ceiling on this connection’s spend — providers report the '
+          'spend, never the limit. Empty means no limit.',
+      onSave: () => Navigator.of(context).pop(_draft),
+      editors: [
+        for (final period in _BudgetPeriod.values)
+          TextField(
+            controller: _limits[period],
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: period.label,
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+            // No setState: the controllers own the text this build reads.
+            onChanged:
+                (text) => _draft = period.withLimit(_draft, _minorUnits(text)),
+          ),
+      ],
+    );
   }
 }
 
@@ -130,10 +157,10 @@ enum _BudgetPeriod {
         _BudgetPeriod.month => rules.month,
       };
 
-  int? limitOf(ConnectionAlertThresholds rules) => switch (this) {
-    _BudgetPeriod.today => rules.budget.today,
-    _BudgetPeriod.week => rules.budget.week,
-    _BudgetPeriod.month => rules.budget.month,
+  int? limitOf(ConnectionBudget budget) => switch (this) {
+    _BudgetPeriod.today => budget.today,
+    _BudgetPeriod.week => budget.week,
+    _BudgetPeriod.month => budget.month,
   };
 
   ConnectionAlertThresholds withThreshold(
@@ -145,31 +172,24 @@ enum _BudgetPeriod {
     _BudgetPeriod.month => rules.copyWith(month: value),
   };
 
-  ConnectionAlertThresholds withLimit(
-    ConnectionAlertThresholds rules,
-    int? minorUnits,
-  ) {
-    final current = rules.budget;
-    // Written out because a limit can be cleared, which copyWith cannot express.
-    final budget = switch (this) {
-      _BudgetPeriod.today => ConnectionBudget(
-        today: minorUnits,
-        week: current.week,
-        month: current.month,
-      ),
-      _BudgetPeriod.week => ConnectionBudget(
-        today: current.today,
-        week: minorUnits,
-        month: current.month,
-      ),
-      _BudgetPeriod.month => ConnectionBudget(
-        today: current.today,
-        week: current.week,
-        month: minorUnits,
-      ),
-    };
-    return rules.copyWith(budget: budget);
-  }
+  ConnectionBudget withLimit(ConnectionBudget budget, int? minorUnits) =>
+      switch (this) {
+        _BudgetPeriod.today => ConnectionBudget(
+          today: minorUnits,
+          week: budget.week,
+          month: budget.month,
+        ),
+        _BudgetPeriod.week => ConnectionBudget(
+          today: budget.today,
+          week: minorUnits,
+          month: budget.month,
+        ),
+        _BudgetPeriod.month => ConnectionBudget(
+          today: budget.today,
+          week: budget.week,
+          month: minorUnits,
+        ),
+      };
 }
 
 /// Minor units are the storage unit; the field takes major units.
@@ -184,9 +204,9 @@ int? _minorUnits(String text) {
   return (value * 100).round();
 }
 
-/// Shell the threshold dialog uses: intro copy, spaced editors, Cancel/Save.
-class _ThresholdsDialog extends StatelessWidget {
-  const _ThresholdsDialog({
+/// Shell both dialogs use: intro copy, spaced editors, Cancel/Save.
+class _ConnectionDialog extends StatelessWidget {
+  const _ConnectionDialog({
     required this.title,
     required this.intro,
     required this.editors,

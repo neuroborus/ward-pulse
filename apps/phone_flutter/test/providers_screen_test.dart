@@ -104,7 +104,104 @@ void main() {
     );
     expect(find.text('Connected'), findsWidgets);
   });
+
+  testWidgets('budget limits are offered to platform connections only', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ProvidersScreen(
+            credentialStore: _MemoryCredentialStore(),
+            codexAccountService: const EmptyCodexAccountService(),
+            claudeAccountService: const EmptyClaudeAccountService(),
+            onCredentialsChanged: () {},
+            alertThresholds: const AlertThresholdPreferences(),
+            onAlertThresholdsChanged: (_) async {},
+            cursorPlanSignIn: (_) async => null,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Team Admin API'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      _inRow('Cursor plan', find.byTooltip('Budget limits')),
+      findsNothing,
+    );
+    expect(
+      _inRow('Cursor plan', find.byTooltip('Alert thresholds')),
+      findsOneWidget,
+    );
+    expect(
+      _inRow('Team Admin API', find.byTooltip('Budget limits')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a budget period without a limit cannot be alerted on', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ProvidersScreen(
+            credentialStore: _MemoryCredentialStore(),
+            codexAccountService: const EmptyCodexAccountService(),
+            claudeAccountService: const EmptyClaudeAccountService(),
+            onCredentialsChanged: () {},
+            alertThresholds: const AlertThresholdPreferences().withConnection(
+              ProviderConnections.cursorPlatform,
+              const ConnectionAlertThresholds(
+                budget: ConnectionBudget(today: 2000),
+              ),
+            ),
+            onAlertThresholdsChanged: (_) async {},
+            cursorPlanSignIn: (_) async => null,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Team Admin API'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      _inRow('Team Admin API', find.byTooltip('Alert thresholds')),
+    );
+    await tester.pumpAndSettle();
+
+    final periods =
+        tester
+            .widgetList<DropdownButton<int?>>(find.byType(DropdownButton<int?>))
+            .toList();
+    expect(periods, hasLength(3));
+    expect(periods[0].onChanged, isNotNull, reason: 'Today has a limit');
+    expect(periods[1].onChanged, isNull);
+    expect(periods[2].onChanged, isNull);
+    expect(
+      find.text('Set this period’s limit under Budget limits'),
+      findsNWidgets(2),
+    );
+  });
 }
+
+/// Scopes a finder to the catalog row titled [title].
+Finder _inRow(String title, Finder matching) => find.descendant(
+  of: find.widgetWithText(ListTile, title),
+  matching: matching,
+);
 
 class _MemoryCredentialStore implements ProviderCredentialStore {
   final _secrets = <ProviderConnectionId, String>{};

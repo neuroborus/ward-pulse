@@ -98,11 +98,12 @@ void main() {
     );
 
     final decoded = AlertThresholdPreferences.decode(prefs.encode());
+    final saved = decoded.forConnection(ProviderConnections.openAiPlatform);
 
-    expect(
-      decoded.forConnection(ProviderConnections.openAiPlatform).budget.month,
-      5000,
-    );
+    expect(saved.budget.month, 5000);
+    // Stored, but not an alert: the Providers bell must stay quiet.
+    expect(saved.isEnabled, isTrue);
+    expect(saved.hasAlertRules, isFalse);
   });
 
   test('clearing every limit drops the rule', () {
