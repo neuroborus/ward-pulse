@@ -77,7 +77,10 @@ per-provider capability tables below are the source of truth for what each conne
 - Debug **Mock data** loads a seeded multi-provider demo (OpenAI, Codex, Claude plan + platform,
   Cursor plan + platform) so the full dashboard stays reviewable without live credentials.
   Utilization reshuffles on toggle/refresh (not on automatic sync ticks); the Phase 1 single
-  `provider: mock` golden remains for CLI/FFI regression only.
+  `provider: mock` golden remains for CLI/FFI regression only. Platform accounts come from the
+  real adapters, which report spend but never a limit, so the demo derives a stand-in ceiling
+  from the fixture's own spend and keeps it short of exhaustion — an invented limit must not
+  stage an `Error`.
 
 ## Polling cadence
 

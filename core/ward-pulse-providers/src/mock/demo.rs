@@ -226,8 +226,7 @@ fn pick_i64(rng: &mut SeedRng, choices: &[i64]) -> i64 {
 }
 
 fn scramble_budget(rng: &mut SeedRng, budget: &mut BudgetState) {
-    let used_percent = interesting_percent(rng);
-    let Some(limit) = budget_limit(budget, used_percent) else {
+    let Some((limit, used_percent)) = budget_target(budget, interesting_percent(rng)) else {
         return;
     };
     let spent_units = ((limit.minor_units as f64) * (used_percent / 100.0).min(1.2)).round() as i64;
@@ -239,20 +238,30 @@ fn scramble_budget(rng: &mut SeedRng, budget: &mut BudgetState) {
     *budget = calculate_budget_state(budget.period, Some(spent), Some(limit), projected);
 }
 
-/// Ceiling to scramble the budget against.
+/// Ceiling to scramble the budget against, and the draw to scramble with.
 ///
 /// Demo platform accounts are built by the real adapters, and providers report
 /// spend but never a budget, so every `limit` arrives as `None` and the budget
 /// rings could never fill. Stand in for the local limit a user would set,
 /// derived from the fixture's own spend so the invented ceiling stays in scale.
-fn budget_limit(budget: &BudgetState, used_percent: f64) -> Option<Money> {
+///
+/// The draw is clamped only for an invented ceiling: a limit we made up should
+/// not also make up an exhausted budget, which `calculate_budget_state` reports
+/// as `Error` and which then reads as a real failure on every surface. A real
+/// limit still runs the full range.
+fn budget_target(budget: &BudgetState, drawn: f64) -> Option<(Money, f64)> {
     match budget.limit.clone() {
-        Some(limit) if limit.minor_units > 0 => Some(limit),
+        Some(limit) if limit.minor_units > 0 => Some((limit, drawn)),
         _ => {
             let spent = budget.spent.as_ref()?;
-            // Clamp the divisor so a 0% draw cannot blow the ceiling up.
-            let units = ((spent.minor_units as f64) * 100.0 / used_percent.max(5.0)).round() as i64;
-            (units > 0).then(|| Money::minor_units(units, spent.currency.clone()))
+            let used_percent = drawn.clamp(5.0, 95.0);
+            let units = ((spent.minor_units as f64) * 100.0 / used_percent).round() as i64;
+            (units > 0).then(|| {
+                (
+                    Money::minor_units(units, spent.currency.clone()),
+                    used_percent,
+                )
+            })
         }
     }
 }
@@ -399,6 +408,30 @@ mod tests {
             checked >= 4,
             "too few spend-reporting periods to prove anything"
         );
+    }
+
+    /// A budget at 100% is reported as `Error` and reads as a real failure on
+    /// the dashboard, the watch and the widget — which the demo must never
+    /// stage. Every ceiling here is invented, since no provider reports one, so
+    /// the clamp in `budget_target` has to hold for every account.
+    #[test]
+    fn demo_budgets_never_read_as_exhausted() {
+        for seed in 0..24 {
+            let snapshot = debug_multi_provider_dashboard(seed).expect("demo dashboard");
+            for account in &snapshot.accounts {
+                for state in [&account.today, &account.week, &account.month] {
+                    let Some(percent) = state.used_percent else {
+                        continue;
+                    };
+                    assert!(
+                        percent < 100.0,
+                        "seed {seed}: {:?} {:?} drew {percent}",
+                        account.provider,
+                        state.period
+                    );
+                }
+            }
+        }
     }
 
     #[test]
