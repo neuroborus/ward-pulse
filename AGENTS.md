@@ -58,3 +58,5 @@ just check-docs
 - Keep component-specific guidance beside its owner and expose it through thin pages in `docs/site/`.
 - Update `docs/site/vocs.config.ts` when site navigation changes.
 - Update local skills in `.agents/skills/` when repository workflow or ownership boundaries change.
+- `.claude/skills` is a symlink to `.agents/skills/` so Claude Code discovers the same set. Edit
+  the skills through `.agents/skills/`; never add a second copy under `.claude/`.
