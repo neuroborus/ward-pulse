@@ -29,11 +29,13 @@ const FONT = 'Noto Sans'
 const FONT_FILE = '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf'
 const SIZE = 450
 
+// A budget row belongs to one connection and takes that connection's family
+// color, so `cursorPlatform` repeats the Cursor teal on purpose.
 const FAMILY = {
   codex: { name: 'Codex', color: '#65D78A' },
   claude: { name: 'Claude', color: '#E8915A' },
   cursor: { name: 'Cursor', color: '#67E8D4' },
-  budget: { name: 'Budget', color: '#8AB4F8' },
+  cursorPlatform: { name: 'Cursor platform', color: '#67E8D4' },
 }
 
 function loadFontMetrics(fontSize, texts) {
@@ -398,7 +400,9 @@ const variants = [
         used: 0.4,
         credits: '80',
       },
-      { family: FAMILY.budget, metric: 'Today', used: 0.55 },
+      // Cursor platform reports billing-cycle spend only, so a monthly budget
+      // is the one it can actually carry.
+      { family: FAMILY.cursorPlatform, metric: 'Month', used: 0.55 },
     ],
     alerts: 0,
   },
