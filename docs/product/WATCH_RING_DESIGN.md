@@ -2,7 +2,9 @@
 
 **Baseline locked 2026-07-25**; melt / strip-accent revision **2026-07-27**; ring-cap /
 purchased-meter revision **2026-07-27** (max three plan/budget rings; Extra usage and other
-purchased meters are not rings); band-width revision **2026-08-02** (see Ring geometry) —
+purchased meters are not rings); band-width revision **2026-08-02** (see Ring geometry);
+per-connection budget revision **2026-08-08** (budget rings belong to one connection and take
+its family color; the summed Today / Week / Month rings are retired) —
 accepted visual target for Wear OS and Watch Face Format until the next explicit design
 revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
@@ -25,7 +27,12 @@ credits — never LLM `TOK` / token counts.
 
 ## Layer rules
 
-1. **One ring = one metric** — provider plan/allowance window with a %, or a local budget %.
+1. **One ring = one metric of one connection** — a provider plan/allowance window with a %, or
+   one connection's local budget % for one period. There is no ring for a sum across
+   connections: spend is reported by whichever connections report it, while a limit exists only
+   where the user set one, so a summed percentage divides one set by another. Aggregate **money**
+   is still true and stays on the phone dashboard cards and the Wear app period sections — it is
+   the aggregate *percentage* that has no owner and no meaning.
    Claude subscription plan windows are an exception at **selection** time: the phone exposes one
    Claude plan slot and resolves it to the tightest remaining window (window name lives on Glance,
    not on face strips).
@@ -41,6 +48,13 @@ credits — never LLM `TOK` / token counts.
 4. **Omit exhausted** — `usedPercent >= 100` (or empty/unavailable) does not render.
 5. **Max three** — phone **Watchface** tab chooses slots (`watchRingSlotCount = 3`); payload carries
    only the resolved surface order after omit + sort. Plan/budget percent metrics only.
+6. **A budget ring is offered where spend is reported, and enabled once a limit is set** — the
+   slot exists for a (connection, period) pair that reports spend, which is what makes a
+   ceiling meaningful; subscription plans report none and carry allowance windows instead, and
+   a connection that reports only monthly spend offers only a monthly budget. Providers never
+   report the ceiling itself, so until the user sets one the slot stays visible but disabled,
+   and the reason names where to set it (**Providers**, its own budget entry — not the alert
+   dialog).
 
 ## Typography
 
@@ -60,7 +74,12 @@ may modulate toward theme tertiary/error when needed.
 | OpenAI / Codex | `#65D78A` | Green |
 | Anthropic / Claude | `#E8915A` | Orange (Anthropic presentation) |
 | Cursor | `#67E8D4` | Teal |
-| Local budget (Today / Week / Month) | `#8AB4F8` | Blue |
+| Unresolved family | `#8AB4F8` | Blue — fallback only, never a product color |
+
+A local budget ring takes the family color of the connection it belongs to, exactly like that
+connection's allowance rings; period is carried by the ring label, not by a color of its own.
+Blue is what remains when a ring id resolves to no family, which should not happen for a ring
+the product ships.
 
 Track (empty portion of the ring): muted graphite on dark surface (`#2E3632` in review art;
 theme `outlineVariant` at runtime).
@@ -107,7 +126,8 @@ Rules:
 - **Credits-only**: thin framing track, large time, credits strip only — no percent arcs.
 - No orphan captions (`Codex left`, floating unit labels) outside the strip row.
 - Review art focuses on 1–3 provider families. A local **budget** metric may still occupy a product
-  ring slot; do not ship a “4 providers” face variant in review art.
+  ring slot, drawn in its connection's family color; do not ship a “4 providers” face variant in
+  review art.
 
 ## Ring geometry (revised 2026-08-02)
 

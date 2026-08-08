@@ -115,7 +115,10 @@ Same strokes as the face (`WATCH_RING_DESIGN.md`) for metric mini-arcs:
 | OpenAI / Codex | `#65D78A` |
 | Anthropic / Claude | `#E8915A` |
 | Cursor | `#67E8D4` |
-| Local budget | `#8AB4F8` |
+| Unresolved family | `#8AB4F8` — fallback only |
+
+A local budget row takes the family color of the connection it belongs to; the period lives in
+the row label, not in a color of its own.
 
 Refresh `OK` reuses Codex green as status affordance on this control only — do not spread that
 into Alerts chrome or general Wear buttons. Surface / track / label match face review art
@@ -136,7 +139,7 @@ xdg-open apps/wear_android/design/preview-glance-legend-3.png
 |------|---------|
 | `glance-legend-3.svg` | **Primary** — three providers, `OK` refresh enabled, Alerts disabled |
 | `glance-legend-1.svg` | Single provider with credits |
-| `glance-legend-budget.svg` | Plan rows (with credits) + Budget (blue, no credits) |
+| `glance-legend-budget.svg` | Plan rows (with credits) + a connection budget row (family color, no credits) |
 | `glance-legend-stale.svg` | `!OK` + detail `Stale`, refresh enabled, Alerts active |
 | `glance-legend-cadence.svg` | Healthy `OK` but refresh **disabled** (cadence cooldown; no detail) |
 | `glance-legend-rate-limit.svg` | `!OK` + detail `Rate limited`, refresh **disabled** (provider) |

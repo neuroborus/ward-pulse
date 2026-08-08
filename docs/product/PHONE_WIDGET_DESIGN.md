@@ -16,14 +16,18 @@ Configuration lives on the phone **Widget** tab and is **independent** of Watchf
 
 ## Metric rules
 
-1. **One slot = one percent metric** — local budget (Today / Week / Month), provider plan window,
-   or purchased meter (Extra usage, on-demand, credits %) when the provider reports a %.
+1. **One slot = one percent metric of one connection** — one connection's local budget for a
+   period, a provider plan window, or a purchased meter (Extra usage, on-demand, credits %) when
+   the provider reports a %. There is no summed Today / Week / Month slot: see
+   `WATCH_RING_DESIGN.md` layer rule 1 for why a percentage across connections has no owner.
 2. **Claude plan windows stay expanded** on the phone widget (`5h`, `Weekly`, Opus/Sonnet weekly
    when present). Watchface/Glance still collapse Claude to one tightest ring.
 3. **Cursor Models and Other Models** are separate selectable rows whenever the usage-summary
    reports both pool percents.
 4. **Remaining language** — display `(100 - usedPercent)` for percent metrics; family colors match
-   the product palette (OpenAI/Codex green, Anthropic orange, Cursor teal, budget blue).
+   the product palette (OpenAI/Codex green, Anthropic orange, Cursor teal). A budget row takes
+   the family color of its connection; blue is a fallback for an unresolved family, not a
+   product color.
 5. **Purchased credits** — on **plan** rows, when that provider family reports finite purchased
    remaining credits, show Glance-style columns: `N% left` · label · `N credits` (compact
    count + `credits` unit). Same per-provider rule as Wear Glance / face strips — not a
@@ -52,7 +56,8 @@ tall span stays stale. Unused slots stay omitted, not filled.
 
 Default (unset) selection prefers **plan windows** first (Claude + Cursor + Codex), then
 purchased meters, then local budgets — so 5h / weekly / Cursor Models / Other Models are not
-crowded out by Extra usage.
+crowded out by Extra usage. A budget row only becomes selectable once its connection has a
+limit for that period, so an unconfigured install defaults to plan windows.
 
 ## Composition (locked)
 

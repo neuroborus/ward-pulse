@@ -593,7 +593,9 @@ It owns:
 - **all user-configured** alert thresholds:
   - plan / purchased meters on plan rows (opt-in; no hard-coded cutoffs);
   - Today / Week / Month spend budgets on organization-key rows, each a user-entered
-    limit plus its own threshold (providers do not report a budget);
+    limit plus its own threshold (providers do not report a budget). The limit is entered
+    through its own row action, not through the alert dialog — it is the ceiling every
+    percentage depends on, and a threshold without it can never fire;
   - UI speaks **% left**; storage and Rust keep used%;
 - live status, last successful sync, last error, and supported metrics when connected.
 
@@ -621,7 +623,8 @@ Split runtime output from configuration:
 |---------|---------|--------|
 | Active alerts | Dashboard alerts panel (and Wear Alerts detail) | Only rules the user enabled, evaluated against the latest snapshot |
 | Plan / purchased alert rules | **Providers** (plan catalog rows) | One opt-in threshold per meter as **% left** |
-| Today / Week / Month budget rules | **Providers** (OpenAI Platform row) | Same remaining-% editor; not under Settings |
+| Today / Week / Month budget **limits** | **Providers**, its own per-connection entry | The ceiling itself, not an alert — it is what makes a percentage exist at all. Platform / organization connections only; not under Settings and not inside the alert dialog |
+| Today / Week / Month budget **alert rules** | **Providers** (alert dialog) | Same remaining-% editor; a period stays disabled until that connection has a limit for it |
 
 **Product rule:** alerts are opt-in. Provider status chrome (`Warning` / `RateLimited` from
 reported utilization) must **not** invent dashboard alerts by itself. Empty “No alerts” is the
@@ -1614,10 +1617,12 @@ Deliverables:
 - OpenPencil sources under `apps/watchface_wff/design/` and `apps/wear_android/design/` for
   1–3 concentric layers on round and square plus ambient (WFF art uses the same concentric
   language as Wear — not the old side-by-side `RING 1` / `RING 2` wireframe);
-- a ring binds to exactly one metric (provider **plan** window with a %, or local budget
-  percent — never purchased Extra usage / on-demand / credit meters);
-- layer color is primarily **by provider/metric family** (OpenAI/Codex green, Anthropic
-  orange, Cursor teal, local budget blue), with status (warn/error) as a modulation;
+- a ring binds to exactly one metric of exactly one connection (provider **plan** window with a
+  %, or that connection's local budget percent for one period — never purchased Extra usage /
+  on-demand / credit meters, and never a sum across connections);
+- layer color is primarily **by provider family** (OpenAI/Codex green, Anthropic orange,
+  Cursor teal), with status (warn/error) as a modulation; a budget ring takes its connection's
+  family color, and blue survives only as the fallback for an unresolved family;
 - **arc = remaining**: the colored sweep shrinks as the limit is consumed (not a “used”
   fill that grows toward full); melt is clockwise from 12 (usage gap advances like a
   clock hand; remaining ends at 12);
@@ -1734,7 +1739,7 @@ Deliverables:
 
 - Android App Widget hosted by the Flutter phone shell (`home_widget` + RemoteViews);
 - Widget tab selects which metrics appear (same catalog idea as Watchface: provider plan
-  windows, purchased/credit % when available, local budgets);
+  windows, purchased/credit % when available, per-connection local budgets);
 - small→tall resize shows 1–6 complete column-rows by allocated height (olive card hugs
   rows/columns; width drops credits→label→%); day/night chrome + overlay face watermark;
   prefs cap `phoneWidgetSlotCount = 6`; Claude windows stay expanded; exhausted pools as
@@ -1742,7 +1747,8 @@ Deliverables:
 - render only configured, available metrics (exhausted stay as `0% left`); omit empty
   slots rather than inventing `Unknown` filler;
 - **remaining** language for percent metrics (same meaning as watch rings); family colors
-  from the shared palette (OpenAI/Codex green, Anthropic orange, Cursor teal, budget blue);
+  from the shared palette (OpenAI/Codex green, Anthropic orange, Cursor teal), with a budget
+  row taking its connection's family color;
 - update after provider sync / scheduled refresh without opening the full app; stale state
   is explicit when the last successful dashboard is too old;
 - tap opens the phone app (Dashboard);
