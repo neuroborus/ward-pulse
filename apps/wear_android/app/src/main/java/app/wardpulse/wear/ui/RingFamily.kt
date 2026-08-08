@@ -18,7 +18,10 @@ object RingFamily {
                 ringId.contains(".codex.") ||
                 ringId.startsWith("allowance.openai") ||
                 ringId.contains(".openai.") -> CODEX
-            ringId.startsWith("allowance.claude") || ringId.contains(".claude.") -> CLAUDE
+            // One family, two names: allowances say `claude`, connection keys `anthropic`.
+            ringId.startsWith("allowance.claude") ||
+                ringId.contains(".claude.") ||
+                ringId.contains(".anthropic.") -> CLAUDE
             ringId.startsWith("allowance.cursor") || ringId.contains(".cursor.") -> CURSOR
             ringId.startsWith("budget.") -> BUDGET
             else -> FALLBACK

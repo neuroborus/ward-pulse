@@ -202,9 +202,9 @@ object PreviewWatchDashboardSummary {
         overallStatus = PulseStatus.OK,
         rings = listOf(
             // Surface order: tightest remaining first (center/inner on face; top on Glance).
-            RingSummary("budget.week", "Week", 28.5, PulseStatus.OK),
-            RingSummary("budget.month", "Month", 26.5, PulseStatus.OK),
-            RingSummary("budget.today", "Today", 24.8, PulseStatus.OK),
+            RingSummary("budget.anthropic.platform.week", "Week", 28.5, PulseStatus.OK),
+            RingSummary("budget.anthropic.platform.month", "Month", 26.5, PulseStatus.OK),
+            RingSummary("budget.anthropic.platform.today", "Today", 24.8, PulseStatus.OK),
         ),
         creditsGlance = CreditsGlance(text = "500", label = "Credits left", provider = "mock"),
         today = PeriodSummary(

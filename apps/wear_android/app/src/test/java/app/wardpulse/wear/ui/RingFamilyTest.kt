@@ -12,4 +12,11 @@ class RingFamilyTest {
         assertEquals(RingFamily.BUDGET, RingFamily.colorArgb("budget.week"))
         assertEquals(RingFamily.FALLBACK, RingFamily.colorArgb("unknown.metric"))
     }
+
+    @Test
+    fun budgetRingsFollowTheirConnection() {
+        assertEquals(RingFamily.CODEX, RingFamily.colorArgb("budget.openai.platform.today"))
+        assertEquals(RingFamily.CLAUDE, RingFamily.colorArgb("budget.anthropic.platform.month"))
+        assertEquals(RingFamily.CURSOR, RingFamily.colorArgb("budget.cursor.platform.month"))
+    }
 }
