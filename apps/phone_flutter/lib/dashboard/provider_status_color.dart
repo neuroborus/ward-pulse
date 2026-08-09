@@ -32,11 +32,3 @@ Color providerFamilyColor(String provider) {
     _ => familyBudgetColor,
   };
 }
-
-/// Platform/budget metric fill: budget blue when healthy, else status color.
-Color budgetMetricColor(ColorScheme colors, ProviderStatus status) {
-  return switch (status) {
-    ProviderStatus.ok => familyBudgetColor,
-    _ => providerStatusColor(colors, status),
-  };
-}

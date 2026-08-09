@@ -13,17 +13,11 @@
       "minorUnits": 1240,
       "currency": "USD"
     },
-    "limit": {
-      "minorUnits": 5000,
-      "currency": "USD"
-    },
-    "remaining": {
-      "minorUnits": 3760,
-      "currency": "USD"
-    },
-    "usedPercent": 24.8,
+    "limit": null,
+    "remaining": null,
+    "usedPercent": null,
     "projectedTotal": null,
-    "status": "ok"
+    "status": "unknown"
   },
   "week": {
     "period": "week",
@@ -31,20 +25,14 @@
       "minorUnits": 7130,
       "currency": "USD"
     },
-    "limit": {
-      "minorUnits": 25000,
-      "currency": "USD"
-    },
-    "remaining": {
-      "minorUnits": 17870,
-      "currency": "USD"
-    },
-    "usedPercent": 28.52,
+    "limit": null,
+    "remaining": null,
+    "usedPercent": null,
     "projectedTotal": {
       "minorUnits": 22800,
       "currency": "USD"
     },
-    "status": "ok"
+    "status": "unknown"
   },
   "allowances": [],
   "providers": [

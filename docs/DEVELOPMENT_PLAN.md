@@ -547,10 +547,9 @@ Widget. Surface configuration lives on those tabs, not under Settings.
 
 Shows:
 
-- today spent vs daily limit;
-- week spent vs weekly limit;
-- month spent vs monthly limit if configured;
-- remaining budget;
+- today / week / month spend across connections — **money only**: a limit belongs to one
+  connection, so a sum of limits is a ceiling nobody set, and a percentage against it has no
+  owner (per-connection percentages live on the rings and in Providers);
 - additional credits if known;
 - overall provider status;
 - active alerts (from **user-configured** rules only; empty “No alerts” until rules fire);
@@ -560,14 +559,13 @@ Example:
 
 ```text
 Today
-$12.40 / $50.00
-$37.60 remaining
-24% used
+$12.40
 
 Week
-$71.30 / $250.00
-Projected: $228.00
-Status: OK
+$71.30
+
+Month
+$212.10
 ```
 
 ### Charts
@@ -666,9 +664,7 @@ per-metric detail screens kept secondary.
 
 ```text
 Today
-$12.40 / $50
-24% used
-$37.60 left
+$12.40
 OK
 ```
 
@@ -676,9 +672,8 @@ OK
 
 ```text
 Week
-$71 / $250
+$71.30
 Projected $228
-Normal
 ```
 
 ### Providers screen

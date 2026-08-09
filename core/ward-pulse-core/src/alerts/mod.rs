@@ -327,8 +327,8 @@ mod tests {
             month_total: budget(0.0),
             alerts: Vec::new(),
             watch_summary: WatchSummary {
-                today_used_percent: Some(0.0),
-                week_used_percent: Some(0.0),
+                today_used_percent: None,
+                week_used_percent: None,
                 status: ProviderStatus::Ok,
             },
         }

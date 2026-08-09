@@ -207,23 +207,25 @@ object PreviewWatchDashboardSummary {
             RingSummary("budget.anthropic.platform.today", "Today", 24.8, PulseStatus.OK),
         ),
         creditsGlance = CreditsGlance(text = "500", label = "Credits left", provider = "mock"),
+        // Period totals carry money only: limits are per connection, so the sum
+        // across connections has no ceiling, percentage, or status of its own.
         today = PeriodSummary(
             period = "today",
             spent = Money(1_240, "USD"),
-            limit = Money(5_000, "USD"),
-            remaining = Money(3_760, "USD"),
-            usedPercent = 24.8,
+            limit = null,
+            remaining = null,
+            usedPercent = null,
             projectedTotal = null,
-            status = PulseStatus.OK,
+            status = PulseStatus.UNKNOWN,
         ),
         week = PeriodSummary(
             period = "week",
             spent = Money(7_130, "USD"),
-            limit = Money(25_000, "USD"),
-            remaining = Money(17_870, "USD"),
-            usedPercent = 28.52,
+            limit = null,
+            remaining = null,
+            usedPercent = null,
             projectedTotal = Money(22_800, "USD"),
-            status = PulseStatus.OK,
+            status = PulseStatus.UNKNOWN,
         ),
         allowances = emptyList(),
         providers = listOf(

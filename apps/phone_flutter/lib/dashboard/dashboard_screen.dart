@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../charts/budget_progress_bar.dart';
 import '../charts/usage_history_chart.dart';
 import '../settings/consumption_display_preferences.dart';
 import 'connected_capabilities.dart';
@@ -327,7 +326,7 @@ class StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    // Short word (OK / Warning) by default; sync/budget callers may override.
+    // Short word (OK / Warning) by default; sync callers may override.
     final message = tooltip ?? status.label;
 
     return Tooltip(
@@ -349,6 +348,10 @@ class StatusPill extends StatelessWidget {
   }
 }
 
+/// Spend of one period across every connection — money only.
+///
+/// Limits are per connection, so the total has no ceiling to measure against:
+/// no bar, no percentage, and no status pill that would read `Unknown` forever.
 class BudgetSummaryCard extends StatelessWidget {
   const BudgetSummaryCard({
     super.key,
@@ -363,11 +366,6 @@ class BudgetSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final spentLabel = state.spent?.label;
-    final limit = state.limit;
-    final remaining = state.remaining;
-    final usedPercentLabel =
-        state.usedPercent == null ? null : state.usedPercentLabel;
-    final progress = state.usedFraction;
 
     return Card(
       child: Padding(
@@ -375,43 +373,11 @@ class BudgetSummaryCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(child: Text(title, style: textTheme.titleMedium)),
-                StatusPill(
-                  status: state.status,
-                  tooltip: state.statusExplanation,
-                ),
-              ],
-            ),
-            if (spentLabel != null) ...[
-              const SizedBox(height: 14),
-              Text(spentLabel, style: textTheme.headlineSmall),
-            ],
-            if (limit != null) ...[
-              const SizedBox(height: 4),
-              Text('Limit ${limit.label}'),
-            ],
-            if (progress != null) ...[
-              const SizedBox(height: 14),
-              BudgetProgressBar(state: state),
-            ],
-            if (usedPercentLabel != null || remaining != null) ...[
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  if (usedPercentLabel != null)
-                    Expanded(child: Text('$usedPercentLabel used')),
-                  if (remaining != null)
-                    Flexible(
-                      child: Text(
-                        'Left ${remaining.label}',
-                        textAlign: TextAlign.end,
-                      ),
-                    ),
-                ],
-              ),
-            ],
+            Text(title, style: textTheme.titleMedium),
+            const SizedBox(height: 14),
+            spentLabel == null
+                ? const Text('No spend reported')
+                : Text(spentLabel, style: textTheme.headlineSmall),
           ],
         ),
       ),
@@ -485,6 +451,8 @@ class _BudgetCards extends StatelessWidget {
       builder: (context, constraints) {
         if (constraints.maxWidth < 760) {
           return Column(
+            // A money-only card has no full-width row left to stretch it.
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               for (final card in cards) ...[
                 card,

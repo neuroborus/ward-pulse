@@ -21,18 +21,31 @@ void main() {
     expect(formatQuantityValue('100'), '100');
   });
 
-  test('explains unknown platform spend without a local limit', () {
+  testWidgets('aggregate spend card shows money and nothing to measure it', (
+    tester,
+  ) async {
     final state = BudgetState.fromJson({
       'period': 'today',
-      'spent': {'minorUnits': 0, 'currency': 'USD'},
+      'spent': {'minorUnits': 1240, 'currency': 'USD'},
       'limit': null,
       'remaining': null,
       'usedPercent': null,
       'projectedTotal': null,
       'status': 'unknown',
     });
-    expect(state.statusExplanation, contains('no local budget limit'));
-    expect(state.statusExplanation, contains('Subscription credit'));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: wardPulseLightTheme,
+        home: Scaffold(body: BudgetSummaryCard(title: 'Today', state: state)),
+      ),
+    );
+
+    expect(find.text('USD 12.40'), findsOneWidget);
+    // Limits are per connection, so the total has no ceiling: a bar or a pill
+    // here could only say Unknown, next to a sum that is exactly known.
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(find.byType(StatusPill), findsNothing);
   });
 
   testWidgets('shows allowances from every connected provider', (tester) async {

@@ -149,14 +149,14 @@ private fun WatchDashboardSummary.rowsFor(screen: Screen): List<SummaryRow> = wh
             allowance.status,
         )
     }.ifEmpty { listOf(SummaryRow("No usage data", "Sync from the phone")) }
+    // Spend across every connection, with no ceiling of its own: limits are per
+    // connection, so there is no percentage or remaining left to show here.
     Screen.TODAY -> listOf(
-        SummaryRow("${today.spent.labelOrUnknown()} / ${today.limit.labelOrUnknown()}", "Budget"),
-        SummaryRow(formatPercentUsedLabel(today.usedPercent), "${today.remaining.labelOrUnknown()} left"),
+        SummaryRow(today.spent.labelOrUnknown(), "Spent"),
         SummaryRow(overallStatus.label, "Overall status", overallStatus),
     )
     Screen.WEEK -> listOf(
-        SummaryRow("${week.spent.labelOrUnknown()} / ${week.limit.labelOrUnknown()}", "Budget"),
-        SummaryRow(formatPercentUsedLabel(week.usedPercent), "${week.remaining.labelOrUnknown()} left"),
+        SummaryRow(week.spent.labelOrUnknown(), "Spent"),
         SummaryRow(
             title = week.projectedTotal?.label ?: "Unavailable",
             detail = "Projected total",

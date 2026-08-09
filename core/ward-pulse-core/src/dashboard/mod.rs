@@ -50,25 +50,24 @@ fn total_state<'a>(
     states: impl Iterator<Item = &'a BudgetState>,
 ) -> BudgetState {
     let mut spent = MoneyTotal::default();
-    let mut limit = MoneyTotal::default();
     let mut projected_total = MoneyTotal::default();
 
     for state in states {
         if let Some(value) = &state.spent {
             spent.add(value);
         }
-        if let Some(value) = &state.limit {
-            limit.add(value);
-        }
         if let Some(value) = &state.projected_total {
             projected_total.add(value);
         }
     }
 
+    // Limits are set per connection, so a sum of them is a ceiling nobody chose:
+    // spend from every connection measured against the few that have a limit.
+    // The aggregate reports money and leaves percentage to the connection cards.
     calculate_budget_state(
         period,
         spent.into_option(),
-        limit.into_option(),
+        None,
         projected_total.into_option(),
     )
 }
@@ -135,7 +134,7 @@ mod tests {
     }
 
     #[test]
-    fn sums_totals_when_currency_matches() {
+    fn sums_spend_but_never_limits() {
         let snapshot = build_dashboard_snapshot(
             DateTimeUtc::from("2026-06-27T18:42:00Z"),
             vec![
@@ -145,8 +144,9 @@ mod tests {
         );
 
         assert_eq!(snapshot.today_total.spent, Some(usd(300)));
-        assert_eq!(snapshot.today_total.limit, Some(usd(2_000)));
-        assert_eq!(snapshot.today_total.used_percent, Some(15.0));
+        assert_eq!(snapshot.today_total.limit, None);
+        assert_eq!(snapshot.today_total.remaining, None);
+        assert_eq!(snapshot.today_total.used_percent, None);
     }
 
     #[test]
@@ -160,8 +160,6 @@ mod tests {
         );
 
         assert_eq!(snapshot.today_total.spent, None);
-        assert_eq!(snapshot.today_total.limit, None);
-        assert_eq!(snapshot.today_total.used_percent, None);
         assert_eq!(snapshot.today_total.status, ProviderStatus::Unknown);
     }
 

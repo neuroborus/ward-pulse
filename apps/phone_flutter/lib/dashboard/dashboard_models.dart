@@ -22,18 +22,6 @@ extension ProviderStatusLabel on ProviderStatus {
       ProviderStatus.unknown => 'Unknown',
     };
   }
-
-  String get description {
-    return switch (this) {
-      ProviderStatus.ok => 'Provider data is current.',
-      ProviderStatus.warning => 'Usage is approaching a configured limit.',
-      ProviderStatus.error => 'Provider sync failed.',
-      ProviderStatus.rateLimited => 'Provider rate limit reached.',
-      ProviderStatus.authRequired => 'Provider authentication is required.',
-      ProviderStatus.stale => 'Showing data from the last successful sync.',
-      ProviderStatus.unknown => 'Provider status is unavailable.',
-    };
-  }
 }
 
 enum DashboardSyncIssue {
@@ -582,15 +570,6 @@ class BudgetState {
     'status': status.name,
   };
 
-  double? get usedFraction {
-    final value = usedPercent;
-    if (value == null) {
-      return null;
-    }
-
-    return (value / 100).clamp(0.0, 1.0).toDouble();
-  }
-
   String get periodLabel {
     return switch (period) {
       'today' => 'Today',
@@ -598,32 +577,6 @@ class BudgetState {
       'month' => 'Month',
       _ => period,
     };
-  }
-
-  String get usedPercentLabel {
-    final value = usedPercent;
-    if (value == null) {
-      return 'Unknown';
-    }
-
-    final places = value.truncateToDouble() == value ? 0 : 1;
-    return '${value.toStringAsFixed(places)}%';
-  }
-
-  /// Why this budget card shows its status — StatusPill tooltip when set.
-  String get statusExplanation {
-    if (status != ProviderStatus.unknown) {
-      return status.description;
-    }
-    if (spent != null && limit == null) {
-      return 'Organization/platform API spend has no local budget limit yet, '
-          'so percent used and status stay Unknown. Subscription credit '
-          'purchases are not included in these totals.';
-    }
-    if (spent == null) {
-      return 'No organization/platform API spend was reported for this period.';
-    }
-    return status.description;
   }
 }
 
