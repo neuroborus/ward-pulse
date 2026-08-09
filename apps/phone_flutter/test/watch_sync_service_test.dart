@@ -30,6 +30,40 @@ void main() {
     expect(jsonDecode(payload.encode()), expected);
   });
 
+  test('sends budget rings keyed by connection', () {
+    final json =
+        jsonDecode(
+              File(
+                '../../fixtures/snapshots/dashboard_today.json',
+              ).readAsStringSync(),
+            )
+            as Map<String, dynamic>;
+    final account = (json['accounts'] as List).first as Map<String, dynamic>;
+    // Mock accounts hold no rings, so only the connection differs here.
+    account['provider'] = 'claude';
+    account['connection'] = 'anthropic.platform';
+
+    final payload =
+        jsonDecode(
+              WatchDashboardSummaryPayload.fromSnapshot(
+                DashboardSnapshot.fromJson(json),
+                const ConsumptionDisplayPreferences(),
+                const WatchRingPreferences(),
+              ).encode(),
+            )
+            as Map<String, dynamic>;
+
+    final rings = payload['rings'] as List;
+    expect(rings.map((ring) => ring['id']), [
+      'budget.anthropic.platform.week',
+      'budget.anthropic.platform.month',
+      'budget.anthropic.platform.today',
+    ]);
+    // Wear prefixes a family onto a bare pool name; a budget ring arrives named,
+    // so Glance shows the connection (`glance-legend-budget.svg`).
+    expect(rings.first['label'], 'Anthropic platform · Week');
+  });
+
   test('marks the previous watch summary stale after a sync failure', () {
     final dashboard =
         DashboardSnapshot.fromJsonString(

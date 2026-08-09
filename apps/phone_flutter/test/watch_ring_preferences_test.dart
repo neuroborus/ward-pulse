@@ -10,20 +10,45 @@ void main() {
     File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
   );
 
-  test('defaults to the first available percent metrics when unset', () {
-    final rings = resolveWatchRings(snapshot, const WatchRingPreferences());
+  test('mock accounts offer no rings at all', () {
+    expect(watchRingCatalog(snapshot), isEmpty);
+    expect(watchRingCatalog(null), isEmpty);
+  });
 
+  test('offers a budget ring per period a connection reports spend for', () {
+    final catalog = watchRingCatalog(_planAndBudgetSnapshot());
+
+    // Week reports no spend, so it never becomes a slot.
+    expect(catalog.map((ring) => ring.id), [
+      'allowance.codex.codex-weekly',
+      'budget.anthropic.platform.today',
+      'budget.anthropic.platform.month',
+    ]);
+    final today = catalog[1];
+    expect(today.isAvailable, isFalse);
+    // The reason names the budget entry, not the alert dialog.
+    expect(today.unavailableReason, contains('Providers · Budget limits'));
+    expect(today.catalogTitle, 'Anthropic platform · Today');
+    expect(catalog.last.isAvailable, isTrue);
+  });
+
+  test('defaults to the first available percent metrics when unset', () {
+    final rings = resolveWatchRings(
+      _planAndBudgetSnapshot(),
+      const WatchRingPreferences(),
+    );
+
+    // Plan windows first; a budget ring without a limit is not a candidate.
     expect(rings.map((ring) => ring.id), [
-      'budget.today',
-      'budget.week',
-      'budget.month',
+      'allowance.codex.codex-weekly',
+      'budget.anthropic.platform.month',
     ]);
     expect(rings.every((ring) => ring.usedPercent != null), isTrue);
   });
 
   test('honors an explicit empty selection', () {
     final rings = resolveWatchRings(
-      snapshot,
+      _planAndBudgetSnapshot(),
       const WatchRingPreferences(selectedIds: []),
     );
 
@@ -32,13 +57,20 @@ void main() {
 
   test('keeps selection order and drops unavailable ids', () {
     final rings = resolveWatchRings(
-      snapshot,
+      _planAndBudgetSnapshot(),
       const WatchRingPreferences(
-        selectedIds: ['budget.week', 'missing', 'budget.today'],
+        selectedIds: [
+          'budget.anthropic.platform.month',
+          'missing',
+          'allowance.codex.codex-weekly',
+        ],
       ),
     );
 
-    expect(rings.map((ring) => ring.id), ['budget.week', 'budget.today']);
+    expect(rings.map((ring) => ring.id), [
+      'budget.anthropic.platform.month',
+      'allowance.codex.codex-weekly',
+    ]);
   });
 
   test('clamps stored ids to three slots', () {
@@ -220,12 +252,16 @@ void main() {
     test('migrates legacy Claude window ids to one plan slot', () {
       expect(
         migrateWatchRingSelectedIds([
-          'budget.today',
+          'budget.anthropic.platform.month',
           'allowance.claude.claude-five-hour',
           'allowance.claude.claude-seven-day',
           'allowance.codex.codex-weekly',
         ]),
-        ['budget.today', claudePlanRingId, 'allowance.codex.codex-weekly'],
+        [
+          'budget.anthropic.platform.month',
+          claudePlanRingId,
+          'allowance.codex.codex-weekly',
+        ],
       );
     });
 
@@ -269,9 +305,46 @@ void main() {
     );
   });
 
+  test('a stored selection of only retired ids reads back as unset', () {
+    // Upgrade path: the summed budgets were the only rings a platform-only
+    // user could pick, so an emptied selection must not mean "no rings".
+    expect(
+      watchRingPreferencesFromStoredIds([
+        'budget.today',
+        'budget.week',
+      ]).usesDefaults,
+      isTrue,
+    );
+    // Stored empty stays the user's explicit choice.
+    expect(watchRingPreferencesFromStoredIds([]).selectedIds, isEmpty);
+    expect(
+      watchRingPreferencesFromStoredIds([
+        'budget.today',
+        'budget.anthropic.platform.month',
+      ]).selectedIds,
+      ['budget.anthropic.platform.month'],
+    );
+  });
+
+  test('drops the retired summed budget ring ids from prefs', () {
+    // The sum stood for no single connection, so there is no successor id.
+    expect(
+      migrateWatchRingSelectedIds([
+        'budget.today',
+        'budget.anthropic.platform.month',
+        'budget.week',
+        'budget.month',
+      ]),
+      ['budget.anthropic.platform.month'],
+    );
+  });
+
   test('includes Cursor Models and Other Models in watch ring catalog', () {
-    final cursor = Map<String, Object?>.from(
-      (snapshot.toJson()['accounts'] as List).first as Map,
+    final cursor = _asPlanConnection(
+      Map<String, dynamic>.from(
+        (snapshot.toJson()['accounts'] as List).first as Map,
+      ),
+      'cursor.plan',
     );
     cursor['provider'] = 'cursor';
     cursor['accountId'] = 'cursor-local';
@@ -393,8 +466,13 @@ void main() {
       ).catalogTitle,
       'Cursor Models',
     );
-    // Budgets belong to no family.
-    expect(metric('budget.today', 'Today').catalogTitle, 'Today');
+    // A budget ring names its connection: three `Month` rows are ambiguous.
+    expect(
+      metric('budget.anthropic.platform.month', 'Month').catalogTitle,
+      'Anthropic platform · Month',
+    );
+    // Unknown connection key — keep the bare period rather than invent one.
+    expect(metric('budget.mock.plan.today', 'Today').catalogTitle, 'Today');
   });
 
   test('excludes purchased Claude Extra usage from watch ring catalog', () {
@@ -436,6 +514,83 @@ void main() {
   });
 }
 
+/// A plan window plus a spend-reporting platform connection: Anthropic
+/// platform reports Today (no limit yet) and Month (limit set), never Week.
+DashboardSnapshot _planAndBudgetSnapshot() {
+  final source = DashboardSnapshot.fromJsonString(
+    File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+  );
+  final codex = _asPlanConnection(
+    source.primaryAccount!.toJson()
+      ..['accountId'] = 'codex-local'
+      ..['provider'] = 'codex'
+      ..['allowances'] = [
+        _planAllowance(
+          id: 'codex-weekly',
+          label: 'Weekly plan',
+          usedPercent: 55,
+          windowMinutes: 10080,
+        ),
+      ]
+      ..['buckets'] = <Object>[]
+      ..['modelBreakdown'] = <Object>[],
+    'openai.plan',
+  );
+  final platform =
+      source.primaryAccount!.toJson()
+        ..['accountId'] = 'anthropic-platform'
+        ..['provider'] = 'claude'
+        ..['connection'] = 'anthropic.platform'
+        ..['allowances'] = <Object>[]
+        ..['buckets'] = <Object>[]
+        ..['modelBreakdown'] = <Object>[]
+        ..['today'] = _spentBudget('today')
+        ..['week'] = _reportsNothingBudget('week')
+        ..['month'] = _spentBudget('month', usedPercent: 40);
+
+  return DashboardSnapshot.fromJson(
+    source.toJson()..['accounts'] = [codex, platform],
+  );
+}
+
+/// Plan connections report no spend, so they offer no budget ring.
+Map<String, dynamic> _asPlanConnection(
+  Map<String, dynamic> account,
+  String connection,
+) {
+  return account
+    ..['connection'] = connection
+    ..['today'] = _reportsNothingBudget('today')
+    ..['week'] = _reportsNothingBudget('week')
+    ..['month'] = _reportsNothingBudget('month');
+}
+
+Map<String, dynamic> _reportsNothingBudget(String period) {
+  return {
+    'period': period,
+    'spent': null,
+    'limit': null,
+    'remaining': null,
+    'usedPercent': null,
+    'projectedTotal': null,
+    'status': 'unknown',
+  };
+}
+
+/// Reported spend; a percentage only exists once the user set a local limit.
+Map<String, dynamic> _spentBudget(String period, {double? usedPercent}) {
+  final limited = usedPercent != null;
+  return {
+    'period': period,
+    'spent': {'minorUnits': 4000, 'currency': 'USD'},
+    'limit': limited ? {'minorUnits': 10000, 'currency': 'USD'} : null,
+    'remaining': limited ? {'minorUnits': 6000, 'currency': 'USD'} : null,
+    'usedPercent': usedPercent,
+    'projectedTotal': null,
+    'status': 'ok',
+  };
+}
+
 DashboardSnapshot _claudeCodexSnapshot({
   required double fiveHourUsed,
   required double sevenDayUsed,
@@ -444,40 +599,44 @@ DashboardSnapshot _claudeCodexSnapshot({
   final source = DashboardSnapshot.fromJsonString(
     File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
   );
-  final claude =
-      source.primaryAccount!.toJson()
-        ..['accountId'] = 'claude-local'
-        ..['provider'] = 'claude'
-        ..['allowances'] = [
-          _planAllowance(
-            id: 'claude-five-hour',
-            label: '5-hour session',
-            usedPercent: fiveHourUsed,
-            windowMinutes: 300,
-          ),
-          _planAllowance(
-            id: 'claude-seven-day',
-            label: 'Weekly plan',
-            usedPercent: sevenDayUsed,
-            windowMinutes: 10080,
-          ),
-        ]
-        ..['buckets'] = <Object>[]
-        ..['modelBreakdown'] = <Object>[];
-  final codex =
-      source.primaryAccount!.toJson()
-        ..['accountId'] = 'codex-local'
-        ..['provider'] = 'codex'
-        ..['allowances'] = [
-          _planAllowance(
-            id: 'codex-weekly',
-            label: 'Weekly plan',
-            usedPercent: codexUsed,
-            windowMinutes: 10080,
-          ),
-        ]
-        ..['buckets'] = <Object>[]
-        ..['modelBreakdown'] = <Object>[];
+  final claude = _asPlanConnection(
+    source.primaryAccount!.toJson()
+      ..['accountId'] = 'claude-local'
+      ..['provider'] = 'claude'
+      ..['allowances'] = [
+        _planAllowance(
+          id: 'claude-five-hour',
+          label: '5-hour session',
+          usedPercent: fiveHourUsed,
+          windowMinutes: 300,
+        ),
+        _planAllowance(
+          id: 'claude-seven-day',
+          label: 'Weekly plan',
+          usedPercent: sevenDayUsed,
+          windowMinutes: 10080,
+        ),
+      ]
+      ..['buckets'] = <Object>[]
+      ..['modelBreakdown'] = <Object>[],
+    'anthropic.plan',
+  );
+  final codex = _asPlanConnection(
+    source.primaryAccount!.toJson()
+      ..['accountId'] = 'codex-local'
+      ..['provider'] = 'codex'
+      ..['allowances'] = [
+        _planAllowance(
+          id: 'codex-weekly',
+          label: 'Weekly plan',
+          usedPercent: codexUsed,
+          windowMinutes: 10080,
+        ),
+      ]
+      ..['buckets'] = <Object>[]
+      ..['modelBreakdown'] = <Object>[],
+    'openai.plan',
+  );
 
   return DashboardSnapshot.fromJson(
     source.toJson()..['accounts'] = [claude, codex],
@@ -519,20 +678,24 @@ DashboardSnapshot _twoPlanProvidersSnapshot({
     codexAllowances.add(_purchasedAllowance(remaining: codexCredits));
   }
 
-  final claude =
-      source.primaryAccount!.toJson()
-        ..['accountId'] = 'claude-local'
-        ..['provider'] = 'claude'
-        ..['allowances'] = claudeAllowances
-        ..['buckets'] = <Object>[]
-        ..['modelBreakdown'] = <Object>[];
-  final codex =
-      source.primaryAccount!.toJson()
-        ..['accountId'] = 'codex-local'
-        ..['provider'] = 'codex'
-        ..['allowances'] = codexAllowances
-        ..['buckets'] = <Object>[]
-        ..['modelBreakdown'] = <Object>[];
+  final claude = _asPlanConnection(
+    source.primaryAccount!.toJson()
+      ..['accountId'] = 'claude-local'
+      ..['provider'] = 'claude'
+      ..['allowances'] = claudeAllowances
+      ..['buckets'] = <Object>[]
+      ..['modelBreakdown'] = <Object>[],
+    'anthropic.plan',
+  );
+  final codex = _asPlanConnection(
+    source.primaryAccount!.toJson()
+      ..['accountId'] = 'codex-local'
+      ..['provider'] = 'codex'
+      ..['allowances'] = codexAllowances
+      ..['buckets'] = <Object>[]
+      ..['modelBreakdown'] = <Object>[],
+    'openai.plan',
+  );
 
   return DashboardSnapshot.fromJson(
     source.toJson()..['accounts'] = [claude, codex],

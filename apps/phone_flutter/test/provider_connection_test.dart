@@ -24,6 +24,19 @@ void main() {
     expect(providerFamilyLabel(ProviderFamily.openai), 'OpenAI');
   });
 
+  test('storage keys round-trip back to their connection id', () {
+    for (final connection in providerConnectionCatalog()) {
+      expect(
+        ProviderConnectionId.fromStorageKey(connection.id.storageKey),
+        connection.id,
+        reason: connection.id.storageKey,
+      );
+    }
+    // Ring ids may carry a key this phone build does not know yet.
+    expect(ProviderConnectionId.fromStorageKey('mock.plan'), isNull);
+    expect(ProviderConnectionId.fromStorageKey('anthropic'), isNull);
+  });
+
   test('plan sign-in rows omit pasted-secret hints', () {
     for (final connection in providerConnectionCatalog()) {
       final signInPlan =

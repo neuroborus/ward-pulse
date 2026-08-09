@@ -109,7 +109,7 @@ class WatchDashboardSummaryPayload {
         for (final ring in rings)
           {
             'id': ring.id,
-            'label': ring.label,
+            'label': _ringLabel(ring),
             // Round for glanceable surfaces — avoid float noise like 24.800000000000004.
             'usedPercent': double.parse(
               (ring.usedPercent ?? 0).toStringAsFixed(1),
@@ -166,6 +166,13 @@ extension _ProviderStatusWireName on ProviderStatus {
       ProviderStatus.unknown => 'unknown',
     };
   }
+}
+
+/// Budget rings travel named (`Anthropic platform · Month`): the connection is
+/// the phone's vocabulary, and three bare `Month` rows read alike on Wear.
+/// Plan windows keep the pool name that Glance prefixes with its family.
+String _ringLabel(WatchRingMetric ring) {
+  return ring.id.startsWith('budget.') ? ring.catalogTitle : ring.label;
 }
 
 Map<String, Object?> _budgetToJson(BudgetState budget) {

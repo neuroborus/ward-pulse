@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
+import 'package:ward_pulse_phone/dashboard/provider_status_color.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_payload.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
 
@@ -12,7 +13,7 @@ void main() {
 
   test('builds remaining rows from available percent metrics', () {
     final payload = buildPhoneWidgetPayload(
-      snapshot,
+      _asConnection(snapshot),
       const PhoneWidgetPreferences(),
     );
     expect(payload.stale, isFalse);
@@ -43,11 +44,19 @@ void main() {
     expect(payload.rows, isEmpty);
   });
 
-  test('family accents map metric ids', () {
-    expect(phoneWidgetAccentArgb('budget.today'), greaterThan(0));
+  test('family accents follow the family named in the metric id', () {
+    final claude = providerFamilyColor('claude').toARGB32();
+    expect(phoneWidgetAccentArgb('allowance.claude.plan'), claude);
+    // A budget ring carries its connection, so it takes that family too.
+    expect(phoneWidgetAccentArgb('budget.anthropic.platform.month'), claude);
     expect(
-      phoneWidgetAccentArgb('allowance.claude.plan'),
-      isNot(phoneWidgetAccentArgb('budget.today')),
+      phoneWidgetAccentArgb('budget.openai.platform.today'),
+      providerFamilyColor('codex').toARGB32(),
+    );
+    // No family named in the id: fall back to the neutral budget accent.
+    expect(
+      phoneWidgetAccentArgb('budget.mock.plan.today'),
+      familyBudgetColor.toARGB32(),
     );
   });
 
@@ -224,7 +233,11 @@ void main() {
     expect(payload.rows.single.percentText, '60% left');
     expect(payload.rows.single.label, 'Claude · 5h');
     expect(payload.rows.single.line, '60% left · Claude · 5h · 320 credits');
-    expect(phoneWidgetCreditsSuffix(withCredits, 'budget.today'), isNull);
+    expect(
+      phoneWidgetCreditsSuffix(withCredits, 'budget.anthropic.platform.today'),
+      isNull,
+      reason: 'budget rings track spend, not a credit pool',
+    );
     expect(
       phoneWidgetCreditsSuffix(
         withCredits,
@@ -233,5 +246,18 @@ void main() {
       isNull,
       reason: 'purchased-meter rows are the credit pool; do not repeat credits',
     );
+  });
+}
+
+/// Mock fixture as a real connection: mock accounts hold no metric slots.
+DashboardSnapshot _asConnection(DashboardSnapshot snapshot) {
+  final account =
+      Map<String, Object?>.from(snapshot.primaryAccount!.toJson())
+        ..['accountId'] = 'anthropic-platform'
+        ..['provider'] = 'claude'
+        ..['connection'] = 'anthropic.platform';
+  return DashboardSnapshot.fromJson({
+    ...snapshot.toJson(),
+    'accounts': [account],
   });
 }

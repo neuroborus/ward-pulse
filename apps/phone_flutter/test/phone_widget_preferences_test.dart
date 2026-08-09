@@ -30,19 +30,30 @@ void main() {
     final migrated = migratePhoneWidgetSelectedIds([
       'allowance.claude.claude-five-hour',
       'allowance.claude.claude-extra-usage',
-      'budget.today',
+      'budget.anthropic.platform.today',
+      // Retired sum: no successor id, so it just leaves the selection.
+      'budget.week',
       'allowance.claude.claude-seven-day',
       claudePlanRingId,
     ]);
     expect(migrated, [
       'allowance.claude.claude-five-hour',
       'allowance.claude.claude-extra-usage',
-      'budget.today',
+      'budget.anthropic.platform.today',
       'allowance.claude.claude-seven-day',
       'allowance.claude.claude-seven-day-opus',
       'allowance.claude.claude-seven-day-sonnet',
     ]);
     expect(migrated, isNot(contains(claudePlanRingId)));
+  });
+
+  test('a stored selection of only retired ids reads back as unset', () {
+    expect(
+      phoneWidgetPreferencesFromStoredIds(['budget.month']).usesDefaults,
+      isTrue,
+    );
+    // Stored empty stays the user's explicit choice.
+    expect(phoneWidgetPreferencesFromStoredIds([]).selectedIds, isEmpty);
   });
 
   test('phone widget catalog expands Claude windows and purchased meters', () {

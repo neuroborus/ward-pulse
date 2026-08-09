@@ -188,11 +188,32 @@ void main() {
     expect(find.text('Watch summary'), findsOneWidget);
   });
 
+  testWidgets('slot cards say where metrics come from when there are none', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      WardPulseApp(repository: const NoProvidersDashboardRepository()),
+    );
+    await tester.pumpAndSettle();
+
+    for (final tab in ['Watchface', 'Widget']) {
+      await tester.tap(find.text(tab));
+      await tester.pumpAndSettle();
+      // A bare header card would read as a broken screen.
+      expect(find.text('No metrics yet'), findsOneWidget, reason: tab);
+      expect(find.byType(CheckboxListTile), findsNothing, reason: tab);
+    }
+  });
+
   testWidgets('Watchface tab owns ring slots and payload preview', (
     tester,
   ) async {
-    final snapshot = DashboardSnapshot.fromJsonString(
-      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    final snapshot = _asConnection(
+      DashboardSnapshot.fromJsonString(
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync(),
+      ),
     );
     final store = _MemoryWatchRingStore();
 
@@ -209,15 +230,19 @@ void main() {
     expect(find.text('Ring slots'), findsOneWidget);
     expect(find.text('Wear & watch face'), findsOneWidget);
     expect(find.text('Next watch payload'), findsOneWidget);
-    expect(find.text('Today'), findsWidgets);
+    // Budget rings are per connection, so the slot names it before the period.
+    expect(find.text('Anthropic platform · Today'), findsWidgets);
 
     await tester.scrollUntilVisible(
-      find.text('Today'),
+      find.text('Anthropic platform · Today'),
       200,
       scrollable: find.byType(Scrollable).first,
     );
     // Defaults select available metrics; toggling Today off persists an explicit list.
-    final todayTile = find.widgetWithText(CheckboxListTile, 'Today');
+    final todayTile = find.widgetWithText(
+      CheckboxListTile,
+      'Anthropic platform · Today',
+    );
     expect(todayTile, findsOneWidget);
     await tester.tap(todayTile);
     await tester.pumpAndSettle();
@@ -228,8 +253,12 @@ void main() {
   testWidgets('Widget tab owns metrics independently of Watchface', (
     tester,
   ) async {
-    final snapshot = DashboardSnapshot.fromJsonString(
-      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    final snapshot = _asConnection(
+      DashboardSnapshot.fromJsonString(
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync(),
+      ),
     );
     final store = _MemoryPhoneWidgetStore();
 
@@ -248,7 +277,10 @@ void main() {
     expect(find.text('Next widget payload'), findsOneWidget);
     expect(find.textContaining('independent of Watchface'), findsOneWidget);
 
-    final todayTile = find.widgetWithText(CheckboxListTile, 'Today');
+    final todayTile = find.widgetWithText(
+      CheckboxListTile,
+      'Anthropic platform · Today',
+    );
     expect(todayTile, findsOneWidget);
     await tester.tap(todayTile);
     await tester.pumpAndSettle();
@@ -873,6 +905,19 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Mock data'), findsNothing);
+  });
+}
+
+/// Mock fixture as a real connection: mock accounts hold no metric slots.
+DashboardSnapshot _asConnection(DashboardSnapshot snapshot) {
+  final account =
+      Map<String, Object?>.from(snapshot.primaryAccount!.toJson())
+        ..['accountId'] = 'anthropic-platform'
+        ..['provider'] = 'claude'
+        ..['connection'] = 'anthropic.platform';
+  return DashboardSnapshot.fromJson({
+    ...snapshot.toJson(),
+    'accounts': [account],
   });
 }
 

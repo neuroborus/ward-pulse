@@ -63,6 +63,7 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
   Widget build(BuildContext context) {
     final snapshot = widget.snapshot;
     final selectedIds = _effectiveRingIds;
+    final catalog = watchRingCatalog(snapshot);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -80,7 +81,17 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
                   'stay off the watch',
                 ),
               ),
-              for (final metric in watchRingCatalog(snapshot)) ...[
+              if (catalog.isEmpty) ...[
+                const Divider(height: 1),
+                const ListTile(
+                  title: Text('No metrics yet'),
+                  subtitle: Text(
+                    'Connect a provider under Providers · plan windows and '
+                    'budget limits fill these slots.',
+                  ),
+                ),
+              ],
+              for (final metric in catalog) ...[
                 const Divider(height: 1),
                 _WatchRingTile(
                   metric: metric,

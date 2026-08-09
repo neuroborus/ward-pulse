@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../dashboard/dashboard_models.dart';
+import '../providers/provider_connection.dart';
 import '../sync/credit_request_runway.dart';
 
 /// Maximum simultaneous rings on watch and watch-face surfaces.
@@ -24,6 +25,13 @@ const _retiredPurchasedRingIds = <String>{
   'allowance.claude.claude-extra-usage',
   'allowance.cursor.cursor-on-demand',
   'allowance.codex.codex-purchased-credits',
+};
+
+/// Former ring-catalog ids for the summed budgets, now keyed by connection.
+const retiredBudgetRingIds = <String>{
+  'budget.today',
+  'budget.week',
+  'budget.month',
 };
 
 /// One selectable percent metric for a watch ring.
@@ -58,6 +66,13 @@ final class WatchRingMetric {
   String get catalogTitle {
     if (_isClaudePlanSlot) {
       return 'Claude plan';
+    }
+    final connection = _connectionFromBudgetRingId(id);
+    if (connection != null) {
+      // The family alone cannot tell two connections of one provider apart,
+      // and the label is only the period (`Anthropic platform · Month`).
+      return '${providerFamilyLabel(connection.provider)} '
+          '${connectionKindLabel(connection.kind)} · $label';
     }
     final provider = providerFromRingId(id);
     if (provider == null) {
@@ -111,6 +126,19 @@ final class WatchRingPreferences {
   List<String> get migratedIds => migrateWatchRingSelectedIds(clampedIds);
 }
 
+/// Storage → prefs, reading an all-retired selection as unset.
+///
+/// An empty *stored* list is a real choice ("no rings"); a list that migration
+/// empties is not — those ids no longer exist, so defaults apply again rather
+/// than leaving the watch blank until the user re-picks.
+WatchRingPreferences watchRingPreferencesFromStoredIds(List<String> ids) {
+  final migrated = migrateWatchRingSelectedIds(ids);
+  if (ids.isNotEmpty && migrated.isEmpty) {
+    return const WatchRingPreferences();
+  }
+  return WatchRingPreferences(selectedIds: migrated);
+}
+
 String? _claudePlanWindowGlanceLabel(String allowanceId) {
   return switch (allowanceId) {
     'claude-five-hour' => '5h',
@@ -138,8 +166,9 @@ final claudePlanWindowRingIds = [
   for (final id in _claudePlanWindowIds) 'allowance.claude.$id',
 ];
 
-/// Coalesce legacy Claude window ids into [claudePlanRingId] and optionally
-/// drop retired purchased-meter ring ids (Watchface only).
+/// Coalesce legacy Claude window ids into [claudePlanRingId], drop the retired
+/// summed budget ids, and optionally drop retired purchased-meter ring ids
+/// (Watchface only).
 List<String> migrateWatchRingSelectedIds(
   List<String> ids, {
   bool dropPurchased = true,
@@ -148,6 +177,10 @@ List<String> migrateWatchRingSelectedIds(
   final out = <String>[];
   var sawClaudePlan = false;
   for (final id in ids) {
+    // No successor to pick: which connection the sum stood for is unknown.
+    if (retiredBudgetRingIds.contains(id)) {
+      continue;
+    }
     if (dropPurchased && _retiredPurchasedRingIds.contains(id)) {
       continue;
     }
@@ -230,16 +263,11 @@ List<WatchRingMetric> watchRingCatalog(
   bool includePurchased = false,
   bool collapseClaudePlan = true,
 }) {
-  final metrics = <WatchRingMetric>[
-    _budgetMetric('budget.today', 'Today', snapshot?.todayTotal),
-    _budgetMetric('budget.week', 'Week', snapshot?.weekTotal),
-    _budgetMetric('budget.month', 'Month', snapshot?.monthTotal),
-  ];
-
   if (snapshot == null) {
-    return metrics;
+    return const [];
   }
 
+  final metrics = <WatchRingMetric>[];
   for (final account in snapshot.accounts) {
     if (account.provider == 'mock') {
       continue;
@@ -264,6 +292,15 @@ List<WatchRingMetric> watchRingCatalog(
       }
       metrics.add(_allowanceMetric(account.provider, allowance));
     }
+  }
+
+  // Budgets last: a plan window always carries a percentage, while a budget
+  // ring waits for a limit, and unset Watchface defaults take the first slots.
+  for (final account in snapshot.accounts) {
+    if (account.provider == 'mock') {
+      continue;
+    }
+    metrics.addAll(_connectionBudgetMetrics(account));
   }
 
   return metrics;
@@ -388,18 +425,47 @@ WatchRingMetric _allowanceMetric(String provider, AllowanceState allowance) {
   );
 }
 
-WatchRingMetric _budgetMetric(String id, String label, BudgetState? budget) {
-  final percent = budget?.usedPercent;
+/// Local budget rings of one connection: one per period it reports spend for.
+///
+/// Reported spend is what makes a ceiling meaningful — subscription plans
+/// report none, and a connection may report only some periods.
+List<WatchRingMetric> _connectionBudgetMetrics(ProviderSnapshot account) {
+  final connection = account.connection;
+  if (connection == null) {
+    return const [];
+  }
+  return [
+    for (final budget in [account.today, account.week, account.month])
+      if (budget.spent != null) _budgetMetric(connection, budget),
+  ];
+}
+
+WatchRingMetric _budgetMetric(String connection, BudgetState budget) {
+  final percent = budget.usedPercent;
   return WatchRingMetric(
-    id: id,
-    label: label,
+    id: 'budget.$connection.${budget.period}',
+    label: budget.periodLabel,
     usedPercent: percent,
-    status: budget?.status ?? ProviderStatus.unknown,
+    status: budget.status,
     unavailableReason:
         percent == null
-            ? 'Connect a spend-reporting provider to fill this budget ring.'
+            ? 'Set this period’s limit under Providers · Budget limits.'
             : null,
   );
+}
+
+/// Connection of a `budget.<connection>.<period>` ring, or null for other ids.
+ProviderConnectionId? _connectionFromBudgetRingId(String ringId) {
+  const prefix = 'budget.';
+  if (!ringId.startsWith(prefix)) {
+    return null;
+  }
+  final key = ringId.substring(prefix.length);
+  final period = key.lastIndexOf('.');
+  if (period < 0) {
+    return null;
+  }
+  return ProviderConnectionId.fromStorageKey(key.substring(0, period));
 }
 
 abstract interface class WatchRingPreferenceStore {
@@ -431,11 +497,14 @@ final class SecureWatchRingPreferenceStore implements WatchRingPreferenceStore {
         for (final entry in decoded)
           if (entry is String && entry.isNotEmpty) entry,
       ];
-      final migrated = migrateWatchRingSelectedIds(ids);
-      if (!_sameIds(ids.take(watchRingSlotCount).toList(), migrated)) {
+      final preferences = watchRingPreferencesFromStoredIds(ids);
+      final migrated = preferences.selectedIds;
+      if (migrated == null) {
+        await _storage.delete(key: _key);
+      } else if (!_sameIds(ids.take(watchRingSlotCount).toList(), migrated)) {
         await _storage.write(key: _key, value: jsonEncode(migrated));
       }
-      return WatchRingPreferences(selectedIds: migrated);
+      return preferences;
     } on FormatException {
       return const WatchRingPreferences();
     }

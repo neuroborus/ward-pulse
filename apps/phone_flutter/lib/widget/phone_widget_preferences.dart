@@ -27,13 +27,29 @@ final class PhoneWidgetPreferences {
   List<String> get migratedIds => migratePhoneWidgetSelectedIds(clampedIds);
 }
 
+/// Storage → prefs, reading an all-retired selection as unset.
+///
+/// Mirrors [watchRingPreferencesFromStoredIds]: an empty stored list is the
+/// user's "no metrics", while an emptied one only means the ids are gone.
+PhoneWidgetPreferences phoneWidgetPreferencesFromStoredIds(List<String> ids) {
+  final migrated = migratePhoneWidgetSelectedIds(ids);
+  if (ids.isNotEmpty && migrated.isEmpty) {
+    return const PhoneWidgetPreferences();
+  }
+  return PhoneWidgetPreferences(selectedIds: migrated);
+}
+
 /// Phone-widget prefs migration: keep Claude windows and purchased meters.
 ///
 /// Rewrites the retired Watchface-only [claudePlanRingId] into expanded window
-/// ids so an older Claude selection is not dropped on upgrade.
+/// ids so an older Claude selection is not dropped on upgrade, and drops the
+/// [retiredBudgetRingIds] the summed budgets used to occupy.
 List<String> migratePhoneWidgetSelectedIds(List<String> ids) {
   final out = <String>[];
   for (final id in ids) {
+    if (retiredBudgetRingIds.contains(id)) {
+      continue;
+    }
     if (id == claudePlanRingId) {
       for (final windowId in claudePlanWindowRingIds) {
         if (!out.contains(windowId)) {
@@ -178,11 +194,14 @@ final class SecurePhoneWidgetPreferenceStore
         for (final entry in decoded)
           if (entry is String) entry,
       ];
-      final migrated = migratePhoneWidgetSelectedIds(ids);
-      if (!_sameIds(ids.take(phoneWidgetSlotCount).toList(), migrated)) {
+      final preferences = phoneWidgetPreferencesFromStoredIds(ids);
+      final migrated = preferences.selectedIds;
+      if (migrated == null) {
+        await _storage.delete(key: _key);
+      } else if (!_sameIds(ids.take(phoneWidgetSlotCount).toList(), migrated)) {
         await _storage.write(key: _key, value: jsonEncode(migrated));
       }
-      return PhoneWidgetPreferences(selectedIds: migrated);
+      return preferences;
     } on FormatException {
       return const PhoneWidgetPreferences();
     }

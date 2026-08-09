@@ -18,6 +18,20 @@ final class ProviderConnectionId {
 
   String get storageKey => '${provider.name}.${kind.name}';
 
+  /// Inverse of [storageKey]; null when the key names no known connection.
+  static ProviderConnectionId? fromStorageKey(String key) {
+    final parts = key.split('.');
+    if (parts.length != 2) {
+      return null;
+    }
+    final provider = ProviderFamily.values.asNameMap()[parts.first];
+    final kind = ConnectionKind.values.asNameMap()[parts.last];
+    if (provider == null || kind == null) {
+      return null;
+    }
+    return ProviderConnectionId(provider: provider, kind: kind);
+  }
+
   @override
   bool operator ==(Object other) =>
       other is ProviderConnectionId &&
@@ -155,5 +169,13 @@ String providerFamilyLabel(ProviderFamily provider) {
     ProviderFamily.openai => 'OpenAI',
     ProviderFamily.anthropic => 'Anthropic',
     ProviderFamily.cursor => 'Cursor',
+  };
+}
+
+/// Sentence case, to follow a family label (`Anthropic platform`, `Cursor plan`).
+String connectionKindLabel(ConnectionKind kind) {
+  return switch (kind) {
+    ConnectionKind.plan => 'plan',
+    ConnectionKind.platform => 'platform',
   };
 }

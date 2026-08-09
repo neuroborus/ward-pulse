@@ -114,12 +114,12 @@ bool _isPurchasedMeterMetric(
   return false;
 }
 
-/// Family accent matching [providerFamilyColor] / budget blue.
+/// Family accent matching [providerFamilyColor], blue when no family is named.
+///
+/// A budget ring carries the connection it belongs to, so it takes that family
+/// (`budget.anthropic.platform.month`), not the aggregate blue.
 int phoneWidgetAccentArgb(String metricId) {
-  if (metricId.startsWith('budget.')) {
-    return familyBudgetColor.toARGB32();
-  }
-  if (metricId.contains('claude')) {
+  if (metricId.contains('claude') || metricId.contains('anthropic')) {
     return providerFamilyColor('claude').toARGB32();
   }
   if (metricId.contains('cursor')) {

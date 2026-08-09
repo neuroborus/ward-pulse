@@ -8,8 +8,11 @@ import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_sync.dart';
 
 void main() {
-  final snapshot = DashboardSnapshot.fromJsonString(
-    File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+  // Mock accounts hold no metric slots, so default prefs would write nothing.
+  final snapshot = _asConnection(
+    DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    ),
   );
 
   test('overlapping syncs keep only the newer payload', () async {
@@ -65,7 +68,9 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       final middle = coordinator.sync(
         snapshot,
-        const PhoneWidgetPreferences(selectedIds: ['budget.today']),
+        const PhoneWidgetPreferences(
+          selectedIds: ['budget.anthropic.platform.today'],
+        ),
       );
       final latest = coordinator.sync(snapshot, defaultPrefs);
       gate.complete();
@@ -104,4 +109,17 @@ void main() {
       expect(attempts, 2);
     },
   );
+}
+
+/// Mock fixture as a real connection: mock accounts hold no metric slots.
+DashboardSnapshot _asConnection(DashboardSnapshot snapshot) {
+  final account =
+      Map<String, Object?>.from(snapshot.primaryAccount!.toJson())
+        ..['accountId'] = 'anthropic-platform'
+        ..['provider'] = 'claude'
+        ..['connection'] = 'anthropic.platform';
+  return DashboardSnapshot.fromJson({
+    ...snapshot.toJson(),
+    'accounts': [account],
+  });
 }
