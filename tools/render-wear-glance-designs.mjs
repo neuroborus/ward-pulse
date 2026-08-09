@@ -38,33 +38,29 @@ const FAMILY = {
   cursorPlatform: { name: 'Cursor platform', color: '#67E8D4' },
 }
 
+/**
+ * Real metrics or nothing. These place every baseline and size the alerts plate, so a guessed
+ * width moves the art: the fallback this replaces returned character-count estimates without
+ * a word, which made committed SVGs depend on whether the rendering machine had Pillow.
+ */
 function loadFontMetrics(fontSize, texts) {
-  const fallback = {
-    widths: Object.fromEntries(texts.map((t) => [t, fontSize * 0.55 * t.length])),
-    ascent: fontSize,
-    descent: fontSize * 0.25,
-  }
-  try {
-    const out = execFileSync(
-      'python3',
+  const out = execFileSync(
+    'python3',
+    [
+      '-c',
       [
-        '-c',
-        [
-          'import json',
-          'from PIL import ImageFont',
-          `font = ImageFont.truetype(${JSON.stringify(FONT_FILE)}, ${fontSize})`,
-          `texts = ${JSON.stringify(texts)}`,
-          'asc, desc = font.getmetrics()',
-          'widths = {t: font.getbbox(t)[2] - font.getbbox(t)[0] for t in texts}',
-          'print(json.dumps({"widths": widths, "ascent": asc, "descent": desc}))',
-        ].join('\n'),
-      ],
-      { encoding: 'utf8' },
-    )
-    return JSON.parse(out)
-  } catch {
-    return fallback
-  }
+        'import json',
+        'from PIL import ImageFont',
+        `font = ImageFont.truetype(${JSON.stringify(FONT_FILE)}, ${fontSize})`,
+        `texts = ${JSON.stringify(texts)}`,
+        'asc, desc = font.getmetrics()',
+        'widths = {t: font.getbbox(t)[2] - font.getbbox(t)[0] for t in texts}',
+        'print(json.dumps({"widths": widths, "ascent": asc, "descent": desc}))',
+      ].join('\n'),
+    ],
+    { encoding: 'utf8' },
+  )
+  return JSON.parse(out)
 }
 
 function esc(text) {
