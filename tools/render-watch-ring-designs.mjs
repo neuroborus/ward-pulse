@@ -18,6 +18,9 @@ const TRACK = '#2E3632'
 const LABEL = '#F4FBF8'
 const WELL = '#0B0E0C'
 
+/** The one family accent worn by two entries — a plan ring and a budget ring share it. */
+const ANTHROPIC = '#E8915A'
+
 /** SIL OFL-1.1. Bold for watch-scale labels. */
 const FONT = 'Noto Sans'
 const FONT_FILE = '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf'
@@ -31,13 +34,21 @@ const CATALOG = {
   claude: {
     id: 'claude',
     used: 0.61,
-    color: '#E8915A',
+    color: ANTHROPIC,
   },
   cursor: {
     id: 'cursor',
     // Matches fixtures/providers/cursor/usage_summary.json autoPercentUsed.
     used: 0.47,
     color: '#67E8D4',
+  },
+  anthropicBudget: {
+    id: 'anthropic-budget',
+    used: 0.285,
+    // A budget ring wears its connection's family color, never one of its own.
+    color: ANTHROPIC,
+    // Spend of limit, not remaining percent — the one documented exception.
+    budget: '$71.30/250',
   },
 }
 
@@ -100,8 +111,12 @@ function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
 
 function barLabel(layer, { showPlan, showCredits }) {
   const parts = []
-  if (showPlan && layer.used < 1) {
-    parts.push(`${Math.round((1 - layer.used) * 100)}%`)
+  if (showPlan) {
+    if (layer.budget) {
+      parts.push(layer.budget)
+    } else if (layer.used < 1) {
+      parts.push(`${Math.round((1 - layer.used) * 100)}%`)
+    }
   }
   // Credits glue onto the matching provider strip only (review art uses Codex credits).
   if (showCredits && layer.id === 'codex') {
@@ -277,6 +292,16 @@ const variants = [
     layers: two,
     showPlan: true,
     showCredits: true,
+  },
+  {
+    // Codex and Cursor keep their own colors, so the budget ring is the only orange one:
+    // pairing it with the Claude plan ring would draw the multi-profile case the document
+    // still leaves open.
+    file: 'round-3-plan-budget.svg',
+    name: 'Round · 3 providers · plan + budget',
+    layers: [CATALOG.codex, CATALOG.cursor, CATALOG.anthropicBudget],
+    showPlan: true,
+    showCredits: false,
   },
   {
     file: 'round-1-plan.svg',

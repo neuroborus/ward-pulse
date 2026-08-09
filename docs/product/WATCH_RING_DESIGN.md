@@ -193,6 +193,7 @@ xdg-open apps/wear_android/design/preview-3-plan-credits.png
 | File | Meaning |
 |------|---------|
 | `round-3-plan-credits.svg` | **Primary baseline** — three providers, plan + credits |
+| `round-3-plan-budget.svg` | Two plan rings + a budget ring reading `$71.30/250` |
 | `round-2-plan-credits.svg` | Two providers |
 | `round-1-plan.svg` | Single plan ring, `%` strip only |
 | `round-1-plan-credits.svg` | Single plan + credits |

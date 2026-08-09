@@ -79,7 +79,7 @@ Used on Wear / WFF rings and on phone charts / plan bars / provider section acce
 - Unresolved family: `#8AB4F8` — fallback only. A budget metric is drawn in the family color of
   the connection it belongs to, so blue should not appear on a shipped surface.
 
-Review exports: `tools/render-watch-ring-designs.mjs` → `round-*-plan-credits.svg`
+Review exports: `tools/render-watch-ring-designs.mjs` → `round-*.svg`
 (matching-provider strip may append remaining purchased credits, never LLM `TOK`;
 remaining arcs melt clockwise from 12). Primary preview:
 `apps/wear_android/design/preview-3-plan-credits.png`.
