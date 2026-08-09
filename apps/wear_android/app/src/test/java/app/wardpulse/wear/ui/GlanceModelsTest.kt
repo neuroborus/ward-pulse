@@ -148,6 +148,41 @@ class GlanceModelsTest {
         assertEquals("60% left", rows[2].subtitle)
     }
 
+    @Test
+    fun legendRows_keepPhoneComposedBudgetLabel() {
+        val rows =
+            glanceLegendRows(
+                baseSummary(
+                    rings =
+                        listOf(
+                            RingSummary(
+                                "budget.anthropic.platform.month",
+                                "Anthropic platform · Month",
+                                40.0,
+                                PulseStatus.OK,
+                            ),
+                        ),
+                    allowances =
+                        listOf(
+                            AllowanceSummary(
+                                source = "purchased",
+                                label = "Claude · Extra usage",
+                                usedPercent = null,
+                                remaining = Quantity("320", "credits"),
+                                unlimited = false,
+                                resetsAt = null,
+                                status = PulseStatus.OK,
+                            ),
+                        ),
+                ),
+            )
+        // The phone names a budget ring by its connection — do not prefix again.
+        assertEquals("Anthropic platform · Month", rows.single().title)
+        // Credits belong to the plan pool, not to a spend ceiling.
+        assertEquals("60% left", rows.single().subtitle)
+        assertEquals(RingFamily.CLAUDE, rows.single().colorArgb)
+    }
+
     private fun baseSummary(
         overall: PulseStatus = PulseStatus.OK,
         isStale: Boolean = false,
