@@ -89,6 +89,16 @@ class WatchComplicationTextTest {
     }
 
     @Test
+    fun budgetStripsReadMoneyInsteadOfPercent() {
+        // Preview rings are one connection's budget periods: week / month / today.
+        val summary = PreviewWatchDashboardSummary.value
+
+        assertEquals("\$71.30/250", WatchComplicationText.stripLabel(summary, 0))
+        assertEquals("\$212.10/800", WatchComplicationText.stripLabel(summary, 1))
+        assertEquals("\$12.40/50", WatchComplicationText.stripLabel(summary, 2))
+    }
+
+    @Test
     fun identifiesTheLiveProviderAndStatus() {
         val summary =
             PreviewWatchDashboardSummary.value.copy(

@@ -84,6 +84,9 @@ data class RingSummary(
     val label: String,
     val usedPercent: Double,
     val status: PulseStatus,
+    /** Budget rings carry their money; a plan window has none, so both stay null. */
+    val spent: Money? = null,
+    val limit: Money? = null,
 )
 
 /** Compact remaining purchased credits for the watch-face SHORT_TEXT slot. */
@@ -196,15 +199,36 @@ data class WatchDashboardSummary(
 
 object PreviewWatchDashboardSummary {
     val value = WatchDashboardSummary(
-        schemaVersion = 7,
+        schemaVersion = 8,
         dataMode = WatchDataMode.MOCK,
         generatedAt = "2026-06-27T18:42:00Z",
         overallStatus = PulseStatus.OK,
         rings = listOf(
             // Surface order: tightest remaining first (center/inner on face; top on Glance).
-            RingSummary("budget.anthropic.platform.week", "Week", 28.5, PulseStatus.OK),
-            RingSummary("budget.anthropic.platform.month", "Month", 26.5, PulseStatus.OK),
-            RingSummary("budget.anthropic.platform.today", "Today", 24.8, PulseStatus.OK),
+            RingSummary(
+                "budget.anthropic.platform.week",
+                "Week",
+                28.5,
+                PulseStatus.OK,
+                spent = Money(7_130, "USD"),
+                limit = Money(25_000, "USD"),
+            ),
+            RingSummary(
+                "budget.anthropic.platform.month",
+                "Month",
+                26.5,
+                PulseStatus.OK,
+                spent = Money(21_210, "USD"),
+                limit = Money(80_000, "USD"),
+            ),
+            RingSummary(
+                "budget.anthropic.platform.today",
+                "Today",
+                24.8,
+                PulseStatus.OK,
+                spent = Money(1_240, "USD"),
+                limit = Money(5_000, "USD"),
+            ),
         ),
         creditsGlance = CreditsGlance(text = "500", label = "Credits left", provider = "mock"),
         // Period totals carry money only: limits are per connection, so the sum

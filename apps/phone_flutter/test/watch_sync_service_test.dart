@@ -62,6 +62,10 @@ void main() {
     // Wear prefixes a family onto a bare pool name; a budget ring arrives named,
     // so Glance shows the connection (`glance-legend-budget.svg`).
     expect(rings.first['label'], 'Anthropic platform · Week');
+    // Money travels as structure, currency included: the face strip spells the
+    // symbol itself instead of assuming every connection bills in dollars.
+    expect(rings.first['spent'], {'minorUnits': 7130, 'currency': 'USD'});
+    expect(rings.first['limit'], {'minorUnits': 25000, 'currency': 'USD'});
   });
 
   test('marks the previous watch summary stale after a sync failure', () {
@@ -140,7 +144,7 @@ void main() {
             )
             as Map<String, dynamic>;
 
-    expect(payload['schemaVersion'], 7);
+    expect(payload['schemaVersion'], 8);
     expect(payload['creditsGlance'], {
       'text': '12.5',
       'label': 'Credits left',

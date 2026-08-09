@@ -41,6 +41,8 @@ final class WatchRingMetric {
     required this.label,
     required this.usedPercent,
     required this.status,
+    this.spent,
+    this.limit,
     this.unavailableReason,
   });
 
@@ -52,6 +54,11 @@ final class WatchRingMetric {
   /// Consumed capacity 0–100 from the provider (Watch/WFF arcs use remaining).
   final double? usedPercent;
   final ProviderStatus status;
+
+  /// Money behind a budget ring — the face strip reads it instead of a percent.
+  /// Allowance rings leave both null: a plan window has no price.
+  final Money? spent;
+  final Money? limit;
 
   /// When set, the Settings row is disabled and the reason is shown as help.
   final String? unavailableReason;
@@ -447,6 +454,8 @@ WatchRingMetric _budgetMetric(String connection, BudgetState budget) {
     label: budget.periodLabel,
     usedPercent: percent,
     status: budget.status,
+    spent: budget.spent,
+    limit: budget.limit,
     unavailableReason:
         percent == null
             ? 'Set this period’s limit under Providers · Budget limits.'

@@ -119,6 +119,8 @@ private fun RingSummary.toJson() = JSONObject().apply {
     put("label", label)
     put("usedPercent", usedPercent)
     put("status", status.wireName)
+    put("spent", spent?.toJson() ?: JSONObject.NULL)
+    put("limit", limit?.toJson() ?: JSONObject.NULL)
 }
 
 private fun PeriodSummary.toJson() = JSONObject().apply {
@@ -211,6 +213,8 @@ private fun JSONObject.toRingSummary(): RingSummary {
         label = getString("label").also { require(it.isNotEmpty()) },
         usedPercent = usedPercent,
         status = getString("status").toPulseStatus(),
+        spent = nullableObject("spent")?.toMoney(),
+        limit = nullableObject("limit")?.toMoney(),
     )
 }
 
@@ -287,7 +291,7 @@ private inline fun <T> JSONArray.mapObjects(transform: (JSONObject) -> T): List<
 
 private fun String.toPulseStatus(): PulseStatus = requireNotNull(PulseStatus.fromWireName(this))
 
-private const val SCHEMA_VERSION = 7
+private const val SCHEMA_VERSION = 8
 private const val MAX_RINGS = 3
 private val CURRENCY_PATTERN = Regex("^[A-Z]{3}$")
 private val PROVIDERS = setOf("openai", "codex", "claude", "cursor", "mock")

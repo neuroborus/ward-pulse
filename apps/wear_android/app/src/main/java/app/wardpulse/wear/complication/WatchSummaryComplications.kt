@@ -23,6 +23,7 @@ import app.wardpulse.wear.model.WatchDataMode
 import app.wardpulse.wear.ui.RingFamily
 import app.wardpulse.wear.ui.formatPercentAmount
 import app.wardpulse.wear.ui.formatPercentLabel
+import app.wardpulse.wear.ui.formatBudgetStripLabel
 import app.wardpulse.wear.ui.purchasedCreditsCompact
 import java.util.Locale
 
@@ -310,7 +311,8 @@ class Strip3ComplicationDataSourceService : RingStripComplicationDataSourceServi
 
 class Strip4ComplicationDataSourceService : RingStripComplicationDataSourceService() {
     override val ringIndex = 3
-    override val previewText = "75%"
+    // The budget-colored slot: the editor should show what a budget strip reads.
+    override val previewText = "\$12.34/100"
     override val previewColorArgb = RingFamily.BUDGET
 }
 
@@ -334,7 +336,7 @@ object WatchComplicationText {
      * Human strip label for surface ring [index] (`WATCH_RING_DESIGN.md`):
      * `8%`, or `8% · 500` when that ring's provider reports purchased credits
      * (same per-family source as Glance). Credits-only on strip 0 when there is
-     * no plan ring.
+     * no plan ring. A budget ring reads its money instead — `$12.34/100`.
      */
     fun stripLabel(summary: WatchDashboardSummary?, index: Int): String? {
         if (summary == null) {
@@ -346,6 +348,7 @@ object WatchComplicationText {
             if (remaining <= 0f) {
                 return null
             }
+            formatBudgetStripLabel(ring.spent, ring.limit)?.let { return it }
             val percent = percentAmount(remaining)
             val credits = purchasedCreditsCompact(summary, ring.id)
             return if (credits != null) {

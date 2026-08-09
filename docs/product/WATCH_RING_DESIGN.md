@@ -4,7 +4,8 @@
 purchased-meter revision **2026-07-27** (max three plan/budget rings; Extra usage and other
 purchased meters are not rings); band-width revision **2026-08-02** (see Ring geometry);
 per-connection budget revision **2026-08-08** (budget rings belong to one connection and take
-its family color; the summed Today / Week / Month rings are retired) —
+its family color; the summed Today / Week / Month rings are retired); budget-strip revision
+**2026-08-09** (a budget strip reads `$12.34/100` instead of a percent) —
 accepted visual target for Wear OS and Watch Face Format until the next explicit design
 revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
@@ -120,6 +121,16 @@ Rules:
   - content: `%`, or `% · credits` when that strip’s provider family reports purchased remaining
     (per-provider from `allowances`, same as Glance — not gated on aggregate `creditsGlance`);
     omit unused halves / omit empty strips;
+  - **budget strips are the one exception to the remaining language** — they read spend of
+    limit (`$12.34/100`), because a budget ceiling is a number the wearer typed and money is
+    how the product already names it everywhere else; the arc above still melts by remaining.
+    Spend keeps cents, the limit is whole (rounded to nearest): cents on both halves
+    (`$999.99/999.99`) are 14 % wider than the worst credits label and would force the strip
+    geometry open, while the worst budget label `$999.99/999` still fits. Currency travels as
+    a code in the payload and Wear spells the symbol — a `$` baked into the watch would be a
+    lie the day a connection bills in something else. A currency with no one-glyph symbol on
+    the watch falls back to the plain `%` label rather than a spelled code: `EUR 999.99/999`
+    is 118 % of the locked width, worse than the form the rule already rejects;
   - credits text is compact (`500`, `1.2K`) — never a `TOK` suffix;
   - ring band **18.8 units** on the 450 WFF canvas so arcs read clearer while a **3-strip**
     stack still clears the aperture (see Ring geometry for why that is not the nominal 25).
@@ -196,7 +207,7 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
 | Surface | Role |
 |---------|------|
 | Wear OS app Glance | **Not** this face language — locked text legend (`WEAR_GLANCE_DESIGN.md`, 2026-07-26) |
-| WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs plus sunk `RANGED_VALUE` strips (`%` / `% · credits`) in `watchface.xml`. Every strip TEXT is the full label (WFF `length(TITLE)` Conditions are unreliable). Strip accents use `[COMPLICATION.RANGED_VALUE_COLORS]` (family ColorRamp). Keep progress/track spans below 360° (scale onto 359.9°) — a closed circle collapses to a ROUND tip. Remaining melt is clockwise from 12: Transform `startAngle` to `(1 - value/max) * 359.9` with fixed `endAngle` 359.9. Strips need their own `BoundingBox` slots (`BoundingArc` clips content to the arc band). |
+| WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs plus sunk `RANGED_VALUE` strips (`%` / `% · credits` / `$12.34/100` for budgets) in `watchface.xml`. Every strip TEXT is the full label (WFF `length(TITLE)` Conditions are unreliable). Strip accents use `[COMPLICATION.RANGED_VALUE_COLORS]` (family ColorRamp). Keep progress/track spans below 360° (scale onto 359.9°) — a closed circle collapses to a ROUND tip. Remaining melt is clockwise from 12: Transform `startAngle` to `(1 - value/max) * 359.9` with fixed `endAngle` 359.9. Strips need their own `BoundingBox` slots (`BoundingArc` clips content to the arc band). |
 | Phone Watchface tab | Slot selection + preview of next payload rings (not Settings) |
 
 ## Non-goals

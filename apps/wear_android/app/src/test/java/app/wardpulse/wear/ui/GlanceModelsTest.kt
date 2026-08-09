@@ -204,7 +204,7 @@ class GlanceModelsTest {
                 status = PulseStatus.OK,
             )
         return WatchDashboardSummary(
-            schemaVersion = 7,
+            schemaVersion = 8,
             dataMode = dataMode,
             generatedAt = "2026-07-26T10:00:00Z",
             overallStatus = overall,

@@ -99,7 +99,7 @@ class WatchDashboardSummaryPayload {
         snapshot.accounts.isNotEmpty &&
         snapshot.accounts.every((account) => account.provider == 'mock');
     return WatchDashboardSummaryPayload._({
-      'schemaVersion': 7,
+      'schemaVersion': 8,
       'dataMode': mockDataMode || isLegacyMockProvider ? 'mock' : 'live',
       'generatedAt': snapshot.generatedAt.toUtc().toIso8601String(),
       'overallStatus': snapshot.overallStatus.wireName,
@@ -115,6 +115,10 @@ class WatchDashboardSummaryPayload {
               (ring.usedPercent ?? 0).toStringAsFixed(1),
             ),
             'status': ring.status.wireName,
+            // Budget strips read money, so it travels as structure — the
+            // currency code included, or Wear would have to assume one.
+            'spent': _moneyToJson(ring.spent),
+            'limit': _moneyToJson(ring.limit),
           },
       ],
       'creditsGlance': creditsGlance?.toJson(),
