@@ -173,7 +173,14 @@ the third band.
 
 `tools/render-watch-ring-designs.mjs` carries the same measured values, so review art shows
 what the watch shows. Before that revision the generator drew the nominal 26, roughly 2.3x
-the real band.
+the real band; it also sized each strip box to its own label until **2026-08-09**, which drew
+the retired 96-unit stack in a 12pt-face world. The stack is now a constant there too, and the
+generator refuses any label wider than the 78-unit text region instead of letting it overhang —
+the face would ellipsize it.
+
+The family accent bar is the band trap again at strip scale: its 3x14 arc carries a 3-thick
+stroke, so it paints 17 units tall and 6 wide with the left half clipped by the box edge —
+measured 16.4 x 4.7 on device. Review art draws 4.5 x 17, not the 3 x 14 the markup declares.
 
 ## Ambient
 

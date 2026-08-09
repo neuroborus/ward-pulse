@@ -20,13 +20,16 @@
     <text x="225" y="250.1" text-anchor="middle"
       font-family="Noto Sans, sans-serif" font-size="69.8"
       font-weight="700" fill="#F4FBF8">10:08</text>
-    <rect x="177.1" y="291.1" width="95.8"
-      height="22.0" rx="6.0" fill="#0B0E0C"
-      fill-opacity="0.92" />
-    <rect x="177.1" y="293.1" width="3.1"
-      height="18.0" rx="2.0"
-      fill="#65D78A" />
-    <text x="226.6" y="307.1"
-      text-anchor="middle" font-family="Noto Sans, sans-serif"
-      font-size="14" font-weight="700" fill="#F4FBF8">8%</text>
+    <rect x="181.0" y="283.0"
+      width="88.0" height="18.0"
+      rx="6.0" fill="#0B0E0C" fill-opacity="0.92" />
+    <rect x="181.0"
+      y="283.5"
+      width="4.5"
+      height="17.0"
+      rx="2.3" fill="#65D78A" />
+    <text x="226.0" y="292.0"
+      text-anchor="middle" dominant-baseline="central"
+      font-family="Noto Sans, sans-serif" font-size="12.0"
+      font-weight="700" fill="#F4FBF8">8%</text>
 </svg>

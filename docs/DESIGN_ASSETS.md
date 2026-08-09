@@ -139,6 +139,9 @@ Commit runtime exports when an application build consumes them.
 
 ImageMagick is required; Inkscape is preferred for mono SVG→PNG when available.
 `tools/fade-watermark-png.py` needs Pillow (`pip`/`apt` package `python3-pil`).
+`tools/render-watch-ring-designs.mjs` needs it too, plus the Noto Sans Bold file it measures
+strip labels against: it stops on a missing font rather than guess their width, so committed
+art never depends on the machine that rendered it.
 
 ## Setup
 

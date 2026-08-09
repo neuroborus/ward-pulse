@@ -25,6 +25,32 @@ const ANTHROPIC = '#E8915A'
 const FONT = 'Noto Sans'
 const FONT_FILE = '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf'
 
+/** The canvas the strip stack was measured on; every strip number below is in its units. */
+const FACE = 450
+
+/**
+ * Measured off the face, never derived from the canvas: `watchface.xml` fixes 88x18 boxes
+ * stepping 21 from y=283, with a 12pt label inside a 78-unit text region. Sizing a box to
+ * its content instead is what let review art drift a stack wider than the watch draws.
+ *
+ * The accent is what the face paints, not what its markup declares: a 3x14 arc under a
+ * 3-thick stroke covers 17 units of height and 6 of width, the left half clipped away by the
+ * box edge. Same path-versus-paint trap the design document flags for the ring bands.
+ */
+const STRIP = {
+  x: 181,
+  y: 283,
+  width: 88,
+  height: 18,
+  pitch: 21,
+  radius: 6,
+  accentWidth: 4.5,
+  accentHeight: 17,
+  textInset: 6,
+  textWidth: 78,
+  fontSize: 12,
+}
+
 const CATALOG = {
   codex: {
     id: 'codex',
@@ -55,33 +81,33 @@ const CATALOG = {
 /** Aggregate remaining purchased credits on the center (first) strip (not LLM tokens). */
 const CREDITS_GLANCE = '500'
 
-/** One Python round-trip: widths[text] + ascent/descent for baseline math. */
-function loadFontMetrics(fontSize, texts) {
-  const fallback = {
-    widths: Object.fromEntries(texts.map((t) => [t, fontSize * 0.62 * t.length])),
-    ascent: fontSize,
-    descent: fontSize * 0.25,
-  }
-  try {
-    const out = execFileSync(
-      'python3',
+/**
+ * Widths now guard the labels instead of placing them: the box is a measured constant, so a
+ * label that outgrows the text region has to fail here rather than silently overhang, the way
+ * the face would ellipsize it. A missing font or Pillow fails too — the old silent fallback
+ * shifted baselines by 0.3 and made committed art depend on the machine that rendered it.
+ */
+function assertLabelsFit(texts) {
+  const out = execFileSync(
+    'python3',
+    [
+      '-c',
       [
-        '-c',
-        [
-          'import json',
-          'from PIL import ImageFont',
-          `font = ImageFont.truetype(${JSON.stringify(FONT_FILE)}, ${fontSize})`,
-          `texts = ${JSON.stringify(texts)}`,
-          'asc, desc = font.getmetrics()',
-          'widths = {t: font.getbbox(t)[2] - font.getbbox(t)[0] for t in texts}',
-          'print(json.dumps({"widths": widths, "ascent": asc, "descent": desc}))',
-        ].join('\n'),
-      ],
-      { encoding: 'utf8' },
-    )
-    return JSON.parse(out)
-  } catch {
-    return fallback
+        'import json',
+        'from PIL import ImageFont',
+        `font = ImageFont.truetype(${JSON.stringify(FONT_FILE)}, ${STRIP.fontSize})`,
+        `texts = ${JSON.stringify(texts)}`,
+        'print(json.dumps({t: font.getbbox(t)[2] - font.getbbox(t)[0] for t in texts}))',
+      ].join('\n'),
+    ],
+    { encoding: 'utf8' },
+  )
+  for (const [text, width] of Object.entries(JSON.parse(out))) {
+    if (width > STRIP.textWidth) {
+      throw new Error(
+        `strip label "${text}" is ${width} units wide, past the ${STRIP.textWidth}-unit region`,
+      )
+    }
   }
 }
 
@@ -129,10 +155,10 @@ function sortByRemaining(layers) {
   return [...layers].sort((a, b) => b.used - a.used)
 }
 
-function providerBars({ cx, cy, innerR, layers, showPlan, showCredits, size }) {
+function providerBars({ layers, showPlan, showCredits, size }) {
   const ordered = showPlan ? sortByRemaining(layers) : layers.slice(0, 1)
   const rows = ordered
-    .map((layer, index) => ({
+    .map((layer) => ({
       layer,
       text: barLabel(layer, {
         showPlan,
@@ -143,51 +169,30 @@ function providerBars({ cx, cy, innerR, layers, showPlan, showCredits, size }) {
   if (rows.length === 0) {
     return ''
   }
+  assertLabelsFit(rows.map((row) => row.text))
 
-  const fontSize = Math.round(size * 0.032)
-  const barH = Math.max(fontSize + 8, size * 0.044)
-  const gap = Math.max(3, size * 0.007)
-  const rx = Math.min(6, barH * 0.28)
-  const padX = 12
-  const accentW = Math.max(2.5, size * 0.007)
-  const metrics = loadFontMetrics(fontSize, [
-    '100% · 10.0M',
-    ...rows.map((row) => row.text),
-  ])
-  // Floor width for worst-case center label from compactCreditCount (`100% · 10.0M`).
-  const worstCase = metrics.widths['100% · 10.0M'] ?? fontSize * 0.62 * 12
-  const textW = Math.max(
-    worstCase,
-    ...rows.map((row) => metrics.widths[row.text] ?? 0),
-  )
-  // Cap so a 3-up stack stays inside the clear aperture (matches WFF strip width 96).
-  const barW = Math.min(size * 0.213, textW + padX * 2 + accentW)
-  const textBaseline =
-    barH / 2 + (metrics.ascent - metrics.descent) / 2
-  const stackH = rows.length * barH + (rows.length - 1) * gap
-  const maxBottom = cy + Math.min(innerR * 0.95, size * 0.43)
-  const preferredTop = cy + size * 0.147
-  let y = Math.min(preferredTop, maxBottom - stackH)
-  y = Math.max(y, cy + size * 0.14)
-  const x = cx - barW / 2
-  // Center labels in the well to the right of the accent.
-  const textX = cx + accentW / 2
+  // The face lays the stack out in its own 450 units; only the canvas scale differs here.
+  const k = size / FACE
+  const textX = (STRIP.x + STRIP.textInset + STRIP.textWidth / 2) * k
 
   let out = ''
-  for (const row of rows) {
+  rows.forEach((row, index) => {
     const { layer, text } = row
+    const y = (STRIP.y + index * STRIP.pitch) * k
     out += `
-    <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}"
-      height="${barH.toFixed(1)}" rx="${rx.toFixed(1)}" fill="${WELL}"
-      fill-opacity="0.92" />
-    <rect x="${x.toFixed(1)}" y="${(y + 2).toFixed(1)}" width="${accentW.toFixed(1)}"
-      height="${(barH - 4).toFixed(1)}" rx="${Math.min(2, accentW).toFixed(1)}"
-      fill="${layer.color}" />
-    <text x="${textX.toFixed(1)}" y="${(y + textBaseline).toFixed(1)}"
-      text-anchor="middle" font-family="${FONT}, sans-serif"
-      font-size="${fontSize}" font-weight="700" fill="${LABEL}">${esc(text)}</text>`
-    y += barH + gap
-  }
+    <rect x="${(STRIP.x * k).toFixed(1)}" y="${y.toFixed(1)}"
+      width="${(STRIP.width * k).toFixed(1)}" height="${(STRIP.height * k).toFixed(1)}"
+      rx="${(STRIP.radius * k).toFixed(1)}" fill="${WELL}" fill-opacity="0.92" />
+    <rect x="${(STRIP.x * k).toFixed(1)}"
+      y="${(y + ((STRIP.height - STRIP.accentHeight) / 2) * k).toFixed(1)}"
+      width="${(STRIP.accentWidth * k).toFixed(1)}"
+      height="${(STRIP.accentHeight * k).toFixed(1)}"
+      rx="${((STRIP.accentWidth / 2) * k).toFixed(1)}" fill="${layer.color}" />
+    <text x="${textX.toFixed(1)}" y="${(y + (STRIP.height / 2) * k).toFixed(1)}"
+      text-anchor="middle" dominant-baseline="central"
+      font-family="${FONT}, sans-serif" font-size="${(STRIP.fontSize * k).toFixed(1)}"
+      font-weight="700" fill="${LABEL}">${esc(text)}</text>`
+  })
   return out
 }
 
@@ -211,7 +216,6 @@ function faceSvg({
   const stripLayers = showPlan ? planLayers : layers.slice(0, 1)
 
   let ringMarkup = ''
-  let innerR = size * 0.3
   if (showPlan && planLayers.length > 0) {
     // planLayers are tightest-first; draw index 0 on the innermost radius (center).
     for (let i = 0; i < planLayers.length; i += 1) {
@@ -227,12 +231,10 @@ function faceSvg({
         ambient,
       })
     }
-    innerR = outer - planLayers.length * (thickness + gap) + gap * 0.5
   } else {
     ringMarkup += `
     <circle cx="${cx}" cy="${cy}" r="${(size * 0.42).toFixed(1)}" fill="none"
       stroke="${TRACK}" stroke-width="${(size * 0.018).toFixed(1)}" />`
-    innerR = size * 0.36
   }
 
   const timeSize = ambient ? size * 0.18 : size * 0.155
@@ -243,9 +245,6 @@ function faceSvg({
       font-weight="700" fill="${LABEL}">10:08</text>`
   if (!ambient) {
     content += providerBars({
-      cx,
-      cy,
-      innerR,
       layers: stripLayers,
       showPlan,
       showCredits,
