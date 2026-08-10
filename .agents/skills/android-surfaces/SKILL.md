@@ -82,6 +82,8 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 
 ## Watch Face Format
 
+- `watchface.xml` is written by `tools/render-watchface.mjs` (`just render-watchface`). Change the
+  generator, never the XML; `just check-watchface` fails on drift.
 - Keep WFF declarative and minimal; follow the same concentric language as Wear (not
   side-by-side `RING 1` / `RING 2` placeholders).
 - WFF format version 2 (Wear OS 5+): concentric `RANGED_VALUE` arcs with `WeightedStroke`

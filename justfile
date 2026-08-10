@@ -72,7 +72,12 @@ check-wear:
 validate-watchface:
     tools/validate-watchface/validate.sh
 
+# Writes watchface.xml from tools/render-watchface.mjs; edit the generator, not the XML.
+render-watchface:
+    node tools/render-watchface.mjs
+
 check-watchface: validate-watchface
+    node tools/render-watchface.mjs --check
     cd apps/watchface_wff && ./gradlew --no-daemon lintDebug assembleDebug bundleDebug
 
 test-wear-device:

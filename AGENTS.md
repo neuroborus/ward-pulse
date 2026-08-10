@@ -95,9 +95,11 @@ Kotlin lives under `app/src/main/java/app/wardpulse/wear/` (ignore the empty top
 
 ### Watch face (`apps/watchface_wff/`)
 
-Single declarative file: `src/main/res/raw/watchface.xml`; metadata in
-`res/xml/watch_face_info.xml`. Validate with `just validate-watchface`. Geometry and language
-rules are locked in `docs/product/WATCH_RING_DESIGN.md` — read it before editing the XML.
+Single declarative file: `src/main/res/raw/watchface.xml`, **generated** by
+`tools/render-watchface.mjs` (`just render-watchface`) — edit the generator, never the XML;
+`just check-watchface` fails on drift. Metadata in `res/xml/watch_face_info.xml`. Validate with
+`just validate-watchface`. Geometry and language rules are locked in
+`docs/product/WATCH_RING_DESIGN.md` — read it before changing the face.
 
 ### Shared contracts and goldens
 
@@ -164,7 +166,7 @@ Start with:
 ### Watch face rendering
 Start with:
 - `docs/product/WATCH_RING_DESIGN.md`
-- `apps/watchface_wff/src/main/res/raw/watchface.xml`
+- `tools/render-watchface.mjs` (writes `apps/watchface_wff/src/main/res/raw/watchface.xml`)
 
 ### Phone home widget
 Start with:

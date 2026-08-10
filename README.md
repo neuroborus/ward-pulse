@@ -40,6 +40,7 @@ just build-android-rust
 just run-phone
 just check-wear
 just validate-watchface
+just render-watchface
 just check-watchface
 just docs-dev
 just check-docs

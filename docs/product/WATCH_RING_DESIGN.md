@@ -14,6 +14,7 @@ wireframes, large remaining-% heroes, or bordered strip cards.
 Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 13). Asset ownership: `docs/DESIGN_ASSETS.md`.
 
 Canonical review generator: `tools/render-watch-ring-designs.mjs`  
+Canonical face generator: `tools/render-watchface.mjs` — it writes the shipped `watchface.xml`.  
 Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and sibling variants).
 
 ## Goal
