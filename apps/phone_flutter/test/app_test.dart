@@ -205,6 +205,37 @@ void main() {
     }
   });
 
+  testWidgets('slot count follows the rows, not a stored selection', (
+    tester,
+  ) async {
+    final store =
+        _MemoryWatchRingStore()
+          ..value = const WatchRingPreferences(
+            selectedIds: [
+              'allowance.codex.plan',
+              'budget.anthropic.platform.today',
+              'budget.anthropic.platform.week',
+            ],
+          );
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: const _FailingDashboardRepository(
+          DashboardSyncIssue.providerUnavailable,
+        ),
+        watchRingPreferenceStore: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Watchface'));
+    await tester.pumpAndSettle();
+
+    // A failed load leaves no rows to tick, so counting the stored ids would
+    // claim three slots the screen does not show.
+    expect(find.text('No metrics yet'), findsOneWidget);
+    expect(find.textContaining('0 of 3 slots used'), findsOneWidget);
+  });
+
   testWidgets('Watchface tab owns ring slots and payload preview', (
     tester,
   ) async {
@@ -244,10 +275,14 @@ void main() {
       'Anthropic platform · Today',
     );
     expect(todayTile, findsOneWidget);
+    // A full stack greys every unpicked row; the count is what tells that
+    // apart from a fault, so it has to follow the selection.
+    expect(find.textContaining('3 of 3 slots used'), findsOneWidget);
     await tester.tap(todayTile);
     await tester.pumpAndSettle();
 
     expect(store.value.selectedIds, isNotNull);
+    expect(find.textContaining('2 of 3 slots used'), findsOneWidget);
   });
 
   testWidgets('Widget tab owns metrics independently of Watchface', (
@@ -276,6 +311,8 @@ void main() {
     expect(find.text('Home screen widget'), findsOneWidget);
     expect(find.text('Next widget payload'), findsOneWidget);
     expect(find.textContaining('independent of Watchface'), findsOneWidget);
+    // Its own copy of the count, on a screen with six slots instead of three.
+    expect(find.textContaining('of 6 slots used'), findsOneWidget);
 
     final todayTile = find.widgetWithText(
       CheckboxListTile,

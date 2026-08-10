@@ -64,6 +64,10 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
     final snapshot = widget.snapshot;
     final selectedIds = _effectiveRingIds;
     final catalog = watchRingCatalog(snapshot);
+    // Ticked rows, not stored ids: without a snapshot the card has no rows at
+    // all, and the stored selection would claim slots nothing on screen shows.
+    final usedSlots =
+        catalog.where((metric) => selectedIds.contains(metric.id)).length;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -77,8 +81,11 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
                 leading: const Icon(Icons.watch_outlined),
                 title: const Text('Wear & watch face'),
                 subtitle: Text(
-                  'Pick up to $watchRingSlotCount metrics · unavailable ones '
-                  'stay off the watch',
+                  // The count, not the cap: a full stack greys every unpicked
+                  // row, and without it that reads as a fault rather than a
+                  // slot to free.
+                  '$usedSlots of $watchRingSlotCount slots used · '
+                  'unavailable ones stay off the watch',
                 ),
               ),
               if (catalog.isEmpty) ...[

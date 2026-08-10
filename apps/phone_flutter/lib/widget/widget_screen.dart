@@ -68,6 +68,9 @@ class _WidgetScreenState extends State<WidgetScreen> {
     final snapshot = widget.snapshot;
     final selectedIds = _effectiveIds;
     final catalog = phoneWidgetCatalog(snapshot);
+    // Ticked rows, not stored ids — same reason as Watchface.
+    final usedSlots =
+        catalog.where((metric) => selectedIds.contains(metric.id)).length;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -81,9 +84,11 @@ class _WidgetScreenState extends State<WidgetScreen> {
                 leading: const Icon(Icons.widgets_outlined),
                 title: const Text('Home screen widget'),
                 subtitle: Text(
-                  'Pick up to $phoneWidgetSlotCount metrics · independent of '
-                  'Watchface · Claude windows stay separate · credits append '
-                  'like Glance · exhausted pools show as 0% left',
+                  // Same reason as Watchface: the count explains a greyed row
+                  // that the cap alone leaves looking broken.
+                  '$usedSlots of $phoneWidgetSlotCount slots used · '
+                  'independent of Watchface · Claude windows stay separate · '
+                  'credits append like Glance · exhausted pools show as 0% left',
                 ),
               ),
               if (catalog.isEmpty) ...[
