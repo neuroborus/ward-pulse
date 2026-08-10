@@ -206,6 +206,7 @@ After Rust changes, run:
 ```bash
 cd core && cargo fmt --all -- --check
 cd core && cargo clippy --workspace --all-targets -- -D warnings
+cd core && RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
 cd core && cargo test --workspace
 ```
 

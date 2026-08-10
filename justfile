@@ -12,6 +12,11 @@ lint-core:
 test-core:
     cd core && cargo test --workspace
 
+# Rustdoc reads only the items it documents, hence --document-private-items.
+# Fails on a broken intra-doc link; nothing else in the repo reports one.
+doc-core:
+    cd core && RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
+
 # Dart formatting for the phone shell and the bindings package it consumes.
 fmt-phone:
     cd apps/phone_flutter && dart format lib test
@@ -32,6 +37,7 @@ check-phone:
 check-core: validate-fixtures
     cd core && cargo fmt --all -- --check
     cd core && cargo clippy --workspace --all-targets -- -D warnings
+    cd core && RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
     cd core && cargo test --workspace
 
 snapshot-core:

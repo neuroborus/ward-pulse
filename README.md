@@ -57,6 +57,7 @@ Direct Rust commands work from `core/`:
 ```sh
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
 cargo test --workspace
 cargo run --quiet -p ward-pulse-cli
 ```
