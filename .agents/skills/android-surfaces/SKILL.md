@@ -82,8 +82,14 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 
 ## Watch Face Format
 
-- `watchface.xml` is written by `tools/render-watchface.mjs` (`just render-watchface`). Change the
-  generator, never the XML; `just check-watchface` fails on drift.
+- `watchface.xml` is written by `tools/render-watchface.mjs` (`just render-watchface`), together
+  with the ring-type drawables it names (`res/drawable-nodpi/`, ImageMagick as `just
+  export-icons` already uses). Change the generator, never the XML or the PNGs;
+  `just check-watchface` fails on drift. Geometry and canvas are both the **450**-unit design
+  language `WATCH_RING_DESIGN.md` locks — the canvas is what WFF renders at before scaling to
+  the screen, so raising it softens every edge on the face. Do not raise it to sharpen type:
+  WFF rounds each glyph of a `TextCircular` to a whole canvas unit, and the answer to that is
+  baking, not resolution.
 - Keep WFF declarative and minimal; follow the same concentric language as Wear (not
   side-by-side `RING 1` / `RING 2` placeholders).
 - WFF format version 2 (Wear OS 5+): concentric `RANGED_VALUE` arcs with `WeightedStroke`
@@ -99,8 +105,10 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   on WFF. Draw strips after `DigitalClock` so the clock does not cover them.
 - A ring slot's TITLE carries the budget period (`D` / `7D` / `M`, empty for plan rings), and the
   face repeats it around that band as background-colour cut-out type, branching on
-  `[COMPLICATION.TITLE]` equality. Repeat counts and letter spacing are measured per ring on
-  device in `tools/render-watchface.mjs` — remeasure, never hand-tune.
+  `[COMPLICATION.TITLE]` equality to pick one baked image per ring and period. The type runs in
+  four sweeps with a bare break on each diagonal, aligned across rings; within a sweep tokens are
+  placed by rotation, and the repeat counts in `tools/render-watchface.mjs` are the fitted
+  constants both that generator and the review-art one read — copy, never hand-tune.
 - Prefer live arcs for selected layers, optional `creditsGlance` on the **matching provider**
   strip when present, large time. Never LLM `TOK` on the face.
 - Support tap-to-open into the Wear OS app where possible.

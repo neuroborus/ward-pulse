@@ -132,10 +132,15 @@ Canonical preview: `brand/watchface/preview-face-active-quiet.png`.
 | Phone adaptive foreground | `drawable-*/ic_launcher_foreground.png` |
 | WFF runtime mono (faded PNG) | `apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png` |
 | Phone widget mono (same faded PNG) | `apps/phone_flutter/android/app/src/main/res/drawable/wardpulse_mono.png` |
+| WFF ring type, one per ring and period | `apps/watchface_wff/src/main/res/drawable-nodpi/ring{1,2,3}_type_{day,week,month}.png` |
 
 Prefer regenerating exports with `just export-icons` rather than editing PNGs by hand. The mono
 drawable must go through `tools/fade-watermark-png.py` (wired in `tools/export-icons.sh`).
 Commit runtime exports when an application build consumes them.
+
+The last row is the exception: the ring type is not a brand export but the face's own type,
+baked by `tools/render-watchface.mjs` (`just render-watchface`) alongside the XML that names it.
+Regenerate it there.
 
 ImageMagick is required; Inkscape is preferred for mono SVG→PNG when available.
 `tools/fade-watermark-png.py` needs Pillow (`pip`/`apt` package `python3-pil`).

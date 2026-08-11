@@ -72,7 +72,8 @@ check-wear:
 validate-watchface:
     tools/validate-watchface/validate.sh
 
-# Writes watchface.xml from tools/render-watchface.mjs; edit the generator, not the XML.
+# Writes watchface.xml and the ring-type drawables; edit the generator, not its output.
+# Needs ImageMagick `convert` for the drawables, as export-icons does.
 render-watchface:
     node tools/render-watchface.mjs
 

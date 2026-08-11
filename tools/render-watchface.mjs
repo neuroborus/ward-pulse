@@ -1,25 +1,50 @@
 #!/usr/bin/env node
 /**
  * The watch face itself, not review art: writes
- * `apps/watchface_wff/src/main/res/raw/watchface.xml`
- * (geometry and language rules: `docs/product/WATCH_RING_DESIGN.md`).
+ * `apps/watchface_wff/src/main/res/raw/watchface.xml` and the ring-type drawables
+ * it names (geometry and language rules: `docs/product/WATCH_RING_DESIGN.md`).
  *
  * Four rings and four strips are the same block four times over, and ring type
- * multiplies the ring block again — one branch per period, so twelve copies of
- * it in an 832-line file. Hand-editing means editing one and missing eleven;
- * the next such feature multiplies the copies again, not the ideas.
+ * multiplies the ring block again — one branch per period, one image per branch.
+ * Hand-editing means editing one and missing eight; the next such feature
+ * multiplies the copies again, not the ideas.
+ *
+ * The textures are written by the same run because they are the same geometry:
+ * splitting them would let a band and its type drift a constant apart. Baking
+ * them needs ImageMagick, as `just export-icons` already does.
  *
  * Usage: node tools/render-watchface.mjs [--check]
- *   --check  compare against the file on disk and exit non-zero on drift
+ *   --check  compare the XML against the file on disk and exit non-zero on drift
+ *
+ * `--check` covers the XML only: the images are what a rasterizer made of it, and
+ * comparing bytes would fail on a different ImageMagick rather than on a real
+ * drift. A missing one still stops the build — the face names each by resource.
  */
 
-import { readFile, writeFile } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const target = join(root, 'apps/watchface_wff/src/main/res/raw/watchface.xml')
+// `-nodpi`, because the images are already sized to the canvas: the density
+// buckets would rescale them on load and soften what was baked to be exact.
+const drawables = join(root, 'apps/watchface_wff/src/main/res/drawable-nodpi')
+// The same face the review generators measure with, and named as a file for the
+// same reason: the rasterizer resolves a family through fontconfig, which
+// substitutes rather than fails, and would rebake every band at another metric.
+const FONT_FILE = '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf'
 
+/**
+ * The canvas, which is also the design language `WATCH_RING_DESIGN.md` locks: one
+ * number, no conversion, and every constant below comparable to the baseline by
+ * eye. It is also the render resolution — WFF draws the scene at this size and
+ * scales the result to the screen, so a larger canvas is a downscale on most
+ * watches and loses antialiasing in it: edge roughness measured 0.143 px here
+ * against 0.151 at 900, on a 384-pixel device. Raising it is a cost, not a knob.
+ */
 const FACE = { size: 450, center: 225 }
 
 /**
@@ -50,14 +75,24 @@ const RINGS = [
 const BAND_THICKNESS = 40
 
 /**
- * Ring type as texture: the budget period repeated around the band.
+ * Ring type as texture: the budget period repeated around the band, drawn from a
+ * baked image per ring and period rather than set as text.
  *
  * The glyphs are punched out in the background colour instead of being drawn in
  * the family colour, because `Font color` rejects
  * `[COMPLICATION.RANGED_VALUE_COLORS]` — the ramp is a colour list and the
  * attribute parses one ARGB. So the colour keeps coming from the arc
  * underneath, and as a bonus the melt boundary can never slice a glyph: it is
- * an edge in the arc, and the glyph is only ever a hole.
+ * an edge in the arc, and the glyph is only ever a hole in it — a shallow one,
+ * see `opacity`.
+ *
+ * Baked, because `TextCircular` rounds every glyph it lays out to a whole canvas
+ * unit: on the 450 canvas that is 0.93 units of baseline jitter along a band,
+ * repeating every 90° and plainly visible as letters that do not sit on their
+ * circle. A finer canvas only trades it against the blit to the screen — 0.61
+ * units at 900, 0.25 at 1800, and stepped glyph edges long before it is gone. An
+ * image carries its own spacing and moves as one thing under any scale, so what
+ * the ring shows is what this generator drew.
  */
 const TEXTURE = {
   /**
@@ -72,38 +107,75 @@ const TEXTURE = {
    * falls into disconnected chunks, at 0.78 it is 2.2, thin but continuous.
    */
   capOfBand: 0.78,
+  /** Cap height of Noto Sans Bold, 1462/2048 em — the face bakes its own font. */
+  capRatio: 0.714,
   /**
-   * Cap height of SYNC_TO_DEVICE BOLD as a fraction of `size`, read off device
-   * captures at three sizes (0.709-0.732). Not the 0.83 an early probe
-   * reported — that one measured the em box, not the cap.
+   * How many sweeps a band's type is dealt over. Four breaks on the diagonals,
+   * aligned across every ring: a run has to end somewhere, and a declared break
+   * absorbs the ends where a token gap would show them as a collision on one
+   * side and a hole on the other.
    */
-  capRatio: 0.72,
+  sweeps: 4,
+  /** Bare band between two sweeps, in degrees. */
+  sweepGap: 10,
+  /**
+   * How much of the background colour a glyph carries. Below 1 the holes stop
+   * being holes: what is left is the arc, darkened by that share, so the type
+   * reads as a shade in the band rather than as a second row of marks competing
+   * with the rings it labels.
+   */
+  opacity: 0.45,
+  /** The face's own typeface now that the type is baked, not the device's. */
+  font: 'Noto Sans',
+  /** As the review generators set it, and as `FONT_FILE` is: Noto Sans Bold. */
+  weight: 700,
 }
 
-/** The cap height is the design knob; `Font size` is what WFF takes. */
-const TEXTURE_FONT_SIZE = Number(((TEXTURE.band * TEXTURE.capOfBand) / TEXTURE.capRatio).toFixed(1))
+const TEXTURE_CAP = TEXTURE.band * TEXTURE.capOfBand
+
+/** The cap height is the design knob; a font size is what the baking takes. */
+const TEXTURE_FONT_SIZE = Number((TEXTURE_CAP / TEXTURE.capRatio).toFixed(1))
+
+/**
+ * The baseline, as an inset from the ring's outer edge: an image is that ring's
+ * own square, so the band runs along its rim and a baseline half a cap below the
+ * band's centreline leaves the cap centred on it. One number for every ring —
+ * what changes between them is the square, not where the type sits in the band.
+ */
+const TEXTURE_BASELINE = Number(((TEXTURE.band + TEXTURE_CAP) / 2).toFixed(2))
+
+/** Texture alpha, dimmed for ambient by the same 140 of 255 the arcs take. */
+const TEXTURE_ALPHA = Math.round(255 * TEXTURE.opacity)
+const TEXTURE_ALPHA_AMBIENT = Math.round((TEXTURE_ALPHA * 140) / 255)
 
 /**
  * Period tokens exactly as the complication writes them into TITLE, with the
- * advance of one repeat — the token plus the space after it — in ems, per ring
- * from the outside in.
+ * repeats one sweep holds — outer ring first, one count per ring the face draws.
  *
- * One number per token would be the honest model, and it is wrong: the same
- * glyph at the same `size` advances by a fraction of a pixel more on one ring
- * than on another, because the run is rasterized at the radius it is drawn on.
- * A fraction of a pixel times sixty repeats is degrees of arc, so each advance
- * is measured on device, from the leftover its own ring leaves at 12. Four
- * decimals for the same reason: the error multiplies by the repeat count.
- *
- * The innermost ring is unmeasured — the reference device binds only three ring
- * complications — so it borrows the innermost measurement rather than the
- * outermost, the drift being toward the centre.
+ * The counts were fitted to a token advance measured on device while the type
+ * was still set as text, and they are kept rather than recomputed: they are what
+ * the band was designed around, and Noto's own metrics would fit a different
+ * number of tokens on the same arc. `tools/render-watch-ring-designs.mjs` copies
+ * this table, so the boards and the face count alike.
  */
 const TOKENS = [
-  { period: 'Day', title: 'D', steps: [0.8407, 0.8371, 0.8312, 0.8312] },
-  { period: 'Week', title: '7D', steps: [1.4159, 1.4136, 1.4164, 1.4164] },
-  { period: 'Month', title: 'M', steps: [1.0498, 1.0518, 1.0510, 1.0510] },
+  { period: 'Day', title: 'D', repeats: [15, 13, 11] },
+  { period: 'Week', title: '7D', repeats: [9, 8, 6] },
+  { period: 'Month', title: 'M', repeats: [12, 10, 9] },
 ]
+
+/**
+ * Rings the type can label. Three, because the counts above are per ring and the
+ * baseline caps the face at three: a fourth would have to be drawn from a guessed
+ * count, and the fourth ring is markup that never renders anyway.
+ */
+const TEXTURE_RINGS = TOKENS[0].repeats.length
+
+// One count per token per ring, or a band bakes empty: a short row leaves the
+// repeat count undefined, and nothing downstream reads that as an error.
+if (TOKENS.some(({ repeats }) => repeats.length !== TEXTURE_RINGS)) {
+  throw new Error('TOKENS: every period needs one repeat count per ring the type labels')
+}
 
 /**
  * Strips, one per ring, stacked below the wordmark. Measured off the face, not
@@ -156,7 +228,8 @@ const HEADER = `<?xml version="1.0" encoding="utf-8"?>
   use the same ColorRamp as arcs ([COMPLICATION.RANGED_VALUE_COLORS]).
 
   Ring type: the budget period from COMPLICATION.TITLE (D / 7D / M) repeated around the
-  band and punched out in the background colour, so the arc underneath keeps the family.
+  band and punched out in the background colour at low alpha, so the arc underneath keeps
+  the family and the type stays a shade in the band.
 
   BoundingArc clips ring-slot content — strips use BoundingBox slots after clock.
   Strip TEXT = full label (\`46%\` or \`100% · 500\` on the owning family).
@@ -180,82 +253,116 @@ function lift() {
         </PartDraw>`
 }
 
-/**
- * The circle the glyphs are centred on. `width`/`height` on `TextCircular` are
- * that centreline, not an outer edge as on `Arc` — so this is the band's
- * centreline and no baseline correction is needed.
- */
-function textureCircle(diameter) {
-  return Number((diameter - TEXTURE.band).toFixed(1))
+/** The drawable a ring's period is baked into, and the name WFF resolves it by. */
+function textureResource(index, period) {
+  return `ring${index + 1}_type_${period.toLowerCase()}`
 }
 
 /**
- * One period's run, as literal text plus the spacing that closes it. The branch
- * already knows its token, so nothing is substituted at runtime: TITLE only
- * chooses which branch draws.
- *
- * A whole number of repeats never measures out to a whole circle, and
- * `TextCircular` neither stretches a run nor wraps it — it centres it in the
- * sweep and leaves the remainder as one gap at 12: a seam, gaping when the
- * remainder is nearly a repeat and a collision when it is nearly none. So the
- * count is the nearest whole number of repeats, and `letterSpacing` spreads the
- * difference over every character until the run plus one word space is exactly
- * the circle — the gap at 12 then reads as one more gap between repeats.
- *
- * Only as exact as the `step` it is given, which is why `TOKENS` measures one
- * per ring: the font is the watch's own, so on a watch whose font is not the
- * reference one the fit drifts back and a ring ends a little open.
+ * A ring's type as an SVG, in that ring's own design units. Tokens are placed one
+ * by one, each rotated onto its share of the sweep, so the spacing is uniform by
+ * construction — which is the whole reason the type is baked rather than set.
  */
-function textureRun(circle, title, step) {
-  const ems = (Math.PI * circle) / TEXTURE_FONT_SIZE
-  const repeats = Math.round(ems / step)
-  // Each repeat pays for its own glyphs and for the space that follows it.
-  const spacing = (ems / repeats - step) / (title.length + 1)
-  return { text: Array(repeats).fill(title).join(' '), spacing: spacing.toFixed(4) }
+function textureImage(diameter, title, repeats) {
+  const centre = diameter / 2
+  const pitch = 360 / TEXTURE.sweeps
+  const slot = (pitch - TEXTURE.sweepGap) / repeats
+  // Half a sweep off 12, so the breaks fall on the diagonals: 12 is where both
+  // ends of the melt live, and a break there frames the round cap instead of
+  // letting the type close over it.
+  const origin = pitch / 2 + TEXTURE.sweepGap / 2
+  const tokens = Array.from({ length: TEXTURE.sweeps }, (_, sweep) =>
+    Array.from({ length: repeats }, (_, repeat) => {
+      const angle = (origin + sweep * pitch + (repeat + 0.5) * slot).toFixed(2)
+      return `<text x="${centre}" y="${TEXTURE_BASELINE}" transform="rotate(${angle} ${centre} ${centre})">${title}</text>`
+    }).join(''),
+  ).join('')
+  // One user unit per design unit: a viewBox that scales makes the rasterizer
+  // misplace the centre a token rotates about. The pixels come from the density.
+  return `<svg xmlns="http://www.w3.org/2000/svg"
+  width="${diameter}" height="${diameter}" viewBox="0 0 ${diameter} ${diameter}">
+  <g font-family="${TEXTURE.font}" font-size="${TEXTURE_FONT_SIZE}" font-weight="${TEXTURE.weight}"
+    fill="#${COLOR.background.slice(3)}" text-anchor="middle">${tokens}</g>
+</svg>
+`
 }
 
-function ringTextureBranch(circle, period, { text, spacing }) {
+/**
+ * ImageMagick, as `just export-icons` already uses it; no new tool for this. The
+ * density is what sizes the output: 96 is one pixel per SVG user unit, and the SVG
+ * is written in design units, so the image lands at exactly the pixels its box
+ * covers on the canvas and the renderer draws it one to one. Baking finer buys
+ * nothing — the scene is rasterized at canvas size before it reaches the screen.
+ *
+ * Through a file, never a pipe: ImageMagick hands a named SVG to a real renderer
+ * and falls back to its own on stdin, and that fallback drops the centre a
+ * `rotate()` turns about — every token lands on a circle around the corner.
+ *
+ * `-strip` for the sake of the diff: it drops the render timestamp, without which
+ * every run rewrites nine committed binaries whose pixels did not change.
+ */
+function rasterize(file, png) {
+  execFileSync('convert', ['-background', 'none', '-density', '96', '-strip', file, `png32:${png}`])
+}
+
+/** One drawable per ring and period: what the face draws instead of setting type. */
+async function writeTextures() {
+  await access(FONT_FILE).catch(() => {
+    throw new Error(`${FONT_FILE} is missing; ring type would bake in a substituted font`)
+  })
+  await mkdir(drawables, { recursive: true })
+  const scratch = await mkdtemp(join(tmpdir(), 'wardpulse-type-'))
+  try {
+    for (const [index, { diameter }] of RINGS.slice(0, TEXTURE_RINGS).entries()) {
+      for (const { period, title, repeats } of TOKENS) {
+        const name = textureResource(index, period)
+        const svg = join(scratch, `${name}.svg`)
+        await writeFile(svg, textureImage(diameter, title, repeats[index]))
+        rasterize(svg, join(drawables, `${name}.png`))
+      }
+    }
+  } finally {
+    await rm(scratch, { recursive: true, force: true })
+  }
+}
+
+/**
+ * One period's texture as the image that carries it. The branch already knows
+ * its token, so nothing is substituted at runtime: TITLE only chooses which
+ * branch draws.
+ *
+ * The box is the ring's own square. The type sits on the band's centreline, well
+ * inside that square, so a box sized to the ring needs no separate bounds and
+ * lines the image up with the arc by construction.
+ */
+function ringTextureBranch(diameter, index, period) {
+  const inset = Number(((FACE.size - diameter) / 2).toFixed(1))
   return `                                <Compare expression="is${period}">
-                                    <PartText x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
-                                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                                        <TextCircular
-                                            centerX="${FACE.center}"
-                                            centerY="${FACE.center}"
-                                            width="${circle}"
-                                            height="${circle}"
-                                            startAngle="${SWEEP.start}"
-                                            endAngle="${SWEEP.end}"
-                                            direction="CLOCKWISE"
-                                            align="CENTER">
-                                            <Font
-                                                family="SYNC_TO_DEVICE"
-                                                size="${TEXTURE_FONT_SIZE}"
-                                                weight="BOLD"
-                                                letterSpacing="${spacing}"
-                                                color="${COLOR.background}">${text}</Font>
-                                        </TextCircular>
-                                    </PartText>
+                                    <PartImage x="${inset}" y="${inset}" width="${diameter}" height="${diameter}" alpha="${TEXTURE_ALPHA}">
+                                        <Variant mode="AMBIENT" target="alpha" value="${TEXTURE_ALPHA_AMBIENT}" />
+                                        <Image resource="${textureResource(index, period)}" />
+                                    </PartImage>
                                 </Compare>`
 }
 
 /**
  * No `Default`: a slot whose complication names no period gets no texture,
  * rather than being labelled with whichever token the fallback happened to be.
+ * A ring past the cap gets none either — there is no image baked for it.
  */
-function ringTexture(diameter, ring) {
-  const circle = textureCircle(diameter)
+function ringTexture(diameter, index) {
+  if (index >= TEXTURE_RINGS) return ''
   const expressions = TOKENS.map(
     ({ period, title }) =>
       `                                    <Expression name="is${period}"><![CDATA[[COMPLICATION.TITLE] == "${title}"]]></Expression>`,
   ).join('\n')
-  return `                            <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
+  return `
+                            <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
                             <Condition>
                                 <Expressions>
 ${expressions}
                                 </Expressions>
-${TOKENS.map(({ period, title, steps }) =>
-  ringTextureBranch(circle, period, textureRun(circle, title, steps[ring])),
-).join('\n')}
+${TOKENS.map(({ period }) => ringTextureBranch(diameter, index, period)).join('\n')}
                             </Condition>`
 }
 
@@ -321,8 +428,7 @@ function ringSlot({ slotId, diameter, service }, index) {
                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                         cap="ROUND" />
                                 </Arc>
-                            </PartDraw>
-${ringTexture(diameter, index)}
+                            </PartDraw>${ringTexture(diameter, index)}
                         </Group>
                     </Compare>
                 </Condition>
@@ -489,4 +595,6 @@ if (process.argv.includes('--check')) {
 } else {
   await writeFile(target, xml)
   console.log(`wrote ${target}`)
+  await writeTextures()
+  console.log(`wrote ${TEXTURE_RINGS * TOKENS.length} ring textures to ${drawables}`)
 }

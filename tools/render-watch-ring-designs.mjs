@@ -59,10 +59,12 @@ const STRIP = {
  * the background color, so the arc underneath keeps carrying the family
  * (`WATCH_RING_DESIGN.md`). Only a budget ring names a period; a plan window draws no type.
  *
- * Repeat counts are copied from the face, outer ring first, never recomputed here: on device
- * they come from advances measured per ring, and Noto's own metrics would fit a different
- * number of tokens on the same band. Placement below is by rotation, so review art has no seam
- * to inherit; the face has no such freedom and closes its circle with letter spacing.
+ * The type runs in four sweeps with a bare break on each diagonal, as on the face. The repeats a
+ * sweep holds are copied from `TOKENS` in `tools/render-watchface.mjs`, outer ring first, never
+ * recomputed here: they were fitted to an advance measured on device, and Noto's own metrics
+ * would fit a different number of tokens on the same band. Within a sweep both generators place
+ * tokens by rotation — the face bakes its bands as images through the same construction, so a
+ * board and the watch differ only in the rasterizer that draws them.
  *
  * Three counts per token, not four: the face caps at three rings, so a fourth would be a board
  * the baseline forbids, and the generator throws rather than draw one from a guessed count.
@@ -72,10 +74,17 @@ const TEXTURE = {
   capOfBand: 0.78,
   /** Cap height of Noto Sans Bold, 1462/2048 em. */
   capRatio: 0.714,
+  /** Sweeps the type is dealt over. */
+  sweeps: 4,
+  /** Bare band between two sweeps, in degrees. */
+  sweepGap: 10,
+  /** How much of the background colour a glyph carries, as on the face: a shade, not a hole. */
+  opacity: 0.45,
+  /** Repeats in one sweep, not round the whole band. */
   repeats: {
-    D: [65, 58, 50],
-    '7D': [39, 34, 29],
-    M: [52, 46, 39],
+    D: [15, 13, 11],
+    '7D': [9, 8, 6],
+    M: [12, 10, 9],
   },
 }
 
@@ -188,13 +197,20 @@ function ringTexture({ cx, cy, r, thickness, period, fromOutside }) {
   const cap = thickness * TEXTURE.capOfBand
   // Baseline half a cap height below the centre line leaves the cap centred on the band.
   const y = (cy - r + cap / 2).toFixed(1)
-  const tokens = Array.from({ length: repeats }, (_, index) => {
-    const angle = ((index * 360) / repeats).toFixed(2)
-    return `<text x="${cx}" y="${y}" transform="rotate(${angle} ${cx} ${cy})">${period}</text>`
-  }).join('')
+  const pitch = 360 / TEXTURE.sweeps
+  const slot = (pitch - TEXTURE.sweepGap) / repeats
+  // Half a sweep off 12, as on the face: the breaks land on the diagonals.
+  const origin = pitch / 2 + TEXTURE.sweepGap / 2
+  const tokens = Array.from({ length: TEXTURE.sweeps }, (_, index) =>
+    Array.from({ length: repeats }, (_, repeat) => {
+      const angle = (origin + index * pitch + (repeat + 0.5) * slot).toFixed(2)
+      return `<text x="${cx}" y="${y}" transform="rotate(${angle} ${cx} ${cy})">${period}</text>`
+    }).join(''),
+  ).join('')
   return `
     <g font-family="${FONT}, sans-serif" font-size="${(cap / TEXTURE.capRatio).toFixed(1)}"
-      font-weight="700" fill="${BACKGROUND}" text-anchor="middle">${tokens}</g>`
+      font-weight="700" fill="${BACKGROUND}" fill-opacity="${TEXTURE.opacity}"
+      text-anchor="middle">${tokens}</g>`
 }
 
 function barLabel(layer, { showPlan, showCredits }) {

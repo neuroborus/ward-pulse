@@ -14,13 +14,17 @@ app; ambient keeps muted arcs, large time, and a quieter mark (strips off).
 From the repository root:
 
 ```sh
+just render-watchface
 just validate-watchface
 just check-watchface
 just build-watchface
 ANDROID_SERIAL="$WEAR_SERIAL" just run-watchface
 ```
 
-`validate-watchface` uses the checksum-pinned official WFF validator. `build-watchface`
+`render-watchface` writes `res/raw/watchface.xml` and the ring-type drawables in
+`res/drawable-nodpi/` from `tools/render-watchface.mjs` — edit the generator, never its output;
+`check-watchface` fails on drift. `validate-watchface` uses the checksum-pinned official WFF
+validator. `build-watchface`
 produces debug APK and AAB artifacts under
 `apps/watchface_wff/build/outputs/`. The run command installs the APK and selects
 `app.wardpulse.watchface` on the target Wear device.

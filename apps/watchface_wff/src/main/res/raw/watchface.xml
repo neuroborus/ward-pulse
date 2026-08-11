@@ -9,7 +9,8 @@
   use the same ColorRamp as arcs ([COMPLICATION.RANGED_VALUE_COLORS]).
 
   Ring type: the budget period from COMPLICATION.TITLE (D / 7D / M) repeated around the
-  band and punched out in the background colour, so the arc underneath keeps the family.
+  band and punched out in the background colour at low alpha, so the arc underneath keeps
+  the family and the type stays a shade in the band.
 
   BoundingArc clips ring-slot content — strips use BoundingBox slots after clock.
   Strip TEXT = full label (`46%` or `100% · 500` on the owning family).
@@ -102,67 +103,22 @@
                                     <Expression name="isMonth"><![CDATA[[COMPLICATION.TITLE] == "M"]]></Expression>
                                 </Expressions>
                                 <Compare expression="isDay">
-                                    <PartText x="0" y="0" width="450" height="450" alpha="255">
-                                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                                        <TextCircular
-                                            centerX="225"
-                                            centerY="225"
-                                            width="383.8"
-                                            height="383.8"
-                                            startAngle="0"
-                                            endAngle="359.9"
-                                            direction="CLOCKWISE"
-                                            align="CENTER">
-                                            <Font
-                                                family="SYNC_TO_DEVICE"
-                                                size="21.9"
-                                                weight="BOLD"
-                                                letterSpacing="0.0032"
-                                                color="#ff0a0d0b">D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D</Font>
-                                        </TextCircular>
-                                    </PartText>
+                                    <PartImage x="23" y="23" width="404" height="404" alpha="115">
+                                        <Variant mode="AMBIENT" target="alpha" value="63" />
+                                        <Image resource="ring1_type_day" />
+                                    </PartImage>
                                 </Compare>
                                 <Compare expression="isWeek">
-                                    <PartText x="0" y="0" width="450" height="450" alpha="255">
-                                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                                        <TextCircular
-                                            centerX="225"
-                                            centerY="225"
-                                            width="383.8"
-                                            height="383.8"
-                                            startAngle="0"
-                                            endAngle="359.9"
-                                            direction="CLOCKWISE"
-                                            align="CENTER">
-                                            <Font
-                                                family="SYNC_TO_DEVICE"
-                                                size="21.9"
-                                                weight="BOLD"
-                                                letterSpacing="-0.0014"
-                                                color="#ff0a0d0b">7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D</Font>
-                                        </TextCircular>
-                                    </PartText>
+                                    <PartImage x="23" y="23" width="404" height="404" alpha="115">
+                                        <Variant mode="AMBIENT" target="alpha" value="63" />
+                                        <Image resource="ring1_type_week" />
+                                    </PartImage>
                                 </Compare>
                                 <Compare expression="isMonth">
-                                    <PartText x="0" y="0" width="450" height="450" alpha="255">
-                                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                                        <TextCircular
-                                            centerX="225"
-                                            centerY="225"
-                                            width="383.8"
-                                            height="383.8"
-                                            startAngle="0"
-                                            endAngle="359.9"
-                                            direction="CLOCKWISE"
-                                            align="CENTER">
-                                            <Font
-                                                family="SYNC_TO_DEVICE"
-                                                size="21.9"
-                                                weight="BOLD"
-                                                letterSpacing="0.0045"
-                                                color="#ff0a0d0b">M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M</Font>
-                                        </TextCircular>
-                                    </PartText>
+                                    <PartImage x="23" y="23" width="404" height="404" alpha="115">
+                                        <Variant mode="AMBIENT" target="alpha" value="63" />
+                                        <Image resource="ring1_type_month" />
+                                    </PartImage>
                                 </Compare>
                             </Condition>
                         </Group>
@@ -241,67 +197,22 @@
                                     <Expression name="isMonth"><![CDATA[[COMPLICATION.TITLE] == "M"]]></Expression>
                                 </Expressions>
                                 <Compare expression="isDay">
-                                    <PartText x="0" y="0" width="450" height="450" alpha="255">
-                                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                                        <TextCircular
-                                            centerX="225"
-                                            centerY="225"
-                                            width="335.8"
-                                            height="335.8"
-                                            startAngle="0"
-                                            endAngle="359.9"
-                                            direction="CLOCKWISE"
-                                            align="CENTER">
-                                            <Font
-                                                family="SYNC_TO_DEVICE"
-                                                size="21.9"
-                                                weight="BOLD"
-                                                letterSpacing="-0.0033"
-                                                color="#ff0a0d0b">D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D</Font>
-                                        </TextCircular>
-                                    </PartText>
+                                    <PartImage x="47" y="47" width="356" height="356" alpha="115">
+                                        <Variant mode="AMBIENT" target="alpha" value="63" />
+                                        <Image resource="ring2_type_day" />
+                                    </PartImage>
                                 </Compare>
                                 <Compare expression="isWeek">
-                                    <PartText x="0" y="0" width="450" height="450" alpha="255">
-                                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                                        <TextCircular
-                                            centerX="225"
-                                            centerY="225"
-                                            width="335.8"
-                                            height="335.8"
-                                            startAngle="0"
-                                            endAngle="359.9"
-                                            direction="CLOCKWISE"
-                                            align="CENTER">
-                                            <Font
-                                                family="SYNC_TO_DEVICE"
-                                                size="21.9"
-                                                weight="BOLD"
-                                                letterSpacing="0.0011"
-                                                color="#ff0a0d0b">7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D</Font>
-                                        </TextCircular>
-                                    </PartText>
+                                    <PartImage x="47" y="47" width="356" height="356" alpha="115">
+                                        <Variant mode="AMBIENT" target="alpha" value="63" />
+                                        <Image resource="ring2_type_week" />
+                                    </PartImage>
                                 </Compare>
                                 <Compare expression="isMonth">
-                                    <PartText x="0" y="0" width="450" height="450" alpha="255">
-                                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                                        <TextCircular
-                                            centerX="225"
-                                            centerY="225"
-                                            width="335.8"
-                                            height="335.8"
-                                            startAngle="0"
-                                            endAngle="359.9"
-                                            direction="CLOCKWISE"
-                                            align="CENTER">
-                                            <Font
-                                                family="SYNC_TO_DEVICE"
-                                                size="21.9"
-                                                weight="BOLD"
-                                                letterSpacing="-0.0023"
-                                                color="#ff0a0d0b">M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M</Font>
-                                        </TextCircular>
-                                    </PartText>
+                                    <PartImage x="47" y="47" width="356" height="356" alpha="115">
+                                        <Variant mode="AMBIENT" target="alpha" value="63" />
+                                        <Image resource="ring2_type_month" />
+                                    </PartImage>
                                 </Compare>
                             </Condition>
                         </Group>
@@ -380,67 +291,22 @@
                                     <Expression name="isMonth"><![CDATA[[COMPLICATION.TITLE] == "M"]]></Expression>
                                 </Expressions>
                                 <Compare expression="isDay">
-                                    <PartText x="0" y="0" width="450" height="450" alpha="255">
-                                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                                        <TextCircular
-                                            centerX="225"
-                                            centerY="225"
-                                            width="287.8"
-                                            height="287.8"
-                                            startAngle="0"
-                                            endAngle="359.9"
-                                            direction="CLOCKWISE"
-                                            align="CENTER">
-                                            <Font
-                                                family="SYNC_TO_DEVICE"
-                                                size="21.9"
-                                                weight="BOLD"
-                                                letterSpacing="-0.0027"
-                                                color="#ff0a0d0b">D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D</Font>
-                                        </TextCircular>
-                                    </PartText>
+                                    <PartImage x="71" y="71" width="308" height="308" alpha="115">
+                                        <Variant mode="AMBIENT" target="alpha" value="63" />
+                                        <Image resource="ring3_type_day" />
+                                    </PartImage>
                                 </Compare>
                                 <Compare expression="isWeek">
-                                    <PartText x="0" y="0" width="450" height="450" alpha="255">
-                                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                                        <TextCircular
-                                            centerX="225"
-                                            centerY="225"
-                                            width="287.8"
-                                            height="287.8"
-                                            startAngle="0"
-                                            endAngle="359.9"
-                                            direction="CLOCKWISE"
-                                            align="CENTER">
-                                            <Font
-                                                family="SYNC_TO_DEVICE"
-                                                size="21.9"
-                                                weight="BOLD"
-                                                letterSpacing="0.0024"
-                                                color="#ff0a0d0b">7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D</Font>
-                                        </TextCircular>
-                                    </PartText>
+                                    <PartImage x="71" y="71" width="308" height="308" alpha="115">
+                                        <Variant mode="AMBIENT" target="alpha" value="63" />
+                                        <Image resource="ring3_type_week" />
+                                    </PartImage>
                                 </Compare>
                                 <Compare expression="isMonth">
-                                    <PartText x="0" y="0" width="450" height="450" alpha="255">
-                                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                                        <TextCircular
-                                            centerX="225"
-                                            centerY="225"
-                                            width="287.8"
-                                            height="287.8"
-                                            startAngle="0"
-                                            endAngle="359.9"
-                                            direction="CLOCKWISE"
-                                            align="CENTER">
-                                            <Font
-                                                family="SYNC_TO_DEVICE"
-                                                size="21.9"
-                                                weight="BOLD"
-                                                letterSpacing="0.0038"
-                                                color="#ff0a0d0b">M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M</Font>
-                                        </TextCircular>
-                                    </PartText>
+                                    <PartImage x="71" y="71" width="308" height="308" alpha="115">
+                                        <Variant mode="AMBIENT" target="alpha" value="63" />
+                                        <Image resource="ring3_type_month" />
+                                    </PartImage>
                                 </Compare>
                             </Condition>
                         </Group>
@@ -511,77 +377,6 @@
                                         cap="ROUND" />
                                 </Arc>
                             </PartDraw>
-                            <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isDay"><![CDATA[[COMPLICATION.TITLE] == "D"]]></Expression>
-                                    <Expression name="isWeek"><![CDATA[[COMPLICATION.TITLE] == "7D"]]></Expression>
-                                    <Expression name="isMonth"><![CDATA[[COMPLICATION.TITLE] == "M"]]></Expression>
-                                </Expressions>
-                                <Compare expression="isDay">
-                                    <PartText x="0" y="0" width="450" height="450" alpha="255">
-                                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                                        <TextCircular
-                                            centerX="225"
-                                            centerY="225"
-                                            width="239.8"
-                                            height="239.8"
-                                            startAngle="0"
-                                            endAngle="359.9"
-                                            direction="CLOCKWISE"
-                                            align="CENTER">
-                                            <Font
-                                                family="SYNC_TO_DEVICE"
-                                                size="21.9"
-                                                weight="BOLD"
-                                                letterSpacing="0.0039"
-                                                color="#ff0a0d0b">D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D D</Font>
-                                        </TextCircular>
-                                    </PartText>
-                                </Compare>
-                                <Compare expression="isWeek">
-                                    <PartText x="0" y="0" width="450" height="450" alpha="255">
-                                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                                        <TextCircular
-                                            centerX="225"
-                                            centerY="225"
-                                            width="239.8"
-                                            height="239.8"
-                                            startAngle="0"
-                                            endAngle="359.9"
-                                            direction="CLOCKWISE"
-                                            align="CENTER">
-                                            <Font
-                                                family="SYNC_TO_DEVICE"
-                                                size="21.9"
-                                                weight="BOLD"
-                                                letterSpacing="0.0056"
-                                                color="#ff0a0d0b">7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D 7D</Font>
-                                        </TextCircular>
-                                    </PartText>
-                                </Compare>
-                                <Compare expression="isMonth">
-                                    <PartText x="0" y="0" width="450" height="450" alpha="255">
-                                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                                        <TextCircular
-                                            centerX="225"
-                                            centerY="225"
-                                            width="239.8"
-                                            height="239.8"
-                                            startAngle="0"
-                                            endAngle="359.9"
-                                            direction="CLOCKWISE"
-                                            align="CENTER">
-                                            <Font
-                                                family="SYNC_TO_DEVICE"
-                                                size="21.9"
-                                                weight="BOLD"
-                                                letterSpacing="-0.0043"
-                                                color="#ff0a0d0b">M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M M</Font>
-                                        </TextCircular>
-                                    </PartText>
-                                </Compare>
-                            </Condition>
                         </Group>
                     </Compare>
                 </Condition>

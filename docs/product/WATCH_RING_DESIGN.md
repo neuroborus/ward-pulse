@@ -15,7 +15,8 @@ wireframes, large remaining-% heroes, or bordered strip cards.
 Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 13). Asset ownership: `docs/DESIGN_ASSETS.md`.
 
 Canonical review generator: `tools/render-watch-ring-designs.mjs`  
-Canonical face generator: `tools/render-watchface.mjs` — it writes the shipped `watchface.xml`.  
+Canonical face generator: `tools/render-watchface.mjs` — it writes the shipped `watchface.xml`
+and the ring-type drawables beside it.  
 Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and sibling variants).
 
 ## Goal
@@ -135,9 +136,9 @@ Rules:
     the watch falls back to the plain `%` label rather than a spelled code: `EUR 999.99/999`
     is 118 % of the locked width, worse than the form the rule already rejects;
   - credits text is compact (`500`, `1.2K`) — never a `TOK` suffix;
-  - ring band **20.2 units** on the 450 WFF canvas so arcs read clearer while a **3-strip**
-    stack still clears the aperture (see Ring geometry: it is neither the nominal 40 nor the
-    18.8 the scaling factor predicted — the band was measured, not derived).
+  - ring band **20.2 units** in the 450-unit design language so arcs read clearer while a
+    **3-strip** stack still clears the aperture (see Ring geometry: it is neither the nominal 40
+    nor the 18.8 the scaling factor predicted — the band was measured, not derived).
 - **Ring type** — a budget ring's band repeats its period; other rings carry none (see Ring type
   texture).
 - **Credits-only**: thin framing track, large time, credits strip only — no percent arcs.
@@ -154,6 +155,12 @@ things the file does not say:
 - WFF draws a band at roughly **half the nominal `thickness`** — `thickness="25"` rendered a
   10 px band on a 384 px round watch, which is why arcs read thinner than every review board;
 - `width` sets the band's **outer edge**, not its centre line, so the stroke grows inward.
+
+Every number in this document is a **design unit**: the 450-unit language the generator is
+written in, the boards are drawn in, and the shipped `watchface.xml` declares as its canvas —
+one number throughout, no conversion. The canvas is also the resolution WFF renders at before
+scaling to the screen, so raising it costs antialiasing on every edge of the face; see Ring
+type texture for the one feature that tempted it and why it no longer does.
 
 | | Value |
 |---|---|
@@ -202,27 +209,55 @@ is not a calendar period, and an empty band is itself the signal.
   the band, so the arc underneath keeps carrying the family and the melt boundary can never
   slice a glyph in half. WFF also refuses the alternative: `Font color` will not take
   `[COMPLICATION.RANGED_VALUE_COLORS]`.
+- **45% opaque** — the punch is a shade, not a hole. At full strength the tokens read as a second
+  row of marks and the ring stops reading as a ring; at 0.45 what survives is the arc, darkened by
+  that share. Ambient keeps the ratio: 115 dims to 63 as the arcs dim 255 to 140.
 - **Source** — the ring complication writes the token into `COMPLICATION.TITLE`
   (`WatchComplicationText.ringPeriodToken`), and the face branches on it. A ring whose id names
   no period sends none and matches no branch.
-- **Size** — cap height **0.78 of the band** (15.8 of 20.2 units). The device font's cap is 0.72
-  of `size`, so `Font size` is 21.9; the face derives it rather than declaring it, because the
-  band is the measured constant and the font size follows.
-- **The circle has to close** — `TextCircular` has no `JUSTIFY`, so a run that does not measure
-  out to a whole circle leaves its whole remainder as one gap at 12, which reads as a chipped
-  ring. The face fits each band with a whole number of repeats plus a per-band `letterSpacing`.
-  The advance the fit rests on is **measured on device, per rendered ring**: the same glyph at
-  the same size advances a fraction of a pixel differently at each radius, and a fraction of a
-  pixel times sixty repeats is degrees of arc. The numbers live in `tools/render-watchface.mjs`
-  — remeasure rather than reason about them.
-- **Portability** — the face fonts are `SYNC_TO_DEVICE`, so those advances belong to the
-  reference device; a watch whose system font differs drifts the seam back and needs a
-  remeasure. Pre-rendered per-ring images are the escape hatch if that becomes common. A WFF
-  `BitmapFont` is not: it renders and tints, but silently drops runs past ~50 glyphs, under the
-  24–65 repeats a band needs.
+- **Size** — cap height **0.78 of the band** (15.8 of 20.2 units). Noto Sans Bold caps at 0.714
+  of `size`, so the type is set at 22.1; the generator derives it rather than declaring it,
+  because the band is the measured constant and the font size follows.
+- **Baked, not typeset** — the face draws the type from **an image per ring and period**
+  (`res/drawable-nodpi/ring{1,2,3}_type_{day,week,month}.png`, nine files, ~220 KB), not from a
+  `TextCircular`. WFF rounds every glyph it lays out to a whole **canvas** unit, and each token
+  takes that unit of radial play: **0.93 units** of baseline jitter, 3.0 peak to peak, identical
+  in units at 384 and at 768 device pixels and repeating exactly every 90° — letters that
+  visibly do not sit on their circle. Screen-independent means quantization, whose only cure is
+  resolution: 0.61 units at a canvas of 900, 0.25 at 1800. The canvas cannot pay it. It is the
+  resolution the **whole scene** is rendered at before scaling to the screen, so raising it
+  roughens every edge on the face — 0.128 / 0.137 / 0.147 px measured for 450 / 900 / 1800 at
+  384 — and it never reaches the rest of the unevenness anyway: per-glyph ink weight held at
+  **17%** spread from 450 to 1800, that one being the final blit into the screen's own pixels.
+  An image has no glyphs to round, carries its own spacing, and moves as one thing under any
+  scale. So the band shows what the generator drew, and the canvas stays at 450, where the face
+  is sharpest. Do not reach for the canvas to sharpen something else; bake it.
+- **Four breaks on the diagonals** — the type does not run the whole way round. Each band is
+  **four sweeps** of the same run, with **10° of bare band** between them, centered on 45°, 135°,
+  225° and 315° and therefore aligned across every ring. The breaks are the design, not a defect
+  to be hidden: they punctuate a texture that would otherwise read as a solid pattern, and they
+  are what keeps the four bands speaking together — the same four gaps at the same four angles,
+  whatever period each ring carries. Off the diagonals they would collide with 12, where both
+  ends of the melt live: a break there frames the round cap, while type closes over it as a row
+  of holes.
+- **Placed by rotation** — within a sweep each token is rotated onto its own equal share, so the
+  spacing is uniform by construction: nothing is justified, nothing is centered with a remainder
+  left at the ends. The repeats per sweep are **15 / 13 / 11** for `D`, **9 / 8 / 6** for `7D`
+  and **12 / 10 / 9** for `M`, outer ring first. Those counts were fitted to a token advance
+  measured on device while the type was still set as text, and they are kept rather than
+  recomputed — they are what the band was designed around, and a font's own metrics would fit a
+  different number on the same arc.
+- **One font, every watch** — baking pins what WFF otherwise cannot. Fonts are `SYNC_TO_DEVICE`
+  and no font can be bundled for text, so a band set as type is fitted to a metric the watch is
+  free not to have: a system face one per cent wider opens 3.6° in a full band. The image carries
+  Noto Sans Bold everywhere, so the texture is identical on every device rather than merely
+  tolerant of the difference. `BitmapFonts` are the other way to pin it — an image per glyph, and
+  a silent ~50-glyph limit per run that a whole band exceeds. An escape hatch to remember, not to
+  take.
 
-Review art draws the same texture at the same cap height and the same repeat counts, but places
-each token by rotation, so its spacing is uniform by construction and it inherits no seam.
+Review art draws the same texture from the same table at the same cap height, breaks and repeat
+counts — `tools/render-watch-ring-designs.mjs` copies them from the face generator and never
+recomputes them, so the boards and the watch count alike.
 
 ## Ambient
 
