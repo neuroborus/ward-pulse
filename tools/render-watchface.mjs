@@ -4,10 +4,10 @@
  * `apps/watchface_wff/src/main/res/raw/watchface.xml`
  * (geometry and language rules: `docs/product/WATCH_RING_DESIGN.md`).
  *
- * Four rings and four strips are the same block four times over — 557 lines of
- * which about 460 are copies. Hand-editing them means editing one and missing
- * three, and every planned change (ring-type lettering, a boundary fade) adds
- * bands per ring, multiplying the copies rather than the ideas.
+ * Four rings and four strips are the same block four times over, and ring type
+ * multiplies the ring block again — one branch per period, so twelve copies of
+ * it in an 832-line file. Hand-editing means editing one and missing eleven;
+ * the next such feature multiplies the copies again, not the ideas.
  *
  * Usage: node tools/render-watchface.mjs [--check]
  *   --check  compare against the file on disk and exit non-zero on drift
@@ -37,8 +37,8 @@ const COLOR = {
 
 /**
  * Rings, outermost first. Diameters step by 48 because the band is thicker than
- * it declares: WFF paints roughly 0.44 of the nominal `thickness`, so 40 draws
- * about 18 units and neighbours touch at the old 18-unit pitch.
+ * it declares: WFF paints about half the nominal `thickness`, so 40 draws close
+ * to 20 units (`TEXTURE.band`) and neighbours touch at the old 18-unit pitch.
  */
 const RINGS = [
   { slotId: 101, diameter: 404, service: 'Today' },
@@ -48,6 +48,62 @@ const RINGS = [
 ]
 
 const BAND_THICKNESS = 40
+
+/**
+ * Ring type as texture: the budget period repeated around the band.
+ *
+ * The glyphs are punched out in the background colour instead of being drawn in
+ * the family colour, because `Font color` rejects
+ * `[COMPLICATION.RANGED_VALUE_COLORS]` — the ramp is a colour list and the
+ * attribute parses one ARGB. So the colour keeps coming from the arc
+ * underneath, and as a bonus the melt boundary can never slice a glyph: it is
+ * an edge in the arc, and the glyph is only ever a hole.
+ */
+const TEXTURE = {
+  /**
+   * What WFF paints of `BAND_THICKNESS` — about half, never the nominal. This
+   * is the band measured off a device screenshot in `WATCH_RING_DESIGN.md`,
+   * kept identical here so the texture cannot drift from the baseline.
+   */
+  band: 20.2,
+  /**
+   * Cap height as a fraction of the band. The measure is how much colour
+   * survives above and below the hole: at 0.94 it is 0.0 units and the ring
+   * falls into disconnected chunks, at 0.78 it is 2.2, thin but continuous.
+   */
+  capOfBand: 0.78,
+  /**
+   * Cap height of SYNC_TO_DEVICE BOLD as a fraction of `size`, read off device
+   * captures at three sizes (0.709-0.732). Not the 0.83 an early probe
+   * reported — that one measured the em box, not the cap.
+   */
+  capRatio: 0.72,
+}
+
+/** The cap height is the design knob; `Font size` is what WFF takes. */
+const TEXTURE_FONT_SIZE = Number(((TEXTURE.band * TEXTURE.capOfBand) / TEXTURE.capRatio).toFixed(1))
+
+/**
+ * Period tokens exactly as the complication writes them into TITLE, with the
+ * advance of one repeat — the token plus the space after it — in ems, per ring
+ * from the outside in.
+ *
+ * One number per token would be the honest model, and it is wrong: the same
+ * glyph at the same `size` advances by a fraction of a pixel more on one ring
+ * than on another, because the run is rasterized at the radius it is drawn on.
+ * A fraction of a pixel times sixty repeats is degrees of arc, so each advance
+ * is measured on device, from the leftover its own ring leaves at 12. Four
+ * decimals for the same reason: the error multiplies by the repeat count.
+ *
+ * The innermost ring is unmeasured — the reference device binds only three ring
+ * complications — so it borrows the innermost measurement rather than the
+ * outermost, the drift being toward the centre.
+ */
+const TOKENS = [
+  { period: 'Day', title: 'D', steps: [0.8407, 0.8371, 0.8312, 0.8312] },
+  { period: 'Week', title: '7D', steps: [1.4159, 1.4136, 1.4164, 1.4164] },
+  { period: 'Month', title: 'M', steps: [1.0498, 1.0518, 1.0510, 1.0510] },
+]
 
 /**
  * Strips, one per ring, stacked below the wordmark. Measured off the face, not
@@ -68,6 +124,15 @@ const STRIP = {
   fontSize: 12,
 }
 
+/**
+ * The wordmark, centred between the clock and the strip stack. Both boxes are
+ * square because the asset is — WFF stretches the image to fill its box, and
+ * the earlier 66x55 / 54x45 boxes flattened the mark by 17%. The PNG carries
+ * its own padding, so the ink lands at 243-268: clear of the clock, which ends
+ * at 229, and of the strips, which start at 283.
+ */
+const WORDMARK = { centerX: FACE.center, centerY: 260, size: 66, ambientSize: 54 }
+
 const STRIPS = [
   { slotId: 104, service: 'Tokens' },
   { slotId: 107, service: 'Strip2' },
@@ -86,9 +151,12 @@ const HEADER = `<?xml version="1.0" encoding="utf-8"?>
   (docs/product/WATCH_RING_DESIGN.md, baseline 2026-07-25).
 
   Visual target: apps/wear_android/design/round-*-plan*.svg
-  — radial lift background, ~25px ring stroke (~+30% again), equal-width sunk strips (96, rx=6)
-  sized for "100% · 10.0M". Strip slots are RANGED_VALUE so accents use the same
-  ColorRamp as arcs ([COMPLICATION.RANGED_VALUE_COLORS]).
+  — radial lift background, 40-unit ring stroke (WFF paints about half of it), equal-width
+  sunk strips (88, rx=6) sized for "100% · 10.0M". Strip slots are RANGED_VALUE so accents
+  use the same ColorRamp as arcs ([COMPLICATION.RANGED_VALUE_COLORS]).
+
+  Ring type: the budget period from COMPLICATION.TITLE (D / 7D / M) repeated around the
+  band and punched out in the background colour, so the arc underneath keeps the family.
 
   BoundingArc clips ring-slot content — strips use BoundingBox slots after clock.
   Strip TEXT = full label (\`46%\` or \`100% · 500\` on the owning family).
@@ -110,6 +178,85 @@ function lift() {
                 </Fill>
             </Ellipse>
         </PartDraw>`
+}
+
+/**
+ * The circle the glyphs are centred on. `width`/`height` on `TextCircular` are
+ * that centreline, not an outer edge as on `Arc` — so this is the band's
+ * centreline and no baseline correction is needed.
+ */
+function textureCircle(diameter) {
+  return Number((diameter - TEXTURE.band).toFixed(1))
+}
+
+/**
+ * One period's run, as literal text plus the spacing that closes it. The branch
+ * already knows its token, so nothing is substituted at runtime: TITLE only
+ * chooses which branch draws.
+ *
+ * A whole number of repeats never measures out to a whole circle, and
+ * `TextCircular` neither stretches a run nor wraps it — it centres it in the
+ * sweep and leaves the remainder as one gap at 12: a seam, gaping when the
+ * remainder is nearly a repeat and a collision when it is nearly none. So the
+ * count is the nearest whole number of repeats, and `letterSpacing` spreads the
+ * difference over every character until the run plus one word space is exactly
+ * the circle — the gap at 12 then reads as one more gap between repeats.
+ *
+ * Only as exact as the `step` it is given, which is why `TOKENS` measures one
+ * per ring: the font is the watch's own, so on a watch whose font is not the
+ * reference one the fit drifts back and a ring ends a little open.
+ */
+function textureRun(circle, title, step) {
+  const ems = (Math.PI * circle) / TEXTURE_FONT_SIZE
+  const repeats = Math.round(ems / step)
+  // Each repeat pays for its own glyphs and for the space that follows it.
+  const spacing = (ems / repeats - step) / (title.length + 1)
+  return { text: Array(repeats).fill(title).join(' '), spacing: spacing.toFixed(4) }
+}
+
+function ringTextureBranch(circle, period, { text, spacing }) {
+  return `                                <Compare expression="is${period}">
+                                    <PartText x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <TextCircular
+                                            centerX="${FACE.center}"
+                                            centerY="${FACE.center}"
+                                            width="${circle}"
+                                            height="${circle}"
+                                            startAngle="${SWEEP.start}"
+                                            endAngle="${SWEEP.end}"
+                                            direction="CLOCKWISE"
+                                            align="CENTER">
+                                            <Font
+                                                family="SYNC_TO_DEVICE"
+                                                size="${TEXTURE_FONT_SIZE}"
+                                                weight="BOLD"
+                                                letterSpacing="${spacing}"
+                                                color="${COLOR.background}">${text}</Font>
+                                        </TextCircular>
+                                    </PartText>
+                                </Compare>`
+}
+
+/**
+ * No `Default`: a slot whose complication names no period gets no texture,
+ * rather than being labelled with whichever token the fallback happened to be.
+ */
+function ringTexture(diameter, ring) {
+  const circle = textureCircle(diameter)
+  const expressions = TOKENS.map(
+    ({ period, title }) =>
+      `                                    <Expression name="is${period}"><![CDATA[[COMPLICATION.TITLE] == "${title}"]]></Expression>`,
+  ).join('\n')
+  return `                            <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
+                            <Condition>
+                                <Expressions>
+${expressions}
+                                </Expressions>
+${TOKENS.map(({ period, title, steps }) =>
+  ringTextureBranch(circle, period, textureRun(circle, title, steps[ring])),
+).join('\n')}
+                            </Condition>`
 }
 
 function ringSlot({ slotId, diameter, service }, index) {
@@ -175,6 +322,7 @@ function ringSlot({ slotId, diameter, service }, index) {
                                         cap="ROUND" />
                                 </Arc>
                             </PartDraw>
+${ringTexture(diameter, index)}
                         </Group>
                     </Compare>
                 </Condition>
@@ -225,14 +373,16 @@ function clock() {
 
 /** The wordmark also carries the tap target into the Wear app. */
 function wordmark() {
+  const box = (size) =>
+    `x="${WORDMARK.centerX - size / 2}" y="${WORDMARK.centerY - size / 2}" width="${size}" height="${size}"`
   return `        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="wardpulse">
             <Launch target="app.wardpulse/app.wardpulse.wear.MainActivity" />
-            <!-- Between time and strips; keep bottom edge above strip stack (y=291). -->
-            <PartImage x="192" y="237" width="66" height="55" alpha="95">
+            <!-- The asset is padded: the box runs to 293, the ink stops at 268. -->
+            <PartImage ${box(WORDMARK.size)} alpha="95">
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <Image resource="wardpulse_mono" />
             </PartImage>
-            <PartImage x="198" y="242" width="54" height="45" alpha="0">
+            <PartImage ${box(WORDMARK.ambientSize)} alpha="0">
                 <Variant mode="AMBIENT" target="alpha" value="70" />
                 <Image resource="wardpulse_mono" />
             </PartImage>

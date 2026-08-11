@@ -56,8 +56,8 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   a local cooldown. Review art: `preview-glance-legend-*.png`. Compose: `GlanceLegendPage`
   (+ watch→phone refresh message).
 - **Watch face / WFF** (and any face-like complication preview) follow
-  `docs/product/WATCH_RING_DESIGN.md` (**locked 2026-07-25**, melt/strip revision
-  **2026-07-27**): **inner/center = tightest**
+  `docs/product/WATCH_RING_DESIGN.md` (**locked 2026-07-25**; later revisions are listed in the
+  document header): **inner/center = tightest**
   remaining (plan `%` primary; credit request-runway secondary from internal costs — never show
   request counts); arc = remaining (clockwise melt from 12); large time hero; sunk family strips
   (equal width; first strip nearest center; stroke tuned so 3 strips clear arcs); family colors.
@@ -97,6 +97,10 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   aperture. Every strip TEXT = full label (`46%` or `100% · 500`); accents use
   `[COMPLICATION.RANGED_VALUE_COLORS]`. Avoid `length(TITLE)` Conditions — they are unreliable
   on WFF. Draw strips after `DigitalClock` so the clock does not cover them.
+- A ring slot's TITLE carries the budget period (`D` / `7D` / `M`, empty for plan rings), and the
+  face repeats it around that band as background-colour cut-out type, branching on
+  `[COMPLICATION.TITLE]` equality. Repeat counts and letter spacing are measured per ring on
+  device in `tools/render-watchface.mjs` — remeasure, never hand-tune.
 - Prefer live arcs for selected layers, optional `creditsGlance` on the **matching provider**
   strip when present, large time. Never LLM `TOK` on the face.
 - Support tap-to-open into the Wear OS app where possible.

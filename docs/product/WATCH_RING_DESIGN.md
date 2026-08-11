@@ -5,7 +5,8 @@ purchased-meter revision **2026-07-27** (max three plan/budget rings; Extra usag
 purchased meters are not rings); band-width revision **2026-08-02** (see Ring geometry);
 per-connection budget revision **2026-08-08** (budget rings belong to one connection and take
 its family color; the summed Today / Week / Month rings are retired); budget-strip revision
-**2026-08-09** (a budget strip reads `$12.34/100` instead of a percent) —
+**2026-08-09** (a budget strip reads `$12.34/100` instead of a percent); ring-type revision
+**2026-08-11** (a budget ring repeats its period around its own band as cut-out type) —
 accepted visual target for Wear OS and Watch Face Format until the next explicit design
 revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
@@ -79,7 +80,8 @@ may modulate toward theme tertiary/error when needed.
 | Unresolved family | `#8AB4F8` | Blue — fallback only, never a product color |
 
 A local budget ring takes the family color of the connection it belongs to, exactly like that
-connection's allowance rings; period is carried by the ring label, not by a color of its own.
+connection's allowance rings; period is carried by the type in the band (see Ring type texture),
+never by a color of its own.
 Blue is what remains when a ring id resolves to no family, which should not happen for a ring
 the product ships.
 
@@ -133,8 +135,11 @@ Rules:
     the watch falls back to the plain `%` label rather than a spelled code: `EUR 999.99/999`
     is 118 % of the locked width, worse than the form the rule already rejects;
   - credits text is compact (`500`, `1.2K`) — never a `TOK` suffix;
-  - ring band **18.8 units** on the 450 WFF canvas so arcs read clearer while a **3-strip**
-    stack still clears the aperture (see Ring geometry for why that is not the nominal 25).
+  - ring band **20.2 units** on the 450 WFF canvas so arcs read clearer while a **3-strip**
+    stack still clears the aperture (see Ring geometry: it is neither the nominal 40 nor the
+    18.8 the scaling factor predicted — the band was measured, not derived).
+- **Ring type** — a budget ring's band repeats its period; other rings carry none (see Ring type
+  texture).
 - **Credits-only**: thin framing track, large time, credits strip only — no percent arcs.
 - No orphan captions (`Codex left`, floating unit labels) outside the strip row.
 - Review art focuses on 1–3 provider families. A local **budget** metric may still occupy a product
@@ -183,9 +188,47 @@ The family accent bar is the band trap again at strip scale: its 3x14 arc carrie
 stroke, so it paints 17 units tall and 6 wide with the left half clipped by the box edge —
 measured 16.4 x 4.7 on device. Review art draws 4.5 x 17, not the 3 x 14 the markup declares.
 
+## Ring type texture (revision 2026-08-11)
+
+Three same-family budget rings are three identical orange arcs, and the strip stack names them
+only in the order they melt. The band carries the missing word: each budget ring repeats its
+**period** around its own circumference. Plan and allowance rings draw none — a moving window
+is not a calendar period, and an empty band is itself the signal.
+
+- **Vocabulary** — `D`, `7D`, `M`. Not `W`: at ring scale `W` and `M` are near-mirror shapes,
+  and the watch already labels the Claude window `5h`, so duration tokens are the house
+  vocabulary.
+- **Cut-out, not ink** — glyphs are painted in the face background color and punched through
+  the band, so the arc underneath keeps carrying the family and the melt boundary can never
+  slice a glyph in half. WFF also refuses the alternative: `Font color` will not take
+  `[COMPLICATION.RANGED_VALUE_COLORS]`.
+- **Source** — the ring complication writes the token into `COMPLICATION.TITLE`
+  (`WatchComplicationText.ringPeriodToken`), and the face branches on it. A ring whose id names
+  no period sends none and matches no branch.
+- **Size** — cap height **0.78 of the band** (15.8 of 20.2 units). The device font's cap is 0.72
+  of `size`, so `Font size` is 21.9; the face derives it rather than declaring it, because the
+  band is the measured constant and the font size follows.
+- **The circle has to close** — `TextCircular` has no `JUSTIFY`, so a run that does not measure
+  out to a whole circle leaves its whole remainder as one gap at 12, which reads as a chipped
+  ring. The face fits each band with a whole number of repeats plus a per-band `letterSpacing`.
+  The advance the fit rests on is **measured on device, per rendered ring**: the same glyph at
+  the same size advances a fraction of a pixel differently at each radius, and a fraction of a
+  pixel times sixty repeats is degrees of arc. The numbers live in `tools/render-watchface.mjs`
+  — remeasure rather than reason about them.
+- **Portability** — the face fonts are `SYNC_TO_DEVICE`, so those advances belong to the
+  reference device; a watch whose system font differs drifts the seam back and needs a
+  remeasure. Pre-rendered per-ring images are the escape hatch if that becomes common. A WFF
+  `BitmapFont` is not: it renders and tints, but silently drops runs past ~50 glyphs, under the
+  24–65 repeats a band needs.
+
+Review art draws the same texture at the same cap height and the same repeat counts, but places
+each token by rotation, so its spacing is uniform by construction and it inherits no seam.
+
 ## Ambient
 
 Muted remaining arcs (when plan rings exist) and large centered time. Strips off for ambient.
+Ring type dims with the band it is punched into (alpha 140, same as the arcs) — it is part of
+the ring, not chrome to switch off.
 
 ## Review variants
 
@@ -201,7 +244,8 @@ xdg-open apps/wear_android/design/preview-3-plan-credits.png
 | File | Meaning |
 |------|---------|
 | `round-3-plan-credits.svg` | **Primary baseline** — three providers, plan + credits |
-| `round-3-plan-budget.svg` | Two plan rings + a budget ring reading `$71.30/250` |
+| `round-3-plan-budget.svg` | Two plan rings + a budget ring reading `$71.30/250`; only its band carries type |
+| `round-3-budget-periods.svg` | **Ring type baseline** — one connection's three budget periods, told apart by `7D` / `M` / `D` alone |
 | `round-2-plan-credits.svg` | Two providers |
 | `round-1-plan.svg` | Single plan ring, `%` strip only |
 | `round-1-plan-credits.svg` | Single plan + credits |
@@ -234,6 +278,8 @@ Recorded for planning only. Today’s **Max three** rule and “purchased meters
 are locked; do not raise the face cap without an explicit later design revision.
 
 - **Multi-profile per provider** — up to three profiles/accounts of the same provider may
-  eventually share a device. Same-family rings on one face must then differ by
-  **hatch/pattern** as well as family color (color alone is not enough for two Codex or two
-  Claude windows).
+  eventually share a device. Same-family rings on one face must then differ by more than family
+  color (color alone is not enough for two Codex or two Claude windows). The band is already
+  spoken for on budget rings, so a profile marker either shares that channel — a profile token
+  read together with the period — or finds another; a second pattern layered on the same band
+  would make both unreadable.

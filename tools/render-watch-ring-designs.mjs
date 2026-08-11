@@ -18,6 +18,9 @@ const TRACK = '#2E3632'
 const LABEL = '#F4FBF8'
 const WELL = '#0B0E0C'
 
+/** The ground under everything; ring type is punched down to it rather than inked on top. */
+const BACKGROUND = '#0A0D0B'
+
 /** The one family accent worn by two entries — a plan ring and a budget ring share it. */
 const ANTHROPIC = '#E8915A'
 
@@ -51,6 +54,31 @@ const STRIP = {
   fontSize: 12,
 }
 
+/**
+ * The ring type drawn as texture: the budget period repeated round the band and punched out in
+ * the background color, so the arc underneath keeps carrying the family
+ * (`WATCH_RING_DESIGN.md`). Only a budget ring names a period; a plan window draws no type.
+ *
+ * Repeat counts are copied from the face, outer ring first, never recomputed here: on device
+ * they come from advances measured per ring, and Noto's own metrics would fit a different
+ * number of tokens on the same band. Placement below is by rotation, so review art has no seam
+ * to inherit; the face has no such freedom and closes its circle with letter spacing.
+ *
+ * Three counts per token, not four: the face caps at three rings, so a fourth would be a board
+ * the baseline forbids, and the generator throws rather than draw one from a guessed count.
+ */
+const TEXTURE = {
+  /** Cap height as a share of the band, the same share the face gives it. */
+  capOfBand: 0.78,
+  /** Cap height of Noto Sans Bold, 1462/2048 em. */
+  capRatio: 0.714,
+  repeats: {
+    D: [65, 58, 50],
+    '7D': [39, 34, 29],
+    M: [52, 46, 39],
+  },
+}
+
 const CATALOG = {
   codex: {
     id: 'codex',
@@ -68,13 +96,30 @@ const CATALOG = {
     used: 0.47,
     color: '#67E8D4',
   },
-  anthropicBudget: {
-    id: 'anthropic-budget',
+  // One connection's three budget periods; percents and money match Wear's
+  // PreviewWatchDashboardSummary, so the boards and the preview face show one story.
+  anthropicBudgetWeek: {
+    id: 'anthropic-budget-week',
     used: 0.285,
     // A budget ring wears its connection's family color, never one of its own.
     color: ANTHROPIC,
     // Spend of limit, not remaining percent — the one documented exception.
     budget: '$71.30/250',
+    period: '7D',
+  },
+  anthropicBudgetMonth: {
+    id: 'anthropic-budget-month',
+    used: 0.265,
+    color: ANTHROPIC,
+    budget: '$212.10/800',
+    period: 'M',
+  },
+  anthropicBudgetToday: {
+    id: 'anthropic-budget-today',
+    used: 0.248,
+    color: ANTHROPIC,
+    budget: '$12.40/50',
+    period: 'D',
   },
 }
 
@@ -133,6 +178,23 @@ function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
       stroke-dasharray="${paint.toFixed(2)} ${circ.toFixed(2)}"
       stroke-dashoffset="${(-used).toFixed(2)}"
       transform="rotate(-90 ${cx} ${cy})" />`
+}
+
+function ringTexture({ cx, cy, r, thickness, period, fromOutside }) {
+  const repeats = TEXTURE.repeats[period]?.[fromOutside]
+  if (!repeats) {
+    throw new Error(`no measured repeat count for "${period}" on ring ${fromOutside + 1}`)
+  }
+  const cap = thickness * TEXTURE.capOfBand
+  // Baseline half a cap height below the centre line leaves the cap centred on the band.
+  const y = (cy - r + cap / 2).toFixed(1)
+  const tokens = Array.from({ length: repeats }, (_, index) => {
+    const angle = ((index * 360) / repeats).toFixed(2)
+    return `<text x="${cx}" y="${y}" transform="rotate(${angle} ${cx} ${cy})">${period}</text>`
+  }).join('')
+  return `
+    <g font-family="${FONT}, sans-serif" font-size="${(cap / TEXTURE.capRatio).toFixed(1)}"
+      font-weight="700" fill="${BACKGROUND}" text-anchor="middle">${tokens}</g>`
 }
 
 function barLabel(layer, { showPlan, showCredits }) {
@@ -230,6 +292,16 @@ function faceSvg({
         color: planLayers[i].color,
         ambient,
       })
+      if (planLayers[i].period) {
+        ringMarkup += ringTexture({
+          cx,
+          cy,
+          r,
+          thickness,
+          period: planLayers[i].period,
+          fromOutside,
+        })
+      }
     }
   } else {
     ringMarkup += `
@@ -258,7 +330,7 @@ function faceSvg({
     <radialGradient id="lift" cx="50%" cy="48%" r="62%">
       <stop offset="0%" stop-color="#18201C"/>
       <stop offset="55%" stop-color="${SURFACE}"/>
-      <stop offset="100%" stop-color="#0A0D0B"/>
+      <stop offset="100%" stop-color="${BACKGROUND}"/>
     </radialGradient>
   </defs>
   <rect width="${size}" height="${size}" fill="url(#lift)"/>
@@ -298,7 +370,20 @@ const variants = [
     // still leaves open.
     file: 'round-3-plan-budget.svg',
     name: 'Round · 3 providers · plan + budget',
-    layers: [CATALOG.codex, CATALOG.cursor, CATALOG.anthropicBudget],
+    layers: [CATALOG.codex, CATALOG.cursor, CATALOG.anthropicBudgetWeek],
+    showPlan: true,
+    showCredits: false,
+  },
+  {
+    // The board the ring type exists for: one connection's three budget periods wear one
+    // family color, so the type punched into each band is all that tells them apart.
+    file: 'round-3-budget-periods.svg',
+    name: 'Round · 3 budget periods · one connection',
+    layers: [
+      CATALOG.anthropicBudgetWeek,
+      CATALOG.anthropicBudgetMonth,
+      CATALOG.anthropicBudgetToday,
+    ],
     showPlan: true,
     showCredits: false,
   },
@@ -335,6 +420,8 @@ const variants = [
 
 const wffFiles = new Set([
   'round-3-plan-credits.svg',
+  // Ring type is a face-only channel, so its board belongs beside the face too.
+  'round-3-budget-periods.svg',
   'round-1-plan-credits.svg',
   'round-credits-only.svg',
   'round-ambient-3.svg',

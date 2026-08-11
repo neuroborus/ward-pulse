@@ -72,11 +72,12 @@ abstract class RingComplicationDataSourceService :
                 if (ring == null || remaining == null || remaining <= 0f) {
                     NoDataComplicationData()
                 } else {
-                    // Credits live on the center strip; keep RANGED_VALUE TITLE empty.
+                    // Credits live on the center strip; TITLE carries the period
+                    // the face repeats around the band, and nothing else.
                     ComplicationBuilders.ranged(
                         this,
                         remaining,
-                        title = null,
+                        title = WatchComplicationText.ringPeriodToken(ring.id),
                         colorArgb = RingFamily.colorArgb(ring.id),
                         contentDescription = label,
                     )
@@ -320,6 +321,26 @@ object WatchComplicationText {
     /** Remaining capacity 0–100 for RANGED_VALUE / strip-style labels. */
     fun remainingPercent(usedPercent: Double): Float =
         (100.0 - usedPercent.coerceIn(0.0, 100.0)).toFloat().coerceIn(0f, 100f)
+
+    /**
+     * The period token the watch face repeats around a ring, read off the ring
+     * id the way [RingFamily.colorArgb] reads the family. Null for a ring that
+     * has no period — a plan window or an allowance is a moving window, not a
+     * calendar period — and the face draws no texture for a slot that names
+     * none.
+     *
+     * `7D` rather than `W`: at ring scale `W` and `M` are near-mirror shapes,
+     * and the watch already labels the Claude window `5h`, so duration tokens
+     * are the house vocabulary (`docs/product/WATCH_RING_DESIGN.md`).
+     */
+    fun ringPeriodToken(ringId: String): String? =
+        when {
+            !ringId.startsWith("budget.") -> null
+            ringId.endsWith(".today") -> "D"
+            ringId.endsWith(".week") -> "7D"
+            ringId.endsWith(".month") -> "M"
+            else -> null
+        }
 
     data class StripPayload(
         /** Full strip label for WFF Template `%s` (`46%`, `100% · 500`). */

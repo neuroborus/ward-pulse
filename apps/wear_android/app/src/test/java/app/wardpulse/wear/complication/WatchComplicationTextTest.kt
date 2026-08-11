@@ -168,4 +168,17 @@ class WatchComplicationTextTest {
         assertEquals("CODEX · LIMIT", WatchComplicationText.status(summary))
         assertEquals("LIMIT", WatchComplicationText.shortStatus(PulseStatus.RATE_LIMITED))
     }
+
+    @Test
+    fun readsThePeriodTokenOffBudgetRingIdsOnly() {
+        assertEquals("D", WatchComplicationText.ringPeriodToken("budget.anthropic.today"))
+        assertEquals("7D", WatchComplicationText.ringPeriodToken("budget.openai.week"))
+        assertEquals("M", WatchComplicationText.ringPeriodToken("budget.cursor.month"))
+
+        // A window is not a calendar period, so the face draws no texture for it.
+        assertNull(WatchComplicationText.ringPeriodToken("allowance.claude.plan"))
+        // A connection named after a period must not be mistaken for one.
+        assertNull(WatchComplicationText.ringPeriodToken("allowance.codex.week"))
+        assertNull(WatchComplicationText.ringPeriodToken("budget.anthropic.quarter"))
+    }
 }
