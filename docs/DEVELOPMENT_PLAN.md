@@ -1790,6 +1790,157 @@ iOS widgets
 multi-profile hatch patterns (same future note as Phase 13)
 ```
 
+### Phase 15 — plan recovery notifications
+
+Status: planned 2026-08-12.
+
+Rationale: an exhausted plan window is the one state the user is actively waiting to leave.
+Today the product says nothing when it ends — the ring simply reappears after the next poll,
+and the user learns it by opening the app they could not use. A recovery is worth an
+interruption; nothing else in the product is.
+
+**A recovery is an event, not an alert.** Alerts are user-configured thresholds that stay true
+while the condition holds and are listed on the Dashboard and counted on Wear. A recovery is an
+edge — `usedPercent >= 100` yesterday, usable now — that happens once, has no steady state, and
+needs no rule to configure. It must not enter the alerts list, must not be counted by Wear's
+`Alerts: N`, and must not bring back a phone Alerts tab.
+
+Deliverables:
+
+- the edge is computed in Rust from the previous state and the new snapshot, so the rule stays
+  deterministic and testable and the shells stay transport-only;
+- it fires only for a window that was **exhausted** and reports a reset instant — a window that
+  merely rolls over while it still had headroom is not news;
+- delivery is **scheduled from `AllowanceState.resets_at`**, not discovered by polling: the
+  reset instant is already modeled and all three plan families fill it in — Claude, Codex and
+  Cursor — while platform connections carry billing reports with no window to reset. So the
+  feature is not Claude-only, and no adapter needs new data. The refresh cadence (5–60
+  minutes, 5-minute floor) would make a polled notification late by up to an interval. The next
+  poll confirms, and a moved window reschedules or cancels;
+- notifications are **on by default** with one systemic switch in Settings (not a per-connection
+  rule on Providers — there is no threshold to configure). Android 13+ still governs
+  `POST_NOTIFICATIONS` at the OS level, so "on by default" means the app asks, not that it
+  bypasses;
+- the watch surface is **not** free: phone and Wear intentionally share the `app.wardpulse`
+  application id, and Wear suppresses bridging for an app it already carries on the assumption
+  that the watch app posts its own. So the watch side is a decision — post from the Wear app,
+  or set the notification bridging mode — and it has to be exercised on a paired AVD, since no
+  gate reaches it;
+- plan and allowance windows only in the first iteration. A local budget rolls on the user's own
+  calendar rather than a provider clock, and whether that deserves the same interruption is a
+  separate question.
+
+Acceptance:
+
+```text
+a window crossing exhausted → usable notifies exactly once per crossing
+a window that was never exhausted notifies never
+notification fires at the reset instant, not at the next poll
+a reset instant that moves reschedules; a disconnected provider cancels
+the recovery is absent from the Dashboard alerts list and from Wear's Alerts count
+the notification reaches a paired watch exactly once — not twice, not never
+the switch is in Settings, is on by default, and survives reinstall of the widget/watch surfaces
+no notification carries credentials, account ids, or raw provider payloads
+```
+
+Open question — a marker on the watch face:
+
+```text
+A filled family-colored dot in the upper aperture would say "this one is back" without the
+phone. Three things have to be settled before it can be drawn, and all three touch a locked
+baseline: WATCH_RING_DESIGN.md reserves the upper inner rim for a future weather glance and
+forbids placeholder chrome; a dot needs its own data channel (a complication slot) and a
+lifetime, since nothing on the face expires by itself; and one dot cannot carry two families
+when two plans recover together. Until those are answered the face already says it in its own
+language — an exhausted ring is omitted, so a recovered one reappears at 100% on the next sync.
+A marker lands only with a WATCH_RING_DESIGN.md revision and a schema field to carry it.
+```
+
+Non-goals for this phase:
+
+```text
+turning a recovery into an alert rule, a threshold, or an Alerts tab entry
+notifying on every window roll-over regardless of exhaustion
+a server, push service, or any inbound channel — scheduling is local to the phone
+desktop agent state (whether a coding agent is waiting on the user) — different sensor,
+  different transport, not this phase
+```
+
+### Phase 16 — one declared order for the phone tabs
+
+Status: planned 2026-08-12. Phone shells only; watch and widget **surface** order is locked by
+Phase 13 and is not touched here.
+
+Rationale: the phone answers "in what order do providers appear" three different ways today,
+and one of the three was never decided by anyone. Providers renders the catalog in enum order
+(`ProviderFamily { openai, anthropic, cursor }` × `ConnectionKind { plan, platform }`), which is
+repository history rather than meaning. The Dashboard has no declared order at all:
+`_providerDashboardSections` groups accounts into a `LinkedHashMap`, so `grouped.values` returns
+insertion order — which is the order the snapshot arrived in, which is the order links are
+chained in `buildLiveProviderStack`. Reordering two arguments there for readability silently
+reorders the user's main screen, and no test holds it.
+
+The value being bought is **stability**: a dashboard opened ten times a day is fast because the
+card is where it was last time. So order by keys that change rarely, and let position move only
+when something real changed.
+
+Deliverables:
+
+- one ordering function per surface in the phone shell, declared and covered by tests — no
+  surface may inherit its order from assembly or from a map's insertion order;
+- composite comparators, matched to what each tab is for:
+
+| Tab | Its job | Keys, in order |
+| --- | --- | --- |
+| Dashboard | watching | needs action → usage over the period → alphabetical |
+| Providers | managing | connected → needs action → alphabetical |
+| Watchface / Widget | picking metrics | connected → alphabetical |
+
+- **"needs action" means status**, not percentage — and it is read off the scale that already
+  exists: `ProviderStatus::severity` (`Ok` 1 → `Error` 7) with its Dart mirror in
+  `provider_status_severity.dart`. Sort by that rank descending; do **not** enumerate a subset
+  here. A hand-written list of "the bad ones" is how the product ended up with five disagreeing
+  status scales once already, and it would silently drop `Error`, the worst of them. Status
+  changes weekly at most, so it can jump a row without shuffling the list;
+- **"usage" means spend or volume over the period**, never the live remaining percent. Remaining
+  percent crosses its neighbours on almost every poll, and a list that reshuffles itself on a
+  timer destroys the muscle memory this phase exists to protect. The key needs no new data —
+  `spent` per account is already in the snapshot;
+- **alphabetical sorts on the stable connection id**, not on the displayed label, so the order
+  cannot follow a copy edit or a future translation;
+- connected/not-connected is a real key only where unconnected rows render: the Watchface and
+  Widget catalogs keep them visible but disabled, while the Dashboard has no card for a
+  provider that reports nothing.
+
+Acceptance:
+
+```text
+every phone surface takes its order from a named function, and a test fails if the order changes
+reordering links in buildLiveProviderStack leaves the Dashboard order unchanged
+Dashboard and Providers rank status by ProviderStatus::severity; no sixth status scale appears
+a change in remaining percent alone never reorders a phone surface
+two providers with equal keys sort by connection id, and renaming a label does not move them
+Watchface / Widget catalogs list connected metrics first and keep unconnected ones visible but disabled
+watch and widget surface order stays tightest-remaining-first (Phase 13), unaffected by this phase
+```
+
+Open question — a personal order:
+
+```text
+A dashboard is a personal shelf, and dragging cards into place would beat any default we pick.
+It also replaces the usage key rather than joining it: a user-defined order is the answer to
+"what matters to me". Worth doing after the declared order lands, not instead of it — an
+explicit default is what a personal order overrides.
+```
+
+Non-goals for this phase:
+
+```text
+reordering the primary tabs themselves (Dashboard → Watchface → Widget → Providers → Settings)
+sorting any phone surface by live remaining percent
+changing watch, Glance, or widget surface order
+```
+
 ---
 
 ## 20. Testing strategy
