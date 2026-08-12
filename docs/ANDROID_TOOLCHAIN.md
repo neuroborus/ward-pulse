@@ -40,12 +40,14 @@ build and test gates is ready:
   unchanged after the phone app is force-stopped and the Wear app is restarted.
 - The official WFF validator accepts the declarative watch face, and the package builds as
   APK/AAB without dex files.
-- The watch face installs and renders on the round Wear AVD; tap-to-open and ambient mode
-  pass emulator acceptance.
+- The watch face installs and renders on the round and square Wear AVDs; tap-to-open and
+  ambient mode pass emulator acceptance (ambient is entered with `KEYCODE_SLEEP` — see Wear
+  emulator navigation).
 
 The Phase 2 phone-dashboard, Phase 3 Rust-bridge, and Phase 4 Wear-app acceptance gates
 passed on **2026-07-18**. Phase 5 paired-device and Phase 6 WFF acceptance passed on
-**2026-07-19**.
+**2026-07-19**. The face was checked on the square AVD, and ambient on both shapes, on
+**2026-08-12**.
 
 Chrome and Linux desktop warnings from `flutter doctor` are out of scope. WardPulse targets
 Android phone, Wear OS, and Watch Face Format in the current product plan.
@@ -346,6 +348,21 @@ Start WardPulse directly when launcher navigation is not under test:
 adb -s "$WEAR_SERIAL" shell am start \
   -n app.wardpulse/app.wardpulse.wear.MainActivity
 ```
+
+After `am start`, `keyevent 4` returns to the face — but send it once: from the face itself
+both `4` and `3` open the launcher, and `4` from the launcher lands back on the face.
+
+Ambient is `KEYCODE_SLEEP`, not the power button — `keyevent 26` leaves this image
+interactive:
+
+```sh
+adb -s "$WEAR_SERIAL" shell input keyevent 223   # Dozing / DOZE_SUSPEND
+adb -s "$WEAR_SERIAL" shell input keyevent 224   # back to interactive
+```
+
+`screencap` in doze captures the frame after the system's own dimming, which is neither a
+scale nor a gamma of the interactive one. Use it to check that ambient renders what it should;
+never read alpha levels off it.
 
 The app compiles against Android SDK 37.1 but targets API 36 and runs on the Wear OS 6.1 /
 API 36.1 image. Compile SDK and runtime system image versions are intentionally independent.
