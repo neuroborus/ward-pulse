@@ -1611,8 +1611,10 @@ unselected or unavailable ones simply do not render. Face visual contract:
 Deliverables:
 
 - OpenPencil sources under `apps/watchface_wff/design/` and `apps/wear_android/design/` for
-  1–3 concentric layers on round and square plus ambient (WFF art uses the same concentric
-  language as Wear — not the old side-by-side `RING 1` / `RING 2` wireframe);
+  1–3 concentric layers plus ambient (WFF art uses the same concentric language as Wear — not
+  the old side-by-side `RING 1` / `RING 2` wireframe); one board serves both shapes, since WFF
+  renders one 450-unit canvas and a square watch shows the same circle with its corners left
+  to the background;
 - a ring binds to exactly one metric of exactly one connection (provider **plan** window with a
   %, or that connection's local budget percent for one period — never purchased Extra usage /
   on-demand / credit meters, and never a sum across connections);
@@ -1648,12 +1650,16 @@ Acceptance:
 
 ```text
 WATCH_RING_DESIGN.md baseline locked 2026-07-25 (time hero, remaining arcs, sunk strips);
-  melt/strip-accent revision 2026-07-27 (clockwise-from-12 melt; ColorRamp strip accents)
+  melt/strip-accent revision 2026-07-27 (clockwise-from-12 melt; ColorRamp strip accents);
+  band-width 2026-08-02; per-connection budget 2026-08-08; budget-strip 2026-08-09;
+  ring-type 2026-08-11
 WEAR_GLANCE_DESIGN.md baseline locked 2026-07-26 (legend rows, OK/!OK refresh, Alerts pill)
 review SVGs/PNGs match those baselines (face: preview-3-plan-credits; Glance: preview-glance-legend-3)
+watchface.xml and its ring-type drawables are generated (render-watchface.mjs; check-watchface fails on XML drift)
 schema version 7 validates and sanitized fixtures stay current
 watch surfaces show only configured, available, non-exhausted rings
 arc length = remaining; melt clockwise from 12; inner/center = tightest remaining
+a budget ring's band repeats its period as cut-out type (`D` / `7D` / `M`); plan rings carry none
 credits per provider family on face strips (`% · credits`) from allowances, like Glance;
   creditsGlance for credits-only faces; never LLM TOK
 App Glance credits are per provider with an explicit credits label (not a footer sum)
@@ -1681,6 +1687,11 @@ Strip TEXT carries the full label (`100% · 500`); accents via RANGED_VALUE Colo
 Credits per provider family on face strips from allowances (same as Glance); creditsGlance for credits-only
 Clockwise-from-12 remaining melt (Transform startAngle; review art regenerated 2026-07-27)
 Wear Glance Compose text legend landed (GlanceLegendPage; watch→phone refresh request)
+Ring band widened to a measured 20.2 units at a 24-unit pitch, strip stack re-spaced (2026-08-07)
+Budget rings key by connection and take its family color; summed Today/Week/Month rings retired (2026-08-09)
+Budget strips read spend of limit (`$12.34/100`); the aggregate budget percentage is gone (2026-08-09)
+watchface.xml generated from tools/render-watchface.mjs (2026-08-10)
+Budget ring bands repeat their period as baked cut-out type from generated drawables, four sweeps broken on the diagonals (2026-08-11)
 ```
 
 
