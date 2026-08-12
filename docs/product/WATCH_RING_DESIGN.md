@@ -257,13 +257,17 @@ is not a calendar period, and an empty band is itself the signal.
 
 Review art draws the same texture from the same table at the same cap height, breaks and repeat
 counts — `tools/render-watch-ring-designs.mjs` copies them from the face generator and never
-recomputes them, so the boards and the watch count alike.
+recomputes them, so the boards and the watch count alike. The ambient board is the one place
+the height moves: that art paints a thinner band, and the type follows it at the same 0.78 of
+whatever is drawn.
 
 ## Ambient
 
 Muted remaining arcs (when plan rings exist) and large centered time. Strips off for ambient.
 Ring type dims with the band it is punched into (alpha 140, same as the arcs) — it is part of
-the ring, not chrome to switch off.
+the ring, not chrome to switch off. `round-ambient-budget.svg` shows that it survives, not at
+what level: review art mutes an ambient arc to one gray, while the face keeps the family color
+and dims it, so the two cannot agree on a number.
 
 ## Review variants
 
@@ -286,6 +290,7 @@ xdg-open apps/wear_android/design/preview-3-plan-credits.png
 | `round-1-plan-credits.svg` | Single plan + credits |
 | `round-credits-only.svg` | No plan rings — time + credits strip |
 | `round-ambient-3.svg` | Ambient, three muted rings |
+| `round-ambient-budget.svg` | Ambient with type — the band dims and takes its type with it |
 
 Wear: `apps/wear_android/design/`. WFF copies: `apps/watchface_wff/design/`.  
 OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `arcData`).

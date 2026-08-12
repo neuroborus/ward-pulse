@@ -176,14 +176,13 @@ function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
   const circ = 2 * Math.PI * r
   const left = Math.max(0.02, Math.min(remaining, 0.999))
   const paint = circ * left
-  const weight = ambient ? thickness * 0.75 : thickness
   const valueColor = ambient ? '#8A968F' : color
   const used = circ * (1 - left)
   return `
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
-      stroke-width="${weight}" />
+      stroke-width="${thickness}" />
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${valueColor}"
-      stroke-width="${weight}" stroke-linecap="round"
+      stroke-width="${thickness}" stroke-linecap="round"
       stroke-dasharray="${paint.toFixed(2)} ${circ.toFixed(2)}"
       stroke-dashoffset="${(-used).toFixed(2)}"
       transform="rotate(-90 ${cx} ${cy})" />`
@@ -290,6 +289,10 @@ function faceSvg({
   const outer = size * 0.4264
   const gap = size * 0.0084
   const thickness = Math.max(8, size * (ambient ? 0.0403 : 0.0449))
+  // Ambient art paints a thinner band than it reserves; the ring pitch stays on `thickness`
+  // while the stroke and the type punched into it take `band`, so a cap set for the full
+  // width cannot overflow the thinned stroke.
+  const band = ambient ? thickness * 0.75 : thickness
   const planLayers = sortByRemaining(layers.filter((layer) => layer.used < 1))
   const stripLayers = showPlan ? planLayers : layers.slice(0, 1)
 
@@ -303,7 +306,7 @@ function faceSvg({
         cx,
         cy,
         r,
-        thickness,
+        thickness: band,
         remaining: 1 - planLayers[i].used,
         color: planLayers[i].color,
         ambient,
@@ -313,7 +316,7 @@ function faceSvg({
           cx,
           cy,
           r,
-          thickness,
+          thickness: band,
           period: planLayers[i].period,
           fromOutside,
         })
@@ -364,6 +367,13 @@ await mkdir(wffDir, { recursive: true })
 const three = [CATALOG.codex, CATALOG.claude, CATALOG.cursor]
 const two = [CATALOG.codex, CATALOG.claude]
 const one = [CATALOG.codex]
+// One connection's three budget periods. The type baseline and its ambient counterpart draw
+// the same rings, and sharing the set is what keeps the two boards from drifting apart.
+const budgetPeriods = [
+  CATALOG.anthropicBudgetWeek,
+  CATALOG.anthropicBudgetMonth,
+  CATALOG.anthropicBudgetToday,
+]
 
 const variants = [
   {
@@ -395,11 +405,7 @@ const variants = [
     // family color, so the type punched into each band is all that tells them apart.
     file: 'round-3-budget-periods.svg',
     name: 'Round · 3 budget periods · one connection',
-    layers: [
-      CATALOG.anthropicBudgetWeek,
-      CATALOG.anthropicBudgetMonth,
-      CATALOG.anthropicBudgetToday,
-    ],
+    layers: budgetPeriods,
     showPlan: true,
     showCredits: false,
   },
@@ -432,6 +438,17 @@ const variants = [
     showPlan: true,
     showCredits: false,
   },
+  {
+    // Ambient dims the band the type is punched into, it does not switch the type off.
+    // The board shows that the type survives; it cannot show at what level, because the
+    // arc here is the muted gray of ambient art, not the family color the face dims.
+    file: 'round-ambient-budget.svg',
+    name: 'Round · ambient · 3 budget periods',
+    layers: budgetPeriods,
+    ambient: true,
+    showPlan: true,
+    showCredits: false,
+  },
 ]
 
 const wffFiles = new Set([
@@ -441,6 +458,7 @@ const wffFiles = new Set([
   'round-1-plan-credits.svg',
   'round-credits-only.svg',
   'round-ambient-3.svg',
+  'round-ambient-budget.svg',
 ])
 
 for (const variant of variants) {
