@@ -5,6 +5,7 @@
 *.local
 *.log
 LOCAL_ARTIFACTS/
+/prepush.sh
 
 # Rust
 target/
