@@ -21,9 +21,9 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 
 - Own provider setup, credential entry, secure storage integration, platform transport, sync scheduling, diagnostics export, and Wear Data Layer send.
 - **Dashboard status marks** follow `docs/product/PHONE_DASHBOARD_DESIGN.md` (**rules locked
-  2026-08-13**): `Ok` draws nothing; a rollup counts only what is visible below it and shows a
-  count where a leaf shows a glyph; family color stays identity; rank from
-  `ProviderStatus::severity`, never a new list.
+  2026-08-13**): `Ok` draws nothing; a rollup counts the problems rendered below it and shows a
+  count where a leaf shows a glyph; family color stays
+  identity; rank from `ProviderStatus::severity`, never a new list.
 - Consume dashboard snapshots from Rust.
 - Show today, week, month, provider plaques on Dashboard, charts, budgets, credits, sync
   status, Providers connection hub, and Settings.

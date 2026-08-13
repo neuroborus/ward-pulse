@@ -98,6 +98,8 @@ void main() {
     expect(find.text('Purchased credits'), findsOneWidget);
     expect(find.text('Unlimited'), findsOneWidget);
     expect(find.text('Unknown'), findsNothing);
+    // Healthy families say nothing at all.
+    expect(find.byType(Badge), findsNothing);
 
     expect(find.text('OpenAI'), findsOneWidget);
     await tester.scrollUntilVisible(
@@ -179,12 +181,12 @@ void main() {
     expect(find.text('Other Models'), findsOneWidget);
     expect(find.text('53% left'), findsOneWidget);
     expect(find.text('0% left'), findsOneWidget);
-    expect(find.byTooltip('Rate limited'), findsOneWidget);
     expect(find.byIcon(Icons.speed), findsOneWidget);
-    // A card marks a deviation, never health: the pill belongs to the rate
-    // limited pool alone (PHONE_DASHBOARD_DESIGN.md).
+    // A card marks a deviation, never health, and the header says how many
+    // deviate below it (PHONE_DASHBOARD_DESIGN.md).
     expect(_pillsInCardOf(find.text('Cursor Models')), findsNothing);
     expect(_pillsInCardOf(find.text('Other Models')), findsOneWidget);
+    expect(find.widgetWithText(Badge, '1'), findsOneWidget);
   });
 
   testWidgets('always shows platform spend when budgets are available', (

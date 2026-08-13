@@ -485,6 +485,7 @@ class _ProviderDashboardSection {
     required this.provider,
     required this.providerLabel,
     required this.status,
+    required this.flagged,
     required this.allowances,
     required this.buckets,
     required this.modelBreakdown,
@@ -493,6 +494,12 @@ class _ProviderDashboardSection {
   final String provider;
   final String providerLabel;
   final ProviderStatus status;
+
+  /// How many things this section is reporting as unhealthy: one per card that
+  /// deviates, or one for an account that deviates without a card of its own —
+  /// a platform connection reports spend, not meters, and its trouble would
+  /// otherwise have nowhere to show.
+  final int flagged;
   final List<AllowanceState> allowances;
   final List<UsageBucket> buckets;
   final List<ModelUsage> modelBreakdown;
@@ -536,7 +543,29 @@ List<_ProviderDashboardSection> _providerDashboardSections(
       _ProviderDashboardSection(
         provider: group.first.provider,
         providerLabel: group.first.providerLabel,
-        status: worstProviderStatus(group.map((account) => account.status)),
+        // A rollup covers what this section renders — its cards and the
+        // accounts behind them. Cards alone are not enough: an account can read
+        // healthy while a card crossed its own threshold, and it can read
+        // warning while reporting no card at all
+        // (PHONE_DASHBOARD_DESIGN.md).
+        status: worstProviderStatus([
+          ...group.map((account) => account.status),
+          ...allowances.map((allowance) => allowance.status),
+        ]),
+        flagged: group.fold(0, (total, account) {
+          final cards =
+              account.allowances
+                  .where(
+                    (allowance) =>
+                        displayPreferences.allows(allowance.source) &&
+                        allowance.status != ProviderStatus.ok,
+                  )
+                  .length;
+          if (cards > 0) {
+            return total + cards;
+          }
+          return total + (account.status == ProviderStatus.ok ? 0 : 1);
+        }),
         allowances: allowances,
         buckets: buckets,
         modelBreakdown: modelBreakdown,
@@ -575,6 +604,10 @@ class _ProviderDashboardSectionView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final chip = providerStatusChipColors(
+      Theme.of(context).colorScheme,
+      section.status,
+    );
     final accent = providerFamilyColor(section.provider);
     final cards = [
       for (final allowance in section.allowances)
@@ -598,7 +631,19 @@ class _ProviderDashboardSectionView extends StatelessWidget {
             Expanded(
               child: Text(section.providerLabel, style: textTheme.titleMedium),
             ),
-            StatusPill(status: section.status),
+            // A rollup differs from a leaf in form: the card carries the glyph
+            // that states a fact, the header carries how many facts are below.
+            // The accent bar keeps naming the family, never the status.
+            if (section.flagged > 0)
+              Tooltip(
+                message: section.status.label,
+                triggerMode: TooltipTriggerMode.tap,
+                child: Badge(
+                  backgroundColor: chip.fill,
+                  textColor: chip.ink,
+                  label: Text('${section.flagged}'),
+                ),
+              ),
           ],
         ),
         if (cards.isNotEmpty) ...[

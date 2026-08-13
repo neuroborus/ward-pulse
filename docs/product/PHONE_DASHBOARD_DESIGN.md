@@ -21,7 +21,7 @@ The Dashboard nests three scopes, and each has a different job:
 | Level | What it states | Source |
 |---|---|---|
 | Allowance card | this meter's own state | `allowance.status` |
-| Family header | the worst of the cards it renders | those cards, after the display filter |
+| Family header | how many things this family reports as unhealthy | its rendered cards and the accounts behind them |
 | App bar | the worst of the sections on screen | those sections |
 
 ## Rules
@@ -30,10 +30,13 @@ The Dashboard nests three scopes, and each has a different job:
    healthy checkmarks says "nothing happened" once per row and drowns the one triangle the
    screen was opened for — and a filled check outweighs an outlined warning, so the norm ends up
    louder than the problem.
-2. **A rollup counts what is visible below it.** The family header summarizes the cards it
-   actually renders, so a meter hidden by the display filter is not summarized: a count that
-   includes it promises a problem the user cannot scroll to. The app bar summarizes sections the
-   same way. A rollup is never computed from a set the user cannot reach.
+2. **A rollup covers what the level below renders, and nothing the user cannot reach.** A count
+   that includes something absent from the screen promises a problem nothing there can explain.
+   Cards alone are not the whole of a section, though: an account can read healthy while one of
+   its cards crossed its own threshold, and a platform connection reports spend rather than
+   meters, so its trouble has no card to appear on. Hence the family header counts **one per
+   unhealthy card, or one for an unhealthy account that produced no unhealthy card**, and takes
+   its color from the worst of both. The app bar summarizes sections the same way.
 3. **A rollup differs from a leaf in form, not in repetition.** The same glyph at the same size
    on three nested levels erases the nesting. The leaf carries the glyph, because it states a
    fact; a rollup carries a **count**, because it states how many facts are below.
@@ -41,7 +44,9 @@ The Dashboard nests three scopes, and each has a different job:
    and keeps doing only that, exactly as on the watch, where color is family and status only
    modulates. Status rides beside it, never over it.
 5. **One severity scale.** Rank comes from `ProviderStatus::severity` in the core and its Dart
-   mirror in `provider_status_severity.dart`; colors come from `providerStatusColor`. Do not
+   mirror in `provider_status_severity.dart`. Color follows the shape it paints:
+   `providerStatusColor` is ink for a glyph, `providerStatusChipColors` is the container pair a
+   filled count sits in, and the two travel together so a fill and its label cannot drift. Do not
    enumerate "the bad statuses" anywhere — that habit once left the product with five scales
    that disagreed.
 6. **The top mark is a way in, not a copy.** A rollup earns its place only when the problem is
