@@ -202,11 +202,13 @@ on its own value.
    zero.
 7. **One payload entry, two complication slots.** A `RANGED_VALUE` complication carries one
    value, so two melts need two slots however the payload is shaped: the entry travels whole and
-   the Wear data sources publish its two pools into a slot pair. Four slots is the worst case —
-   one pair plus two single rings — and the face already declares four, though not at usable
-   radii: the fourth is declared for a fourth *band* (diameter 260), while a split half belongs
-   inside its pair's own pitch. The generator redeclares the geometry either way; what the
-   existing four buy is that the slot count does not have to grow.
+   the Wear data sources publish its two pools into a slot pair. The markup pays more than the
+   payload does: a pair sorts by its tighter half and can therefore land on **any** of the three
+   bands, so every band needs a second slot standing by — six declared, of which at most four
+   ever carry data (one pair plus two single rings). A band draws one full arc when its second
+   slot is empty and two halves when it is not, the same way the type branches on its
+   complication today. The four slots the face declares now are for four *bands* and do not
+   answer this; the generator redeclares the geometry anyway.
 8. **The payload must say "one band", not "two rings".** The shipped contract caps `rings` at
    three entries (`schemas/watch_dashboard_summary.schema.json`, `maxItems: 3`, schema version
    8), and three entries mean three bands. If a pair travelled as two entries, a face holding a
