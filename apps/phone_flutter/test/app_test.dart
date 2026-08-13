@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_app.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
+import 'package:ward_pulse_phone/dashboard/provider_status_color.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
@@ -466,6 +467,9 @@ void main() {
 
     expect(find.text('WardPulse'), findsOneWidget);
     expect(find.text('Dashboard unavailable'), findsNothing);
+    // Nothing deviates, so the app bar says nothing at all
+    // (PHONE_DASHBOARD_DESIGN.md).
+    expect(find.byType(Badge), findsNothing);
   });
 
   testWidgets('labels previous dashboard data as stale', (tester) async {
@@ -478,9 +482,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // App bar overall status plus the provider plaque on the dashboard.
+    // Staleness is an account state, so no card carries a glyph for it: the
+    // family answers with a count and the app bar with a way in — never the
+    // same mark twice down the screen (PHONE_DASHBOARD_DESIGN.md).
+    expect(find.byIcon(Icons.schedule), findsNothing);
     expect(find.byTooltip('Stale'), findsWidgets);
-    expect(find.byIcon(Icons.schedule), findsWidgets);
+    expect(find.byTooltip('Go to stale'), findsOneWidget);
     expect(
       find.textContaining('Showing previous data · Updated'),
       findsOneWidget,
@@ -493,11 +500,56 @@ void main() {
       find.byTooltip(DashboardSyncIssue.authentication.message),
       findsWidgets,
     );
-    final staleIcon = find.byIcon(Icons.schedule).first;
+    final appBarMark = find.byTooltip('Go to stale');
     expect(
-      tester.widget<Icon>(staleIcon).color,
-      Theme.of(tester.element(staleIcon)).colorScheme.tertiary,
+      tester
+          .widget<Badge>(
+            find.descendant(of: appBarMark, matching: find.byType(Badge)),
+          )
+          .backgroundColor,
+      providerStatusChipColors(
+        Theme.of(tester.element(appBarMark)).colorScheme,
+        ProviderStatus.stale,
+      ).fill,
     );
+  });
+
+  testWidgets('the app-bar mark opens the Dashboard at the first problem', (
+    tester,
+  ) async {
+    final snapshot =
+        DashboardSnapshot.fromJsonString(
+          File(
+            '../../fixtures/snapshots/dashboard_today.json',
+          ).readAsStringSync(),
+        ).withStaleStatus();
+
+    await tester.pumpWidget(
+      WardPulseApp(repository: ValueDashboardRepository(snapshot)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.text('Refresh interval'), findsOneWidget);
+
+    // A rollup earns its place by leading somewhere, so it works from any tab.
+    await tester.tap(find.byTooltip('Go to stale'));
+    await tester.pumpAndSettle();
+
+    // Settings is gone and the flagged section is the thing on screen — the
+    // dashboard title has scrolled off above it, which is the point.
+    expect(find.text('Refresh interval'), findsNothing);
+    expect(find.byTooltip('Stale'), findsWidgets);
+    expect(find.text('Usage dashboard'), findsNothing);
+
+    // The request is spent: coming back later is an ordinary visit, not a
+    // repeat of a tap the reader made once.
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dashboard'));
+    await tester.pumpAndSettle();
+    expect(find.text('Usage dashboard'), findsOneWidget);
   });
 
   testWidgets('stores and masks an OpenAI Admin API key', (tester) async {

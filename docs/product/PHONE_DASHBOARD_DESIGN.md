@@ -22,7 +22,7 @@ The Dashboard nests three scopes, and each has a different job:
 |---|---|---|
 | Allowance card | this meter's own state | `allowance.status` |
 | Family header | how many things this family reports as unhealthy | its rendered cards and the accounts behind them |
-| App bar | the worst of the sections on screen | those sections |
+| App bar | how many sections a tap can take the reader to | those sections |
 
 ## Rules
 

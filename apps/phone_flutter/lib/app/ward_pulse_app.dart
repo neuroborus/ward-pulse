@@ -7,6 +7,7 @@ import '../dashboard/apply_alert_settings.dart';
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_repository.dart';
 import '../dashboard/dashboard_screen.dart';
+import '../dashboard/provider_status_color.dart';
 import '../providers/claude_account_service.dart';
 import '../providers/codex_account_service.dart';
 import '../providers/provider_credential_store.dart';
@@ -133,6 +134,7 @@ class DashboardHost extends StatefulWidget {
 }
 
 class _DashboardHostState extends State<DashboardHost> {
+  static const _dashboardIndex = 0;
   static const _watchfaceIndex = 1;
   static const _widgetIndex = 2;
   static const _providersIndex = 3;
@@ -151,6 +153,7 @@ class _DashboardHostState extends State<DashboardHost> {
   Future<void> _alertThresholdWrite = Future<void>.value();
   bool _mockDataEnabled = false;
   int _selectedIndex = 0;
+  ({String provider, int token})? _reveal;
   StreamSubscription<void>? _syncTicks;
   var _autoSyncInFlight = false;
 
@@ -452,6 +455,23 @@ class _DashboardHostState extends State<DashboardHost> {
     });
   }
 
+  /// The top mark is a way in, not a copy: it opens the Dashboard when another
+  /// tab is showing and then brings the first unhealthy section into view
+  /// (PHONE_DASHBOARD_DESIGN.md).
+  void _revealProblem(String provider) {
+    setState(() {
+      _selectedIndex = _dashboardIndex;
+      _reveal = (provider: provider, token: (_reveal?.token ?? 0) + 1);
+    });
+    // A request is answered once. Left standing, it would scroll again every
+    // time the reader came back to the tab, long after they asked.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() => _reveal = null);
+      }
+    });
+  }
+
   void _openProviders() {
     setState(() {
       _selectedIndex = _providersIndex;
@@ -475,12 +495,9 @@ class _DashboardHostState extends State<DashboardHost> {
             title: const Text('WardPulse'),
             actions: [
               if (snapshot != null)
-                Padding(
-                  padding: const EdgeInsetsDirectional.only(end: 12),
-                  child: StatusPill(
-                    status: snapshot.overallStatus,
-                    tooltip: snapshot.syncTooltip,
-                  ),
+                _AppBarProblems(
+                  problems: dashboardProblems(snapshot, _displayPreferences),
+                  onReveal: _revealProblem,
                 ),
               IconButton(
                 tooltip: 'Refresh',
@@ -533,6 +550,7 @@ class _DashboardHostState extends State<DashboardHost> {
                 snapshot: snapshot,
                 displayPreferences: _displayPreferences,
                 onOpenProviders: _openProviders,
+                reveal: _reveal,
               ),
               _ => _ErrorView(
                 failure: const DashboardLoadException(),
@@ -677,4 +695,41 @@ void _showErrorDetails(BuildContext context, String details) {
           ],
         ),
   );
+}
+
+/// The app bar's rollup: how many sections a tap can take the reader to, in the
+/// worst of their colors. Silent when nothing below deviates.
+class _AppBarProblems extends StatelessWidget {
+  const _AppBarProblems({required this.problems, required this.onReveal});
+
+  final DashboardProblems problems;
+  final void Function(String provider) onReveal;
+
+  @override
+  Widget build(BuildContext context) {
+    if (problems.first case final provider?) {
+      final chip = providerStatusChipColors(
+        Theme.of(context).colorScheme,
+        problems.status,
+      );
+      return Padding(
+        padding: const EdgeInsetsDirectional.only(end: 12),
+        child: Tooltip(
+          message: 'Go to ${problems.status.label.toLowerCase()}',
+          child: InkResponse(
+            onTap: () => onReveal(provider),
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Badge(
+                backgroundColor: chip.fill,
+                textColor: chip.ink,
+                label: Text('${problems.sections}'),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  }
 }

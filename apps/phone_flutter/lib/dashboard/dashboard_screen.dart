@@ -7,20 +7,88 @@ import 'dashboard_models.dart';
 import 'provider_status_color.dart';
 import 'provider_status_severity.dart';
 
-class DashboardScreen extends StatelessWidget {
+/// What the app bar summarizes: the sections a tap can scroll to, never a
+/// status computed over something the screen does not show
+/// (PHONE_DASHBOARD_DESIGN.md).
+typedef DashboardProblems =
+    ({int sections, ProviderStatus status, String? first});
+
+DashboardProblems dashboardProblems(
+  DashboardSnapshot snapshot,
+  ConsumptionDisplayPreferences displayPreferences,
+) {
+  final flagged = _providerDashboardSections(
+    snapshot.accounts,
+    displayPreferences,
+  ).where((section) => section.flagged > 0).toList(growable: false);
+  return (
+    sections: flagged.length,
+    status: worstProviderStatus(flagged.map((section) => section.status)),
+    first: flagged.isEmpty ? null : flagged.first.provider,
+  );
+}
+
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
     super.key,
     required this.snapshot,
     this.displayPreferences = const ConsumptionDisplayPreferences(),
     this.onOpenProviders,
+    this.reveal,
   });
 
   final DashboardSnapshot snapshot;
   final ConsumptionDisplayPreferences displayPreferences;
   final VoidCallback? onOpenProviders;
 
+  /// A section to bring into view, and the tap that asked for it. The token is
+  /// what makes a second tap on the same provider scroll again after the reader
+  /// has wandered off.
+  final ({String provider, int token})? reveal;
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  final _sectionKeys = <String, GlobalKey>{};
+
+  @override
+  void initState() {
+    super.initState();
+    // Arriving from another tab builds this screen fresh, so the first request
+    // lands here rather than in didUpdateWidget.
+    _scheduleReveal(widget.reveal);
+  }
+
+  @override
+  void didUpdateWidget(DashboardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.reveal != oldWidget.reveal) {
+      _scheduleReveal(widget.reveal);
+    }
+  }
+
+  void _scheduleReveal(({String provider, int token})? reveal) {
+    if (reveal == null) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_sectionKeys[reveal.provider]?.currentContext case final target?) {
+        Scrollable.ensureVisible(
+          target,
+          duration: const Duration(milliseconds: 250),
+          alignment: 0.1,
+        );
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final snapshot = widget.snapshot;
+    final displayPreferences = widget.displayPreferences;
+    final onOpenProviders = widget.onOpenProviders;
     if (snapshot.accounts.isEmpty) {
       return ConnectProviderPrompt(onOpenProviders: onOpenProviders);
     }
@@ -58,6 +126,7 @@ class DashboardScreen extends StatelessWidget {
         if (providerSections.isNotEmpty) ...[
           _ProviderDashboardSections(
             sections: providerSections,
+            sectionKeys: _sectionKeys,
             footer:
                 showMissingPurchased && hasVisibleAllowances
                     ? const MissingPurchasedUsageCard()
@@ -576,9 +645,17 @@ List<_ProviderDashboardSection> _providerDashboardSections(
 }
 
 class _ProviderDashboardSections extends StatelessWidget {
-  const _ProviderDashboardSections({required this.sections, this.footer});
+  const _ProviderDashboardSections({
+    required this.sections,
+    required this.sectionKeys,
+    this.footer,
+  });
 
   final List<_ProviderDashboardSection> sections;
+
+  /// Owned by the screen's state so a key survives rebuilds and stays a valid
+  /// scroll target between the tap and the frame that answers it.
+  final Map<String, GlobalKey> sectionKeys;
   final Widget? footer;
 
   @override
@@ -588,7 +665,10 @@ class _ProviderDashboardSections extends StatelessWidget {
       children: [
         for (final (index, section) in sections.indexed) ...[
           if (index > 0) const SizedBox(height: 20),
-          _ProviderDashboardSectionView(section: section),
+          KeyedSubtree(
+            key: sectionKeys.putIfAbsent(section.provider, GlobalKey.new),
+            child: _ProviderDashboardSectionView(section: section),
+          ),
         ],
         if (footer case final footer?) ...[const SizedBox(height: 12), footer],
       ],
