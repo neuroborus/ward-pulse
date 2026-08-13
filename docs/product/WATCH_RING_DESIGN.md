@@ -225,10 +225,9 @@ spend (`cursor/platform.rs`), while the two pools live on the **plan** connectio
 (`cursor/mod.rs`). Different connections, so a band is either one or the other. Which is
 fortunate — a cap of 15.8 units does not fit in half a band.
 
-Geometry is **not settled here**: half a band is roughly 8.5 px on a 384-pixel watch, and
-whether two halves survive rounding, the ROUND cap and antialiasing is a question for a device,
-not for arithmetic. Measure before drawing, as Ring geometry already demands, and write the
-measured numbers there.
+Geometry was settled on a device, not in arithmetic: the halves measure 9.75 units each and
+meet without a seam — numbers, and the four readings behind them, in Ring geometry under
+*Halves of a band*.
 
 ## Ring geometry (revised 2026-08-02)
 
@@ -258,6 +257,34 @@ Widening the band alone is not enough: at the original 18-unit pitch a thickness
 neighbouring bands touch, and a first attempt at pitch 21 still left a 0.8-unit hairline
 because the band renders 20.2, not the 18.8 a 0.44 factor predicted. Measure after every
 change — the factor is not exact.
+
+**Halves of a band, measured 2026-08-13.** A split band (see Split band) is two arcs inside one
+ring slot, and the numbers that work are **centre lines at `outer − 5` and `outer − 15`, both at
+`thickness="10"`** — 197 and 187 on the outermost band, 173 and 163 on the next, 149 and 139 on
+the third, since a pair can land on any of them. In the markup that is `width="394"` and
+`width="374"` for the outermost: **twice the centre line**, not twice the outer edge as the
+whole-band rule above would suggest. Getting that translation wrong is what the first two
+probes did, and it fails silently — the halves land on top of each other and read as one band. Measured on the round AVD at 384 on the
+outermost: the halves paint 182.5–192.25 and 192.25–202.25, **9.75 units each** (8.3 px),
+meeting with no gap and no overlap, identical in all four diagonal breaks. Only that band was
+measured; the other two follow the same offsets from their own outer edge and want the same
+check before they ship.
+
+Those numbers are not derived from the two rules above, and they cannot be: **an arc behaves
+differently inside a complication slot than outside one**, and neither behaviour was predicted
+by the other. All four readings, same device, same session:
+
+| Where | Markup | Painted |
+|---|---|---|
+| Scene level, no slot | `width=404 thickness=40` | 201.75–221.5 — 19.75 units, inner edge at `width/2`, growing outward |
+| Ring slot (shipped) | `width=404 thickness=40` | 181.6–202.1 — 20.5 units by angular coverage, which is the locked 20.2 plus antialias; outer edge at `width/2`, growing inward |
+| Ring slot | `width=384 thickness=20` | 182.5–202.2 — 19.7 units, i.e. the whole nominal, centred on `width/2` |
+| Ring slot | `width=394` / `374`, `thickness=10` | 192.25–202.25 and 182.5–192.25 — 9.75 each |
+
+The half-nominal rule at the top of this section holds for the first row and is what the
+shipped band was fitted to; rows three and four paint the full nominal instead. The slot's
+`BoundingArc` is the obvious suspect — it clips ring content to its own band — but that is a
+guess, and this document does not keep guesses next to measurements.
 
 The strip stack was resized with the rings — 88x18 boxes stepping 21 units from y=283, a
 stack pitch of its own that has nothing to do with the 24-unit ring pitch. The previous 96x20
