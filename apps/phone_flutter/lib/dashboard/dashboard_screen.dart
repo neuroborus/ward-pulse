@@ -285,7 +285,11 @@ class AllowanceSummaryCard extends StatelessWidget {
                 Expanded(
                   child: Text(allowance.label, style: textTheme.titleMedium),
                 ),
-                StatusPill(status: allowance.status),
+                // A mark is an exception, never the norm: a column of healthy
+                // checkmarks outweighs the one warning the screen was opened
+                // for (PHONE_DASHBOARD_DESIGN.md).
+                if (allowance.status != ProviderStatus.ok)
+                  StatusPill(status: allowance.status),
               ],
             ),
             const SizedBox(height: 14),

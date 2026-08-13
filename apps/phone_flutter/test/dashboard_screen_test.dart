@@ -181,6 +181,10 @@ void main() {
     expect(find.text('0% left'), findsOneWidget);
     expect(find.byTooltip('Rate limited'), findsOneWidget);
     expect(find.byIcon(Icons.speed), findsOneWidget);
+    // A card marks a deviation, never health: the pill belongs to the rate
+    // limited pool alone (PHONE_DASHBOARD_DESIGN.md).
+    expect(_pillsInCardOf(find.text('Cursor Models')), findsNothing);
+    expect(_pillsInCardOf(find.text('Other Models')), findsOneWidget);
   });
 
   testWidgets('always shows platform spend when budgets are available', (
@@ -539,4 +543,13 @@ void main() {
       findsOneWidget,
     );
   });
+}
+
+/// Status pills inside the card that carries [label], so a leaf assertion stays
+/// a leaf assertion once family and app-bar rollups change around it.
+Finder _pillsInCardOf(Finder label) {
+  return find.descendant(
+    of: find.ancestor(of: label, matching: find.byType(Card)),
+    matching: find.byType(StatusPill),
+  );
 }
