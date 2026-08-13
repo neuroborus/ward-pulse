@@ -113,7 +113,8 @@ One declarative file, `src/main/res/raw/watchface.xml`, plus the ring-type drawa
 ### Design and docs
 
 - Locked baselines in `docs/product/`: `WATCH_RING_DESIGN.md` (face), `WEAR_GLANCE_DESIGN.md`
-  (Glance), `PHONE_WIDGET_DESIGN.md` (widget); asset ownership in `docs/DESIGN_ASSETS.md`;
+  (Glance), `PHONE_WIDGET_DESIGN.md` (widget), `PHONE_DASHBOARD_DESIGN.md` (Dashboard status
+  marks — rules, no review board); asset ownership in `docs/DESIGN_ASSETS.md`;
   phases in `docs/DEVELOPMENT_PLAN.md`; provider API notes in `docs/product/PROVIDER_NOTES.md`.
 - Review art is generated, never hand-edited: `tools/render-watch-ring-designs.mjs` (face),
   `tools/render-wear-glance-designs.mjs` (Glance), `tools/render-phone-widget-designs.mjs`
@@ -142,6 +143,7 @@ Start with:
 
 ### Phone UI (dashboard, providers, settings)
 Start with:
+- `docs/product/PHONE_DASHBOARD_DESIGN.md` (status marks — read it before adding one)
 - `apps/phone_flutter/lib/dashboard/dashboard_screen.dart`
 - `apps/phone_flutter/lib/providers/providers_screen.dart`
 - `apps/phone_flutter/lib/settings/settings_screen.dart`

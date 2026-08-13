@@ -13,6 +13,9 @@ This directory is the documentation gate for the project. Root files should stay
 - [product/PHONE_WIDGET_DESIGN.md](product/PHONE_WIDGET_DESIGN.md) — **locked 2026-07-27**:
   phone home-widget rows, size caps (small 2 / medium 4), App Widget surface.
 - [product/WEAR_GLANCE_DESIGN.md](product/WEAR_GLANCE_DESIGN.md) — **baseline locked 2026-07-26**: Wear app Glance text legend (OK/!OK refresh, cadence vs rate-limit, Alerts pill); not a face clone.
+- [product/PHONE_DASHBOARD_DESIGN.md](product/PHONE_DASHBOARD_DESIGN.md) — **status rules locked
+  2026-08-13**: when a status mark appears on the phone Dashboard and how a rollup differs from a
+  leaf. Rules, not a composition — no review board.
 - [DOCUMENTATION.md](DOCUMENTATION.md) defines documentation ownership, Vocs tooling, and contributor workflow.
 - [product/ANDROID_GOALS.md](product/ANDROID_GOALS.md) defines the MVP goal, surfaces, and non-goals.
 - [product/PROVIDER_NOTES.md](product/PROVIDER_NOTES.md) tracks provider integration assumptions and open questions.
