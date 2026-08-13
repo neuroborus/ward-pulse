@@ -21,6 +21,56 @@ void main() {
     expect(formatQuantityValue('100'), '100');
   });
 
+  test('the app bar counts sections, not the problems inside them', () {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    Map<String, dynamic> account(String provider, List<String> statuses) {
+      return source.primaryAccount!.toJson()
+        ..['accountId'] = '$provider-local'
+        ..['provider'] = provider
+        ..['status'] = 'ok'
+        ..['allowances'] = [
+          for (final (index, status) in statuses.indexed)
+            {
+              'id': '$provider-$index',
+              'source': 'plan',
+              'label': '$provider $index',
+              'usedPercent': 50.0,
+              'used': null,
+              'limit': null,
+              'remaining': null,
+              'unlimited': false,
+              'windowMinutes': null,
+              'resetsAt': null,
+              'status': status,
+            },
+        ]
+        ..['buckets'] = <Object>[]
+        ..['modelBreakdown'] = <Object>[];
+    }
+
+    final snapshot = DashboardSnapshot.fromJson(
+      source.toJson()
+        ..['accounts'] = [
+          account('cursor', ['warning', 'rateLimited']),
+          account('claude', ['ok']),
+          account('codex', ['error']),
+        ],
+    );
+
+    final problems = dashboardProblems(
+      snapshot,
+      const ConsumptionDisplayPreferences(),
+    );
+
+    // Three unhealthy cards live in two families, and a tap can only take the
+    // reader to a family (PHONE_DASHBOARD_DESIGN.md).
+    expect(problems.sections, 2);
+    expect(problems.first, 'cursor');
+    expect(problems.status, ProviderStatus.error);
+  });
+
   testWidgets('aggregate spend card shows money and nothing to measure it', (
     tester,
   ) async {
