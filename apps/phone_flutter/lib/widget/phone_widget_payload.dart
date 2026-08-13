@@ -122,11 +122,16 @@ int phoneWidgetAccentArgb(String metricId) {
   if (metricId.contains('claude') || metricId.contains('anthropic')) {
     return providerFamilyColor('claude').toARGB32();
   }
+  // Before the family branch, or it would never be reached: the pool name sits
+  // inside a `cursor` id (`WATCH_RING_DESIGN.md`, Split band).
+  if (metricId.contains('cursor-plan-models')) {
+    return familyCursorOwnColor.toARGB32();
+  }
   if (metricId.contains('cursor')) {
     return providerFamilyColor('cursor').toARGB32();
   }
   if (metricId.contains('codex') || metricId.contains('openai')) {
     return providerFamilyColor('codex').toARGB32();
   }
-  return familyBudgetColor.toARGB32();
+  return familyFallbackColor.toARGB32();
 }

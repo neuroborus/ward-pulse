@@ -7,9 +7,15 @@ package app.wardpulse.wear.ui
 object RingFamily {
     const val CODEX = 0xFF65D78A.toInt()
     const val CLAUDE = 0xFFE8915A.toInt()
+
+    /** Cursor, and its external models pool by extension. */
     const val CURSOR = 0xFF67E8D4.toInt()
-    const val BUDGET = 0xFF8AB4F8.toInt()
-    const val FALLBACK = BUDGET
+
+    /** The Cursor plan's own models — the one pool that leaves the family colour. */
+    const val CURSOR_OWN = 0xFF7E93B8.toInt()
+
+    /** Deliberately colourless: an id that names no family should not ship. */
+    const val FALLBACK = 0xFF8A968F.toInt()
 
     /** ARGB for WFF [COMPLICATION.RANGED_VALUE_COLORS] / Compose strokes. */
     fun colorArgb(ringId: String): Int =
@@ -22,8 +28,10 @@ object RingFamily {
             ringId.startsWith("allowance.claude") ||
                 ringId.contains(".claude.") ||
                 ringId.contains(".anthropic.") -> CLAUDE
+            // Before the family branch, or it would never be reached: the pool
+            // name sits inside an `allowance.cursor.` id.
+            ringId.contains("cursor-plan-models") -> CURSOR_OWN
             ringId.startsWith("allowance.cursor") || ringId.contains(".cursor.") -> CURSOR
-            ringId.startsWith("budget.") -> BUDGET
             else -> FALLBACK
         }
 }

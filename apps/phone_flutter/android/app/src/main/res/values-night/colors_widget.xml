@@ -6,7 +6,7 @@
     <color name="ward_pulse_widget_on_surface">#F4FBF8</color>
     <color name="ward_pulse_widget_muted">#A7B09E</color>
     <color name="ward_pulse_widget_stale">#E8915A</color>
-    <color name="ward_pulse_widget_budget">#8AB4F8</color>
+    <color name="ward_pulse_widget_fallback">#8A968F</color>
     <!-- Face watermark stroke #C5CDD1 at ~face alpha. -->
     <color name="ward_pulse_widget_watermark">#70C5CDD1</color>
 </resources>

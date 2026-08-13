@@ -228,7 +228,8 @@ class Ring3ComplicationDataSourceService : RingComplicationDataSourceService() {
 class Ring4ComplicationDataSourceService : RingComplicationDataSourceService() {
     override val ringIndex = 3
     override val previewPercent = 75f
-    override val previewColorArgb = RingFamily.BUDGET
+    // A budget ring wears its connection's family, so the editor preview does too.
+    override val previewColorArgb = RingFamily.CLAUDE
     override val previewLabel = "Ring 4"
 }
 
@@ -312,9 +313,10 @@ class Strip3ComplicationDataSourceService : RingStripComplicationDataSourceServi
 
 class Strip4ComplicationDataSourceService : RingStripComplicationDataSourceService() {
     override val ringIndex = 3
-    // The budget-colored slot: the editor should show what a budget strip reads.
+    // The budget slot: the editor should show what a budget strip reads, in the
+    // family colour such a ring carries.
     override val previewText = "\$12.34/100"
-    override val previewColorArgb = RingFamily.BUDGET
+    override val previewColorArgb = RingFamily.CLAUDE
 }
 
 object WatchComplicationText {

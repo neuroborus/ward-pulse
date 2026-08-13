@@ -204,8 +204,10 @@ class WardPulseAppWidget : AppWidgetProvider() {
                 val percent = data.getString("row_${i}_percent", "") ?: ""
                 val credits = data.getString("row_${i}_credits", "") ?: ""
                 val label = data.getString("row_${i}_label", "") ?: ""
-                val colorHex = data.getString("row_${i}_color", "ff8ab4f8") ?: "ff8ab4f8"
-                val color = colorHex.toLongOrNull(16)?.toInt() ?: 0xFF8AB4F8.toInt()
+                // Colourless on purpose: a row whose accent did not arrive names no
+                // family, and blue is a product colour again since 2026-08-13.
+                val colorHex = data.getString("row_${i}_color", "ff8a968f") ?: "ff8a968f"
+                val color = colorHex.toLongOrNull(16)?.toInt() ?: 0xFF8A968F.toInt()
                 views.setViewVisibility(rowIds[i], View.VISIBLE)
                 views.setTextViewText(percentIds[i], percent)
                 views.setTextViewText(creditsIds[i], credits)

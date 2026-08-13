@@ -77,7 +77,7 @@
                     android:layout_height="14dp"
                     android:contentDescription="@null"
                     android:importantForAccessibility="no"
-                    android:background="@color/ward_pulse_widget_budget" />
+                    android:background="@color/ward_pulse_widget_fallback" />
                 <TextView
                     android:id="@+id/widget_row_0_percent"
                     android:layout_width="70dp"
@@ -124,7 +124,7 @@
                     android:layout_height="14dp"
                     android:contentDescription="@null"
                     android:importantForAccessibility="no"
-                    android:background="@color/ward_pulse_widget_budget" />
+                    android:background="@color/ward_pulse_widget_fallback" />
                 <TextView
                     android:id="@+id/widget_row_1_percent"
                     android:layout_width="70dp"
@@ -171,7 +171,7 @@
                     android:layout_height="14dp"
                     android:contentDescription="@null"
                     android:importantForAccessibility="no"
-                    android:background="@color/ward_pulse_widget_budget" />
+                    android:background="@color/ward_pulse_widget_fallback" />
                 <TextView
                     android:id="@+id/widget_row_2_percent"
                     android:layout_width="70dp"
@@ -218,7 +218,7 @@
                     android:layout_height="14dp"
                     android:contentDescription="@null"
                     android:importantForAccessibility="no"
-                    android:background="@color/ward_pulse_widget_budget" />
+                    android:background="@color/ward_pulse_widget_fallback" />
                 <TextView
                     android:id="@+id/widget_row_3_percent"
                     android:layout_width="70dp"
@@ -265,7 +265,7 @@
                     android:layout_height="14dp"
                     android:contentDescription="@null"
                     android:importantForAccessibility="no"
-                    android:background="@color/ward_pulse_widget_budget" />
+                    android:background="@color/ward_pulse_widget_fallback" />
                 <TextView
                     android:id="@+id/widget_row_4_percent"
                     android:layout_width="70dp"
@@ -312,7 +312,7 @@
                     android:layout_height="14dp"
                     android:contentDescription="@null"
                     android:importantForAccessibility="no"
-                    android:background="@color/ward_pulse_widget_budget" />
+                    android:background="@color/ward_pulse_widget_fallback" />
                 <TextView
                     android:id="@+id/widget_row_5_percent"
                     android:layout_width="70dp"

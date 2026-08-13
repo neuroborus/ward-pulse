@@ -18,7 +18,7 @@
       transform="rotate(-90 225 225)" />
     <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#2E3632"
       stroke-width="20.205000000000002" />
-    <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#67E8D4"
+    <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#7E93B8"
       stroke-width="20.205000000000002" stroke-linecap="round"
       stroke-dasharray="559.11 1054.92"
       stroke-dashoffset="-495.81"
@@ -56,7 +56,7 @@
       y="304.5"
       width="4.5"
       height="17.0"
-      rx="2.3" fill="#67E8D4" />
+      rx="2.3" fill="#7E93B8" />
     <text x="226.0" y="313.0"
       text-anchor="middle" dominant-baseline="central"
       font-family="Noto Sans, sans-serif" font-size="12.0"

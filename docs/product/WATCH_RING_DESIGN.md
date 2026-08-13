@@ -87,6 +87,7 @@ may modulate toward theme tertiary/error when needed.
 | Cursor · other models | `#67E8D4` | Cyan — external models on the Cursor plan |
 | Cursor · own models | `#7E93B8` | Grey-blue — the plan's own pool |
 | Unresolved family | `#8A968F` | Neutral grey — fallback only, never a product color |
+| Demo data | `#8AB4F8` | The old blue, kept so mock rings do not masquerade as unresolved |
 
 A local budget ring takes the family color of the connection it belongs to, exactly like that
 connection's allowance rings; period is carried by the type in the band (see Ring type texture),

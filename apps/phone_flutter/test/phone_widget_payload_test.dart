@@ -53,10 +53,20 @@ void main() {
       phoneWidgetAccentArgb('budget.openai.platform.today'),
       providerFamilyColor('codex').toARGB32(),
     );
-    // No family named in the id: fall back to the neutral budget accent.
+    // No family named in the id: fall back to the colourless accent.
     expect(
       phoneWidgetAccentArgb('budget.mock.plan.today'),
-      familyBudgetColor.toARGB32(),
+      familyFallbackColor.toARGB32(),
+    );
+    // The Cursor plan's own models leave the family colour; everything else
+    // Cursor keeps it.
+    expect(
+      phoneWidgetAccentArgb('allowance.cursor.cursor-plan-models'),
+      familyCursorOwnColor.toARGB32(),
+    );
+    expect(
+      phoneWidgetAccentArgb('allowance.cursor.cursor-plan-other'),
+      providerFamilyColor('cursor').toARGB32(),
     );
   });
 

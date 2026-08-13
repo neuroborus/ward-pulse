@@ -7,7 +7,16 @@ const _familyCodex = Color(0xFF65D78A);
 const _familyClaude = Color(0xFFE8915A);
 const _familyCursor = Color(0xFF67E8D4);
 const _familyOpenAi = Color(0xFF65D78A);
-const familyBudgetColor = Color(0xFF8AB4F8);
+
+/// The Cursor plan's own models — the one pool that leaves the family colour
+/// (`WATCH_RING_DESIGN.md`, Split band).
+const familyCursorOwnColor = Color(0xFF7E93B8);
+
+/// Demo data keeps the blue it has always had; it is not an unresolved family.
+const _familyMock = Color(0xFF8AB4F8);
+
+/// Deliberately colourless: an id that names no family should not ship.
+const familyFallbackColor = Color(0xFF8A968F);
 
 Color providerStatusColor(ColorScheme colors, ProviderStatus status) {
   return switch (status) {
@@ -61,7 +70,7 @@ Color providerFamilyColor(String provider) {
     'codex' => _familyCodex,
     'claude' => _familyClaude,
     'cursor' => _familyCursor,
-    'mock' => familyBudgetColor,
-    _ => familyBudgetColor,
+    'mock' => _familyMock,
+    _ => familyFallbackColor,
   };
 }

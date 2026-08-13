@@ -6,7 +6,7 @@
     <color name="ward_pulse_widget_on_surface">#1A1F1A</color>
     <color name="ward_pulse_widget_muted">#5F675C</color>
     <color name="ward_pulse_widget_stale">#C46A3A</color>
-    <color name="ward_pulse_widget_budget">#8AB4F8</color>
+    <color name="ward_pulse_widget_fallback">#8A968F</color>
     <!-- Face mono stroke, muted for light surfaces (~face PartImage quiet). -->
     <color name="ward_pulse_widget_watermark">#665F675C</color>
 </resources>

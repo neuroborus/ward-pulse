@@ -101,9 +101,11 @@ const CATALOG = {
   },
   cursor: {
     id: 'cursor',
-    // Matches fixtures/providers/cursor/usage_summary.json autoPercentUsed.
+    // Matches fixtures/providers/cursor/usage_summary.json autoPercentUsed —
+    // that is the plan's own models, the one pool that leaves the family color
+    // (`WATCH_RING_DESIGN.md`, Split band).
     used: 0.47,
-    color: '#67E8D4',
+    color: '#7E93B8',
   },
   // One connection's three budget periods; percents and money match Wear's
   // PreviewWatchDashboardSummary, so the boards and the preview face show one story.
