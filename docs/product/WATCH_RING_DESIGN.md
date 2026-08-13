@@ -6,7 +6,9 @@ purchased meters are not rings); band-width revision **2026-08-02** (see Ring ge
 per-connection budget revision **2026-08-08** (budget rings belong to one connection and take
 its family color; the summed Today / Week / Month rings are retired); budget-strip revision
 **2026-08-09** (a budget strip reads `$12.34/100` instead of a percent); ring-type revision
-**2026-08-11** (a budget ring repeats its period around its own band as cut-out type) —
+**2026-08-11** (a budget ring repeats its period around its own band as cut-out type);
+split-band revision **2026-08-13** (one Cursor plan's two pools may share a single band, and
+Cursor's own models take a colour of their own) —
 accepted visual target for Wear OS and Watch Face Format until the next explicit design
 revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
@@ -27,7 +29,8 @@ per-provider source as Glance). Purchased meters (Claude Extra usage, Cursor on-
 credits) are **not** ring candidates — they stay on the phone dashboard and may appear as
 alerts only when the user configures thresholds for those meters on **Providers**.
 Not “always show every provider,” and never invent `Unknown` filler. Strip secondary values are
-credits — never LLM `TOK` / token counts.
+credits — never LLM `TOK` / token counts. The one strip that carries something else is a split
+pair's, whose second value is the other pool's percent (see Split band).
 
 ## Layer rules
 
@@ -40,6 +43,8 @@ credits — never LLM `TOK` / token counts.
    Claude subscription plan windows are an exception at **selection** time: the phone exposes one
    Claude plan slot and resolves it to the tightest remaining window (window name lives on Glance,
    not on face strips).
+   A Cursor plan's two pools are an exception at **drawing** time: they may share one band, split
+   lengthwise (see Split band). That is the only division, and it stays one slot.
 2. **Arc = remaining** — the colored sweep is `(100 - usedPercent)`. As the limit is consumed, the
    arc shrinks (do not grow a separate “used” fill). Melt is **clockwise from 12**: usage opens a
    gap at 12 o’clock and advances like a clock hand; remaining stays anchored ending at 12.
@@ -51,7 +56,9 @@ credits — never LLM `TOK` / token counts.
    limit: innermost ring and the strip nearest the center. Outer rings are looser.
 4. **Omit exhausted** — `usedPercent >= 100` (or empty/unavailable) does not render.
 5. **Max three** — phone **Watchface** tab chooses slots (`watchRingSlotCount = 3`); payload carries
-   only the resolved surface order after omit + sort. Plan/budget percent metrics only.
+   only the resolved surface order after omit + sort. Plan/budget percent metrics only. A split
+   pair counts as **one** against the cap on both sides: it draws one band, and the Watchface tab
+   charges the two Cursor pools one slot, or the face could never hold a pair and two other rings.
 6. **A budget ring is offered where spend is reported, and enabled once a limit is set** — the
    slot exists for a (connection, period) pair that reports spend, which is what makes a
    ceiling meaningful; subscription plans report none and carry allowance windows instead, and
@@ -77,14 +84,23 @@ may modulate toward theme tertiary/error when needed.
 |--------|--------|--------|
 | OpenAI / Codex | `#65D78A` | Green |
 | Anthropic / Claude | `#E8915A` | Orange (Anthropic presentation) |
-| Cursor | `#67E8D4` | Teal |
-| Unresolved family | `#8AB4F8` | Blue — fallback only, never a product color |
+| Cursor · other models | `#67E8D4` | Cyan — external models on the Cursor plan |
+| Cursor · own models | `#7E93B8` | Grey-blue — the plan's own pool |
+| Unresolved family | `#8A968F` | Neutral grey — fallback only, never a product color |
 
 A local budget ring takes the family color of the connection it belongs to, exactly like that
 connection's allowance rings; period is carried by the type in the band (see Ring type texture),
 never by a color of its own.
-Blue is what remains when a ring id resolves to no family, which should not happen for a ring
-the product ships.
+Grey is what remains when a ring id resolves to no family, which should not happen for a ring
+the product ships. It is deliberately colourless: the fallback used to be blue, and a blue
+fallback beside Cursor's grey-blue pool would read as a product colour at band scale.
+
+Distances, CIE76 ΔE on these values (a desk check, not a device one): the two Cursor pools sit
+52 apart, which is what lets them share a band; the tightest pair in the whole palette is the
+grey-blue pool against the grey fallback at 25, and the next is cyan against Codex green at 31 —
+both above the ~20 where hues start collapsing on a 17-pixel band, and the first of them pairs a
+product colour with one that should never ship. A new colour should clear 20 against every row
+here before it is proposed.
 
 Track (empty portion of the ring): muted graphite on dark surface (`#2E3632` in review art;
 theme `outlineVariant` at runtime).
@@ -136,6 +152,8 @@ Rules:
     the watch falls back to the plain `%` label rather than a spelled code: `EUR 999.99/999`
     is 118 % of the locked width, worse than the form the rule already rejects;
   - credits text is compact (`500`, `1.2K`) — never a `TOK` suffix;
+  - a **split** strip is the exception to the accent rule and to credits alike: a marker at each
+    end in the two pool colours, two percentages, no credits (see Split band);
   - ring band **20.2 units** in the 450-unit design language so arcs read clearer while a
     **3-strip** stack still clears the aperture (see Ring geometry: it is neither the nominal 40
     nor the 18.8 the scaling factor predicted — the band was measured, not derived).
@@ -146,6 +164,68 @@ Rules:
 - Review art focuses on 1–3 provider families. A local **budget** metric may still occupy a product
   ring slot, drawn in its connection's family color; do not ship a “4 providers” face variant in
   review art.
+
+## Split band (revision 2026-08-13)
+
+A Cursor plan reports two pools — its own models and the external ones — and they are not
+substitutes: exhausting one does not let the work continue on the other, it changes the tool.
+Both deserve a ring, and spending two of three slots on one subscription is what makes the face
+useless for everything else. So the two share **one band, split lengthwise**, each half melting
+on its own value.
+
+1. **Only this case, and only one slot.** The division is allowed for two pools of the same plan
+   of the same connection. Everything else stays one ring, one metric. A split pair costs one of
+   the three slots — the whole point is that a plan with two pools does not cost two.
+2. **The order inside a pair is fixed by pool, never by usage.** Own models take the inner half
+   and the left marker; external models the outer half and the right one. Position inside the
+   pair is a name, not a rank: urgency is already carried twice, by each half's own melt and by
+   where the pair sits among the rings. A third encoding would only make the colours swap sides
+   at the moment the reader is looking at a problem.
+3. **The pair sorts by its tighter half.** Layer rule 3 is unchanged and still means what it
+   says — innermost is closest to exhaustion — because it ranks rings against each other, while
+   rule 2 above orders the halves inside one of them.
+4. **The strip splits with the band.** A pair's strip carries a marker at each end, in the two
+   colours, and two percentages in one TEXT, as every strip label is composed whole. One marker
+   stays the rule for every other strip: two of the same colour would say a thing twice, which is
+   the defect this language exists to avoid. The second marker cannot be painted from the first
+   slot: `[COMPLICATION.RANGED_VALUE_COLORS]` is scoped to its own `ComplicationSlot`, so a
+   strip's two ends belong to the pair's two slots — the same pairing rule 7 below states for the
+   band, read at strip scale.
+5. **A split strip carries no credits.** The well is measured for one worst-case label, and two
+   percentages spend that width. Nothing is lost: Glance already lists purchased credits per
+   provider, and that is where a reader looks for a number rather than a warning.
+6. **An exhausted half collapses the pair.** Layer rule 4 omits an exhausted metric, and a pair
+   is no exception: when one pool reaches `usedPercent >= 100`, the band goes back to being a single
+   ring of the surviving pool, in that pool's colour, with one marker and one percentage on its
+   strip. Cursor's external pool runs out routinely, so this is the common state, not the corner
+   case — a half-empty split band would spend the scarcest space on a number that is already
+   zero.
+7. **One payload entry, two complication slots.** A `RANGED_VALUE` complication carries one
+   value, so two melts need two slots however the payload is shaped: the entry travels whole and
+   the Wear data sources publish its two pools into a slot pair. Four slots is the worst case —
+   one pair plus two single rings — and the face already declares four, though not at usable
+   radii: the fourth is declared for a fourth *band* (diameter 260), while a split half belongs
+   inside its pair's own pitch. The generator redeclares the geometry either way; what the
+   existing four buy is that the slot count does not have to grow.
+8. **The payload must say "one band", not "two rings".** The shipped contract caps `rings` at
+   three entries (`schemas/watch_dashboard_summary.schema.json`, `maxItems: 3`, schema version
+   8), and three entries mean three bands. If a pair travelled as two entries, a face holding a
+   pair and two other rings would need four, and the cap would have to grow — which would also
+   make "one slot" true only in prose. So the slot stays one entry and carries its second pool
+   inside itself. That is a schema change with a version bump on both sides: the phone writer and
+   Wear's `SCHEMA_VERSION` must move together, since a mismatch makes the watch discard the whole
+   payload.
+
+A split band never carries ring type, and no rule is needed to keep them apart: type belongs to
+budget rings, and a Cursor budget ring hangs off the **team Admin** connection that reports
+spend (`cursor/platform.rs`), while the two pools live on the **plan** connection
+(`cursor/mod.rs`). Different connections, so a band is either one or the other. Which is
+fortunate — a cap of 15.8 units does not fit in half a band.
+
+Geometry is **not settled here**: half a band is roughly 8.5 px on a 384-pixel watch, and
+whether two halves survive rounding, the ROUND cap and antialiasing is a question for a device,
+not for arithmetic. Measure before drawing, as Ring geometry already demands, and write the
+measured numbers there.
 
 ## Ring geometry (revised 2026-08-02)
 
@@ -322,4 +402,6 @@ are locked; do not raise the face cap without an explicit later design revision.
   color (color alone is not enough for two Codex or two Claude windows). The band is already
   spoken for on budget rings, so a profile marker either shares that channel — a profile token
   read together with the period — or finds another; a second pattern layered on the same band
-  would make both unreadable.
+  would make both unreadable. Since 2026-08-13 a split Cursor band has no room left at all: its
+  two halves are already the division, and dividing a half again is not a thing a 17-pixel band
+  can carry. Two Cursor profiles will have to give up either the split or the same face.

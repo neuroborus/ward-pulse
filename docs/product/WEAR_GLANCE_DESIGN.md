@@ -114,11 +114,15 @@ Same strokes as the face (`WATCH_RING_DESIGN.md`) for metric mini-arcs:
 |--------|--------|
 | OpenAI / Codex | `#65D78A` |
 | Anthropic / Claude | `#E8915A` |
-| Cursor | `#67E8D4` |
-| Unresolved family | `#8AB4F8` — fallback only |
+| Cursor · other models | `#67E8D4` |
+| Cursor · own models | `#7E93B8` |
+| Unresolved family | `#8A968F` — fallback only |
 
 A local budget row takes the family color of the connection it belongs to; the period lives in
-the row label, not in a color of its own.
+the row label, not in a color of its own. Glance needs nothing structural for a Cursor plan's
+two pools: it already lists one row per ring, so the pair arrives as two rows and only the
+colours differ (face split: `WATCH_RING_DESIGN.md`, Split band). Purchased credits stay here —
+a split face strip gives its width to the second percentage instead.
 
 Refresh `OK` reuses Codex green as status affordance on this control only — do not spread that
 into Alerts chrome or general Wear buttons. Surface / track / label match face review art

@@ -1617,10 +1617,13 @@ Deliverables:
   to the background;
 - a ring binds to exactly one metric of exactly one connection (provider **plan** window with a
   %, or that connection's local budget percent for one period — never purchased Extra usage /
-  on-demand / credit meters, and never a sum across connections);
-- layer color is primarily **by provider family** (OpenAI/Codex green, Anthropic orange,
-  Cursor teal), with status (warn/error) as a modulation; a budget ring takes its connection's
-  family color, and blue survives only as the fallback for an unresolved family;
+  on-demand / credit meters, and never a sum across connections). One exception, added by the
+  split-band revision 2026-08-13: a Cursor plan's two pools may share a single band, split
+  lengthwise, and still cost one slot;
+- layer color is primarily **by provider family**, with status (warn/error) as a modulation; a
+  budget ring takes its connection's family color, and a neutral grey survives only as the
+  fallback for an unresolved family. The palette itself lives in `WATCH_RING_DESIGN.md`, which
+  since 2026-08-13 gives the two Cursor pools colors of their own;
 - **arc = remaining**: the colored sweep shrinks as the limit is consumed (not a “used”
   fill that grows toward full); melt is clockwise from 12 (usage gap advances like a
   clock hand; remaining ends at 12);
@@ -1753,9 +1756,9 @@ Deliverables:
   `0% left`; Glance-style credits end-aligned (label centered);
 - render only configured, available metrics (exhausted stay as `0% left`); omit empty
   slots rather than inventing `Unknown` filler;
-- **remaining** language for percent metrics (same meaning as watch rings); family colors
-  from the shared palette (OpenAI/Codex green, Anthropic orange, Cursor teal), with a budget
-  row taking its connection's family color;
+- **remaining** language for percent metrics (same meaning as watch rings); family colors from
+  the shared palette in `WATCH_RING_DESIGN.md`, with a budget row taking its connection's family
+  color;
 - update after provider sync / scheduled refresh without opening the full app; stale state
   is explicit when the last successful dashboard is too old;
 - tap opens the phone app (Dashboard);

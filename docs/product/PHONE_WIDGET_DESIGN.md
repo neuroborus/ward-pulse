@@ -25,9 +25,9 @@ Configuration lives on the phone **Widget** tab and is **independent** of Watchf
 3. **Cursor Models and Other Models** are separate selectable rows whenever the usage-summary
    reports both pool percents.
 4. **Remaining language** — display `(100 - usedPercent)` for percent metrics; family colors match
-   the product palette (OpenAI/Codex green, Anthropic orange, Cursor teal). A budget row takes
-   the family color of its connection; blue is a fallback for an unresolved family, not a
-   product color.
+   the product palette in `WATCH_RING_DESIGN.md`, where a Cursor plan's two pools carry their own
+   colors since 2026-08-13. A budget row takes the family color of its connection; the neutral
+   grey is a fallback for an unresolved family, not a product color.
 5. **Purchased credits** — on **plan** rows, when that provider family reports finite purchased
    remaining credits, show Glance-style columns: `N% left` · label · `N credits` (compact
    count + `credits` unit). Same per-provider rule as Wear Glance / face strips — not a

@@ -75,9 +75,10 @@ Used on Wear / WFF rings and on phone charts / plan bars / provider section acce
 
 - OpenAI / Codex: `#65D78A`.
 - Anthropic / Claude: `#E8915A`.
-- Cursor: `#67E8D4`.
-- Unresolved family: `#8AB4F8` — fallback only. A budget metric is drawn in the family color of
-  the connection it belongs to, so blue should not appear on a shipped surface.
+- Cursor · other models: `#67E8D4`; Cursor · own models: `#7E93B8` (split-band revision
+  2026-08-13 — the two pools of one plan carry their own colours).
+- Unresolved family: `#8A968F` — fallback only. A budget metric is drawn in the family color of
+  the connection it belongs to, so the grey should not appear on a shipped surface.
 
 Review exports: `tools/render-watch-ring-designs.mjs` → `round-*.svg`
 (matching-provider strip may append remaining purchased credits, never LLM `TOK`;
