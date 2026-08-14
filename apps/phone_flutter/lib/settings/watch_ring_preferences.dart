@@ -336,6 +336,34 @@ List<WatchRingMetric> resolveWatchRings(
   ];
 }
 
+/// The Cursor plan's two pools share one band, so they travel as one entry: the
+/// own-models pool with the external one folded into its `split`
+/// (`WATCH_RING_DESIGN.md`, Split band).
+///
+/// The pair keeps the place of its **tighter** half, which is where the surface
+/// order already put it, while inside the entry the order is by pool — own
+/// first — because that side is a name, not a rank.
+const cursorOwnPoolId = 'allowance.cursor.cursor-plan-models';
+const cursorOtherPoolId = 'allowance.cursor.cursor-plan-other';
+
+List<(WatchRingMetric, WatchRingMetric?)> pairCursorPools(
+  List<WatchRingMetric> rings,
+) {
+  final own = rings.where((ring) => ring.id == cursorOwnPoolId).firstOrNull;
+  final other = rings.where((ring) => ring.id == cursorOtherPoolId).firstOrNull;
+  if (own == null || other == null) {
+    return [for (final ring in rings) (ring, null)];
+  }
+  final tighter = rings.indexOf(own) < rings.indexOf(other) ? own : other;
+  return [
+    for (final ring in rings)
+      if (ring.id == tighter.id)
+        (own, other)
+      else if (ring.id != cursorOwnPoolId && ring.id != cursorOtherPoolId)
+        (ring, null),
+  ];
+}
+
 /// Display order for Wear/WFF/Glance: omit exhausted layers, tightest remaining first.
 ///
 /// Payload index 0 = critical limit. Face maps that to the **innermost** ring and the

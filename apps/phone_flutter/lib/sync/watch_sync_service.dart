@@ -99,14 +99,14 @@ class WatchDashboardSummaryPayload {
         snapshot.accounts.isNotEmpty &&
         snapshot.accounts.every((account) => account.provider == 'mock');
     return WatchDashboardSummaryPayload._({
-      'schemaVersion': 8,
+      'schemaVersion': 9,
       'dataMode': mockDataMode || isLegacyMockProvider ? 'mock' : 'live',
       'generatedAt': snapshot.generatedAt.toUtc().toIso8601String(),
       'overallStatus': snapshot.overallStatus.wireName,
       'manualRefreshAllowed': window.allowed,
       'manualRefreshAvailableAt': window.availableAt?.toUtc().toIso8601String(),
       'rings': [
-        for (final ring in rings)
+        for (final (ring, split) in pairCursorPools(rings))
           {
             'id': ring.id,
             'label': _ringLabel(ring),
@@ -119,6 +119,7 @@ class WatchDashboardSummaryPayload {
             // currency code included, or Wear would have to assume one.
             'spent': _moneyToJson(ring.spent),
             'limit': _moneyToJson(ring.limit),
+            'split': split == null ? null : _splitToJson(split),
           },
       ],
       'creditsGlance': creditsGlance?.toJson(),
@@ -175,6 +176,15 @@ extension _ProviderStatusWireName on ProviderStatus {
 /// Budget rings travel named (`Anthropic platform · Month`): the connection is
 /// the phone's vocabulary, and three bare `Month` rows read alike on Wear.
 /// Plan windows keep the pool name that Glance prefixes with its family.
+Map<String, Object?> _splitToJson(WatchRingMetric ring) {
+  return {
+    'id': ring.id,
+    'label': _ringLabel(ring),
+    'usedPercent': double.parse((ring.usedPercent ?? 0).toStringAsFixed(1)),
+    'status': ring.status.wireName,
+  };
+}
+
 String _ringLabel(WatchRingMetric ring) {
   return ring.id.startsWith('budget.') ? ring.catalogTitle : ring.label;
 }

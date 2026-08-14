@@ -82,6 +82,35 @@ void main() {
     expect(jsonEncode(preferences.clampedIds), '["a","b","c"]');
   });
 
+  WatchRingMetric ring(String id, double used) => WatchRingMetric(
+    id: id,
+    label: id,
+    usedPercent: used,
+    status: ProviderStatus.ok,
+  );
+
+  test('the Cursor pools travel as one entry, own models first', () {
+    final packed = pairCursorPools([
+      ring(cursorOtherPoolId, 90),
+      ring('allowance.claude.plan', 40),
+      ring(cursorOwnPoolId, 10),
+    ]);
+
+    // One band, so one entry — and it keeps the place of the tighter half.
+    expect(packed.length, 2);
+    expect(packed.first.$1.id, cursorOwnPoolId);
+    expect(packed.first.$2?.id, cursorOtherPoolId);
+    expect(packed.last.$1.id, 'allowance.claude.plan');
+    expect(packed.last.$2, isNull);
+  });
+
+  test('one Cursor pool alone is an ordinary ring', () {
+    final packed = pairCursorPools([ring(cursorOwnPoolId, 10)]);
+
+    expect(packed.length, 1);
+    expect(packed.single.$2, isNull);
+  });
+
   test('surface order puts tightest remaining first and drops exhausted', () {
     const rings = [
       WatchRingMetric(

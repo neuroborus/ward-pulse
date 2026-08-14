@@ -144,7 +144,7 @@ void main() {
             )
             as Map<String, dynamic>;
 
-    expect(payload['schemaVersion'], 8);
+    expect(payload['schemaVersion'], 9);
     expect(payload['creditsGlance'], {
       'text': '12.5',
       'label': 'Credits left',

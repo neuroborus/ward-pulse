@@ -87,6 +87,20 @@ data class RingSummary(
     /** Budget rings carry their money; a plan window has none, so both stay null. */
     val spent: Money? = null,
     val limit: Money? = null,
+    /**
+     * The other pool of the same plan, drawn as the outer half of this one band
+     * (`WATCH_RING_DESIGN.md`, Split band). One entry is one band, so a pair
+     * costs one of the three.
+     */
+    val split: RingHalf? = null,
+)
+
+/** The outer half of a split band: a pool, without money it never has. */
+data class RingHalf(
+    val id: String,
+    val label: String,
+    val usedPercent: Double,
+    val status: PulseStatus,
 )
 
 /** Compact remaining purchased credits for the watch-face SHORT_TEXT slot. */
@@ -199,7 +213,7 @@ data class WatchDashboardSummary(
 
 object PreviewWatchDashboardSummary {
     val value = WatchDashboardSummary(
-        schemaVersion = 8,
+        schemaVersion = 9,
         dataMode = WatchDataMode.MOCK,
         generatedAt = "2026-06-27T18:42:00Z",
         overallStatus = PulseStatus.OK,

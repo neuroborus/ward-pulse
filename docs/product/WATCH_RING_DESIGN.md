@@ -210,14 +210,13 @@ on its own value.
    slot is empty and two halves when it is not, the same way the type branches on its
    complication today. The four slots the face declares now are for four *bands* and do not
    answer this; the generator redeclares the geometry anyway.
-8. **The payload must say "one band", not "two rings".** The shipped contract caps `rings` at
-   three entries (`schemas/watch_dashboard_summary.schema.json`, `maxItems: 3`, schema version
-   8), and three entries mean three bands. If a pair travelled as two entries, a face holding a
-   pair and two other rings would need four, and the cap would have to grow — which would also
-   make "one slot" true only in prose. So the slot stays one entry and carries its second pool
-   inside itself. That is a schema change with a version bump on both sides: the phone writer and
-   Wear's `SCHEMA_VERSION` must move together, since a mismatch makes the watch discard the whole
-   payload.
+8. **The payload says "one band", not "two rings".** The contract caps `rings` at three entries
+   (`schemas/watch_dashboard_summary.schema.json`, `maxItems: 3`), and three entries mean three
+   bands. If a pair travelled as two entries, a face holding a pair and two other rings would
+   need four, and the cap would have to grow — which would also make "one slot" true only in
+   prose. So the slot stays one entry and carries its second pool in `split`, added by **schema
+   version 9** (2026-08-14). The version moved on both sides in one commit, as it must: a
+   mismatch makes the watch discard the whole payload rather than part of it.
 
 A split band never carries ring type, and no rule is needed to keep them apart: type belongs to
 budget rings, and a Cursor budget ring hangs off the **team Admin** connection that reports
