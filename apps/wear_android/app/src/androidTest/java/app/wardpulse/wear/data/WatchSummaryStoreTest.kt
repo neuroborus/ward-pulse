@@ -43,6 +43,39 @@ class WatchSummaryStoreTest {
     }
 
     @Test
+    fun keepsBothPoolsOfASplitBand() {
+        val encoded = testContext.assets.open("watch_dashboard_summary.json")
+            .bufferedReader()
+            .use { it.readText() }
+            .replace(
+                "\"rings\": [],",
+                """
+                "rings": [{
+                  "id": "allowance.cursor.cursor-plan-models",
+                  "label": "Cursor Models",
+                  "usedPercent": 47.0,
+                  "status": "ok",
+                  "spent": null,
+                  "limit": null,
+                  "split": {
+                    "id": "allowance.cursor.cursor-plan-other",
+                    "label": "Other Models",
+                    "usedPercent": 62.0,
+                    "status": "ok"
+                  }
+                }],
+                """.trimIndent(),
+            )
+
+        assertTrue(store.saveEncoded(encoded))
+        // One entry is one band, and its second pool rides inside it.
+        val rings = store.load()?.rings.orEmpty()
+        assertEquals(1, rings.size)
+        assertEquals("allowance.cursor.cursor-plan-other", rings.first().split?.id)
+        assertEquals(62.0, rings.first().split?.usedPercent)
+    }
+
+    @Test
     fun rejectsLegacyPayloadWithoutAnExplicitDataMode() {
         val encoded = testContext.assets.open("watch_dashboard_summary.json")
             .bufferedReader()

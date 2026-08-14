@@ -51,6 +51,69 @@ abstract class ShortTextComplicationDataSourceService :
     }
 }
 
+/**
+ * The outer half of a split band: the other pool of a plan that shares one band
+ * (`WATCH_RING_DESIGN.md`, Split band).
+ *
+ * A `RANGED_VALUE` complication carries one value, so two melts need two slots
+ * whatever the payload looks like. This one answers for the same band as its
+ * [ringIndex] twin and stays `NoData` while that band's ring has no `split` —
+ * which is every band on most watches.
+ */
+abstract class RingSplitComplicationDataSourceService :
+    SuspendingComplicationDataSourceService() {
+    protected abstract val ringIndex: Int
+
+    override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
+        if (request.complicationType != ComplicationType.RANGED_VALUE) {
+            return null
+        }
+        val rings = WatchSummaryStore(this).load()?.rings.orEmpty()
+        val half = RingSurfaceOrder.payloadIndexForOuterSlot(rings.size, ringIndex)
+            ?.let { rings[it].split }
+        val remaining = half?.let { WatchComplicationText.remainingPercent(it.usedPercent) }
+        if (half == null || remaining == null || remaining <= 0f) {
+            return NoDataComplicationData()
+        }
+        // Plan pools carry no period, so no TITLE: ring type belongs to budgets.
+        return ComplicationBuilders.ranged(
+            this,
+            remaining,
+            title = null,
+            colorArgb = RingFamily.colorArgb(half.id),
+            contentDescription = half.label,
+        )
+    }
+
+    override fun getPreviewData(type: ComplicationType): ComplicationData? =
+        if (type == ComplicationType.RANGED_VALUE) {
+            ComplicationBuilders.ranged(
+                this,
+                62f,
+                title = null,
+                colorArgb = RingFamily.CURSOR,
+                contentDescription = "Other Models",
+            )
+        } else {
+            null
+        }
+}
+
+/** Outer half of the band [TodayComplicationDataSourceService] draws. */
+class Ring1SplitComplicationDataSourceService : RingSplitComplicationDataSourceService() {
+    override val ringIndex = 0
+}
+
+/** Outer half of the band [WeekComplicationDataSourceService] draws. */
+class Ring2SplitComplicationDataSourceService : RingSplitComplicationDataSourceService() {
+    override val ringIndex = 1
+}
+
+/** Outer half of the band [Ring3ComplicationDataSourceService] draws. */
+class Ring3SplitComplicationDataSourceService : RingSplitComplicationDataSourceService() {
+    override val ringIndex = 2
+}
+
 abstract class RingComplicationDataSourceService :
     SuspendingComplicationDataSourceService() {
     protected abstract val ringIndex: Int
@@ -444,6 +507,9 @@ object WatchComplicationUpdater {
         WeekComplicationDataSourceService::class.java,
         Ring3ComplicationDataSourceService::class.java,
         Ring4ComplicationDataSourceService::class.java,
+        Ring1SplitComplicationDataSourceService::class.java,
+        Ring2SplitComplicationDataSourceService::class.java,
+        Ring3SplitComplicationDataSourceService::class.java,
         StatusComplicationDataSourceService::class.java,
         TokensComplicationDataSourceService::class.java,
         Strip2ComplicationDataSourceService::class.java,
