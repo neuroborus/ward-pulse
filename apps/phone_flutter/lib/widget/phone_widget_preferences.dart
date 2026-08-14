@@ -71,6 +71,9 @@ List<WatchRingMetric> phoneWidgetCatalog(DashboardSnapshot? snapshot) {
     snapshot,
     includePurchased: true,
     collapseClaudePlan: false,
+    // The widget has rows, not bands: nothing to split, so both Cursor pools
+    // stay selectable on their own.
+    collapseCursorPlan: false,
   );
 }
 

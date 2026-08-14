@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../dashboard/dashboard_models.dart';
+import '../dashboard/provider_status_severity.dart';
 import '../providers/provider_connection.dart';
 import '../sync/credit_request_runway.dart';
 
@@ -11,6 +12,12 @@ const watchRingSlotCount = 3;
 
 /// Synthetic watch-ring slot: Claude plan windows collapse to the tightest one.
 const claudePlanRingId = 'allowance.claude.plan';
+
+/// One Watchface slot for the Cursor plan's two pools. Unlike the Claude slot,
+/// which resolves to a single window, this one resolves back to **both** pools:
+/// they share a band rather than replace each other (`WATCH_RING_DESIGN.md`,
+/// Split band).
+const cursorPlanRingId = 'allowance.cursor.plan';
 
 /// Claude plan window allowance ids, tie-break order (shorter / primary first).
 const _claudePlanWindowIds = <String>[
@@ -183,6 +190,7 @@ List<String> migrateWatchRingSelectedIds(
 }) {
   final out = <String>[];
   var sawClaudePlan = false;
+  var sawCursorPlan = false;
   for (final id in ids) {
     // No successor to pick: which connection the sum stood for is unknown.
     if (retiredBudgetRingIds.contains(id)) {
@@ -195,6 +203,17 @@ List<String> migrateWatchRingSelectedIds(
       if (!sawClaudePlan) {
         out.add(claudePlanRingId);
         sawClaudePlan = true;
+      }
+      continue;
+    }
+    // Both pools once cost a slot each; they share a band now, so a stored pair
+    // folds into the one slot it costs (`WATCH_RING_DESIGN.md`, Split band).
+    if (id == cursorPlanRingId ||
+        id == cursorOwnPoolId ||
+        id == cursorOtherPoolId) {
+      if (!sawCursorPlan) {
+        out.add(cursorPlanRingId);
+        sawCursorPlan = true;
       }
       continue;
     }
@@ -258,6 +277,44 @@ int _compareClaudePlanWindows(AllowanceState a, AllowanceState b) {
       .compareTo(_claudePlanWindowIds.indexOf(b.id));
 }
 
+bool _isCursorPoolId(String allowanceId) =>
+    allowanceId == 'cursor-plan-models' || allowanceId == 'cursor-plan-other';
+
+/// One catalog row for a Cursor plan that reports both pools; `null` when it
+/// reports one or none, because a single pool is an ordinary ring.
+///
+/// The row wears the **tighter** half — that is what the pair sorts by — while
+/// the halves themselves keep their own order by pool, not by usage.
+WatchRingMetric? collapseCursorPlanRing(List<AllowanceState> allowances) {
+  AllowanceState? poolFor(String id) {
+    for (final allowance in allowances) {
+      if (allowance.id == id && allowance.usedPercent != null) {
+        return allowance;
+      }
+    }
+    return null;
+  }
+
+  final own = poolFor('cursor-plan-models');
+  final other = poolFor('cursor-plan-other');
+  if (own == null || other == null) {
+    return null;
+  }
+  // Prefer a non-exhausted half, as the Claude collapse does: an exhausted pool
+  // does not exhaust the pair — the band falls back to the surviving one
+  // (`WATCH_RING_DESIGN.md`, Split band, rule 6).
+  final usable = [own, other].where((pool) => pool.usedPercent! < 100).toList();
+  final ranked = usable.isNotEmpty ? usable : [own, other];
+  ranked.sort((a, b) => b.usedPercent!.compareTo(a.usedPercent!));
+  final tighter = ranked.first;
+  return WatchRingMetric(
+    id: cursorPlanRingId,
+    label: 'Cursor plan',
+    usedPercent: tighter.usedPercent,
+    status: worstProviderStatus([own.status, other.status]),
+  );
+}
+
 /// Builds the catalog of ring metrics from the current dashboard snapshot.
 ///
 /// Purchased meters (Extra usage, on-demand, Codex credits) are excluded by
@@ -269,6 +326,7 @@ List<WatchRingMetric> watchRingCatalog(
   DashboardSnapshot? snapshot, {
   bool includePurchased = false,
   bool collapseClaudePlan = true,
+  bool collapseCursorPlan = true,
 }) {
   if (snapshot == null) {
     return const [];
@@ -293,8 +351,20 @@ List<WatchRingMetric> watchRingCatalog(
       }
       continue;
     }
+    if (account.provider == 'cursor' && collapseCursorPlan) {
+      final collapsed = collapseCursorPlanRing(account.allowances);
+      if (collapsed != null) {
+        metrics.add(collapsed);
+      }
+    }
     for (final allowance in account.allowances) {
       if (allowance.source == AllowanceSource.purchased && !includePurchased) {
+        continue;
+      }
+      if (account.provider == 'cursor' &&
+          collapseCursorPlan &&
+          _isCursorPoolId(allowance.id) &&
+          collapseCursorPlanRing(account.allowances) != null) {
         continue;
       }
       metrics.add(_allowanceMetric(account.provider, allowance));
@@ -321,18 +391,31 @@ List<WatchRingMetric> resolveWatchRings(
   DashboardSnapshot snapshot,
   WatchRingPreferences preferences,
 ) {
-  if (preferences.usesDefaults) {
-    return watchRingCatalog(
-      snapshot,
-    ).where((metric) => metric.isAvailable).take(watchRingSlotCount).toList();
-  }
-
   final catalog = {
     for (final metric in watchRingCatalog(snapshot)) metric.id: metric,
+    // The paired slot travels as its two pools: they share a band, and the
+    // payload packs them back into one entry.
+    for (final metric in watchRingCatalog(snapshot, collapseCursorPlan: false))
+      if (metric.id == cursorOwnPoolId || metric.id == cursorOtherPoolId)
+        metric.id: metric,
   };
+  // Defaults and a stored selection differ only in where the ids come from —
+  // everything after that, expansion included, has to treat them alike.
+  final ids =
+      preferences.usesDefaults
+          ? [
+            for (final metric in watchRingCatalog(snapshot))
+              if (metric.isAvailable) metric.id,
+          ].take(watchRingSlotCount)
+          : preferences.migratedIds;
   return [
-    for (final id in preferences.migratedIds)
-      if (catalog[id] case final metric? when metric.isAvailable) metric,
+    for (final id in ids)
+      if (id == cursorPlanRingId) ...[
+        for (final poolId in const [cursorOwnPoolId, cursorOtherPoolId])
+          if (catalog[poolId] case final metric? when metric.isAvailable)
+            metric,
+      ] else if (catalog[id] case final metric? when metric.isAvailable)
+        metric,
   ];
 }
 
