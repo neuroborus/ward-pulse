@@ -42,30 +42,16 @@ class WatchSummaryStoreTest {
         assertEquals(WatchDataMode.MOCK, store.load()?.dataMode)
     }
 
+    /**
+     * The paired fixture is the phone's own output, asserted byte for byte by
+     * `watch_sync_service_test.dart` — so this parses what the phone writes,
+     * not a literal written here to match it.
+     */
     @Test
     fun keepsBothPoolsOfASplitBand() {
-        val encoded = testContext.assets.open("watch_dashboard_summary.json")
+        val encoded = testContext.assets.open("watch_dashboard_summary_paired.json")
             .bufferedReader()
             .use { it.readText() }
-            .replace(
-                "\"rings\": [],",
-                """
-                "rings": [{
-                  "id": "allowance.cursor.cursor-plan-models",
-                  "label": "Cursor Models",
-                  "usedPercent": 47.0,
-                  "status": "ok",
-                  "spent": null,
-                  "limit": null,
-                  "split": {
-                    "id": "allowance.cursor.cursor-plan-other",
-                    "label": "Other Models",
-                    "usedPercent": 62.0,
-                    "status": "ok"
-                  }
-                }],
-                """.trimIndent(),
-            )
 
         assertTrue(store.saveEncoded(encoded))
         // One entry is one band, and its second pool rides inside it.

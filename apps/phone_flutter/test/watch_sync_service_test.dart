@@ -68,6 +68,47 @@ void main() {
     expect(rings.first['limit'], {'minorUnits': 25000, 'currency': 'USD'});
   });
 
+  test('packs a Cursor pair into one ring carrying its second pool', () {
+    final json =
+        jsonDecode(
+              File(
+                '../../fixtures/snapshots/dashboard_today.json',
+              ).readAsStringSync(),
+            )
+            as Map<String, dynamic>;
+    final account = (json['accounts'] as List).first as Map<String, dynamic>;
+    account['provider'] = 'cursor';
+    account['connection'] = 'cursor.plan';
+    account['allowances'] = [
+      _cursorPool('cursor-plan-models', 'Cursor Models', 47.0),
+      _cursorPool('cursor-plan-other', 'Other Models', 62.0),
+    ];
+    final expected = jsonDecode(
+      File(
+        '../../fixtures/snapshots/watch_dashboard_summary_paired.json',
+      ).readAsStringSync(),
+    );
+
+    final dashboard = DashboardSnapshot.fromJson(json);
+    final payload =
+        jsonDecode(
+              WatchDashboardSummaryPayload.fromSnapshot(
+                dashboard,
+                const ConsumptionDisplayPreferences(),
+                const WatchRingPreferences(selectedIds: [cursorPlanRingId]),
+                // Match fixture: PollCadence floor already elapsed.
+                clock: dashboard.generatedAt.add(ManualRefreshWindow.floor),
+              ).encode(),
+            )
+            as Map<String, dynamic>;
+
+    // One band, so one entry: the second pool rides inside the first
+    // (`WATCH_RING_DESIGN.md`, Split band). The golden is the whole payload
+    // because Wear parses this very file (`WatchSummaryStoreTest`) — a renamed
+    // key has to fail on one side or the other, not quietly on neither.
+    expect(payload, expected);
+  });
+
   test('marks the previous watch summary stale after a sync failure', () {
     final dashboard =
         DashboardSnapshot.fromJsonString(
@@ -245,4 +286,21 @@ void main() {
       lastSync.add(ManualRefreshWindow.floor).toUtc().toIso8601String(),
     );
   });
+}
+
+/// A plan pool as the Cursor adapter reports it: a percent and nothing to bill.
+Map<String, dynamic> _cursorPool(String id, String label, double usedPercent) {
+  return {
+    'id': id,
+    'source': 'plan',
+    'label': label,
+    'usedPercent': usedPercent,
+    'used': null,
+    'limit': null,
+    'remaining': null,
+    'unlimited': false,
+    'windowMinutes': null,
+    'resetsAt': null,
+    'status': 'ok',
+  };
 }

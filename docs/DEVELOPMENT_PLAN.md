@@ -780,7 +780,9 @@ reshuffles utilization when Mock data is toggled or the phone refreshes (automat
 current scenario); the Phase 1 single `mock` provider golden remains for
 CLI and FFI regression only. Phase 13 plans
 schema version 4, which replaces the preference-filtered allowance list with explicitly
-selected ring entries.
+selected ring entries. A split band has its own sanitized example,
+`fixtures/snapshots/watch_dashboard_summary_paired.json`: the phone asserts its whole payload
+against that file and Wear parses the same file, so a renamed key cannot pass both sides.
 
 ---
 
@@ -1660,7 +1662,7 @@ WATCH_RING_DESIGN.md baseline locked 2026-07-25 (time hero, remaining arcs, sunk
 WEAR_GLANCE_DESIGN.md baseline locked 2026-07-26 (legend rows, OK/!OK refresh, Alerts pill)
 review SVGs/PNGs match those baselines (face: preview-3-plan-credits; Glance: preview-glance-legend-3)
 watchface.xml and its ring-type drawables are generated (render-watchface.mjs; check-watchface fails on XML drift)
-schema version 7 validates and sanitized fixtures stay current
+the watch payload validates against its schema (version 9 since the split band) and sanitized fixtures stay current
 watch surfaces show only configured, available, non-exhausted rings
 arc length = remaining; melt clockwise from 12; inner/center = tightest remaining
 a budget ring's band repeats its period as cut-out type (`D` / `7D` / `M`); plan rings carry none
