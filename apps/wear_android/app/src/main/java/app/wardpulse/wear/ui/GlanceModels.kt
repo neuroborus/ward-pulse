@@ -2,7 +2,6 @@ package app.wardpulse.wear.ui
 
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.Quantity
-import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.model.WatchDataMode
 import app.wardpulse.wear.model.formatQuantityValue
@@ -57,30 +56,47 @@ fun glanceRefreshChrome(
     )
 }
 
-/** Active (non-exhausted) rings already ordered tightest-remaining first by the phone. */
+/**
+ * Active (non-exhausted) pools already ordered tightest-remaining first by the phone.
+ *
+ * A pair travels as one entry with its second pool inside (`WATCH_RING_DESIGN.md`,
+ * Split band). Only the face shares a band; here every pool keeps its own row.
+ */
 fun glanceLegendRows(summary: WatchDashboardSummary): List<GlanceLegendRowModel> {
-    return summary.rings
-        .filter { it.usedPercent < 100.0 }
-        .map { ring ->
-            val remaining =
-                (100.0 - ring.usedPercent.coerceIn(0.0, 100.0)).coerceAtLeast(0.0)
-            GlanceLegendRowModel(
-                title = glancePrimaryLabel(ring),
-                subtitle = glanceSubtitle(summary, ring, remaining),
-                remainingFraction = (remaining / 100.0).toFloat(),
-                colorArgb = RingFamily.colorArgb(ring.id),
-            )
-        }
+    return summary.rings.flatMap { ring ->
+        listOfNotNull(
+            glanceLegendRow(summary, ring.id, ring.label, ring.usedPercent),
+            ring.split?.let { glanceLegendRow(summary, it.id, it.label, it.usedPercent) },
+        )
+    }
 }
 
-internal fun glancePrimaryLabel(ring: RingSummary): String {
-    val family = glanceFamilyName(ring.id) ?: return ring.label
+private fun glanceLegendRow(
+    summary: WatchDashboardSummary,
+    ringId: String,
+    label: String,
+    usedPercent: Double,
+): GlanceLegendRowModel? {
+    if (usedPercent >= 100.0) {
+        return null
+    }
+    val remaining = (100.0 - usedPercent.coerceIn(0.0, 100.0)).coerceAtLeast(0.0)
+    return GlanceLegendRowModel(
+        title = glancePrimaryLabel(ringId, label),
+        subtitle = glanceSubtitle(summary, ringId, remaining),
+        remainingFraction = (remaining / 100.0).toFloat(),
+        colorArgb = RingFamily.colorArgb(ringId),
+    )
+}
+
+internal fun glancePrimaryLabel(ringId: String, label: String): String {
+    val family = glanceFamilyName(ringId) ?: return label
     // Already named: composed by the phone (`Family · Pool`), or a pool name that
     // opens with its own family (`Cursor Models`).
-    if (ring.label.contains(" · ") || ring.label.substringBefore(' ') == family) {
-        return ring.label
+    if (label.contains(" · ") || label.substringBefore(' ') == family) {
+        return label
     }
-    return "$family · ${ring.label}"
+    return "$family · $label"
 }
 
 internal fun glanceFamilyName(ringId: String): String? = when {
@@ -95,11 +111,11 @@ internal fun glanceFamilyName(ringId: String): String? = when {
 
 private fun glanceSubtitle(
     summary: WatchDashboardSummary,
-    ring: RingSummary,
+    ringId: String,
     remaining: Double,
 ): String {
     val left = "${remaining.roundToInt()}% left"
-    val credits = purchasedCreditsSuffix(summary, ring.id) ?: return left
+    val credits = purchasedCreditsSuffix(summary, ringId) ?: return left
     return "$left · $credits"
 }
 

@@ -5,6 +5,7 @@ import app.wardpulse.wear.model.CreditsGlance
 import app.wardpulse.wear.model.PeriodSummary
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.Quantity
+import app.wardpulse.wear.model.RingHalf
 import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.model.WatchDataMode
@@ -106,17 +107,19 @@ class GlanceModelsTest {
                                 92.0,
                                 PulseStatus.OK,
                             ),
+                            // One band, two pools: the exhausted one drops out alone.
                             RingSummary(
                                 "allowance.cursor.cursor-plan-models",
                                 "Cursor Models",
                                 76.0,
                                 PulseStatus.OK,
-                            ),
-                            RingSummary(
-                                "allowance.cursor.cursor-plan-other",
-                                "Other Models",
-                                100.0,
-                                PulseStatus.OK,
+                                split =
+                                    RingHalf(
+                                        "allowance.cursor.cursor-plan-other",
+                                        "Other Models",
+                                        100.0,
+                                        PulseStatus.OK,
+                                    ),
                             ),
                             RingSummary(
                                 "budget.today",
@@ -146,6 +149,40 @@ class GlanceModelsTest {
         assertEquals("Cursor Models", rows[1].title)
         assertEquals("Budget · Today", rows[2].title)
         assertEquals("60% left", rows[2].subtitle)
+    }
+
+    /** The face shares a band between two pools; Glance never does. */
+    @Test
+    fun legendRows_listBothPoolsOfAPairedBand() {
+        val rows =
+            glanceLegendRows(
+                baseSummary(
+                    rings =
+                        listOf(
+                            RingSummary(
+                                "allowance.cursor.cursor-plan-models",
+                                "Cursor Models",
+                                53.0,
+                                PulseStatus.OK,
+                                split =
+                                    RingHalf(
+                                        "allowance.cursor.cursor-plan-other",
+                                        "Other Models",
+                                        38.0,
+                                        PulseStatus.OK,
+                                    ),
+                            ),
+                        ),
+                ),
+            )
+        assertEquals(2, rows.size)
+        assertEquals("Cursor Models", rows[0].title)
+        assertEquals("47% left", rows[0].subtitle)
+        assertEquals("Cursor · Other Models", rows[1].title)
+        assertEquals("62% left", rows[1].subtitle)
+        // Each pool carries its own colour, which is the point of splitting them.
+        assertEquals(RingFamily.colorArgb("allowance.cursor.cursor-plan-models"), rows[0].colorArgb)
+        assertEquals(RingFamily.colorArgb("allowance.cursor.cursor-plan-other"), rows[1].colorArgb)
     }
 
     @Test
