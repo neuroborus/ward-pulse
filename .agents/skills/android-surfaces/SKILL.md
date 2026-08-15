@@ -96,6 +96,13 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   baking, not resolution.
 - Keep WFF declarative and minimal; follow the same concentric language as Wear (not
   side-by-side `RING 1` / `RING 2` placeholders).
+- **A scene holds at most eight `ComplicationSlot` elements** — the same in format versions 2, 4
+  and 5, so raising the version buys nothing. This face has used all eight since 2026-07-25
+  (four rings, four strips; the fourth of each was undrawn until the split-band revision took
+  the fourth ring). Count before designing anything that needs a new slot — the validator never
+  says "too many slots": a ninth is reported as `Invalid content was found starting with element
+  'ComplicationSlot'`, listing `PartText`, `PartImage`, `Condition` and friends as what it
+  expected instead.
 - WFF format version 2 (Wear OS 5+): concentric `RANGED_VALUE` arcs with `WeightedStroke`
   colors from Wear `ColorRamp` / `[COMPLICATION.RANGED_VALUE_COLORS]`; arc = remaining.
   Keep track spans under 360° (scale onto 359.9°) — a closed circle collapses

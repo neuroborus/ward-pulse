@@ -1619,7 +1619,8 @@ Deliverables:
   %, or that connection's local budget percent for one period — never purchased Extra usage /
   on-demand / credit meters, and never a sum across connections). One exception, added by the
   split-band revision 2026-08-13: a Cursor plan's two pools may share a single band, split
-  lengthwise, and still cost one slot;
+  lengthwise, and still cost one of the three ring slots the user picks (on the face they cost
+  two complications, and the outer halves of all three bands share one `ComplicationSlot`);
 - layer color is primarily **by provider family**, with status (warn/error) as a modulation; a
   budget ring takes its connection's family color, and a neutral grey survives only as the
   fallback for an unresolved family. The palette itself lives in `WATCH_RING_DESIGN.md`, which

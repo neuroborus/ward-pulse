@@ -374,7 +374,7 @@ concentric baseline — `docs/product/WATCH_RING_DESIGN.md`):
 
 | Setting | Value | Purpose |
 | --- | --- | --- |
-| Watch Face Format | version 2 | Concentric remaining arcs + strip accents via WeightedStroke / RANGED_VALUE ColorRamp (Wear OS 5+) |
+| Watch Face Format | version 2 | Concentric remaining arcs + strip accents via WeightedStroke / RANGED_VALUE ColorRamp (Wear OS 5+). A scene takes at most **8** `ComplicationSlot` elements — the same in v2/v4/v5, so a raise cannot buy more |
 | Application ID | `app.wardpulse.watchface` | Independent watch face package |
 | Minimum SDK | API 34 | Minimum runtime for WFF v2 |
 | Compile SDK | Android SDK 37.1 | Shared Android build baseline |

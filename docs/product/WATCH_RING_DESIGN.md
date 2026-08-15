@@ -188,10 +188,10 @@ on its own value.
 4. **The strip splits with the band.** A pair's strip carries a marker at each end, in the two
    colours, and two percentages in one TEXT, as every strip label is composed whole. One marker
    stays the rule for every other strip: two of the same colour would say a thing twice, which is
-   the defect this language exists to avoid. The second marker cannot be painted from the first
-   slot: `[COMPLICATION.RANGED_VALUE_COLORS]` is scoped to its own `ComplicationSlot`, so a
-   strip's two ends belong to the pair's two slots — the same pairing rule 7 below states for the
-   band, read at strip scale.
+   the defect this language exists to avoid. The second marker cannot be painted from the band's
+   own strip slot: `[COMPLICATION.RANGED_VALUE_COLORS]` is scoped to one `ComplicationSlot`, so
+   the two ends need two of them. Rule 7's budget leaves exactly one spare — the fourth strip —
+   and spending it here is the open question; the fallback is one marker and two percentages.
 5. **A split strip carries no credits.** The well is measured for one worst-case label, and two
    percentages spend that width. Nothing is lost: Glance already lists purchased credits per
    provider, and that is where a reader looks for a number rather than a warning.
@@ -201,15 +201,20 @@ on its own value.
    strip. Cursor's external pool runs out routinely, so this is the common state, not the corner
    case — a half-empty split band would spend the scarcest space on a number that is already
    zero.
-7. **One payload entry, two complication slots.** A `RANGED_VALUE` complication carries one
-   value, so two melts need two slots however the payload is shaped: the entry travels whole and
-   the Wear data sources publish its two pools into a slot pair. The markup pays more than the
-   payload does: a pair sorts by its tighter half and can therefore land on **any** of the three
-   bands, so every band needs a second slot standing by — six declared, of which at most four
-   ever carry data (one pair plus two single rings). A band draws one full arc when its second
-   slot is empty and two halves when it is not, the same way the type branches on its
-   complication today. The four slots the face declares now are for four *bands* and do not
-   answer this; the generator redeclares the geometry anyway.
+7. **One payload entry, two complications — and one shared slot for the outer half.** A
+   `RANGED_VALUE` complication carries one value, so two melts need two complications however the
+   payload is shaped: the entry travels whole and Wear publishes its two pools separately. Where
+   they land is decided by a hard limit: **a WFF scene holds at most eight `ComplicationSlot`
+   elements** (`maxOccurs="8"`, unchanged in format versions 2, 4 and 5), and this face has held
+   exactly eight since 2026-07-25 — four ring slots and four strips. A second slot per band would
+   need nine and does not exist.
+   So the outer half gets **one slot for all three bands**, taking over the fourth ring slot the
+   face declares and never draws. Its `BoundingArc` is thick enough to reach every band, and a
+   `Condition` on its own `TITLE` — the band index, written by the watch — picks which band it
+   draws on. The band's own slot learns from its own `TITLE` that it is now half a band. Both are
+   the same mechanism the ring type already uses: a slot can only read its own complication, so
+   everything it needs to know arrives in that string. The two uses never collide — a `TITLE`
+   holds a period only for a budget ring, and a pair is always two plan pools.
 8. **The payload says "one band", not "two rings".** The contract caps `rings` at three entries
    (`schemas/watch_dashboard_summary.schema.json`, `maxItems: 3`), and three entries mean three
    bands. If a pair travelled as two entries, a face holding a pair and two other rings would
@@ -291,7 +296,9 @@ stack reached radius 142.3 and would have cut into the widened inner band.
 
 Only three strips render, matching the three-ring cap. A fourth slot exists in the markup for
 both rings and strips; neither is drawn, and the fourth strip's geometry is not kept clear of
-the third band.
+the third band. The fourth **ring** slot is spoken for since the split-band revision — it is
+where the outer half of a shared band comes from (Split band, rule 7) — so the fourth strip is
+the only spare the eight-slot budget still has.
 
 `tools/render-watch-ring-designs.mjs` carries the same measured values, so review art shows
 what the watch shows. Before that revision the generator drew the nominal 26, roughly 2.3x
@@ -409,7 +416,7 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
 | Surface | Role |
 |---------|------|
 | Wear OS app Glance | **Not** this face language — locked text legend (`WEAR_GLANCE_DESIGN.md`, 2026-07-26) |
-| WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs plus sunk `RANGED_VALUE` strips (`%` / `% · credits` / `$12.34/100` for budgets) in `watchface.xml`. Every strip TEXT is the full label (WFF `length(TITLE)` Conditions are unreliable). Strip accents use `[COMPLICATION.RANGED_VALUE_COLORS]` (family ColorRamp). Keep progress/track spans below 360° (scale onto 359.9°) — a closed circle collapses to a ROUND tip. Remaining melt is clockwise from 12: Transform `startAngle` to `(1 - value/max) * 359.9` with fixed `endAngle` 359.9. Strips need their own `BoundingBox` slots (`BoundingArc` clips content to the arc band). |
+| WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs plus sunk `RANGED_VALUE` strips (`%` / `% · credits` / `$12.34/100` for budgets) in `watchface.xml`. Every strip TEXT is the full label (WFF `length(TITLE)` Conditions are unreliable). Strip accents use `[COMPLICATION.RANGED_VALUE_COLORS]` (family ColorRamp). Keep progress/track spans below 360° (scale onto 359.9°) — a closed circle collapses to a ROUND tip. Remaining melt is clockwise from 12: Transform `startAngle` to `(1 - value/max) * 359.9` with fixed `endAngle` 359.9. Strips need their own `BoundingBox` slots (`BoundingArc` clips content to the arc band). A scene holds **at most eight** `ComplicationSlot` elements in every format version and this face has used all eight since 2026-07-25, so a new slot has to come out of that budget (Split band, rule 7). |
 | Phone Watchface tab | Slot selection + preview of next payload rings (not Settings) |
 
 ## Non-goals
