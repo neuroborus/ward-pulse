@@ -8,6 +8,7 @@ import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_repository.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../dashboard/provider_status_color.dart';
+import 'surface_order.dart';
 import '../providers/claude_account_service.dart';
 import '../providers/codex_account_service.dart';
 import '../providers/provider_credential_store.dart';
@@ -142,6 +143,11 @@ class _DashboardHostState extends State<DashboardHost> {
 
   late Future<DashboardSnapshot> _snapshot = _loadSnapshot();
   DashboardSnapshot? _currentSnapshot;
+
+  /// Holds the Dashboard's card order for the run, so a poll that only moves
+  /// spend leaves every card where the reader last saw it. Shared with the
+  /// app-bar badge, which must point at the topmost flagged card.
+  final _dashboardOrder = FrozenOrder();
   ConsumptionDisplayPreferences _displayPreferences =
       const ConsumptionDisplayPreferences();
   RefreshIntervalPreference _refreshInterval =
@@ -507,7 +513,11 @@ class _DashboardHostState extends State<DashboardHost> {
             actions: [
               if (snapshot != null)
                 _AppBarProblems(
-                  problems: dashboardProblems(snapshot, _displayPreferences),
+                  problems: dashboardProblems(
+                    snapshot,
+                    _displayPreferences,
+                    _dashboardOrder,
+                  ),
                   onReveal: _revealProblem,
                 ),
               IconButton(
@@ -570,6 +580,7 @@ class _DashboardHostState extends State<DashboardHost> {
                 displayPreferences: _displayPreferences,
                 onOpenProviders: _openProviders,
                 reveal: _reveal,
+                order: _dashboardOrder,
               ),
               _ => _ErrorView(
                 failure: const DashboardLoadException(),

@@ -28,20 +28,23 @@ int compareBySpend(Money? left, Money? right) {
 ///
 /// A key that shifts on every poll — spend on the Dashboard — would slide a
 /// card out from under the reader's finger. So a ranking is computed once for a
-/// given set of keys and held: a refresh that only moves figures renders the
-/// order it already had, while a provider appearing, vanishing, or changing
-/// state earns a fresh one.
+/// given set of keys and held, and a new ranking is taken only when that set
+/// differs.
 ///
-/// Keys, not rows: a tab can hold the order of ids the shell knows without
-/// exposing the private widgets it builds from them.
+/// What counts as a change is therefore the caller's to state: it writes into
+/// each key exactly what must rerank the list — the row's identity, plus the
+/// state it reports — and leaves out the figures this class exists to absorb.
+///
+/// Keys, not rows: a tab can hold an order without handing over the private
+/// widgets it builds from it.
 class FrozenOrder {
   List<String>? _held;
 
   /// The order to render — the held one for as long as [ranked] names the same
   /// keys, whatever their new positions are.
   ///
-  /// [ranked] names one row each: these are ids, and a repeated one would be a
-  /// row counted twice by the caller rather than an order to hold.
+  /// [ranked] carries one key per row: a repeated key would be a row counted
+  /// twice by the caller rather than an order to hold.
   List<String> hold(List<String> ranked) {
     final held = _held;
     if (held != null &&

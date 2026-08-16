@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app/pull_to_refresh_list.dart';
+import '../app/surface_order.dart';
 import '../charts/usage_history_chart.dart';
 import '../settings/consumption_display_preferences.dart';
 import 'connected_capabilities.dart';
@@ -16,11 +17,16 @@ typedef DashboardProblems =
 
 DashboardProblems dashboardProblems(
   DashboardSnapshot snapshot,
-  ConsumptionDisplayPreferences displayPreferences,
-) {
+  ConsumptionDisplayPreferences displayPreferences, [
+  FrozenOrder? order,
+]) {
+  // The same [order] the screen renders with: `first` is what the app bar
+  // scrolls to, and reading it off a different order would skip past a card
+  // sitting higher up.
   final flagged = _providerDashboardSections(
     snapshot.accounts,
     displayPreferences,
+    order,
   ).where((section) => section.flagged > 0).toList(growable: false);
   return (
     sections: flagged.length,
@@ -36,12 +42,17 @@ class DashboardScreen extends StatefulWidget {
     this.displayPreferences = const ConsumptionDisplayPreferences(),
     this.onOpenProviders,
     this.reveal,
+    this.order,
     required this.onRefresh,
   });
 
   final DashboardSnapshot snapshot;
   final ConsumptionDisplayPreferences displayPreferences;
   final VoidCallback? onOpenProviders;
+
+  /// Keeps the cards where the reader last saw them. Owned by the shell, which
+  /// shares it with the app-bar problem badge; `null` ranks afresh every build.
+  final FrozenOrder? order;
 
   /// A section to bring into view, and the tap that asked for it. The token is
   /// what makes a second tap on the same provider scroll again after the reader
@@ -105,6 +116,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final providerSections = _providerDashboardSections(
       snapshot.accounts,
       displayPreferences,
+      widget.order,
     );
     final hasVisibleAllowances = providerSections.any(
       (section) => section.allowances.isNotEmpty,
@@ -559,6 +571,7 @@ class _ProviderDashboardSection {
     required this.provider,
     required this.providerLabel,
     required this.status,
+    required this.spent,
     required this.flagged,
     required this.allowances,
     required this.buckets,
@@ -568,6 +581,11 @@ class _ProviderDashboardSection {
   final String provider;
   final String providerLabel;
   final ProviderStatus status;
+
+  /// What this family spent this month, or `null` when its accounts disagree on
+  /// a currency. Carried because ordering needs it and a section spans several
+  /// accounts, while spend is reported per account.
+  final Money? spent;
 
   /// How many things this section is reporting as unhealthy: one per card that
   /// deviates, or one for an account that deviates without a card of its own —
@@ -589,8 +607,9 @@ class _ProviderDashboardSection {
 /// keeps allowances, history, and model breakdown under a single accent bar.
 List<_ProviderDashboardSection> _providerDashboardSections(
   List<ProviderSnapshot> accounts,
-  ConsumptionDisplayPreferences displayPreferences,
-) {
+  ConsumptionDisplayPreferences displayPreferences, [
+  FrozenOrder? order,
+]) {
   final grouped = <String, List<ProviderSnapshot>>{};
   for (final account in accounts) {
     grouped
@@ -617,6 +636,7 @@ List<_ProviderDashboardSection> _providerDashboardSections(
       _ProviderDashboardSection(
         provider: group.first.provider,
         providerLabel: group.first.providerLabel,
+        spent: _monthSpend(group),
         // A rollup covers what this section renders — its cards and the
         // accounts behind them. Cards alone are not enough: an account can read
         // healthy while a card crossed its own threshold, and it can read
@@ -646,7 +666,73 @@ List<_ProviderDashboardSection> _providerDashboardSections(
       ),
     );
   }
+
+  sections.sort(_compareSections);
+  if (order == null) {
+    return sections;
+  }
+
+  // Held so a poll that only moves spend cannot slide a card out from under a
+  // finger; the ranking above decides again the moment a family's state moves.
+  final held = order.hold([for (final section in sections) _orderKey(section)]);
+  final position = {
+    for (var index = 0; index < held.length; index++) held[index]: index,
+  };
+  sections.sort(
+    (left, right) =>
+        position[_orderKey(left)]!.compareTo(position[_orderKey(right)]!),
+  );
   return sections;
+}
+
+/// What a held order is held against: the family, and the state it reports.
+///
+/// Spend is deliberately absent — it is the number this freezing exists to
+/// absorb. Status is deliberately present: a family falling into error climbs
+/// the poll it happens, rather than waiting for another family to appear.
+String _orderKey(_ProviderDashboardSection section) {
+  return '${section.provider} ${section.status.name}';
+}
+
+/// What needs action first, then what costs most, then a stable name.
+int _compareSections(
+  _ProviderDashboardSection left,
+  _ProviderDashboardSection right,
+) {
+  final statusCmp = compareByStatus(left.status, right.status);
+  if (statusCmp != 0) {
+    return statusCmp;
+  }
+  final spentCmp = compareBySpend(left.spent, right.spent);
+  if (spentCmp != 0) {
+    return spentCmp;
+  }
+  // The provider key, not the label: a copy edit must not move a card.
+  return left.provider.compareTo(right.provider);
+}
+
+/// This month's spend for a whole family, or `null` when its accounts report in
+/// different currencies — the core refuses to add those, and so does the order.
+Money? _monthSpend(List<ProviderSnapshot> group) {
+  Money? total;
+  for (final account in group) {
+    final spent = account.month.spent;
+    if (spent == null) {
+      continue;
+    }
+    if (total == null) {
+      total = spent;
+      continue;
+    }
+    if (total.currency != spent.currency) {
+      return null;
+    }
+    total = Money(
+      minorUnits: total.minorUnits + spent.minorUnits,
+      currency: total.currency,
+    );
+  }
+  return total;
 }
 
 class _ProviderDashboardSections extends StatelessWidget {

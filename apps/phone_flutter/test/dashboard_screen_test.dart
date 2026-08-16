@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/app/surface_order.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_theme.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_screen.dart';
@@ -67,7 +68,9 @@ void main() {
     // Three unhealthy cards live in two families, and a tap can only take the
     // reader to a family (PHONE_DASHBOARD_DESIGN.md).
     expect(problems.sections, 2);
-    expect(problems.first, 'cursor');
+    // The worst family, not the one that happened to arrive first: Codex is in
+    // error while Cursor is only rate limited.
+    expect(problems.first, 'codex');
     expect(problems.status, ProviderStatus.error);
   });
 
@@ -603,6 +606,224 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  group('the declared card order', () {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+
+    Map<String, dynamic> account(
+      String provider, {
+      String status = 'ok',
+      int spent = 0,
+      String currency = 'USD',
+    }) {
+      return source.primaryAccount!.toJson()
+        ..['accountId'] = '$provider-local'
+        ..['provider'] = provider
+        ..['status'] = status
+        ..['allowances'] = [
+          {
+            'id': '$provider-plan',
+            'source': 'plan',
+            'label': '$provider plan',
+            'usedPercent': 50.0,
+            'used': null,
+            'limit': null,
+            'remaining': null,
+            'unlimited': false,
+            'windowMinutes': null,
+            'resetsAt': null,
+            'status': status,
+          },
+        ]
+        ..['buckets'] = <Object>[]
+        ..['modelBreakdown'] = <Object>[]
+        ..['month'] = {
+          'period': 'month',
+          'spent': {'minorUnits': spent, 'currency': currency},
+          'limit': null,
+          'remaining': null,
+          'usedPercent': null,
+          'projectedTotal': null,
+          'status': status,
+        };
+    }
+
+    DashboardSnapshot snapshotOf(List<Map<String, dynamic>> accounts) {
+      return DashboardSnapshot.fromJson(
+        source.toJson()..['accounts'] = accounts,
+      );
+    }
+
+    /// Provider plaques top to bottom.
+    List<String> renderedOrder(WidgetTester tester) {
+      final headers =
+          [
+              'Codex',
+              'Claude',
+              'Cursor',
+            ].where((label) => find.text(label).evaluate().isNotEmpty).toList()
+            ..sort(
+              (left, right) => tester
+                  .getTopLeft(find.text(left))
+                  .dy
+                  .compareTo(tester.getTopLeft(find.text(right)).dy),
+            );
+      return headers;
+    }
+
+    Future<void> show(
+      WidgetTester tester,
+      DashboardSnapshot snapshot, {
+      FrozenOrder? order,
+    }) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: wardPulseLightTheme,
+          home: Scaffold(
+            body: DashboardScreen(
+              snapshot: snapshot,
+              order: order,
+              onRefresh: _noRefresh,
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('needs action first, then spend, then name', (tester) async {
+      await show(
+        tester,
+        snapshotOf([
+          account('claude', spent: 100),
+          account('codex', spent: 900),
+          account('cursor', status: 'error'),
+        ]),
+      );
+
+      // Cursor is broken and comes first though it spent nothing; Codex
+      // outspends Claude and takes the rest.
+      expect(renderedOrder(tester), ['Cursor', 'Codex', 'Claude']);
+    });
+
+    testWidgets('equal keys fall back to the provider, not the label', (
+      tester,
+    ) async {
+      await show(
+        tester,
+        snapshotOf([account('cursor'), account('codex'), account('claude')]),
+      );
+
+      expect(renderedOrder(tester), ['Claude', 'Codex', 'Cursor']);
+    });
+
+    testWidgets('the same accounts in another order render the same screen', (
+      tester,
+    ) async {
+      final accounts = [
+        account('claude', spent: 100),
+        account('codex', spent: 900),
+        account('cursor', status: 'error'),
+      ];
+
+      await show(tester, snapshotOf(accounts));
+      final first = renderedOrder(tester);
+
+      await show(tester, snapshotOf(accounts.reversed.toList()));
+
+      expect(renderedOrder(tester), first);
+    });
+
+    testWidgets('a poll that only moves spend leaves the cards alone', (
+      tester,
+    ) async {
+      final order = FrozenOrder();
+      await show(
+        tester,
+        snapshotOf([
+          account('claude', spent: 100),
+          account('codex', spent: 900),
+        ]),
+        order: order,
+      );
+      expect(renderedOrder(tester), ['Codex', 'Claude']);
+
+      // Claude overtakes Codex on spend; the reader's list must not swap under
+      // the finger, because no provider changed state.
+      await show(
+        tester,
+        snapshotOf([
+          account('claude', spent: 5000),
+          account('codex', spent: 900),
+        ]),
+        order: order,
+      );
+
+      expect(renderedOrder(tester), ['Codex', 'Claude']);
+    });
+
+    testWidgets('a family falling into error climbs the same poll', (
+      tester,
+    ) async {
+      final order = FrozenOrder();
+      await show(
+        tester,
+        snapshotOf([
+          account('claude', spent: 100),
+          account('codex', spent: 900),
+        ]),
+        order: order,
+      );
+      expect(renderedOrder(tester), ['Codex', 'Claude']);
+
+      // The same two families, so nothing joined or left — but one of them now
+      // needs the reader, and a held order must not sit on that.
+      await show(
+        tester,
+        snapshotOf([
+          account('claude', status: 'error', spent: 100),
+          account('codex', spent: 900),
+        ]),
+        order: order,
+      );
+
+      expect(renderedOrder(tester), ['Claude', 'Codex']);
+    });
+
+    testWidgets('a family joining reranks, and the badge follows the cards', (
+      tester,
+    ) async {
+      final order = FrozenOrder();
+      await show(
+        tester,
+        snapshotOf([
+          account('claude', spent: 100),
+          account('codex', spent: 900),
+        ]),
+        order: order,
+      );
+
+      final withCursor = snapshotOf([
+        account('claude', spent: 100),
+        account('codex', spent: 900),
+        account('cursor', status: 'error'),
+      ]);
+      await show(tester, withCursor, order: order);
+
+      expect(renderedOrder(tester), ['Cursor', 'Codex', 'Claude']);
+      // What the app-bar mark scrolls to is read off the same order, so it
+      // cannot point past a card sitting higher up.
+      expect(
+        dashboardProblems(
+          withCursor,
+          const ConsumptionDisplayPreferences(),
+          order,
+        ).first,
+        'cursor',
+      );
+    });
   });
 }
 
