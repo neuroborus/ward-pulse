@@ -19,6 +19,10 @@ const claudePlanRingId = 'allowance.claude.plan';
 /// Split band).
 const cursorPlanRingId = 'allowance.cursor.plan';
 
+/// What that one slot is called wherever a pair counts as one: the catalog row,
+/// and the payload preview that counts what the catalog charged for.
+const cursorPlanRingLabel = 'Cursor plan';
+
 /// Claude plan window allowance ids, tie-break order (shorter / primary first).
 const _claudePlanWindowIds = <String>[
   'claude-five-hour',
@@ -309,7 +313,7 @@ WatchRingMetric? collapseCursorPlanRing(List<AllowanceState> allowances) {
   final tighter = ranked.first;
   return WatchRingMetric(
     id: cursorPlanRingId,
-    label: 'Cursor plan',
+    label: cursorPlanRingLabel,
     usedPercent: tighter.usedPercent,
     status: worstProviderStatus([own.status, other.status]),
   );
@@ -500,23 +504,37 @@ List<WatchRingMetric> orderWatchRingsForSurface(
 }
 
 /// Short subtitle for Watchface preview and Settings diagnostics.
+///
+/// Counts **bands**, not pools: a Cursor pair travels as one payload entry and
+/// costs one slot, so it is named once, by the row the user checked.
 String watchRingPayloadSubtitle(
   DashboardSnapshot snapshot,
   WatchRingPreferences ringPreferences,
 ) {
-  final rings = orderWatchRingsForSurface(
-    resolveWatchRings(snapshot, ringPreferences),
-    snapshot: snapshot,
+  final bands = pairCursorPools(
+    orderWatchRingsForSurface(
+      resolveWatchRings(snapshot, ringPreferences),
+      snapshot: snapshot,
+    ),
   );
-  if (rings.isEmpty) {
+  if (bands.isEmpty) {
     return 'No rings selected';
   }
-  if (rings.length == 1) {
-    final ring = rings.single;
-    return '${ring.catalogTitle} ${ring.remainingPercent!.round()}% left';
+  if (bands.length == 1) {
+    final (ring, split) = bands.single;
+    // A band speaks with its tighter half, the way the face ranks it.
+    final tightest =
+        split == null || ring.remainingPercent! <= split.remainingPercent!
+            ? ring
+            : split;
+    final title = split == null ? ring.catalogTitle : cursorPlanRingLabel;
+    return '$title ${tightest.remainingPercent!.round()}% left';
   }
-  return '${rings.length} rings · '
-      '${rings.map((ring) => ring.catalogTitle).join(', ')}';
+  final titles = [
+    for (final (ring, split) in bands)
+      if (split == null) ring.catalogTitle else cursorPlanRingLabel,
+  ];
+  return '${bands.length} rings · ${titles.join(', ')}';
 }
 
 /// Owning provider for `allowance.<provider>.…`, or null for budgets / unknown.

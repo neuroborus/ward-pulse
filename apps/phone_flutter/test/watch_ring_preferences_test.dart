@@ -529,6 +529,26 @@ void main() {
     ]);
   });
 
+  test('the payload preview counts a pair as one band', () {
+    final withPair = _cursorPairAndCodexSnapshot();
+
+    // Three pools, two bands, three payload entries would be wrong: the pair is
+    // one entry and one slot, named by the row the user checked.
+    expect(
+      watchRingPayloadSubtitle(withPair, const WatchRingPreferences()),
+      '2 rings · Codex · Weekly plan, Cursor plan',
+    );
+
+    // Alone, a pair reads like any single band — through its tighter half.
+    expect(
+      watchRingPayloadSubtitle(
+        withPair,
+        const WatchRingPreferences(selectedIds: [cursorPlanRingId]),
+      ),
+      'Cursor plan 53% left',
+    );
+  });
+
   test('catalog titles name the family without repeating it', () {
     WatchRingMetric metric(String id, String label) => WatchRingMetric(
       id: id,
@@ -730,6 +750,55 @@ DashboardSnapshot _claudeCodexSnapshot({
 
   return DashboardSnapshot.fromJson(
     source.toJson()..['accounts'] = [claude, codex],
+  );
+}
+
+/// Cursor with both plan pools alive, beside a tighter Codex plan.
+DashboardSnapshot _cursorPairAndCodexSnapshot() {
+  final source = DashboardSnapshot.fromJsonString(
+    File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+  );
+  final cursor = _asPlanConnection(
+    source.primaryAccount!.toJson()
+      ..['accountId'] = 'cursor-local'
+      ..['provider'] = 'cursor'
+      ..['allowances'] = [
+        _planAllowance(
+          id: 'cursor-plan-models',
+          label: 'Cursor Models',
+          usedPercent: 47,
+          windowMinutes: 43200,
+        ),
+        _planAllowance(
+          id: 'cursor-plan-other',
+          label: 'Other Models',
+          usedPercent: 38,
+          windowMinutes: 43200,
+        ),
+      ]
+      ..['buckets'] = <Object>[]
+      ..['modelBreakdown'] = <Object>[],
+    'cursor.plan',
+  );
+  final codex = _asPlanConnection(
+    source.primaryAccount!.toJson()
+      ..['accountId'] = 'codex-local'
+      ..['provider'] = 'codex'
+      ..['allowances'] = [
+        _planAllowance(
+          id: 'codex-weekly',
+          label: 'Weekly plan',
+          usedPercent: 92,
+          windowMinutes: 10080,
+        ),
+      ]
+      ..['buckets'] = <Object>[]
+      ..['modelBreakdown'] = <Object>[],
+    'openai.plan',
+  );
+
+  return DashboardSnapshot.fromJson(
+    source.toJson()..['accounts'] = [cursor, codex],
   );
 }
 
