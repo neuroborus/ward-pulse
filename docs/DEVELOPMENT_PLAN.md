@@ -1874,8 +1874,8 @@ desktop agent state (whether a coding agent is waiting on the user) — differen
 
 ### Phase 16 — one declared order for the phone tabs
 
-Status: planned 2026-08-12. Phone shells only; watch and widget **surface** order is locked by
-Phase 13 and is not touched here.
+Status: completed as of 2026-08-16. Phone shells only; watch and widget **surface** order is
+locked by Phase 13 and is not touched here.
 
 Rationale: the phone answers "in what order do providers appear" three different ways today,
 and one of the three was never decided by anyone. Providers renders the catalog in enum order

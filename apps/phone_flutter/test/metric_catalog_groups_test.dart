@@ -99,6 +99,28 @@ void main() {
       );
     });
 
+    test('a poll that only moves percentages leaves the order alone', () {
+      WatchRingMetric at(String id, double percent) => WatchRingMetric(
+        id: id,
+        label: id,
+        usedPercent: percent,
+        status: ProviderStatus.ok,
+      );
+
+      final before = connectionsUnder(MetricKind.plan, [
+        at('budget.openai.plan.today', 5),
+        at('budget.anthropic.plan.today', 90),
+      ]);
+      // The two swap on every measure a reader can see, and the picker holds:
+      // percentages are not one of its keys.
+      final after = connectionsUnder(MetricKind.plan, [
+        at('budget.openai.plan.today', 90),
+        at('budget.anthropic.plan.today', 5),
+      ]);
+
+      expect(after, before);
+    });
+
     test(
       'a provider this build does not know sorts on the provider itself',
       () {

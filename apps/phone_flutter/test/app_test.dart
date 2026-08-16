@@ -310,6 +310,64 @@ void main() {
     expect(find.textContaining('2 of 3 slots used'), findsOneWidget);
   });
 
+  testWidgets('a metric with nothing to show stays listed and refuses a tap', (
+    tester,
+  ) async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final account =
+        Map<String, Object?>.from(source.primaryAccount!.toJson())
+          ..['accountId'] = 'anthropic-platform'
+          ..['provider'] = 'claude'
+          ..['connection'] = 'anthropic.platform'
+          // No limit set for the month, so the ring has no percentage to draw.
+          ..['month'] = {
+            'period': 'month',
+            'spent': {'minorUnits': 2500, 'currency': 'USD'},
+            'limit': null,
+            'remaining': null,
+            'usedPercent': null,
+            'projectedTotal': null,
+            'status': 'ok',
+          };
+    final snapshot = DashboardSnapshot.fromJson({
+      ...source.toJson(),
+      'accounts': [account],
+    });
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(snapshot),
+        watchRingPreferenceStore: _MemoryWatchRingStore(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Watchface'));
+    await tester.pumpAndSettle();
+
+    final month = find.widgetWithText(CheckboxListTile, 'Month');
+    await tester.scrollUntilVisible(
+      month,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    // Still under its connection, saying why it cannot be picked, and the box
+    // refuses the tap — sunk rather than hidden.
+    expect(month, findsOneWidget);
+    expect(
+      find.descendant(
+        of: month,
+        matching: find.byTooltip(
+          'Set this period’s limit under Providers · Budget limits.',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.widget<CheckboxListTile>(month).onChanged, isNull);
+  });
+
   testWidgets('Widget tab owns metrics independently of Watchface', (
     tester,
   ) async {
