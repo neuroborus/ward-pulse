@@ -276,14 +276,6 @@ class Ring3ComplicationDataSourceService : RingComplicationDataSourceService() {
     override val previewLabel = "Ring 3"
 }
 
-class Ring4ComplicationDataSourceService : RingComplicationDataSourceService() {
-    override val ringIndex = 3
-    override val previewPercent = 75f
-    // A budget ring wears its connection's family, so the editor preview does too.
-    override val previewColorArgb = RingFamily.CLAUDE
-    override val previewLabel = "Ring 4"
-}
-
 class StatusComplicationDataSourceService : ShortTextComplicationDataSourceService() {
     override val previewText = "SYNC"
 
@@ -518,7 +510,6 @@ object WatchComplicationUpdater {
         TodayComplicationDataSourceService::class.java,
         WeekComplicationDataSourceService::class.java,
         Ring3ComplicationDataSourceService::class.java,
-        Ring4ComplicationDataSourceService::class.java,
         RingSplitComplicationDataSourceService::class.java,
         StatusComplicationDataSourceService::class.java,
         TokensComplicationDataSourceService::class.java,

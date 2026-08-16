@@ -69,10 +69,32 @@ const RINGS = [
   { slotId: 101, diameter: 404, service: 'Today' },
   { slotId: 102, diameter: 356, service: 'Week' },
   { slotId: 105, diameter: 308, service: 'Ring3' },
-  { slotId: 106, diameter: 260, service: 'Ring4' },
 ]
 
 const BAND_THICKNESS = 40
+
+/**
+ * Halves of a shared band, measured on the watch 2026-08-13
+ * (`WATCH_RING_DESIGN.md`, Ring geometry): centre lines at `outer - 5` and
+ * `outer - 15`, both at thickness 10, and inside a slot `width` is **twice the
+ * centre line**. A band's `diameter` here is twice its outer edge, so the two
+ * halves are `diameter - 10` and `diameter - 30`.
+ */
+const HALF_THICKNESS = 10
+const OUTER_HALF_INSET = 10
+const INNER_HALF_INSET = 30
+
+/**
+ * One slot draws the outer half of whichever band is shared, because a WFF scene
+ * holds at most eight `ComplicationSlot` elements and this face spends all eight
+ * (`WATCH_RING_DESIGN.md`, Split band, rule 7). It takes the id the fourth ring
+ * used to hold, and picks its radius from the band index the watch writes into
+ * TITLE — counted from the outside, mirroring the payload order.
+ */
+const OUTER_HALF = { slotId: 106, service: 'RingSplit' }
+
+/** The token a band's own slot sends when it draws only its inner half. */
+const SPLIT_TOKEN = 'split'
 
 /**
  * Ring type as texture: the budget period repeated around the band, drawn from a
@@ -165,9 +187,9 @@ const TOKENS = [
 ]
 
 /**
- * Rings the type can label. Three, because the counts above are per ring and the
- * baseline caps the face at three: a fourth would have to be drawn from a guessed
- * count, and the fourth ring is markup that never renders anyway.
+ * Rings the type can label — all of them: the baseline caps the face at three
+ * bands, and the counts above are fitted per band. A shared band carries no
+ * period, so it gets no texture either; that branch is chosen by TITLE.
  */
 const TEXTURE_RINGS = TOKENS[0].repeats.length
 
@@ -366,6 +388,42 @@ ${TOKENS.map(({ period }) => ringTextureBranch(diameter, index, period)).join('\
                             </Condition>`
 }
 
+/**
+ * Track plus melt for one arc. The melt keeps its own `PartDraw` so ambient can
+ * dim it without touching the track underneath.
+ */
+function bandArcs(diameter, thickness, pad) {
+  return `${pad}<PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}">
+${pad}    <Arc
+${pad}        centerX="${FACE.center}"
+${pad}        centerY="${FACE.center}"
+${pad}        width="${diameter}"
+${pad}        height="${diameter}"
+${pad}        startAngle="${SWEEP.start}"
+${pad}        endAngle="${SWEEP.end}">
+${pad}        <Stroke color="${COLOR.track}" thickness="${thickness}" cap="ROUND" />
+${pad}    </Arc>
+${pad}</PartDraw>
+${pad}<PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
+${pad}    <Variant mode="AMBIENT" target="alpha" value="140" />
+${pad}    <Arc
+${pad}        centerX="${FACE.center}"
+${pad}        centerY="${FACE.center}"
+${pad}        width="${diameter}"
+${pad}        height="${diameter}"
+${pad}        startAngle="${SWEEP.start}"
+${pad}        endAngle="${SWEEP.end}">
+${pad}        <Transform
+${pad}            target="startAngle"
+${pad}            value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end}" />
+${pad}        <WeightedStroke
+${pad}            thickness="${thickness}"
+${pad}            colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+${pad}            cap="ROUND" />
+${pad}    </Arc>
+${pad}</PartDraw>`
+}
+
 function ringSlot({ slotId, diameter, service }, index) {
   const name = `ring${index + 1}`
   return `        <ComplicationSlot
@@ -399,38 +457,86 @@ function ringSlot({ slotId, diameter, service }, index) {
                         </Expression>
                     </Expressions>
                     <Compare expression="hasRing">
-                        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}">
-                            <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}">
-                                <Arc
-                                    centerX="${FACE.center}"
-                                    centerY="${FACE.center}"
-                                    width="${diameter}"
-                                    height="${diameter}"
-                                    startAngle="${SWEEP.start}"
-                                    endAngle="${SWEEP.end}">
-                                    <Stroke color="${COLOR.track}" thickness="${BAND_THICKNESS}" cap="ROUND" />
-                                </Arc>
-                            </PartDraw>
-                            <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
-                                <Variant mode="AMBIENT" target="alpha" value="140" />
-                                <Arc
-                                    centerX="${FACE.center}"
-                                    centerY="${FACE.center}"
-                                    width="${diameter}"
-                                    height="${diameter}"
-                                    startAngle="${SWEEP.start}"
-                                    endAngle="${SWEEP.end}">
-                                    <Transform
-                                        target="startAngle"
-                                        value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end}" />
-                                    <WeightedStroke
-                                        thickness="${BAND_THICKNESS}"
-                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-                                        cap="ROUND" />
-                                </Arc>
-                            </PartDraw>${ringTexture(diameter, index)}
-                        </Group>
+                        <!-- Shared band: this slot keeps the inner half, the outer one
+                             comes from the slot that serves every band. -->
+                        <Condition>
+                            <Expressions>
+                                <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "${SPLIT_TOKEN}"]]></Expression>
+                            </Expressions>
+                            <Compare expression="isSplit">
+                                <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}Half">
+${bandArcs(diameter - INNER_HALF_INSET, HALF_THICKNESS, ' '.repeat(36))}
+                                </Group>
+                            </Compare>
+                            <Default>
+                                <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}">
+${bandArcs(diameter, BAND_THICKNESS, ' '.repeat(36))}${ringTexture(diameter, index)}
+                                </Group>
+                            </Default>
+                        </Condition>
                     </Compare>
+                </Condition>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>`
+}
+
+/**
+ * The outer half of whichever band is shared. One slot, three radii: the watch
+ * writes the band index — counted from the outside — into TITLE, and the branch
+ * below turns it into a radius. `NoData` while no band is shared, which is the
+ * usual state, and then this slot draws nothing at all.
+ *
+ * Its `BoundingArc` has to reach every band it may draw on, so it spans from the
+ * outermost half down to the innermost one rather than hugging a single band.
+ * A `BoundingArc` takes its **outer edge** in `width` — unlike the arcs inside a
+ * slot, which take twice their centre line. Measured 2026-08-16: with `width`
+ * set to twice the centre the clip cut the outermost half in half.
+ */
+function outerHalfSlot() {
+  const centres = RINGS.map(({ diameter }) => (diameter - OUTER_HALF_INSET) / 2)
+  const clipOuter = Math.max(...centres) + HALF_THICKNESS
+  const clipInner = Math.min(...centres) - HALF_THICKNESS
+  const branches = RINGS.map(
+    ({ diameter }, index) => `                    <Compare expression="isBand${index}">
+                        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="outerHalf${index + 1}">
+${bandArcs(diameter - OUTER_HALF_INSET, HALF_THICKNESS, ' '.repeat(28))}
+                        </Group>
+                    </Compare>`,
+  ).join('\n')
+  const expressions = RINGS.map(
+    (_, index) =>
+      `                        <Expression name="isBand${index}"><![CDATA[[COMPLICATION.TITLE] == "${index}"]]></Expression>`,
+  ).join('\n')
+  return `        <ComplicationSlot
+            x="0"
+            y="0"
+            width="${FACE.size}"
+            height="${FACE.size}"
+            slotId="${OUTER_HALF.slotId}"
+            displayName="@string/outer_half_complication"
+            supportedTypes="RANGED_VALUE EMPTY"
+            isCustomizable="FALSE">
+            <DefaultProviderPolicy
+                primaryProvider="${provider(OUTER_HALF.service)}"
+                primaryProviderType="RANGED_VALUE"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <BoundingArc
+                centerX="${FACE.center}"
+                centerY="${FACE.center}"
+                width="${clipOuter * 2}"
+                height="${clipOuter * 2}"
+                thickness="${clipOuter - clipInner}"
+                startAngle="${SWEEP.start}"
+                endAngle="${SWEEP.end}"
+                isRoundEdge="TRUE" />
+            <Complication type="RANGED_VALUE">
+                <Condition>
+                    <Expressions>
+${expressions}
+                    </Expressions>
+${branches}
                 </Condition>
             </Complication>
             <Complication type="EMPTY" />
@@ -565,7 +671,7 @@ function face() {
   // the first ring sits on and the comment introduces the strip stack, so
   // neither is cut off from what follows it.
   const body = [
-    [lift(), RINGS.map(ringSlot).join('\n\n')].join('\n'),
+    [lift(), RINGS.map(ringSlot).join('\n\n'), outerHalfSlot()].join('\n\n'),
     clock(),
     [wordmark(), stripComment(), STRIPS.map(stripSlot).join('\n\n')].join('\n'),
   ].join('\n\n')

@@ -350,7 +350,30 @@ adb -s "$WEAR_SERIAL" shell am start \
 ```
 
 After `am start`, `keyevent 4` returns to the face — but send it once: from the face itself
-both `4` and `3` open the launcher, and `4` from the launcher lands back on the face.
+both `4` and `3` open the launcher, and `4` from the launcher lands back on the face. When the
+keys leave you stranded in the launcher, `am force-stop com.google.android.wearable.sysui`
+restarts the system UI on the watch face.
+
+To put a chosen summary on the face, write the app's prefs and then **start the app once**:
+
+```sh
+adb -s "$WEAR_SERIAL" push summary.xml /data/local/tmp/watch_summary.xml
+adb -s "$WEAR_SERIAL" shell run-as app.wardpulse \
+  cp /data/local/tmp/watch_summary.xml /data/data/app.wardpulse/shared_prefs/watch_summary.xml
+adb -s "$WEAR_SERIAL" shell am start -n app.wardpulse/app.wardpulse.wear.MainActivity
+```
+
+The start is not optional: complications refresh only when something calls
+`WatchComplicationUpdater.requestUpdate` (`MainActivity`, or the Data Layer listener). A prefs
+file written behind the app's back leaves every slot showing its previous value, and the face
+then measures exactly as it did before the change — which reads like a broken change rather
+than a stale one.
+
+Two more ways this misleads. After `pm clear` the app has no `shared_prefs/` directory at all,
+so the `cp` above fails and the face falls back to `NoData` — arcs and strips vanish together,
+which looks like a rendering bug rather than an empty payload; start the app once first so the
+directory exists. And reinstalling the **face** package resets its slots the same way, so seed
+after the install, not before.
 
 Ambient is `KEYCODE_SLEEP`, not the power button — `keyevent 26` leaves this image
 interactive:

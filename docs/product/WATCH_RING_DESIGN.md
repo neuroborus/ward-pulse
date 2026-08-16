@@ -274,9 +274,17 @@ the third, since a pair can land on any of them. In the markup that is `width="3
 whole-band rule above would suggest. Getting that translation wrong is what the first two
 probes did, and it fails silently — the halves land on top of each other and read as one band. Measured on the round AVD at 384 on the
 outermost: the halves paint 182.5–192.25 and 192.25–202.25, **9.75 units each** (8.3 px),
-meeting with no gap and no overlap, identical in all four diagonal breaks. Only that band was
-measured; the other two follow the same offsets from their own outer edge and want the same
-check before they ship.
+meeting with no gap and no overlap, identical in all four diagonal breaks. All three bands were
+measured the same way when the split shipped (2026-08-16), moving one pair from band to band:
+centres **187.0 / 197.1**, **163.2 / 173.4** and **139.4 / 149.0** against the 187/197, 163/173
+and 139/149 the offsets predict, every half 9.1–9.5 units, no gap at the seam. The offsets hold
+on every band, and so does the shared slot that draws the outer ones.
+
+**A `BoundingArc` takes its outer edge in `width`, unlike the arcs it clips.** The shared slot
+that draws outer halves spans every band, and setting its `width` to twice the centre line —
+the rule for arcs *inside* a slot — clipped the outermost half at its own centre, leaving a
+half-width arc that looked like a rendering bug. `width="414" thickness="68"` is the span from
+207 down to 139, and only then does the clip stay out of the way.
 
 Those numbers are not derived from the two rules above, and they cannot be: **an arc behaves
 differently inside a complication slot than outside one**, and neither behaviour was predicted
@@ -298,11 +306,11 @@ The strip stack was resized with the rings — 88x18 boxes stepping 21 units fro
 stack pitch of its own that has nothing to do with the 24-unit ring pitch. The previous 96x20
 stack reached radius 142.3 and would have cut into the widened inner band.
 
-Only three strips render, matching the three-ring cap. A fourth slot exists in the markup for
-both rings and strips; neither is drawn, and the fourth strip's geometry is not kept clear of
-the third band. The fourth **ring** slot is spoken for since the split-band revision — it is
-where the outer half of a shared band comes from (Split band, rule 7) — so the fourth strip is
-the only spare the eight-slot budget still has.
+Only three strips render, matching the three-ring cap. The fourth **ring** slot is no longer a
+fourth ring at all: since the split-band revision shipped it draws the outer half of whichever
+band is shared, at whatever radius that band sits (Split band, rule 7). A fourth **strip** slot
+is still declared and still undrawn, its geometry not kept clear of the third band — and it is
+the only spare the eight-slot budget has left.
 
 `tools/render-watch-ring-designs.mjs` carries the same measured values, so review art shows
 what the watch shows. Before that revision the generator drew the nominal 26, roughly 2.3x
