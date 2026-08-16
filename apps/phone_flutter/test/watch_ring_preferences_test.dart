@@ -82,6 +82,71 @@ void main() {
     expect(jsonEncode(preferences.clampedIds), '["a","b","c"]');
   });
 
+  test('the surface keeps four rings when they are three bands', () {
+    final withPair = _cursorPairAndCodexSnapshot();
+    const picked = WatchRingPreferences(
+      selectedIds: [
+        cursorOwnPoolId,
+        cursorOtherPoolId,
+        'allowance.codex.codex-weekly',
+      ],
+    );
+
+    final surface = orderWatchRingsForSurface(
+      resolveWatchRings(withPair, picked),
+      snapshot: withPair,
+    );
+    // Cutting at three rings dropped a pool and the band arrived undivided.
+    expect(surface.map((ring) => ring.id), contains(cursorOwnPoolId));
+    expect(surface.map((ring) => ring.id), contains(cursorOtherPoolId));
+    final packed = pairCursorPools(surface);
+    // Two bands: Codex is tighter and sorts first, the pair follows whole.
+    expect(packed.length, 2);
+    expect(packed.last.$1.id, cursorOwnPoolId);
+    expect(packed.last.$2?.id, cursorOtherPoolId);
+  });
+
+  test(
+    'a pool still joins its partner from behind a ring that does not fit',
+    () {
+      // The second pool is free once the first is in, so a full budget must not
+      // hide it: stopping at the first misfit would send the watch half a pair.
+      const crowded = WatchRingPreferences(
+        selectedIds: [
+          'allowance.claude.plan',
+          'budget.anthropic.platform.week',
+          cursorOwnPoolId,
+          'budget.anthropic.platform.today',
+          cursorOtherPoolId,
+        ],
+      );
+
+      expect(crowded.clampedIds, [
+        'allowance.claude.plan',
+        'budget.anthropic.platform.week',
+        cursorOwnPoolId,
+        cursorOtherPoolId,
+      ]);
+      expect(watchRingSlotCost(crowded.clampedIds), 3);
+    },
+  );
+
+  test('a pair leaves room for a third band', () {
+    // Four rows, three bands: counting ids instead of bands cut the last tick,
+    // so the third arc could never be chosen once a pair was.
+    const withPair = WatchRingPreferences(
+      selectedIds: [
+        cursorOwnPoolId,
+        cursorOtherPoolId,
+        'allowance.claude.plan',
+        'budget.anthropic.platform.week',
+      ],
+    );
+
+    expect(withPair.clampedIds, withPair.selectedIds);
+    expect(watchRingSlotCost(withPair.migratedIds), 3);
+  });
+
   WatchRingMetric ring(String id, double used) => WatchRingMetric(
     id: id,
     label: id,

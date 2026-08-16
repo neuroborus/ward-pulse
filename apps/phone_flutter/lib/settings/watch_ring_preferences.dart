@@ -134,9 +134,13 @@ final class WatchRingPreferences {
 
   bool get usesDefaults => selectedIds == null;
 
-  List<String> get clampedIds => (selectedIds ?? const <String>[])
-      .take(watchRingSlotCount)
-      .toList(growable: false);
+  /// Clamped by **slot cost**, not by count: both Cursor pools share a band, so
+  /// a four-id selection can still be three rings. Counting ids here dropped the
+  /// fourth tick before it ever reached the watch.
+  List<String> get clampedIds => _withinSlotBudget(
+    selectedIds ?? const <String>[],
+    watchRingSlotCount,
+  ).toList(growable: false);
 
   /// Clamped selection with legacy Claude / purchased ring ids migrated.
   List<String> get migratedIds => migrateWatchRingSelectedIds(clampedIds);
@@ -347,13 +351,16 @@ int watchRingSlotCost(Iterable<String> ids) {
 }
 
 /// Keeps ids in order while they fit the slot budget, counting by band.
+///
+/// Skips what does not fit rather than stopping at it: the second pool of a pair
+/// costs nothing once the first is in, and it may sit behind a ring that no
+/// longer fits — stopping there would split the pair and hand the watch a half.
 List<String> _withinSlotBudget(Iterable<String> ids, int maxSlots) {
   final out = <String>[];
   for (final id in ids) {
-    if (watchRingSlotCost([...out, id]) > maxSlots) {
-      break;
+    if (watchRingSlotCost([...out, id]) <= maxSlots) {
+      out.add(id);
     }
-    out.add(id);
   }
   return out;
 }
@@ -471,7 +478,14 @@ List<WatchRingMetric> orderWatchRingsForSurface(
     }
     return a.id.compareTo(b.id);
   });
-  return active.take(maxSlots).toList(growable: false);
+  // By band, not by ring: a pair is two rings and one slot, so counting rings
+  // here dropped one of its pools and the band arrived undivided.
+  final kept =
+      _withinSlotBudget([for (final ring in active) ring.id], maxSlots).toSet();
+  return [
+    for (final ring in active)
+      if (kept.contains(ring.id)) ring,
+  ];
 }
 
 /// Short subtitle for Watchface preview and Settings diagnostics.
@@ -608,9 +622,15 @@ final class SecureWatchRingPreferenceStore implements WatchRingPreferenceStore {
       ];
       final preferences = watchRingPreferencesFromStoredIds(ids);
       final migrated = preferences.selectedIds;
+      // The comparison is against what the budget keeps, not the first three
+      // ids: a pair is four ids and three bands, and counting ids rewrote the
+      // stored selection on every read.
       if (migrated == null) {
         await _storage.delete(key: _key);
-      } else if (!_sameIds(ids.take(watchRingSlotCount).toList(), migrated)) {
+      } else if (!_sameIds(
+        _withinSlotBudget(ids, watchRingSlotCount),
+        migrated,
+      )) {
         await _storage.write(key: _key, value: jsonEncode(migrated));
       }
       return preferences;
