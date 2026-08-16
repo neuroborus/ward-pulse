@@ -171,6 +171,9 @@ List<ProviderConnection> providerConnectionCatalog({
 /// and `openai` are both OpenAI, `claude` and `anthropic` both Anthropic. The
 /// Providers tab shows one card per family, so this is how account data reaches
 /// the card that speaks for it.
+///
+/// The pickers read the same strings one step finer, down to the connection
+/// (`metric_catalog_groups.dart`). A new provider belongs in both.
 ProviderFamily? providerFamilyOf(String provider) {
   return switch (provider) {
     'openai' || 'codex' => ProviderFamily.openai,

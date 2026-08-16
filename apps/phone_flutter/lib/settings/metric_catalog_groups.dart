@@ -3,7 +3,11 @@ import '../providers/provider_connection.dart';
 import 'watch_ring_preferences.dart';
 
 /// One connection's rows under a heading: `Codex`, `Anthropic`.
-typedef MetricConnectionGroup = ({String title, List<WatchRingMetric> metrics});
+///
+/// [id] is what the group sorts on — the connection's storage key, so a heading
+/// can be reworded without moving it. [title] is only what the reader sees.
+typedef MetricConnectionGroup =
+    ({String id, String title, List<WatchRingMetric> metrics});
 
 /// The picker read as an outline: a kind of connection, its connections, and
 /// their metrics in catalog order.
@@ -31,12 +35,16 @@ enum MetricKind {
 /// boundaries itself. The rows already carry them — an allowance belongs to a
 /// plan connection, a budget names its own — so the pickers just show them.
 List<MetricGroup> groupMetricCatalog(List<WatchRingMetric> catalog) {
-  final order = <MetricKind, Map<String, List<WatchRingMetric>>>{};
+  final order = <MetricKind, Map<String, MetricConnectionGroup>>{};
   for (final metric in catalog) {
     final connection = metricConnectionOf(metric.id);
     order
         .putIfAbsent(connection.kind, () => {})
-        .putIfAbsent(connection.title, () => [])
+        .putIfAbsent(
+          connection.id,
+          () => (id: connection.id, title: connection.title, metrics: []),
+        )
+        .metrics
         .add(metric);
   }
   return [
@@ -44,12 +52,33 @@ List<MetricGroup> groupMetricCatalog(List<WatchRingMetric> catalog) {
       if (order[kind] case final connections?)
         (
           title: kind.title,
-          connections: [
-            for (final connection in connections.entries)
-              (title: connection.key, metrics: connection.value),
-          ],
+          connections: connections.values.toList()..sort(_compareConnections),
         ),
   ];
+}
+
+/// What the reader can put on a surface comes first, then a stable id.
+///
+/// The id, not the heading: sorting on the label would let a copy edit reorder
+/// the picker, and the ids sort by provider (`anthropic.plan` before
+/// `openai.plan`), which is not the alphabet the headings read in.
+int _compareConnections(
+  MetricConnectionGroup left,
+  MetricConnectionGroup right,
+) {
+  final selectableCmp = (_isSelectable(right) ? 1 : 0).compareTo(
+    _isSelectable(left) ? 1 : 0,
+  );
+  if (selectableCmp != 0) {
+    return selectableCmp;
+  }
+  return left.id.compareTo(right.id);
+}
+
+/// Whether anything under this connection can go on a ring at all. Rows that
+/// cannot stay listed and disabled, so the connection sinks rather than hides.
+bool _isSelectable(MetricConnectionGroup group) {
+  return group.metrics.any((metric) => metric.isAvailable);
 }
 
 /// Which heading and sub-heading a metric belongs under.
@@ -58,16 +87,20 @@ List<MetricGroup> groupMetricCatalog(List<WatchRingMetric> catalog) {
 /// provider (`allowance.codex.…`), a budget names the connection itself
 /// (`budget.openai.plan.…`), and those are one and the same subscription. They
 /// are listed together, or a reader sees one connection twice under two names.
-({MetricKind kind, String title}) metricConnectionOf(String metricId) {
+({MetricKind kind, String id, String title}) metricConnectionOf(
+  String metricId,
+) {
   final provider = providerFromRingId(metricId);
   final connection =
       connectionFromBudgetRingId(metricId) ??
       _connectionOfAllowanceProvider(provider);
   if (connection == null) {
     // A provider this build does not know yet: name it, and do not file it
-    // under a kind of connection nobody established it has.
+    // under a kind of connection nobody established it has. There is no
+    // connection id to sort on either, so the provider itself is the id.
     return (
       kind: MetricKind.other,
+      id: provider ?? '',
       title: provider == null ? 'Other' : providerDisplayLabel(provider),
     );
   }
@@ -76,6 +109,7 @@ List<MetricGroup> groupMetricCatalog(List<WatchRingMetric> catalog) {
       ConnectionKind.plan => MetricKind.plan,
       ConnectionKind.platform => MetricKind.platform,
     },
+    id: connection.storageKey,
     title: _connectionHeading(connection),
   );
 }
@@ -84,6 +118,9 @@ List<MetricGroup> groupMetricCatalog(List<WatchRingMetric> catalog) {
 /// speaks for: `codex` is the OpenAI subscription, `openai` the reporting key
 /// beside it. Today only subscriptions report allowances, but the id is built
 /// from whatever provider the account carries, so both are mapped.
+///
+/// Reads the same provider strings as `providerFamilyOf`, one step finer — a
+/// connection rather than a family. A new provider belongs in both.
 ProviderConnectionId? _connectionOfAllowanceProvider(String? provider) {
   return switch (provider) {
     'codex' => ProviderConnections.codexPlan,

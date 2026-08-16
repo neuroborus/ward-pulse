@@ -9,14 +9,17 @@ void main() {
     // are the same subscription, so both land under one heading.
     expect(metricConnectionOf('allowance.codex.codex-weekly'), (
       kind: MetricKind.plan,
+      id: 'openai.plan',
       title: 'Codex',
     ));
     expect(metricConnectionOf('budget.openai.plan.today'), (
       kind: MetricKind.plan,
+      id: 'openai.plan',
       title: 'Codex',
     ));
     expect(metricConnectionOf('budget.openai.platform.today'), (
       kind: MetricKind.platform,
+      id: 'openai.platform',
       title: 'OpenAI',
     ));
   });
@@ -40,5 +43,73 @@ void main() {
     // No separator to cut: the collapsed slot must not be renamed after the
     // window it happens to resolve to today.
     expect(metricRowTitle(metric(claudePlanRingId, 'Weekly')), 'Claude plan');
+  });
+
+  group('the declared connection order', () {
+    WatchRingMetric metric(String id, {bool available = true}) =>
+        WatchRingMetric(
+          id: id,
+          label: id,
+          usedPercent: available ? 10 : null,
+          status: ProviderStatus.ok,
+          unavailableReason: available ? null : 'Nothing to show.',
+        );
+
+    List<String> connectionsUnder(
+      MetricKind kind,
+      List<WatchRingMetric> catalog,
+    ) {
+      final group = groupMetricCatalog(
+        catalog,
+      ).firstWhere((group) => group.title == kind.title);
+      return [for (final connection in group.connections) connection.title];
+    }
+
+    test('connections sort by their id, not by the heading a reader sees', () {
+      // Built Codex-first, and Claude still leads: `anthropic.plan` precedes
+      // `openai.plan`, which is not the order the two headings read in.
+      expect(
+        connectionsUnder(MetricKind.plan, [
+          metric('budget.openai.plan.today'),
+          metric('budget.cursor.plan.today'),
+          metric('budget.anthropic.plan.today'),
+        ]),
+        ['Claude', 'Cursor', 'Codex'],
+      );
+    });
+
+    test('a connection with nothing to select sinks below one that has', () {
+      expect(
+        connectionsUnder(MetricKind.plan, [
+          metric('budget.anthropic.plan.today', available: false),
+          metric('budget.openai.plan.today'),
+        ]),
+        ['Codex', 'Claude'],
+      );
+    });
+
+    test('one selectable row is enough to keep a connection up', () {
+      expect(
+        connectionsUnder(MetricKind.plan, [
+          metric('budget.anthropic.plan.today', available: false),
+          metric('budget.anthropic.plan.week'),
+          metric('budget.openai.plan.today', available: false),
+        ]),
+        ['Claude', 'Codex'],
+      );
+    });
+
+    test(
+      'a provider this build does not know sorts on the provider itself',
+      () {
+        expect(
+          connectionsUnder(MetricKind.other, [
+            metric('allowance.zeta.some-window'),
+            metric('allowance.alpha.some-window'),
+          ]),
+          ['alpha', 'zeta'],
+        );
+      },
+    );
   });
 }
