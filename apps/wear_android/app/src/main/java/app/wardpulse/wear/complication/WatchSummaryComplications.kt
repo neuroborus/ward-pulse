@@ -17,6 +17,7 @@ import androidx.wear.watchface.complications.datasource.SuspendingComplicationDa
 import app.wardpulse.wear.MainActivity
 import app.wardpulse.wear.data.WatchSummaryStore
 import app.wardpulse.wear.model.PulseStatus
+import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.RingSurfaceOrder
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.model.WatchDataMode
@@ -55,31 +56,33 @@ abstract class ShortTextComplicationDataSourceService :
  * The outer half of a split band: the other pool of a plan that shares one band
  * (`WATCH_RING_DESIGN.md`, Split band).
  *
- * A `RANGED_VALUE` complication carries one value, so two melts need two slots
- * whatever the payload looks like. This one answers for the same band as its
- * [ringIndex] twin and stays `NoData` while that band's ring has no `split` —
- * which is every band on most watches.
+ * **One service for all three bands.** A WFF scene holds at most eight
+ * `ComplicationSlot` elements and this face has spent all eight, so a second
+ * slot per band does not exist. The face gives the outer half a single slot
+ * that reaches every band and picks the radius from this complication's TITLE:
+ * the band index counted **from the outside**, which is not the payload index —
+ * [RingSurfaceOrder] mirrors one into the other.
+ *
+ * Stays `NoData` while no ring carries a `split`, which is every band on most
+ * watches.
  */
-abstract class RingSplitComplicationDataSourceService :
-    SuspendingComplicationDataSourceService() {
-    protected abstract val ringIndex: Int
-
+class RingSplitComplicationDataSourceService : SuspendingComplicationDataSourceService() {
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
         if (request.complicationType != ComplicationType.RANGED_VALUE) {
             return null
         }
         val rings = WatchSummaryStore(this).load()?.rings.orEmpty()
-        val half = RingSurfaceOrder.payloadIndexForOuterSlot(rings.size, ringIndex)
-            ?.let { rings[it].split }
+        val payloadIndex = rings.indexOfFirst { it.split != null }
+        val half = rings.getOrNull(payloadIndex)?.split
+        val outerSlot = RingSurfaceOrder.outerSlotForPayloadIndex(rings.size, payloadIndex)
         val remaining = half?.let { WatchComplicationText.remainingPercent(it.usedPercent) }
-        if (half == null || remaining == null || remaining <= 0f) {
+        if (half == null || outerSlot == null || remaining == null || remaining <= 0f) {
             return NoDataComplicationData()
         }
-        // Plan pools carry no period, so no TITLE: ring type belongs to budgets.
         return ComplicationBuilders.ranged(
             this,
             remaining,
-            title = null,
+            title = outerSlot.toString(),
             colorArgb = RingFamily.colorArgb(half.id),
             contentDescription = half.label,
         )
@@ -90,28 +93,13 @@ abstract class RingSplitComplicationDataSourceService :
             ComplicationBuilders.ranged(
                 this,
                 62f,
-                title = null,
+                title = "0",
                 colorArgb = RingFamily.CURSOR,
                 contentDescription = "Other Models",
             )
         } else {
             null
         }
-}
-
-/** Outer half of the band [TodayComplicationDataSourceService] draws. */
-class Ring1SplitComplicationDataSourceService : RingSplitComplicationDataSourceService() {
-    override val ringIndex = 0
-}
-
-/** Outer half of the band [WeekComplicationDataSourceService] draws. */
-class Ring2SplitComplicationDataSourceService : RingSplitComplicationDataSourceService() {
-    override val ringIndex = 1
-}
-
-/** Outer half of the band [Ring3ComplicationDataSourceService] draws. */
-class Ring3SplitComplicationDataSourceService : RingSplitComplicationDataSourceService() {
-    override val ringIndex = 2
 }
 
 abstract class RingComplicationDataSourceService :
@@ -135,12 +123,12 @@ abstract class RingComplicationDataSourceService :
                 if (ring == null || remaining == null || remaining <= 0f) {
                     NoDataComplicationData()
                 } else {
-                    // Credits live on the center strip; TITLE carries the period
-                    // the face repeats around the band, and nothing else.
+                    // Credits live on the center strip; TITLE carries what the
+                    // face branches on — the budget period, or `split`.
                     ComplicationBuilders.ranged(
                         this,
                         remaining,
-                        title = WatchComplicationText.ringPeriodToken(ring.id),
+                        title = WatchComplicationText.ringTitleToken(ring),
                         colorArgb = RingFamily.colorArgb(ring.id),
                         contentDescription = label,
                     )
@@ -383,9 +371,27 @@ class Strip4ComplicationDataSourceService : RingStripComplicationDataSourceServi
 }
 
 object WatchComplicationText {
+    /**
+     * What a band's own slot puts in TITLE when it draws only its inner half.
+     * The face branches on this string; keep it in step with
+     * `tools/render-watchface.mjs`.
+     */
+    const val SPLIT_TOKEN = "split"
+
     /** Remaining capacity 0–100 for RANGED_VALUE / strip-style labels. */
     fun remainingPercent(usedPercent: Double): Float =
         (100.0 - usedPercent.coerceIn(0.0, 100.0)).toFloat().coerceIn(0f, 100f)
+
+    /**
+     * Everything a ring slot tells the face about itself, in the one string a
+     * complication may carry: [SPLIT_TOKEN] when the band is shared with a
+     * second pool, otherwise its budget period.
+     *
+     * The two can never collide — only a budget ring has a period, and a pair
+     * is always two plan pools (`WATCH_RING_DESIGN.md`, Split band).
+     */
+    fun ringTitleToken(ring: RingSummary): String? =
+        if (ring.split != null) SPLIT_TOKEN else ringPeriodToken(ring.id)
 
     /**
      * The period token the watch face repeats around a ring, read off the ring
@@ -436,6 +442,12 @@ object WatchComplicationText {
             }
             formatBudgetStripLabel(ring.spent, ring.limit)?.let { return it }
             val percent = percentAmount(remaining)
+            // A split band spends the well on its second percent instead of
+            // credits (`WATCH_RING_DESIGN.md`, Split band, rules 4 and 5).
+            val half = ring.split?.let { remainingPercent(it.usedPercent) }
+            if (half != null && half > 0f) {
+                return "$percent% · ${percentAmount(half)}%"
+            }
             val credits = purchasedCreditsCompact(summary, ring.id)
             return if (credits != null) {
                 "$percent% · $credits"
@@ -507,9 +519,7 @@ object WatchComplicationUpdater {
         WeekComplicationDataSourceService::class.java,
         Ring3ComplicationDataSourceService::class.java,
         Ring4ComplicationDataSourceService::class.java,
-        Ring1SplitComplicationDataSourceService::class.java,
-        Ring2SplitComplicationDataSourceService::class.java,
-        Ring3SplitComplicationDataSourceService::class.java,
+        RingSplitComplicationDataSourceService::class.java,
         StatusComplicationDataSourceService::class.java,
         TokensComplicationDataSourceService::class.java,
         Strip2ComplicationDataSourceService::class.java,

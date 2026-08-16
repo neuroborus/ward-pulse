@@ -10,7 +10,5 @@
     <string name="strip2_complication">WardPulse strip 2</string>
     <string name="strip3_complication">WardPulse strip 3</string>
     <string name="strip4_complication">WardPulse strip 4</string>
-    <string name="ring1_split_complication">WardPulse ring 1 · other pool</string>
-    <string name="ring2_split_complication">WardPulse ring 2 · other pool</string>
-    <string name="ring3_split_complication">WardPulse ring 3 · other pool</string>
+    <string name="ring_split_complication">WardPulse · other pool</string>
 </resources>

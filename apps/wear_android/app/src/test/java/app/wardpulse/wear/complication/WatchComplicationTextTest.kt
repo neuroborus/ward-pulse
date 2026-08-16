@@ -6,6 +6,7 @@ import app.wardpulse.wear.model.PreviewWatchDashboardSummary
 import app.wardpulse.wear.model.ProviderSummary
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.Quantity
+import app.wardpulse.wear.model.RingHalf
 import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.WatchDataMode
 import org.junit.Assert.assertEquals
@@ -180,5 +181,75 @@ class WatchComplicationTextTest {
         // A connection named after a period must not be mistaken for one.
         assertNull(WatchComplicationText.ringPeriodToken("allowance.codex.week"))
         assertNull(WatchComplicationText.ringPeriodToken("budget.anthropic.quarter"))
+    }
+
+    @Test
+    fun aSharedBandTellsTheFaceSoInsteadOfAPeriod() {
+        val pool =
+            RingSummary(
+                "allowance.cursor.cursor-plan-models",
+                "Cursor Models",
+                47.0,
+                PulseStatus.OK,
+            )
+        assertNull(WatchComplicationText.ringTitleToken(pool))
+        assertEquals(
+            "split",
+            WatchComplicationText.ringTitleToken(
+                pool.copy(
+                    split =
+                        RingHalf(
+                            "allowance.cursor.cursor-plan-other",
+                            "Other Models",
+                            38.0,
+                            PulseStatus.OK,
+                        ),
+                ),
+            ),
+        )
+        // A budget ring keeps its period: it can never be half a band.
+        assertEquals(
+            "M",
+            WatchComplicationText.ringTitleToken(
+                RingSummary("budget.cursor.month", "Month", 12.0, PulseStatus.OK),
+            ),
+        )
+    }
+
+    @Test
+    fun aSplitStripSpendsItsWellOnTheSecondPercentNotCredits() {
+        val summary =
+            PreviewWatchDashboardSummary.value.copy(
+                rings =
+                    listOf(
+                        RingSummary(
+                            "allowance.cursor.cursor-plan-models",
+                            "Cursor Models",
+                            53.0,
+                            PulseStatus.OK,
+                            split =
+                                RingHalf(
+                                    "allowance.cursor.cursor-plan-other",
+                                    "Other Models",
+                                    38.0,
+                                    PulseStatus.OK,
+                                ),
+                        ),
+                    ),
+                allowances =
+                    listOf(
+                        AllowanceSummary(
+                            source = "purchased",
+                            label = "Cursor · Purchased credits",
+                            usedPercent = null,
+                            remaining = Quantity("2100", "credits"),
+                            unlimited = false,
+                            resetsAt = null,
+                            status = PulseStatus.OK,
+                        ),
+                    ),
+            )
+
+        assertEquals("47% · 62%", WatchComplicationText.stripLabel(summary, 0))
     }
 }
