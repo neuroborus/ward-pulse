@@ -284,20 +284,17 @@ void main() {
     expect(find.text('Ring slots'), findsOneWidget);
     expect(find.text('Wear & watch face'), findsOneWidget);
     expect(find.text('Next watch payload'), findsOneWidget);
-    // Budget rings are per connection, so the slot names it before the period.
-    expect(find.text('Anthropic platform · Today'), findsWidgets);
+    // Budget rings are per connection, and the connection is a heading now.
+    expect(find.text('Anthropic'), findsWidgets);
 
     await tester.scrollUntilVisible(
-      find.text('Anthropic platform · Today'),
+      find.text('Anthropic'),
       200,
       scrollable: find.byType(Scrollable).first,
     );
     // Defaults select available metrics; toggling Today off persists an explicit list.
-    final todayTile = find.widgetWithText(
-      CheckboxListTile,
-      'Anthropic platform · Today',
-    );
-    expect(todayTile, findsOneWidget);
+    final todayTile =
+        find.widgetWithText(CheckboxListTile, 'Today').hitTestable().first;
     // A full stack greys every unpicked row; the count is what tells that
     // apart from a fault, so it has to follow the selection.
     expect(find.textContaining('3 of 3 slots used'), findsOneWidget);
@@ -332,16 +329,21 @@ void main() {
 
     expect(find.text('Widget metrics'), findsOneWidget);
     expect(find.text('Home screen widget'), findsOneWidget);
+    // The picker is an outline now, so the preview sits below its headings.
+    await tester.scrollUntilVisible(
+      find.text('Next widget payload'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Next widget payload'), findsOneWidget);
     expect(find.textContaining('independent of Watchface'), findsOneWidget);
     // Its own copy of the count, on a screen with six slots instead of three.
     expect(find.textContaining('of 6 slots used'), findsOneWidget);
 
-    final todayTile = find.widgetWithText(
-      CheckboxListTile,
-      'Anthropic platform · Today',
-    );
-    expect(todayTile, findsOneWidget);
+    // The connection is a heading here now, so its rows carry only the period.
+    expect(find.text('Anthropic'), findsWidgets);
+    final todayTile =
+        find.widgetWithText(CheckboxListTile, 'Today').hitTestable().first;
     await tester.tap(todayTile);
     await tester.pumpAndSettle();
 

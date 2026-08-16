@@ -1902,6 +1902,12 @@ Deliverables:
 | Providers | managing | connected → needs action → alphabetical |
 | Watchface / Widget | picking metrics | connected → alphabetical |
 
+The two pickers already group before they sort: since 2026-08-16 both list their rows under a
+heading per kind of limit (plan usage, platform limits) and a sub-heading per connection
+(`groupMetricCatalog`). Ordering therefore has two questions to answer, not one — where a
+connection sits among its peers, and where its rows sit inside it — and the second one is
+already answered for budgets by the period order the catalog builds.
+
 - **"needs action" means status**, not percentage — and it is read off the scale that already
   exists: `ProviderStatus::severity` (`Ok` 1 → `Error` 7) with its Dart mirror in
   `provider_status_severity.dart`. Sort by that rank descending; do **not** enumerate a subset

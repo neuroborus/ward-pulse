@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app/catalog_outline.dart';
 import '../app/pull_to_refresh_list.dart';
 import '../dashboard/dashboard_models.dart';
 import '../settings/watch_ring_preferences.dart';
@@ -101,17 +102,19 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
                   ),
                 ),
               ],
-              for (final metric in catalog) ...[
-                const Divider(height: 1),
-                _WatchRingTile(
-                  metric: metric,
-                  selected: selectedIds.contains(metric.id),
-                  atCapacity:
-                      watchRingSlotCost([...selectedIds, metric.id]) >
-                      watchRingSlotCount,
-                  onChanged: (value) => _toggleRing(metric, value),
-                ),
-              ],
+              CatalogOutline(
+                catalog: catalog,
+                rowBuilder:
+                    (metric, title) => _WatchRingTile(
+                      metric: metric,
+                      title: title,
+                      selected: selectedIds.contains(metric.id),
+                      atCapacity:
+                          watchRingSlotCost([...selectedIds, metric.id]) >
+                          watchRingSlotCount,
+                      onChanged: (value) => _toggleRing(metric, value),
+                    ),
+              ),
             ],
           ),
         ),
@@ -150,12 +153,14 @@ class _SectionHeader extends StatelessWidget {
 class _WatchRingTile extends StatelessWidget {
   const _WatchRingTile({
     required this.metric,
+    required this.title,
     required this.selected,
     required this.atCapacity,
     required this.onChanged,
   });
 
   final WatchRingMetric metric;
+  final String title;
   final bool selected;
   final bool atCapacity;
   final ValueChanged<bool> onChanged;
@@ -169,7 +174,7 @@ class _WatchRingTile extends StatelessWidget {
           reason == null
               ? const Icon(Icons.data_usage_outlined)
               : Tooltip(message: reason, child: const Icon(Icons.help_outline)),
-      title: Text(metric.catalogTitle),
+      title: Text(title),
       subtitle: Text(metric.catalogSubtitle),
       value: selected,
       onChanged: canToggle ? (value) => onChanged(value ?? false) : null,

@@ -444,7 +444,7 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
 |---------|------|
 | Wear OS app Glance | **Not** this face language — locked text legend (`WEAR_GLANCE_DESIGN.md`, 2026-07-26) |
 | WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs plus sunk `RANGED_VALUE` strips (`%` / `% · credits` / `$12.34/100` for budgets) in `watchface.xml`. Every strip TEXT is the full label (WFF `length(TITLE)` Conditions are unreliable). Strip accents use `[COMPLICATION.RANGED_VALUE_COLORS]` (family ColorRamp). Keep progress/track spans below 360° (scale onto 359.9°) — a closed circle collapses to a ROUND tip. Remaining melt is clockwise from 12: Transform `startAngle` to `(1 - value/max) * 359.9` with fixed `endAngle` 359.9. Strips need their own `BoundingBox` slots (`BoundingArc` clips content to the arc band). A scene holds **at most eight** `ComplicationSlot` elements in every format version and this face has used all eight since 2026-07-25, so a new slot has to come out of that budget (Split band, rule 7). |
-| Phone Watchface tab | Slot selection + preview of next payload rings (not Settings) |
+| Phone Watchface tab | Slot selection + preview of next payload rings (not Settings). Rows are grouped since 2026-08-16: a heading per kind of connection, a sub-heading per connection, the same outline the Widget tab uses |
 
 ## Non-goals
 

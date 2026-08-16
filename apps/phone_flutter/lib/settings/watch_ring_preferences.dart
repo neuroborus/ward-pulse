@@ -83,7 +83,7 @@ final class WatchRingMetric {
     if (_isClaudePlanSlot) {
       return 'Claude plan';
     }
-    final connection = _connectionFromBudgetRingId(id);
+    final connection = connectionFromBudgetRingId(id);
     if (connection != null) {
       // The family alone cannot tell two connections of one provider apart,
       // and the label is only the period (`Anthropic platform · Month`).
@@ -578,7 +578,7 @@ WatchRingMetric _budgetMetric(String connection, BudgetState budget) {
 }
 
 /// Connection of a `budget.<connection>.<period>` ring, or null for other ids.
-ProviderConnectionId? _connectionFromBudgetRingId(String ringId) {
+ProviderConnectionId? connectionFromBudgetRingId(String ringId) {
   const prefix = 'budget.';
   if (!ringId.startsWith(prefix)) {
     return null;

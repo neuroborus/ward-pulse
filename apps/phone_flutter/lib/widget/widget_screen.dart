@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app/catalog_outline.dart';
 import '../app/pull_to_refresh_list.dart';
 import '../dashboard/dashboard_models.dart';
 import '../settings/watch_ring_preferences.dart';
@@ -106,15 +107,17 @@ class _WidgetScreenState extends State<WidgetScreen> {
                   ),
                 ),
               ],
-              for (final metric in catalog) ...[
-                const Divider(height: 1),
-                _MetricTile(
-                  metric: metric,
-                  selected: selectedIds.contains(metric.id),
-                  atCapacity: selectedIds.length >= phoneWidgetSlotCount,
-                  onChanged: (value) => _toggleMetric(metric, value),
-                ),
-              ],
+              CatalogOutline(
+                catalog: catalog,
+                rowBuilder:
+                    (metric, title) => _MetricTile(
+                      metric: metric,
+                      title: title,
+                      selected: selectedIds.contains(metric.id),
+                      atCapacity: selectedIds.length >= phoneWidgetSlotCount,
+                      onChanged: (value) => _toggleMetric(metric, value),
+                    ),
+              ),
             ],
           ),
         ),
@@ -153,12 +156,14 @@ class _SectionHeader extends StatelessWidget {
 class _MetricTile extends StatelessWidget {
   const _MetricTile({
     required this.metric,
+    required this.title,
     required this.selected,
     required this.atCapacity,
     required this.onChanged,
   });
 
   final WatchRingMetric metric;
+  final String title;
   final bool selected;
   final bool atCapacity;
   final ValueChanged<bool> onChanged;
@@ -172,7 +177,7 @@ class _MetricTile extends StatelessWidget {
           reason == null
               ? const Icon(Icons.data_usage_outlined)
               : Tooltip(message: reason, child: const Icon(Icons.help_outline)),
-      title: Text(metric.catalogTitle),
+      title: Text(title),
       subtitle: Text(metric.catalogSubtitle),
       value: selected,
       onChanged: canToggle ? (value) => onChanged(value ?? false) : null,
