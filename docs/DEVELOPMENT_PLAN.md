@@ -1882,9 +1882,9 @@ and one of the three was never decided by anyone. Providers renders the catalog 
 (`ProviderFamily { openai, anthropic, cursor }` × `ConnectionKind { plan, platform }`), which is
 repository history rather than meaning. The Dashboard has no declared order at all:
 `_providerDashboardSections` groups accounts into a `LinkedHashMap`, so `grouped.values` returns
-insertion order — which is the order the snapshot arrived in, which is the order links are
-chained in `buildLiveProviderStack`. Reordering two arguments there for readability silently
-reorders the user's main screen, and no test holds it.
+insertion order — which is the order the snapshot arrived in, which is the order
+`buildLiveProviderStack` chains its `connect(fallback: …)` links. Rewiring that chain for
+readability silently reorders the user's main screen, and no test holds it.
 
 The value being bought is **stability**: a dashboard opened ten times a day is fast because the
 card is where it was last time. So order by keys that change rarely, and let position move only
@@ -1900,7 +1900,7 @@ Deliverables:
 | --- | --- | --- |
 | Dashboard | watching | needs action → usage over the period → alphabetical |
 | Providers | managing | connected → needs action → alphabetical |
-| Watchface / Widget | picking metrics | connected → alphabetical |
+| Watchface / Widget | picking metrics | selectable → alphabetical |
 
 The two pickers already group before they sort: since 2026-08-16 both list their rows under a
 heading per kind of limit (plan usage, platform limits) and a sub-heading per connection
@@ -1918,21 +1918,42 @@ already answered for budgets by the period order the catalog builds.
   percent crosses its neighbours on almost every poll, and a list that reshuffles itself on a
   timer destroys the muscle memory this phase exists to protect. The key needs no new data —
   `spent` per account is already in the snapshot;
-- **alphabetical sorts on the stable connection id**, not on the displayed label, so the order
-  cannot follow a copy edit or a future translation;
-- connected/not-connected is a real key only where unconnected rows render: the Watchface and
-  Widget catalogs keep them visible but disabled, while the Dashboard has no card for a
-  provider that reports nothing.
+- **alphabetical sorts on a stable id**, never on the displayed label, so the order cannot
+  follow a copy edit or a future translation. Which id depends on what a row is: only the
+  pickers list connections, and they sort on the connection id. The Dashboard and Providers
+  both list families — one section per `account.provider`, one card per `ProviderFamily` — so
+  they sort on the provider key, with their other keys rolled up over the family's accounts or
+  connections. Neither tab reorders inside a family: a Providers card keeps plan above
+  platform, which is layout rather than order;
+- **"selectable" is not "connected"**, and only the pickers have this key at all. A provider that
+  is not connected has no account in the snapshot, so `watchRingCatalog` never builds a row for
+  it — there is nothing to sink. What the catalogs do keep visible but disabled is a row that
+  cannot be put on a ring: an allowance with no percentage, or a budget period with no limit
+  set. That is the state the pickers sort on, and `WatchRingMetric.isAvailable` already names
+  it. The Dashboard and Providers have no such row: the Dashboard shows no card for a provider
+  that reports nothing, and Providers ranks by whether a credential is stored.
+
+Decided 2026-08-16, and both answers are about the same thing — a list that does not move
+under the reader:
+
+- **numbers alone never reorder a surface.** A list is rebuilt when a provider changes state —
+  connected, gone unavailable, or a new status — and not when a poll merely moves its figures.
+  Where a key already steps only with that state, sorting delivers this on its own; where a key
+  is continuous, as spend is on the Dashboard, the computed order is held for the run and
+  recomputed on the next state change;
+- **all four tabs take their order from this phase**, each by its own rule from the table above.
+  Settings has no provider list and is not one of them.
 
 Acceptance:
 
 ```text
 every phone surface takes its order from a named function, and a test fails if the order changes
-reordering links in buildLiveProviderStack leaves the Dashboard order unchanged
+a refresh that changes only percentages or spend leaves every phone surface in the same order
+a provider changing state — connected, available, status — is the only thing that reorders
+the same accounts in a different order render the same Dashboard, whatever buildLiveProviderStack chains
 Dashboard and Providers rank status by ProviderStatus::severity; no sixth status scale appears
-a change in remaining percent alone never reorders a phone surface
-two providers with equal keys sort by connection id, and renaming a label does not move them
-Watchface / Widget catalogs list connected metrics first and keep unconnected ones visible but disabled
+equal keys are broken by the stable id — the provider key, or the connection id in a picker — and renaming a label moves nothing
+Watchface / Widget catalogs list selectable metrics first and keep the unselectable ones visible but disabled
 watch and widget surface order stays tightest-remaining-first (Phase 13), unaffected by this phase
 ```
 
