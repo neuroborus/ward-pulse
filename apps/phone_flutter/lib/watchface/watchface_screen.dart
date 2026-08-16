@@ -22,16 +22,10 @@ class WatchfaceScreen extends StatefulWidget {
 }
 
 class _WatchfaceScreenState extends State<WatchfaceScreen> {
-  List<String> get _effectiveRingIds {
-    final snapshot = widget.snapshot;
-    if (snapshot == null) {
-      return widget.ringPreferences.migratedIds;
-    }
-    return [
-      for (final ring in resolveWatchRings(snapshot, widget.ringPreferences))
-        ring.id,
-    ];
-  }
+  /// Catalog ids, never resolved ones: a pair is one row here, and a checkbox
+  /// that looked for its pools would never find itself.
+  List<String> get _effectiveRingIds =>
+      watchRingSelectionIds(widget.snapshot, widget.ringPreferences);
 
   Future<void> _toggleRing(WatchRingMetric metric, bool selected) async {
     if (!metric.isAvailable) {
@@ -39,7 +33,8 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
     }
     final ids = [..._effectiveRingIds];
     if (selected) {
-      if (ids.contains(metric.id) || ids.length >= watchRingSlotCount) {
+      if (ids.contains(metric.id) ||
+          watchRingSlotCost([...ids, metric.id]) > watchRingSlotCount) {
         return;
       }
       ids.add(metric.id);
@@ -66,8 +61,11 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
     final catalog = watchRingCatalog(snapshot);
     // Ticked rows, not stored ids: without a snapshot the card has no rows at
     // all, and the stored selection would claim slots nothing on screen shows.
-    final usedSlots =
-        catalog.where((metric) => selectedIds.contains(metric.id)).length;
+    // Counted by band, so both Cursor pools together cost one.
+    final usedSlots = watchRingSlotCost([
+      for (final metric in catalog)
+        if (selectedIds.contains(metric.id)) metric.id,
+    ]);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -103,7 +101,9 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
                 _WatchRingTile(
                   metric: metric,
                   selected: selectedIds.contains(metric.id),
-                  atCapacity: selectedIds.length >= watchRingSlotCount,
+                  atCapacity:
+                      watchRingSlotCost([...selectedIds, metric.id]) >
+                      watchRingSlotCount,
                   onChanged: (value) => _toggleRing(metric, value),
                 ),
               ],

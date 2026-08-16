@@ -178,9 +178,11 @@ Both deserve a ring, and spending two of three slots on one subscription is what
 useless for everything else. So the two share **one band, split lengthwise**, each half melting
 on its own value.
 
-1. **Only this case, and only one slot.** The division is allowed for two pools of the same plan
-   of the same connection. Everything else stays one ring, one metric. A split pair costs one of
-   the three slots — the whole point is that a plan with two pools does not cost two.
+1. **Only this case, only when both are picked, and only one slot.** The division is allowed for
+   two pools of the same plan of the same connection. Everything else stays one ring, one metric.
+   The Watchface tab offers each pool as its own row: **ticking both** is what shares a band —
+   either alone is an ordinary, undivided ring. A pair costs one of the three slots, which is the
+   whole point: a plan with two pools does not cost two.
 2. **The order inside a pair is fixed by pool, never by usage.** Own models take the inner half
    and the left marker; external models the outer half and the right one. Position inside the
    pair is a name, not a rank: urgency is already carried twice, by each half's own melt and by

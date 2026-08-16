@@ -111,39 +111,20 @@ void main() {
     expect(packed.single.$2, isNull);
   });
 
-  test('an exhausted half leaves the pair as one surviving ring', () {
-    // Rule 6: a pool at 100% does not exhaust the pair; the band falls back to
-    // the other pool rather than disappearing.
-    final collapsed = collapseCursorPlanRing(const [
-      AllowanceState(
-        id: 'cursor-plan-models',
-        source: AllowanceSource.plan,
-        label: 'Cursor Models',
-        usedPercent: 47,
-        used: null,
-        limit: null,
-        remaining: null,
-        windowMinutes: null,
-        resetsAt: null,
-        status: ProviderStatus.ok,
-      ),
-      AllowanceState(
-        id: 'cursor-plan-other',
-        source: AllowanceSource.plan,
-        label: 'Other Models',
-        usedPercent: 100,
-        used: null,
-        limit: null,
-        remaining: null,
-        windowMinutes: null,
-        resetsAt: null,
-        status: ProviderStatus.rateLimited,
-      ),
-    ]);
-
-    expect(collapsed?.id, cursorPlanRingId);
-    expect(collapsed?.usedPercent, 47);
-    expect(collapsed?.status, ProviderStatus.rateLimited);
+  test('two pools cost one slot, one pool costs one too', () {
+    // The pair is a band, not two rings: picking both spends a single slot, so
+    // a third ring still fits (`WATCH_RING_DESIGN.md`, Split band).
+    expect(watchRingSlotCost([cursorOwnPoolId, cursorOtherPoolId]), 1);
+    expect(watchRingSlotCost([cursorOwnPoolId]), 1);
+    expect(
+      watchRingSlotCost([
+        cursorOwnPoolId,
+        cursorOtherPoolId,
+        'allowance.claude.plan',
+        'budget.anthropic.platform.week',
+      ]),
+      3,
+    );
   });
 
   test('surface order puts tightest remaining first and drops exhausted', () {
@@ -365,20 +346,26 @@ void main() {
         'allowance.cursor.cursor-on-demand',
         'allowance.codex.codex-purchased-credits',
       ]),
-      // The surviving pool id folds into the slot the pair now costs.
-      [cursorPlanRingId],
+      // A pool id is a catalog row and survives as itself.
+      [cursorOwnPoolId],
     );
   });
 
-  test('a stored Cursor pair reads back as the one slot it costs', () {
-    expect(
-      migrateWatchRingSelectedIds([
-        cursorOwnPoolId,
-        cursorOtherPoolId,
-        claudePlanRingId,
-      ]),
-      [cursorPlanRingId, claudePlanRingId],
-    );
+  test('a stored pair keeps both pools and still costs one slot', () {
+    const stored = [cursorOwnPoolId, cursorOtherPoolId, claudePlanRingId];
+
+    expect(migrateWatchRingSelectedIds(stored), stored);
+    // Three ids, two bands: the budget for a third ring is untouched.
+    expect(watchRingSlotCost(migrateWatchRingSelectedIds(stored)), 2);
+  });
+
+  test('the retired one-row id unfolds into the pools it stood for', () {
+    // One build stored the pair as a single row; those users keep both pools.
+    expect(migrateWatchRingSelectedIds([cursorPlanRingId, claudePlanRingId]), [
+      cursorOwnPoolId,
+      cursorOtherPoolId,
+      claudePlanRingId,
+    ]);
   });
 
   test('a stored selection of only retired ids reads back as unset', () {
@@ -500,23 +487,14 @@ void main() {
       },
     });
 
-    // Watchface offers the pair as one slot: it draws them on one band.
+    // Both pools are offered on their own: a band is shared only when the user
+    // ticks both (`WATCH_RING_DESIGN.md`, Split band).
     final catalogIds =
         watchRingCatalog(withCursor).map((ring) => ring.id).toList();
-    expect(catalogIds, contains(cursorPlanRingId));
-    expect(catalogIds, isNot(contains(cursorOwnPoolId)));
-    expect(catalogIds, isNot(contains(cursorOtherPoolId)));
+    expect(catalogIds, contains(cursorOwnPoolId));
+    expect(catalogIds, contains(cursorOtherPoolId));
+    expect(catalogIds, isNot(contains(cursorPlanRingId)));
     expect(catalogIds, isNot(contains('allowance.cursor.cursor-on-demand')));
-
-    // The widget has rows, so it still offers each pool on its own.
-    final widgetIds =
-        watchRingCatalog(
-          withCursor,
-          collapseCursorPlan: false,
-        ).map((ring) => ring.id).toList();
-    expect(widgetIds, contains(cursorOwnPoolId));
-    expect(widgetIds, contains(cursorOtherPoolId));
-    expect(widgetIds, isNot(contains(cursorPlanRingId)));
 
     final surface = orderWatchRingsForSurface(
       resolveWatchRings(withCursor, const WatchRingPreferences()),
@@ -527,6 +505,40 @@ void main() {
     expect(surface.map((ring) => ring.id), [
       'allowance.cursor.cursor-plan-models',
     ]);
+  });
+
+  test('a pool answers to the row the user ticked', () {
+    final withPair = _cursorPairAndCodexSnapshot();
+    const picked = WatchRingPreferences(selectedIds: [cursorOwnPoolId]);
+
+    // The Watchface tab ticks catalog rows, so the selection speaks their ids.
+    expect(watchRingSelectionIds(withPair, picked), [cursorOwnPoolId]);
+    expect(resolveWatchRings(withPair, picked).map((ring) => ring.id), [
+      cursorOwnPoolId,
+    ]);
+    // Unticking removes what was ticked; before this the screen looked for a
+    // pool by an id the catalog never showed, and the ring lived on.
+    final left = [...watchRingSelectionIds(withPair, picked)]
+      ..remove(cursorOwnPoolId);
+    expect(left, isEmpty);
+  });
+
+  test('the band is shared only when both pools are ticked', () {
+    final withPair = _cursorPairAndCodexSnapshot();
+    const both = WatchRingPreferences(
+      selectedIds: [cursorOwnPoolId, cursorOtherPoolId],
+    );
+
+    // Two rows, one band: the payload packs them into a single entry.
+    final packed = pairCursorPools(resolveWatchRings(withPair, both));
+    expect(packed.length, 1);
+    expect(packed.single.$1.id, cursorOwnPoolId);
+    expect(packed.single.$2?.id, cursorOtherPoolId);
+
+    // One pool alone stays an ordinary ring, undivided.
+    const own = WatchRingPreferences(selectedIds: [cursorOwnPoolId]);
+    final alone = pairCursorPools(resolveWatchRings(withPair, own));
+    expect(alone.single.$2, isNull);
   });
 
   test('the payload preview counts a pair as one band', () {
@@ -543,7 +555,9 @@ void main() {
     expect(
       watchRingPayloadSubtitle(
         withPair,
-        const WatchRingPreferences(selectedIds: [cursorPlanRingId]),
+        const WatchRingPreferences(
+          selectedIds: [cursorOwnPoolId, cursorOtherPoolId],
+        ),
       ),
       'Cursor plan 53% left',
     );
@@ -566,8 +580,7 @@ void main() {
       metric('allowance.claude.claude-seven-day', 'Weekly plan').catalogTitle,
       'Claude · Weekly plan',
     );
-    // The paired slot opens with its family too, so it must not gain a second.
-    expect(metric(cursorPlanRingId, 'Cursor plan').catalogTitle, 'Cursor plan');
+
     // Already opens with its family.
     expect(
       metric(

@@ -95,7 +95,9 @@ void main() {
               WatchDashboardSummaryPayload.fromSnapshot(
                 dashboard,
                 const ConsumptionDisplayPreferences(),
-                const WatchRingPreferences(selectedIds: [cursorPlanRingId]),
+                const WatchRingPreferences(
+                  selectedIds: [cursorOwnPoolId, cursorOtherPoolId],
+                ),
                 // Match fixture: PollCadence floor already elapsed.
                 clock: dashboard.generatedAt.add(ManualRefreshWindow.floor),
               ).encode(),
