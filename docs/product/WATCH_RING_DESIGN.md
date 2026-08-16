@@ -87,21 +87,25 @@ may modulate toward theme tertiary/error when needed.
 | Cursor · other models | `#67E8D4` | Cyan — external models on the Cursor plan |
 | Cursor · own models | `#7E93B8` | Grey-blue — the plan's own pool |
 | Unresolved family | `#8A968F` | Neutral grey — fallback only, never a product color |
-| Demo data | `#8AB4F8` | The old blue, kept so mock rings do not masquerade as unresolved |
+| Demo data | `#8AB4F8` | The old blue, kept so mock data does not masquerade as unresolved. Phone-side only: `watchRingCatalog` drops mock accounts, so it never reaches a band |
 
 A local budget ring takes the family color of the connection it belongs to, exactly like that
 connection's allowance rings; period is carried by the type in the band (see Ring type texture),
-never by a color of its own.
+never by a color of its own. For Cursor that colour is the **cyan**: grey-blue names one pool of
+one plan, so nothing but that pool may wear it — a budget spans the whole connection
+(`RingFamily.colorArgb`, and the `cursorPlatform` row on the Glance board).
 Grey is what remains when a ring id resolves to no family, which should not happen for a ring
 the product ships. It is deliberately colourless: the fallback used to be blue, and a blue
 fallback beside Cursor's grey-blue pool would read as a product colour at band scale.
 
 Distances, CIE76 ΔE on these values (a desk check, not a device one): the two Cursor pools sit
-52 apart, which is what lets them share a band; the tightest pair in the whole palette is the
-grey-blue pool against the grey fallback at 25, and the next is cyan against Codex green at 31 —
-both above the ~20 where hues start collapsing on a 17-pixel band, and the first of them pairs a
-product colour with one that should never ship. A new colour should clear 20 against every row
-here before it is proposed.
+52 apart, which is what lets them share a band. The tightest pair in the whole palette is the
+grey-blue pool against **demo blue at 21**, then the grey fallback at 25, then cyan against
+Codex green at 31 — all above the ~20 where hues start collapsing on a 17-pixel band. The first
+two never meet on a band anyway: the grey fallback should not ship at all, and demo blue belongs
+to the legacy single `mock` provider, whose accounts `watchRingCatalog` skips outright — the
+seeded debug demo invents real families instead, so its Cursor pools wear the pool colours.
+A new colour should clear 20 against every row here before it is proposed.
 
 Track (empty portion of the ring): muted graphite on dark surface (`#2E3632` in review art;
 theme `outlineVariant` at runtime).
