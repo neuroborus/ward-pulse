@@ -206,6 +206,28 @@ void main() {
     }
   });
 
+  testWidgets('a reload keeps the dashboard on screen', (tester) async {
+    final snapshot = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+
+    await tester.pumpWidget(
+      WardPulseApp(repository: ValueDashboardRepository(snapshot)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Usage dashboard'), findsOneWidget);
+
+    // The refresh used to blank the tab and draw it again, which read as a
+    // flicker over the numbers the reader was looking at.
+    await tester.tap(find.byTooltip('Refresh'));
+    await tester.pump();
+    expect(find.text('Usage dashboard'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+
+    await tester.pumpAndSettle();
+    expect(find.text('Usage dashboard'), findsOneWidget);
+  });
+
   testWidgets('slot count follows the rows, not a stored selection', (
     tester,
   ) async {

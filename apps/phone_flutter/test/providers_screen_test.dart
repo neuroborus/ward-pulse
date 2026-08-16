@@ -18,6 +18,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: ProvidersScreen(
+            onRefresh: _noRefresh,
             credentialStore: store,
             codexAccountService: const EmptyCodexAccountService(),
             claudeAccountService: const EmptyClaudeAccountService(),
@@ -72,6 +73,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: ProvidersScreen(
+            onRefresh: _noRefresh,
             credentialStore: store,
             codexAccountService: const EmptyCodexAccountService(),
             claudeAccountService: const EmptyClaudeAccountService(),
@@ -112,6 +114,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: ProvidersScreen(
+            onRefresh: _noRefresh,
             credentialStore: _MemoryCredentialStore(),
             codexAccountService: const EmptyCodexAccountService(),
             claudeAccountService: const EmptyClaudeAccountService(),
@@ -153,6 +156,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: ProvidersScreen(
+            onRefresh: _noRefresh,
             credentialStore: _MemoryCredentialStore(),
             codexAccountService: const EmptyCodexAccountService(),
             claudeAccountService: const EmptyClaudeAccountService(),
@@ -234,3 +238,6 @@ class _MemoryCredentialStore implements ProviderCredentialStore {
     _labels[id] = trimmed;
   }
 }
+
+/// These tests drive the screen, not the reload behind the pull.
+Future<void> _noRefresh() async {}

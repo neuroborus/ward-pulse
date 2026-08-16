@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app/pull_to_refresh_list.dart';
 import '../settings/alert_threshold_preferences.dart';
 import 'alert_threshold_dialogs.dart';
 import 'claude_account_row.dart';
@@ -23,6 +24,7 @@ class ProvidersScreen extends StatefulWidget {
     required this.alertThresholds,
     required this.onAlertThresholdsChanged,
     this.cursorPlanSignIn,
+    required this.onRefresh,
   });
 
   final ProviderCredentialStore credentialStore;
@@ -38,6 +40,9 @@ class ProvidersScreen extends StatefulWidget {
 
   /// Test seam; defaults to [CursorPlanSignInScreen.open].
   final CursorPlanSignIn? cursorPlanSignIn;
+
+  /// Pull-to-refresh reload, shared with the app-bar action.
+  final Future<void> Function() onRefresh;
 
   @override
   State<ProvidersScreen> createState() => _ProvidersScreenState();
@@ -313,8 +318,8 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
   Widget build(BuildContext context) {
     final catalog = providerConnectionCatalog(platformLabels: _labels);
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+    return PullToRefreshList(
+      onRefresh: widget.onRefresh,
       children: [
         for (final provider in ProviderFamily.values) ...[
           Card(

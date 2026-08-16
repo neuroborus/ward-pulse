@@ -135,6 +135,7 @@ void main() {
         theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
+            onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
             displayPreferences: const ConsumptionDisplayPreferences(
               purchased: true,
@@ -220,6 +221,7 @@ void main() {
         theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
+            onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
             displayPreferences: const ConsumptionDisplayPreferences(plan: true),
           ),
@@ -255,6 +257,7 @@ void main() {
         theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
+            onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
             // Display prefs no longer hide surfaces.
             displayPreferences: const ConsumptionDisplayPreferences(
@@ -292,6 +295,7 @@ void main() {
         theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
+            onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
             onOpenProviders: () => openedProviders = true,
           ),
@@ -354,6 +358,7 @@ void main() {
         theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
+            onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
           ),
         ),
@@ -415,6 +420,7 @@ void main() {
         theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
+            onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
           ),
         ),
@@ -469,6 +475,7 @@ void main() {
         theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
+            onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
           ),
         ),
@@ -530,6 +537,7 @@ void main() {
         theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
+            onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
             displayPreferences: const ConsumptionDisplayPreferences(plan: true),
           ),
@@ -576,6 +584,7 @@ void main() {
         theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
+            onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
             displayPreferences: const ConsumptionDisplayPreferences(
               plan: true,
@@ -605,3 +614,6 @@ Finder _pillsInCardOf(Finder label) {
     matching: find.byType(StatusPill),
   );
 }
+
+/// These tests drive the screen, not the reload behind the pull.
+Future<void> _noRefresh() async {}

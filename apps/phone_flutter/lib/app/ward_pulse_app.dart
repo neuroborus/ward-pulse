@@ -444,6 +444,17 @@ class _DashboardHostState extends State<DashboardHost> {
     await _queueWatchSummary(snapshot);
   }
 
+  /// Pull-to-refresh runs the same reload the app-bar action does; the gesture
+  /// only has to hold the spinner until the snapshot lands.
+  Future<void> _pullToRefresh() async {
+    _reload();
+    try {
+      await _snapshot;
+    } catch (_) {
+      // The failure state already tells the reader; the gesture just ends.
+    }
+  }
+
   void _reload() {
     // Mock demo is cached across auto-sync; refresh should draw a new seed.
     // Live repos must not clear connection recovery caches on every refresh.
@@ -510,18 +521,21 @@ class _DashboardHostState extends State<DashboardHost> {
             child: switch (state.connectionState) {
               _ when _selectedIndex == _watchfaceIndex => WatchfaceScreen(
                 key: const ValueKey('watchface'),
+                onRefresh: _pullToRefresh,
                 snapshot: snapshot,
                 ringPreferences: _ringPreferences,
                 onRingPreferencesChanged: _updateRingPreferences,
               ),
               _ when _selectedIndex == _widgetIndex => WidgetScreen(
                 key: const ValueKey('widget'),
+                onRefresh: _pullToRefresh,
                 snapshot: snapshot,
                 preferences: _widgetPreferences,
                 onPreferencesChanged: _updateWidgetPreferences,
               ),
               _ when _selectedIndex == _providersIndex => ProvidersScreen(
                 key: const ValueKey('providers'),
+                onRefresh: _pullToRefresh,
                 credentialStore: widget.credentialStore,
                 codexAccountService: widget.codexAccountService,
                 claudeAccountService: widget.claudeAccountService,
@@ -531,6 +545,7 @@ class _DashboardHostState extends State<DashboardHost> {
               ),
               _ when _selectedIndex == _settingsIndex => SettingsScreen(
                 key: const ValueKey('settings'),
+                onRefresh: _pullToRefresh,
                 snapshot: snapshot,
                 refreshInterval: _refreshInterval,
                 onRefreshIntervalChanged: _updateRefreshInterval,
@@ -540,13 +555,17 @@ class _DashboardHostState extends State<DashboardHost> {
                 mockDataEnabled: _mockDataEnabled,
                 onMockDataEnabledChanged: _updateMockDataEnabled,
               ),
-              ConnectionState.waiting => const _LoadingView(),
+              // Only the very first load has nothing to show; a reload keeps
+              // the dashboard up rather than blanking it.
+              ConnectionState.waiting when snapshot == null =>
+                const _LoadingView(),
               _ when state.hasError => _ErrorView(
                 failure: _dashboardFailure(state.error),
                 onRetry: _reload,
                 onOpenProviders: _openProviders,
               ),
               _ when snapshot != null => DashboardScreen(
+                onRefresh: _pullToRefresh,
                 snapshot: snapshot,
                 displayPreferences: _displayPreferences,
                 onOpenProviders: _openProviders,

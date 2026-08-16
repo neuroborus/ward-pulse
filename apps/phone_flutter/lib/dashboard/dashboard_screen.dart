@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app/pull_to_refresh_list.dart';
 import '../charts/usage_history_chart.dart';
 import '../settings/consumption_display_preferences.dart';
 import 'connected_capabilities.dart';
@@ -35,6 +36,7 @@ class DashboardScreen extends StatefulWidget {
     this.displayPreferences = const ConsumptionDisplayPreferences(),
     this.onOpenProviders,
     this.reveal,
+    required this.onRefresh,
   });
 
   final DashboardSnapshot snapshot;
@@ -45,6 +47,9 @@ class DashboardScreen extends StatefulWidget {
   /// what makes a second tap on the same provider scroll again after the reader
   /// has wandered off.
   final ({String provider, int token})? reveal;
+
+  /// Pull-to-refresh reload, shared with the app-bar action.
+  final Future<void> Function() onRefresh;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -110,8 +115,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final showMissingPurchased = caps.showAllowances && !hasPurchasedAllowance;
     final showPlatformSpend = true;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+    return PullToRefreshList(
+      onRefresh: widget.onRefresh,
       children: [
         _SyncHeader(snapshot: snapshot),
         const SizedBox(height: 16),

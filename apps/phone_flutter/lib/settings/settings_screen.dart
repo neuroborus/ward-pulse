@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../app/pull_to_refresh_list.dart';
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../sync/poll_cadence.dart';
@@ -22,6 +23,7 @@ class SettingsScreen extends StatefulWidget {
     required this.debugDataAvailable,
     required this.mockDataEnabled,
     required this.onMockDataEnabledChanged,
+    required this.onRefresh,
   });
 
   final DashboardSnapshot? snapshot;
@@ -33,6 +35,9 @@ class SettingsScreen extends StatefulWidget {
   final bool debugDataAvailable;
   final bool mockDataEnabled;
   final Future<void> Function(bool value) onMockDataEnabledChanged;
+
+  /// Pull-to-refresh reload, shared with the app-bar action.
+  final Future<void> Function() onRefresh;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -121,8 +126,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       shownRefreshMinutes,
     );
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+    return PullToRefreshList(
+      onRefresh: widget.onRefresh,
       children: [
         const _SettingsSectionHeader(title: 'Refresh'),
         Card(

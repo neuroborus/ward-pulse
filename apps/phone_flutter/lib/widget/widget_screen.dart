@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app/pull_to_refresh_list.dart';
 import '../dashboard/dashboard_models.dart';
 import '../settings/watch_ring_preferences.dart';
 import 'phone_widget_preferences.dart';
@@ -11,12 +12,16 @@ class WidgetScreen extends StatefulWidget {
     required this.snapshot,
     required this.preferences,
     required this.onPreferencesChanged,
+    required this.onRefresh,
   });
 
   final DashboardSnapshot? snapshot;
   final PhoneWidgetPreferences preferences;
   final Future<void> Function(PhoneWidgetPreferences value)
   onPreferencesChanged;
+
+  /// Pull-to-refresh reload, shared with the app-bar action.
+  final Future<void> Function() onRefresh;
 
   @override
   State<WidgetScreen> createState() => _WidgetScreenState();
@@ -72,8 +77,8 @@ class _WidgetScreenState extends State<WidgetScreen> {
     final usedSlots =
         catalog.where((metric) => selectedIds.contains(metric.id)).length;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+    return PullToRefreshList(
+      onRefresh: widget.onRefresh,
       children: [
         const _SectionHeader(title: 'Widget metrics'),
         Card(

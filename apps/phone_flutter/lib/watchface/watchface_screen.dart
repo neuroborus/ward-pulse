@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app/pull_to_refresh_list.dart';
 import '../dashboard/dashboard_models.dart';
 import '../settings/watch_ring_preferences.dart';
 
@@ -10,12 +11,16 @@ class WatchfaceScreen extends StatefulWidget {
     required this.snapshot,
     required this.ringPreferences,
     required this.onRingPreferencesChanged,
+    required this.onRefresh,
   });
 
   final DashboardSnapshot? snapshot;
   final WatchRingPreferences ringPreferences;
   final Future<void> Function(WatchRingPreferences value)
   onRingPreferencesChanged;
+
+  /// Pull-to-refresh reload, shared with the app-bar action.
+  final Future<void> Function() onRefresh;
 
   @override
   State<WatchfaceScreen> createState() => _WatchfaceScreenState();
@@ -67,8 +72,8 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
         if (selectedIds.contains(metric.id)) metric.id,
     ]);
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+    return PullToRefreshList(
+      onRefresh: widget.onRefresh,
       children: [
         const _SectionHeader(title: 'Ring slots'),
         Card(
