@@ -93,8 +93,8 @@ function miniArc({ cx, cy, r, thickness, remaining, color }) {
       stroke-width="${thickness}" />
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}"
       stroke-width="${thickness}" stroke-linecap="round"
-      stroke-dasharray="${paint.toFixed(2)} ${circ.toFixed(2)}"
-      stroke-dashoffset="${(-used).toFixed(2)}"
+      stroke-dasharray="${Math.max(0, paint - thickness).toFixed(2)} ${circ.toFixed(2)}"
+      stroke-dashoffset="${(-(used + thickness / 2)).toFixed(2)}"
       transform="rotate(-90 ${cx} ${cy})" />`
 }
 

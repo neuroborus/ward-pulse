@@ -348,11 +348,17 @@ private fun MiniRemainingArc(
             style = strokeStyle,
         )
         val remaining = remainingFraction.coerceIn(0f, 1f)
-        val sweep = remaining * 360f
-        if (sweep > 0f) {
+        // A round cap reaches half a stroke past the angle it is drawn to, so the
+        // sweep is short by one cap at each end and the caps fill it back in —
+        // otherwise a nearly full row reads as a closed ring, the way the face did
+        // before 2026-08-16 (`WATCH_RING_DESIGN.md`, Ring geometry).
+        val capDegrees =
+            Math.toDegrees((strokeWidth / 2f / (arcSize.width / 2f)).toDouble()).toFloat()
+        val sweep = (remaining * 360f - 2f * capDegrees).coerceAtLeast(0f)
+        if (remaining > 0f) {
             drawArc(
                 color = color,
-                startAngle = -90f + (1f - remaining) * 360f,
+                startAngle = -90f + (1f - remaining) * 360f + capDegrees,
                 sweepAngle = sweep,
                 useCenter = false,
                 topLeft = topLeft,

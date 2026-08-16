@@ -48,7 +48,11 @@ Rules:
   band takes its place in the order and the second pool follows it, wherever its own percent
   would have landed alone.
 - Mini arc = **remaining** (`100 - usedPercent`), family color from the face palette;
-  same clockwise-from-12 melt as the watch face (usage gap opens at 12).
+  same clockwise-from-12 melt as the watch face (usage gap opens at 12). Its round caps reach
+  half a stroke past each end — on a 17-unit arc that is 8.4° per cap, more than a 4%-used row
+  has to show — so the sweep is drawn short by one cap at each end and the caps fill it back in.
+  Without that a nearly full row reads as a closed ring (`WATCH_RING_DESIGN.md`, Ring geometry,
+  where the same correction is measured on the face).
 - Primary line: family/provider + metric label. Codex keeps `Weekly plan`; Cursor Pro+/Ultra
   plan pools use `Cursor Models` / `Other Models` (exhausted pools stay off the face).
   Claude’s subscription plan windows (`5h`, `Weekly`, optional Opus/Sonnet weekly) collapse to
