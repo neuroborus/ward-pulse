@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/providers/claude_account_service.dart';
 import 'package:ward_pulse_phone/providers/codex_account_service.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
@@ -198,6 +199,95 @@ void main() {
       find.text('Set this period’s limit under Budget limits'),
       findsNWidgets(2),
     );
+  });
+
+  group('the declared card order', () {
+    Future<List<String>> shown(
+      WidgetTester tester, {
+      ProviderCredentialStore? store,
+      Map<ProviderFamily, ProviderStatus> statuses = const {},
+    }) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ProvidersScreen(
+              onRefresh: _noRefresh,
+              credentialStore: store ?? _MemoryCredentialStore(),
+              codexAccountService: const EmptyCodexAccountService(),
+              claudeAccountService: const EmptyClaudeAccountService(),
+              onCredentialsChanged: () {},
+              alertThresholds: const AlertThresholdPreferences(),
+              onAlertThresholdsChanged: (_) async {},
+              cursorPlanSignIn: (_) async => null,
+              statuses: statuses,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      return ['OpenAI', 'Anthropic', 'Cursor']..sort(
+        (left, right) => tester
+            .getTopLeft(find.text(left))
+            .dy
+            .compareTo(tester.getTopLeft(find.text(right)).dy),
+      );
+    }
+
+    testWidgets('without a snapshot the families keep a stable name order', (
+      tester,
+    ) async {
+      // Nothing reported yet and nothing connected: the tab still has to open
+      // the same way every time.
+      expect(await shown(tester), ['Anthropic', 'Cursor', 'OpenAI']);
+    });
+
+    testWidgets('the family asking for attention comes first', (tester) async {
+      expect(
+        await shown(
+          tester,
+          statuses: const {
+            ProviderFamily.cursor: ProviderStatus.authRequired,
+            ProviderFamily.openai: ProviderStatus.ok,
+            ProviderFamily.anthropic: ProviderStatus.ok,
+          },
+        ),
+        ['Cursor', 'Anthropic', 'OpenAI'],
+      );
+    });
+
+    testWidgets('a subscription signed in without a pasted secret counts', (
+      tester,
+    ) async {
+      // Nothing was pasted for OpenAI, but Codex is reporting, so the family is
+      // connected and outranks the two that report nothing at all.
+      expect(
+        await shown(
+          tester,
+          statuses: const {ProviderFamily.openai: ProviderStatus.ok},
+        ),
+        ['OpenAI', 'Anthropic', 'Cursor'],
+      );
+    });
+
+    testWidgets('a family with no credential sinks but stays on the tab', (
+      tester,
+    ) async {
+      final store = _MemoryCredentialStore();
+      await store.writeSecret(ProviderConnections.cursorPlatform, 'secret');
+
+      // Cursor has a secret and is healthy; the other two report nothing and
+      // hold nothing, so they follow it — still listed, because this tab is
+      // where one connects them.
+      expect(
+        await shown(
+          tester,
+          store: store,
+          statuses: const {ProviderFamily.cursor: ProviderStatus.ok},
+        ),
+        ['Cursor', 'Anthropic', 'OpenAI'],
+      );
+    });
   });
 }
 

@@ -164,6 +164,22 @@ List<ProviderConnection> providerConnectionCatalog({
   ];
 }
 
+/// The family a snapshot's provider belongs to, or `null` for one this build
+/// does not know.
+///
+/// A subscription and the reporting key beside it are the same family: `codex`
+/// and `openai` are both OpenAI, `claude` and `anthropic` both Anthropic. The
+/// Providers tab shows one card per family, so this is how account data reaches
+/// the card that speaks for it.
+ProviderFamily? providerFamilyOf(String provider) {
+  return switch (provider) {
+    'openai' || 'codex' => ProviderFamily.openai,
+    'anthropic' || 'claude' => ProviderFamily.anthropic,
+    'cursor' => ProviderFamily.cursor,
+    _ => null,
+  };
+}
+
 String providerFamilyLabel(ProviderFamily provider) {
   return switch (provider) {
     ProviderFamily.openai => 'OpenAI',

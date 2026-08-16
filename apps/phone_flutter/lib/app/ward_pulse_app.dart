@@ -8,9 +8,10 @@ import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_repository.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../dashboard/provider_status_color.dart';
-import 'surface_order.dart';
+import '../dashboard/provider_status_severity.dart';
 import '../providers/claude_account_service.dart';
 import '../providers/codex_account_service.dart';
+import '../providers/provider_connection.dart';
 import '../providers/provider_credential_store.dart';
 import '../providers/providers_screen.dart';
 import '../settings/alert_threshold_preferences.dart';
@@ -27,6 +28,7 @@ import '../watchface/watchface_screen.dart';
 import '../widget/phone_widget_preferences.dart';
 import '../widget/phone_widget_sync.dart';
 import '../widget/widget_screen.dart';
+import 'surface_order.dart';
 import 'ward_pulse_theme.dart';
 
 class WardPulseApp extends StatelessWidget {
@@ -500,6 +502,25 @@ class _DashboardHostState extends State<DashboardHost> {
     _reload();
   }
 
+  /// Worst status each family is reporting, for the Providers order.
+  ///
+  /// Accounts only: that tab manages connections, so a plan meter crossing its
+  /// own threshold is not what should pull a card to the top of it.
+  Map<ProviderFamily, ProviderStatus> _providerStatuses(
+    DashboardSnapshot? snapshot,
+  ) {
+    final byFamily = <ProviderFamily, List<ProviderStatus>>{};
+    for (final account in snapshot?.accounts ?? const <ProviderSnapshot>[]) {
+      if (providerFamilyOf(account.provider) case final family?) {
+        byFamily.putIfAbsent(family, () => []).add(account.status);
+      }
+    }
+    return {
+      for (final entry in byFamily.entries)
+        entry.key: worstProviderStatus(entry.value),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<DashboardSnapshot>(
@@ -552,6 +573,7 @@ class _DashboardHostState extends State<DashboardHost> {
                 onCredentialsChanged: _onCredentialsChanged,
                 alertThresholds: _alertThresholds,
                 onAlertThresholdsChanged: _updateAlertThresholds,
+                statuses: _providerStatuses(snapshot),
               ),
               _ when _selectedIndex == _settingsIndex => SettingsScreen(
                 key: const ValueKey('settings'),

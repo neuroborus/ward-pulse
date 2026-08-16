@@ -70,9 +70,14 @@ void main() {
     await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
 
-    expect(find.text('OpenAI'), findsOneWidget);
-    expect(find.text('Anthropic'), findsOneWidget);
-    expect(find.text('Cursor'), findsOneWidget);
+    // Which family sits where is the tab's own business
+    // (providers_screen_test.dart); this test only asks that the catalog
+    // opened, so it scrolls to the row instead of assuming a position.
+    await tester.scrollUntilVisible(
+      find.text('Codex subscription'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Codex subscription'), findsOneWidget);
     expect(find.text('Not connected'), findsWidgets);
   });
@@ -453,7 +458,12 @@ void main() {
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.byTooltip('Alert thresholds').first);
+    await tester.tap(
+      find.descendant(
+        of: find.widgetWithText(ListTile, 'Codex subscription'),
+        matching: find.byTooltip('Alert thresholds'),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Alerts ·'), findsOneWidget);
@@ -620,6 +630,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(credentialStore.openAiSecret, 'secret-admin-key');
+    await tester.scrollUntilVisible(
+      find.text('Connected'),
+      -300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Connected'), findsOneWidget);
     expect(find.text('secret-admin-key'), findsNothing);
   });
@@ -667,6 +682,11 @@ void main() {
 
     expect(credentialStore.openAiSecret, 'secret-admin-key');
     expect(credentialStore.openAiLabel, 'Work org key');
+    await tester.scrollUntilVisible(
+      find.text('Work org key'),
+      -300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Work org key'), findsOneWidget);
     expect(find.text('Platform reporting'), findsNothing);
 
@@ -995,9 +1015,14 @@ void main() {
     expect(preferences.value, isTrue);
     await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
-    expect(find.text('OpenAI'), findsOneWidget);
-    expect(find.text('Anthropic'), findsOneWidget);
-    expect(find.text('Cursor'), findsOneWidget);
+    // Which family sits where is the tab's own business
+    // (providers_screen_test.dart); this test only asks that the catalog
+    // opened, so it scrolls to the row instead of assuming a position.
+    await tester.scrollUntilVisible(
+      find.text('Codex subscription'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Codex subscription'), findsOneWidget);
   });
 

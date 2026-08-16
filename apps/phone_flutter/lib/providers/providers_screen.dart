@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../app/pull_to_refresh_list.dart';
+import '../app/surface_order.dart';
+import '../dashboard/dashboard_models.dart';
 import '../settings/alert_threshold_preferences.dart';
 import 'alert_threshold_dialogs.dart';
 import 'claude_account_row.dart';
@@ -24,6 +26,7 @@ class ProvidersScreen extends StatefulWidget {
     required this.alertThresholds,
     required this.onAlertThresholdsChanged,
     this.cursorPlanSignIn,
+    this.statuses = const {},
     required this.onRefresh,
   });
 
@@ -40,6 +43,11 @@ class ProvidersScreen extends StatefulWidget {
 
   /// Test seam; defaults to [CursorPlanSignInScreen.open].
   final CursorPlanSignIn? cursorPlanSignIn;
+
+  /// What each family is reporting, worst account first. Only the order reads
+  /// it: a tab for managing connections leads with the one asking to be
+  /// managed. Empty until a snapshot lands.
+  final Map<ProviderFamily, ProviderStatus> statuses;
 
   /// Pull-to-refresh reload, shared with the app-bar action.
   final Future<void> Function() onRefresh;
@@ -314,14 +322,54 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     );
   }
 
+  /// Families in the order this tab declares: the ones asking for attention
+  /// first, the ones with no credential last, ties broken by a stable name.
+  ///
+  /// Rows inside a card keep their plan-then-platform layout — that pairing is
+  /// how the card reads, not an order to sort.
+  int _compareFamilies(ProviderFamily left, ProviderFamily right) {
+    final connectedCmp = (_isConnected(right) ? 1 : 0).compareTo(
+      _isConnected(left) ? 1 : 0,
+    );
+    if (connectedCmp != 0) {
+      return connectedCmp;
+    }
+    final statusCmp = compareByStatus(_statusOf(left), _statusOf(right));
+    if (statusCmp != 0) {
+      return statusCmp;
+    }
+    // The enum name, not the label: renaming OpenAI must not move its card.
+    return left.name.compareTo(right.name);
+  }
+
+  /// Reporting accounts, or a stored secret no poll has used yet.
+  ///
+  /// A subscription signed in through its account service never reaches
+  /// [_hasSecret] — only pasted secrets do — but it does reach the snapshot,
+  /// and a family with accounts in the snapshot is a family that is connected.
+  bool _isConnected(ProviderFamily family) {
+    return widget.statuses.containsKey(family) ||
+        _hasSecret.entries.any(
+          (entry) =>
+              entry.value &&
+              ProviderConnectionId.fromStorageKey(entry.key)?.provider ==
+                  family,
+        );
+  }
+
+  ProviderStatus _statusOf(ProviderFamily family) {
+    return widget.statuses[family] ?? ProviderStatus.unknown;
+  }
+
   @override
   Widget build(BuildContext context) {
     final catalog = providerConnectionCatalog(platformLabels: _labels);
+    final families = ProviderFamily.values.toList()..sort(_compareFamilies);
 
     return PullToRefreshList(
       onRefresh: widget.onRefresh,
       children: [
-        for (final provider in ProviderFamily.values) ...[
+        for (final provider in families) ...[
           Card(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
