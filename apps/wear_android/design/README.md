@@ -37,6 +37,6 @@ convert -background none -density 144 \
 xdg-open apps/wear_android/design/preview-glance-legend-3.png
 ```
 
-Variants: `glance-legend-3`, `glance-legend-1`, `glance-legend-budget`,
-`glance-legend-stale`, `glance-legend-cadence`, `glance-legend-rate-limit`,
-`glance-legend-empty`, `glance-legend-exhausted`.
+Variants: `glance-legend-3`, `glance-legend-1`, `glance-legend-pair`,
+`glance-legend-budget`, `glance-legend-stale`, `glance-legend-cadence`,
+`glance-legend-rate-limit`, `glance-legend-empty`, `glance-legend-exhausted`.

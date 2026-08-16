@@ -27,6 +27,9 @@ const FAMILY = {
   codex: '#65D78A',
   claude: '#E8915A',
   cursor: '#67E8D4',
+  // A Cursor plan's own models keep a color of their own; the external pool
+  // stays the family teal (`WATCH_RING_DESIGN.md`, palette).
+  cursorOwn: '#7E93B8',
 }
 
 /** `#AARRGGBB` from Android resources → SVG colour plus separate opacity. */
@@ -200,7 +203,7 @@ const MEDIUM_ROWS = [
     family: null,
     pool: 'Cursor Models',
     credits: '2.1K credits',
-    color: FAMILY.cursor,
+    color: FAMILY.cursorOwn,
   },
 ]
 

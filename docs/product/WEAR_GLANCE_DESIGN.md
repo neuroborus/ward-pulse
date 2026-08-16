@@ -33,7 +33,7 @@ map face colors to providers.
   (●)  Claude · 5h
        39% left · 80 credits
 
-  (●)  Cursor · Cursor Models
+  (●)  Cursor Models
        53% left
 
       [ Alerts: 0 ]          ← pill button; disabled when N = 0
@@ -44,7 +44,9 @@ Rules:
 - One row = one selected ring metric from the watch summary (same set as the face).
 - Row order = **tightest remaining first** (highest `usedPercent` first; equal percents break
   ties by credit request-runway from internal costs — credits shown, not request counts),
-  matching the face.
+  matching the face. A pair is one band, so its two rows stay **together**, own pool first: the
+  band takes its place in the order and the second pool follows it, wherever its own percent
+  would have landed alone.
 - Mini arc = **remaining** (`100 - usedPercent`), family color from the face palette;
   same clockwise-from-12 melt as the watch face (usage gap opens at 12).
 - Primary line: family/provider + metric label. Codex keeps `Weekly plan`; Cursor Pro+/Ultra
@@ -144,6 +146,7 @@ xdg-open apps/wear_android/design/preview-glance-legend-3.png
 |------|---------|
 | `glance-legend-3.svg` | **Primary** — three providers, `OK` refresh enabled, Alerts disabled |
 | `glance-legend-1.svg` | Single provider with credits |
+| `glance-legend-pair.svg` | A Cursor plan's two pools — two rows, two colours, one band on the face |
 | `glance-legend-budget.svg` | Plan rows (with credits) + a connection budget row (family color, no credits) |
 | `glance-legend-stale.svg` | `!OK` + detail `Stale`, refresh enabled, Alerts active |
 | `glance-legend-cadence.svg` | Healthy `OK` but refresh **disabled** (cadence cooldown; no detail) |

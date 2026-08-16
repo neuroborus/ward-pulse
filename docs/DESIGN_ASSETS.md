@@ -88,7 +88,7 @@ remaining arcs melt clockwise from 12). Primary preview:
 Wear **app** Glance legend (**baseline locked 2026-07-26**, not the face):
 `tools/render-wear-glance-designs.mjs` → `glance-legend-*.svg` /
 `preview-glance-legend-*.png`. Primary preview:
-`apps/wear_android/design/preview-glance-legend-3.png`. Variants: `3`, `1`, `budget`,
+`apps/wear_android/design/preview-glance-legend-3.png`. Variants: `3`, `1`, `pair`, `budget`,
 `stale`, `cadence`, `rate-limit`, `empty`, `exhausted`.
 See [`product/WEAR_GLANCE_DESIGN.md`](product/WEAR_GLANCE_DESIGN.md).
 

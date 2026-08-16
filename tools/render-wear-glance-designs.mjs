@@ -30,12 +30,25 @@ const FONT_FILE = '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf'
 const SIZE = 450
 
 // A budget row belongs to one connection and takes that connection's family
-// color, so `cursorPlatform` repeats the Cursor teal on purpose.
+// color, so `cursorPlatform` repeats the Cursor teal on purpose. A Cursor plan's
+// own models carry a color of their own (`WATCH_RING_DESIGN.md`, palette).
 const FAMILY = {
   codex: { name: 'Codex', color: '#65D78A' },
   claude: { name: 'Claude', color: '#E8915A' },
   cursor: { name: 'Cursor', color: '#67E8D4' },
+  cursorOwn: { name: 'Cursor', color: '#7E93B8' },
   cursorPlatform: { name: 'Cursor platform', color: '#67E8D4' },
+}
+
+/**
+ * Wear drops the family prefix when the pool name already opens with it
+ * (`glancePrimaryLabel`), so the board must not print `Cursor · Cursor Models`.
+ */
+function rowTitle(row) {
+  // Wear compares the first word, not a prefix, so `Cursorish` would still be named.
+  return row.metric.split(' ')[0] === row.family.name
+    ? row.metric
+    : `${row.family.name} · ${row.metric}`
 }
 
 /**
@@ -204,7 +217,7 @@ function glanceSvg({
   const alertsText = alertsActive ? LABEL : DISABLED
 
   const ordered = sortByRemaining(rows)
-  const titles = ordered.map((row) => `${row.family.name} · ${row.metric}`)
+  const titles = ordered.map(rowTitle)
   const subs = ordered.map((row) => rowSubLine(row))
   const titleMetrics = loadFontMetrics(titleSize, titles)
   const subMetrics = loadFontMetrics(subSize, [...subs, alertsLabel])
@@ -292,7 +305,7 @@ function glanceSvg({
 
     for (const row of ordered) {
       const remaining = 1 - row.used
-      const title = `${row.family.name} · ${row.metric}`
+      const title = rowTitle(row)
       const sub = rowSubLine(row)
       const rowMid = y + rowH / 2
       body += miniArc({
@@ -356,7 +369,7 @@ const three = [
   { family: FAMILY.codex, metric: 'Weekly plan', used: 0.92, credits: '320' },
   { family: FAMILY.claude, metric: '5h', used: 0.61, credits: '80' },
   // Matches fixtures/providers/cursor/usage_summary.json autoPercentUsed.
-  { family: FAMILY.cursor, metric: 'Cursor Models', used: 0.47 },
+  { family: FAMILY.cursorOwn, metric: 'Cursor Models', used: 0.47 },
 ]
 
 const variants = [
@@ -375,6 +388,25 @@ const variants = [
     refreshEnabled: true,
     rows: [
       { family: FAMILY.codex, metric: 'Weekly plan', used: 0.92, credits: '320' },
+    ],
+    alerts: 0,
+  },
+  {
+    // One band on the face, two rows here: Glance never shares a row
+    // (`WEAR_GLANCE_DESIGN.md`, palette). Keep the pair adjacent and own-models
+    // first — the app emits the second pool right after its band, so a sample
+    // that interleaves another provider between them could not occur.
+    file: 'glance-legend-pair.svg',
+    name: 'Glance · legend · Cursor pair · OK refresh',
+    ok: true,
+    refreshEnabled: true,
+    rows: [
+      { family: FAMILY.codex, metric: 'Weekly plan', used: 0.92, credits: '320' },
+      { family: FAMILY.cursorOwn, metric: 'Cursor Models', used: 0.47 },
+      // The fixture's external pool is exhausted (`apiPercentUsed` 100), which
+      // collapses the pair and shows nothing here, so this one value is chosen:
+      // far enough from 47 to read as a second pool, not a rounding of the first.
+      { family: FAMILY.cursor, metric: 'Other Models', used: 0.38 },
     ],
     alerts: 0,
   },
