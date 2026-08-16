@@ -10,14 +10,20 @@ ProviderStatus worstProviderStatus(Iterable<ProviderStatus> statuses) {
     return ProviderStatus.unknown;
   }
   return statuses.reduce(
-    (worst, status) => _severity(status) > _severity(worst) ? status : worst,
+    (worst, status) =>
+        providerStatusSeverity(status) > providerStatusSeverity(worst)
+            ? status
+            : worst,
   );
 }
 
 /// Aggregation rank. Ranks are distinct, so [worstProviderStatus] never depends
 /// on input order. `unknown` outranks `ok`: a surface that reported nothing must
 /// not read as healthy.
-int _severity(ProviderStatus status) {
+///
+/// Public so that a surface ordering its rows by "needs action" ranks them on
+/// this scale instead of inventing a second one.
+int providerStatusSeverity(ProviderStatus status) {
   return switch (status) {
     ProviderStatus.ok => 1,
     ProviderStatus.unknown => 2,
