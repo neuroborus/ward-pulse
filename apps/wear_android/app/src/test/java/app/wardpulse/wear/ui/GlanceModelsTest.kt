@@ -185,6 +185,60 @@ class GlanceModelsTest {
         assertEquals(RingFamily.colorArgb("allowance.cursor.cursor-plan-other"), rows[1].colorArgb)
     }
 
+    /**
+     * A pair is one band, so its rows travel with it: the phone ranks bands, and
+     * the second pool follows its own band rather than its own percent
+     * (`WEAR_GLANCE_DESIGN.md`). The board sorts every row by remaining, which is
+     * why this is worth pinning here.
+     */
+    @Test
+    fun legendRows_keepAPairTogetherWhereItsBandLands() {
+        val rows =
+            glanceLegendRows(
+                baseSummary(
+                    rings =
+                        listOf(
+                            RingSummary(
+                                "allowance.codex.week",
+                                "Weekly plan",
+                                92.0,
+                                PulseStatus.OK,
+                            ),
+                            RingSummary(
+                                "allowance.cursor.cursor-plan-models",
+                                "Cursor Models",
+                                53.0,
+                                PulseStatus.OK,
+                                // Loosest metric on the watch: sorted on its own
+                                // percent it would come last, not second.
+                                split =
+                                    RingHalf(
+                                        "allowance.cursor.cursor-plan-other",
+                                        "Other Models",
+                                        20.0,
+                                        PulseStatus.OK,
+                                    ),
+                            ),
+                            RingSummary(
+                                "budget.today",
+                                "Today",
+                                40.0,
+                                PulseStatus.OK,
+                            ),
+                        ),
+                ),
+            )
+        assertEquals(
+            listOf(
+                "Codex · Weekly plan",
+                "Cursor Models",
+                "Cursor · Other Models",
+                "Budget · Today",
+            ),
+            rows.map { it.title },
+        )
+    }
+
     @Test
     fun legendRows_keepPhoneComposedBudgetLabel() {
         val rows =
