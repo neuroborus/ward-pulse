@@ -194,8 +194,9 @@ on its own value.
    stays the rule for every other strip: two of the same colour would say a thing twice, which is
    the defect this language exists to avoid. The second marker cannot be painted from the band's
    own strip slot: `[COMPLICATION.RANGED_VALUE_COLORS]` is scoped to one `ComplicationSlot`, so
-   the two ends need two of them. Rule 7's budget leaves exactly one spare — the fourth strip —
-   and spending it here is the open question; the fallback is one marker and two percentages.
+   the two ends need two of them. The fourth strip — the last spare rule 7's budget had — was
+   spent on this on **2026-08-16**: one slot for all three rows, the row chosen by its own
+   `TITLE`, the same shape as the shared ring slot. The eight-slot budget is now fully spent.
 5. **A split strip carries no credits.** The well is measured for one worst-case label, and two
    percentages spend that width. Nothing is lost: Glance already lists purchased credits per
    provider, and that is where a reader looks for a number rather than a warning.
@@ -210,8 +211,9 @@ on its own value.
    payload is shaped: the entry travels whole and Wear publishes its two pools separately. Where
    they land is decided by a hard limit: **a WFF scene holds at most eight `ComplicationSlot`
    elements** (`maxOccurs="8"`, unchanged in format versions 2, 4 and 5), and this face has held
-   exactly eight since 2026-07-25 — four ring slots and four strips. A second slot per band would
-   need nine and does not exist.
+   exactly eight since 2026-07-25. A second slot per band would need nine and does not exist.
+   What those eight *are* has changed twice since — the fourth ring became the shared outer half,
+   the fourth strip became the split marker — but never how many.
    So the outer half gets **one slot for all three bands**, taking over the fourth ring slot the
    face declares and never draws. Its `BoundingArc` is thick enough to reach every band, and a
    `Condition` on its own `TITLE` — the band index, written by the watch — picks which band it
@@ -308,9 +310,11 @@ stack reached radius 142.3 and would have cut into the widened inner band.
 
 Only three strips render, matching the three-ring cap. The fourth **ring** slot is no longer a
 fourth ring at all: since the split-band revision shipped it draws the outer half of whichever
-band is shared, at whatever radius that band sits (Split band, rule 7). A fourth **strip** slot
-is still declared and still undrawn, its geometry not kept clear of the third band — and it is
-the only spare the eight-slot budget has left.
+band is shared, at whatever radius that band sits (Split band, rule 7). The fourth **strip** slot is no longer a fourth row
+either: since 2026-08-16 it carries the far-end marker of a split strip, a box over all three
+rows that paints one 3x14 arc at the right edge of the row its `TITLE` names (measured on the
+watch: the marker lands at x 265–268 of the 181–269 strip, on the paired row only). Nothing in
+the eight-slot budget is spare now.
 
 `tools/render-watch-ring-designs.mjs` carries the same measured values, so review art shows
 what the watch shows. Before that revision the generator drew the nominal 26, roughly 2.3x

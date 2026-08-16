@@ -174,10 +174,10 @@
         </service>
 
         <service
-            android:name=".complication.Strip4ComplicationDataSourceService"
+            android:name=".complication.StripSplitComplicationDataSourceService"
             android:exported="true"
             android:icon="@drawable/ic_complication"
-            android:label="@string/strip4_complication"
+            android:label="@string/split_marker_complication"
             android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
             <intent-filter>
                 <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />

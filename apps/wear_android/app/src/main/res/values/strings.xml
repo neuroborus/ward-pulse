@@ -8,6 +8,6 @@
     <string name="tokens_complication">WardPulse strip 1</string>
     <string name="strip2_complication">WardPulse strip 2</string>
     <string name="strip3_complication">WardPulse strip 3</string>
-    <string name="strip4_complication">WardPulse strip 4</string>
+    <string name="split_marker_complication">WardPulse · split marker</string>
     <string name="ring_split_complication">WardPulse · other pool</string>
 </resources>

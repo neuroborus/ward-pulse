@@ -354,12 +354,50 @@ class Strip3ComplicationDataSourceService : RingStripComplicationDataSourceServi
     override val previewColorArgb = RingFamily.CURSOR
 }
 
-class Strip4ComplicationDataSourceService : RingStripComplicationDataSourceService() {
-    override val ringIndex = 3
-    // The budget slot: the editor should show what a budget strip reads, in the
-    // family colour such a ring carries.
-    override val previewText = "\$12.34/100"
-    override val previewColorArgb = RingFamily.CLAUDE
+/**
+ * The far end of a split band's strip (`WATCH_RING_DESIGN.md`, Split band, rule
+ * 4): one marker, in the second pool's colour, on the row that band occupies.
+ *
+ * `[COMPLICATION.RANGED_VALUE_COLORS]` is scoped to its own slot, so the second
+ * colour cannot come from the strip that already carries the first. TITLE is the
+ * strip row — the payload index, which strips use directly — and the face turns
+ * it into a position. `NoData` while no band is shared.
+ */
+class StripSplitComplicationDataSourceService : SuspendingComplicationDataSourceService() {
+    override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
+        if (request.complicationType != ComplicationType.RANGED_VALUE) {
+            return null
+        }
+        val rings = WatchSummaryStore(this).load()?.rings.orEmpty()
+        val row = rings.indexOfFirst { it.split != null }
+        val half = rings.getOrNull(row)?.split ?: return NoDataComplicationData()
+        val remaining = WatchComplicationText.remainingPercent(half.usedPercent)
+        if (remaining <= 0f) {
+            return NoDataComplicationData()
+        }
+        // `ranged`, not `strip`: the row travels in TITLE, and this slot draws a
+        // marker rather than a label.
+        return ComplicationBuilders.ranged(
+            this,
+            remaining,
+            title = row.toString(),
+            colorArgb = RingFamily.colorArgb(half.id),
+            contentDescription = half.label,
+        )
+    }
+
+    override fun getPreviewData(type: ComplicationType): ComplicationData? =
+        if (type == ComplicationType.RANGED_VALUE) {
+            ComplicationBuilders.ranged(
+                this,
+                62f,
+                title = "0",
+                colorArgb = RingFamily.CURSOR,
+                contentDescription = "Other Models",
+            )
+        } else {
+            null
+        }
 }
 
 object WatchComplicationText {
@@ -515,7 +553,7 @@ object WatchComplicationUpdater {
         TokensComplicationDataSourceService::class.java,
         Strip2ComplicationDataSourceService::class.java,
         Strip3ComplicationDataSourceService::class.java,
-        Strip4ComplicationDataSourceService::class.java,
+        StripSplitComplicationDataSourceService::class.java,
     )
 
     fun requestUpdate(context: Context) {

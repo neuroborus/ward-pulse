@@ -231,8 +231,17 @@ const STRIPS = [
   { slotId: 104, service: 'Tokens' },
   { slotId: 107, service: 'Strip2' },
   { slotId: 108, service: 'Strip3' },
-  { slotId: 109, service: 'Strip4' },
 ]
+
+/**
+ * The far end of a split band's strip: one slot for all three rows, the last
+ * one the eight-slot budget had (`WATCH_RING_DESIGN.md`, Split band, rule 4).
+ * `[COMPLICATION.RANGED_VALUE_COLORS]` is scoped to its own slot, so the second
+ * colour cannot come from the strip that already carries the first; it comes
+ * from here, and TITLE — the strip row, which is the payload index — says which
+ * row to mark.
+ */
+const SPLIT_MARKER = { slotId: 109, service: 'StripSplit' }
 
 /** Every slot names a service in the Wear app; nothing else may fill them. */
 function provider(service) {
@@ -666,6 +675,62 @@ function stripSlot({ slotId, service }, index) {
         </ComplicationSlot>`
 }
 
+/** Mirrors the accent on the left of a strip, at the right edge of one row. */
+function splitMarkerSlot() {
+  const { width, height, pitch } = STRIP
+  const rows = STRIPS.length
+  const branches = STRIPS.map(
+    (_, index) => `                    <Compare expression="isRow${index}">
+                        <PartDraw x="0" y="${index * pitch}" width="${width}" height="${height}">
+                            <Arc
+                                centerX="${width - 1.5}"
+                                centerY="${height / 2}"
+                                width="3"
+                                height="14"
+                                startAngle="${SWEEP.start}"
+                                endAngle="${SWEEP.end}">
+                                <WeightedStroke
+                                    thickness="3"
+                                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                    cap="BUTT" />
+                            </Arc>
+                        </PartDraw>
+                    </Compare>`,
+  ).join('\n')
+  const expressions = STRIPS.map(
+    (_, index) =>
+      `                        <Expression name="isRow${index}"><![CDATA[[COMPLICATION.TITLE] == "${index}"]]></Expression>`,
+  ).join('\n')
+  return `        <ComplicationSlot
+            x="${STRIP.x}"
+            y="${STRIP.top}"
+            width="${width}"
+            height="${(rows - 1) * pitch + height}"
+            slotId="${SPLIT_MARKER.slotId}"
+            displayName="@string/split_marker_complication"
+            supportedTypes="RANGED_VALUE EMPTY"
+            isCustomizable="FALSE">
+            <DefaultProviderPolicy
+                primaryProvider="${provider(SPLIT_MARKER.service)}"
+                primaryProviderType="RANGED_VALUE"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <BoundingBox x="0" y="0" width="${width}" height="${(rows - 1) * pitch + height}" />
+            <Complication type="RANGED_VALUE">
+                <Group x="0" y="0" width="${width}" height="${(rows - 1) * pitch + height}" name="split_marker" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <Condition>
+                        <Expressions>
+${expressions}
+                        </Expressions>
+${branches}
+                    </Condition>
+                </Group>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>`
+}
+
 function face() {
   // A blank line means "a different slot starts here". The lift is the ground
   // the first ring sits on and the comment introduces the strip stack, so
@@ -673,7 +738,12 @@ function face() {
   const body = [
     [lift(), RINGS.map(ringSlot).join('\n\n'), outerHalfSlot()].join('\n\n'),
     clock(),
-    [wordmark(), stripComment(), STRIPS.map(stripSlot).join('\n\n')].join('\n'),
+    [
+      wordmark(),
+      stripComment(),
+      STRIPS.map(stripSlot).join('\n\n'),
+      splitMarkerSlot(),
+    ].join('\n'),
   ].join('\n\n')
   return `${HEADER}
 <WatchFace width="${FACE.size}" height="${FACE.size}">
