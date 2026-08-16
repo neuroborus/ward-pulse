@@ -189,9 +189,13 @@ function esc(text) {
 function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
   const circ = 2 * Math.PI * r
   const left = Math.max(0.02, Math.min(remaining, 0.999))
-  const paint = circ * left
   const valueColor = ambient ? '#8A968F' : color
-  const used = circ * (1 - left)
+  // Round caps reach half a thickness past each end, so the drawn span is
+  // shortened by one cap on each side and started half a cap later: what the
+  // eye sees then ends where the value does, as on the face
+  // (`WATCH_RING_DESIGN.md`, Ring geometry).
+  const paint = Math.max(0, circ * left - thickness)
+  const used = circ * (1 - left) + thickness / 2
   return `
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
       stroke-width="${thickness}" />

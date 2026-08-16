@@ -13,22 +13,22 @@
       stroke-width="20.205000000000002" />
     <circle cx="225" cy="225" r="143.91" fill="none" stroke="#65D78A"
       stroke-width="20.205000000000002" stroke-linecap="round"
-      stroke-dasharray="72.34 904.21"
-      stroke-dashoffset="-831.88"
+      stroke-dasharray="52.13 904.21"
+      stroke-dashoffset="-841.98"
       transform="rotate(-90 225 225)" />
     <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#2E3632"
       stroke-width="20.205000000000002" />
     <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#7E93B8"
       stroke-width="20.205000000000002" stroke-linecap="round"
-      stroke-dasharray="559.11 1054.92"
-      stroke-dashoffset="-495.81"
+      stroke-dasharray="538.90 1054.92"
+      stroke-dashoffset="-505.91"
       transform="rotate(-90 225 225)" />
     <circle cx="225" cy="225" r="191.88" fill="none" stroke="#2E3632"
       stroke-width="20.205000000000002" />
     <circle cx="225" cy="225" r="191.88" fill="none" stroke="#E8915A"
       stroke-width="20.205000000000002" stroke-linecap="round"
-      stroke-dasharray="862.02 1205.62"
-      stroke-dashoffset="-343.60"
+      stroke-dasharray="841.81 1205.62"
+      stroke-dashoffset="-353.70"
       transform="rotate(-90 225 225)" />
     <g font-family="Noto Sans, sans-serif" font-size="22.1"
       font-weight="700" fill="#0A0D0B" fill-opacity="0.45"

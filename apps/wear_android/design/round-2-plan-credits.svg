@@ -13,15 +13,15 @@
       stroke-width="20.205000000000002" />
     <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#65D78A"
       stroke-width="20.205000000000002" stroke-linecap="round"
-      stroke-dasharray="84.39 1054.92"
-      stroke-dashoffset="-970.52"
+      stroke-dasharray="64.19 1054.92"
+      stroke-dashoffset="-980.62"
       transform="rotate(-90 225 225)" />
     <circle cx="225" cy="225" r="191.88" fill="none" stroke="#2E3632"
       stroke-width="20.205000000000002" />
     <circle cx="225" cy="225" r="191.88" fill="none" stroke="#E8915A"
       stroke-width="20.205000000000002" stroke-linecap="round"
-      stroke-dasharray="470.19 1205.62"
-      stroke-dashoffset="-735.43"
+      stroke-dasharray="449.99 1205.62"
+      stroke-dashoffset="-745.53"
       transform="rotate(-90 225 225)" />
   
     <text x="225" y="250.1" text-anchor="middle"

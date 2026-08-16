@@ -13,29 +13,29 @@
       stroke-width="20.205000000000002" />
     <circle cx="225" cy="225" r="143.91" fill="none" stroke="#65D78A"
       stroke-width="20.205000000000002" stroke-linecap="round"
-      stroke-dasharray="72.34 904.21"
-      stroke-dashoffset="-831.88"
+      stroke-dasharray="52.13 904.21"
+      stroke-dashoffset="-841.98"
       transform="rotate(-90 225 225)" />
     <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#2E3632"
       stroke-width="20.205000000000002" />
     <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#E8915A"
       stroke-width="20.205000000000002" stroke-linecap="round"
-      stroke-dasharray="411.42 1054.92"
-      stroke-dashoffset="-643.50"
+      stroke-dasharray="391.21 1054.92"
+      stroke-dashoffset="-653.60"
       transform="rotate(-90 225 225)" />
     <circle cx="225" cy="225" r="186.82874999999999" fill="none" stroke="#2E3632"
       stroke-width="10.102500000000001" />
     <circle cx="225" cy="225" r="186.82874999999999" fill="none" stroke="#7E93B8"
       stroke-width="10.102500000000001" stroke-linecap="round"
-      stroke-dasharray="622.16 1173.88"
-      stroke-dashoffset="-551.72"
+      stroke-dasharray="612.05 1173.88"
+      stroke-dashoffset="-556.77"
       transform="rotate(-90 225 225)" />
     <circle cx="225" cy="225" r="196.93125" fill="none" stroke="#2E3632"
       stroke-width="10.102500000000001" />
     <circle cx="225" cy="225" r="196.93125" fill="none" stroke="#67E8D4"
       stroke-width="10.102500000000001" stroke-linecap="round"
-      stroke-dasharray="767.16 1237.36"
-      stroke-dashoffset="-470.20"
+      stroke-dasharray="757.06 1237.36"
+      stroke-dashoffset="-475.25"
       transform="rotate(-90 225 225)" />
   
     <text x="225" y="250.1" text-anchor="middle"

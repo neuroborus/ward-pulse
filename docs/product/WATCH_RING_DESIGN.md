@@ -270,6 +270,14 @@ neighbouring bands touch, and a first attempt at pitch 21 still left a 0.8-unit 
 because the band renders 20.2, not the 18.8 a 0.44 factor predicted. Measure after every
 change — the factor is not exact.
 
+**A `ROUND` cap reaches past the angle it is drawn to, so the melt is inset by one.** Measured
+2026-08-16: a 40-unit band at radius 159 lost **6.42° per end**, half its nominal thickness laid
+along the arc, so a ring at 4% used showed a 3° gap instead of 14° and read as closed. The face
+now draws the melt short by one cap at each end (`capDegrees` in `tools/render-watchface.mjs`),
+and the caps fill exactly what the inset freed: at 50% used the gap measures **180.3°** against
+a true 179.95°, on the full band and on both halves alike. Review art carries the same inset,
+which is why the boards and the watch still agree.
+
 **Halves of a band, measured 2026-08-13.** A split band (see Split band) is two arcs inside one
 ring slot, and the numbers that work are **centre lines at `outer − 5` and `outer − 15`, both at
 `thickness="10"`** — 197 and 187 on the outermost band, 173 and 163 on the next, 149 and 139 on

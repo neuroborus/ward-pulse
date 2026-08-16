@@ -93,10 +93,10 @@
                                             width="374"
                                             height="374"
                                             startAngle="0"
-                                            endAngle="359.9">
+                                            endAngle="358.37">
                                             <Transform
                                                 target="startAngle"
-                                                value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.53, 0, 358.37)" />
                                             <WeightedStroke
                                                 thickness="10"
                                                 colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -126,10 +126,10 @@
                                             width="404"
                                             height="404"
                                             startAngle="0"
-                                            endAngle="359.9">
+                                            endAngle="354.23">
                                             <Transform
                                                 target="startAngle"
-                                                value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 5.67, 0, 354.23)" />
                                             <WeightedStroke
                                                 thickness="40"
                                                 colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -229,10 +229,10 @@
                                             width="326"
                                             height="326"
                                             startAngle="0"
-                                            endAngle="359.9">
+                                            endAngle="358.14">
                                             <Transform
                                                 target="startAngle"
-                                                value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.76, 0, 358.14)" />
                                             <WeightedStroke
                                                 thickness="10"
                                                 colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -262,10 +262,10 @@
                                             width="356"
                                             height="356"
                                             startAngle="0"
-                                            endAngle="359.9">
+                                            endAngle="353.46">
                                             <Transform
                                                 target="startAngle"
-                                                value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 6.44, 0, 353.46)" />
                                             <WeightedStroke
                                                 thickness="40"
                                                 colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -365,10 +365,10 @@
                                             width="278"
                                             height="278"
                                             startAngle="0"
-                                            endAngle="359.9">
+                                            endAngle="357.84">
                                             <Transform
                                                 target="startAngle"
-                                                value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 2.06, 0, 357.84)" />
                                             <WeightedStroke
                                                 thickness="10"
                                                 colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -398,10 +398,10 @@
                                             width="308"
                                             height="308"
                                             startAngle="0"
-                                            endAngle="359.9">
+                                            endAngle="352.46">
                                             <Transform
                                                 target="startAngle"
-                                                value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 7.44, 0, 352.46)" />
                                             <WeightedStroke
                                                 thickness="40"
                                                 colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -494,10 +494,10 @@
                                     width="394"
                                     height="394"
                                     startAngle="0"
-                                    endAngle="359.9">
+                                    endAngle="358.45">
                                     <Transform
                                         target="startAngle"
-                                        value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.45, 0, 358.45)" />
                                     <WeightedStroke
                                         thickness="10"
                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -527,10 +527,10 @@
                                     width="346"
                                     height="346"
                                     startAngle="0"
-                                    endAngle="359.9">
+                                    endAngle="358.24">
                                     <Transform
                                         target="startAngle"
-                                        value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.66, 0, 358.24)" />
                                     <WeightedStroke
                                         thickness="10"
                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -560,10 +560,10 @@
                                     width="298"
                                     height="298"
                                     startAngle="0"
-                                    endAngle="359.9">
+                                    endAngle="357.98">
                                     <Transform
                                         target="startAngle"
-                                        value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.92, 0, 357.98)" />
                                     <WeightedStroke
                                         thickness="10"
                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"

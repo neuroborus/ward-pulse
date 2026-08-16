@@ -13,8 +13,8 @@
       stroke-width="20.205000000000002" />
     <circle cx="225" cy="225" r="191.88" fill="none" stroke="#65D78A"
       stroke-width="20.205000000000002" stroke-linecap="round"
-      stroke-dasharray="96.45 1205.62"
-      stroke-dashoffset="-1109.17"
+      stroke-dasharray="76.24 1205.62"
+      stroke-dashoffset="-1119.27"
       transform="rotate(-90 225 225)" />
   
     <text x="225" y="250.1" text-anchor="middle"

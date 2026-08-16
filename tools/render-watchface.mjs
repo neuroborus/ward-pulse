@@ -398,8 +398,23 @@ ${TOKENS.map(({ period }) => ringTextureBranch(diameter, index, period)).join('\
 }
 
 /**
+ * How far a `ROUND` cap reaches past the angle it is drawn to, in degrees of the
+ * band it sits on. Measured on the watch 2026-08-16: a 40-unit band at radius
+ * 159 lost 6.42° of gap per end, which is half the nominal thickness laid along
+ * the arc. Without it a nearly full ring reads as closed — 4% used showed a 3°
+ * gap instead of 14°.
+ */
+function capDegrees(diameter, thickness) {
+  const radius = diameter / 2
+  return Number(((thickness / 2 / radius) * (180 / Math.PI)).toFixed(2))
+}
+
+/**
  * Track plus melt for one arc. The melt keeps its own `PartDraw` so ambient can
  * dim it without touching the track underneath.
+ *
+ * The melt is drawn **inset by one cap at each end**, so what the eye sees ends
+ * where the value does: the caps then fill exactly the space the inset freed.
  */
 function bandArcs(diameter, thickness, pad) {
   return `${pad}<PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}">
@@ -421,10 +436,10 @@ ${pad}        centerY="${FACE.center}"
 ${pad}        width="${diameter}"
 ${pad}        height="${diameter}"
 ${pad}        startAngle="${SWEEP.start}"
-${pad}        endAngle="${SWEEP.end}">
+${pad}        endAngle="${(SWEEP.end - capDegrees(diameter, thickness)).toFixed(2)}">
 ${pad}        <Transform
 ${pad}            target="startAngle"
-${pad}            value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end}" />
+${pad}            value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end} + ${capDegrees(diameter, thickness)}, ${SWEEP.start}, ${(SWEEP.end - capDegrees(diameter, thickness)).toFixed(2)})" />
 ${pad}        <WeightedStroke
 ${pad}            thickness="${thickness}"
 ${pad}            colors="[COMPLICATION.RANGED_VALUE_COLORS]"
