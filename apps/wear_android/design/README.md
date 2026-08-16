@@ -16,8 +16,9 @@ convert -background none -density 144 \
 xdg-open apps/wear_android/design/preview-3-plan-credits.png
 ```
 
-Variants: `round-3-plan-credits`, `round-3-plan-budget`, `round-2-plan-credits`,
-`round-1-plan`, `round-1-plan-credits`, `round-credits-only`, `round-ambient-3`.
+Variants: `round-3-plan-credits`, `round-3-plan-split`, `round-3-plan-budget`,
+`round-2-plan-credits`, `round-1-plan`, `round-1-plan-credits`, `round-credits-only`,
+`round-ambient-3`.
 
 ## App Glance legend (locked)
 

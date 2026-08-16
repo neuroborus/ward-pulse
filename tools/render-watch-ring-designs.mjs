@@ -107,6 +107,18 @@ const CATALOG = {
     used: 0.47,
     color: '#7E93B8',
   },
+  /**
+   * The same plan with both pools alive: one band split lengthwise, own models
+   * inside. The fixture's external pool is exhausted (`apiPercentUsed` 100),
+   * which collapses the pair, so this one value is chosen — far enough from 47
+   * to read as a second pool rather than a rounding of the first.
+   */
+  cursorPair: {
+    id: 'cursor',
+    used: 0.47,
+    color: '#7E93B8',
+    split: { used: 0.38, color: '#67E8D4' },
+  },
   // One connection's three budget periods; percents and money match Wear's
   // PreviewWatchDashboardSummary, so the boards and the preview face show one story.
   anthropicBudgetWeek: {
@@ -190,6 +202,14 @@ function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
       transform="rotate(-90 ${cx} ${cy})" />`
 }
 
+/** Inner half first, then outer: the same order the payload packs a pair in. */
+function ringArcPair(r, band) {
+  return [
+    [r - band / 4, band / 2],
+    [r + band / 4, band / 2],
+  ]
+}
+
 function ringTexture({ cx, cy, r, thickness, period, fromOutside }) {
   const repeats = TEXTURE.repeats[period]?.[fromOutside]
   if (!repeats) {
@@ -222,6 +242,12 @@ function barLabel(layer, { showPlan, showCredits }) {
     } else if (layer.used < 1) {
       parts.push(`${Math.round((1 - layer.used) * 100)}%`)
     }
+  }
+  // A split strip spends the well on its second percent, so credits never join it
+  // (`WATCH_RING_DESIGN.md`, Split band, rules 4 and 5).
+  if (layer.split) {
+    parts.push(`${Math.round((1 - layer.split.used) * 100)}%`)
+    return parts.join(' · ')
   }
   // Credits glue onto the matching provider strip only (review art uses Codex credits).
   if (showCredits && layer.id === 'codex') {
@@ -271,6 +297,16 @@ function providerBars({ layers, showPlan, showCredits, size }) {
       text-anchor="middle" dominant-baseline="central"
       font-family="${FONT}, sans-serif" font-size="${(STRIP.fontSize * k).toFixed(1)}"
       font-weight="700" fill="${LABEL}">${esc(text)}</text>`
+    if (layer.split) {
+      // The far end names the second pool; its colour can only come from a slot
+      // of its own on the face, which is why the fourth strip slot went here.
+      out += `
+    <rect x="${((STRIP.x + STRIP.width - STRIP.accentWidth) * k).toFixed(1)}"
+      y="${(y + ((STRIP.height - STRIP.accentHeight) / 2) * k).toFixed(1)}"
+      width="${(STRIP.accentWidth * k).toFixed(1)}"
+      height="${(STRIP.accentHeight * k).toFixed(1)}"
+      rx="${((STRIP.accentWidth / 2) * k).toFixed(1)}" fill="${layer.split.color}" />`
+    }
   })
   return out
 }
@@ -304,15 +340,32 @@ function faceSvg({
     for (let i = 0; i < planLayers.length; i += 1) {
       const fromOutside = planLayers.length - 1 - i
       const r = outer - fromOutside * (thickness + gap)
-      ringMarkup += ringArc({
-        cx,
-        cy,
-        r,
-        thickness: band,
-        remaining: 1 - planLayers[i].used,
-        color: planLayers[i].color,
-        ambient,
-      })
+      const split = planLayers[i].split
+      if (split) {
+        // Halves of one band: centre lines a quarter-band either side of it,
+        // each half as thick, exactly as the face draws them.
+        ringArcPair(r, band).forEach(([radius, halfBand], half) => {
+          ringMarkup += ringArc({
+            cx,
+            cy,
+            r: radius,
+            thickness: halfBand,
+            remaining: 1 - (half === 0 ? planLayers[i].used : split.used),
+            color: half === 0 ? planLayers[i].color : split.color,
+            ambient,
+          })
+        })
+      } else {
+        ringMarkup += ringArc({
+          cx,
+          cy,
+          r,
+          thickness: band,
+          remaining: 1 - planLayers[i].used,
+          color: planLayers[i].color,
+          ambient,
+        })
+      }
       if (planLayers[i].period) {
         ringMarkup += ringTexture({
           cx,
@@ -393,6 +446,16 @@ const variants = [
     showCredits: true,
   },
   {
+    // The split band: one plan on one band, its two pools in their own colours,
+    // two markers and two percents on the strip it shares
+    // (`WATCH_RING_DESIGN.md`, Split band).
+    file: 'round-3-plan-split.svg',
+    name: 'Round · 3 providers · a Cursor plan sharing one band',
+    layers: [CATALOG.codex, CATALOG.claude, CATALOG.cursorPair],
+    showPlan: true,
+    showCredits: false,
+  },
+  {
     // Codex and Cursor keep their own colors, so the budget ring is the only orange one:
     // pairing it with the Claude plan ring would draw the multi-profile case the document
     // still leaves open.
@@ -455,6 +518,8 @@ const variants = [
 
 const wffFiles = new Set([
   'round-3-plan-credits.svg',
+  // A split band is a face-only channel, so its board belongs beside the face too.
+  'round-3-plan-split.svg',
   // Ring type is a face-only channel, so its board belongs beside the face too.
   'round-3-budget-periods.svg',
   'round-1-plan-credits.svg',

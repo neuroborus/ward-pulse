@@ -7,5 +7,5 @@
 node tools/render-watch-ring-designs.mjs
 ```
 
-Representative copies: `round-3-plan-credits`, `round-1-plan-credits`, `round-credits-only`,
-`round-ambient-3`. Runtime face: `src/main/res/raw/watchface.xml` (concentric remaining arcs).
+Representative copies: `round-3-plan-credits`, `round-3-plan-split`, `round-1-plan-credits`,
+`round-credits-only`, `round-ambient-3`. Runtime face: `src/main/res/raw/watchface.xml` (concentric remaining arcs).
