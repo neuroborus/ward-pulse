@@ -25,6 +25,20 @@ void main() {
     expect(jsonDecode(encodeWindowKeys(keys)), golden['exhausted']);
   });
 
+  test('a recovery keeps its label when the reset instant is unreadable', () {
+    // The core passes provider instants through, so a broken one reaches here;
+    // losing the window over it would cost the whole poll's bookkeeping.
+    final recovery = planRecoveryFromJson({
+      'accountId': 'claude-local',
+      'allowanceId': 'claude-weekly',
+      'label': 'Weekly plan',
+      'resetsAt': 'whenever',
+    });
+
+    expect(recovery.label, 'Weekly plan');
+    expect(recovery.resetsAt, isNull);
+  });
+
   test('a store nothing can read counts as nothing remembered', () {
     // One missed recovery beats a crash on a background poll, and the next one
     // refills the list anyway. Readable-but-wrong counts as unreadable: those

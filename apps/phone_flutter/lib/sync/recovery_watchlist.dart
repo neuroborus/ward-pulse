@@ -2,6 +2,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/plan_recoveries.dart';
+import 'recovery_notifications.dart';
 
 /// The plan windows that were spent when the phone last looked.
 ///
@@ -49,24 +50,55 @@ final class DisabledRecoveryWatchlistStore implements RecoveryWatchlistStore {
   Future<void> write(List<WindowKey> keys) async {}
 }
 
-/// Records which windows [snapshot] reports as spent.
+/// Tells the reader about windows that came back, then remembers what is spent
+/// now.
 ///
 /// Called from both places a fresh snapshot appears — the headless tick and the
 /// foreground load — because they are separate paths, exactly as the watch and
-/// widget pushes are. Failures are swallowed: a snapshot the phone could not
-/// remember costs one missed recovery, never a crashed poll.
+/// widget pushes are.
 ///
-/// [mockData] empties the list instead of filling it. Demo windows are invented,
-/// so remembering them would make the first live poll after leaving demo mode
-/// look like a recovery — a notification about something that never ran out.
-Future<void> rememberExhaustedWindows(
+/// **Notify first, remember second.** Remembering first would lose a recovery
+/// for good if the process died in between: the key is gone and no later poll
+/// can see the edge. Notifying first risks a repeat instead, and a repeat costs
+/// nothing — the notification is keyed by the window and replaces its own
+/// earlier copy. The same property is why the two paths need no lock when they
+/// overlap: they read the same list, report the same windows, and write the
+/// same answer.
+///
+/// [mockData] empties the list instead of filling it, and reports nothing. Demo
+/// windows are invented, so remembering them would make the first live poll
+/// after leaving demo mode look like a recovery.
+Future<void> syncPlanRecoveries(
   DashboardSnapshot snapshot,
-  RecoveryWatchlistStore store, {
+  RecoveryWatchlistStore store,
+  RecoveryNotifier notifier, {
   bool mockData = false,
+  ReadPlanRecoveries readRecoveries = planRecoveries,
+  ReadExhaustedWindows readWindows = exhaustedWindows,
 }) async {
   try {
-    await store.write(mockData ? const [] : exhaustedWindows(snapshot));
+    if (mockData) {
+      await store.write(const []);
+      return;
+    }
+    // An edge needs a past. With nothing remembered there is nothing to have
+    // left, and asking the core would serialize the whole snapshot to be told
+    // so — on most polls, since most of the time nothing is spent.
+    final remembered = await store.read();
+    if (remembered.isNotEmpty) {
+      for (final recovery in readRecoveries(snapshot, remembered)) {
+        try {
+          await notifier.notify(recovery);
+        } catch (_) {
+          // Each window is reported on its own: a notifier that refuses one
+          // must not silence the rest, and must not stop the list below from
+          // moving on. A stuck list would go on missing every later window.
+        }
+      }
+    }
+    await store.write(readWindows(snapshot));
   } catch (_) {
-    // Nothing to say here: the next poll writes the list again.
+    // A poll must never crash over bookkeeping; the next one writes the list
+    // again.
   }
 }

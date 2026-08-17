@@ -23,6 +23,7 @@ import '../settings/watch_ring_preferences.dart';
 import '../sync/headless_provider_sync.dart';
 import '../sync/manual_refresh_window.dart';
 import '../sync/provider_sync_scheduler.dart';
+import '../sync/recovery_notifications.dart';
 import '../sync/recovery_watchlist.dart';
 import '../sync/watch_sync_service.dart';
 import '../watchface/watchface_screen.dart';
@@ -52,6 +53,7 @@ class WardPulseApp extends StatelessWidget {
     this.debugDataAvailable = false,
     this.debugDataPreferenceStore = const DisabledDebugDataPreferenceStore(),
     this.recoveryWatchlistStore = const DisabledRecoveryWatchlistStore(),
+    this.recoveryNotifier = const SilentRecoveryNotifier(),
   });
 
   final DashboardRepository repository;
@@ -70,6 +72,7 @@ class WardPulseApp extends StatelessWidget {
   final bool debugDataAvailable;
   final DebugDataPreferenceStore debugDataPreferenceStore;
   final RecoveryWatchlistStore recoveryWatchlistStore;
+  final RecoveryNotifier recoveryNotifier;
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +98,7 @@ class WardPulseApp extends StatelessWidget {
         debugDataAvailable: debugDataAvailable,
         debugDataPreferenceStore: debugDataPreferenceStore,
         recoveryWatchlistStore: recoveryWatchlistStore,
+        recoveryNotifier: recoveryNotifier,
       ),
     );
   }
@@ -119,6 +123,7 @@ class DashboardHost extends StatefulWidget {
     required this.debugDataAvailable,
     required this.debugDataPreferenceStore,
     required this.recoveryWatchlistStore,
+    required this.recoveryNotifier,
   });
 
   final DashboardRepository repository;
@@ -136,6 +141,7 @@ class DashboardHost extends StatefulWidget {
   final ProviderSyncScheduler syncScheduler;
   final bool debugDataAvailable;
   final DebugDataPreferenceStore debugDataPreferenceStore;
+  final RecoveryNotifier recoveryNotifier;
   final RecoveryWatchlistStore recoveryWatchlistStore;
 
   @override
@@ -372,9 +378,10 @@ class _DashboardHostState extends State<DashboardHost> {
     );
     _currentSnapshot = snapshot;
     unawaited(
-      rememberExhaustedWindows(
+      syncPlanRecoveries(
         snapshot,
         widget.recoveryWatchlistStore,
+        widget.recoveryNotifier,
         mockData: _mockDataEnabled,
       ),
     );

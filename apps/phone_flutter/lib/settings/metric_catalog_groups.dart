@@ -4,8 +4,8 @@ import 'watch_ring_preferences.dart';
 
 /// One connection's rows under a heading: `Codex`, `Anthropic`.
 ///
-/// [id] is what the group sorts on — the connection's storage key, so a heading
-/// can be reworded without moving it. [title] is only what the reader sees.
+/// `id` is what the group sorts on — the connection's storage key, so a heading
+/// can be reworded without moving it. `title` is only what the reader sees.
 typedef MetricConnectionGroup =
     ({String id, String title, List<WatchRingMetric> metrics});
 

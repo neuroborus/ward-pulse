@@ -71,6 +71,10 @@ final class _WardPulseBindings {
           .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
             'ward_pulse_exhausted_windows_result_json',
           ),
+      _planRecoveriesResultJson = library
+          .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
+            'ward_pulse_plan_recoveries_result_json',
+          ),
       _stringFree = library.lookupFunction<_NativeStringFree, _DartStringFree>(
         'ward_pulse_string_free',
       );
@@ -90,6 +94,7 @@ final class _WardPulseBindings {
   final _DartJsonTransform _mergeDashboardSnapshotsResultJson;
   final _DartJsonTransform _applyAlertSettingsResultJson;
   final _DartJsonTransform _exhaustedWindowsResultJson;
+  final _DartJsonTransform _planRecoveriesResultJson;
   final _DartStringFree _stringFree;
 
   String loadDashboardSnapshotJson() {
@@ -154,6 +159,19 @@ final class _WardPulseBindings {
       snapshotJson,
       _exhaustedWindowsResultJson,
       payloadKey: 'windowsJson',
+    );
+  }
+
+  /// Windows from [exhaustedJson] that [snapshotJson] reports usable again.
+  String planRecoveriesJson(String snapshotJson, String exhaustedJson) {
+    final request = jsonEncode({
+      'snapshot': jsonDecode(snapshotJson),
+      'exhausted': jsonDecode(exhaustedJson),
+    });
+    return _normalizeReportJson(
+      request,
+      _planRecoveriesResultJson,
+      payloadKey: 'recoveriesJson',
     );
   }
 
@@ -246,4 +264,8 @@ String applyAlertSettingsJson(String snapshotJson, String settingsJson) {
 
 String exhaustedWindowsJson(String snapshotJson) {
   return _bindings.exhaustedWindowsJson(snapshotJson);
+}
+
+String planRecoveriesJson(String snapshotJson, String exhaustedJson) {
+  return _bindings.planRecoveriesJson(snapshotJson, exhaustedJson);
 }
