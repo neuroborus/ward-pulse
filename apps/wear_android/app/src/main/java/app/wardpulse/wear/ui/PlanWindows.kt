@@ -35,7 +35,7 @@ fun planWindowRows(
 ): List<PlanWindowRow> =
     summary.allowances
         // Purchased meters do not come back, they are bought again.
-        .filter { it.source == PLAN_SOURCE }
+        .filter { it.source == "plan" }
         .sortedWith(planWindowOrder(now))
         .map { allowance ->
             PlanWindowRow(
@@ -55,8 +55,17 @@ private fun planWindowOrder(now: Instant): Comparator<AllowanceSummary> =
         .thenBy { it.returnsAt(now) ?: Instant.MAX }
         .thenBy { it.label }
 
+/**
+ * A window without a share has run out when what it does report has: a plan with
+ * no published ceiling counts down a remainder instead, and a line reading
+ * `0 credits left` belongs at the top like any other empty window.
+ */
 private val AllowanceSummary.isExhausted: Boolean
-    get() = !unlimited && (usedPercent ?: 0.0) >= 100.0
+    get() = when {
+        unlimited -> false
+        usedPercent != null -> usedPercent >= 100.0
+        else -> remaining?.value?.toDoubleOrNull()?.let { it <= 0.0 } == true
+    }
 
 /**
  * The moment this window is next expected to roll, or `null` when it cannot say.
@@ -79,6 +88,10 @@ private fun AllowanceSummary.returnsAt(now: Instant): Instant? {
  * window reporting no percentage is not a full one, and one that cannot name a
  * future moment says nothing about time.
  *
+ * The share falls back to the bare remainder, as the Usage screen does: a plan
+ * with no published limit — Cursor's, when the team ceiling is unknown — knows
+ * how much is left without knowing the share it makes up.
+ *
  * A window that can say neither reads `Unavailable`, the same word the rest of
  * the watch uses for a meter that reported nothing — an empty line under a
  * label would look like a rendering fault instead.
@@ -91,6 +104,7 @@ private fun detailOf(
     val left = when {
         allowance.unlimited -> "Unlimited"
         allowance.usedPercent != null -> "${formatPercentRemainingLabel(allowance.usedPercent)} left"
+        allowance.remaining != null -> "${allowance.remaining.label} left"
         else -> null
     }
     val back = allowance.returnsAt(now)?.let { backLabel(it, now, zone) }
@@ -108,8 +122,6 @@ private fun backLabel(returnsAt: Instant, now: Instant, zone: ZoneId): String {
     val format = if (sameDay) BACK_TODAY_FORMAT else BACK_DATED_FORMAT
     return "back ${format.withZone(zone).format(returnsAt)}"
 }
-
-private const val PLAN_SOURCE = "plan"
 
 private val BACK_TODAY_FORMAT: DateTimeFormatter =
     DateTimeFormatter.ofPattern("'at' HH:mm", Locale.US)

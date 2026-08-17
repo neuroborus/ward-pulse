@@ -41,6 +41,7 @@ import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.ui.theme.WardPulseTheme
+import java.time.Instant
 
 private const val HOME_ROUTE = "home"
 
@@ -50,6 +51,7 @@ private enum class HomePage {
 }
 
 private enum class Screen(val route: String, val label: String) {
+    PLAN_WINDOWS("plan-windows", "Plan windows"),
     USAGE("usage", "Usage"),
     TODAY("today", "Today"),
     WEEK("week", "Week"),
@@ -142,6 +144,11 @@ private fun EmptyDashboardScreen() {
 }
 
 private fun WatchDashboardSummary.rowsFor(screen: Screen): List<SummaryRow> = when (screen) {
+    // When each window comes back, exhausted ones first
+    // (`apps/wear_android/README.md`, Plan windows).
+    Screen.PLAN_WINDOWS -> planWindowRows(this, Instant.now())
+        .map { SummaryRow(it.title, it.detail, it.status) }
+        .ifEmpty { listOf(SummaryRow("No plan windows", "Sync from the phone")) }
     Screen.USAGE -> allowances.map { allowance ->
         SummaryRow(
             allowance.label,
