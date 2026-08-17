@@ -68,6 +68,9 @@ Rules:
   unknown. A reset already behind counts as none, because the provider has not caught up with
   its own clock (Cursor aggregates about hourly), and printing a moment that has passed would
   say the window is late rather than that the number is.
+- **An unlimited window says so** (`Unlimited`), and one that can say neither a share nor a
+  moment reads `Unavailable` — the word the rest of the watch already uses for a meter that
+  reported nothing. A blank line under a label would read as a rendering fault, not as silence.
 - Time is the device's own clock, and "inside a day" means **today's date**, not the next
   twenty-four hours: `back at HH:MM` for a window rolling today, `back MMM d, HH:mm` for any
   other, so tomorrow evening never reads like tonight.
