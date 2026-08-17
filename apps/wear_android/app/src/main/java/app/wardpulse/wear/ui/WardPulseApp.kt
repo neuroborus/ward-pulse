@@ -18,8 +18,6 @@ import androidx.compose.ui.unit.sp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.AppScaffold
-import androidx.wear.compose.material3.Button
-import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.Card
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
@@ -34,30 +32,18 @@ import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
 import androidx.wear.compose.ui.tooling.preview.WearPreviewDevices
 import androidx.wear.compose.ui.tooling.preview.WearPreviewSquare
-import app.wardpulse.wear.model.AllowanceSummary
-import app.wardpulse.wear.model.Money
 import app.wardpulse.wear.model.PreviewWatchDashboardSummary
 import app.wardpulse.wear.model.PulseStatus
-import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.ui.theme.WardPulseTheme
 import java.time.Instant
 
 private const val HOME_ROUTE = "home"
+private const val ALERTS_ROUTE = "alerts"
 
 private enum class HomePage {
     Glance,
-    Menu,
-}
-
-private enum class Screen(val route: String, val label: String) {
-    PLAN_WINDOWS("plan-windows", "Plan windows"),
-    USAGE("usage", "Usage"),
-    TODAY("today", "Today"),
-    WEEK("week", "Week"),
-    PROVIDERS("providers", "Providers"),
-    ALERTS("alerts", "Alerts"),
-    LAST_SYNC("last-sync", "Last sync"),
+    PlanWindows,
 }
 
 private data class SummaryRow(
@@ -83,35 +69,11 @@ fun WardPulseApp(summary: WatchDashboardSummary?) {
             composable(HOME_ROUTE) {
                 HomeScreen(
                     summary = summary,
-                    onOpen = { navController.navigate(it.route) },
-                    onOpenRing = { index -> navController.navigate("ring/$index") },
+                    onOpenAlerts = { navController.navigate(ALERTS_ROUTE) },
                 )
             }
-            composable("ring/{index}") { entry ->
-                val index = entry.arguments?.getString("index")?.toIntOrNull()
-                val ring = index?.let { summary.activeRings.getOrNull(it) }
-                if (ring == null) {
-                    SummaryScreen(
-                        title = "Ring",
-                        rows = listOf(SummaryRow("Unavailable", "Choose rings on the phone")),
-                    )
-                } else {
-                    SummaryScreen(
-                        title = ring.label,
-                        rows = listOf(
-                            SummaryRow(formatPercentUsedLabel(ring.usedPercent), "Used", ring.status),
-                            SummaryRow(ring.status.label, "Status", ring.status),
-                        ),
-                    )
-                }
-            }
-            Screen.entries.forEach { screen ->
-                composable(screen.route) {
-                    SummaryScreen(
-                        title = screen.label,
-                        rows = summary.rowsFor(screen),
-                    )
-                }
+            composable(ALERTS_ROUTE) {
+                SummaryScreen(title = "Alerts", rows = summary.alertRows())
             }
         }
     }
@@ -143,67 +105,28 @@ private fun EmptyDashboardScreen() {
     }
 }
 
-private fun WatchDashboardSummary.rowsFor(screen: Screen): List<SummaryRow> = when (screen) {
-    // When each window comes back, exhausted ones first
-    // (`apps/wear_android/README.md`, Plan windows).
-    Screen.PLAN_WINDOWS -> planWindowRows(this, Instant.now())
+/**
+ * When each window comes back, exhausted ones first
+ * (`apps/wear_android/README.md`, Plan windows).
+ */
+private fun WatchDashboardSummary.planRows(): List<SummaryRow> =
+    planWindowRows(this, Instant.now())
         .map { SummaryRow(it.title, it.detail, it.status) }
         .ifEmpty { listOf(SummaryRow("No plan windows", "Sync from the phone")) }
-    Screen.USAGE -> allowances.map { allowance ->
-        SummaryRow(
-            allowance.label,
-            allowance.valueLabel,
-            allowance.status,
-        )
-    }.ifEmpty { listOf(SummaryRow("No usage data", "Sync from the phone")) }
-    // Spend across every connection, with no ceiling of its own: limits are per
-    // connection, so there is no percentage or remaining left to show here.
-    Screen.TODAY -> listOf(
-        SummaryRow(today.spent.labelOrUnknown(), "Spent"),
-        SummaryRow(overallStatus.label, "Overall status", overallStatus),
-    )
-    Screen.WEEK -> listOf(
-        SummaryRow(week.spent.labelOrUnknown(), "Spent"),
-        SummaryRow(
-            title = week.projectedTotal?.label ?: "Unavailable",
-            detail = "Projected total",
-        ),
-    )
-    Screen.PROVIDERS -> providers.map {
-        SummaryRow(it.providerLabel, it.todaySpent?.label ?: "Unavailable", it.status)
-    }
-    Screen.ALERTS -> alerts.map {
+
+private fun WatchDashboardSummary.alertRows(): List<SummaryRow> =
+    alerts.map {
         SummaryRow(
             it.severity.replaceFirstChar(Char::uppercase),
             it.message,
             it.severity.toStatus(),
         )
-    }
-        .ifEmpty { listOf(SummaryRow("No active alerts", "All providers look normal")) }
-    Screen.LAST_SYNC -> listOf(
-        SummaryRow(lastSyncLabel, "Local time"),
-        SummaryRow(lastSyncUtcLabel, "UTC"),
-        SummaryRow(
-            title = if (isStale) "Stale data" else "Up to date",
-            detail = if (isStale) {
-                "Showing the last saved summary"
-            } else {
-                "Latest summary is available"
-            },
-            status = if (isStale) PulseStatus.WARNING else PulseStatus.OK,
-        ),
-    )
-}
-
-/** Exhausted layers are omitted on the surface (design: omit usedPercent >= 100). */
-private val WatchDashboardSummary.activeRings: List<RingSummary>
-    get() = rings.filter { it.usedPercent < 100.0 }
+    }.ifEmpty { listOf(SummaryRow("No active alerts", "All providers look normal")) }
 
 @Composable
 private fun HomeScreen(
     summary: WatchDashboardSummary,
-    onOpen: (Screen) -> Unit,
-    onOpenRing: (Int) -> Unit,
+    onOpenAlerts: () -> Unit,
 ) {
     val pages = HomePage.entries
     val pagerState = rememberPagerState(pageCount = { pages.size })
@@ -216,89 +139,12 @@ private fun HomeScreen(
         when (pages[page]) {
             HomePage.Glance -> GlanceLegendPage(
                 summary = summary,
-                onOpenAlerts = { onOpen(Screen.ALERTS) },
+                onOpenAlerts = onOpenAlerts,
             )
-            HomePage.Menu -> MenuPage(
-                summary = summary,
-                onOpen = onOpen,
-                onOpenRing = onOpenRing,
+            HomePage.PlanWindows -> SummaryScreen(
+                title = "Plan windows",
+                rows = summary.planRows(),
             )
-        }
-    }
-}
-
-@Composable
-private fun MenuPage(
-    summary: WatchDashboardSummary,
-    onOpen: (Screen) -> Unit,
-    onOpenRing: (Int) -> Unit,
-) {
-    val state = rememberTransformingLazyColumnState()
-    val transformationSpec = rememberTransformationSpec()
-    val rings = summary.activeRings
-    val menuColors = ButtonDefaults.buttonColors(
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-    )
-
-    ScreenScaffold(scrollState = state) { contentPadding ->
-        TransformingLazyColumn(
-            state = state,
-            contentPadding = contentPadding,
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.padding(horizontal = 18.dp),
-        ) {
-            item {
-                ListHeader {
-                    Text("Menu", style = MaterialTheme.typography.titleSmall)
-                }
-            }
-            items(rings.size) { index ->
-                val ring = rings[index]
-                Button(
-                    onClick = { onOpenRing(index) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .transformedHeight(this, transformationSpec),
-                    colors = menuColors,
-                    transformation = SurfaceTransformation(transformationSpec),
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(
-                            ring.label,
-                            style = MaterialTheme.typography.labelLarge,
-                            textAlign = TextAlign.Center,
-                        )
-                        Text(
-                            formatPercentRemainingLabel(ring.usedPercent),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                        )
-                    }
-                }
-            }
-            items(Screen.entries.size) { index ->
-                val destination = Screen.entries[index]
-                Button(
-                    onClick = { onOpen(destination) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .transformedHeight(this, transformationSpec),
-                    colors = menuColors,
-                    transformation = SurfaceTransformation(transformationSpec),
-                ) {
-                    Text(
-                        destination.label,
-                        modifier = Modifier.fillMaxWidth(),
-                        style = MaterialTheme.typography.labelLarge,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            }
         }
     }
 }
@@ -322,14 +168,6 @@ private fun StraightAppTimeText() {
         maxLines = 1,
     )
 }
-
-private val AllowanceSummary.valueLabel: String
-    get() = when {
-        unlimited -> "Unlimited"
-        usedPercent != null -> formatPercentUsedLabel(usedPercent)
-        remaining != null -> remaining.label
-        else -> "Unavailable"
-    }
 
 @Composable
 private fun SummaryScreen(title: String, rows: List<SummaryRow>) {
@@ -379,8 +217,6 @@ private fun statusColor(status: PulseStatus): Color = when (status) {
     -> MaterialTheme.colorScheme.error
     PulseStatus.UNKNOWN -> MaterialTheme.colorScheme.onSurfaceVariant
 }
-
-private fun Money?.labelOrUnknown(): String = this?.label ?: "Unknown"
 
 private fun String.toStatus(): PulseStatus = when (this) {
     "error" -> PulseStatus.ERROR
