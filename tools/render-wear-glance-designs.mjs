@@ -175,9 +175,18 @@ function refreshStatusControl({
   return { markup, plateR: r }
 }
 
-/** Tightest remaining first — same order rule as the watch face. */
+/**
+ * Tightest remaining first — same order rule as the watch face.
+ *
+ * Sorts **bands**, then lets a paired band's second pool follow its own: the
+ * payload carries the pair inside one ring (`ring.split`), so the app cannot
+ * separate them and neither may a board. Sorting the two pools as peers is what
+ * splits them, which is exactly what four rows made visible.
+ */
 function sortByRemaining(rows) {
-  return [...rows].sort((a, b) => b.used - a.used)
+  return [...rows]
+    .sort((a, b) => b.used - a.used)
+    .flatMap((row) => (row.split ? [row, row.split] : [row]))
 }
 
 function rowSubLine(row) {
@@ -402,11 +411,15 @@ const variants = [
     refreshEnabled: true,
     rows: [
       { family: FAMILY.codex, metric: 'Weekly plan', used: 0.92, credits: '320' },
-      { family: FAMILY.cursorOwn, metric: 'Cursor Models', used: 0.47 },
-      // The fixture's external pool is exhausted (`apiPercentUsed` 100), which
-      // collapses the pair and shows nothing here, so this one value is chosen:
-      // far enough from 47 to read as a second pool, not a rounding of the first.
-      { family: FAMILY.cursor, metric: 'Other Models', used: 0.38 },
+      {
+        family: FAMILY.cursorOwn,
+        metric: 'Cursor Models',
+        used: 0.47,
+        // The fixture's external pool is exhausted (`apiPercentUsed` 100), which
+        // collapses the pair and shows nothing here, so this one value is
+        // chosen: far enough from 47 to read as a second pool, not a rounding.
+        split: { family: FAMILY.cursor, metric: 'Other Models', used: 0.38 },
+      },
     ],
     alerts: 0,
   },
@@ -420,8 +433,18 @@ const variants = [
     refreshEnabled: true,
     rows: [
       { family: FAMILY.claude, metric: 'Opus weekly', used: 0.94, credits: '387' },
-      { family: FAMILY.cursorOwn, metric: 'Cursor Models', used: 0.0, credits: '1716' },
-      { family: FAMILY.cursor, metric: 'Other Models', used: 0.25, credits: '1716' },
+      {
+        family: FAMILY.cursorOwn,
+        metric: 'Cursor Models',
+        used: 0.0,
+        credits: '1716',
+        split: {
+          family: FAMILY.cursor,
+          metric: 'Other Models',
+          used: 0.25,
+          credits: '1716',
+        },
+      },
       { family: FAMILY.codex, metric: 'Weekly plan', used: 0.09, credits: '4500' },
     ],
     alerts: 0,

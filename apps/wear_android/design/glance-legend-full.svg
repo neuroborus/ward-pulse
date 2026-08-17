@@ -53,43 +53,43 @@
       font-weight="700" fill="#8A968F">6% left · 387 credits</text>
     <circle cx="132" cy="223" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
-    <circle cx="132" cy="223" r="17" fill="none" stroke="#67E8D4"
-      stroke-width="5" stroke-linecap="round"
-      stroke-dasharray="75.11 106.81"
-      stroke-dashoffset="-29.20"
-      transform="rotate(-90 132 223)" />
-    <text x="166" y="221.5"
-      font-family="Noto Sans, sans-serif" font-size="16"
-      font-weight="700" fill="#F4FBF8">Cursor · Other Models</text>
-    <text x="166" y="241.0"
-      font-family="Noto Sans, sans-serif" font-size="14"
-      font-weight="700" fill="#8A968F">75% left · 1716 credits</text>
-    <circle cx="132" cy="277" r="17" fill="none" stroke="#2E3632"
-      stroke-width="5" />
-    <circle cx="132" cy="277" r="17" fill="none" stroke="#65D78A"
+    <circle cx="132" cy="223" r="17" fill="none" stroke="#65D78A"
       stroke-width="5" stroke-linecap="round"
       stroke-dasharray="92.20 106.81"
       stroke-dashoffset="-12.11"
-      transform="rotate(-90 132 277)" />
-    <text x="166" y="275.5"
+      transform="rotate(-90 132 223)" />
+    <text x="166" y="221.5"
       font-family="Noto Sans, sans-serif" font-size="16"
       font-weight="700" fill="#F4FBF8">Codex · Weekly plan</text>
-    <text x="166" y="295.0"
+    <text x="166" y="241.0"
       font-family="Noto Sans, sans-serif" font-size="14"
       font-weight="700" fill="#8A968F">91% left · 4500 credits</text>
-    <circle cx="132" cy="331" r="17" fill="none" stroke="#2E3632"
+    <circle cx="132" cy="277" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
-    <circle cx="132" cy="331" r="17" fill="none" stroke="#7E93B8"
+    <circle cx="132" cy="277" r="17" fill="none" stroke="#7E93B8"
       stroke-width="5" stroke-linecap="round"
       stroke-dasharray="101.71 106.81"
       stroke-dashoffset="-2.61"
+      transform="rotate(-90 132 277)" />
+    <text x="166" y="275.5"
+      font-family="Noto Sans, sans-serif" font-size="16"
+      font-weight="700" fill="#F4FBF8">Cursor Models</text>
+    <text x="166" y="295.0"
+      font-family="Noto Sans, sans-serif" font-size="14"
+      font-weight="700" fill="#8A968F">100% left · 1716 credits</text>
+    <circle cx="132" cy="331" r="17" fill="none" stroke="#2E3632"
+      stroke-width="5" />
+    <circle cx="132" cy="331" r="17" fill="none" stroke="#67E8D4"
+      stroke-width="5" stroke-linecap="round"
+      stroke-dasharray="75.11 106.81"
+      stroke-dashoffset="-29.20"
       transform="rotate(-90 132 331)" />
     <text x="166" y="329.5"
       font-family="Noto Sans, sans-serif" font-size="16"
-      font-weight="700" fill="#F4FBF8">Cursor Models</text>
+      font-weight="700" fill="#F4FBF8">Cursor · Other Models</text>
     <text x="166" y="349.0"
       font-family="Noto Sans, sans-serif" font-size="14"
-      font-weight="700" fill="#8A968F">100% left · 1716 credits</text>
+      font-weight="700" fill="#8A968F">75% left · 1716 credits</text>
     <rect x="161.0" y="372" width="128.0"
       height="36" rx="18" fill="#171B18" stroke="#2A302C"
       stroke-width="1"
