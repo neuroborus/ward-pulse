@@ -18,6 +18,7 @@ import '../settings/alert_threshold_preferences.dart';
 import '../settings/settings_screen.dart';
 import '../settings/consumption_display_preferences.dart';
 import '../settings/debug_data_preferences.dart';
+import '../settings/recovery_notification_preferences.dart';
 import '../settings/refresh_interval_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
 import '../sync/headless_provider_sync.dart';
@@ -56,6 +57,8 @@ class WardPulseApp extends StatelessWidget {
     this.recoveryWatchlistStore = const DisabledRecoveryWatchlistStore(),
     this.recoveryNotifier = const SilentRecoveryNotifier(),
     this.recoveryWake = const DisabledRecoveryWakeScheduler(),
+    this.recoveryNotificationStore =
+        const DefaultRecoveryNotificationPreferenceStore(),
   });
 
   final DashboardRepository repository;
@@ -76,6 +79,7 @@ class WardPulseApp extends StatelessWidget {
   final RecoveryWatchlistStore recoveryWatchlistStore;
   final RecoveryNotifier recoveryNotifier;
   final RecoveryWakeScheduler recoveryWake;
+  final RecoveryNotificationPreferenceStore recoveryNotificationStore;
 
   @override
   Widget build(BuildContext context) {
@@ -103,6 +107,7 @@ class WardPulseApp extends StatelessWidget {
         recoveryWatchlistStore: recoveryWatchlistStore,
         recoveryNotifier: recoveryNotifier,
         recoveryWake: recoveryWake,
+        recoveryNotificationStore: recoveryNotificationStore,
       ),
     );
   }
@@ -129,6 +134,7 @@ class DashboardHost extends StatefulWidget {
     required this.recoveryWatchlistStore,
     required this.recoveryNotifier,
     required this.recoveryWake,
+    required this.recoveryNotificationStore,
   });
 
   final DashboardRepository repository;
@@ -146,6 +152,7 @@ class DashboardHost extends StatefulWidget {
   final ProviderSyncScheduler syncScheduler;
   final bool debugDataAvailable;
   final DebugDataPreferenceStore debugDataPreferenceStore;
+  final RecoveryNotificationPreferenceStore recoveryNotificationStore;
   final RecoveryWakeScheduler recoveryWake;
   final RecoveryNotifier recoveryNotifier;
   final RecoveryWatchlistStore recoveryWatchlistStore;
@@ -178,6 +185,7 @@ class _DashboardHostState extends State<DashboardHost> {
       const AlertThresholdPreferences();
   Future<void> _alertThresholdWrite = Future<void>.value();
   bool _mockDataEnabled = false;
+  bool _recoveryNotificationsEnabled = true;
   int _selectedIndex = 0;
   ({String provider, int token})? _reveal;
   StreamSubscription<void>? _syncTicks;
@@ -280,6 +288,35 @@ class _DashboardHostState extends State<DashboardHost> {
     }
   }
 
+  Future<void> _readRecoveryNotificationPreference() async {
+    try {
+      _recoveryNotificationsEnabled =
+          await widget.recoveryNotificationStore.read();
+    } catch (_) {
+      // A store that will not answer leaves the switch where it defaults, on:
+      // the feature exists to interrupt, and Android still gates the post.
+      _recoveryNotificationsEnabled = true;
+    }
+  }
+
+  /// Writes the switch, and asks Android for the permission when it goes on.
+  ///
+  /// The asking happens here because only a foreground Activity can ask, while
+  /// the poll that posts runs in a background isolate with none.
+  /// Answers whether a recovery may actually reach the reader now: the switch
+  /// is the reader's wish, and Android has the last word on it.
+  Future<bool> _updateRecoveryNotifications(bool enabled) async {
+    await widget.recoveryNotificationStore.write(enabled);
+    final granted =
+        enabled ? await widget.recoveryNotifier.requestPermission() : true;
+    if (mounted) {
+      setState(() {
+        _recoveryNotificationsEnabled = enabled;
+      });
+    }
+    return granted;
+  }
+
   Future<void> _readDebugDataPreference() async {
     if (!widget.debugDataAvailable) {
       _mockDataEnabled = false;
@@ -374,6 +411,7 @@ class _DashboardHostState extends State<DashboardHost> {
     await _readWidgetPreferences();
     await _readAlertThresholds();
     await _readDebugDataPreference();
+    await _readRecoveryNotificationPreference();
     // Rescheduling before the load keeps the next tick a full interval away, so
     // no connection is polled faster than its floor, and a failed load still
     // retries on the next tick. Headless WorkManager uses ≥15 minutes.
@@ -390,6 +428,7 @@ class _DashboardHostState extends State<DashboardHost> {
         widget.recoveryNotifier,
         widget.recoveryWake,
         mockData: _mockDataEnabled,
+        notifications: _recoveryNotificationsEnabled,
       ),
     );
     unawaited(_syncWatch(snapshot));
@@ -610,6 +649,8 @@ class _DashboardHostState extends State<DashboardHost> {
                 onRefreshIntervalChanged: _updateRefreshInterval,
                 ringPreferences: _ringPreferences,
                 onSyncWatch: _onSettingsSyncWatch,
+                recoveryNotificationsEnabled: _recoveryNotificationsEnabled,
+                onRecoveryNotificationsChanged: _updateRecoveryNotifications,
                 debugDataAvailable: widget.debugDataAvailable,
                 mockDataEnabled: _mockDataEnabled,
                 onMockDataEnabledChanged: _updateMockDataEnabled,

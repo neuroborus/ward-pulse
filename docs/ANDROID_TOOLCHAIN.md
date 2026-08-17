@@ -387,6 +387,16 @@ adb -s "$WEAR_SERIAL" shell input keyevent 224   # back to interactive
 scale nor a gamma of the interactive one. Use it to check that ambient renders what it should;
 never read alpha levels off it.
 
+Tap coordinates measured off a screenshot are a guess: the image is scaled, and a system dialog
+sits above whatever it covers, so a near miss lands on the screen underneath and quietly changes
+something else. Read the bounds instead, then tap their centre:
+
+```sh
+adb -s "$PHONE_SERIAL" shell uiautomator dump /sdcard/ui.xml
+adb -s "$PHONE_SERIAL" shell cat /sdcard/ui.xml | tr '<' '\n' | grep -i "don.t allow"
+# bounds="[133,1400][947,1547]" → tap 540 1473
+```
+
 The app compiles against Android SDK 37.1 but targets API 36 and runs on the Wear OS 6.1 /
 API 36.1 image. Compile SDK and runtime system image versions are intentionally independent.
 

@@ -19,6 +19,8 @@ import 'package:ward_pulse_phone/settings/refresh_interval_preferences.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
 import 'package:ward_pulse_phone/sync/poll_cadence.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_scheduler.dart';
+import 'package:ward_pulse_phone/settings/recovery_notification_preferences.dart';
+import 'package:ward_pulse_phone/sync/recovery_notifications.dart';
 import 'package:ward_pulse_phone/sync/recovery_watchlist.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 
@@ -1120,6 +1122,52 @@ void main() {
     },
   );
 
+  testWidgets('the recovery switch is on, and says when Android blocks it', (
+    tester,
+  ) async {
+    final store = _MemoryRecoveryNotificationStore();
+    final notifier = _BlockedRecoveryNotifier();
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(
+          DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 8, 17)),
+        ),
+        recoveryNotificationStore: store,
+        recoveryNotifier: notifier,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    final toggle = find.widgetWithText(SwitchListTile, 'Plan recovery');
+    await tester.scrollUntilVisible(
+      toggle,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    // On without being asked: interrupting is the point of the feature.
+    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+
+    // Off and on again, so the ask runs with Android refusing it.
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(store.enabled, isFalse);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+
+    expect(store.enabled, isTrue);
+    expect(notifier.asked, 1);
+    // The reader said yes and Android said no; leaving the switch on without a
+    // word would promise an interruption that cannot arrive.
+    expect(
+      find.text('Android is blocking WardPulse notifications'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('hides mock data outside debug builds', (tester) async {
     await tester.pumpWidget(
       WardPulseApp(
@@ -1151,6 +1199,31 @@ DashboardSnapshot _asConnection(DashboardSnapshot snapshot) {
     ...snapshot.toJson(),
     'accounts': [account],
   });
+}
+
+class _MemoryRecoveryNotificationStore
+    implements RecoveryNotificationPreferenceStore {
+  bool enabled = true;
+
+  @override
+  Future<bool> read() async => enabled;
+
+  @override
+  Future<void> write(bool value) async => enabled = value;
+}
+
+/// Android refusing the permission, which the switch alone cannot detect.
+class _BlockedRecoveryNotifier implements RecoveryNotifier {
+  var asked = 0;
+
+  @override
+  Future<void> notify(PlanRecovery recovery) async {}
+
+  @override
+  Future<bool> requestPermission() async {
+    asked++;
+    return false;
+  }
 }
 
 class _MemoryRecoveryWatchlistStore implements RecoveryWatchlistStore {

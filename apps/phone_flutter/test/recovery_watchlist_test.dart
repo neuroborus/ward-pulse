@@ -152,6 +152,9 @@ void main() {
             (accountId: 'claude-local', allowanceId: 'weekly'),
             (accountId: 'claude-local', allowanceId: 'session'),
           ],
+      // Pinned, or the wall clock decides the answer: both instants have to be
+      // ahead for "the soonest" to mean anything.
+      now: () => DateTime.utc(2026, 8, 17, 12),
     );
 
     // Two windows are spent; one wake is enough, because the poll it starts
@@ -168,6 +171,9 @@ void main() {
     final wake = _RecordingWake();
     const spent = [(accountId: 'claude-local', allowanceId: 'weekly')];
 
+    // Pinned: these instants are only "ahead" until the day they are not, and
+    // a test that rots with the calendar is a test nobody trusts.
+    final rightNow = DateTime.utc(2026, 8, 17, 12);
     Future<void> pollWithReset(DateTime resetsAt) => syncPlanRecoveries(
       _withAllowances(source, {'weekly': resetsAt}),
       store,
@@ -175,6 +181,7 @@ void main() {
       wake,
       readRecoveries: (_, _) => const [],
       readWindows: (_) => spent,
+      now: () => rightNow,
     );
 
     await pollWithReset(DateTime.utc(2026, 8, 18, 9));
@@ -271,6 +278,47 @@ void main() {
     // five-minute loop for as long as the provider lags. The cadence covers it.
     expect(wake.booked, isEmpty);
     expect(wake.cancelled, 1);
+  });
+
+  test('the switch silences the telling, not the watching', () async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final store = _MemoryRecoveryWatchlistStore();
+    await store.write(const [
+      (accountId: 'claude-local', allowanceId: 'weekly'),
+    ]);
+    final notifier = _RecordingRecoveryNotifier();
+    final wake = _RecordingWake();
+    final rightNow = DateTime.utc(2026, 8, 17, 12);
+    final resetsAt = rightNow.add(const Duration(hours: 3));
+
+    await syncPlanRecoveries(
+      _withAllowances(source, {'weekly': resetsAt}),
+      store,
+      notifier,
+      wake,
+      notifications: false,
+      readRecoveries:
+          (_, _) => const [
+            (
+              accountId: 'claude-local',
+              provider: 'claude',
+              allowanceId: 'weekly',
+              label: 'Weekly plan',
+              resetsAt: null,
+            ),
+          ],
+      readWindows:
+          (_) => const [(accountId: 'claude-local', allowanceId: 'weekly')],
+      now: () => rightNow,
+    );
+
+    // Nothing is said, and everything else carries on: the list moves and the
+    // wake is booked, so turning the switch back on picks up where it was.
+    expect(notifier.reported, isEmpty);
+    expect(await store.read(), hasLength(1));
+    expect(wake.booked, [resetsAt]);
   });
 
   test('nothing spent takes the wake off the books', () async {
@@ -387,6 +435,9 @@ class _RecordingRecoveryNotifier implements RecoveryNotifier {
     }
     reported.add(recovery);
   }
+
+  @override
+  Future<bool> requestPermission() async => true;
 }
 
 class _RecordingWake implements RecoveryWakeScheduler {

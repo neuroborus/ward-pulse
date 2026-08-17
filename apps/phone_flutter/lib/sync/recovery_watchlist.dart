@@ -67,6 +67,10 @@ final class DisabledRecoveryWatchlistStore implements RecoveryWatchlistStore {
 /// overlap: they read the same list, report the same windows, and write the
 /// same answer.
 ///
+/// [notifications] off silences the telling and nothing else: the windows are
+/// still tracked and the wake is still booked, because the switch turns off an
+/// interruption, not an eye.
+///
 /// [mockData] empties the list instead of filling it, and reports nothing. Demo
 /// windows are invented, so remembering them would make the first live poll
 /// after leaving demo mode look like a recovery.
@@ -76,6 +80,7 @@ Future<void> syncPlanRecoveries(
   RecoveryNotifier notifier,
   RecoveryWakeScheduler wake, {
   bool mockData = false,
+  bool notifications = true,
   ReadPlanRecoveries readRecoveries = planRecoveries,
   ReadExhaustedWindows readWindows = exhaustedWindows,
   DateTime Function() now = DateTime.now,
@@ -90,7 +95,7 @@ Future<void> syncPlanRecoveries(
     // left, and asking the core would serialize the whole snapshot to be told
     // so — on most polls, since most of the time nothing is spent.
     final remembered = await store.read();
-    if (remembered.isNotEmpty) {
+    if (notifications && remembered.isNotEmpty) {
       for (final recovery in readRecoveries(snapshot, remembered)) {
         try {
           await notifier.notify(recovery);

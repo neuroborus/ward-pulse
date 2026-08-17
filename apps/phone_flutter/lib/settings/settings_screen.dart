@@ -20,6 +20,8 @@ class SettingsScreen extends StatefulWidget {
     required this.onRefreshIntervalChanged,
     required this.ringPreferences,
     required this.onSyncWatch,
+    required this.recoveryNotificationsEnabled,
+    required this.onRecoveryNotificationsChanged,
     required this.debugDataAvailable,
     required this.mockDataEnabled,
     required this.onMockDataEnabledChanged,
@@ -27,6 +29,14 @@ class SettingsScreen extends StatefulWidget {
   });
 
   final DashboardSnapshot? snapshot;
+
+  /// Whether a plan window coming back may interrupt the reader.
+  final bool recoveryNotificationsEnabled;
+
+  /// Turning it on is also where Android is asked for the permission: only the
+  /// foreground can ask, and the poll that posts runs without an Activity.
+  /// Answers whether posting is allowed now, which the switch alone cannot say.
+  final Future<bool> Function(bool enabled) onRecoveryNotificationsChanged;
   final RefreshIntervalPreference refreshInterval;
   final Future<void> Function(RefreshIntervalPreference value)
   onRefreshIntervalChanged;
@@ -85,6 +95,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
         setState(() {
           _isSyncing = false;
         });
+      }
+    }
+  }
+
+  Future<void> _setRecoveryNotifications(bool value) async {
+    try {
+      final granted = await widget.onRecoveryNotificationsChanged(value);
+      if (value && !granted && mounted) {
+        // The reader said yes and Android said no; leaving the switch on
+        // without a word would promise an interruption that cannot arrive.
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Android is blocking WardPulse notifications'),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not update notification setting'),
+          ),
+        );
       }
     }
   }
@@ -178,6 +211,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        const _SettingsSectionHeader(title: 'Notifications'),
+        Card(
+          child: SwitchListTile(
+            secondary: const Icon(Icons.notifications_active_outlined),
+            title: const Text('Plan recovery'),
+            subtitle: const Text(
+              'Tells you when a plan window you had run out of is usable again '
+              '· the only thing WardPulse interrupts for',
+            ),
+            value: widget.recoveryNotificationsEnabled,
+            onChanged: _setRecoveryNotifications,
           ),
         ),
         const SizedBox(height: 16),

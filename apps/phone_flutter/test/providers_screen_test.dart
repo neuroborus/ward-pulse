@@ -201,6 +201,36 @@ void main() {
     );
   });
 
+  testWidgets('a recovery is not something a connection configures', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ProvidersScreen(
+            onRefresh: _noRefresh,
+            credentialStore: _MemoryCredentialStore(),
+            codexAccountService: const EmptyCodexAccountService(),
+            claudeAccountService: const EmptyClaudeAccountService(),
+            onCredentialsChanged: () {},
+            alertThresholds: const AlertThresholdPreferences(),
+            onAlertThresholdsChanged: (_) async {},
+            cursorPlanSignIn: (_) async => null,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The switch lives in Settings, alone, because a recovery has no threshold
+    // to set: it either happened or it did not. A per-connection rule here
+    // would be a threshold pretending to be one.
+    expect(
+      find.textContaining(RegExp('recovery', caseSensitive: false)),
+      findsNothing,
+    );
+  });
+
   group('the declared card order', () {
     Future<List<String>> shown(
       WidgetTester tester, {

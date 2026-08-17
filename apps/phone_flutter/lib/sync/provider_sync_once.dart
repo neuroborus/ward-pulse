@@ -6,6 +6,7 @@ import '../dashboard/apply_alert_settings.dart';
 import '../dashboard/phone_live_bindings.dart';
 import '../settings/alert_threshold_preferences.dart';
 import '../settings/consumption_display_preferences.dart';
+import '../settings/recovery_notification_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
 import '../widget/phone_widget_preferences.dart';
 import '../widget/phone_widget_sync.dart';
@@ -26,6 +27,8 @@ Future<void> providerSyncOnce() async {
     final ringPreferences = await SecureWatchRingPreferenceStore().read();
     final widgetPreferences = await SecurePhoneWidgetPreferenceStore().read();
     final alertThresholds = await SecureAlertThresholdPreferenceStore().read();
+    final notifyOnRecovery =
+        await SecureRecoveryNotificationPreferenceStore().read();
     final snapshot = applyUserAlertSettings(
       await live.repository.load(),
       alertThresholds,
@@ -54,6 +57,7 @@ Future<void> providerSyncOnce() async {
       SecureRecoveryWatchlistStore(),
       LocalRecoveryNotifier(),
       const WorkmanagerRecoveryWakeScheduler(),
+      notifications: notifyOnRecovery,
     );
   } catch (_) {
     // Automatic / headless sync keeps the last successful snapshot visible.

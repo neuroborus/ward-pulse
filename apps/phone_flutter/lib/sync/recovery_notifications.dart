@@ -9,6 +9,13 @@ import '../dashboard/plan_recoveries.dart';
 /// one: host tests carry no Android to post to.
 abstract interface class RecoveryNotifier {
   Future<void> notify(PlanRecovery recovery);
+
+  /// Asks Android for permission to post at all (13+), and answers whether it
+  /// may now.
+  ///
+  /// Only a foreground Activity may ask, so this is called from the Settings
+  /// switch and never from the poll that posts.
+  Future<bool> requestPermission();
 }
 
 /// Says nothing, for hosts with nowhere to say it: tests, and any build without
@@ -18,6 +25,9 @@ final class SilentRecoveryNotifier implements RecoveryNotifier {
 
   @override
   Future<void> notify(PlanRecovery recovery) async {}
+
+  @override
+  Future<bool> requestPermission() async => true;
 }
 
 /// Posts through the local notification plugin.
@@ -61,6 +71,20 @@ final class LocalRecoveryNotifier implements RecoveryNotifier {
         ),
       ),
     );
+  }
+
+  @override
+  Future<bool> requestPermission() async {
+    await _ensureReady();
+    final granted =
+        await _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >()
+            ?.requestNotificationsPermission();
+    // Null means no Android implementation answered — nothing was refused, so
+    // the switch has no bad news to report.
+    return granted ?? true;
   }
 
   Future<void> _ensureReady() async {
