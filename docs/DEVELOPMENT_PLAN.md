@@ -1600,7 +1600,9 @@ no tokens, cookies, or raw payloads appear in logs
 
 ### Phase 13 — configurable watch rings
 
-Status: in progress as of 2026-07-25.
+Status: in progress as of 2026-08-17. The visual baselines, the payload, and both watch
+surfaces are in tree; what the list below still owes is the acceptance walk — each line paired
+with the test or the device check that holds it.
 
 Rationale: watch space is limited and must never show `Unknown` filler. Plan/allowance data
 across connected providers is percentage-first, so Wear and WFF standardize on concentric
@@ -1700,6 +1702,9 @@ Budget rings key by connection and take its family color; summed Today/Week/Mont
 Budget strips read spend of limit (`$12.34/100`); the aggregate budget percentage is gone (2026-08-09)
 watchface.xml generated from tools/render-watchface.mjs (2026-08-10)
 Budget ring bands repeat their period as baked cut-out type from generated drawables, four sweeps broken on the diagonals (2026-08-11)
+A Cursor plan's two pools share one band: outer/inner halves, one complication slot for all three bands, schema v9 (2026-08-14 → 2026-08-16)
+Glance shows a pair as two adjacent rows, own pool first; the face keeps it one band (2026-08-15)
+Glance rows sit on the art's 54 pitch and keep 12 clear of the Alerts pill — four rows is the ceiling (2026-08-17)
 ```
 
 
