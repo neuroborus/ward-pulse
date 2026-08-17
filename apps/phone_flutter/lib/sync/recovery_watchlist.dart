@@ -2,7 +2,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/plan_recoveries.dart';
+import 'poll_cadence.dart';
 import 'recovery_notifications.dart';
+import 'recovery_wake.dart';
 
 /// The plan windows that were spent when the phone last looked.
 ///
@@ -71,14 +73,17 @@ final class DisabledRecoveryWatchlistStore implements RecoveryWatchlistStore {
 Future<void> syncPlanRecoveries(
   DashboardSnapshot snapshot,
   RecoveryWatchlistStore store,
-  RecoveryNotifier notifier, {
+  RecoveryNotifier notifier,
+  RecoveryWakeScheduler wake, {
   bool mockData = false,
   ReadPlanRecoveries readRecoveries = planRecoveries,
   ReadExhaustedWindows readWindows = exhaustedWindows,
+  DateTime Function() now = DateTime.now,
 }) async {
   try {
     if (mockData) {
       await store.write(const []);
+      await wake.cancel();
       return;
     }
     // An edge needs a past. With nothing remembered there is nothing to have
@@ -96,7 +101,25 @@ Future<void> syncPlanRecoveries(
         }
       }
     }
-    await store.write(readWindows(snapshot));
+    final spent = readWindows(snapshot);
+    await store.write(spent);
+    // Booked from the reset instant rather than left to the next poll, which
+    // the cadence would make up to an interval late. `null` covers every case
+    // with nothing to wake for: nothing spent, nothing saying when it rolls,
+    // and a reset already behind because the provider has not caught up.
+    final soonest = nextResetAmong(snapshot, spent, after: now());
+    if (soonest == null) {
+      await wake.cancel();
+    } else {
+      // Never sooner than the poll floor after this one. A window resetting a
+      // minute from now would otherwise send the woken poll straight back to a
+      // provider, and `PollCadence` calls its lower bound the strictest hard
+      // floor across connections — a wake is not an exemption from it.
+      final floor = now().add(
+        const Duration(minutes: PollCadence.minRefreshMinutes),
+      );
+      await wake.scheduleAt(soonest.isBefore(floor) ? floor : soonest);
+    }
   } catch (_) {
     // A poll must never crash over bookkeeping; the next one writes the list
     // again.

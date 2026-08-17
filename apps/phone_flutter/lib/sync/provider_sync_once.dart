@@ -10,6 +10,7 @@ import '../settings/watch_ring_preferences.dart';
 import '../widget/phone_widget_preferences.dart';
 import '../widget/phone_widget_sync.dart';
 import 'recovery_notifications.dart';
+import 'recovery_wake.dart';
 import 'recovery_watchlist.dart';
 import 'watch_sync_service.dart';
 
@@ -52,6 +53,7 @@ Future<void> providerSyncOnce() async {
       snapshot,
       SecureRecoveryWatchlistStore(),
       LocalRecoveryNotifier(),
+      const WorkmanagerRecoveryWakeScheduler(),
     );
   } catch (_) {
     // Automatic / headless sync keeps the last successful snapshot visible.

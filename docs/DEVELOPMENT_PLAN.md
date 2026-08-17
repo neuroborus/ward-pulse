@@ -1872,7 +1872,8 @@ Acceptance:
 ```text
 a window crossing exhausted → usable notifies exactly once per crossing
 a window that was never exhausted notifies never
-the wake is scheduled for the reset instant, not left to the next poll
+a spent window books its wake from the reset instant, never sooner than the poll floor,
+  and none at all once that instant is behind and the provider still reads it spent
 a reset instant that moves reschedules; a disconnected provider cancels
 the recovery is absent from the Dashboard alerts list and from Wear's Alerts count
 the notification reaches a paired watch exactly once — not twice, not never

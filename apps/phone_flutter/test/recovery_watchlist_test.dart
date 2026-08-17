@@ -1,7 +1,14 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/plan_recoveries.dart';
 import 'package:ward_pulse_phone/sync/recovery_notifications.dart';
+import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
+import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
+import 'package:ward_pulse_phone/sync/poll_cadence.dart';
+import 'package:ward_pulse_phone/sync/recovery_wake.dart';
+import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 import 'package:ward_pulse_phone/sync/recovery_watchlist.dart';
 
 void main() {
@@ -25,6 +32,7 @@ void main() {
       DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 8, 17)),
       store,
       const SilentRecoveryNotifier(),
+      const DisabledRecoveryWakeScheduler(),
       mockData: true,
     );
 
@@ -43,6 +51,7 @@ void main() {
       DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 8, 17)),
       store,
       const SilentRecoveryNotifier(),
+      const DisabledRecoveryWakeScheduler(),
       readRecoveries: (_, _) => const [],
       readWindows:
           (_) => const [
@@ -61,11 +70,13 @@ void main() {
       (accountId: 'claude-local', allowanceId: 'claude-weekly'),
     ]);
     final notifier = _RecordingRecoveryNotifier();
+    final wake = _RecordingWake();
 
     await syncPlanRecoveries(
       DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 8, 17)),
       store,
       notifier,
+      wake,
       readRecoveries:
           (_, exhausted) => [
             for (final key in exhausted)
@@ -92,11 +103,13 @@ void main() {
       (accountId: 'claude-local', allowanceId: 'claude-session'),
     ]);
     final notifier = _RecordingRecoveryNotifier(refuse: 'claude-weekly');
+    final wake = _RecordingWake();
 
     await syncPlanRecoveries(
       DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 8, 17)),
       store,
       notifier,
+      wake,
       readRecoveries:
           (_, exhausted) => [
             for (final key in exhausted)
@@ -117,15 +130,223 @@ void main() {
     expect(await store.read(), isEmpty);
   });
 
+  test('the wake is booked for the soonest window still spent', () async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final snapshot = _withAllowances(source, {
+      'weekly': DateTime.utc(2026, 8, 18, 9),
+      'session': DateTime.utc(2026, 8, 17, 14),
+    });
+    final store = _MemoryRecoveryWatchlistStore();
+    final wake = _RecordingWake();
+
+    await syncPlanRecoveries(
+      snapshot,
+      store,
+      const SilentRecoveryNotifier(),
+      wake,
+      readRecoveries: (_, _) => const [],
+      readWindows:
+          (_) => const [
+            (accountId: 'claude-local', allowanceId: 'weekly'),
+            (accountId: 'claude-local', allowanceId: 'session'),
+          ],
+    );
+
+    // Two windows are spent; one wake is enough, because the poll it starts
+    // looks at both. The earlier instant is the one worth booking.
+    expect(wake.booked, [DateTime.utc(2026, 8, 17, 14)]);
+    expect(wake.cancelled, 0);
+  });
+
+  test('a window whose reset moves gets the wake booked again', () async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final store = _MemoryRecoveryWatchlistStore();
+    final wake = _RecordingWake();
+    const spent = [(accountId: 'claude-local', allowanceId: 'weekly')];
+
+    Future<void> pollWithReset(DateTime resetsAt) => syncPlanRecoveries(
+      _withAllowances(source, {'weekly': resetsAt}),
+      store,
+      const SilentRecoveryNotifier(),
+      wake,
+      readRecoveries: (_, _) => const [],
+      readWindows: (_) => spent,
+    );
+
+    await pollWithReset(DateTime.utc(2026, 8, 18, 9));
+    await pollWithReset(DateTime.utc(2026, 8, 18, 15));
+
+    // The provider moved the window; the booking follows it. On the platform
+    // side this is what `ExistingWorkPolicy.replace` is for — the default would
+    // keep the first instant and the reader would be woken too early.
+    expect(wake.booked, [
+      DateTime.utc(2026, 8, 18, 9),
+      DateTime.utc(2026, 8, 18, 15),
+    ]);
+  });
+
+  test('a wake never lands sooner than the poll floor', () async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final wake = _RecordingWake();
+    final rightNow = DateTime.utc(2026, 8, 17, 12);
+
+    await syncPlanRecoveries(
+      // The window rolls in a minute, well inside the floor.
+      _withAllowances(source, {
+        'weekly': rightNow.add(const Duration(minutes: 1)),
+      }),
+      _MemoryRecoveryWatchlistStore(),
+      const SilentRecoveryNotifier(),
+      wake,
+      readRecoveries: (_, _) => const [],
+      readWindows:
+          (_) => const [(accountId: 'claude-local', allowanceId: 'weekly')],
+      now: () => rightNow,
+    );
+
+    // Waking on the instant would put two polls a minute apart, and the floor
+    // is the strictest a connection allows — a recovery is not an exemption.
+    expect(wake.booked, [
+      rightNow.add(const Duration(minutes: PollCadence.minRefreshMinutes)),
+    ]);
+  });
+
+  test('a reset the provider has not caught up to books nothing', () async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final wake = _RecordingWake();
+    final rightNow = DateTime.utc(2026, 8, 17, 12);
+
+    await syncPlanRecoveries(
+      // The window says it rolled an hour ago and still reads spent, which is
+      // what a provider aggregating hourly looks like.
+      _withAllowances(source, {
+        'weekly': rightNow.subtract(const Duration(hours: 1)),
+      }),
+      _MemoryRecoveryWatchlistStore(),
+      const SilentRecoveryNotifier(),
+      wake,
+      readRecoveries: (_, _) => const [],
+      readWindows:
+          (_) => const [(accountId: 'claude-local', allowanceId: 'weekly')],
+      now: () => rightNow,
+    );
+
+    // Booking here would wake, see the same thing, and book again — a
+    // five-minute loop for as long as the provider lags. The cadence covers it.
+    expect(wake.booked, isEmpty);
+    expect(wake.cancelled, 1);
+  });
+
+  test('a reset the provider has not caught up to books nothing', () async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final wake = _RecordingWake();
+    final rightNow = DateTime.utc(2026, 8, 17, 12);
+
+    await syncPlanRecoveries(
+      // The window says it rolled an hour ago and still reads spent, which is
+      // what a provider aggregating hourly looks like.
+      _withAllowances(source, {
+        'weekly': rightNow.subtract(const Duration(hours: 1)),
+      }),
+      _MemoryRecoveryWatchlistStore(),
+      const SilentRecoveryNotifier(),
+      wake,
+      readRecoveries: (_, _) => const [],
+      readWindows:
+          (_) => const [(accountId: 'claude-local', allowanceId: 'weekly')],
+      now: () => rightNow,
+    );
+
+    // Booking here would wake, see the same thing, and book again — a
+    // five-minute loop for as long as the provider lags. The cadence covers it.
+    expect(wake.booked, isEmpty);
+    expect(wake.cancelled, 1);
+  });
+
+  test('nothing spent takes the wake off the books', () async {
+    final store = _MemoryRecoveryWatchlistStore();
+    final wake = _RecordingWake();
+
+    await syncPlanRecoveries(
+      DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 8, 17)),
+      store,
+      const SilentRecoveryNotifier(),
+      wake,
+      readRecoveries: (_, _) => const [],
+      readWindows: (_) => const [],
+    );
+
+    expect(wake.booked, isEmpty);
+    expect(wake.cancelled, 1);
+  });
+
+  test('a reported recovery adds nothing to alerts, phone or watch', () async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final snapshot = _withAllowances(source, {
+      'weekly': DateTime.utc(2026, 8, 18, 9),
+    });
+    final store = _MemoryRecoveryWatchlistStore();
+    await store.write(const [
+      (accountId: 'claude-local', allowanceId: 'weekly'),
+    ]);
+    final notifier = _RecordingRecoveryNotifier();
+
+    await syncPlanRecoveries(
+      snapshot,
+      store,
+      notifier,
+      _RecordingWake(),
+      readRecoveries:
+          (_, _) => const [
+            (
+              accountId: 'claude-local',
+              provider: 'claude',
+              allowanceId: 'weekly',
+              label: 'Weekly plan',
+              resetsAt: null,
+            ),
+          ],
+      readWindows: (_) => const [],
+    );
+
+    // A recovery is an edge, not a condition: it is told once and leaves no
+    // standing state behind. An alert would be listed on the Dashboard and
+    // counted on the watch, and this one is neither.
+    expect(notifier.reported, hasLength(1));
+    expect(snapshot.alerts, isEmpty);
+    expect(
+      WatchDashboardSummaryPayload.fromSnapshot(
+        snapshot,
+        const ConsumptionDisplayPreferences(),
+        const WatchRingPreferences(),
+      ).encode(),
+      contains('"alerts":[]'),
+    );
+  });
+
   test('with nothing remembered the core is not even asked', () async {
     final store = _MemoryRecoveryWatchlistStore();
     final notifier = _RecordingRecoveryNotifier();
+    final wake = _RecordingWake();
     var asked = false;
 
     await syncPlanRecoveries(
       DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 8, 17)),
       store,
       notifier,
+      wake,
       readRecoveries: (_, _) {
         asked = true;
         return const [];
@@ -166,4 +387,49 @@ class _RecordingRecoveryNotifier implements RecoveryNotifier {
     }
     reported.add(recovery);
   }
+}
+
+class _RecordingWake implements RecoveryWakeScheduler {
+  final booked = <DateTime>[];
+  var cancelled = 0;
+
+  @override
+  Future<void> scheduleAt(DateTime resetsAt) async => booked.add(resetsAt);
+
+  @override
+  Future<void> cancel() async => cancelled++;
+}
+
+/// The golden snapshot with one account whose windows reset at [resets].
+DashboardSnapshot _withAllowances(
+  DashboardSnapshot source,
+  Map<String, DateTime> resets,
+) {
+  return DashboardSnapshot.fromJson({
+    ...source.toJson(),
+    'accounts': [
+      {
+        ...source.primaryAccount!.toJson(),
+        'accountId': 'claude-local',
+        'provider': 'claude',
+        'allowances': [
+          for (final entry in resets.entries)
+            {
+              'id': entry.key,
+              'source': 'plan',
+              'label': entry.key,
+              'usedPercent': 100.0,
+              'used': null,
+              'limit': null,
+              'remaining': null,
+              'windowMinutes': null,
+              'resetsAt': entry.value.toIso8601String(),
+              'status': 'warning',
+            },
+        ],
+        'buckets': <Object>[],
+        'modelBreakdown': <Object>[],
+      },
+    ],
+  });
 }

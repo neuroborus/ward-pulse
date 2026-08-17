@@ -57,6 +57,42 @@ List<PlanRecovery> planRecoveries(
   ];
 }
 
+/// The soonest a window in [exhausted] is expected to roll [after] a given
+/// instant, or `null` when none of them says.
+///
+/// Only instants still ahead count. A reset already behind means the provider
+/// has not caught up with its own clock — Cursor aggregates about hourly — and
+/// booking a wake for it would put the phone in a five-minute loop against a
+/// window that keeps reading spent. The ordinary cadence covers that case.
+///
+/// Reading, not judging: the core decides which windows are spent, and the
+/// shell decides when to look again — scheduling is the shell's side of the
+/// boundary, as the poll cadence already is.
+DateTime? nextResetAmong(
+  DashboardSnapshot snapshot,
+  List<WindowKey> exhausted, {
+  required DateTime after,
+}) {
+  DateTime? soonest;
+  for (final account in snapshot.accounts) {
+    for (final allowance in account.allowances) {
+      final isExhausted = exhausted.any(
+        (key) =>
+            key.accountId == account.accountId &&
+            key.allowanceId == allowance.id,
+      );
+      final resetsAt = allowance.resetsAt;
+      if (!isExhausted || resetsAt == null || !resetsAt.isAfter(after)) {
+        continue;
+      }
+      if (soonest == null || resetsAt.isBefore(soonest)) {
+        soonest = resetsAt;
+      }
+    }
+  }
+  return soonest;
+}
+
 /// Window keys as the core reads them, ready to be stored between polls.
 String encodeWindowKeys(List<WindowKey> keys) {
   return jsonEncode([

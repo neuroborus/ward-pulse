@@ -24,6 +24,7 @@ import '../sync/headless_provider_sync.dart';
 import '../sync/manual_refresh_window.dart';
 import '../sync/provider_sync_scheduler.dart';
 import '../sync/recovery_notifications.dart';
+import '../sync/recovery_wake.dart';
 import '../sync/recovery_watchlist.dart';
 import '../sync/watch_sync_service.dart';
 import '../watchface/watchface_screen.dart';
@@ -54,6 +55,7 @@ class WardPulseApp extends StatelessWidget {
     this.debugDataPreferenceStore = const DisabledDebugDataPreferenceStore(),
     this.recoveryWatchlistStore = const DisabledRecoveryWatchlistStore(),
     this.recoveryNotifier = const SilentRecoveryNotifier(),
+    this.recoveryWake = const DisabledRecoveryWakeScheduler(),
   });
 
   final DashboardRepository repository;
@@ -73,6 +75,7 @@ class WardPulseApp extends StatelessWidget {
   final DebugDataPreferenceStore debugDataPreferenceStore;
   final RecoveryWatchlistStore recoveryWatchlistStore;
   final RecoveryNotifier recoveryNotifier;
+  final RecoveryWakeScheduler recoveryWake;
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +102,7 @@ class WardPulseApp extends StatelessWidget {
         debugDataPreferenceStore: debugDataPreferenceStore,
         recoveryWatchlistStore: recoveryWatchlistStore,
         recoveryNotifier: recoveryNotifier,
+        recoveryWake: recoveryWake,
       ),
     );
   }
@@ -124,6 +128,7 @@ class DashboardHost extends StatefulWidget {
     required this.debugDataPreferenceStore,
     required this.recoveryWatchlistStore,
     required this.recoveryNotifier,
+    required this.recoveryWake,
   });
 
   final DashboardRepository repository;
@@ -141,6 +146,7 @@ class DashboardHost extends StatefulWidget {
   final ProviderSyncScheduler syncScheduler;
   final bool debugDataAvailable;
   final DebugDataPreferenceStore debugDataPreferenceStore;
+  final RecoveryWakeScheduler recoveryWake;
   final RecoveryNotifier recoveryNotifier;
   final RecoveryWatchlistStore recoveryWatchlistStore;
 
@@ -382,6 +388,7 @@ class _DashboardHostState extends State<DashboardHost> {
         snapshot,
         widget.recoveryWatchlistStore,
         widget.recoveryNotifier,
+        widget.recoveryWake,
         mockData: _mockDataEnabled,
       ),
     );
