@@ -1800,7 +1800,16 @@ multi-profile hatch patterns (same future note as Phase 13)
 
 ### Phase 15 — plan recovery notifications
 
-Status: planned 2026-08-12.
+Status: implementation complete; watch delivery unverified as of 2026-08-17.
+
+Everything but one acceptance line is covered by tests: the edge in the Rust core, the phone's
+memory of what was spent, the notification and what it may say, the wake booked from the reset
+instant, and the Settings switch with its permission ask. The open line is **"the notification
+reaches a paired watch exactly once"**. It was attempted on 2026-08-17 and could not be measured:
+on the two local AVDs nothing bridges from phone to watch at all — not this notification and not
+a control posted with `cmd notification post` — so a zero on the watch says nothing about
+bridging. Measuring it needs a phone paired through the Wear OS companion app; only then does the
+`notificationBridgeMode` question have an answer worth writing down.
 
 Rationale: an exhausted plan window is the one state the user is actively waiting to leave.
 Today the product says nothing when it ends — the ring simply reappears after the next poll,
@@ -1815,10 +1824,12 @@ needs no rule to configure. It must not enter the alerts list, must not be count
 
 Deliverables:
 
-- the edge is computed in Rust from the previous state and the new snapshot, so the rule stays
-  deterministic and testable and the shells stay transport-only;
-- it fires only for a window that was **exhausted** and reports a reset instant — a window that
-  merely rolls over while it still had headroom is not news;
+- the edge is computed in Rust from the windows the phone remembered as spent and the new
+  snapshot, so the rule stays deterministic and testable and the shells stay transport-only;
+- it fires only for a window that was **exhausted** — one that merely rolls over while it still
+  had headroom is not news. A reset instant is not required to fire: a provider that does not
+  say when a window rolls still has real recoveries, they simply arrive with the next poll
+  instead of a wake booked for the instant;
 - delivery is **scheduled from `AllowanceState.resets_at`**, not discovered by polling: the
   reset instant is already modeled and all three plan families fill it in — Claude, Codex and
   Cursor — while platform connections carry billing reports with no window to reset. So the
@@ -1832,8 +1843,9 @@ Deliverables:
 - the watch surface is **not** free: phone and Wear intentionally share the `app.wardpulse`
   application id, and Wear suppresses bridging for an app it already carries on the assumption
   that the watch app posts its own. So the watch side is a decision — post from the Wear app,
-  or set the notification bridging mode — and it has to be exercised on a paired AVD, since no
-  gate reaches it;
+  or set the notification bridging mode — and it can only be settled by watching it happen, on a
+  phone paired through the Wear OS companion app. Two AVDs on `adb` are not that pair: they carry
+  the Data Layer this product already uses and bridge no notifications at all;
 - plan and allowance windows only in the first iteration. A local budget rolls on the user's own
   calendar rather than a provider clock, and whether that deserves the same interruption is a
   separate question.
@@ -1861,11 +1873,13 @@ what the repository already carries:
   beside the `standalone` key already there — the phone manifest has no say. Android documents
   bridging as the default and `NO_BRIDGING` as the way to switch it off, but does not document
   the case this app is in, where phone and watch share `app.wardpulse`. So the deliverable is
-  first a paired-AVD observation and only then a declaration: nothing if it already arrives
-  once, `NO_BRIDGING` if it arrives twice.
+  first an observation on a companion-paired phone and only then a declaration: nothing if it
+  already arrives once, `NO_BRIDGING` if it arrives twice.
 
-The phone must also **persist the previous snapshot**: the edge compares two of them, and the
-process does not survive between polls.
+The phone must also **persist which windows were spent**: the edge needs a past, and the process
+does not survive between polls. Keys, not whole snapshots — phone preferences live in
+platform-secure storage beside credentials, and a few window ids belong there in a way that
+kilobytes of usage data do not.
 
 Acceptance:
 
