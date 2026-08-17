@@ -85,24 +85,51 @@
                                             <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
-                                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                                        <Arc
-                                            centerX="225"
-                                            centerY="225"
-                                            width="374"
-                                            height="374"
-                                            startAngle="0"
-                                            endAngle="358.37">
-                                            <Transform
-                                                target="startAngle"
-                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.53, 0, 358.37)" />
-                                            <WeightedStroke
-                                                thickness="10"
-                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-                                                cap="ROUND" />
-                                        </Arc>
-                                    </PartDraw>
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                        </Expressions>
+                                        <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                             leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                             the transform so the two round caps close over each other. -->
+                                        <Compare expression="isFull">
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="374"
+                                                    height="374"
+                                                    startAngle="0"
+                                                    endAngle="358.37">
+                                                    <WeightedStroke
+                                                        thickness="10"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Compare>
+                                        <Default>
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="374"
+                                                    height="374"
+                                                    startAngle="0"
+                                                    endAngle="358.37">
+                                                    <Transform
+                                                        target="startAngle"
+                                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.53, 0, 358.37)" />
+                                                    <WeightedStroke
+                                                        thickness="10"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Default>
+                                    </Condition>
                                 </Group>
                             </Compare>
                             <Default>
@@ -118,24 +145,51 @@
                                             <Stroke color="#ff2e3632" thickness="40" cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
-                                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                                        <Arc
-                                            centerX="225"
-                                            centerY="225"
-                                            width="404"
-                                            height="404"
-                                            startAngle="0"
-                                            endAngle="354.23">
-                                            <Transform
-                                                target="startAngle"
-                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 5.67, 0, 354.23)" />
-                                            <WeightedStroke
-                                                thickness="40"
-                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-                                                cap="ROUND" />
-                                        </Arc>
-                                    </PartDraw>
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                        </Expressions>
+                                        <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                             leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                             the transform so the two round caps close over each other. -->
+                                        <Compare expression="isFull">
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="404"
+                                                    height="404"
+                                                    startAngle="0"
+                                                    endAngle="354.23">
+                                                    <WeightedStroke
+                                                        thickness="40"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Compare>
+                                        <Default>
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="404"
+                                                    height="404"
+                                                    startAngle="0"
+                                                    endAngle="354.23">
+                                                    <Transform
+                                                        target="startAngle"
+                                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 5.67, 0, 354.23)" />
+                                                    <WeightedStroke
+                                                        thickness="40"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Default>
+                                    </Condition>
                             <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
                             <Condition>
                                 <Expressions>
@@ -221,24 +275,51 @@
                                             <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
-                                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                                        <Arc
-                                            centerX="225"
-                                            centerY="225"
-                                            width="326"
-                                            height="326"
-                                            startAngle="0"
-                                            endAngle="358.14">
-                                            <Transform
-                                                target="startAngle"
-                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.76, 0, 358.14)" />
-                                            <WeightedStroke
-                                                thickness="10"
-                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-                                                cap="ROUND" />
-                                        </Arc>
-                                    </PartDraw>
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                        </Expressions>
+                                        <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                             leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                             the transform so the two round caps close over each other. -->
+                                        <Compare expression="isFull">
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="326"
+                                                    height="326"
+                                                    startAngle="0"
+                                                    endAngle="358.14">
+                                                    <WeightedStroke
+                                                        thickness="10"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Compare>
+                                        <Default>
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="326"
+                                                    height="326"
+                                                    startAngle="0"
+                                                    endAngle="358.14">
+                                                    <Transform
+                                                        target="startAngle"
+                                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.76, 0, 358.14)" />
+                                                    <WeightedStroke
+                                                        thickness="10"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Default>
+                                    </Condition>
                                 </Group>
                             </Compare>
                             <Default>
@@ -254,24 +335,51 @@
                                             <Stroke color="#ff2e3632" thickness="40" cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
-                                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                                        <Arc
-                                            centerX="225"
-                                            centerY="225"
-                                            width="356"
-                                            height="356"
-                                            startAngle="0"
-                                            endAngle="353.46">
-                                            <Transform
-                                                target="startAngle"
-                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 6.44, 0, 353.46)" />
-                                            <WeightedStroke
-                                                thickness="40"
-                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-                                                cap="ROUND" />
-                                        </Arc>
-                                    </PartDraw>
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                        </Expressions>
+                                        <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                             leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                             the transform so the two round caps close over each other. -->
+                                        <Compare expression="isFull">
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="356"
+                                                    height="356"
+                                                    startAngle="0"
+                                                    endAngle="353.46">
+                                                    <WeightedStroke
+                                                        thickness="40"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Compare>
+                                        <Default>
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="356"
+                                                    height="356"
+                                                    startAngle="0"
+                                                    endAngle="353.46">
+                                                    <Transform
+                                                        target="startAngle"
+                                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 6.44, 0, 353.46)" />
+                                                    <WeightedStroke
+                                                        thickness="40"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Default>
+                                    </Condition>
                             <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
                             <Condition>
                                 <Expressions>
@@ -357,24 +465,51 @@
                                             <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
-                                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                                        <Arc
-                                            centerX="225"
-                                            centerY="225"
-                                            width="278"
-                                            height="278"
-                                            startAngle="0"
-                                            endAngle="357.84">
-                                            <Transform
-                                                target="startAngle"
-                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 2.06, 0, 357.84)" />
-                                            <WeightedStroke
-                                                thickness="10"
-                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-                                                cap="ROUND" />
-                                        </Arc>
-                                    </PartDraw>
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                        </Expressions>
+                                        <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                             leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                             the transform so the two round caps close over each other. -->
+                                        <Compare expression="isFull">
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="278"
+                                                    height="278"
+                                                    startAngle="0"
+                                                    endAngle="357.84">
+                                                    <WeightedStroke
+                                                        thickness="10"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Compare>
+                                        <Default>
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="278"
+                                                    height="278"
+                                                    startAngle="0"
+                                                    endAngle="357.84">
+                                                    <Transform
+                                                        target="startAngle"
+                                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 2.06, 0, 357.84)" />
+                                                    <WeightedStroke
+                                                        thickness="10"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Default>
+                                    </Condition>
                                 </Group>
                             </Compare>
                             <Default>
@@ -390,24 +525,51 @@
                                             <Stroke color="#ff2e3632" thickness="40" cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
-                                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                                        <Arc
-                                            centerX="225"
-                                            centerY="225"
-                                            width="308"
-                                            height="308"
-                                            startAngle="0"
-                                            endAngle="352.46">
-                                            <Transform
-                                                target="startAngle"
-                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 7.44, 0, 352.46)" />
-                                            <WeightedStroke
-                                                thickness="40"
-                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-                                                cap="ROUND" />
-                                        </Arc>
-                                    </PartDraw>
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                        </Expressions>
+                                        <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                             leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                             the transform so the two round caps close over each other. -->
+                                        <Compare expression="isFull">
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="308"
+                                                    height="308"
+                                                    startAngle="0"
+                                                    endAngle="352.46">
+                                                    <WeightedStroke
+                                                        thickness="40"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Compare>
+                                        <Default>
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="308"
+                                                    height="308"
+                                                    startAngle="0"
+                                                    endAngle="352.46">
+                                                    <Transform
+                                                        target="startAngle"
+                                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 7.44, 0, 352.46)" />
+                                                    <WeightedStroke
+                                                        thickness="40"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Default>
+                                    </Condition>
                             <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
                             <Condition>
                                 <Expressions>
@@ -486,24 +648,51 @@
                                     <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
                                 </Arc>
                             </PartDraw>
-                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
-                                <Variant mode="AMBIENT" target="alpha" value="140" />
-                                <Arc
-                                    centerX="225"
-                                    centerY="225"
-                                    width="394"
-                                    height="394"
-                                    startAngle="0"
-                                    endAngle="358.45">
-                                    <Transform
-                                        target="startAngle"
-                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.45, 0, 358.45)" />
-                                    <WeightedStroke
-                                        thickness="10"
-                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-                                        cap="ROUND" />
-                                </Arc>
-                            </PartDraw>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                </Expressions>
+                                <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                     leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                     the transform so the two round caps close over each other. -->
+                                <Compare expression="isFull">
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="394"
+                                            height="394"
+                                            startAngle="0"
+                                            endAngle="358.45">
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Compare>
+                                <Default>
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="394"
+                                            height="394"
+                                            startAngle="0"
+                                            endAngle="358.45">
+                                            <Transform
+                                                target="startAngle"
+                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.45, 0, 358.45)" />
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Default>
+                            </Condition>
                         </Group>
                     </Compare>
                     <Compare expression="isBand1">
@@ -519,24 +708,51 @@
                                     <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
                                 </Arc>
                             </PartDraw>
-                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
-                                <Variant mode="AMBIENT" target="alpha" value="140" />
-                                <Arc
-                                    centerX="225"
-                                    centerY="225"
-                                    width="346"
-                                    height="346"
-                                    startAngle="0"
-                                    endAngle="358.24">
-                                    <Transform
-                                        target="startAngle"
-                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.66, 0, 358.24)" />
-                                    <WeightedStroke
-                                        thickness="10"
-                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-                                        cap="ROUND" />
-                                </Arc>
-                            </PartDraw>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                </Expressions>
+                                <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                     leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                     the transform so the two round caps close over each other. -->
+                                <Compare expression="isFull">
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="346"
+                                            height="346"
+                                            startAngle="0"
+                                            endAngle="358.24">
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Compare>
+                                <Default>
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="346"
+                                            height="346"
+                                            startAngle="0"
+                                            endAngle="358.24">
+                                            <Transform
+                                                target="startAngle"
+                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.66, 0, 358.24)" />
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Default>
+                            </Condition>
                         </Group>
                     </Compare>
                     <Compare expression="isBand2">
@@ -552,24 +768,51 @@
                                     <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
                                 </Arc>
                             </PartDraw>
-                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
-                                <Variant mode="AMBIENT" target="alpha" value="140" />
-                                <Arc
-                                    centerX="225"
-                                    centerY="225"
-                                    width="298"
-                                    height="298"
-                                    startAngle="0"
-                                    endAngle="357.98">
-                                    <Transform
-                                        target="startAngle"
-                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.92, 0, 357.98)" />
-                                    <WeightedStroke
-                                        thickness="10"
-                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-                                        cap="ROUND" />
-                                </Arc>
-                            </PartDraw>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                </Expressions>
+                                <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                     leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                     the transform so the two round caps close over each other. -->
+                                <Compare expression="isFull">
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="298"
+                                            height="298"
+                                            startAngle="0"
+                                            endAngle="357.98">
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Compare>
+                                <Default>
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="298"
+                                            height="298"
+                                            startAngle="0"
+                                            endAngle="357.98">
+                                            <Transform
+                                                target="startAngle"
+                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.92, 0, 357.98)" />
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Default>
+                            </Condition>
                         </Group>
                     </Compare>
                 </Condition>

@@ -428,24 +428,51 @@ ${pad}        endAngle="${SWEEP.end}">
 ${pad}        <Stroke color="${COLOR.track}" thickness="${thickness}" cap="ROUND" />
 ${pad}    </Arc>
 ${pad}</PartDraw>
-${pad}<PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
-${pad}    <Variant mode="AMBIENT" target="alpha" value="140" />
-${pad}    <Arc
-${pad}        centerX="${FACE.center}"
-${pad}        centerY="${FACE.center}"
-${pad}        width="${diameter}"
-${pad}        height="${diameter}"
-${pad}        startAngle="${SWEEP.start}"
-${pad}        endAngle="${(SWEEP.end - capDegrees(diameter, thickness)).toFixed(2)}">
-${pad}        <Transform
-${pad}            target="startAngle"
-${pad}            value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end} + ${capDegrees(diameter, thickness)}, ${SWEEP.start}, ${(SWEEP.end - capDegrees(diameter, thickness)).toFixed(2)})" />
-${pad}        <WeightedStroke
-${pad}            thickness="${thickness}"
-${pad}            colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-${pad}            cap="ROUND" />
-${pad}    </Arc>
-${pad}</PartDraw>`
+${pad}<Condition>
+${pad}    <Expressions>
+${pad}        <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+${pad}    </Expressions>
+${pad}    <!-- Nothing spent yet: there is no melt to inset, and the inset would
+${pad}         leave a seam at 12 on a ring that has spent nothing. Drawn without
+${pad}         the transform so the two round caps close over each other. -->
+${pad}    <Compare expression="isFull">
+${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
+${pad}            <Variant mode="AMBIENT" target="alpha" value="140" />
+${pad}            <Arc
+${pad}                centerX="${FACE.center}"
+${pad}                centerY="${FACE.center}"
+${pad}                width="${diameter}"
+${pad}                height="${diameter}"
+${pad}                startAngle="${SWEEP.start}"
+${pad}                endAngle="${(SWEEP.end - capDegrees(diameter, thickness)).toFixed(2)}">
+${pad}                <WeightedStroke
+${pad}                    thickness="${thickness}"
+${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+${pad}                    cap="ROUND" />
+${pad}            </Arc>
+${pad}        </PartDraw>
+${pad}    </Compare>
+${pad}    <Default>
+${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
+${pad}            <Variant mode="AMBIENT" target="alpha" value="140" />
+${pad}            <Arc
+${pad}                centerX="${FACE.center}"
+${pad}                centerY="${FACE.center}"
+${pad}                width="${diameter}"
+${pad}                height="${diameter}"
+${pad}                startAngle="${SWEEP.start}"
+${pad}                endAngle="${(SWEEP.end - capDegrees(diameter, thickness)).toFixed(2)}">
+${pad}                <Transform
+${pad}                    target="startAngle"
+${pad}                    value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end} + ${capDegrees(diameter, thickness)}, ${SWEEP.start}, ${(SWEEP.end - capDegrees(diameter, thickness)).toFixed(2)})" />
+${pad}                <WeightedStroke
+${pad}                    thickness="${thickness}"
+${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+${pad}                    cap="ROUND" />
+${pad}            </Arc>
+${pad}        </PartDraw>
+${pad}    </Default>
+${pad}</Condition>`
 }
 
 function ringSlot({ slotId, diameter, service }, index) {

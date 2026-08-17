@@ -8,7 +8,8 @@ its family color; the summed Today / Week / Month rings are retired); budget-str
 **2026-08-09** (a budget strip reads `$12.34/100` instead of a percent); ring-type revision
 **2026-08-11** (a budget ring repeats its period around its own band as cut-out type);
 split-band revision **2026-08-13** (one Cursor plan's two pools may share a single band, and
-Cursor's own models take a colour of their own) —
+Cursor's own models take a colour of their own); full-ring revision **2026-08-17** (a band with
+nothing spent closes instead of carrying a seam) —
 accepted visual target for Wear OS and Watch Face Format until the next explicit design
 revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
@@ -278,6 +279,15 @@ and the caps fill exactly what the inset freed: at 50% used the gap measures **1
 a true 179.95°, on the full band and on both halves alike. Review art carries the same inset,
 which is why the boards and the watch still agree.
 
+**A band that has spent nothing closes (revision 2026-08-17).** The cap inset above is what
+makes a small melt visible, but at `usedPercent == 0` there is no melt to inset and the inset
+leaves the ring open anyway: measured on the paired band, a seam of about **1°** at 12, four
+pixels wide at that radius. A closed sweep is not available — `359.9` exists precisely because
+`360` collapses the `ROUND` tip — so the face branches instead: when the complication reads its
+maximum, the same arc is drawn without the start transform and the two caps close over each
+other. Boards do the same (`ringArc`, `remaining >= 1`), which is why
+`round-3-plan-untouched.svg` shows a closed inner half beside a spending outer one.
+
 **Halves of a band, measured 2026-08-13.** A split band (see Split band) is two arcs inside one
 ring slot, and the numbers that work are **centre lines at `outer − 5` and `outer − 15`, both at
 `thickness="10"`** — 197 and 187 on the outermost band, 173 and 163 on the next, 149 and 139 on
@@ -426,6 +436,7 @@ xdg-open apps/wear_android/design/preview-3-plan-credits.png
 |------|---------|
 | `round-3-plan-credits.svg` | **Primary baseline** — three providers, plan + credits |
 | `round-3-plan-split.svg` | **Split band baseline** — a Cursor plan's two pools on one band, two markers and two percents on its strip |
+| `round-3-plan-untouched.svg` | A pool nobody has spent: its half closes, while the pool beside it keeps its gap |
 | `round-3-plan-budget.svg` | Two plan rings + a budget ring reading `$71.30/250`; only its band carries type |
 | `round-3-budget-periods.svg` | **Ring type baseline** — one connection's three budget periods, told apart by `7D` / `M` / `D` alone |
 | `round-2-plan-credits.svg` | Two providers |

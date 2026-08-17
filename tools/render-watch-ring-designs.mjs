@@ -119,6 +119,14 @@ const CATALOG = {
     color: '#7E93B8',
     split: { used: 0.38, color: '#67E8D4' },
   },
+  // The live case that raised the full-ring question: an own pool nobody has
+  // touched yet beside an external one already spending.
+  cursorPairUntouched: {
+    id: 'cursor',
+    used: 0,
+    color: '#7E93B8',
+    split: { used: 0.25, color: '#67E8D4' },
+  },
   // One connection's three budget periods; percents and money match Wear's
   // PreviewWatchDashboardSummary, so the boards and the preview face show one story.
   anthropicBudgetWeek: {
@@ -188,8 +196,18 @@ function esc(text) {
 
 function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
   const circ = 2 * Math.PI * r
-  const left = Math.max(0.02, Math.min(remaining, 0.999))
   const valueColor = ambient ? '#8A968F' : color
+  if (remaining >= 1) {
+    // Nothing spent: a closed ring, because the cap inset below would leave a
+    // seam at 12 on a band that has spent nothing to open one
+    // (`WATCH_RING_DESIGN.md`, Ring geometry — full-ring revision 2026-08-17).
+    return `
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
+      stroke-width="${thickness}" />
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${valueColor}"
+      stroke-width="${thickness}" />`
+  }
+  const left = Math.max(0.02, Math.min(remaining, 0.999))
   // Round caps reach half a thickness past each end, so the drawn span is
   // shortened by one cap on each side and started half a cap later: what the
   // eye sees then ends where the value does, as on the face
@@ -460,6 +478,16 @@ const variants = [
     showCredits: false,
   },
   {
+    // A band at 100% remaining closes: no melt to inset, so no seam at 12. The
+    // rest of the board is the everyday case, so the closed ring is the only
+    // thing to compare.
+    file: 'round-3-plan-untouched.svg',
+    name: 'Round · 3 providers · an untouched pool closes its half',
+    layers: [CATALOG.codex, CATALOG.claude, CATALOG.cursorPairUntouched],
+    showPlan: true,
+    showCredits: false,
+  },
+  {
     // Codex and Cursor keep their own colors, so the budget ring is the only orange one:
     // pairing it with the Claude plan ring would draw the multi-profile case the document
     // still leaves open.
@@ -526,6 +554,8 @@ const wffFiles = new Set([
   'round-3-plan-split.svg',
   // Ring type is a face-only channel, so its board belongs beside the face too.
   'round-3-budget-periods.svg',
+  // Closing a full ring is a face drawing rule, so its board goes beside it.
+  'round-3-plan-untouched.svg',
   'round-1-plan-credits.svg',
   'round-credits-only.svg',
   'round-ambient-3.svg',
