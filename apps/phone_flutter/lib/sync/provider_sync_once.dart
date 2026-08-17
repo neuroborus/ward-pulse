@@ -51,7 +51,7 @@ Future<void> providerSyncOnce() async {
     await syncPlanRecoveries(
       snapshot,
       SecureRecoveryWatchlistStore(),
-      const SilentRecoveryNotifier(),
+      LocalRecoveryNotifier(),
     );
   } catch (_) {
     // Automatic / headless sync keeps the last successful snapshot visible.

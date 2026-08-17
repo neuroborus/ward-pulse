@@ -12,7 +12,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::model::{AccountId, AllowanceState, DashboardSnapshot};
+use crate::model::{AccountId, AllowanceState, DashboardSnapshot, ProviderKind};
 use crate::time::DateTimeUtc;
 
 /// One plan window, named the only way it is unique: allowance ids repeat
@@ -32,6 +32,10 @@ pub struct WindowKey {
 #[serde(rename_all = "camelCase")]
 pub struct PlanRecovery {
     pub account_id: AccountId,
+    /// Which family the window belongs to. Two subscriptions can both call a
+    /// window "Weekly plan", so the family is what tells a reader which one is
+    /// back.
+    pub provider: ProviderKind,
     pub allowance_id: String,
     pub label: String,
     /// When the window is next expected to roll, as the new snapshot reports it.
@@ -70,6 +74,7 @@ pub fn plan_recoveries(exhausted: &[WindowKey], next: &DashboardSnapshot) -> Vec
             if was_exhausted && has_room(allowance) {
                 recoveries.push(PlanRecovery {
                     account_id: account.account_id.clone(),
+                    provider: account.provider,
                     allowance_id: allowance.id.clone(),
                     label: allowance.label.clone(),
                     resets_at: allowance.resets_at.clone(),
@@ -194,6 +199,7 @@ mod tests {
 
         assert_eq!(recoveries.len(), 1);
         assert_eq!(recoveries[0].account_id, "claude");
+        assert_eq!(recoveries[0].provider, ProviderKind::Claude);
         assert_eq!(recoveries[0].allowance_id, "weekly");
         assert_eq!(
             recoveries[0].resets_at,

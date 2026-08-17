@@ -1841,9 +1841,15 @@ Deliverables:
 Decided 2026-08-16, on the three questions the deliverables left open — all three answered by
 what the repository already carries:
 
-- **the notification is posted by the Android host**, not by a new plugin. A channel and one
-  `notify` are less surface than a dependency that brings its own scheduler and its own
-  permission flow, and the host already owns the app widget and the Wear listener;
+- **the notification is posted through `flutter_local_notifications`**, revised 2026-08-17. The
+  first answer was to post from the Android host over a method channel, on the grounds that a
+  dependency costs more than a channel and one `notify`. That was wrong about where the code
+  runs: an app-level channel is registered in `MainActivity.configureFlutterEngine`, so it
+  exists only in the Activity's engine. The wake that matters here fires with the app closed, in
+  the WorkManager background isolate, where `DartPluginRegistrant` registers pub plugins and
+  nothing else — a channel call from there raises `MissingPluginException`. A plugin is the
+  conventional way to reach the notification manager from that isolate, which is what the
+  repository's "conventional and clearly justified" exception is for;
 - **it is scheduled with `workmanager`**, already in the tree, as a one-off task delayed to
   `resets_at`. An exact alarm is not available in practice: `SCHEDULE_EXACT_ALARM` is granted to
   alarm and calendar apps, which this is not. Firing inside the Doze window is what "scheduled

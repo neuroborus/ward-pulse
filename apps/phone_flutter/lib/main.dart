@@ -13,6 +13,7 @@ import 'widget/phone_widget_preferences.dart';
 import 'widget/phone_widget_sync.dart';
 import 'sync/headless_provider_sync.dart';
 import 'sync/provider_sync_scheduler.dart';
+import 'sync/recovery_notifications.dart';
 import 'sync/recovery_watchlist.dart';
 
 Future<void> main() async {
@@ -36,6 +37,7 @@ Future<void> main() async {
       debugDataAvailable: kDebugMode,
       debugDataPreferenceStore: debugDataPreferenceStore,
       recoveryWatchlistStore: SecureRecoveryWatchlistStore(),
+      recoveryNotifier: LocalRecoveryNotifier(),
       repository:
           kDebugMode
               ? DebugDashboardRepository(

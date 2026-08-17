@@ -34,11 +34,15 @@
     "planRecovery": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["accountId", "allowanceId", "label", "resetsAt"],
+      "required": ["accountId", "provider", "allowanceId", "label", "resetsAt"],
       "properties": {
         "accountId": {
           "type": "string",
           "description": "Keys the notification so a repeat replaces it. Never shown to the reader."
+        },
+        "provider": {
+          "$ref": "dashboard_snapshot.schema.json#/$defs/providerKind",
+          "description": "Which family the window belongs to: two subscriptions can both call a window \"Weekly plan\"."
         },
         "allowanceId": { "type": "string" },
         "label": { "type": "string" },

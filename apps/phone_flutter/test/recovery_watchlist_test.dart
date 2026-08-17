@@ -71,6 +71,7 @@ void main() {
             for (final key in exhausted)
               (
                 accountId: key.accountId,
+                provider: 'claude',
                 allowanceId: key.allowanceId,
                 label: 'Weekly plan',
                 resetsAt: DateTime.utc(2026, 8, 18),
@@ -101,6 +102,7 @@ void main() {
             for (final key in exhausted)
               (
                 accountId: key.accountId,
+                provider: 'claude',
                 allowanceId: key.allowanceId,
                 label: key.allowanceId,
                 resetsAt: null,

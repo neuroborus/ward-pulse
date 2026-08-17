@@ -17,6 +17,7 @@ dependencies:
   webview_flutter: ^4.14.1
   webview_flutter_android: ^4.13.0
   home_widget: ^0.9.3
+  flutter_local_notifications: ^22.3.0
 
 dev_dependencies:
   flutter_test:

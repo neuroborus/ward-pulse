@@ -11,9 +11,16 @@ typedef WindowKey = ({String accountId, String allowanceId});
 /// A window that was spent and has room again.
 ///
 /// `accountId` keys the notification so a repeat replaces it; it is never part
-/// of what a reader sees.
+/// of what a reader sees. `provider` is: two subscriptions can both call a
+/// window "Weekly plan", and the family is what tells them apart.
 typedef PlanRecovery =
-    ({String accountId, String allowanceId, String label, DateTime? resetsAt});
+    ({
+      String accountId,
+      String provider,
+      String allowanceId,
+      String label,
+      DateTime? resetsAt,
+    });
 
 /// Windows `snapshot` reports as spent (Rust core in production; a test seam
 /// everywhere else, since host tests load no `.so`).
@@ -90,6 +97,7 @@ PlanRecovery planRecoveryFromJson(Map<String, dynamic> json) {
   final resetsAt = json['resetsAt'];
   return (
     accountId: json['accountId'] as String,
+    provider: json['provider'] as String,
     allowanceId: json['allowanceId'] as String,
     label: json['label'] as String,
     // `tryParse`, because the core passes provider instants through rather than

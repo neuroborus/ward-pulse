@@ -30,6 +30,7 @@ void main() {
     // losing the window over it would cost the whole poll's bookkeeping.
     final recovery = planRecoveryFromJson({
       'accountId': 'claude-local',
+      'provider': 'claude',
       'allowanceId': 'claude-weekly',
       'label': 'Weekly plan',
       'resetsAt': 'whenever',
