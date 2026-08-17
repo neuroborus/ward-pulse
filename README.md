@@ -12,7 +12,7 @@ This repository is intentionally organized as one product monorepo with separate
 - `apps/phone_flutter/` contains the Flutter phone app shell.
 - `apps/wear_android/` contains the native Kotlin/Compose for Wear OS shell.
 - `apps/watchface_wff/` contains the declarative Watch Face Format package.
-- `schemas/` contains shared JSON schemas for snapshots, accounts, usage buckets, and budgets.
+- `schemas/` contains shared JSON schemas for payloads crossing a language or device boundary.
 - `fixtures/` contains sanitized provider fixtures and stable dashboard snapshots.
 - `bindings/` contains platform binding wrappers.
 - `brand/` contains protected product identity, shared OpenPencil sources, and store artwork.

@@ -67,6 +67,10 @@ final class _WardPulseBindings {
           .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
             'ward_pulse_apply_alert_settings_result_json',
           ),
+      _exhaustedWindowsResultJson = library
+          .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
+            'ward_pulse_exhausted_windows_result_json',
+          ),
       _stringFree = library.lookupFunction<_NativeStringFree, _DartStringFree>(
         'ward_pulse_string_free',
       );
@@ -85,6 +89,7 @@ final class _WardPulseBindings {
   final _DartJsonTransform _cursorPlatformDashboardSnapshotResultJson;
   final _DartJsonTransform _mergeDashboardSnapshotsResultJson;
   final _DartJsonTransform _applyAlertSettingsResultJson;
+  final _DartJsonTransform _exhaustedWindowsResultJson;
   final _DartStringFree _stringFree;
 
   String loadDashboardSnapshotJson() {
@@ -143,20 +148,37 @@ final class _WardPulseBindings {
     return _normalizeReportJson(request, _applyAlertSettingsResultJson);
   }
 
+  /// Plan windows this snapshot reports as spent, to keep until the next poll.
+  String exhaustedWindowsJson(String snapshotJson) {
+    return _normalizeReportJson(
+      snapshotJson,
+      _exhaustedWindowsResultJson,
+      payloadKey: 'windowsJson',
+    );
+  }
+
   String _normalizeReportJson(
     String reportJson,
-    Pointer<Utf8> Function(Pointer<Utf8>) normalize,
-  ) {
+    Pointer<Utf8> Function(Pointer<Utf8>) normalize, {
+    String payloadKey = 'dashboardJson',
+  }) {
     final request = reportJson.toNativeUtf8();
     try {
-      return _decodeResultJson(normalize(request));
+      return _decodeResultJson(normalize(request), payloadKey: payloadKey);
     } finally {
       malloc.free(request);
     }
   }
 
   /// Unwraps the result envelope every entry point returns, then frees it.
-  String _decodeResultJson(Pointer<Utf8> value) {
+  ///
+  /// [payloadKey] names what the envelope carries: entry points that build a
+  /// dashboard say `dashboardJson`, and the ones that answer a question about
+  /// one name their own answer.
+  String _decodeResultJson(
+    Pointer<Utf8> value, {
+    String payloadKey = 'dashboardJson',
+  }) {
     if (value == nullptr) {
       throw const WardPulseBindingsException();
     }
@@ -168,8 +190,8 @@ final class _WardPulseBindings {
       }
 
       return switch (result['status']) {
-        'success' when result['dashboardJson'] is String =>
-          result['dashboardJson'] as String,
+        'success' when result[payloadKey] is String =>
+          result[payloadKey] as String,
         'error' when result['message'] is String =>
           throw WardPulseBindingsException(result['message'] as String),
         _ => throw const WardPulseBindingsException(),
@@ -220,4 +242,8 @@ String mergeDashboardSnapshotsJson(Iterable<String> snapshotsJson) {
 
 String applyAlertSettingsJson(String snapshotJson, String settingsJson) {
   return _bindings.applyAlertSettingsJson(snapshotJson, settingsJson);
+}
+
+String exhaustedWindowsJson(String snapshotJson) {
+  return _bindings.exhaustedWindowsJson(snapshotJson);
 }

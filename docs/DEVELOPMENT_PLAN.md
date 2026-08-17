@@ -186,6 +186,8 @@ ward-pulse/
     provider_account.schema.json
     usage_bucket.schema.json
     budget_state.schema.json
+    watch_dashboard_summary.schema.json
+    plan_recovery.schema.json
 
   brand/
     README.md                    # brand/trademark usage rules

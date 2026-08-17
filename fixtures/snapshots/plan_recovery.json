@@ -1,0 +1,14 @@
+{
+  "exhausted": [
+    { "accountId": "claude-local", "allowanceId": "claude-weekly" },
+    { "accountId": "claude-local", "allowanceId": "claude-session" }
+  ],
+  "recoveries": [
+    {
+      "accountId": "claude-local",
+      "allowanceId": "claude-weekly",
+      "label": "Weekly plan",
+      "resetsAt": "2026-08-17T09:00:00Z"
+    }
+  ]
+}

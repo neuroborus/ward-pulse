@@ -9,6 +9,7 @@ import '../settings/consumption_display_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
 import '../widget/phone_widget_preferences.dart';
 import '../widget/phone_widget_sync.dart';
+import 'recovery_watchlist.dart';
 import 'watch_sync_service.dart';
 
 /// One provider sync + watch push with no UI (headless WorkManager tick).
@@ -44,6 +45,9 @@ Future<void> providerSyncOnce() async {
         name: phoneWidgetLogName,
       );
     }
+    // Bookkeeping last: what the reader can see is pushed first, and a store
+    // that stalls must not hold up the watch.
+    await rememberExhaustedWindows(snapshot, SecureRecoveryWatchlistStore());
   } catch (_) {
     // Automatic / headless sync keeps the last successful snapshot visible.
   }

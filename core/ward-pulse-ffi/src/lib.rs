@@ -5,7 +5,10 @@ use std::ptr;
 
 use ward_pulse_core::model::{DashboardSnapshot, ProviderSnapshot};
 use ward_pulse_core::time::DateTimeUtc;
-use ward_pulse_core::{apply_alert_settings, build_dashboard_snapshot, AlertSettings};
+use ward_pulse_core::{
+    apply_alert_settings, build_dashboard_snapshot, exhausted_windows, plan_recoveries,
+    AlertSettings, WindowKey,
+};
 use ward_pulse_providers::claude::{
     anthropic_provider_snapshot_from_report_json, claude_provider_snapshot_from_report_json,
     AnthropicReportError, ClaudeReportError,
@@ -38,6 +41,7 @@ enum DashboardSnapshotJsonError {
     Deserialize(serde_json::Error),
     Serialize(serde_json::Error),
     AlertSettings(serde_json::Error),
+    PlanRecovery(serde_json::Error),
 }
 
 impl fmt::Display for DashboardSnapshotJsonError {
@@ -76,6 +80,9 @@ impl fmt::Display for DashboardSnapshotJsonError {
             Self::Serialize(error) => {
                 write!(formatter, "failed to serialize dashboard snapshot: {error}")
             }
+            Self::PlanRecovery(error) => {
+                write!(formatter, "failed to read a plan recovery request: {error}")
+            }
             Self::AlertSettings(error) => {
                 write!(formatter, "failed to parse alert settings: {error}")
             }
@@ -95,9 +102,10 @@ impl StdError for DashboardSnapshotJsonError {
             Self::Fixture(error) => Some(error),
             Self::OpenAi(error) => Some(error),
             Self::EmptySnapshots => None,
-            Self::Deserialize(error) | Self::Serialize(error) | Self::AlertSettings(error) => {
-                Some(error)
-            }
+            Self::Deserialize(error)
+            | Self::Serialize(error)
+            | Self::AlertSettings(error)
+            | Self::PlanRecovery(error) => Some(error),
         }
     }
 }
@@ -208,11 +216,50 @@ fn apply_alert_settings_json(request_json: &str) -> Result<String, DashboardSnap
     serde_json::to_string(&snapshot).map_err(DashboardSnapshotJsonError::Serialize)
 }
 
+/// Windows the phone should remember as spent, from a snapshot it just loaded.
+fn exhausted_windows_json(snapshot_json: &str) -> Result<String, DashboardSnapshotJsonError> {
+    let snapshot: DashboardSnapshot =
+        serde_json::from_str(snapshot_json).map_err(DashboardSnapshotJsonError::PlanRecovery)?;
+    serde_json::to_string(&exhausted_windows(&snapshot))
+        .map_err(DashboardSnapshotJsonError::Serialize)
+}
+
+/// Windows from `exhausted` that the snapshot reports usable again.
+///
+/// Both halves arrive in one object, as alert settings do: the shared string
+/// transform takes a single argument.
+fn plan_recoveries_json(request_json: &str) -> Result<String, DashboardSnapshotJsonError> {
+    let value: serde_json::Value =
+        serde_json::from_str(request_json).map_err(DashboardSnapshotJsonError::PlanRecovery)?;
+    let snapshot: DashboardSnapshot = serde_json::from_value(
+        value
+            .get("snapshot")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+    )
+    .map_err(DashboardSnapshotJsonError::PlanRecovery)?;
+    let exhausted: Vec<WindowKey> = match value.get("exhausted") {
+        Some(exhausted) => serde_json::from_value(exhausted.clone())
+            .map_err(DashboardSnapshotJsonError::PlanRecovery)?,
+        None => Vec::new(),
+    };
+    serde_json::to_string(&plan_recoveries(&exhausted, &snapshot))
+        .map_err(DashboardSnapshotJsonError::Serialize)
+}
+
 fn snapshot_result_json(result: Result<String, DashboardSnapshotJsonError>) -> Option<String> {
+    result_json("dashboardJson", result)
+}
+
+/// The result envelope every entry point returns, named by what it carries.
+fn result_json(
+    payload_key: &str,
+    result: Result<String, DashboardSnapshotJsonError>,
+) -> Option<String> {
     let envelope = match result {
-        Ok(dashboard_json) => serde_json::json!({
+        Ok(payload) => serde_json::json!({
             "status": "success",
-            "dashboardJson": dashboard_json,
+            payload_key: payload,
         }),
         Err(error) => serde_json::json!({
             "status": "error",
@@ -332,6 +379,38 @@ pub unsafe extern "C" fn ward_pulse_cursor_platform_dashboard_snapshot_result_js
     })
 }
 
+/// Lists the plan windows a snapshot reports as spent, for the phone to keep
+/// until its next poll, and returns a JSON result envelope.
+///
+/// # Safety
+///
+/// `snapshot_json` must be a non-null pointer to a valid, null-terminated UTF-8
+/// string.
+#[no_mangle]
+pub unsafe extern "C" fn ward_pulse_exhausted_windows_result_json(
+    snapshot_json: *const c_char,
+) -> *mut c_char {
+    transform_report_json(snapshot_json, |json| {
+        result_json("windowsJson", exhausted_windows_json(json))
+    })
+}
+
+/// Reports which remembered windows have room again and returns a JSON result
+/// envelope. The request carries `snapshot` and `exhausted` in one object.
+///
+/// # Safety
+///
+/// `request_json` must be a non-null pointer to a valid, null-terminated UTF-8
+/// string.
+#[no_mangle]
+pub unsafe extern "C" fn ward_pulse_plan_recoveries_result_json(
+    request_json: *const c_char,
+) -> *mut c_char {
+    transform_report_json(request_json, |json| {
+        result_json("recoveriesJson", plan_recoveries_json(json))
+    })
+}
+
 unsafe fn transform_report_json(
     report_json: *const c_char,
     transform: fn(&str) -> Option<String>,
@@ -409,6 +488,98 @@ mod tests {
         .expect("parse golden dashboard snapshot");
 
         assert_eq!(actual, expected);
+    }
+
+    /// The golden both sides read: this crate builds it, and the phone parses
+    /// the same file. A drift here is a contract break, not a test detail.
+    #[test]
+    fn plan_recoveries_match_the_golden_fixture() {
+        let golden: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../fixtures/snapshots/plan_recovery.json"
+        ))
+        .expect("parse golden plan recovery");
+
+        let spent = snapshot_with_weekly_percent(100.0);
+        let windows: serde_json::Value =
+            serde_json::from_str(&exhausted_windows_json(&spent).expect("list exhausted windows"))
+                .expect("parse exhausted windows");
+        assert_eq!(windows, golden["exhausted"]);
+
+        let request = serde_json::json!({
+            "snapshot": serde_json::from_str::<serde_json::Value>(&snapshot_with_weekly_percent(
+                4.0,
+            ))
+            .expect("parse snapshot"),
+            "exhausted": golden["exhausted"],
+        });
+        let recoveries: serde_json::Value = serde_json::from_str(
+            &plan_recoveries_json(&request.to_string()).expect("list recoveries"),
+        )
+        .expect("parse recoveries");
+
+        assert_eq!(recoveries, golden["recoveries"]);
+    }
+
+    #[test]
+    fn a_recovery_request_without_remembered_windows_is_empty() {
+        let request = serde_json::json!({
+            "snapshot": serde_json::from_str::<serde_json::Value>(&snapshot_with_weekly_percent(
+                4.0,
+            ))
+            .expect("parse snapshot"),
+        });
+
+        let recoveries = plan_recoveries_json(&request.to_string()).expect("list recoveries");
+
+        assert_eq!(recoveries, "[]");
+    }
+
+    /// A one-account dashboard whose weekly window sits at `used_percent`.
+    fn snapshot_with_weekly_percent(used_percent: f64) -> String {
+        let mut snapshot: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../fixtures/snapshots/dashboard_today.json"
+        ))
+        .expect("parse golden dashboard snapshot");
+        snapshot["accounts"] = serde_json::json!([{
+            "accountId": "claude-local",
+            "provider": "claude",
+            "status": "ok",
+            "today": snapshot["todayTotal"],
+            "week": snapshot["weekTotal"],
+            "month": snapshot["monthTotal"],
+            "credits": [],
+            "allowances": [
+                {
+                    "id": "claude-weekly",
+                    "source": "plan",
+                    "label": "Weekly plan",
+                    "usedPercent": used_percent,
+                    "used": null,
+                    "limit": null,
+                    "remaining": null,
+                    "windowMinutes": null,
+                    "resetsAt": "2026-08-17T09:00:00Z",
+                    "status": "ok"
+                },
+                {
+                    "id": "claude-session",
+                    "source": "plan",
+                    "label": "5-hour session",
+                    "usedPercent": 100.0,
+                    "used": null,
+                    "limit": null,
+                    "remaining": null,
+                    "windowMinutes": 300,
+                    "resetsAt": "2026-08-17T09:00:00Z",
+                    "status": "warning"
+                }
+            ],
+            "buckets": [],
+            "modelBreakdown": [],
+            "lastSuccessfulSyncAt": null,
+            "lastError": null
+        }]);
+        snapshot.to_string()
     }
 
     #[test]

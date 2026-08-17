@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_app.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
+import 'package:ward_pulse_phone/dashboard/plan_recoveries.dart';
 import 'package:ward_pulse_phone/dashboard/provider_status_color.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
@@ -18,6 +19,7 @@ import 'package:ward_pulse_phone/settings/refresh_interval_preferences.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
 import 'package:ward_pulse_phone/sync/poll_cadence.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_scheduler.dart';
+import 'package:ward_pulse_phone/sync/recovery_watchlist.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 
 void main() {
@@ -1084,6 +1086,40 @@ void main() {
     expect(find.text('Codex subscription'), findsOneWidget);
   });
 
+  testWidgets(
+    'demo data leaves nothing for a recovery to be measured against',
+    (tester) async {
+      final source = DashboardSnapshot.fromJsonString(
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync(),
+      );
+      final preferences = _MemoryDebugDataPreferenceStore();
+      await preferences.writeMockDataEnabled(true);
+      final watchlist =
+          _MemoryRecoveryWatchlistStore()
+            ..keys = const [(accountId: 'codex-demo', allowanceId: 'weekly')];
+
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: DebugDashboardRepository(
+            live: ValueDashboardRepository(source),
+            mock: ValueDashboardRepository(source),
+            preferences: preferences,
+          ),
+          debugDataAvailable: true,
+          debugDataPreferenceStore: preferences,
+          recoveryWatchlistStore: watchlist,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Invented windows must not survive the demo: kept, they would make the
+      // first live poll afterwards look like a recovery.
+      expect(watchlist.keys, isEmpty);
+    },
+  );
+
   testWidgets('hides mock data outside debug builds', (tester) async {
     await tester.pumpWidget(
       WardPulseApp(
@@ -1115,6 +1151,16 @@ DashboardSnapshot _asConnection(DashboardSnapshot snapshot) {
     ...snapshot.toJson(),
     'accounts': [account],
   });
+}
+
+class _MemoryRecoveryWatchlistStore implements RecoveryWatchlistStore {
+  List<WindowKey> keys = const [];
+
+  @override
+  Future<List<WindowKey>> read() async => keys;
+
+  @override
+  Future<void> write(List<WindowKey> value) async => keys = value;
 }
 
 class _FakeWatchSyncService implements WatchSyncService {

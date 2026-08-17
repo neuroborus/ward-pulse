@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wardpulse.app/schemas/plan_recovery.schema.json",
+  "title": "PlanRecovery",
+  "description": "Golden bundle for plan recoveries. The wire payloads are its two members, not this object: `ward_pulse_exhausted_windows_result_json` answers with an array of `windowKey`, `ward_pulse_plan_recoveries_result_json` with an array of `planRecovery`. The keys are also what the phone persists between polls.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["exhausted", "recoveries"],
+  "properties": {
+    "exhausted": {
+      "type": "array",
+      "description": "Windows reported spent by the snapshot the phone last saw.",
+      "items": { "$ref": "#/$defs/windowKey" }
+    },
+    "recoveries": {
+      "type": "array",
+      "description": "Windows that were in `exhausted` and now report room again.",
+      "items": { "$ref": "#/$defs/planRecovery" }
+    }
+  },
+  "$defs": {
+    "windowKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accountId", "allowanceId"],
+      "properties": {
+        "accountId": { "type": "string" },
+        "allowanceId": {
+          "type": "string",
+          "description": "Unique inside its account, not across accounts, which is why the pair is the key."
+        }
+      }
+    },
+    "planRecovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accountId", "allowanceId", "label", "resetsAt"],
+      "properties": {
+        "accountId": {
+          "type": "string",
+          "description": "Keys the notification so a repeat replaces it. Never shown to the reader."
+        },
+        "allowanceId": { "type": "string" },
+        "label": { "type": "string" },
+        "resetsAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "When the window is next expected to roll. Null when the provider does not say: the recovery is still real, but no wake can be scheduled for it."
+        }
+      }
+    }
+  }
+}
