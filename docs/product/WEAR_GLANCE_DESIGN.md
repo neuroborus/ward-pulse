@@ -191,7 +191,7 @@ primary preview: preview-glance-legend-3.png
 | Surface | Role |
 |---------|------|
 | Wear OS app Glance (page 1) | This legend + refresh control + Alerts button |
-| Wear OS app Menu / detail | Secondary pages (rings list, Today, Alerts, …) |
+| Wear OS app second page | Plan windows and when each comes back (`apps/wear_android/README.md`) |
 | Phone | Owns PollCadence floor for Wear taps; pushes `manualRefreshAllowed` /
   `manualRefreshAvailableAt`; Settings slider drives automatic polling only |
 | WFF / face | [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md) — concentric remaining arcs |
