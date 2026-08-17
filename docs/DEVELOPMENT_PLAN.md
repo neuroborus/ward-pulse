@@ -1836,12 +1836,35 @@ Deliverables:
   calendar rather than a provider clock, and whether that deserves the same interruption is a
   separate question.
 
+Decided 2026-08-16, on the three questions the deliverables left open — all three answered by
+what the repository already carries:
+
+- **the notification is posted by the Android host**, not by a new plugin. A channel and one
+  `notify` are less surface than a dependency that brings its own scheduler and its own
+  permission flow, and the host already owns the app widget and the Wear listener;
+- **it is scheduled with `workmanager`**, already in the tree, as a one-off task delayed to
+  `resets_at`. An exact alarm is not available in practice: `SCHEDULE_EXACT_ALARM` is granted to
+  alarm and calendar apps, which this is not. Firing inside the Doze window is what "scheduled
+  from the reset instant rather than discovered by polling" means here, and the poll that runs
+  on waking is what confirms the recovery, reschedules a moved window, or cancels it;
+- **the watch receives the phone's notification by bridging**, rather than posting its own. A
+  second notifier on Wear is new code and a duplicate the moment bridging is on. The lever is
+  `com.google.android.wearable.notificationBridgeMode`, and it lives in the **Wear manifest**,
+  beside the `standalone` key already there — the phone manifest has no say. Android documents
+  bridging as the default and `NO_BRIDGING` as the way to switch it off, but does not document
+  the case this app is in, where phone and watch share `app.wardpulse`. So the deliverable is
+  first a paired-AVD observation and only then a declaration: nothing if it already arrives
+  once, `NO_BRIDGING` if it arrives twice.
+
+The phone must also **persist the previous snapshot**: the edge compares two of them, and the
+process does not survive between polls.
+
 Acceptance:
 
 ```text
 a window crossing exhausted → usable notifies exactly once per crossing
 a window that was never exhausted notifies never
-notification fires at the reset instant, not at the next poll
+the wake is scheduled for the reset instant, not left to the next poll
 a reset instant that moves reschedules; a disconnected provider cancels
 the recovery is absent from the Dashboard alerts list and from Wear's Alerts count
 the notification reaches a paired watch exactly once — not twice, not never
