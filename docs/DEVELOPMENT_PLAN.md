@@ -1600,9 +1600,22 @@ no tokens, cookies, or raw payloads appear in logs
 
 ### Phase 13 — configurable watch rings
 
-Status: in progress as of 2026-08-17. The visual baselines, the payload, and both watch
-surfaces are in tree; what the list below still owes is the acceptance walk — each line paired
-with the test or the device check that holds it.
+Status: complete as of 2026-08-17. Every acceptance line below has something holding it, and
+the walk that established this named which:
+
+- **tests** for the payload and the Glance models — surface order, exhausted layers, and a
+  deselected ring never resolving again (`watch_ring_preferences_test.dart`, which every sync
+  builds its payload through), the manual-refresh window from the `PollCadence` floor and a
+  pair packed into one ring (`watch_sync_service_test.dart`), the seven refresh states, credits,
+  pair rows and label wording (`GlanceModelsTest.kt`);
+- **generated art plus a drift gate** for the face: `watchface.xml` and its ring-type drawables
+  come from `render-watchface.mjs`, and `just check-watchface` fails on drift;
+- **a look on the device** for the two nobody can assert from a host: that the Glance reads as a
+  legend rather than a face clone, and that ambient stays readable with rings visible.
+
+The second kind is the weak one, and it showed: on 2026-08-17 the Glance had drifted from its own
+review art by a row gap nobody's gate compares. The board set now carries the four-row ceiling
+(`glance-legend-full.svg`) so the crowded case is reviewable at all.
 
 Rationale: watch space is limited and must never show `Unknown` filler. Plan/allowance data
 across connected providers is percentage-first, so Wear and WFF standardize on concentric
