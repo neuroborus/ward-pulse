@@ -5,7 +5,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -109,7 +108,7 @@ private data class GlanceMetrics(
     val miniStroke: Dp,
     val textGap: Dp,
     val rowHeight: Dp,
-    val rowGap: Dp,
+    val alertsGap: Dp,
     val timeClearance: Dp,
     val bottomClearance: Dp,
     val contentPadH: Dp,
@@ -138,8 +137,13 @@ private fun glanceMetricsFor(diameter: Dp): GlanceMetrics {
         miniArcSize = art(39f),
         miniStroke = art(5f),
         textGap = art(12f),
+        // Row pitch, as the art lays it out: 54 covers the mini arc and both
+        // lines, and rows sit one after another with no gap added on top. A gap
+        // here is 18px of drift across four rows, which is the whole slack.
         rowHeight = art(54f),
-        rowGap = art(6f),
+        // The art keeps the block clear of the pill by 12 (`alertsBtnY - 12`).
+        // Without it a fourth row lands against the pill.
+        alertsGap = art(12f),
         timeClearance = art(62f),
         // alertsBtnY = SIZE-78, h=36 → 42px below pill to rim.
         bottomClearance = art(42f),
@@ -242,10 +246,7 @@ internal fun GlanceLegendPage(
                     GlanceEmptyCopy(summary = summary, titleStyle = metrics.title)
                 } else {
                     // Wrap-content block (review art blockLeft), not full-bleed rows.
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(metrics.rowGap),
-                        modifier = Modifier.wrapContentWidth(),
-                    ) {
+                    Column(modifier = Modifier.wrapContentWidth()) {
                         rows.forEach { row ->
                             key(row.title, row.subtitle) {
                                 GlanceLegendRow(row = row, metrics = metrics)
@@ -255,6 +256,7 @@ internal fun GlanceLegendPage(
                 }
             }
 
+            Spacer(modifier = Modifier.height(metrics.alertsGap))
             GlanceAlertsPill(
                 count = alertCount,
                 metrics = metrics,

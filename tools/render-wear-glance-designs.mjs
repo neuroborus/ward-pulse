@@ -411,6 +411,22 @@ const variants = [
     alerts: 0,
   },
   {
+    // Four rows is the ceiling: three bands on the face, one of them a pair.
+    // Nothing else in the set reaches it, and the crowding it causes is only
+    // visible here — the block sits closest to the Alerts pill in this case.
+    file: 'glance-legend-full.svg',
+    name: 'Glance · legend · four rows (three bands, one paired)',
+    ok: true,
+    refreshEnabled: true,
+    rows: [
+      { family: FAMILY.claude, metric: 'Opus weekly', used: 0.94, credits: '387' },
+      { family: FAMILY.cursorOwn, metric: 'Cursor Models', used: 0.0, credits: '1716' },
+      { family: FAMILY.cursor, metric: 'Other Models', used: 0.25, credits: '1716' },
+      { family: FAMILY.codex, metric: 'Weekly plan', used: 0.09, credits: '4500' },
+    ],
+    alerts: 0,
+  },
+  {
     file: 'glance-legend-budget.svg',
     name: 'Glance · legend · plan + budget · OK refresh',
     ok: true,

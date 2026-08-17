@@ -60,6 +60,12 @@ Rules:
   (`Claude · 5h` / `Claude · Weekly`).
 - Secondary line: `N% left`; append `· N credits` when that provider reports purchased credits.
   Per provider only — not a footer sum, not face `creditsGlance`, never LLM `TOK`.
+- Rows are laid out on a **54-unit pitch** with nothing added between them: the pitch already
+  covers the mini arc and both lines. A gap on top of it costs 18 units across four rows, which
+  is the entire slack the crowded case has.
+- The block keeps **12 units clear of the Alerts pill**. Four rows is the ceiling — three bands
+  with one of them paired — and it is the only case where the block comes near the pill at all;
+  at three rows the leftover space centers it well above.
 - Empty / exhausted: short copy centered between refresh and Alerts; no placeholder rings.
 
 | Empty state | Copy |
@@ -151,6 +157,7 @@ xdg-open apps/wear_android/design/preview-glance-legend-3.png
 | `glance-legend-3.svg` | **Primary** — three providers, `OK` refresh enabled, Alerts disabled |
 | `glance-legend-1.svg` | Single provider with credits |
 | `glance-legend-pair.svg` | A Cursor plan's two pools — two rows, two colours, one band on the face |
+| `glance-legend-full.svg` | Four rows — the ceiling: three bands, one of them paired; the case that sits closest to the Alerts pill |
 | `glance-legend-budget.svg` | Plan rows (with credits) + a connection budget row (family color, no credits) |
 | `glance-legend-stale.svg` | `!OK` + detail `Stale`, refresh enabled, Alerts active |
 | `glance-legend-cadence.svg` | Healthy `OK` but refresh **disabled** (cadence cooldown; no detail) |
