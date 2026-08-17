@@ -44,10 +44,8 @@ final class LocalRecoveryNotifier implements RecoveryNotifier {
     await _ensureReady();
     await _plugin.show(
       id: recoveryNotificationId(recovery),
-      // Family first, because two subscriptions can both call a window
-      // "Weekly plan" and the reader is being interrupted to learn which.
-      title: '${providerDisplayLabel(recovery.provider)} · ${recovery.label}',
-      body: 'Usable again.',
+      title: recoveryNotificationTitle(recovery),
+      body: recoveryNotificationBody,
       notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
           _channelId,
@@ -78,6 +76,21 @@ final class LocalRecoveryNotifier implements RecoveryNotifier {
     _ready = true;
   }
 }
+
+/// What a recovery says on a locked screen: the family and the window's own
+/// name, nothing else.
+///
+/// Family first, because two subscriptions can both call a window "Weekly
+/// plan" and the reader is being interrupted to learn which one is back. Kept
+/// out of the plugin call so the rule in `SECURITY_MODEL.md` — no credentials,
+/// no account ids, no spend, no raw provider fields — is something a test can
+/// read rather than something a reviewer has to.
+String recoveryNotificationTitle(PlanRecovery recovery) {
+  return '${providerDisplayLabel(recovery.provider)} · ${recovery.label}';
+}
+
+/// The whole message. A recovery has one thing to say and says it.
+const recoveryNotificationBody = 'Usable again.';
 
 /// The notification a window owns, so a second telling replaces the first
 /// rather than stacking beside it — which is what makes a repeat harmless, and

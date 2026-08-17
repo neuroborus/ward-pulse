@@ -17,6 +17,24 @@ void main() {
     expect(idOf('claude-local', 'weekly'), 2077179748);
   });
 
+  test('what it says is the family and the window, and nothing else', () {
+    const recovery = (
+      accountId: 'claude-local',
+      provider: 'claude',
+      allowanceId: 'claude-weekly',
+      label: 'Weekly plan',
+      resetsAt: null,
+    );
+
+    final title = recoveryNotificationTitle(recovery);
+
+    expect(title, 'Claude · Weekly plan');
+    // The rule from SECURITY_MODEL.md, read off the text a locked screen shows.
+    expect(title, isNot(contains(recovery.accountId)));
+    expect(title, isNot(contains(recovery.allowanceId)));
+    expect(recoveryNotificationBody, 'Usable again.');
+  });
+
   test('two windows of one account do not share an id', () {
     expect(idOf('claude-local', 'weekly'), isNot(idOf('claude-local', 'five')));
   });
