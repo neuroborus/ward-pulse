@@ -123,4 +123,4 @@ run-watchface:
     cd apps/watchface_wff && ./gradlew --no-daemon installDebug
     adb -s "$ANDROID_SERIAL" shell am broadcast -a com.google.android.wearable.app.DEBUG_SURFACE --es operation set-watchface --es watchFaceId app.wardpulse.watchface
 
-test-all: check-core check-phone check-wear check-watchface check-docs
+test-all: check-core check-phone check-wear check-watchface check-designs check-docs

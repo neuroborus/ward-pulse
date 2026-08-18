@@ -2172,7 +2172,17 @@ wear-android.yml
 watchface.yml
   official WFF schema validation
   ./gradlew lintDebug assembleDebug bundleDebug
+
+designs.yml
+  review art still matches its generators (SVG only)
+
+docs.yml
+  documentation site builds
 ```
+
+Every workflow that can reach a shared contract also runs
+`tools/validate-fixtures/validate_json.py`: it validates the golden fixtures and checks that the
+watch payload version agrees across the schema, the phone, and the Wear store.
 
 Release CI can be added later:
 

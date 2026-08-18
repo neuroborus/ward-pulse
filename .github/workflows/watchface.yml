@@ -6,6 +6,7 @@ on:
     paths:
       - "apps/watchface_wff/**"
       - "tools/render-watchface.mjs"
+      - "tools/design-output.mjs"
       - "tools/validate-watchface/**"
       - ".github/workflows/watchface.yml"
 
