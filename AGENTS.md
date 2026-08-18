@@ -86,7 +86,8 @@ Kotlin lives under `app/src/main/java/app/wardpulse/wear/` (ignore the empty top
 `data/`, `ui/`, `test/` directories). Unit tests: `app/src/test/`; device tests:
 `app/src/androidTest/`. Review art: `design/`.
 
-- `ui/` — `WardPulseApp.kt` (screens), `GlanceModels.kt`/`GlanceLegend.kt`, `UsageRings.kt`,
+- `ui/` — `WardPulseApp.kt` (Glance page, plan windows page, Alerts),
+  `GlanceModels.kt`/`GlanceLegend.kt`, `PlanWindows.kt` (when each window comes back),
   `RingFamily.kt` (ring-id → family color).
 - `data/WatchSummaryStore.kt` — persisted summary; owns `SCHEMA_VERSION` (must match the
   `schemaVersion` written by phone `watch_sync_service.dart`; a mismatch discards the payload).

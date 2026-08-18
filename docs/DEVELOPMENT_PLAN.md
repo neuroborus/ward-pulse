@@ -2224,8 +2224,9 @@ on `adb` bridge no notifications at all. After it, the payload fields nothing dr
 (`today`, `week`, `projectedTotal`, orphaned by Phase 17) are worth a schema revision that
 retires them together.
 
-Phase 13 acceptance closed on 2026-08-17; OpenPencil sources, Wear `UsageRings`, WFF concentric
-remaining `RANGED_VALUE` arcs, and Phase 11 headless WorkManager polling are in place.
+Phase 13 acceptance closed on 2026-08-17; OpenPencil sources, the Wear Glance legend, WFF
+concentric remaining `RANGED_VALUE` arcs, and Phase 11 headless WorkManager polling are in
+place.
 
 Phase 14 App Widget delivery is in tree (locked `PHONE_WIDGET_DESIGN.md`, Widget tab prefs,
 Android `WardPulseAppWidget`). Remaining: large (6-slot) size if needed, and emulator smoke

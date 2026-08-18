@@ -77,8 +77,10 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 - Face strips show compact remaining credits per provider family from `allowances` (`% · 500`),
   same matching rule as Glance; accents use the family ColorRamp. `creditsGlance` is for
   credits-only faces when there are no plan rings.
-- Keep today, week, usage, providers, alerts (active list only — no rule editing), and last sync
-  as secondary detail screens.
+- Beside the Glance the app keeps exactly two surfaces: a **plan windows** page saying when each
+  window comes back (rules in `apps/wear_android/README.md`), and **Alerts** from the Glance pill
+  (active list only — no rule editing). The today, week, usage, providers, and last sync screens
+  were removed in Phase 17; do not bring a currency total back to the watch.
 - Store and render the latest successful watch summary.
 - Make stale data explicit.
 - Do not enter, display, or store provider credentials.
