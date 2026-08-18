@@ -158,6 +158,11 @@
       "properties": {
         "accountId": { "type": "string" },
         "provider": { "$ref": "#/$defs/providerKind" },
+        "connection": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Owning connection key. Absent on snapshots built before adapters stamped it; alerts then fall back to the provider's plan."
+        },
         "status": { "$ref": "#/$defs/providerStatus" },
         "today": { "$ref": "budget_state.schema.json" },
         "week": { "$ref": "budget_state.schema.json" },

@@ -58,7 +58,7 @@ just check-phone
   then `flutter analyze` and `flutter test`. Use `just fmt-phone` to apply formatting.
 
 - [ ] If Android/Wear/WFF Gradle projects are generated, run the relevant Gradle test/build task.
-- [ ] If schemas or fixtures changed, validate fixture shape manually or with `tools/validate-fixtures/` when available.
+- [ ] If schemas or fixtures changed, run `just validate-fixtures`: it parses every file and checks each golden fixture against its schema.
 - [ ] If GitHub Actions workflows changed, run `actionlint .github/workflows/*.yml`.
 - [ ] If durable docs, Vocs pages, component READMEs, or site navigation changed, run:
 
