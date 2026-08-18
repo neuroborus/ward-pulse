@@ -7,7 +7,6 @@ import 'package:ward_pulse_phone/app/ward_pulse_theme.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_screen.dart';
 import 'package:ward_pulse_phone/dashboard/status_pill.dart';
-import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
 
 void main() {
   test('trims trailing zeros from quantity labels', () {
@@ -61,10 +60,7 @@ void main() {
         ],
     );
 
-    final problems = dashboardProblems(
-      snapshot,
-      const ConsumptionDisplayPreferences(),
-    );
+    final problems = dashboardProblems(snapshot);
 
     // Three unhealthy cards live in two families, and a tap can only take the
     // reader to a family (PHONE_DASHBOARD_DESIGN.md).
@@ -141,9 +137,6 @@ void main() {
           body: DashboardScreen(
             onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
-            displayPreferences: const ConsumptionDisplayPreferences(
-              purchased: true,
-            ),
           ),
         ),
       ),
@@ -227,7 +220,6 @@ void main() {
           body: DashboardScreen(
             onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
-            displayPreferences: const ConsumptionDisplayPreferences(plan: true),
           ),
         ),
       ),
@@ -263,10 +255,6 @@ void main() {
           body: DashboardScreen(
             onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
-            // Display prefs no longer hide surfaces.
-            displayPreferences: const ConsumptionDisplayPreferences(
-              platform: false,
-            ),
           ),
         ),
       ),
@@ -543,7 +531,6 @@ void main() {
           body: DashboardScreen(
             onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
-            displayPreferences: const ConsumptionDisplayPreferences(plan: true),
           ),
         ),
       ),
@@ -590,10 +577,6 @@ void main() {
           body: DashboardScreen(
             onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
-            displayPreferences: const ConsumptionDisplayPreferences(
-              plan: true,
-              purchased: true,
-            ),
           ),
         ),
       ),
@@ -816,14 +799,7 @@ void main() {
       expect(renderedOrder(tester), ['Cursor', 'Codex', 'Claude']);
       // What the app-bar mark scrolls to is read off the same order, so it
       // cannot point past a card sitting higher up.
-      expect(
-        dashboardProblems(
-          withCursor,
-          const ConsumptionDisplayPreferences(),
-          order,
-        ).first,
-        'cursor',
-      );
+      expect(dashboardProblems(withCursor, order).first, 'cursor');
     });
   });
 }

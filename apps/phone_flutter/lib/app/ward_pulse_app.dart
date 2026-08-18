@@ -16,7 +16,6 @@ import '../providers/provider_credential_store.dart';
 import '../providers/providers_screen.dart';
 import '../settings/alert_threshold_preferences.dart';
 import '../settings/settings_screen.dart';
-import '../settings/consumption_display_preferences.dart';
 import '../settings/debug_data_preferences.dart';
 import '../settings/recovery_notification_preferences.dart';
 import '../settings/refresh_interval_preferences.dart';
@@ -44,8 +43,6 @@ class WardPulseApp extends StatelessWidget {
     this.credentialStore = const EmptyProviderCredentialStore(),
     this.codexAccountService = const EmptyCodexAccountService(),
     this.claudeAccountService = const EmptyClaudeAccountService(),
-    this.displayPreferenceStore =
-        const DefaultConsumptionDisplayPreferenceStore(),
     this.refreshIntervalStore = const DefaultRefreshIntervalPreferenceStore(),
     this.watchRingPreferenceStore = const DefaultWatchRingPreferenceStore(),
     this.phoneWidgetPreferenceStore = const DefaultPhoneWidgetPreferenceStore(),
@@ -67,7 +64,6 @@ class WardPulseApp extends StatelessWidget {
   final ProviderCredentialStore credentialStore;
   final CodexAccountService codexAccountService;
   final ClaudeAccountService claudeAccountService;
-  final ConsumptionDisplayPreferenceStore displayPreferenceStore;
   final RefreshIntervalPreferenceStore refreshIntervalStore;
   final WatchRingPreferenceStore watchRingPreferenceStore;
   final PhoneWidgetPreferenceStore phoneWidgetPreferenceStore;
@@ -95,7 +91,6 @@ class WardPulseApp extends StatelessWidget {
         credentialStore: credentialStore,
         codexAccountService: codexAccountService,
         claudeAccountService: claudeAccountService,
-        displayPreferenceStore: displayPreferenceStore,
         refreshIntervalStore: refreshIntervalStore,
         watchRingPreferenceStore: watchRingPreferenceStore,
         phoneWidgetPreferenceStore: phoneWidgetPreferenceStore,
@@ -122,7 +117,6 @@ class DashboardHost extends StatefulWidget {
     required this.credentialStore,
     required this.codexAccountService,
     required this.claudeAccountService,
-    required this.displayPreferenceStore,
     required this.refreshIntervalStore,
     required this.watchRingPreferenceStore,
     required this.phoneWidgetPreferenceStore,
@@ -143,7 +137,6 @@ class DashboardHost extends StatefulWidget {
   final ProviderCredentialStore credentialStore;
   final CodexAccountService codexAccountService;
   final ClaudeAccountService claudeAccountService;
-  final ConsumptionDisplayPreferenceStore displayPreferenceStore;
   final RefreshIntervalPreferenceStore refreshIntervalStore;
   final WatchRingPreferenceStore watchRingPreferenceStore;
   final PhoneWidgetPreferenceStore phoneWidgetPreferenceStore;
@@ -175,8 +168,6 @@ class _DashboardHostState extends State<DashboardHost> {
   /// spend leaves every card where the reader last saw it. Shared with the
   /// app-bar badge, which must point at the topmost flagged card.
   final _dashboardOrder = FrozenOrder();
-  ConsumptionDisplayPreferences _displayPreferences =
-      const ConsumptionDisplayPreferences();
   RefreshIntervalPreference _refreshInterval =
       const RefreshIntervalPreference();
   WatchRingPreferences _ringPreferences = const WatchRingPreferences();
@@ -245,15 +236,6 @@ class _DashboardHostState extends State<DashboardHost> {
     unawaited(_syncTicks?.cancel());
     unawaited(widget.syncScheduler.cancel());
     super.dispose();
-  }
-
-  Future<void> _readDisplayPreferences() async {
-    try {
-      final value = await widget.displayPreferenceStore.read();
-      _displayPreferences = value;
-    } catch (_) {
-      // The default plan view remains available if local preferences fail.
-    }
   }
 
   Future<void> _readRefreshInterval() async {
@@ -405,7 +387,6 @@ class _DashboardHostState extends State<DashboardHost> {
   }
 
   Future<DashboardSnapshot> _loadSnapshot() async {
-    await _readDisplayPreferences();
     await _readRefreshInterval();
     await _readRingPreferences();
     await _readWidgetPreferences();
@@ -503,7 +484,6 @@ class _DashboardHostState extends State<DashboardHost> {
   Future<void> _queueWatchSummary(DashboardSnapshot snapshot) {
     return widget.watchSyncService.sync(
       snapshot,
-      _displayPreferences,
       _ringPreferences,
       manualRefreshAnchorAt: _manualRefreshAnchorAt(snapshot),
       mockDataMode: _mockDataEnabled,
@@ -600,11 +580,7 @@ class _DashboardHostState extends State<DashboardHost> {
             actions: [
               if (snapshot != null)
                 _AppBarProblems(
-                  problems: dashboardProblems(
-                    snapshot,
-                    _displayPreferences,
-                    _dashboardOrder,
-                  ),
+                  problems: dashboardProblems(snapshot, _dashboardOrder),
                   onReveal: _revealProblem,
                 ),
               IconButton(
@@ -667,7 +643,6 @@ class _DashboardHostState extends State<DashboardHost> {
               _ when snapshot != null => DashboardScreen(
                 onRefresh: _pullToRefresh,
                 snapshot: snapshot,
-                displayPreferences: _displayPreferences,
                 onOpenProviders: _openProviders,
                 reveal: _reveal,
                 order: _dashboardOrder,

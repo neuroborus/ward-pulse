@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
-import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/sync/manual_refresh_window.dart';
 
@@ -21,7 +20,6 @@ void main() {
 
     final payload = WatchDashboardSummaryPayload.fromSnapshot(
       dashboard,
-      const ConsumptionDisplayPreferences(),
       const WatchRingPreferences(),
       // Match fixture: PollCadence floor already elapsed.
       clock: dashboard.generatedAt.add(ManualRefreshWindow.floor),
@@ -47,7 +45,6 @@ void main() {
         jsonDecode(
               WatchDashboardSummaryPayload.fromSnapshot(
                 DashboardSnapshot.fromJson(json),
-                const ConsumptionDisplayPreferences(),
                 const WatchRingPreferences(),
               ).encode(),
             )
@@ -94,7 +91,6 @@ void main() {
         jsonDecode(
               WatchDashboardSummaryPayload.fromSnapshot(
                 dashboard,
-                const ConsumptionDisplayPreferences(),
                 const WatchRingPreferences(
                   selectedIds: [cursorOwnPoolId, cursorOtherPoolId],
                 ),
@@ -123,7 +119,6 @@ void main() {
         jsonDecode(
               WatchDashboardSummaryPayload.fromSnapshot(
                 dashboard,
-                const ConsumptionDisplayPreferences(),
                 const WatchRingPreferences(),
               ).encode(),
             )
@@ -180,8 +175,6 @@ void main() {
         jsonDecode(
               WatchDashboardSummaryPayload.fromSnapshot(
                 DashboardSnapshot.fromJson(json),
-                // Display prefs no longer filter surfaces.
-                const ConsumptionDisplayPreferences(plan: false),
                 const WatchRingPreferences(),
               ).encode(),
             )
@@ -216,7 +209,6 @@ void main() {
           jsonDecode(
                 WatchDashboardSummaryPayload.fromSnapshot(
                   DashboardSnapshot.fromJson(json),
-                  const ConsumptionDisplayPreferences(),
                   const WatchRingPreferences(),
                   mockDataMode: true,
                 ).encode(),
@@ -256,7 +248,6 @@ void main() {
         jsonDecode(
               WatchDashboardSummaryPayload.fromSnapshot(
                 DashboardSnapshot.fromJson(json),
-                const ConsumptionDisplayPreferences(purchased: true),
                 const WatchRingPreferences(),
               ).encode(),
             )
@@ -274,7 +265,6 @@ void main() {
         jsonDecode(
               WatchDashboardSummaryPayload.fromSnapshot(
                 dashboard,
-                const ConsumptionDisplayPreferences(),
                 const WatchRingPreferences(),
                 manualRefreshAnchorAt: lastSync,
                 clock: lastSync.add(const Duration(minutes: 2)),

@@ -5,7 +5,6 @@ import 'package:flutter/widgets.dart';
 import '../dashboard/apply_alert_settings.dart';
 import '../dashboard/phone_live_bindings.dart';
 import '../settings/alert_threshold_preferences.dart';
-import '../settings/consumption_display_preferences.dart';
 import '../settings/recovery_notification_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
 import '../widget/phone_widget_preferences.dart';
@@ -22,8 +21,6 @@ Future<void> providerSyncOnce() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     final live = PhoneLiveBindings.create();
-    final displayPreferences =
-        await SecureConsumptionDisplayPreferenceStore().read();
     final ringPreferences = await SecureWatchRingPreferenceStore().read();
     final widgetPreferences = await SecurePhoneWidgetPreferenceStore().read();
     final alertThresholds = await SecureAlertThresholdPreferenceStore().read();
@@ -33,11 +30,7 @@ Future<void> providerSyncOnce() async {
       await live.repository.load(),
       alertThresholds,
     );
-    await const MethodChannelWatchSyncService().sync(
-      snapshot,
-      displayPreferences,
-      ringPreferences,
-    );
+    await const MethodChannelWatchSyncService().sync(snapshot, ringPreferences);
     try {
       await HomeWidgetPhoneWidgetSyncService().sync(
         snapshot,

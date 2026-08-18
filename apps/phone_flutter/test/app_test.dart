@@ -12,7 +12,6 @@ import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
-import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/settings/debug_data_preferences.dart';
 import 'package:ward_pulse_phone/settings/refresh_interval_preferences.dart';
@@ -1243,7 +1242,6 @@ class _FakeWatchSyncService implements WatchSyncService {
   @override
   Future<void> sync(
     DashboardSnapshot snapshot,
-    ConsumptionDisplayPreferences displayPreferences,
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
     bool mockDataMode = false,
@@ -1268,7 +1266,6 @@ class _FailingWatchSyncService implements WatchSyncService {
   @override
   Future<void> sync(
     DashboardSnapshot snapshot,
-    ConsumptionDisplayPreferences displayPreferences,
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
     bool mockDataMode = false,

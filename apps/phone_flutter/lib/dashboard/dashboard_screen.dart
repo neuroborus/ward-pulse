@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../app/pull_to_refresh_list.dart';
 import '../app/surface_order.dart';
 import '../charts/usage_history_chart.dart';
-import '../settings/consumption_display_preferences.dart';
 import 'connected_capabilities.dart';
 import 'dashboard_models.dart';
 import 'provider_status_color.dart';
@@ -17,8 +16,7 @@ typedef DashboardProblems =
     ({int sections, ProviderStatus status, String? first});
 
 DashboardProblems dashboardProblems(
-  DashboardSnapshot snapshot,
-  ConsumptionDisplayPreferences displayPreferences, [
+  DashboardSnapshot snapshot, [
   FrozenOrder? order,
 ]) {
   // The same [order] the screen renders with: `first` is what the app bar
@@ -26,7 +24,6 @@ DashboardProblems dashboardProblems(
   // sitting higher up.
   final flagged = _providerDashboardSections(
     snapshot.accounts,
-    displayPreferences,
     order,
   ).where((section) => section.flagged > 0).toList(growable: false);
   return (
@@ -40,7 +37,6 @@ class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
     super.key,
     required this.snapshot,
-    this.displayPreferences = const ConsumptionDisplayPreferences(),
     this.onOpenProviders,
     this.reveal,
     this.order,
@@ -48,7 +44,6 @@ class DashboardScreen extends StatefulWidget {
   });
 
   final DashboardSnapshot snapshot;
-  final ConsumptionDisplayPreferences displayPreferences;
   final VoidCallback? onOpenProviders;
 
   /// Keeps the cards where the reader last saw them. Owned by the shell, which
@@ -104,7 +99,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final snapshot = widget.snapshot;
-    final displayPreferences = widget.displayPreferences;
     final onOpenProviders = widget.onOpenProviders;
     if (snapshot.accounts.isEmpty) {
       return ConnectProviderPrompt(onOpenProviders: onOpenProviders);
@@ -116,7 +110,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         .toList(growable: false);
     final providerSections = _providerDashboardSections(
       snapshot.accounts,
-      displayPreferences,
       widget.order,
     );
     final hasVisibleAllowances = providerSections.any(
@@ -576,8 +569,7 @@ class _ProviderDashboardSection {
 /// Claude/Cursor use one `ProviderKind` for both connections; grouping by kind
 /// keeps allowances, history, and model breakdown under a single accent bar.
 List<_ProviderDashboardSection> _providerDashboardSections(
-  List<ProviderSnapshot> accounts,
-  ConsumptionDisplayPreferences displayPreferences, [
+  List<ProviderSnapshot> accounts, [
   FrozenOrder? order,
 ]) {
   final grouped = <String, List<ProviderSnapshot>>{};
@@ -591,7 +583,6 @@ List<_ProviderDashboardSection> _providerDashboardSections(
   for (final group in grouped.values) {
     final allowances = group
         .expand((account) => account.allowances)
-        .where((allowance) => displayPreferences.allows(allowance.source))
         .toList(growable: false);
     final buckets = group
         .expand((account) => account.buckets)
@@ -619,11 +610,7 @@ List<_ProviderDashboardSection> _providerDashboardSections(
         flagged: group.fold(0, (total, account) {
           final cards =
               account.allowances
-                  .where(
-                    (allowance) =>
-                        displayPreferences.allows(allowance.source) &&
-                        allowance.status != ProviderStatus.ok,
-                  )
+                  .where((allowance) => allowance.status != ProviderStatus.ok)
                   .length;
           if (cards > 0) {
             return total + cards;

@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/plan_recoveries.dart';
 import 'package:ward_pulse_phone/sync/recovery_notifications.dart';
-import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/sync/poll_cadence.dart';
 import 'package:ward_pulse_phone/sync/recovery_wake.dart';
@@ -377,7 +376,6 @@ void main() {
     expect(
       WatchDashboardSummaryPayload.fromSnapshot(
         snapshot,
-        const ConsumptionDisplayPreferences(),
         const WatchRingPreferences(),
       ).encode(),
       contains('"alerts":[]'),

@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
-import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 import 'package:ward_pulse_phone/settings/recovery_notification_preferences.dart';
@@ -10,7 +9,6 @@ void main() {
     final payload =
         WatchDashboardSummaryPayload.fromSnapshot(
           DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 8, 17)),
-          const ConsumptionDisplayPreferences(),
           const WatchRingPreferences(),
         ).encode();
 

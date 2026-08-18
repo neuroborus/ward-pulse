@@ -48,10 +48,10 @@ report anything.
 Providers may report plan allowances, purchased tokens or credits, or both. These values stay
 separate from monetary budgets because their units and reset rules differ.
 
-- Plan usage, purchased usage, and platform spend are all visible by default.
-- The user may hide any surface, but at least one of the three remains enabled.
-- Allowance preferences filter phone and Wear OS presentation; platform spend is
-  phone-dashboard only. Preferences never discard collected data.
+- Plan usage, purchased usage, and platform spend are all shown; none of the three is hideable.
+  A surface the user cannot see is a surface nobody can act on, and the phone already shows only
+  what providers report.
+- Platform spend is phone-dashboard only: the watch carries percentages, not currency.
 - WardPulse does not invent a limit, balance, or percentage when the provider omits it.
 - Exact provider quantities cross shared contracts as decimal strings with an explicit `tokens`
   or `credits` unit.

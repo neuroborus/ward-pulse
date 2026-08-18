@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 
 import '../dashboard/dashboard_models.dart';
-import '../settings/consumption_display_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
 import 'manual_refresh_window.dart';
 import 'watch_credits_glance.dart';
@@ -12,7 +11,6 @@ import 'watch_credits_glance.dart';
 abstract interface class WatchSyncService {
   Future<void> sync(
     DashboardSnapshot snapshot,
-    ConsumptionDisplayPreferences displayPreferences,
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
     bool mockDataMode = false,
@@ -34,7 +32,6 @@ class MethodChannelWatchSyncService implements WatchSyncService {
   @override
   Future<void> sync(
     DashboardSnapshot snapshot,
-    ConsumptionDisplayPreferences displayPreferences,
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
     bool mockDataMode = false,
@@ -43,7 +40,6 @@ class MethodChannelWatchSyncService implements WatchSyncService {
       'syncWatchSummary',
       WatchDashboardSummaryPayload.fromSnapshot(
         snapshot,
-        displayPreferences,
         ringPreferences,
         manualRefreshAnchorAt: manualRefreshAnchorAt,
         mockDataMode: mockDataMode,
@@ -77,7 +73,6 @@ class WatchDashboardSummaryPayload {
 
   factory WatchDashboardSummaryPayload.fromSnapshot(
     DashboardSnapshot snapshot,
-    ConsumptionDisplayPreferences displayPreferences,
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
     DateTime? clock,
@@ -87,10 +82,7 @@ class WatchDashboardSummaryPayload {
       resolveWatchRings(snapshot, ringPreferences),
       snapshot: snapshot,
     );
-    final creditsGlance = resolveWatchCreditsGlance(
-      snapshot,
-      displayPreferences,
-    );
+    final creditsGlance = resolveWatchCreditsGlance(snapshot);
     final window = ManualRefreshWindow.fromLastSync(
       lastSyncAt: manualRefreshAnchorAt ?? snapshot.generatedAt,
       now: clock,
@@ -128,17 +120,16 @@ class WatchDashboardSummaryPayload {
       'allowances': [
         for (final account in snapshot.accounts)
           for (final allowance in account.allowances)
-            if (displayPreferences.allows(allowance.source))
-              {
-                'source': allowance.source.name,
-                // Disambiguate multi-provider Usage rows on Wear (no schema bump).
-                'label': '${account.providerLabel} · ${allowance.label}',
-                'usedPercent': allowance.usedPercent,
-                'remaining': _quantityToJson(allowance.remaining),
-                if (allowance.unlimited) 'unlimited': true,
-                'resetsAt': allowance.resetsAt?.toUtc().toIso8601String(),
-                'status': allowance.status.wireName,
-              },
+            {
+              'source': allowance.source.name,
+              // Disambiguate multi-provider Usage rows on Wear (no schema bump).
+              'label': '${account.providerLabel} · ${allowance.label}',
+              'usedPercent': allowance.usedPercent,
+              'remaining': _quantityToJson(allowance.remaining),
+              if (allowance.unlimited) 'unlimited': true,
+              'resetsAt': allowance.resetsAt?.toUtc().toIso8601String(),
+              'status': allowance.status.wireName,
+            },
       ],
       'providers': [
         for (final account in snapshot.accounts)

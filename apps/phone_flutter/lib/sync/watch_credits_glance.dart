@@ -1,5 +1,4 @@
 import '../dashboard/dashboard_models.dart';
-import '../settings/consumption_display_preferences.dart';
 
 /// Compact remaining purchased credits for the watch-face strip.
 final class WatchCreditsGlance {
@@ -21,12 +20,8 @@ final class WatchCreditsGlance {
   };
 }
 
-/// Remaining purchased credits for the watch-face strip (always considered;
-/// Settings no longer hides purchased surfaces).
-WatchCreditsGlance? resolveWatchCreditsGlance(
-  DashboardSnapshot snapshot,
-  ConsumptionDisplayPreferences _,
-) {
+/// Remaining purchased credits for the watch-face strip.
+WatchCreditsGlance? resolveWatchCreditsGlance(DashboardSnapshot snapshot) {
   String? unit;
   final providers = <String>{};
   double total = 0;

@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
-import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
 import 'package:ward_pulse_phone/sync/watch_credits_glance.dart';
 
 void main() {
@@ -13,10 +12,7 @@ void main() {
 
   test('resolves remaining purchased credits', () {
     final snapshot = _snapshotWithPurchased(remaining: '500');
-    final glance = resolveWatchCreditsGlance(
-      snapshot,
-      const ConsumptionDisplayPreferences(),
-    );
+    final glance = resolveWatchCreditsGlance(snapshot);
     expect(glance, isNotNull);
     expect(glance!.text, '500');
     expect(glance.label, 'Credits left');
@@ -25,10 +21,7 @@ void main() {
 
   test('shows infinity for unlimited purchased credits', () {
     final snapshot = _snapshotWithPurchased(remaining: null, unlimited: true);
-    final glance = resolveWatchCreditsGlance(
-      snapshot,
-      const ConsumptionDisplayPreferences(),
-    );
+    final glance = resolveWatchCreditsGlance(snapshot);
     expect(glance?.text, '∞');
   });
 }
