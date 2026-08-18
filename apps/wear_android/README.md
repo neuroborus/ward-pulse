@@ -46,7 +46,7 @@ it come back* — and that is why it exists rather than repeating the Glance:
   Cursor · Cursor Models
   100% left · back Sep 1, 00:00
 
-  Codex · Weekly plan          ← provider publishes no reset: the line just ends
+  Codex · Weekly plan          ← no reset in this payload: the line just ends
   9% left
 ```
 
@@ -57,8 +57,9 @@ Rules:
   also the inventory of what the watch knows, and hiding them would change its shape from poll
   to poll, leaving "not spent" indistinguishable from "not reported".
 - **Purchased meters never appear** (`source: purchased` — Extra usage, on-demand, purchased
-  credits). They do not come back; they are bought again, and they carry no reset instant. Their
-  home is the phone's cards.
+  credits). They do not come back; they are bought again. Cursor's on-demand pool does carry an
+  instant, but it is the billing cycle turning over, not capacity returning — the page would be
+  promising something it cannot deliver. Their home is the phone's cards.
 - **Order: exhausted first, then soonest return.** The screen is read when something has run
   out, so what is waited on comes first. A window that cannot name a **future** moment — none
   published, or one already behind — cannot compete for "soonest", so it sorts last inside its

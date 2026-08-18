@@ -11,7 +11,8 @@ WardPulse starts as an Android ecosystem product with these surfaces:
 - Phone home-screen widget (Phase 14): configurable glanceable remaining summary with its own
   visual language — not a copy of the watch face; configured on the Widget tab, independently
   of Watchface; Android App Widget updates after provider sync.
-- Wear OS app: compact dashboard for today, week, providers, alerts (active list only), and last sync.
+- Wear OS app: a Glance legend of what is left, a page saying when each plan window comes back,
+  and the active alert list (no rule editing).
 - Watch Face Format package: glanceable concentric remaining rings and fast launch into the Wear OS app.
 
 ## MVP Goals

@@ -647,44 +647,19 @@ The Wear OS app is a compact dashboard, not a full settings app.
 
 It should be built with Kotlin and Compose for Wear OS.
 
-### MVP screens
+### Surfaces
 
 ```text
-Today
-Week
-Providers
-Alerts
-Last sync
+Glance       — home page: how much is left
+Plan windows — second page: when each one comes back
+Alerts       — reached from the Glance pill
 ```
 
-The implemented app additionally has a Usage screen for plan and purchased allowances.
-Phase 13 puts configurable percent rings on the **watch face**; the Wear **app** home Glance is
-the locked text legend (`WEAR_GLANCE_DESIGN.md`) that maps face colors to providers, with
-per-metric detail screens kept secondary.
-
-### Today screen
-
-```text
-Today
-$12.40
-OK
-```
-
-### Week screen
-
-```text
-Week
-$71.30
-Projected $228
-```
-
-### Providers screen
-
-```text
-Codex   $8.10 OK
-Claude  $2.80 OK
-Cursor  68%  Warn
-```
+The MVP screens (Today, Week, Providers, Last sync, and an added Usage list) were replaced in
+Phase 17 by the surfaces above. Phase 13 puts configurable percent rings on the **watch face**
+and makes the app home the locked text legend (`WEAR_GLANCE_DESIGN.md`) that maps face colors to
+providers; the page beside it answers what the legend cannot, and its rules live in
+`apps/wear_android/README.md`.
 
 ### Alerts screen
 
@@ -2038,6 +2013,70 @@ sorting any phone surface by live remaining percent
 changing watch, Glance, or widget surface order
 ```
 
+### Phase 17 — the watch's second page
+
+Status: completed as of 2026-08-17. Replaces the Today, Week, and Providers screens delivered by
+Phase 4, together with the Usage and Last sync screens and the menu that led to them; Phase 4
+stays as written, as the record of what the watch was before the Glance.
+
+Rationale: the menu is a leftover from the era when the app's home was a list of summaries. The
+Glance took that job in Phase 13 and answers *how much is left* better than any list — mini arcs,
+per-provider credits, one Alerts pill. Of the six menu entries exactly one was still needed:
+Alerts, the pill's destination. Usage and Providers repeated the Glance, the ring buttons above
+them repeated its rows, and Last sync answered a question the Glance already answers with
+`Stale`. Today and Week showed a currency total no design asks the watch for: the Glance carries
+per-provider credits and a budget row, and a money ceiling belongs on the face's budget strip.
+
+**The second page answers what the Glance does not: when a window comes back.** That is also the
+only place exhausted windows belong: the Glance omits them by design, so a plan at zero — the one
+state a user is actively waiting to leave — had nowhere to be read. The list keeps every plan
+window, spent or untouched, because it doubles as the inventory of what the watch knows; a list
+that changed shape with every poll would leave "not spent" indistinguishable from "not reported".
+
+Deliverables:
+
+- the row model is pure Kotlin with `now` as a parameter, tested the way `isStaleAt(now)` is —
+  order, filtering, and every phrasing rule are unit tests, not screenshots;
+- purchased meters never appear: they do not come back, they are bought again. Cursor's on-demand
+  pool is the one that carries an instant at all, and it is a billing cycle turning over rather
+  than capacity returning. Their home is the phone's cards;
+- order is exhausted first, then soonest return; a window that cannot name a **future** moment
+  sorts last inside its group. A reset already behind counts as none — the provider has not
+  caught up with its own clock, and printing a passed moment would say the window is late rather
+  than the number;
+- the line drops whichever half cannot be said, falls back from share to bare remainder for a
+  plan with no published ceiling, and reads `Unavailable` rather than rendering an empty line;
+- the page draws through the existing `SummaryScreen`, so the title takes the window's own status
+  color and urgency arrives for free; no new component;
+- rules live in `apps/wear_android/README.md` beside their owner. `WEAR_GLANCE_DESIGN.md` scopes
+  itself to the first page and only names the second in its surfaces table;
+- the removal takes its orphans with it: the ring detail route, the used-percent label, and the
+  last-sync formatters, each checked for callers across `main` and `test` before deletion.
+
+Acceptance:
+
+```text
+swiping up from the Glance lands on the plan windows themselves, with no menu in between
+an exhausted window is first, and a window whose reset is unpublished or behind ends its line
+  after the share instead of naming a time
+a window rolling today reads back at HH:MM; any other day carries its date
+purchased meters are absent from the page
+the Alerts pill still opens the Alerts screen, and swiping right returns to the Glance
+no app screen shows a currency total; money on the watch stays on the face's budget strip
+```
+
+Non-goals for this phase:
+
+```text
+bringing a currency total back to the watch under a new name
+rule editing on the watch — Alerts stays the active list only
+a face marker for a recovered window (that question belongs to WATCH_RING_DESIGN.md, Phase 15)
+review art for the page — the Glance generator draws a legend, not a list, and the README
+  sketch carries the layout until it becomes contested
+retiring the payload fields this phase orphaned (today, week, projectedTotal) — the Wear store
+  still requires them, so dropping one is a schema revision, not a cleanup
+```
+
 ---
 
 ## 20. Testing strategy
@@ -2179,9 +2218,14 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Close Phase 13 acceptance on device/emulator (Wear rings + WFF concentric live arcs).
-OpenPencil sources, Wear `UsageRings`, WFF concentric remaining `RANGED_VALUE` arcs, and
-Phase 11 headless WorkManager polling are in place.
+Settle the one acceptance line Phase 15 could not measure: a recovery notification reaching a
+paired watch exactly once. It needs a phone paired through the Wear OS companion app — two AVDs
+on `adb` bridge no notifications at all. After it, the payload fields nothing draws any more
+(`today`, `week`, `projectedTotal`, orphaned by Phase 17) are worth a schema revision that
+retires them together.
+
+Phase 13 acceptance closed on 2026-08-17; OpenPencil sources, Wear `UsageRings`, WFF concentric
+remaining `RANGED_VALUE` arcs, and Phase 11 headless WorkManager polling are in place.
 
 Phase 14 App Widget delivery is in tree (locked `PHONE_WIDGET_DESIGN.md`, Widget tab prefs,
 Android `WardPulseAppWidget`). Remaining: large (6-slot) size if needed, and emulator smoke

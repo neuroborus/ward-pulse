@@ -39,8 +39,8 @@ pair's, whose second value is the other pool's percent (see Split band).
    one connection's local budget % for one period. There is no ring for a sum across
    connections: spend is reported by whichever connections report it, while a limit exists only
    where the user set one, so a summed percentage divides one set by another. Aggregate **money**
-   is still true and stays on the phone dashboard cards and the Wear app period sections — it is
-   the aggregate *percentage* that has no owner and no meaning.
+   is still true and stays on the phone dashboard cards — it is the aggregate *percentage* that
+   has no owner and no meaning.
    Claude subscription plan windows are an exception at **selection** time: the phone exposes one
    Claude plan slot and resolves it to the tightest remaining window (window name lives on Glance,
    not on face strips).
