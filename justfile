@@ -81,6 +81,20 @@ check-watchface: validate-watchface
     node tools/render-watchface.mjs --check
     cd apps/watchface_wff && ./gradlew --no-daemon lintDebug assembleDebug bundleDebug
 
+# Review art for the Glance, the face, the widget, and the brand marks.
+render-designs:
+    node tools/render-watch-ring-designs.mjs
+    node tools/render-wear-glance-designs.mjs
+    node tools/render-phone-widget-designs.mjs
+    node tools/render-brand-icons.mjs
+
+# Fails when review art no longer matches its generator (SVG only; see design-output.mjs).
+check-designs:
+    node tools/render-watch-ring-designs.mjs --check
+    node tools/render-wear-glance-designs.mjs --check
+    node tools/render-phone-widget-designs.mjs --check
+    node tools/render-brand-icons.mjs --check
+
 test-wear-device:
     cd apps/wear_android && ./gradlew --no-daemon connectedDebugAndroidTest
 

@@ -7,9 +7,11 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { emit } from './design-output.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -571,12 +573,8 @@ for (const variant of variants) {
     showPlan: variant.showPlan,
     showCredits: variant.showCredits,
   })
-  const wearPath = join(wearDir, variant.file)
-  await writeFile(wearPath, svg)
-  console.log(`wrote ${wearPath}`)
+  await emit(join(wearDir, variant.file), svg, 'render-designs')
   if (wffFiles.has(variant.file)) {
-    const wffPath = join(wffDir, variant.file)
-    await writeFile(wffPath, svg)
-    console.log(`wrote ${wffPath}`)
+    await emit(join(wffDir, variant.file), svg, 'render-designs')
   }
 }

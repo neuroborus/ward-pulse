@@ -8,9 +8,11 @@
  * Usage: node tools/render-brand-icons.mjs
  */
 
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { emit } from './design-output.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -135,7 +137,5 @@ const iconsDir = join(root, 'brand/icons')
 
 await mkdir(iconsDir, { recursive: true })
 
-await writeFile(join(iconsDir, 'wardpulse.svg'), colorLogoSvg(512))
-await writeFile(join(iconsDir, 'wardpulse-mono.svg'), monoLogoSvg(512))
-console.log('wrote brand/icons/wardpulse.svg')
-console.log('wrote brand/icons/wardpulse-mono.svg')
+await emit(join(iconsDir, 'wardpulse.svg'), colorLogoSvg(512), 'render-designs')
+await emit(join(iconsDir, 'wardpulse-mono.svg'), monoLogoSvg(512), 'render-designs')

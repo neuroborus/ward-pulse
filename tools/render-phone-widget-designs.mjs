@@ -11,9 +11,11 @@
  * Usage: node tools/render-phone-widget-designs.mjs
  */
 
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { emit } from './design-output.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const designDir = join(root, 'apps/phone_flutter/design')
@@ -269,7 +271,5 @@ const variants = [
 ]
 
 for (const variant of variants) {
-  const path = join(designDir, variant.file)
-  await writeFile(path, variant.svg())
-  console.log(`wrote ${path}`)
+  await emit(join(designDir, variant.file), variant.svg(), 'render-designs')
 }

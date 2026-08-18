@@ -22,10 +22,12 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { emit } from './design-output.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const target = join(root, 'apps/watchface_wff/src/main/res/raw/watchface.xml')
@@ -801,18 +803,11 @@ ${body}
 
 const xml = face()
 
-if (process.argv.includes('--check')) {
-  const current = await readFile(target, 'utf8')
-  if (current !== xml) {
-    console.error(
-      `${target} differs from the generator; run \`just render-watchface\` and review the diff`,
-    )
-    process.exit(1)
-  }
-  console.log(`${target} is up to date`)
-} else {
-  await writeFile(target, xml)
-  console.log(`wrote ${target}`)
+await emit(target, xml, 'render-watchface')
+
+// Textures are rasterized, not compared: ImageMagick stamps metadata that
+// differs between runs on pixel-identical output (see design-output.mjs).
+if (!process.argv.includes('--check')) {
   await writeTextures()
   console.log(`wrote ${TEXTURE_RINGS * TOKENS.length} ring textures to ${drawables}`)
 }

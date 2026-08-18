@@ -119,7 +119,8 @@ One declarative file, `src/main/res/raw/watchface.xml`, plus the ring-type drawa
   phases in `docs/DEVELOPMENT_PLAN.md`; provider API notes in `docs/product/PROVIDER_NOTES.md`.
 - Review art is generated, never hand-edited: `tools/render-watch-ring-designs.mjs` (face),
   `tools/render-wear-glance-designs.mjs` (Glance), `tools/render-phone-widget-designs.mjs`
-  (widget), `tools/render-brand-icons.mjs` + `just export-icons` (brand marks).
+  (widget), `tools/render-brand-icons.mjs` + `just export-icons` (brand marks). Redraw all four
+  with `just render-designs`; `just check-designs` fails when the tree no longer matches them.
 - Android toolchain and device workflow: `docs/ANDROID_TOOLCHAIN.md`.
 
 ## Task → first files

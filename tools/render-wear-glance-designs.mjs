@@ -10,9 +10,11 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { emit } from './design-output.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -521,7 +523,5 @@ const variants = [
 
 for (const variant of variants) {
   const svg = glanceSvg(variant)
-  const path = join(wearDir, variant.file)
-  await writeFile(path, svg)
-  console.log(`wrote ${path}`)
+  await emit(join(wearDir, variant.file), svg, 'render-designs')
 }
