@@ -217,7 +217,8 @@ cd core && RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document
 cd core && cargo test --workspace
 ```
 
-After schema or fixture changes, validate JSON syntax and keep examples sanitized:
+After schema or fixture changes — and after touching the payload version in either shell —
+validate the shared contracts and keep examples sanitized:
 
 ```bash
 just validate-fixtures

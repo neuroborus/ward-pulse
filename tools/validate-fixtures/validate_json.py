@@ -207,6 +207,34 @@ def check_keywords(name: str, node: Any, where: str = "") -> list[str]:
     return errors
 
 
+# The shells cannot import the schema, so each repeats its version number. A
+# mismatch is silent at build time and total at run time: the Wear store drops
+# every payload whose version it does not recognise.
+SCHEMA_VERSION_USES = {
+    "apps/wear_android/app/src/main/java/app/wardpulse/wear/data/WatchSummaryStore.kt":
+        r"SCHEMA_VERSION = (\d+)",
+    "apps/phone_flutter/lib/sync/watch_sync_service.dart":
+        r"'schemaVersion': (\d+)",
+}
+
+
+def check_schema_version(schemas: dict[str, Any]) -> list[str]:
+    """The one number the phone, the watch, and the contract must agree on."""
+    summary = schemas["watch_dashboard_summary.schema.json"]
+    expected = summary["properties"]["schemaVersion"]["const"]
+    errors: list[str] = []
+    for relative, pattern in sorted(SCHEMA_VERSION_USES.items()):
+        source = (ROOT / relative).read_text(encoding="utf-8")
+        found = re.search(pattern, source)
+        if found is None:
+            errors.append(f"{relative}: no schema version found by /{pattern}/")
+        elif int(found.group(1)) != expected:
+            errors.append(
+                f"{relative}: schema version {found.group(1)}, contract says {expected}"
+            )
+    return errors
+
+
 def report(errors: list[str]) -> int:
     for error in errors:
         print(error)
@@ -235,6 +263,7 @@ def main() -> int:
             )
 
     schemas = load_schemas()
+    errors += check_schema_version(schemas)
     for name, schema in schemas.items():
         errors += check_keywords(name, schema)
     # A golden fixture nobody mapped is the quiet failure this gate exists to

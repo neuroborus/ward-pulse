@@ -71,13 +71,13 @@ WardPulse is local-first. The MVP must not introduce a custom cloud path for pro
 
 ## Phone-to-Watch Sync
 
-- The version 9 Data Layer payload follows `schemas/watch_dashboard_summary.schema.json` and
-  contains only derived ring metrics, optional compact remaining-credits glance
-  (`creditsGlance`), budget, selected allowance, provider-status, alert, freshness, and
+- The Data Layer payload follows `schemas/watch_dashboard_summary.schema.json`, which owns its
+  version number, and contains only derived ring metrics, optional compact remaining-credits
+  glance (`creditsGlance`), budget, selected allowance, provider-status, alert, freshness, and
   phone-owned manual-refresh allowance fields (`manualRefreshAllowed` /
   `manualRefreshAvailableAt`, driven by the PollCadence hard floor). Ring entries and credits
-  glance carry labels and counts —
-  never credentials, account identifiers, raw provider payloads, or LLM token totals.
+  glance carry labels and counts — never credentials, account identifiers, raw provider
+  payloads, or LLM token totals.
 - Mock payloads are produced only by debug builds after the user explicitly enables mock data.
   Debug Mock data is a seeded multi-provider demo (OpenAI, Codex, Claude, Cursor), not the
   legacy single `provider: mock` golden fixture. Release Wear builds reject mock payloads.

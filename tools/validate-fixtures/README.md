@@ -12,6 +12,12 @@ for a checked one.
 A schema must be named `*.schema.json` for the same reason: that is the glob the checker reads,
 and one named otherwise would sit unswept.
 
+The watch payload version is checked across the three places that must agree: the `const` in
+`watch_dashboard_summary.schema.json`, `SCHEMA_VERSION` in the Wear store, and `schemaVersion`
+in the phone's sync service. A mismatch builds fine and fails at run time — the watch drops
+every payload whose version it does not recognise — so the shells run this gate too
+(`phone-android.yml`, `wear-android.yml`), not only the core workflow.
+
 Provider fixtures (`fixtures/providers/`) are sanitized payloads from other people's APIs and
 have no schema of ours to match; they are checked for syntax only.
 

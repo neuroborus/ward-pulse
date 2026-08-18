@@ -30,7 +30,7 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
           components: rustfmt, clippy
-      - name: Validate fixtures against schemas
+      - name: Validate shared contracts
         working-directory: .
         run: python3 tools/validate-fixtures/validate_json.py
       - run: cargo fmt --all -- --check
