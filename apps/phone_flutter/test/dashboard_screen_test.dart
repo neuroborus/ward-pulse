@@ -6,6 +6,7 @@ import 'package:ward_pulse_phone/app/surface_order.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_theme.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_screen.dart';
+import 'package:ward_pulse_phone/dashboard/status_pill.dart';
 import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
 
 void main() {

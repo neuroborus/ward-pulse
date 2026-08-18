@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../app/pull_to_refresh_list.dart';
 import '../dashboard/dashboard_models.dart';
-import '../dashboard/dashboard_screen.dart';
+import '../dashboard/status_pill.dart';
 import '../sync/poll_cadence.dart';
 import 'refresh_interval_preferences.dart';
 import 'watch_ring_preferences.dart';
