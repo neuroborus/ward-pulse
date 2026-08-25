@@ -19,7 +19,9 @@ export default defineConfig({
       items: [
         { text: 'Android goals', link: '/product/android-goals' },
         { text: 'Watch ring design', link: '/product/watch-ring-design' },
+        { text: 'Phone widget design', link: '/product/phone-widget-design' },
         { text: 'Wear glance design', link: '/product/wear-glance-design' },
+        { text: 'Phone dashboard design', link: '/product/phone-dashboard-design' },
         { text: 'Provider notes', link: '/product/provider-notes' },
         { text: 'Security model', link: '/product/security-model' },
         { text: 'Release checklist', link: '/product/release-checklist' },

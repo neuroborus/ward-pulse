@@ -40,12 +40,14 @@ build and test gates is ready:
   unchanged after the phone app is force-stopped and the Wear app is restarted.
 - The official WFF validator accepts the declarative watch face, and the package builds as
   APK/AAB without dex files.
-- The watch face installs and renders on the round Wear AVD; tap-to-open and ambient mode
-  pass emulator acceptance.
+- The watch face installs and renders on the round and square Wear AVDs; tap-to-open and
+  ambient mode pass emulator acceptance (ambient is entered with `KEYCODE_SLEEP` — see Wear
+  emulator navigation).
 
 The Phase 2 phone-dashboard, Phase 3 Rust-bridge, and Phase 4 Wear-app acceptance gates
 passed on **2026-07-18**. Phase 5 paired-device and Phase 6 WFF acceptance passed on
-**2026-07-19**.
+**2026-07-19**. The face was checked on the square AVD, and ambient on both shapes, on
+**2026-08-12**.
 
 Chrome and Linux desktop warnings from `flutter doctor` are out of scope. WardPulse targets
 Android phone, Wear OS, and Watch Face Format in the current product plan.
@@ -67,8 +69,7 @@ Android phone, Wear OS, and Watch Face Format in the current product plan.
 | Android SDK Build Tools | `build-tools;36.0.0` | Android build baseline |
 | Android SDK Platform Tools | 37.0.0 | `adb` |
 | Android Emulator | 36.6.11.0, build 15507667 | Phone emulator |
-| Android phone system image | `system-images;android-36;google_apis;x86_64`, revision 7 | Phone AVD |
-| Android phone Play Store image | `system-images;android-36;google_apis_playstore;x86_64`, revision 7 | Paired phone AVD |
+| Android phone system image | `system-images;android-36;google_apis_playstore;x86_64`, revision 7 | Phone AVD (Play Store) |
 | Android Wear system image | `system-images;android-36.1;android-wear-signed;x86_64`, revision 1 | Wear OS 6.1 AVDs |
 | Gradle Wrapper | 9.1.0 | Flutter Android build |
 | Android Gradle Plugin | 9.0.1 | Flutter Android runner |
@@ -108,11 +109,9 @@ Flutter SDK:       $HOME/develop/flutter
 Android SDK:       $HOME/Android/Sdk
 Android Studio:    $HOME/.local/opt/android-studio
 Java home:         /usr/lib/jvm/java-21-openjdk-amd64
-Phone AVD:         wardpulse_phone_api36
+Phone AVD:         wardpulse_phone_play_api36
 Phone platform:    android-36
-Phone system image system-images;android-36;google_apis;x86_64
-Paired phone AVD:  wardpulse_phone_play_api36
-Paired phone image system-images;android-36;google_apis_playstore;x86_64
+Phone system image system-images;android-36;google_apis_playstore;x86_64
 Wear compile SDK:  platforms;android-37.1
 Wear system image: system-images;android-36.1;android-wear-signed;x86_64
 Wear round AVD:    wardpulse_wear_round_api36_1
@@ -259,38 +258,8 @@ rustup target list --installed
 
 ## Phone AVD
 
-Create the canonical phone AVD:
-
-```sh
-avdmanager create avd \
-  --name wardpulse_phone_api36 \
-  --package "system-images;android-36;google_apis;x86_64" \
-  --force
-```
-
-Accept the default `no` answer when asked whether to create a custom hardware profile.
-
-List and start it with:
-
-```sh
-emulator -list-avds
-emulator -accel-check
-emulator @wardpulse_phone_api36
-```
-
-Verify the running device from another shell:
-
-```sh
-adb devices -l
-flutter devices
-```
-
-The expected Flutter device is an Android x64 emulator running Android 16 / API 36.
-
-### Phase 5 paired phone AVD
-
-Wear Data Layer emulator pairing requires a phone image with the Play Store. Install the
-image and create a separate AVD without replacing the canonical CLI phone AVD:
+Use **one** phone AVD with the Play Store image. It covers Flutter CLI work and Wear Data
+Layer pairing (a second non-Play phone AVD only caused local confusion).
 
 ```sh
 android --sdk="$ANDROID_HOME" sdk install \
@@ -307,12 +276,28 @@ sed -i 's/^PlayStore.enabled=no$/PlayStore.enabled=yes/' \
   "$HOME/.android/avd/wardpulse_phone_play_api36.avd/config.ini"
 ```
 
-Start `wardpulse_phone_play_api36` and one canonical Wear AVD, then pair them with Android
-Studio's Wear OS emulator pairing assistant. Installing the Google Pixel Watch companion
-from Play Store requires a Google account on the phone AVD; use a dedicated test account.
-The companion's optional `Associate` action is not part of this acceptance flow and is not
-required for Data Layer. Both WardPulse APKs must use application ID `app.wardpulse` and the
-same signing certificate; the Wear Kotlin namespace remains `app.wardpulse.wear`.
+List and start it with:
+
+```sh
+emulator -list-avds
+emulator -accel-check
+emulator @wardpulse_phone_play_api36
+```
+
+Verify the running device from another shell:
+
+```sh
+adb devices -l
+flutter devices
+```
+
+The expected Flutter device is an Android x64 emulator running Android 16 / API 36 with Play
+Store. Start it together with one Wear AVD, then pair them with Android Studio's Wear OS
+emulator pairing assistant. Installing the Google Pixel Watch companion from Play Store
+requires a Google account on the phone AVD; use a dedicated test account. The companion's
+optional `Associate` action is not part of this acceptance flow and is not required for Data
+Layer. Both WardPulse APKs must use application ID `app.wardpulse` and the same signing
+certificate; the Wear Kotlin namespace remains `app.wardpulse.wear`.
 
 ## Wear OS AVDs
 
@@ -364,16 +349,65 @@ adb -s "$WEAR_SERIAL" shell am start \
   -n app.wardpulse/app.wardpulse.wear.MainActivity
 ```
 
+After `am start`, `keyevent 4` returns to the face — but send it once: from the face itself
+both `4` and `3` open the launcher, and `4` from the launcher lands back on the face. When the
+keys leave you stranded in the launcher, `am force-stop com.google.android.wearable.sysui`
+restarts the system UI on the watch face.
+
+To put a chosen summary on the face, write the app's prefs and then **start the app once**:
+
+```sh
+adb -s "$WEAR_SERIAL" push summary.xml /data/local/tmp/watch_summary.xml
+adb -s "$WEAR_SERIAL" shell run-as app.wardpulse \
+  cp /data/local/tmp/watch_summary.xml /data/data/app.wardpulse/shared_prefs/watch_summary.xml
+adb -s "$WEAR_SERIAL" shell am start -n app.wardpulse/app.wardpulse.wear.MainActivity
+```
+
+The start is not optional: complications refresh only when something calls
+`WatchComplicationUpdater.requestUpdate` (`MainActivity`, or the Data Layer listener). A prefs
+file written behind the app's back leaves every slot showing its previous value, and the face
+then measures exactly as it did before the change — which reads like a broken change rather
+than a stale one.
+
+Two more ways this misleads. After `pm clear` the app has no `shared_prefs/` directory at all,
+so the `cp` above fails and the face falls back to `NoData` — arcs and strips vanish together,
+which looks like a rendering bug rather than an empty payload; start the app once first so the
+directory exists. And reinstalling the **face** package resets its slots the same way, so seed
+after the install, not before.
+
+Ambient is `KEYCODE_SLEEP`, not the power button — `keyevent 26` leaves this image
+interactive:
+
+```sh
+adb -s "$WEAR_SERIAL" shell input keyevent 223   # Dozing / DOZE_SUSPEND
+adb -s "$WEAR_SERIAL" shell input keyevent 224   # back to interactive
+```
+
+`screencap` in doze captures the frame after the system's own dimming, which is neither a
+scale nor a gamma of the interactive one. Use it to check that ambient renders what it should;
+never read alpha levels off it.
+
+Tap coordinates measured off a screenshot are a guess: the image is scaled, and a system dialog
+sits above whatever it covers, so a near miss lands on the screen underneath and quietly changes
+something else. Read the bounds instead, then tap their centre:
+
+```sh
+adb -s "$PHONE_SERIAL" shell uiautomator dump /sdcard/ui.xml
+adb -s "$PHONE_SERIAL" shell cat /sdcard/ui.xml | tr '<' '\n' | grep -i "don.t allow"
+# bounds="[133,1400][947,1547]" → tap 540 1473
+```
+
 The app compiles against Android SDK 37.1 but targets API 36 and runs on the Wear OS 6.1 /
 API 36.1 image. Compile SDK and runtime system image versions are intentionally independent.
 
 ## Watch Face Format
 
-The Phase 6 watch face is a separate resource-only package in `apps/watchface_wff/`:
+The watch face is a separate resource-only package in `apps/watchface_wff/` (Phase 13
+concentric baseline — `docs/product/WATCH_RING_DESIGN.md`):
 
 | Setting | Value | Purpose |
 | --- | --- | --- |
-| Watch Face Format | version 2 | Concentric rings via WeightedStroke + RANGED_VALUE colors (Wear OS 5+) |
+| Watch Face Format | version 2 | Concentric remaining arcs + strip accents via WeightedStroke / RANGED_VALUE ColorRamp (Wear OS 5+). A scene takes at most **8** `ComplicationSlot` elements — the same in v2/v4/v5, so a raise cannot buy more |
 | Application ID | `app.wardpulse.watchface` | Independent watch face package |
 | Minimum SDK | API 34 | Minimum runtime for WFF v2 |
 | Compile SDK | Android SDK 37.1 | Shared Android build baseline |
@@ -439,10 +473,11 @@ flutter build apk --debug
 flutter run
 ```
 
-For Codex acceptance, open **Settings > Codex account**, start sign-in, open the external OpenAI
-page, and enter the one-time code. Plan usage, purchased usage, and platform spend are on by
-default; any can be hidden in Settings if at least one surface remains. The OAuth session stays
-in phone-secure storage and does not require a Codex CLI, local server, or `adb reverse`.
+For Codex acceptance, open the phone **Providers** tab → Codex / plan row, start sign-in, open
+the external OpenAI page, and enter the one-time code. Plan usage, purchased usage, and
+platform spend are on by default; any can be hidden via Settings consumption-display toggles
+if at least one surface remains. The OAuth session stays in phone-secure storage and does not
+require a Codex CLI, local server, or `adb reverse`.
 
 Run the Wear OS acceptance checks with one canonical Wear AVD active:
 

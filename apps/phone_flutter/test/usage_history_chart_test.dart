@@ -21,6 +21,26 @@ void main() {
     expect(find.text('2026-07-14'), findsOneWidget);
   });
 
+  testWidgets('plots Cursor-style request buckets without inventing cost', (
+    tester,
+  ) async {
+    final buckets = [
+      _requestBucket(DateTime.utc(2026, 7, 18), 77),
+      _requestBucket(DateTime.utc(2026, 7, 19), 110),
+    ];
+
+    final painter = await _pumpChart(tester, buckets);
+
+    expect(find.text('187 requests'), findsOneWidget);
+    expect(find.text('No totals'), findsNothing);
+    expect(find.text('2026-07-18'), findsOneWidget);
+    expect(find.text('2026-07-20'), findsOneWidget);
+    expect(
+      await tester.runAsync(() => _primaryPixelCount(painter)),
+      greaterThan(0),
+    );
+  });
+
   testWidgets('renders dense token history without inventing zero usage', (
     tester,
   ) async {
@@ -118,6 +138,19 @@ UsageBucket _tokenBucket(DateTime start, int tokens) {
     cachedTokens: null,
     reportedTotalTokens: tokens,
     requests: null,
+    model: null,
+  );
+}
+
+UsageBucket _requestBucket(DateTime start, int requests) {
+  return UsageBucket(
+    startAt: start,
+    endAt: start.add(const Duration(days: 1)),
+    cost: null,
+    inputTokens: null,
+    outputTokens: null,
+    cachedTokens: null,
+    requests: requests,
     model: null,
   );
 }

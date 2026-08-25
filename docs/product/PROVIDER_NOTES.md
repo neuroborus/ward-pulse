@@ -29,25 +29,40 @@ Each provider should document:
 
 Platform code owns transport, TLS, background scheduling, secure credential retrieval, retries, and encrypted storage. Rust owns parsing, validation, normalization, error mapping, aggregation, budgets, projections, alerts, and dashboard view models.
 
+### Validation stops short of rejecting timestamps
+
+Rust validates what it can act on. It deliberately does **not** reject a malformed instant:
+`DateTimeUtc` normalizes what it recognizes and passes anything else through unchanged.
+
+The reason is the failure mode, not the type. Instants arrive inside provider payloads, so a
+fallible parse would fail the whole report over one field, and a local-first dashboard would
+show an error page instead of the data it already has. A single odd date is the cheaper loss.
+
+The cost is that `DateTimeUtc` guarantees less than its name suggests, and time ordering relies
+on every producer emitting RFC 3339 in UTC. If a provider ever breaks that, reject at the FFI
+boundary, which already returns an error envelope — not inside the core, which has no way to
+report anything.
+
 ## Consumption display
 
 Providers may report plan allowances, purchased tokens or credits, or both. These values stay
 separate from monetary budgets because their units and reset rules differ.
 
-- Plan usage, purchased usage, and platform spend are all visible by default.
-- The user may hide any surface, but at least one of the three remains enabled.
-- Allowance preferences filter phone and Wear OS presentation; platform spend is
-  phone-dashboard only. Preferences never discard collected data.
+- Plan usage, purchased usage, and platform spend are all shown; none of the three is hideable.
+  A surface the user cannot see is a surface nobody can act on, and the phone already shows only
+  what providers report.
+- Platform spend is phone-dashboard only: the watch carries percentages, not currency.
 - WardPulse does not invent a limit, balance, or percentage when the provider omits it.
 - Exact provider quantities cross shared contracts as decimal strings with an explicit `tokens`
   or `credits` unit.
 - Phone dashboard allowance cards are **per account**, grouped under a provider section
   (family accent + provider name). Plan and purchased values are never summed across
   providers into one card.
-- Wear / WFF strips may show remaining **purchased credits** via watch summary `creditsGlance`
-  (schema v6). That glance may sum same-unit purchased balances across providers for one
-  compact strip number; it is not a phone-dashboard aggregate. LLM token totals stay on
-  phone history charts — never as face `TOK` labels.
+- Wear / WFF strips show remaining **purchased credits** per ring family from watch summary
+  `allowances` (same lookup as Glance: `Codex · …`, `Claude · …`). Compact on the face
+  (`% · 320`); Glance keeps the unit (`% left · 320 credits`). Schema `creditsGlance` remains
+  for credits-only faces (no plan rings). LLM token totals stay on phone history charts —
+  never as face `TOK` labels.
 
 ## Capability-adaptive presentation
 
@@ -55,11 +70,17 @@ The dashboard renders only the metrics that the currently connected providers ca
 per-provider capability tables below are the source of truth for what each connection contributes.
 
 - A metric no connected provider supports is hidden, not rendered as a placeholder. One row keeps a
-  `?` affordance that names the connection to add and deep-links to Settings.
+  `?` affordance that names the connection to add and deep-links to Providers.
 - `Unknown` is reserved for transient provider state: a connection that has not synced yet or whose
   last sync failed. It stays on the status indicator rather than on values.
 - With no connections configured, the dashboard shows a single "Connect a provider" call to action.
-- Mock data keeps the full dashboard so the layout stays reviewable without live credentials.
+- Debug **Mock data** loads a seeded multi-provider demo (OpenAI, Codex, Claude plan + platform,
+  Cursor plan + platform) so the full dashboard stays reviewable without live credentials.
+  Utilization reshuffles on toggle/refresh (not on automatic sync ticks); the Phase 1 single
+  `provider: mock` golden remains for CLI/FFI regression only. Platform accounts come from the
+  real adapters, which report spend but never a limit, so the demo derives a stand-in ceiling
+  from the fixture's own spend and keeps it short of exhaustion — an invented limit must not
+  stage an `Error`.
 
 ## Polling cadence
 
@@ -88,7 +109,7 @@ a running agent.
 
 ## Connection grouping
 
-Every provider in Settings is one section with up to two homogeneous connections:
+Every provider on the **Providers** tab is one section with up to two homogeneous connections:
 
 - `plan`: subscription or allowance reads (Codex device-code OAuth; Claude Code PKCE OAuth
   with authorization-code paste from the callback page; Cursor dashboard WebView sign-in that
@@ -100,12 +121,12 @@ OpenAI therefore shows Codex subscription and Platform reporting together. An op
 user-defined label for platform Admin API keys is plain phone-local display metadata:
 
 - stored beside the credential reference, never concatenated into the secure key value;
-- shown in Settings and provider details in place of the generic Platform title;
+- shown on the Providers connection row in place of the generic Platform title;
 - removed when the credential is removed;
 - never sent to Wear OS or the watch face.
 
-Existing stored Admin API keys remain valid after the Settings regrouping; users do not need to
-re-enter them.
+Existing stored Admin API keys remain valid after the connection-catalog move from Settings to
+Providers; users do not need to re-enter them.
 
 ## OpenAI Platform organization reporting
 
@@ -242,7 +263,10 @@ normalizes `five_hour`, `seven_day`, optional per-model weekly windows, and `ext
 `AllowanceState`. Phone dashboard cards still list every window. Watch/Glance rings collapse
 Claude **plan** windows into one slot (`allowance.claude.plan`): the tightest remaining
 non-exhausted window wins; Glance label is the short token (`5h`, `Weekly`, `Opus weekly`,
-`Sonnet weekly`). Purchased `extra_usage` is not in that collapse pool.
+`Sonnet weekly`). Purchased `extra_usage` is not in that collapse pool and is **not** a watch
+ring candidate — it stays on phone dashboard cards. It may surface as a warning/error alert
+**only when the user configures a threshold** for that meter on Providers — never from a
+hard-coded utilization cutoff alone.
 
 This is a compatibility integration, not a published third-party API. Endpoint or OAuth client
 changes may require an app update. Never log tokens, authorization codes, or raw response bodies.
@@ -252,12 +276,17 @@ changes may require an app update. Never log tokens, authorization codes, or raw
 Status: implemented as an experimental on-device compatibility integration on 2026-07-25;
 dashboard WebView sign-in added 2026-07-26.
 
-Cursor has no official personal-account usage API and no OAuth grant for plan meters. Settings
+Cursor has no official personal-account usage API and no OAuth grant for plan meters. Providers
 opens an in-app WebView to the Cursor dashboard; after sign-in the phone captures the
 `WorkosCursorSessionToken` cookie (Advanced paste remains for the same value), stores it
-securely, and calls `GET /api/usage-summary`, normalizing plan and on-demand meters into
-allowances. Do not claim Admin-API hourly aggregation on this experimental row. Never log the
-cookie or raw response bodies.
+securely, and calls `GET /api/usage-summary`, normalizing included plan pools and on-demand
+meters into allowances. When the payload includes `autoPercentUsed` / `apiPercentUsed`, WardPulse
+shows **Cursor Models** and **Other Models** as separate plan bars (same as the Cursor usage UI)
+on the phone and as selectable watch rings. Purchased on-demand usage is phone-only (and may
+alert **only** with a user-configured threshold on Providers); it is not a ring. Older combined-only payloads keep a single Plan
+usage bar. Exhausted pools (`usedPercent >= 100`) are omitted from the face like other rings.
+Do not claim Admin-API hourly aggregation on this experimental row. Never log the cookie or
+raw response bodies.
 
 ## Cursor team Admin API
 
@@ -272,7 +301,7 @@ Scope:
 - Spend is billing-cycle scoped and maps only to the month budget; today and week stay
   unknown until a day-scoped spend source exists.
 - Hard ceiling is 20 requests per minute; WardPulse polls at the global slider cadence (minimum
-  five minutes). Usage aggregates hourly on the provider side; Settings shows that freshness
+  five minutes). Usage aggregates hourly on the provider side; Providers shows that freshness
   note on this Admin API row only.
 - Never log the key, authorization header, or raw response bodies.
 

@@ -3,13 +3,23 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../dashboard/dashboard_models.dart';
+import '../providers/provider_connection.dart';
 import '../sync/credit_request_runway.dart';
 
 /// Maximum simultaneous rings on watch and watch-face surfaces.
-const watchRingSlotCount = 4;
+const watchRingSlotCount = 3;
 
 /// Synthetic watch-ring slot: Claude plan windows collapse to the tightest one.
 const claudePlanRingId = 'allowance.claude.plan';
+
+/// Retired: for one build the two Cursor pools were a single catalog row. They
+/// are picked separately again — a band is shared only when **both** are picked
+/// (`WATCH_RING_DESIGN.md`, Split band) — so this id survives only to migrate a
+/// selection stored under it.
+const cursorPlanRingId = 'allowance.cursor.plan';
+
+/// What a shared band is called where a pair counts as one: the payload preview.
+const cursorPlanRingLabel = 'Cursor plan';
 
 /// Claude plan window allowance ids, tie-break order (shorter / primary first).
 const _claudePlanWindowIds = <String>[
@@ -19,6 +29,20 @@ const _claudePlanWindowIds = <String>[
   'claude-seven-day-sonnet',
 ];
 
+/// Former ring-catalog ids for purchased meters (no longer selectable).
+const _retiredPurchasedRingIds = <String>{
+  'allowance.claude.claude-extra-usage',
+  'allowance.cursor.cursor-on-demand',
+  'allowance.codex.codex-purchased-credits',
+};
+
+/// Former ring-catalog ids for the summed budgets, now keyed by connection.
+const retiredBudgetRingIds = <String>{
+  'budget.today',
+  'budget.week',
+  'budget.month',
+};
+
 /// One selectable percent metric for a watch ring.
 final class WatchRingMetric {
   const WatchRingMetric({
@@ -26,6 +50,8 @@ final class WatchRingMetric {
     required this.label,
     required this.usedPercent,
     required this.status,
+    this.spent,
+    this.limit,
     this.unavailableReason,
   });
 
@@ -38,6 +64,11 @@ final class WatchRingMetric {
   final double? usedPercent;
   final ProviderStatus status;
 
+  /// Money behind a budget ring — the face strip reads it instead of a percent.
+  /// Allowance rings leave both null: a plan window has no price.
+  final Money? spent;
+  final Money? limit;
+
   /// When set, the Settings row is disabled and the reason is shown as help.
   final String? unavailableReason;
 
@@ -45,11 +76,31 @@ final class WatchRingMetric {
 
   bool get _isClaudePlanSlot => id == claudePlanRingId;
 
-  /// Settings checkbox title (Claude plan slot keeps a stable name).
-  String get settingsTitle => _isClaudePlanSlot ? 'Claude plan' : label;
+  /// Catalog checkbox title, qualified by family so that a `Weekly plan` from
+  /// two providers stays apart. The Claude plan slot is synthetic — its label
+  /// follows the tightest window, so it keeps a stable name instead.
+  String get catalogTitle {
+    if (_isClaudePlanSlot) {
+      return 'Claude plan';
+    }
+    final connection = connectionFromBudgetRingId(id);
+    if (connection != null) {
+      // The family alone cannot tell two connections of one provider apart,
+      // and the label is only the period (`Anthropic platform · Month`).
+      return '${providerFamilyLabel(connection.provider)} '
+          '${connectionKindLabel(connection.kind)} · $label';
+    }
+    final provider = providerFromRingId(id);
+    if (provider == null) {
+      return label;
+    }
+    final family = providerDisplayLabel(provider);
+    // A few pool names already open with the family (`Cursor Models`).
+    return label.split(' ').first == family ? label : '$family · $label';
+  }
 
-  /// Settings checkbox subtitle.
-  String get settingsSubtitle {
+  /// Catalog checkbox subtitle.
+  String get catalogSubtitle {
     final reason = unavailableReason;
     if (reason != null) {
       return reason;
@@ -73,7 +124,6 @@ final class WatchRingMetric {
 }
 
 /// Ordered ring metric ids for Watchface (at most [watchRingSlotCount]).
-/// Transitional UI may still edit these under Settings “Watch display”.
 ///
 /// `selectedIds == null` means unset → use the default available metrics.
 /// An empty list means the user chose zero rings.
@@ -84,12 +134,29 @@ final class WatchRingPreferences {
 
   bool get usesDefaults => selectedIds == null;
 
-  List<String> get clampedIds => (selectedIds ?? const <String>[])
-      .take(watchRingSlotCount)
-      .toList(growable: false);
+  /// Clamped by **slot cost**, not by count: both Cursor pools share a band, so
+  /// a four-id selection can still be three rings. Counting ids here dropped the
+  /// fourth tick before it ever reached the watch.
+  List<String> get clampedIds => _withinSlotBudget(
+    selectedIds ?? const <String>[],
+    watchRingSlotCount,
+  ).toList(growable: false);
 
-  /// Clamped selection with legacy Claude window ids coalesced.
+  /// Clamped selection with legacy Claude / purchased ring ids migrated.
   List<String> get migratedIds => migrateWatchRingSelectedIds(clampedIds);
+}
+
+/// Storage → prefs, reading an all-retired selection as unset.
+///
+/// An empty *stored* list is a real choice ("no rings"); a list that migration
+/// empties is not — those ids no longer exist, so defaults apply again rather
+/// than leaving the watch blank until the user re-picks.
+WatchRingPreferences watchRingPreferencesFromStoredIds(List<String> ids) {
+  final migrated = migrateWatchRingSelectedIds(ids);
+  if (ids.isNotEmpty && migrated.isEmpty) {
+    return const WatchRingPreferences();
+  }
+  return WatchRingPreferences(selectedIds: migrated);
 }
 
 String? _claudePlanWindowGlanceLabel(String allowanceId) {
@@ -114,11 +181,30 @@ bool _isClaudePlanWindowRingId(String ringId) {
   return _isClaudePlanWindowAllowanceId(ringId.substring(prefix.length));
 }
 
-/// Coalesce legacy per-window Claude plan ring ids into [claudePlanRingId].
-List<String> migrateWatchRingSelectedIds(List<String> ids) {
+/// Expanded Claude plan window ring ids for phone-widget prefs migration.
+final claudePlanWindowRingIds = [
+  for (final id in _claudePlanWindowIds) 'allowance.claude.$id',
+];
+
+/// Coalesce legacy Claude window ids into [claudePlanRingId], drop the retired
+/// summed budget ids, and optionally drop retired purchased-meter ring ids
+/// (Watchface only).
+List<String> migrateWatchRingSelectedIds(
+  List<String> ids, {
+  bool dropPurchased = true,
+  int maxSlots = watchRingSlotCount,
+}) {
   final out = <String>[];
   var sawClaudePlan = false;
+  var sawCursorPlan = false;
   for (final id in ids) {
+    // No successor to pick: which connection the sum stood for is unknown.
+    if (retiredBudgetRingIds.contains(id)) {
+      continue;
+    }
+    if (dropPurchased && _retiredPurchasedRingIds.contains(id)) {
+      continue;
+    }
     if (id == claudePlanRingId || _isClaudePlanWindowRingId(id)) {
       if (!sawClaudePlan) {
         out.add(claudePlanRingId);
@@ -126,16 +212,27 @@ List<String> migrateWatchRingSelectedIds(List<String> ids) {
       }
       continue;
     }
+    // One build stored the pair under a single id. Pools are picked separately
+    // again, so that id unfolds into the two it stood for.
+    if (id == cursorPlanRingId) {
+      if (!sawCursorPlan) {
+        out.addAll([cursorOwnPoolId, cursorOtherPoolId]);
+        sawCursorPlan = true;
+      }
+      continue;
+    }
+    if (out.contains(id)) {
+      continue;
+    }
     out.add(id);
   }
-  return out.take(watchRingSlotCount).toList(growable: false);
+  return _withinSlotBudget(out, maxSlots).toList(growable: false);
 }
 
 /// Collapses Claude plan windows into one ring (tightest remaining).
 ///
 /// Prefers non-exhausted windows so surface omit-exhausted does not hide a
-/// usable shorter window behind a fully used weekly. Purchased extra usage is
-/// not included.
+/// usable shorter window behind a fully used weekly.
 WatchRingMetric? collapseClaudePlanRing(Iterable<AllowanceState> allowances) {
   final windows = [
     for (final allowance in allowances)
@@ -157,8 +254,7 @@ WatchRingMetric? collapseClaudePlanRing(Iterable<AllowanceState> allowances) {
       label: 'Claude plan',
       usedPercent: null,
       status: windows.first.status,
-      unavailableReason:
-          'This allowance has no percentage to show as a ring.',
+      unavailableReason: 'This allowance has no percentage to show.',
     );
   }
 
@@ -189,62 +285,147 @@ int _compareClaudePlanWindows(AllowanceState a, AllowanceState b) {
 }
 
 /// Builds the catalog of ring metrics from the current dashboard snapshot.
-List<WatchRingMetric> watchRingCatalog(DashboardSnapshot? snapshot) {
-  final metrics = <WatchRingMetric>[
-    _budgetMetric('budget.today', 'Today', snapshot?.todayTotal),
-    _budgetMetric('budget.week', 'Week', snapshot?.weekTotal),
-    _budgetMetric('budget.month', 'Month', snapshot?.monthTotal),
-  ];
-
+///
+/// Purchased meters (Extra usage, on-demand, Codex credits) are excluded by
+/// default — they stay on phone cards / the Widget tab, not Wear rings.
+///
+/// [collapseClaudePlan] keeps Watch/WFF on one Claude slot. The phone widget
+/// passes `false` so every Claude plan window is selectable on its own.
+List<WatchRingMetric> watchRingCatalog(
+  DashboardSnapshot? snapshot, {
+  bool includePurchased = false,
+  bool collapseClaudePlan = true,
+}) {
   if (snapshot == null) {
-    return metrics;
+    return const [];
   }
 
+  final metrics = <WatchRingMetric>[];
   for (final account in snapshot.accounts) {
     if (account.provider == 'mock') {
       continue;
     }
-    if (account.provider == 'claude') {
+    if (account.provider == 'claude' && collapseClaudePlan) {
       final collapsed = collapseClaudePlanRing(account.allowances);
       if (collapsed != null) {
         metrics.add(collapsed);
       }
-      for (final allowance in account.allowances) {
-        if (_isClaudePlanWindowAllowanceId(allowance.id)) {
-          continue;
+      if (includePurchased) {
+        for (final allowance in account.allowances) {
+          if (allowance.source == AllowanceSource.purchased) {
+            metrics.add(_allowanceMetric(account.provider, allowance));
+          }
         }
-        metrics.add(_allowanceMetric(account.provider, allowance));
       }
       continue;
     }
     for (final allowance in account.allowances) {
+      if (allowance.source == AllowanceSource.purchased && !includePurchased) {
+        continue;
+      }
       metrics.add(_allowanceMetric(account.provider, allowance));
     }
+  }
+
+  // Budgets last: a plan window always carries a percentage, while a budget
+  // ring waits for a limit, and unset Watchface defaults take the first slots.
+  for (final account in snapshot.accounts) {
+    if (account.provider == 'mock') {
+      continue;
+    }
+    metrics.addAll(_connectionBudgetMetrics(account));
   }
 
   return metrics;
 }
 
+/// What a selection costs in ring slots: **bands**, not pools. Both Cursor pools
+/// picked together share one band, so they cost one slot; either alone is an
+/// ordinary ring (`WATCH_RING_DESIGN.md`, Split band).
+int watchRingSlotCost(Iterable<String> ids) {
+  final selected = ids.toList(growable: false);
+  final shared =
+      selected.contains(cursorOwnPoolId) &&
+      selected.contains(cursorOtherPoolId);
+  return selected.length - (shared ? 1 : 0);
+}
+
+/// Keeps ids in order while they fit the slot budget, counting by band.
+///
+/// Skips what does not fit rather than stopping at it: the second pool of a pair
+/// costs nothing once the first is in, and it may sit behind a ring that no
+/// longer fits — stopping there would split the pair and hand the watch a half.
+List<String> _withinSlotBudget(Iterable<String> ids, int maxSlots) {
+  final out = <String>[];
+  for (final id in ids) {
+    if (watchRingSlotCost([...out, id]) <= maxSlots) {
+      out.add(id);
+    }
+  }
+  return out;
+}
+
+/// Catalog rows the watch is set to show: the stored choice, or the defaults the
+/// catalog offers when there is none.
+///
+/// These are **catalog** ids — a Cursor pair is one id here, not its two pools.
+/// [resolveWatchRings] expands them; the Watchface tab must not, or its
+/// checkboxes would look for a pair by an id the catalog never shows.
+List<String> watchRingSelectionIds(
+  DashboardSnapshot? snapshot,
+  WatchRingPreferences preferences,
+) {
+  if (!preferences.usesDefaults || snapshot == null) {
+    return preferences.migratedIds;
+  }
+  return _withinSlotBudget([
+    for (final metric in watchRingCatalog(snapshot))
+      if (metric.isAvailable) metric.id,
+  ], watchRingSlotCount).toList(growable: false);
+}
+
 /// Resolves rings for the watch payload: only available percent metrics.
 ///
-/// Order follows Settings selection (or catalog defaults). Use
+/// Order follows Watchface selection (or catalog defaults). Use
 /// [orderWatchRingsForSurface] before sending to Wear/WFF.
 List<WatchRingMetric> resolveWatchRings(
   DashboardSnapshot snapshot,
   WatchRingPreferences preferences,
 ) {
-  if (preferences.usesDefaults) {
-    return watchRingCatalog(
-      snapshot,
-    ).where((metric) => metric.isAvailable).take(watchRingSlotCount).toList();
-  }
-
   final catalog = {
     for (final metric in watchRingCatalog(snapshot)) metric.id: metric,
   };
   return [
-    for (final id in preferences.migratedIds)
+    for (final id in watchRingSelectionIds(snapshot, preferences))
       if (catalog[id] case final metric? when metric.isAvailable) metric,
+  ];
+}
+
+/// The Cursor plan's two pools share one band, so they travel as one entry: the
+/// own-models pool with the external one folded into its `split`
+/// (`WATCH_RING_DESIGN.md`, Split band).
+///
+/// The pair keeps the place of its **tighter** half, which is where the surface
+/// order already put it, while inside the entry the order is by pool — own
+/// first — because that side is a name, not a rank.
+const cursorOwnPoolId = 'allowance.cursor.cursor-plan-models';
+const cursorOtherPoolId = 'allowance.cursor.cursor-plan-other';
+
+List<(WatchRingMetric, WatchRingMetric?)> pairCursorPools(
+  List<WatchRingMetric> rings,
+) {
+  final own = rings.where((ring) => ring.id == cursorOwnPoolId).firstOrNull;
+  final other = rings.where((ring) => ring.id == cursorOtherPoolId).firstOrNull;
+  if (own == null || other == null) {
+    return [for (final ring in rings) (ring, null)];
+  }
+  final tighter = rings.indexOf(own) < rings.indexOf(other) ? own : other;
+  return [
+    for (final ring in rings)
+      if (ring.id == tighter.id)
+        (own, other)
+      else if (ring.id != cursorOwnPoolId && ring.id != cursorOtherPoolId)
+        (ring, null),
   ];
 }
 
@@ -258,6 +439,7 @@ List<WatchRingMetric> resolveWatchRings(
 List<WatchRingMetric> orderWatchRingsForSurface(
   List<WatchRingMetric> rings, {
   DashboardSnapshot? snapshot,
+  int maxSlots = watchRingSlotCount,
 }) {
   final active = [
     for (final ring in rings)
@@ -266,7 +448,7 @@ List<WatchRingMetric> orderWatchRingsForSurface(
   final runways = <String, double?>{};
   if (snapshot != null) {
     for (final ring in active) {
-      final provider = _providerFromRingId(ring.id);
+      final provider = providerFromRingId(ring.id);
       if (provider == null) {
         continue;
       }
@@ -281,8 +463,8 @@ List<WatchRingMetric> orderWatchRingsForSurface(
     if (usedCmp != 0) {
       return usedCmp;
     }
-    final providerA = _providerFromRingId(a.id);
-    final providerB = _providerFromRingId(b.id);
+    final providerA = providerFromRingId(a.id);
+    final providerB = providerFromRingId(b.id);
     final runwayA = providerA == null ? null : runways[providerA];
     final runwayB = providerB == null ? null : runways[providerB];
     // Missing / unlimited → +∞ (no secondary tightness pressure).
@@ -296,11 +478,52 @@ List<WatchRingMetric> orderWatchRingsForSurface(
     }
     return a.id.compareTo(b.id);
   });
-  return active.take(watchRingSlotCount).toList(growable: false);
+  // By band, not by ring: a pair is two rings and one slot, so counting rings
+  // here dropped one of its pools and the band arrived undivided.
+  final kept =
+      _withinSlotBudget([for (final ring in active) ring.id], maxSlots).toSet();
+  return [
+    for (final ring in active)
+      if (kept.contains(ring.id)) ring,
+  ];
+}
+
+/// Short subtitle for Watchface preview and Settings diagnostics.
+///
+/// Counts **bands**, not pools: a Cursor pair travels as one payload entry and
+/// costs one slot, so it is named once, by the row the user checked.
+String watchRingPayloadSubtitle(
+  DashboardSnapshot snapshot,
+  WatchRingPreferences ringPreferences,
+) {
+  final bands = pairCursorPools(
+    orderWatchRingsForSurface(
+      resolveWatchRings(snapshot, ringPreferences),
+      snapshot: snapshot,
+    ),
+  );
+  if (bands.isEmpty) {
+    return 'No rings selected';
+  }
+  if (bands.length == 1) {
+    final (ring, split) = bands.single;
+    // A band speaks with its tighter half, the way the face ranks it.
+    final tightest =
+        split == null || ring.remainingPercent! <= split.remainingPercent!
+            ? ring
+            : split;
+    final title = split == null ? ring.catalogTitle : cursorPlanRingLabel;
+    return '$title ${tightest.remainingPercent!.round()}% left';
+  }
+  final titles = [
+    for (final (ring, split) in bands)
+      if (split == null) ring.catalogTitle else cursorPlanRingLabel,
+  ];
+  return '${bands.length} rings · ${titles.join(', ')}';
 }
 
 /// Owning provider for `allowance.<provider>.…`, or null for budgets / unknown.
-String? _providerFromRingId(String ringId) {
+String? providerFromRingId(String ringId) {
   if (!ringId.startsWith('allowance.')) {
     return null;
   }
@@ -319,24 +542,53 @@ WatchRingMetric _allowanceMetric(String provider, AllowanceState allowance) {
     usedPercent: percent,
     status: allowance.status,
     unavailableReason:
+        percent == null ? 'This allowance has no percentage to show.' : null,
+  );
+}
+
+/// Local budget rings of one connection: one per period it reports spend for.
+///
+/// Reported spend is what makes a ceiling meaningful — subscription plans
+/// report none, and a connection may report only some periods.
+List<WatchRingMetric> _connectionBudgetMetrics(ProviderSnapshot account) {
+  final connection = account.connection;
+  if (connection == null) {
+    return const [];
+  }
+  return [
+    for (final budget in [account.today, account.week, account.month])
+      if (budget.spent != null) _budgetMetric(connection, budget),
+  ];
+}
+
+WatchRingMetric _budgetMetric(String connection, BudgetState budget) {
+  final percent = budget.usedPercent;
+  return WatchRingMetric(
+    id: 'budget.$connection.${budget.period}',
+    label: budget.periodLabel,
+    usedPercent: percent,
+    status: budget.status,
+    spent: budget.spent,
+    limit: budget.limit,
+    unavailableReason:
         percent == null
-            ? 'This allowance has no percentage to show as a ring.'
+            ? 'Set this period’s limit under Providers · Budget limits.'
             : null,
   );
 }
 
-WatchRingMetric _budgetMetric(String id, String label, BudgetState? budget) {
-  final percent = budget?.usedPercent;
-  return WatchRingMetric(
-    id: id,
-    label: label,
-    usedPercent: percent,
-    status: budget?.status ?? ProviderStatus.unknown,
-    unavailableReason:
-        percent == null
-            ? 'Connect a spend-reporting provider to fill this budget ring.'
-            : null,
-  );
+/// Connection of a `budget.<connection>.<period>` ring, or null for other ids.
+ProviderConnectionId? connectionFromBudgetRingId(String ringId) {
+  const prefix = 'budget.';
+  if (!ringId.startsWith(prefix)) {
+    return null;
+  }
+  final key = ringId.substring(prefix.length);
+  final period = key.lastIndexOf('.');
+  if (period < 0) {
+    return null;
+  }
+  return ProviderConnectionId.fromStorageKey(key.substring(0, period));
 }
 
 abstract interface class WatchRingPreferenceStore {
@@ -368,11 +620,20 @@ final class SecureWatchRingPreferenceStore implements WatchRingPreferenceStore {
         for (final entry in decoded)
           if (entry is String && entry.isNotEmpty) entry,
       ];
-      final migrated = migrateWatchRingSelectedIds(ids);
-      if (!_sameIds(ids.take(watchRingSlotCount).toList(), migrated)) {
+      final preferences = watchRingPreferencesFromStoredIds(ids);
+      final migrated = preferences.selectedIds;
+      // The comparison is against what the budget keeps, not the first three
+      // ids: a pair is four ids and three bands, and counting ids rewrote the
+      // stored selection on every read.
+      if (migrated == null) {
+        await _storage.delete(key: _key);
+      } else if (!_sameIds(
+        _withinSlotBudget(ids, watchRingSlotCount),
+        migrated,
+      )) {
         await _storage.write(key: _key, value: jsonEncode(migrated));
       }
-      return WatchRingPreferences(selectedIds: migrated);
+      return preferences;
     } on FormatException {
       return const WatchRingPreferences();
     }
@@ -383,10 +644,7 @@ final class SecureWatchRingPreferenceStore implements WatchRingPreferenceStore {
     if (value.selectedIds == null) {
       return _storage.delete(key: _key);
     }
-    return _storage.write(
-      key: _key,
-      value: jsonEncode(value.migratedIds),
-    );
+    return _storage.write(key: _key, value: jsonEncode(value.migratedIds));
   }
 }
 

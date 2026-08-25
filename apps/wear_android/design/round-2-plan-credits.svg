@@ -9,38 +9,46 @@
   </defs>
   <rect width="450" height="450" fill="url(#lift)"/>
   
-    <circle cx="225" cy="225" r="176.85" fill="none" stroke="#2E3632"
-      stroke-width="14.4" />
-    <circle cx="225" cy="225" r="176.85" fill="none" stroke="#65D78A"
-      stroke-width="14.4" stroke-linecap="round"
-      stroke-dasharray="88.89 1111.18"
+    <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#2E3632"
+      stroke-width="20.205000000000002" />
+    <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#65D78A"
+      stroke-width="20.205000000000002" stroke-linecap="round"
+      stroke-dasharray="64.19 1054.92"
+      stroke-dashoffset="-980.62"
       transform="rotate(-90 225 225)" />
-    <circle cx="225" cy="225" r="195.75" fill="none" stroke="#2E3632"
-      stroke-width="14.4" />
-    <circle cx="225" cy="225" r="195.75" fill="none" stroke="#E8915A"
-      stroke-width="14.4" stroke-linecap="round"
-      stroke-dasharray="479.67 1229.93"
+    <circle cx="225" cy="225" r="191.88" fill="none" stroke="#2E3632"
+      stroke-width="20.205000000000002" />
+    <circle cx="225" cy="225" r="191.88" fill="none" stroke="#E8915A"
+      stroke-width="20.205000000000002" stroke-linecap="round"
+      stroke-dasharray="449.99 1205.62"
+      stroke-dashoffset="-745.53"
       transform="rotate(-90 225 225)" />
   
     <text x="225" y="250.1" text-anchor="middle"
       font-family="Noto Sans, sans-serif" font-size="69.8"
       font-weight="700" fill="#F4FBF8">10:08</text>
-    <rect x="183.4" y="330.0" width="83.2"
-      height="22.0" rx="6.0" fill="#0B0E0C"
-      fill-opacity="0.92" />
-    <rect x="183.4" y="332.0" width="3.1"
-      height="18.0" rx="2.0"
-      fill="#65D78A" />
-    <text x="226.6" y="346.0"
-      text-anchor="middle" font-family="Noto Sans, sans-serif"
-      font-size="14" font-weight="700" fill="#F4FBF8">8% · 500</text>
-    <rect x="183.4" y="355.2" width="83.2"
-      height="22.0" rx="6.0" fill="#0B0E0C"
-      fill-opacity="0.92" />
-    <rect x="183.4" y="357.2" width="3.1"
-      height="18.0" rx="2.0"
-      fill="#E8915A" />
-    <text x="226.6" y="371.2"
-      text-anchor="middle" font-family="Noto Sans, sans-serif"
-      font-size="14" font-weight="700" fill="#F4FBF8">39%</text>
+    <rect x="181.0" y="283.0"
+      width="88.0" height="18.0"
+      rx="6.0" fill="#0B0E0C" fill-opacity="0.92" />
+    <rect x="181.0"
+      y="283.5"
+      width="4.5"
+      height="17.0"
+      rx="2.3" fill="#65D78A" />
+    <text x="226.0" y="292.0"
+      text-anchor="middle" dominant-baseline="central"
+      font-family="Noto Sans, sans-serif" font-size="12.0"
+      font-weight="700" fill="#F4FBF8">8% · 500</text>
+    <rect x="181.0" y="304.0"
+      width="88.0" height="18.0"
+      rx="6.0" fill="#0B0E0C" fill-opacity="0.92" />
+    <rect x="181.0"
+      y="304.5"
+      width="4.5"
+      height="17.0"
+      rx="2.3" fill="#E8915A" />
+    <text x="226.0" y="313.0"
+      text-anchor="middle" dominant-baseline="central"
+      font-family="Noto Sans, sans-serif" font-size="12.0"
+      font-weight="700" fill="#F4FBF8">39%</text>
 </svg>

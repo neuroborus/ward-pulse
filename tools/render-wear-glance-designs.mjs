@@ -10,9 +10,11 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { emit } from './design-output.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -29,40 +31,51 @@ const FONT = 'Noto Sans'
 const FONT_FILE = '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf'
 const SIZE = 450
 
+// A budget row belongs to one connection and takes that connection's family
+// color, so `cursorPlatform` repeats the Cursor teal on purpose. A Cursor plan's
+// own models carry a color of their own (`WATCH_RING_DESIGN.md`, palette).
 const FAMILY = {
   codex: { name: 'Codex', color: '#65D78A' },
   claude: { name: 'Claude', color: '#E8915A' },
   cursor: { name: 'Cursor', color: '#67E8D4' },
-  budget: { name: 'Budget', color: '#8AB4F8' },
+  cursorOwn: { name: 'Cursor', color: '#7E93B8' },
+  cursorPlatform: { name: 'Cursor platform', color: '#67E8D4' },
 }
 
+/**
+ * Wear drops the family prefix when the pool name already opens with it
+ * (`glancePrimaryLabel`), so the board must not print `Cursor · Cursor Models`.
+ */
+function rowTitle(row) {
+  // Wear compares the first word, not a prefix, so `Cursorish` would still be named.
+  return row.metric.split(' ')[0] === row.family.name
+    ? row.metric
+    : `${row.family.name} · ${row.metric}`
+}
+
+/**
+ * Real metrics or nothing. These place every baseline and size the alerts plate, so a guessed
+ * width moves the art: the fallback this replaces returned character-count estimates without
+ * a word, which made committed SVGs depend on whether the rendering machine had Pillow.
+ */
 function loadFontMetrics(fontSize, texts) {
-  const fallback = {
-    widths: Object.fromEntries(texts.map((t) => [t, fontSize * 0.55 * t.length])),
-    ascent: fontSize,
-    descent: fontSize * 0.25,
-  }
-  try {
-    const out = execFileSync(
-      'python3',
+  const out = execFileSync(
+    'python3',
+    [
+      '-c',
       [
-        '-c',
-        [
-          'import json',
-          'from PIL import ImageFont',
-          `font = ImageFont.truetype(${JSON.stringify(FONT_FILE)}, ${fontSize})`,
-          `texts = ${JSON.stringify(texts)}`,
-          'asc, desc = font.getmetrics()',
-          'widths = {t: font.getbbox(t)[2] - font.getbbox(t)[0] for t in texts}',
-          'print(json.dumps({"widths": widths, "ascent": asc, "descent": desc}))',
-        ].join('\n'),
-      ],
-      { encoding: 'utf8' },
-    )
-    return JSON.parse(out)
-  } catch {
-    return fallback
-  }
+        'import json',
+        'from PIL import ImageFont',
+        `font = ImageFont.truetype(${JSON.stringify(FONT_FILE)}, ${fontSize})`,
+        `texts = ${JSON.stringify(texts)}`,
+        'asc, desc = font.getmetrics()',
+        'widths = {t: font.getbbox(t)[2] - font.getbbox(t)[0] for t in texts}',
+        'print(json.dumps({"widths": widths, "ascent": asc, "descent": desc}))',
+      ].join('\n'),
+    ],
+    { encoding: 'utf8' },
+  )
+  return JSON.parse(out)
 }
 
 function esc(text) {
@@ -76,12 +89,14 @@ function miniArc({ cx, cy, r, thickness, remaining, color }) {
   const circ = 2 * Math.PI * r
   const left = Math.max(0.02, Math.min(remaining, 0.999))
   const paint = circ * left
+  const used = circ * (1 - left)
   return `
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
       stroke-width="${thickness}" />
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}"
       stroke-width="${thickness}" stroke-linecap="round"
-      stroke-dasharray="${paint.toFixed(2)} ${circ.toFixed(2)}"
+      stroke-dasharray="${Math.max(0, paint - thickness).toFixed(2)} ${circ.toFixed(2)}"
+      stroke-dashoffset="${(-(used + thickness / 2)).toFixed(2)}"
       transform="rotate(-90 ${cx} ${cy})" />`
 }
 
@@ -162,9 +177,18 @@ function refreshStatusControl({
   return { markup, plateR: r }
 }
 
-/** Tightest remaining first — same order rule as the watch face. */
+/**
+ * Tightest remaining first — same order rule as the watch face.
+ *
+ * Sorts **bands**, then lets a paired band's second pool follow its own: the
+ * payload carries the pair inside one ring (`ring.split`), so the app cannot
+ * separate them and neither may a board. Sorting the two pools as peers is what
+ * splits them, which is exactly what four rows made visible.
+ */
 function sortByRemaining(rows) {
-  return [...rows].sort((a, b) => b.used - a.used)
+  return [...rows]
+    .sort((a, b) => b.used - a.used)
+    .flatMap((row) => (row.split ? [row, row.split] : [row]))
 }
 
 function rowSubLine(row) {
@@ -204,7 +228,7 @@ function glanceSvg({
   const alertsText = alertsActive ? LABEL : DISABLED
 
   const ordered = sortByRemaining(rows)
-  const titles = ordered.map((row) => `${row.family.name} · ${row.metric}`)
+  const titles = ordered.map(rowTitle)
   const subs = ordered.map((row) => rowSubLine(row))
   const titleMetrics = loadFontMetrics(titleSize, titles)
   const subMetrics = loadFontMetrics(subSize, [...subs, alertsLabel])
@@ -292,7 +316,7 @@ function glanceSvg({
 
     for (const row of ordered) {
       const remaining = 1 - row.used
-      const title = `${row.family.name} · ${row.metric}`
+      const title = rowTitle(row)
       const sub = rowSubLine(row)
       const rowMid = y + rowH / 2
       body += miniArc({
@@ -355,7 +379,8 @@ await mkdir(wearDir, { recursive: true })
 const three = [
   { family: FAMILY.codex, metric: 'Weekly plan', used: 0.92, credits: '320' },
   { family: FAMILY.claude, metric: '5h', used: 0.61, credits: '80' },
-  { family: FAMILY.cursor, metric: 'Weekly plan', used: 0.28 },
+  // Matches fixtures/providers/cursor/usage_summary.json autoPercentUsed.
+  { family: FAMILY.cursorOwn, metric: 'Cursor Models', used: 0.47 },
 ]
 
 const variants = [
@@ -378,6 +403,55 @@ const variants = [
     alerts: 0,
   },
   {
+    // One band on the face, two rows here: Glance never shares a row
+    // (`WEAR_GLANCE_DESIGN.md`, palette). Keep the pair adjacent and own-models
+    // first — the app emits the second pool right after its band, so a sample
+    // that interleaves another provider between them could not occur.
+    file: 'glance-legend-pair.svg',
+    name: 'Glance · legend · Cursor pair · OK refresh',
+    ok: true,
+    refreshEnabled: true,
+    rows: [
+      { family: FAMILY.codex, metric: 'Weekly plan', used: 0.92, credits: '320' },
+      {
+        family: FAMILY.cursorOwn,
+        metric: 'Cursor Models',
+        used: 0.47,
+        // The fixture's external pool is exhausted (`apiPercentUsed` 100), which
+        // collapses the pair and shows nothing here, so this one value is
+        // chosen: far enough from 47 to read as a second pool, not a rounding.
+        split: { family: FAMILY.cursor, metric: 'Other Models', used: 0.38 },
+      },
+    ],
+    alerts: 0,
+  },
+  {
+    // Four rows is the ceiling: three bands on the face, one of them a pair.
+    // Nothing else in the set reaches it, and the crowding it causes is only
+    // visible here — the block sits closest to the Alerts pill in this case.
+    file: 'glance-legend-full.svg',
+    name: 'Glance · legend · four rows (three bands, one paired)',
+    ok: true,
+    refreshEnabled: true,
+    rows: [
+      { family: FAMILY.claude, metric: 'Opus weekly', used: 0.94, credits: '387' },
+      {
+        family: FAMILY.cursorOwn,
+        metric: 'Cursor Models',
+        used: 0.0,
+        credits: '1716',
+        split: {
+          family: FAMILY.cursor,
+          metric: 'Other Models',
+          used: 0.25,
+          credits: '1716',
+        },
+      },
+      { family: FAMILY.codex, metric: 'Weekly plan', used: 0.09, credits: '4500' },
+    ],
+    alerts: 0,
+  },
+  {
     file: 'glance-legend-budget.svg',
     name: 'Glance · legend · plan + budget · OK refresh',
     ok: true,
@@ -395,7 +469,9 @@ const variants = [
         used: 0.4,
         credits: '80',
       },
-      { family: FAMILY.budget, metric: 'Today', used: 0.55 },
+      // Cursor platform reports billing-cycle spend only, so a monthly budget
+      // is the one it can actually carry.
+      { family: FAMILY.cursorPlatform, metric: 'Month', used: 0.55 },
     ],
     alerts: 0,
   },
@@ -447,7 +523,5 @@ const variants = [
 
 for (const variant of variants) {
   const svg = glanceSvg(variant)
-  const path = join(wearDir, variant.file)
-  await writeFile(path, svg)
-  console.log(`wrote ${path}`)
+  await emit(join(wearDir, variant.file), svg, 'render-designs')
 }

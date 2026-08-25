@@ -24,6 +24,10 @@ convert -size 1024x1024 xc:'#101412' brand/icons/previews/wardpulse-mono.png \
   -gravity center -compose over -composite brand/icons/previews/wardpulse-mono-on-dark.png
 convert brand/icons/previews/wardpulse-mono.png -resize 192x192 \
   apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png
+# Same faded mono for the phone home-widget (quiet brand, day/night tinted in layout).
+mkdir -p apps/phone_flutter/android/app/src/main/res/drawable
+convert brand/icons/previews/wardpulse-mono.png -resize 192x192 \
+  apps/phone_flutter/android/app/src/main/res/drawable/wardpulse_mono.png
 
 for dens in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
   name="${dens%:*}"

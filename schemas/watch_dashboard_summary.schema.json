@@ -21,7 +21,7 @@
     "manualRefreshAvailableAt"
   ],
   "properties": {
-    "schemaVersion": { "const": 7 },
+    "schemaVersion": { "const": 9 },
     "dataMode": { "enum": ["live", "mock"] },
     "generatedAt": { "type": "string", "format": "date-time" },
     "overallStatus": { "$ref": "dashboard_snapshot.schema.json#/$defs/providerStatus" },
@@ -38,11 +38,12 @@
     },
     "rings": {
       "type": "array",
-      "maxItems": 4,
+      "maxItems": 3,
+      "description": "Ordered concentric rings (tightest remaining first). Plan/budget percent only; purchased meters are not rings.",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "label", "usedPercent", "status"],
+        "required": ["id", "label", "usedPercent", "status", "spent", "limit", "split"],
         "properties": {
           "id": {
             "type": "string",
@@ -51,7 +52,38 @@
           },
           "label": { "type": "string", "minLength": 1 },
           "usedPercent": { "type": "number", "minimum": 0 },
-          "status": { "$ref": "dashboard_snapshot.schema.json#/$defs/providerStatus" }
+          "status": { "$ref": "dashboard_snapshot.schema.json#/$defs/providerStatus" },
+          "spent": {
+            "description": "Budget rings only: spend behind the ring, shown on the face strip. Null for allowance rings.",
+            "anyOf": [
+              { "$ref": "budget_state.schema.json#/$defs/money" },
+              { "type": "null" }
+            ]
+          },
+          "limit": {
+            "description": "Budget rings only: the limit this connection's period was given. Null for allowance rings.",
+            "anyOf": [
+              { "$ref": "budget_state.schema.json#/$defs/money" },
+              { "type": "null" }
+            ]
+          },
+          "split": {
+            "description": "The other pool of the same plan, drawn as the outer half of this one band (WATCH_RING_DESIGN.md, Split band). One entry stays one band, so three entries stay three bands. Null for every ring that is not a pair. Plan pools carry no money, so no spent/limit here.",
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "label", "usedPercent", "status"],
+                "properties": {
+                  "id": { "type": "string", "minLength": 1 },
+                  "label": { "type": "string", "minLength": 1 },
+                  "usedPercent": { "type": "number", "minimum": 0 },
+                  "status": { "$ref": "dashboard_snapshot.schema.json#/$defs/providerStatus" }
+                }
+              },
+              { "type": "null" }
+            ]
+          }
         }
       }
     },

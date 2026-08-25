@@ -1,9 +1,14 @@
 package app.wardpulse.wear.complication
 
+import app.wardpulse.wear.model.AllowanceSummary
 import app.wardpulse.wear.model.CreditsGlance
 import app.wardpulse.wear.model.PreviewWatchDashboardSummary
 import app.wardpulse.wear.model.ProviderSummary
 import app.wardpulse.wear.model.PulseStatus
+import app.wardpulse.wear.model.Quantity
+import app.wardpulse.wear.model.RingHalf
+import app.wardpulse.wear.model.RingSummary
+import app.wardpulse.wear.model.WatchDataMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -24,43 +29,92 @@ class WatchComplicationTextTest {
     }
 
     @Test
-    fun buildsSunkStripLabelsWithOptionalCredits() {
-        val withCredits = PreviewWatchDashboardSummary.value.copy(
-            creditsGlance = CreditsGlance(text = "500", label = "Credits left", provider = "codex"),
-        )
-        assertEquals(
-            WatchComplicationText.StripPayload(text = "72", title = "500"),
-            WatchComplicationText.stripPayload(withCredits, 0),
-        )
-        assertEquals("72% · 500", WatchComplicationText.stripLabel(withCredits, 0))
-        assertEquals("74%", WatchComplicationText.stripLabel(withCredits, 1))
+    fun buildsSunkStripLabelsWithPerProviderCreditsLikeGlance() {
+        val multi =
+            PreviewWatchDashboardSummary.value.copy(
+                rings =
+                    listOf(
+                        RingSummary(
+                            "allowance.cursor.cursor-plan-models",
+                            "Cursor Models",
+                            53.9,
+                            PulseStatus.OK,
+                        ),
+                        RingSummary("allowance.claude.plan", "Weekly", 61.0, PulseStatus.OK),
+                        RingSummary("allowance.codex.codex-primary", "Weekly plan", 92.0, PulseStatus.OK),
+                    ),
+                // Aggregate glance must not gate per-ring credits.
+                creditsGlance =
+                    CreditsGlance(text = "900", label = "Credits left", provider = null),
+                allowances =
+                    listOf(
+                        AllowanceSummary(
+                            source = "purchased",
+                            label = "Codex · Purchased credits",
+                            usedPercent = null,
+                            remaining = Quantity("320", "credits"),
+                            unlimited = false,
+                            resetsAt = null,
+                            status = PulseStatus.OK,
+                        ),
+                        AllowanceSummary(
+                            source = "purchased",
+                            label = "Claude · Extra usage",
+                            usedPercent = null,
+                            remaining = Quantity("80", "credits"),
+                            unlimited = false,
+                            resetsAt = null,
+                            status = PulseStatus.OK,
+                        ),
+                    ),
+            )
+        // Cursor has no purchased meter — percent only.
+        assertEquals("46%", WatchComplicationText.stripLabel(multi, 0))
+        assertEquals("39% · 80", WatchComplicationText.stripLabel(multi, 1))
+        assertEquals("8% · 320", WatchComplicationText.stripLabel(multi, 2))
 
-        val planOnly = withCredits.copy(creditsGlance = null)
-        assertEquals(
-            WatchComplicationText.StripPayload(text = "72", title = null),
-            WatchComplicationText.stripPayload(planOnly, 0),
-        )
-        assertEquals("72%", WatchComplicationText.stripLabel(planOnly, 0))
+        val planOnly = multi.copy(allowances = emptyList(), creditsGlance = null)
+        assertEquals("46%", WatchComplicationText.stripLabel(planOnly, 0))
 
-        val creditsOnly = planOnly.copy(rings = emptyList(), creditsGlance = withCredits.creditsGlance)
-        assertNull(WatchComplicationText.stripPayload(creditsOnly, 0))
+        val creditsOnly =
+            planOnly.copy(
+                rings = emptyList(),
+                creditsGlance = CreditsGlance(text = "500", label = "Credits left", provider = "codex"),
+            )
+        assertEquals(
+            WatchComplicationText.StripPayload(text = "500"),
+            WatchComplicationText.stripPayload(creditsOnly, 0),
+        )
         assertEquals("500", WatchComplicationText.stripLabel(creditsOnly, 0))
         assertNull(WatchComplicationText.stripLabel(creditsOnly, 1))
     }
 
     @Test
+    fun budgetStripsReadMoneyInsteadOfPercent() {
+        // Preview rings are one connection's budget periods: week / month / today.
+        val summary = PreviewWatchDashboardSummary.value
+
+        assertEquals("\$71.30/250", WatchComplicationText.stripLabel(summary, 0))
+        assertEquals("\$212.10/800", WatchComplicationText.stripLabel(summary, 1))
+        assertEquals("\$12.40/50", WatchComplicationText.stripLabel(summary, 2))
+    }
+
+    @Test
     fun identifiesTheLiveProviderAndStatus() {
-        val summary = PreviewWatchDashboardSummary.value.copy(
-            overallStatus = PulseStatus.UNKNOWN,
-            providers = listOf(
-                ProviderSummary(
-                    provider = "openai",
-                    status = PulseStatus.OK,
-                    todaySpent = null,
-                ),
-            ),
-            isStale = false,
-        )
+        val summary =
+            PreviewWatchDashboardSummary.value.copy(
+                dataMode = WatchDataMode.LIVE,
+                overallStatus = PulseStatus.UNKNOWN,
+                providers =
+                    listOf(
+                        ProviderSummary(
+                            provider = "openai",
+                            status = PulseStatus.OK,
+                            todaySpent = null,
+                        ),
+                    ),
+                isStale = false,
+            )
 
         assertEquals("OPENAI · OK", WatchComplicationText.status(summary))
     }
@@ -73,20 +127,129 @@ class WatchComplicationTextTest {
         )
     }
 
+    /**
+     * The demo impersonates real families, so the provider name cannot reveal
+     * that the numbers are fake — only `dataMode` can.
+     */
+    @Test
+    fun marksMockDataEvenWhenItWearsAProviderName() {
+        val summary =
+            PreviewWatchDashboardSummary.value.copy(
+                dataMode = WatchDataMode.MOCK,
+                providers =
+                    listOf(
+                        ProviderSummary(
+                            provider = "claude",
+                            status = PulseStatus.OK,
+                            todaySpent = null,
+                        ),
+                    ),
+                isStale = false,
+            )
+
+        assertEquals("MOCK · OK", WatchComplicationText.status(summary))
+    }
+
     @Test
     fun shortensRateLimitedStatusForRoundChin() {
-        val summary = PreviewWatchDashboardSummary.value.copy(
-            providers = listOf(
-                ProviderSummary(
-                    provider = "codex",
-                    status = PulseStatus.RATE_LIMITED,
-                    todaySpent = null,
-                ),
-            ),
-            isStale = false,
-        )
+        val summary =
+            PreviewWatchDashboardSummary.value.copy(
+                dataMode = WatchDataMode.LIVE,
+                providers =
+                    listOf(
+                        ProviderSummary(
+                            provider = "codex",
+                            status = PulseStatus.RATE_LIMITED,
+                            todaySpent = null,
+                        ),
+                    ),
+                isStale = false,
+            )
 
         assertEquals("CODEX · LIMIT", WatchComplicationText.status(summary))
         assertEquals("LIMIT", WatchComplicationText.shortStatus(PulseStatus.RATE_LIMITED))
+    }
+
+    @Test
+    fun readsThePeriodTokenOffBudgetRingIdsOnly() {
+        assertEquals("D", WatchComplicationText.ringPeriodToken("budget.anthropic.today"))
+        assertEquals("7D", WatchComplicationText.ringPeriodToken("budget.openai.week"))
+        assertEquals("M", WatchComplicationText.ringPeriodToken("budget.cursor.month"))
+
+        // A window is not a calendar period, so the face draws no texture for it.
+        assertNull(WatchComplicationText.ringPeriodToken("allowance.claude.plan"))
+        // A connection named after a period must not be mistaken for one.
+        assertNull(WatchComplicationText.ringPeriodToken("allowance.codex.week"))
+        assertNull(WatchComplicationText.ringPeriodToken("budget.anthropic.quarter"))
+    }
+
+    @Test
+    fun aSharedBandTellsTheFaceSoInsteadOfAPeriod() {
+        val pool =
+            RingSummary(
+                "allowance.cursor.cursor-plan-models",
+                "Cursor Models",
+                47.0,
+                PulseStatus.OK,
+            )
+        assertNull(WatchComplicationText.ringTitleToken(pool))
+        assertEquals(
+            "split",
+            WatchComplicationText.ringTitleToken(
+                pool.copy(
+                    split =
+                        RingHalf(
+                            "allowance.cursor.cursor-plan-other",
+                            "Other Models",
+                            38.0,
+                            PulseStatus.OK,
+                        ),
+                ),
+            ),
+        )
+        // A budget ring keeps its period: it can never be half a band.
+        assertEquals(
+            "M",
+            WatchComplicationText.ringTitleToken(
+                RingSummary("budget.cursor.month", "Month", 12.0, PulseStatus.OK),
+            ),
+        )
+    }
+
+    @Test
+    fun aSplitStripSpendsItsWellOnTheSecondPercentNotCredits() {
+        val summary =
+            PreviewWatchDashboardSummary.value.copy(
+                rings =
+                    listOf(
+                        RingSummary(
+                            "allowance.cursor.cursor-plan-models",
+                            "Cursor Models",
+                            53.0,
+                            PulseStatus.OK,
+                            split =
+                                RingHalf(
+                                    "allowance.cursor.cursor-plan-other",
+                                    "Other Models",
+                                    38.0,
+                                    PulseStatus.OK,
+                                ),
+                        ),
+                    ),
+                allowances =
+                    listOf(
+                        AllowanceSummary(
+                            source = "purchased",
+                            label = "Cursor · Purchased credits",
+                            usedPercent = null,
+                            remaining = Quantity("2100", "credits"),
+                            unlimited = false,
+                            resetsAt = null,
+                            status = PulseStatus.OK,
+                        ),
+                    ),
+            )
+
+        assertEquals("47% · 62%", WatchComplicationText.stripLabel(summary, 0))
     }
 }

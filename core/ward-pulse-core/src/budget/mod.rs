@@ -24,20 +24,23 @@ pub fn calculate_budget_state_with_warn_at(
     projected_total: Option<Money>,
     warn_at_percent: u8,
 ) -> BudgetState {
-    let used_percent = match (&spent, &limit) {
-        (Some(spent), Some(limit)) if limit.minor_units > 0 => {
-            Some((spent.minor_units as f64 / limit.minor_units as f64) * 100.0)
-        }
+    // Percent and remaining only mean something inside one currency. Mixed input
+    // stays Unknown instead of being silently subtracted across currencies.
+    let comparable = match (&spent, &limit) {
+        (Some(spent), Some(limit)) if spent.currency == limit.currency => Some((spent, limit)),
         _ => None,
     };
 
-    let remaining = match (&spent, &limit) {
-        (Some(spent), Some(limit)) => Some(Money::minor_units(
+    let used_percent = comparable
+        .filter(|(_, limit)| limit.minor_units > 0)
+        .map(|(spent, limit)| (spent.minor_units as f64 / limit.minor_units as f64) * 100.0);
+
+    let remaining = comparable.map(|(spent, limit)| {
+        Money::minor_units(
             (limit.minor_units - spent.minor_units).max(0),
             limit.currency.clone(),
-        )),
-        _ => None,
-    };
+        )
+    });
 
     let warn_at_percent = warn_at_percent.clamp(1, 100);
     let status = match used_percent {
@@ -104,6 +107,20 @@ mod tests {
 
         assert_eq!(state.used_percent, Some(75.0));
         assert_eq!(state.status, ProviderStatus::Warning);
+    }
+
+    #[test]
+    fn mixed_currencies_stay_unknown_instead_of_subtracting() {
+        let state = calculate_budget_state(
+            BudgetPeriod::Today,
+            Some(usd(1_000)),
+            Some(Money::minor_units(5_000, "EUR")),
+            None,
+        );
+
+        assert_eq!(state.used_percent, None);
+        assert_eq!(state.remaining, None);
+        assert_eq!(state.status, ProviderStatus::Unknown);
     }
 
     #[test]

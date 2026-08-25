@@ -6,19 +6,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_app.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
+import 'package:ward_pulse_phone/dashboard/plan_recoveries.dart';
+import 'package:ward_pulse_phone/dashboard/provider_status_color.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
-import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
+import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/settings/debug_data_preferences.dart';
 import 'package:ward_pulse_phone/settings/refresh_interval_preferences.dart';
+import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
 import 'package:ward_pulse_phone/sync/poll_cadence.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_scheduler.dart';
+import 'package:ward_pulse_phone/settings/recovery_notification_preferences.dart';
+import 'package:ward_pulse_phone/sync/recovery_notifications.dart';
+import 'package:ward_pulse_phone/sync/recovery_watchlist.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 
 void main() {
-  testWidgets('renders mock history and opens provider details', (
+  testWidgets('renders mock history and opens Providers catalog', (
     tester,
   ) async {
     final fixture =
@@ -67,18 +73,16 @@ void main() {
     await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Mock'), findsOneWidget);
-    await tester.tap(find.text('Mock'));
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('mock-local'), findsOneWidget);
-    expect(find.text('Today'), findsOneWidget);
+    // Which family sits where is the tab's own business
+    // (providers_screen_test.dart); this test only asks that the catalog
+    // opened, so it scrolls to the row instead of assuming a position.
     await tester.scrollUntilVisible(
-      find.text('Usage history'),
+      find.text('Codex subscription'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('4 buckets'), findsOneWidget);
+    expect(find.text('Codex subscription'), findsOneWidget);
+    expect(find.text('Not connected'), findsWidgets);
   });
 
   testWidgets('syncs an empty watch summary when no providers are connected', (
@@ -107,17 +111,17 @@ void main() {
     final repository = _CountingDashboardRepository(() {
       loads += 1;
       return DashboardSnapshot.empty(
-        generatedAt: DateTime.utc(2026, 7, 26, 12).subtract(
-          Duration(minutes: loads == 1 ? 10 : 0),
-        ),
+        generatedAt: DateTime.utc(
+          2026,
+          7,
+          26,
+          12,
+        ).subtract(Duration(minutes: loads == 1 ? 10 : 0)),
       );
     });
 
     await tester.pumpWidget(
-      WardPulseApp(
-        repository: repository,
-        watchSyncService: watchSyncService,
-      ),
+      WardPulseApp(repository: repository, watchSyncService: watchSyncService),
     );
     await tester.pumpAndSettle();
     expect(loads, 1);
@@ -161,6 +165,386 @@ void main() {
     expect(find.text('Watch summary queued'), findsOneWidget);
   });
 
+  testWidgets('Settings shows systemic sections without Watch display', (
+    tester,
+  ) async {
+    final snapshot = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+
+    await tester.pumpWidget(
+      WardPulseApp(repository: ValueDashboardRepository(snapshot)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Display'), findsNothing);
+    expect(find.text('Alerts'), findsNothing);
+    expect(find.text('Refresh'), findsOneWidget);
+    expect(find.text('Watch display'), findsNothing);
+    expect(
+      find.textContaining('Temporary until the Watchface tab'),
+      findsNothing,
+    );
+    await tester.scrollUntilVisible(
+      find.text('Diagnostics'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Diagnostics'), findsOneWidget);
+    expect(find.text('Sync'), findsWidgets);
+    expect(find.text('Watch summary'), findsOneWidget);
+  });
+
+  testWidgets('slot cards say where metrics come from when there are none', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      WardPulseApp(repository: const NoProvidersDashboardRepository()),
+    );
+    await tester.pumpAndSettle();
+
+    for (final tab in ['Watchface', 'Widget']) {
+      await tester.tap(find.text(tab));
+      await tester.pumpAndSettle();
+      // A bare header card would read as a broken screen.
+      expect(find.text('No metrics yet'), findsOneWidget, reason: tab);
+      expect(find.byType(CheckboxListTile), findsNothing, reason: tab);
+    }
+  });
+
+  testWidgets('a reload keeps the dashboard on screen', (tester) async {
+    final snapshot = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+
+    await tester.pumpWidget(
+      WardPulseApp(repository: ValueDashboardRepository(snapshot)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Usage dashboard'), findsOneWidget);
+
+    // The refresh used to blank the tab and draw it again, which read as a
+    // flicker over the numbers the reader was looking at.
+    await tester.tap(find.byTooltip('Refresh'));
+    await tester.pump();
+    expect(find.text('Usage dashboard'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+
+    await tester.pumpAndSettle();
+    expect(find.text('Usage dashboard'), findsOneWidget);
+  });
+
+  testWidgets('slot count follows the rows, not a stored selection', (
+    tester,
+  ) async {
+    final store =
+        _MemoryWatchRingStore()
+          ..value = const WatchRingPreferences(
+            selectedIds: [
+              'allowance.codex.plan',
+              'budget.anthropic.platform.today',
+              'budget.anthropic.platform.week',
+            ],
+          );
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: const _FailingDashboardRepository(
+          DashboardSyncIssue.providerUnavailable,
+        ),
+        watchRingPreferenceStore: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Watchface'));
+    await tester.pumpAndSettle();
+
+    // A failed load leaves no rows to tick, so counting the stored ids would
+    // claim three slots the screen does not show.
+    expect(find.text('No metrics yet'), findsOneWidget);
+    expect(find.textContaining('0 of 3 slots used'), findsOneWidget);
+  });
+
+  testWidgets('Watchface tab owns ring slots and payload preview', (
+    tester,
+  ) async {
+    final snapshot = _asConnection(
+      DashboardSnapshot.fromJsonString(
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync(),
+      ),
+    );
+    final store = _MemoryWatchRingStore();
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(snapshot),
+        watchRingPreferenceStore: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Watchface'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ring slots'), findsOneWidget);
+    expect(find.text('Wear & watch face'), findsOneWidget);
+    expect(find.text('Next watch payload'), findsOneWidget);
+    // Budget rings are per connection, and the connection is a heading now.
+    expect(find.text('Anthropic'), findsWidgets);
+
+    await tester.scrollUntilVisible(
+      find.text('Anthropic'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    // Defaults select available metrics; toggling Today off persists an explicit list.
+    final todayTile =
+        find.widgetWithText(CheckboxListTile, 'Today').hitTestable().first;
+    // A full stack greys every unpicked row; the count is what tells that
+    // apart from a fault, so it has to follow the selection.
+    expect(find.textContaining('3 of 3 slots used'), findsOneWidget);
+    await tester.tap(todayTile);
+    await tester.pumpAndSettle();
+
+    expect(store.value.selectedIds, isNotNull);
+    expect(find.textContaining('2 of 3 slots used'), findsOneWidget);
+  });
+
+  testWidgets('a metric with nothing to show stays listed and refuses a tap', (
+    tester,
+  ) async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final account =
+        Map<String, Object?>.from(source.primaryAccount!.toJson())
+          ..['accountId'] = 'anthropic-platform'
+          ..['provider'] = 'claude'
+          ..['connection'] = 'anthropic.platform'
+          // No limit set for the month, so the ring has no percentage to draw.
+          ..['month'] = {
+            'period': 'month',
+            'spent': {'minorUnits': 2500, 'currency': 'USD'},
+            'limit': null,
+            'remaining': null,
+            'usedPercent': null,
+            'projectedTotal': null,
+            'status': 'ok',
+          };
+    final snapshot = DashboardSnapshot.fromJson({
+      ...source.toJson(),
+      'accounts': [account],
+    });
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(snapshot),
+        watchRingPreferenceStore: _MemoryWatchRingStore(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Watchface'));
+    await tester.pumpAndSettle();
+
+    final month = find.widgetWithText(CheckboxListTile, 'Month');
+    await tester.scrollUntilVisible(
+      month,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    // Still under its connection, saying why it cannot be picked, and the box
+    // refuses the tap — sunk rather than hidden.
+    expect(month, findsOneWidget);
+    expect(
+      find.descendant(
+        of: month,
+        matching: find.byTooltip(
+          'Set this period’s limit under Providers · Budget limits.',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.widget<CheckboxListTile>(month).onChanged, isNull);
+  });
+
+  testWidgets('Widget tab owns metrics independently of Watchface', (
+    tester,
+  ) async {
+    final snapshot = _asConnection(
+      DashboardSnapshot.fromJsonString(
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync(),
+      ),
+    );
+    final store = _MemoryPhoneWidgetStore();
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(snapshot),
+        phoneWidgetPreferenceStore: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Widget'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Widget metrics'), findsOneWidget);
+    expect(find.text('Home screen widget'), findsOneWidget);
+    // The picker is an outline now, so the preview sits below its headings.
+    await tester.scrollUntilVisible(
+      find.text('Next widget payload'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Next widget payload'), findsOneWidget);
+    expect(find.textContaining('independent of Watchface'), findsOneWidget);
+    // Its own copy of the count, on a screen with six slots instead of three.
+    expect(find.textContaining('of 6 slots used'), findsOneWidget);
+
+    // The connection is a heading here now, so its rows carry only the period.
+    expect(find.text('Anthropic'), findsWidgets);
+    final todayTile =
+        find.widgetWithText(CheckboxListTile, 'Today').hitTestable().first;
+    await tester.tap(todayTile);
+    await tester.pumpAndSettle();
+
+    expect(store.value.selectedIds, isNotNull);
+  });
+
+  testWidgets('Providers Platform row saves a budget limit and its alert', (
+    tester,
+  ) async {
+    final snapshot = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final store = _MemoryAlertThresholdStore();
+    // A connection rule the budget dialog must not clobber on save.
+    store.value = store.value.withConnection(
+      ProviderConnections.codexPlan,
+      const ConnectionAlertThresholds(plan: AlertPercentThreshold(at: 90)),
+    );
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(snapshot),
+        alertThresholdStore: store,
+        // Widget tests do not load libward_pulse_ffi.so; prefs UI only.
+        applyAlertSettings: (current, _) => current,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Platform reporting'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    Finder platformButton(String tooltip) => find.descendant(
+      of: find.ancestor(
+        of: find.text('Platform reporting'),
+        matching: find.byType(ListTile),
+      ),
+      matching: find.byTooltip(tooltip),
+    );
+
+    // The limit comes first: a percentage is meaningless without one.
+    await tester.tap(platformButton('Budget limits'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Budget · Platform reporting'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).first, '25');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(platformButton('Alert thresholds'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Alerts · Platform reporting'), findsOneWidget);
+    expect(find.text('Today'), findsOneWidget);
+    expect(find.text('Week'), findsOneWidget);
+    expect(find.text('Month'), findsOneWidget);
+
+    await tester.tap(find.text('Off').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('20% left').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(
+      store.value.forConnection(ProviderConnections.openAiPlatform).today.at,
+      80,
+    );
+    expect(
+      store.value
+          .forConnection(ProviderConnections.openAiPlatform)
+          .budget
+          .today,
+      2500,
+    );
+    expect(
+      store.value.forConnection(ProviderConnections.codexPlan).plan.at,
+      90,
+    );
+  });
+
+  testWidgets('Providers plan row can save connection alert thresholds', (
+    tester,
+  ) async {
+    final snapshot = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final store = _MemoryAlertThresholdStore();
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(snapshot),
+        alertThresholdStore: store,
+        applyAlertSettings: (current, _) => current,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Codex subscription'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(
+      find.descendant(
+        of: find.widgetWithText(ListTile, 'Codex subscription'),
+        matching: find.byTooltip('Alert thresholds'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Alerts ·'), findsOneWidget);
+    // A plan connection offers window rules, not spend budgets.
+    expect(find.text('Plan'), findsOneWidget);
+    expect(find.text('Purchased'), findsOneWidget);
+    expect(find.text('Today'), findsNothing);
+    await tester.tap(find.text('Off').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('30% left').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(
+      store.value.forConnection(ProviderConnections.codexPlan).plan.at,
+      70,
+    );
+  });
+
   testWidgets('watch sync failure does not block the dashboard', (
     tester,
   ) async {
@@ -178,6 +562,9 @@ void main() {
 
     expect(find.text('WardPulse'), findsOneWidget);
     expect(find.text('Dashboard unavailable'), findsNothing);
+    // Nothing deviates, so the app bar says nothing at all
+    // (PHONE_DASHBOARD_DESIGN.md).
+    expect(find.byType(Badge), findsNothing);
   });
 
   testWidgets('labels previous dashboard data as stale', (tester) async {
@@ -190,8 +577,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // App bar overall status plus the provider plaque on the dashboard.
-    expect(find.text('Stale'), findsWidgets);
+    // Staleness is an account state, so no card carries a glyph for it: the
+    // family answers with a count and the app bar with a way in — never the
+    // same mark twice down the screen (PHONE_DASHBOARD_DESIGN.md).
+    expect(find.byIcon(Icons.schedule), findsNothing);
+    expect(find.byTooltip('Stale'), findsWidgets);
+    expect(find.byTooltip('Go to stale'), findsOneWidget);
     expect(
       find.textContaining('Showing previous data · Updated'),
       findsOneWidget,
@@ -204,11 +595,56 @@ void main() {
       find.byTooltip(DashboardSyncIssue.authentication.message),
       findsWidgets,
     );
-    final staleIcon = find.byIcon(Icons.schedule).first;
+    final appBarMark = find.byTooltip('Go to stale');
     expect(
-      tester.widget<Icon>(staleIcon).color,
-      Theme.of(tester.element(staleIcon)).colorScheme.tertiary,
+      tester
+          .widget<Badge>(
+            find.descendant(of: appBarMark, matching: find.byType(Badge)),
+          )
+          .backgroundColor,
+      providerStatusChipColors(
+        Theme.of(tester.element(appBarMark)).colorScheme,
+        ProviderStatus.stale,
+      ).fill,
     );
+  });
+
+  testWidgets('the app-bar mark opens the Dashboard at the first problem', (
+    tester,
+  ) async {
+    final snapshot =
+        DashboardSnapshot.fromJsonString(
+          File(
+            '../../fixtures/snapshots/dashboard_today.json',
+          ).readAsStringSync(),
+        ).withStaleStatus();
+
+    await tester.pumpWidget(
+      WardPulseApp(repository: ValueDashboardRepository(snapshot)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.text('Refresh interval'), findsOneWidget);
+
+    // A rollup earns its place by leading somewhere, so it works from any tab.
+    await tester.tap(find.byTooltip('Go to stale'));
+    await tester.pumpAndSettle();
+
+    // Settings is gone and the flagged section is the thing on screen — the
+    // dashboard title has scrolled off above it, which is the point.
+    expect(find.text('Refresh interval'), findsNothing);
+    expect(find.byTooltip('Stale'), findsWidgets);
+    expect(find.text('Usage dashboard'), findsNothing);
+
+    // The request is spent: coming back later is an ordinary visit, not a
+    // repeat of a tap the reader made once.
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dashboard'));
+    await tester.pumpAndSettle();
+    expect(find.text('Usage dashboard'), findsOneWidget);
   });
 
   testWidgets('stores and masks an OpenAI Admin API key', (tester) async {
@@ -224,7 +660,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Settings'));
+    await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
@@ -255,6 +691,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(credentialStore.openAiSecret, 'secret-admin-key');
+    await tester.scrollUntilVisible(
+      find.text('Connected'),
+      -300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Connected'), findsOneWidget);
     expect(find.text('secret-admin-key'), findsNothing);
   });
@@ -272,7 +713,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Settings'));
+    await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
@@ -302,24 +743,29 @@ void main() {
 
     expect(credentialStore.openAiSecret, 'secret-admin-key');
     expect(credentialStore.openAiLabel, 'Work org key');
+    await tester.scrollUntilVisible(
+      find.text('Work org key'),
+      -300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Work org key'), findsOneWidget);
     expect(find.text('Platform reporting'), findsNothing);
 
-    final settingsList = find.descendant(
+    final providersList = find.descendant(
       of: find.byType(ListView),
       matching: find.byType(Scrollable),
     );
     await tester.scrollUntilVisible(
       find.text('Anthropic'),
       300,
-      scrollable: settingsList,
+      scrollable: providersList,
     );
     expect(find.text('Anthropic'), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.text('Cursor'),
       300,
-      scrollable: settingsList,
+      scrollable: providersList,
     );
     expect(find.text('Cursor'), findsOneWidget);
     expect(find.text('Not connected'), findsWidgets);
@@ -327,7 +773,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('Work org key'),
       300,
-      scrollable: settingsList,
+      scrollable: providersList,
     );
     await tester.tap(find.text('Work org key'));
     await tester.pumpAndSettle();
@@ -339,7 +785,7 @@ void main() {
     expect(find.text('Platform reporting'), findsOneWidget);
   });
 
-  testWidgets('keeps credential settings available after a load failure', (
+  testWidgets('keeps Providers catalog available after a load failure', (
     tester,
   ) async {
     final credentialStore = _MemoryCredentialStore('invalid-admin-key');
@@ -375,7 +821,7 @@ void main() {
     expect(find.text('Usage · HTTP 401 · invalid_api_key'), findsOneWidget);
     await tester.tap(find.text('Close'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Settings'));
+    await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
@@ -391,71 +837,64 @@ void main() {
     expect(find.text('Remove'), findsOneWidget);
   });
 
-  testWidgets('shows plan and purchased by default and can hide purchases', (
-    tester,
-  ) async {
-    final json =
-        jsonDecode(
-              File(
-                '../../fixtures/snapshots/dashboard_today.json',
-              ).readAsStringSync(),
-            )
-            as Map<String, dynamic>;
-    final account = (json['accounts'] as List).first as Map<String, dynamic>;
-    account['provider'] = 'codex';
-    account['allowances'] = [
-      {
-        'id': 'plan',
-        'source': 'plan',
-        'label': 'Weekly plan',
-        'usedPercent': 84.0,
-        'used': null,
-        'limit': null,
-        'remaining': null,
-        'windowMinutes': 10080,
-        'resetsAt': '2026-07-26T09:55:37Z',
-        'status': 'warning',
-      },
-      {
-        'id': 'purchased',
-        'source': 'purchased',
-        'label': 'Purchased credits',
-        'usedPercent': null,
-        'used': null,
-        'limit': null,
-        'remaining': {'value': '12.5', 'unit': 'credits'},
-        'windowMinutes': null,
-        'resetsAt': null,
-        'status': 'ok',
-      },
-    ];
-    final preferences = _MemoryDisplayPreferenceStore();
+  testWidgets(
+    'shows plan and purchased surfaces without Settings display toggles',
+    (tester) async {
+      final json =
+          jsonDecode(
+                File(
+                  '../../fixtures/snapshots/dashboard_today.json',
+                ).readAsStringSync(),
+              )
+              as Map<String, dynamic>;
+      final account = (json['accounts'] as List).first as Map<String, dynamic>;
+      account['provider'] = 'codex';
+      account['allowances'] = [
+        {
+          'id': 'plan',
+          'source': 'plan',
+          'label': 'Weekly plan',
+          'usedPercent': 84.0,
+          'used': null,
+          'limit': null,
+          'remaining': null,
+          'windowMinutes': 10080,
+          'resetsAt': '2026-07-26T09:55:37Z',
+          'status': 'warning',
+        },
+        {
+          'id': 'purchased',
+          'source': 'purchased',
+          'label': 'Purchased credits',
+          'usedPercent': null,
+          'used': null,
+          'limit': null,
+          'remaining': {'value': '12.5', 'unit': 'credits'},
+          'windowMinutes': null,
+          'resetsAt': null,
+          'status': 'ok',
+        },
+      ];
 
-    await tester.pumpWidget(
-      WardPulseApp(
-        repository: ValueDashboardRepository(DashboardSnapshot.fromJson(json)),
-        displayPreferenceStore: preferences,
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: ValueDashboardRepository(
+            DashboardSnapshot.fromJson(json),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Weekly plan'), findsOneWidget);
-    expect(find.text('Purchased credits'), findsOneWidget);
+      expect(find.text('Weekly plan'), findsOneWidget);
+      expect(find.text('Purchased credits'), findsOneWidget);
 
-    await tester.tap(find.text('Settings'));
-    await tester.pumpAndSettle();
-    expect(find.widgetWithText(SwitchListTile, 'Platform spend'), findsOneWidget);
-    await tester.tap(find.widgetWithText(SwitchListTile, 'Purchased usage'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Dashboard'));
-    await tester.pumpAndSettle();
-
-    expect(preferences.value.purchased, isFalse);
-    expect(preferences.value.plan, isTrue);
-    expect(preferences.value.platform, isTrue);
-    expect(find.text('Weekly plan'), findsOneWidget);
-    expect(find.text('Purchased credits'), findsNothing);
-  });
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      expect(find.text('Display'), findsNothing);
+      expect(find.text('Platform spend'), findsNothing);
+      expect(find.text('Purchased usage'), findsNothing);
+    },
+  );
 
   testWidgets('persists the global refresh interval slider', (tester) async {
     final snapshot = DashboardSnapshot.fromJsonString(
@@ -550,7 +989,7 @@ void main() {
       WardPulseApp(repository: ValueDashboardRepository(snapshot)),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Settings'));
+    await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
 
     final settingsScrollable = find.descendant(
@@ -588,12 +1027,23 @@ void main() {
   });
 
   testWidgets('enables mock data only from the debug setting', (tester) async {
-    final mock = DashboardSnapshot.fromJsonString(
+    final liveFixture = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
     );
-    final liveJson = mock.toJson();
+    final liveJson = liveFixture.toJson();
     (liveJson['accounts'] as List).first['provider'] = 'openai';
     final live = DashboardSnapshot.fromJson(liveJson);
+    final mockJson = liveFixture.toJson();
+    final accounts = mockJson['accounts'] as List<dynamic>;
+    accounts.first
+      ..['provider'] = 'codex'
+      ..['accountId'] = 'codex-demo';
+    accounts.add({
+      ...Map<String, dynamic>.from(accounts.first as Map),
+      'provider': 'cursor',
+      'accountId': 'cursor-demo',
+    });
+    final mock = DashboardSnapshot.fromJson(mockJson);
     final preferences = _MemoryDebugDataPreferenceStore();
 
     await tester.pumpWidget(
@@ -626,8 +1076,95 @@ void main() {
     expect(preferences.value, isTrue);
     await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
-    expect(find.text('Mock'), findsOneWidget);
-    expect(find.text('OpenAI'), findsNothing);
+    // Which family sits where is the tab's own business
+    // (providers_screen_test.dart); this test only asks that the catalog
+    // opened, so it scrolls to the row instead of assuming a position.
+    await tester.scrollUntilVisible(
+      find.text('Codex subscription'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Codex subscription'), findsOneWidget);
+  });
+
+  testWidgets(
+    'demo data leaves nothing for a recovery to be measured against',
+    (tester) async {
+      final source = DashboardSnapshot.fromJsonString(
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync(),
+      );
+      final preferences = _MemoryDebugDataPreferenceStore();
+      await preferences.writeMockDataEnabled(true);
+      final watchlist =
+          _MemoryRecoveryWatchlistStore()
+            ..keys = const [(accountId: 'codex-demo', allowanceId: 'weekly')];
+
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: DebugDashboardRepository(
+            live: ValueDashboardRepository(source),
+            mock: ValueDashboardRepository(source),
+            preferences: preferences,
+          ),
+          debugDataAvailable: true,
+          debugDataPreferenceStore: preferences,
+          recoveryWatchlistStore: watchlist,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Invented windows must not survive the demo: kept, they would make the
+      // first live poll afterwards look like a recovery.
+      expect(watchlist.keys, isEmpty);
+    },
+  );
+
+  testWidgets('the recovery switch is on, and says when Android blocks it', (
+    tester,
+  ) async {
+    final store = _MemoryRecoveryNotificationStore();
+    final notifier = _BlockedRecoveryNotifier();
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(
+          DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 8, 17)),
+        ),
+        recoveryNotificationStore: store,
+        recoveryNotifier: notifier,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    final toggle = find.widgetWithText(SwitchListTile, 'Plan recovery');
+    await tester.scrollUntilVisible(
+      toggle,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    // On without being asked: interrupting is the point of the feature.
+    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+
+    // Off and on again, so the ask runs with Android refusing it.
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(store.enabled, isFalse);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+
+    expect(store.enabled, isTrue);
+    expect(notifier.asked, 1);
+    // The reader said yes and Android said no; leaving the switch on without a
+    // word would promise an interruption that cannot arrive.
+    expect(
+      find.text('Android is blocking WardPulse notifications'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('hides mock data outside debug builds', (tester) async {
@@ -650,6 +1187,54 @@ void main() {
   });
 }
 
+/// Mock fixture as a real connection: mock accounts hold no metric slots.
+DashboardSnapshot _asConnection(DashboardSnapshot snapshot) {
+  final account =
+      Map<String, Object?>.from(snapshot.primaryAccount!.toJson())
+        ..['accountId'] = 'anthropic-platform'
+        ..['provider'] = 'claude'
+        ..['connection'] = 'anthropic.platform';
+  return DashboardSnapshot.fromJson({
+    ...snapshot.toJson(),
+    'accounts': [account],
+  });
+}
+
+class _MemoryRecoveryNotificationStore
+    implements RecoveryNotificationPreferenceStore {
+  bool enabled = true;
+
+  @override
+  Future<bool> read() async => enabled;
+
+  @override
+  Future<void> write(bool value) async => enabled = value;
+}
+
+/// Android refusing the permission, which the switch alone cannot detect.
+class _BlockedRecoveryNotifier implements RecoveryNotifier {
+  var asked = 0;
+
+  @override
+  Future<void> notify(PlanRecovery recovery) async {}
+
+  @override
+  Future<bool> requestPermission() async {
+    asked++;
+    return false;
+  }
+}
+
+class _MemoryRecoveryWatchlistStore implements RecoveryWatchlistStore {
+  List<WindowKey> keys = const [];
+
+  @override
+  Future<List<WindowKey>> read() async => keys;
+
+  @override
+  Future<void> write(List<WindowKey> value) async => keys = value;
+}
+
 class _FakeWatchSyncService implements WatchSyncService {
   final syncedSnapshots = <DashboardSnapshot>[];
   void Function()? refreshHandler;
@@ -657,9 +1242,9 @@ class _FakeWatchSyncService implements WatchSyncService {
   @override
   Future<void> sync(
     DashboardSnapshot snapshot,
-    ConsumptionDisplayPreferences displayPreferences,
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
+    bool mockDataMode = false,
   }) async {
     syncedSnapshots.add(snapshot);
   }
@@ -681,9 +1266,9 @@ class _FailingWatchSyncService implements WatchSyncService {
   @override
   Future<void> sync(
     DashboardSnapshot snapshot,
-    ConsumptionDisplayPreferences displayPreferences,
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
+    bool mockDataMode = false,
   }) {
     return Future.error(StateError('Watch unavailable'));
   }
@@ -714,6 +1299,42 @@ final class _CountingDashboardRepository extends DashboardRepository {
 
   @override
   Future<DashboardSnapshot> load() async => _load();
+}
+
+class _MemoryPhoneWidgetStore implements PhoneWidgetPreferenceStore {
+  PhoneWidgetPreferences value = const PhoneWidgetPreferences();
+
+  @override
+  Future<PhoneWidgetPreferences> read() async => value;
+
+  @override
+  Future<void> write(PhoneWidgetPreferences next) async {
+    value = next;
+  }
+}
+
+class _MemoryWatchRingStore implements WatchRingPreferenceStore {
+  WatchRingPreferences value = const WatchRingPreferences();
+
+  @override
+  Future<WatchRingPreferences> read() async => value;
+
+  @override
+  Future<void> write(WatchRingPreferences next) async {
+    value = next;
+  }
+}
+
+class _MemoryAlertThresholdStore implements AlertThresholdPreferenceStore {
+  AlertThresholdPreferences value = const AlertThresholdPreferences();
+
+  @override
+  Future<AlertThresholdPreferences> read() async => value;
+
+  @override
+  Future<void> write(AlertThresholdPreferences next) async {
+    value = next;
+  }
 }
 
 class _MemoryCredentialStore implements ProviderCredentialStore {
@@ -755,19 +1376,6 @@ class _MemoryCredentialStore implements ProviderCredentialStore {
       return;
     }
     _labels[id] = trimmed;
-  }
-}
-
-class _MemoryDisplayPreferenceStore
-    implements ConsumptionDisplayPreferenceStore {
-  ConsumptionDisplayPreferences value = const ConsumptionDisplayPreferences();
-
-  @override
-  Future<ConsumptionDisplayPreferences> read() async => value;
-
-  @override
-  Future<void> write(ConsumptionDisplayPreferences value) async {
-    this.value = value;
   }
 }
 

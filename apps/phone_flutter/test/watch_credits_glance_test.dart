@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
-import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
 import 'package:ward_pulse_phone/sync/watch_credits_glance.dart';
 
 void main() {
@@ -11,35 +10,18 @@ void main() {
     expect(compactCreditCount(1_400_000), '1.4M');
   });
 
-  test('resolves remaining purchased credits when enabled', () {
+  test('resolves remaining purchased credits', () {
     final snapshot = _snapshotWithPurchased(remaining: '500');
-    final glance = resolveWatchCreditsGlance(
-      snapshot,
-      const ConsumptionDisplayPreferences(plan: true, purchased: true),
-    );
+    final glance = resolveWatchCreditsGlance(snapshot);
     expect(glance, isNotNull);
     expect(glance!.text, '500');
     expect(glance.label, 'Credits left');
     expect(glance.provider, 'codex');
   });
 
-  test('omits credits glance when purchased display is off', () {
-    final snapshot = _snapshotWithPurchased(remaining: '500');
-    expect(
-      resolveWatchCreditsGlance(
-        snapshot,
-        const ConsumptionDisplayPreferences(plan: true, purchased: false),
-      ),
-      isNull,
-    );
-  });
-
   test('shows infinity for unlimited purchased credits', () {
     final snapshot = _snapshotWithPurchased(remaining: null, unlimited: true);
-    final glance = resolveWatchCreditsGlance(
-      snapshot,
-      const ConsumptionDisplayPreferences(purchased: true),
-    );
+    final glance = resolveWatchCreditsGlance(snapshot);
     expect(glance?.text, '∞');
   });
 }

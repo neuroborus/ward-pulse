@@ -5,7 +5,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -109,7 +108,7 @@ private data class GlanceMetrics(
     val miniStroke: Dp,
     val textGap: Dp,
     val rowHeight: Dp,
-    val rowGap: Dp,
+    val alertsGap: Dp,
     val timeClearance: Dp,
     val bottomClearance: Dp,
     val contentPadH: Dp,
@@ -138,8 +137,13 @@ private fun glanceMetricsFor(diameter: Dp): GlanceMetrics {
         miniArcSize = art(39f),
         miniStroke = art(5f),
         textGap = art(12f),
+        // Row pitch, as the art lays it out: 54 covers the mini arc and both
+        // lines, and rows sit one after another with no gap added on top. A gap
+        // here is 18px of drift across four rows, which is the whole slack.
         rowHeight = art(54f),
-        rowGap = art(6f),
+        // The art keeps the block clear of the pill by 12 (`alertsBtnY - 12`).
+        // Without it a fourth row lands against the pill.
+        alertsGap = art(12f),
         timeClearance = art(62f),
         // alertsBtnY = SIZE-78, h=36 → 42px below pill to rim.
         bottomClearance = art(42f),
@@ -242,10 +246,7 @@ internal fun GlanceLegendPage(
                     GlanceEmptyCopy(summary = summary, titleStyle = metrics.title)
                 } else {
                     // Wrap-content block (review art blockLeft), not full-bleed rows.
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(metrics.rowGap),
-                        modifier = Modifier.wrapContentWidth(),
-                    ) {
+                    Column(modifier = Modifier.wrapContentWidth()) {
                         rows.forEach { row ->
                             key(row.title, row.subtitle) {
                                 GlanceLegendRow(row = row, metrics = metrics)
@@ -255,6 +256,7 @@ internal fun GlanceLegendPage(
                 }
             }
 
+            Spacer(modifier = Modifier.height(metrics.alertsGap))
             GlanceAlertsPill(
                 count = alertCount,
                 metrics = metrics,
@@ -347,11 +349,18 @@ private fun MiniRemainingArc(
             size = arcSize,
             style = strokeStyle,
         )
-        val sweep = remainingFraction.coerceIn(0f, 1f) * 360f
-        if (sweep > 0f) {
+        val remaining = remainingFraction.coerceIn(0f, 1f)
+        // A round cap reaches half a stroke past the angle it is drawn to, so the
+        // sweep is short by one cap at each end and the caps fill it back in —
+        // otherwise a nearly full row reads as a closed ring, the way the face did
+        // before 2026-08-16 (`WATCH_RING_DESIGN.md`, Ring geometry).
+        val capDegrees =
+            Math.toDegrees((strokeWidth / 2f / (arcSize.width / 2f)).toDouble()).toFloat()
+        val sweep = (remaining * 360f - 2f * capDegrees).coerceAtLeast(0f)
+        if (remaining > 0f) {
             drawArc(
                 color = color,
-                startAngle = -90f,
+                startAngle = -90f + (1f - remaining) * 360f + capDegrees,
                 sweepAngle = sweep,
                 useCenter = false,
                 topLeft = topLeft,

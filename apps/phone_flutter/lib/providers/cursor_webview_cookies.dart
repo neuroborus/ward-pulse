@@ -86,9 +86,7 @@ Future<bool> ensureCursorSessionCookieCleared({
 }
 
 /// Wipes the shared WebView jar and confirms the Cursor session cookie is gone.
-Future<bool> wipeCursorWebViewSession([
-  WebViewCookieManager? cookieManager,
-]) {
+Future<bool> wipeCursorWebViewSession([WebViewCookieManager? cookieManager]) {
   final manager = cookieManager ?? WebViewCookieManager();
   return ensureCursorSessionCookieCleared(
     clear: manager.clearCookies,

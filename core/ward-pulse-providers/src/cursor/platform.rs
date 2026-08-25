@@ -7,7 +7,7 @@ use std::fmt;
 use serde::Deserialize;
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
-    BudgetPeriod, Money, ProviderKind, ProviderSnapshot, ProviderStatus, UsageBucket,
+    connection, BudgetPeriod, Money, ProviderKind, ProviderSnapshot, ProviderStatus, UsageBucket,
 };
 use ward_pulse_core::time::DateTimeUtc;
 
@@ -114,6 +114,7 @@ pub fn cursor_platform_snapshot_from_report_json(
         provider_snapshot: ProviderSnapshot {
             account_id: report.account_id,
             provider: ProviderKind::Cursor,
+            connection: Some(connection::CURSOR_PLATFORM.to_string()),
             status: ProviderStatus::Ok,
             today: unknown(BudgetPeriod::Today),
             week: unknown(BudgetPeriod::Week),

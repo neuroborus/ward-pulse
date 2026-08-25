@@ -5,11 +5,12 @@ use std::fmt;
 use serde::Deserialize;
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
-    AllowanceSource, AllowanceState, BudgetPeriod, ProviderKind, ProviderSnapshot, ProviderStatus,
-    Quantity, QuantityUnit, UsageBucket,
+    connection, AllowanceSource, AllowanceState, BudgetPeriod, ProviderKind, ProviderSnapshot,
+    ProviderStatus, Quantity, QuantityUnit, UsageBucket,
 };
 use ward_pulse_core::time::DateTimeUtc;
 
+use crate::allowance::worst_status;
 use crate::{BucketCapabilities, ProviderCapabilities};
 
 pub const PROVIDER_NAME: &str = "Codex";
@@ -110,11 +111,7 @@ pub fn codex_provider_snapshot_from_report_json(
         }
     }
 
-    let status = allowances
-        .iter()
-        .map(|allowance| allowance.status)
-        .max_by_key(status_rank)
-        .unwrap_or(ProviderStatus::Unknown);
+    let status = worst_status(&allowances);
     let buckets = report
         .usage
         .daily_usage_buckets
@@ -126,6 +123,7 @@ pub fn codex_provider_snapshot_from_report_json(
     let provider_snapshot = ProviderSnapshot {
         account_id: "codex-local".to_string(),
         provider: ProviderKind::Codex,
+        connection: Some(connection::CODEX_PLAN.to_string()),
         status,
         today: unknown_budget(BudgetPeriod::Today),
         week: unknown_budget(BudgetPeriod::Week),
@@ -317,18 +315,6 @@ fn civil_from_days(days_since_epoch: i64) -> Option<(i64, i64, i64)> {
     Some((year, month, day))
 }
 
-fn status_rank(status: &ProviderStatus) -> u8 {
-    match status {
-        ProviderStatus::Ok => 1,
-        ProviderStatus::Unknown => 2,
-        ProviderStatus::Stale => 3,
-        ProviderStatus::Warning => 4,
-        ProviderStatus::RateLimited => 5,
-        ProviderStatus::AuthRequired => 6,
-        ProviderStatus::Error => 7,
-    }
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RawReport {
@@ -417,7 +403,7 @@ mod tests {
         assert_eq!(
             snapshot.allowances[1].remaining,
             Some(Quantity {
-                value: "12.5".to_string(),
+                value: "500".to_string(),
                 unit: QuantityUnit::Credits,
             })
         );
@@ -448,7 +434,7 @@ mod tests {
     fn preserves_unlimited_purchased_credits() {
         let report_json = REPORT_FIXTURE
             .replace("\"unlimited\": false", "\"unlimited\": true")
-            .replace("\"balance\": \"12.5\"", "\"balance\": null");
+            .replace("\"balance\": \"500\"", "\"balance\": null");
         let report = codex_provider_snapshot_from_report_json(&report_json)
             .expect("normalize unlimited Codex credits");
         let allowance = &report.provider_snapshot.allowances[1];

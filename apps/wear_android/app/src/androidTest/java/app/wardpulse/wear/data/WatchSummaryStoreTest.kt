@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import app.wardpulse.wear.model.Money
 import app.wardpulse.wear.model.PreviewWatchDashboardSummary
 import app.wardpulse.wear.model.WatchDataMode
 import org.junit.Assert.assertEquals
@@ -41,12 +42,31 @@ class WatchSummaryStoreTest {
         assertEquals(WatchDataMode.MOCK, store.load()?.dataMode)
     }
 
+    /**
+     * The paired fixture is the phone's own output, asserted byte for byte by
+     * `watch_sync_service_test.dart` — so this parses what the phone writes,
+     * not a literal written here to match it.
+     */
+    @Test
+    fun keepsBothPoolsOfASplitBand() {
+        val encoded = testContext.assets.open("watch_dashboard_summary_paired.json")
+            .bufferedReader()
+            .use { it.readText() }
+
+        assertTrue(store.saveEncoded(encoded))
+        // One entry is one band, and its second pool rides inside it.
+        val rings = store.load()?.rings.orEmpty()
+        assertEquals(1, rings.size)
+        assertEquals("allowance.cursor.cursor-plan-other", rings.first().split?.id)
+        assertEquals(62.0, rings.first().split?.usedPercent)
+    }
+
     @Test
     fun rejectsLegacyPayloadWithoutAnExplicitDataMode() {
         val encoded = testContext.assets.open("watch_dashboard_summary.json")
             .bufferedReader()
             .use { it.readText() }
-            .replace("\"schemaVersion\": 7,", "\"schemaVersion\": 2,")
+            .replace("\"schemaVersion\": 9,", "\"schemaVersion\": 2,")
             .replace("  \"dataMode\": \"mock\",\n", "")
 
         assertFalse(store.saveEncoded(encoded))
@@ -67,12 +87,45 @@ class WatchSummaryStoreTest {
         assertTrue(store.load()?.allowances?.single()?.unlimited == true)
     }
 
+    /**
+     * The fixture carries no ring — mock accounts hold no budget — so this is the only place
+     * the phone's literal ring shape meets the parser. Wear's own round-trip cannot prove it:
+     * it writes and reads the same keys, and would drift from the phone in step.
+     */
+    @Test
+    fun readsBudgetMoneyInThePhoneWireShape() {
+        val encoded = testContext.assets.open("watch_dashboard_summary.json")
+            .bufferedReader()
+            .use { it.readText() }
+            .replace(
+                "\"rings\": []",
+                """"rings": [{"id":"budget.anthropic.platform.week","label":"Week","usedPercent":28.5,"status":"ok","spent":{"minorUnits":7130,"currency":"USD"},"limit":{"minorUnits":25000,"currency":"USD"}}]""",
+            )
+
+        assertTrue(store.saveEncoded(encoded))
+        val ring = store.load()?.rings?.single()
+        assertEquals(Money(7_130, "USD"), ring?.spent)
+        assertEquals(Money(25_000, "USD"), ring?.limit)
+    }
+
     @Test
     fun invalidSummaryKeepsPreviousState() {
         store.save(PreviewWatchDashboardSummary.value)
 
         assertFalse(store.saveEncoded("{\"schemaVersion\":3,\"rings\":[]}"))
         assertEquals(PreviewWatchDashboardSummary.value, store.load())
+    }
+
+    /** A schema bump throws away what the previous build stored — quietly, not by crashing. */
+    @Test
+    fun discardsASummaryStoredByAnOlderSchema() {
+        val encoded = testContext.assets.open("watch_dashboard_summary.json")
+            .bufferedReader()
+            .use { it.readText() }
+            .replace("\"schemaVersion\": 9,", "\"schemaVersion\": 7,")
+        preferences.edit().putString("latest", encoded).commit()
+
+        assertNull(store.load())
     }
 
     @Test

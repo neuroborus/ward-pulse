@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Shared Settings row for a plan or platform connection.
+/// Shared connection-catalog row for a plan or platform connection.
 class ProviderConnectionRow extends StatelessWidget {
   const ProviderConnectionRow({
     super.key,
@@ -26,6 +26,19 @@ class ProviderConnectionRow extends StatelessWidget {
       isThreeLine: subtitle.contains('\n'),
       trailing: trailing,
       onTap: onTap,
+    );
+  }
+}
+
+/// Spinner sized for a catalog row trailing.
+class RowProgress extends StatelessWidget {
+  const RowProgress();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox.square(
+      dimension: 20,
+      child: CircularProgressIndicator(strokeWidth: 2),
     );
   }
 }

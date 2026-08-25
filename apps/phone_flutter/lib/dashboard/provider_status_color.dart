@@ -7,7 +7,16 @@ const _familyCodex = Color(0xFF65D78A);
 const _familyClaude = Color(0xFFE8915A);
 const _familyCursor = Color(0xFF67E8D4);
 const _familyOpenAi = Color(0xFF65D78A);
-const familyBudgetColor = Color(0xFF8AB4F8);
+
+/// The Cursor plan's own models — the one pool that leaves the family colour
+/// (`WATCH_RING_DESIGN.md`, Split band).
+const familyCursorOwnColor = Color(0xFF7E93B8);
+
+/// Demo data keeps the blue it has always had; it is not an unresolved family.
+const _familyMock = Color(0xFF8AB4F8);
+
+/// Deliberately colourless: an id that names no family should not ship.
+const familyFallbackColor = Color(0xFF8A968F);
 
 Color providerStatusColor(ColorScheme colors, ProviderStatus status) {
   return switch (status) {
@@ -21,6 +30,39 @@ Color providerStatusColor(ColorScheme colors, ProviderStatus status) {
   };
 }
 
+/// Fill and ink for a status chip, as one pair so the two cannot drift apart.
+///
+/// [providerStatusColor] is an ink color — right for a glyph, wrong as a fill:
+/// `outline` behind text has no partner in the scheme, and Material's `Badge`
+/// defaults its label to `onError`, which suits only the two statuses that
+/// paint themselves `error`. Container roles are the scheme's own answer for a
+/// tinted chip: each carries its own legible ink in both themes.
+({Color fill, Color ink}) providerStatusChipColors(
+  ColorScheme colors,
+  ProviderStatus status,
+) {
+  return switch (status) {
+    ProviderStatus.ok => (
+      fill: colors.primaryContainer,
+      ink: colors.onPrimaryContainer,
+    ),
+    ProviderStatus.warning ||
+    ProviderStatus.rateLimited ||
+    ProviderStatus.stale => (
+      fill: colors.tertiaryContainer,
+      ink: colors.onTertiaryContainer,
+    ),
+    ProviderStatus.error || ProviderStatus.authRequired => (
+      fill: colors.errorContainer,
+      ink: colors.onErrorContainer,
+    ),
+    ProviderStatus.unknown => (
+      fill: colors.surfaceContainerHighest,
+      ink: colors.onSurfaceVariant,
+    ),
+  };
+}
+
 /// Accent for a provider family (matches `WATCH_RING_DESIGN.md`).
 Color providerFamilyColor(String provider) {
   return switch (provider) {
@@ -28,15 +70,7 @@ Color providerFamilyColor(String provider) {
     'codex' => _familyCodex,
     'claude' => _familyClaude,
     'cursor' => _familyCursor,
-    'mock' => familyBudgetColor,
-    _ => familyBudgetColor,
-  };
-}
-
-/// Platform/budget metric fill: budget blue when healthy, else status color.
-Color budgetMetricColor(ColorScheme colors, ProviderStatus status) {
-  return switch (status) {
-    ProviderStatus.ok => familyBudgetColor,
-    _ => providerStatusColor(colors, status),
+    'mock' => _familyMock,
+    _ => familyFallbackColor,
   };
 }

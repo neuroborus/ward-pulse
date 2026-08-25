@@ -5,6 +5,7 @@ import app.wardpulse.wear.model.CreditsGlance
 import app.wardpulse.wear.model.PeriodSummary
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.Quantity
+import app.wardpulse.wear.model.RingHalf
 import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.model.WatchDataMode
@@ -56,6 +57,32 @@ class GlanceModelsTest {
     }
 
     @Test
+    fun refreshChrome_staleOutranksRateLimited() {
+        val chrome =
+            glanceRefreshChrome(
+                baseSummary(overall = PulseStatus.RATE_LIMITED, isStale = true),
+                refreshAllowed = true,
+            )
+        assertEquals("Stale", chrome.detail)
+        // The rate limit still blocks the tap; only the detail line changes.
+        assertFalse(chrome.enabled)
+    }
+
+    @Test
+    fun refreshChrome_mockOutranksRateLimited() {
+        val chrome =
+            glanceRefreshChrome(
+                baseSummary(
+                    overall = PulseStatus.RATE_LIMITED,
+                    dataMode = WatchDataMode.MOCK,
+                ),
+                refreshAllowed = true,
+            )
+        assertEquals("Mock data", chrome.detail)
+        assertFalse(chrome.enabled)
+    }
+
+    @Test
     fun refreshChrome_unknownShowsDetail() {
         val chrome =
             glanceRefreshChrome(
@@ -80,11 +107,19 @@ class GlanceModelsTest {
                                 92.0,
                                 PulseStatus.OK,
                             ),
+                            // One band, two pools: the exhausted one drops out alone.
                             RingSummary(
-                                "allowance.cursor.week",
-                                "Weekly plan",
-                                100.0,
+                                "allowance.cursor.cursor-plan-models",
+                                "Cursor Models",
+                                76.0,
                                 PulseStatus.OK,
+                                split =
+                                    RingHalf(
+                                        "allowance.cursor.cursor-plan-other",
+                                        "Other Models",
+                                        100.0,
+                                        PulseStatus.OK,
+                                    ),
                             ),
                             RingSummary(
                                 "budget.today",
@@ -107,16 +142,142 @@ class GlanceModelsTest {
                         ),
                 ),
             )
-        assertEquals(2, rows.size)
+        assertEquals(3, rows.size)
         assertEquals("Codex · Weekly plan", rows[0].title)
         assertEquals("8% left · 320 credits", rows[0].subtitle)
-        assertEquals("Budget · Today", rows[1].title)
-        assertEquals("60% left", rows[1].subtitle)
+        // The pool name already opens with its family — do not name it twice.
+        assertEquals("Cursor Models", rows[1].title)
+        assertEquals("Budget · Today", rows[2].title)
+        assertEquals("60% left", rows[2].subtitle)
+    }
+
+    /** The face shares a band between two pools; Glance never does. */
+    @Test
+    fun legendRows_listBothPoolsOfAPairedBand() {
+        val rows =
+            glanceLegendRows(
+                baseSummary(
+                    rings =
+                        listOf(
+                            RingSummary(
+                                "allowance.cursor.cursor-plan-models",
+                                "Cursor Models",
+                                53.0,
+                                PulseStatus.OK,
+                                split =
+                                    RingHalf(
+                                        "allowance.cursor.cursor-plan-other",
+                                        "Other Models",
+                                        38.0,
+                                        PulseStatus.OK,
+                                    ),
+                            ),
+                        ),
+                ),
+            )
+        assertEquals(2, rows.size)
+        assertEquals("Cursor Models", rows[0].title)
+        assertEquals("47% left", rows[0].subtitle)
+        assertEquals("Cursor · Other Models", rows[1].title)
+        assertEquals("62% left", rows[1].subtitle)
+        // Each pool carries its own colour, which is the point of splitting them.
+        assertEquals(RingFamily.colorArgb("allowance.cursor.cursor-plan-models"), rows[0].colorArgb)
+        assertEquals(RingFamily.colorArgb("allowance.cursor.cursor-plan-other"), rows[1].colorArgb)
+    }
+
+    /**
+     * A pair is one band, so its rows travel with it: the phone ranks bands, and
+     * the second pool follows its own band rather than its own percent
+     * (`WEAR_GLANCE_DESIGN.md`). The board sorts every row by remaining, which is
+     * why this is worth pinning here.
+     */
+    @Test
+    fun legendRows_keepAPairTogetherWhereItsBandLands() {
+        val rows =
+            glanceLegendRows(
+                baseSummary(
+                    rings =
+                        listOf(
+                            RingSummary(
+                                "allowance.codex.week",
+                                "Weekly plan",
+                                92.0,
+                                PulseStatus.OK,
+                            ),
+                            RingSummary(
+                                "allowance.cursor.cursor-plan-models",
+                                "Cursor Models",
+                                53.0,
+                                PulseStatus.OK,
+                                // Loosest metric on the watch: sorted on its own
+                                // percent it would come last, not second.
+                                split =
+                                    RingHalf(
+                                        "allowance.cursor.cursor-plan-other",
+                                        "Other Models",
+                                        20.0,
+                                        PulseStatus.OK,
+                                    ),
+                            ),
+                            RingSummary(
+                                "budget.today",
+                                "Today",
+                                40.0,
+                                PulseStatus.OK,
+                            ),
+                        ),
+                ),
+            )
+        assertEquals(
+            listOf(
+                "Codex · Weekly plan",
+                "Cursor Models",
+                "Cursor · Other Models",
+                "Budget · Today",
+            ),
+            rows.map { it.title },
+        )
+    }
+
+    @Test
+    fun legendRows_keepPhoneComposedBudgetLabel() {
+        val rows =
+            glanceLegendRows(
+                baseSummary(
+                    rings =
+                        listOf(
+                            RingSummary(
+                                "budget.anthropic.platform.month",
+                                "Anthropic platform · Month",
+                                40.0,
+                                PulseStatus.OK,
+                            ),
+                        ),
+                    allowances =
+                        listOf(
+                            AllowanceSummary(
+                                source = "purchased",
+                                label = "Claude · Extra usage",
+                                usedPercent = null,
+                                remaining = Quantity("320", "credits"),
+                                unlimited = false,
+                                resetsAt = null,
+                                status = PulseStatus.OK,
+                            ),
+                        ),
+                ),
+            )
+        // The phone names a budget ring by its connection — do not prefix again.
+        assertEquals("Anthropic platform · Month", rows.single().title)
+        // Credits belong to the plan pool, not to a spend ceiling.
+        assertEquals("60% left", rows.single().subtitle)
+        assertEquals(RingFamily.CLAUDE, rows.single().colorArgb)
     }
 
     private fun baseSummary(
         overall: PulseStatus = PulseStatus.OK,
         isStale: Boolean = false,
+        dataMode: WatchDataMode = WatchDataMode.LIVE,
         rings: List<RingSummary> =
             listOf(
                 RingSummary("budget.today", "Today", 24.8, PulseStatus.OK),
@@ -134,8 +295,8 @@ class GlanceModelsTest {
                 status = PulseStatus.OK,
             )
         return WatchDashboardSummary(
-            schemaVersion = 7,
-            dataMode = WatchDataMode.LIVE,
+            schemaVersion = 9,
+            dataMode = dataMode,
             generatedAt = "2026-07-26T10:00:00Z",
             overallStatus = overall,
             rings = rings,

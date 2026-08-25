@@ -71,15 +71,16 @@ WardPulse is local-first. The MVP must not introduce a custom cloud path for pro
 
 ## Phone-to-Watch Sync
 
-- The version 7 Data Layer payload follows `schemas/watch_dashboard_summary.schema.json` and
-  contains only derived ring metrics, optional compact remaining-credits glance text
-  (`creditsGlance`), budget, selected allowance, provider-status, alert, freshness, and
+- The Data Layer payload follows `schemas/watch_dashboard_summary.schema.json`, which owns its
+  version number, and contains only derived ring metrics, optional compact remaining-credits
+  glance (`creditsGlance`), budget, selected allowance, provider-status, alert, freshness, and
   phone-owned manual-refresh allowance fields (`manualRefreshAllowed` /
   `manualRefreshAvailableAt`, driven by the PollCadence hard floor). Ring entries and credits
-  glance carry labels and counts —
-  never credentials, account identifiers, raw provider payloads, or LLM token totals.
+  glance carry labels and counts — never credentials, account identifiers, raw provider
+  payloads, or LLM token totals.
 - Mock payloads are produced only by debug builds after the user explicitly enables mock data.
-- Release Wear builds reject mock payloads.
+  Debug Mock data is a seeded multi-provider demo (OpenAI, Codex, Claude, Cursor), not the
+  legacy single `provider: mock` golden fixture. Release Wear builds reject mock payloads.
 - Account identifiers, credentials, authorization headers, prompts, and raw provider
   payloads are excluded from the watch contract.
 - Google Play services restricts Data Layer data to paired apps with matching application
@@ -105,6 +106,17 @@ Provider sync diagnostics may include an endpoint label, HTTP status, provider e
 request ID, and sanitized parser reason. They must not include response bodies or raw field
 values.
 Phone-to-watch logs record outcomes only and never include the serialized summary.
+
+## Notification Rules
+
+A notification is read off a locked screen, by whoever is holding the phone. It may carry only
+what the reader needs to act: the provider family and the window's own name. It must not carry
+credentials, account identifiers, spend, or any raw provider field — the account id keys the
+notification so a repeat replaces its own earlier copy, and never appears in its text.
+
+Recovery notifications are the only interruption WardPulse makes. Nothing else in the product
+earns one, and an alert threshold never becomes one: alerts are conditions, listed and counted,
+while a recovery is an edge that is told once.
 
 ## Rust Core Rule
 

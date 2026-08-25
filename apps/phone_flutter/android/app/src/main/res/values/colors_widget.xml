@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Light olive chrome — matches phone Material, not provider accents. -->
+    <color name="ward_pulse_widget_surface">#F2F4F1</color>
+    <color name="ward_pulse_widget_outline">#1A5F675C</color>
+    <color name="ward_pulse_widget_on_surface">#1A1F1A</color>
+    <color name="ward_pulse_widget_muted">#5F675C</color>
+    <color name="ward_pulse_widget_stale">#C46A3A</color>
+    <color name="ward_pulse_widget_fallback">#8A968F</color>
+    <!-- Face mono stroke, muted for light surfaces (~face PartImage quiet). -->
+    <color name="ward_pulse_widget_watermark">#665F675C</color>
+</resources>

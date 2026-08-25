@@ -4,10 +4,10 @@
     <string name="ring1_complication">Ring 1 (outer)</string>
     <string name="ring2_complication">Ring 2</string>
     <string name="ring3_complication">Ring 3</string>
-    <string name="ring4_complication">Ring 4 (inner)</string>
+    <string name="outer_half_complication">Outer half</string>
     <string name="strip1_complication">Strip 1 (plan / credits)</string>
     <string name="strip2_complication">Strip 2</string>
     <string name="strip3_complication">Strip 3</string>
-    <string name="strip4_complication">Strip 4</string>
+    <string name="split_marker_complication">Split strip marker</string>
     <string name="tokens_complication">Credits left</string>
 </resources>

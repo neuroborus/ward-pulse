@@ -1,12 +1,18 @@
+mod demo;
+
 use std::error::Error as StdError;
 use std::fmt;
+
+pub use demo::{
+    debug_multi_provider_dashboard, debug_multi_provider_dashboard_json, DebugDemoDashboardError,
+};
 
 use crate::{BucketCapabilities, ProviderCapabilities};
 use serde::Deserialize;
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
-    BudgetPeriod, CreditSource, CreditState, ModelUsage, Money, ProviderKind, ProviderSnapshot,
-    ProviderStatus, UsageBucket,
+    connection, BudgetPeriod, CreditSource, CreditState, ModelUsage, Money, ProviderKind,
+    ProviderSnapshot, ProviderStatus, UsageBucket,
 };
 use ward_pulse_core::time::DateTimeUtc;
 
@@ -31,6 +37,7 @@ pub fn mock_provider_snapshot(account_id: impl Into<String>) -> ProviderSnapshot
     ProviderSnapshot {
         account_id: account_id.into(),
         provider: ProviderKind::Mock,
+        connection: Some(connection::MOCK_PLAN.to_string()),
         status: ProviderStatus::Ok,
         today: calculate_budget_state(
             BudgetPeriod::Today,

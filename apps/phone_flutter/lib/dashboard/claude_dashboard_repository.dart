@@ -27,7 +27,10 @@ DashboardRepository claudeDashboardRepository({
   );
 }
 
-DashboardLoadException _mapClaudeError(Object error, ProviderSyncLogger logger) {
+DashboardLoadException _mapClaudeError(
+  Object error,
+  ProviderSyncLogger logger,
+) {
   if (error is! ClaudeAccountException) {
     final details = loadFailureDetails(error);
     logger.record(ProviderSyncEvent.invalidResponse, details: details);

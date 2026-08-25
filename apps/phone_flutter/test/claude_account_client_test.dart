@@ -114,10 +114,7 @@ void main() {
     expect(result.session.accessToken, 'sk-ant-oat01-new');
     expect(result.reportJson, contains('"accountId":"acct-1"'));
     expect(transport.methods, ['POST', 'GET']);
-    expect(
-      transport.headers[1]['Authorization'],
-      'Bearer sk-ant-oat01-new',
-    );
+    expect(transport.headers[1]['Authorization'], 'Bearer sk-ant-oat01-new');
     expect(transport.headers[1]['anthropic-beta'], 'oauth-2025-04-20');
     expect(transport.headers[1]['User-Agent'], contains('claude-code'));
   });

@@ -24,7 +24,7 @@ double? creditRequestRunwayForProvider(
     return null;
   }
 
-  final remaining = _purchasedCreditsRemaining(snapshot, provider);
+  final remaining = purchasedCreditsRemainingForProvider(snapshot, provider);
   if (remaining == null) {
     return null;
   }
@@ -32,7 +32,10 @@ double? creditRequestRunwayForProvider(
 }
 
 /// Finite purchased `credits` remaining for one provider, or null.
-double? _purchasedCreditsRemaining(
+///
+/// Shared by watch-ring sort and phone home-widget Glance-style suffixes.
+/// Unlimited purchased balances return null (no numeric credits line).
+double? purchasedCreditsRemainingForProvider(
   DashboardSnapshot snapshot,
   String provider,
 ) {

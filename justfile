@@ -12,6 +12,16 @@ lint-core:
 test-core:
     cd core && cargo test --workspace
 
+# Rustdoc reads only the items it documents, hence --document-private-items.
+# Fails on a broken intra-doc link; nothing else in the repo reports one.
+doc-core:
+    cd core && RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
+
+# Dart formatting for the phone shell and the bindings package it consumes.
+fmt-phone:
+    cd apps/phone_flutter && dart format lib test
+    cd bindings/dart && dart format lib
+
 lint-phone:
     cd apps/phone_flutter && flutter analyze
 
@@ -19,12 +29,15 @@ test-phone:
     cd apps/phone_flutter && flutter test
 
 check-phone:
+    cd apps/phone_flutter && dart format --output=none --set-exit-if-changed lib test
+    cd bindings/dart && dart format --output=none --set-exit-if-changed lib
     just lint-phone
     just test-phone
 
 check-core: validate-fixtures
     cd core && cargo fmt --all -- --check
     cd core && cargo clippy --workspace --all-targets -- -D warnings
+    cd core && RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
     cd core && cargo test --workspace
 
 snapshot-core:
@@ -59,8 +72,28 @@ check-wear:
 validate-watchface:
     tools/validate-watchface/validate.sh
 
+# Writes watchface.xml and the ring-type drawables; edit the generator, not its output.
+# Needs ImageMagick `convert` for the drawables, as export-icons does.
+render-watchface:
+    node tools/render-watchface.mjs
+
 check-watchface: validate-watchface
+    node tools/render-watchface.mjs --check
     cd apps/watchface_wff && ./gradlew --no-daemon lintDebug assembleDebug bundleDebug
+
+# Review art for the Glance, the face, the widget, and the brand marks.
+render-designs:
+    node tools/render-watch-ring-designs.mjs
+    node tools/render-wear-glance-designs.mjs
+    node tools/render-phone-widget-designs.mjs
+    node tools/render-brand-icons.mjs
+
+# Fails when review art no longer matches its generator (SVG only; see design-output.mjs).
+check-designs:
+    node tools/render-watch-ring-designs.mjs --check
+    node tools/render-wear-glance-designs.mjs --check
+    node tools/render-phone-widget-designs.mjs --check
+    node tools/render-brand-icons.mjs --check
 
 test-wear-device:
     cd apps/wear_android && ./gradlew --no-daemon connectedDebugAndroidTest
@@ -74,9 +107,13 @@ test-phone-watch-sync:
 build-wear:
     cd apps/wear_android && ./gradlew --no-daemon assembleDebug
 
+# The Wear app shares `app.wardpulse` with the phone shell, so an install that
+# reaches a paired phone replaces the dashboard with the watch UI. Naming the
+# watch scopes both steps: Gradle's install task filters devices by ANDROID_SERIAL.
 run-wear:
+    @test -n "${ANDROID_SERIAL:-}" || { echo "Set ANDROID_SERIAL to a Wear device serial."; exit 1; }
     cd apps/wear_android && ./gradlew --no-daemon installDebug
-    adb shell am start -n app.wardpulse/app.wardpulse.wear.MainActivity
+    adb -s "$ANDROID_SERIAL" shell am start -n app.wardpulse/app.wardpulse.wear.MainActivity
 
 build-watchface:
     cd apps/watchface_wff && ./gradlew --no-daemon assembleDebug bundleDebug
@@ -86,4 +123,4 @@ run-watchface:
     cd apps/watchface_wff && ./gradlew --no-daemon installDebug
     adb -s "$ANDROID_SERIAL" shell am broadcast -a com.google.android.wearable.app.DEBUG_SURFACE --es operation set-watchface --es watchFaceId app.wardpulse.watchface
 
-test-all: check-core check-phone check-wear check-watchface check-docs
+test-all: check-core check-phone check-wear check-watchface check-designs check-docs

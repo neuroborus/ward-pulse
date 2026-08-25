@@ -1,28 +1,107 @@
 import 'package:flutter/material.dart';
 
-import '../charts/budget_progress_bar.dart';
+import '../app/pull_to_refresh_list.dart';
+import '../app/surface_order.dart';
 import '../charts/usage_history_chart.dart';
-import '../settings/consumption_display_preferences.dart';
 import 'connected_capabilities.dart';
 import 'dashboard_models.dart';
 import 'provider_status_color.dart';
+import 'provider_status_severity.dart';
+import 'status_pill.dart';
 
-class DashboardScreen extends StatelessWidget {
+/// What the app bar summarizes: the sections a tap can scroll to, never a
+/// status computed over something the screen does not show
+/// (PHONE_DASHBOARD_DESIGN.md).
+typedef DashboardProblems =
+    ({int sections, ProviderStatus status, String? first});
+
+DashboardProblems dashboardProblems(
+  DashboardSnapshot snapshot, [
+  FrozenOrder? order,
+]) {
+  // The same [order] the screen renders with: `first` is what the app bar
+  // scrolls to, and reading it off a different order would skip past a card
+  // sitting higher up.
+  final flagged = _providerDashboardSections(
+    snapshot.accounts,
+    order,
+  ).where((section) => section.flagged > 0).toList(growable: false);
+  return (
+    sections: flagged.length,
+    status: worstProviderStatus(flagged.map((section) => section.status)),
+    first: flagged.isEmpty ? null : flagged.first.provider,
+  );
+}
+
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
     super.key,
     required this.snapshot,
-    this.displayPreferences = const ConsumptionDisplayPreferences(),
-    this.onOpenSettings,
+    this.onOpenProviders,
+    this.reveal,
+    this.order,
+    required this.onRefresh,
   });
 
   final DashboardSnapshot snapshot;
-  final ConsumptionDisplayPreferences displayPreferences;
-  final VoidCallback? onOpenSettings;
+  final VoidCallback? onOpenProviders;
+
+  /// Keeps the cards where the reader last saw them. Owned by the shell, which
+  /// shares it with the app-bar problem badge; `null` ranks afresh every build.
+  final FrozenOrder? order;
+
+  /// A section to bring into view, and the tap that asked for it. The token is
+  /// what makes a second tap on the same provider scroll again after the reader
+  /// has wandered off.
+  final ({String provider, int token})? reveal;
+
+  /// Pull-to-refresh reload, shared with the app-bar action.
+  final Future<void> Function() onRefresh;
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  final _sectionKeys = <String, GlobalKey>{};
+
+  @override
+  void initState() {
+    super.initState();
+    // Arriving from another tab builds this screen fresh, so the first request
+    // lands here rather than in didUpdateWidget.
+    _scheduleReveal(widget.reveal);
+  }
+
+  @override
+  void didUpdateWidget(DashboardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.reveal != oldWidget.reveal) {
+      _scheduleReveal(widget.reveal);
+    }
+  }
+
+  void _scheduleReveal(({String provider, int token})? reveal) {
+    if (reveal == null) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_sectionKeys[reveal.provider]?.currentContext case final target?) {
+        Scrollable.ensureVisible(
+          target,
+          duration: const Duration(milliseconds: 250),
+          alignment: 0.1,
+        );
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final snapshot = widget.snapshot;
+    final onOpenProviders = widget.onOpenProviders;
     if (snapshot.accounts.isEmpty) {
-      return ConnectProviderPrompt(onOpenSettings: onOpenSettings);
+      return ConnectProviderPrompt(onOpenProviders: onOpenProviders);
     }
 
     final caps = ConnectedCapabilities.fromAccounts(snapshot.accounts);
@@ -31,7 +110,7 @@ class DashboardScreen extends StatelessWidget {
         .toList(growable: false);
     final providerSections = _providerDashboardSections(
       snapshot.accounts,
-      displayPreferences,
+      widget.order,
     );
     final hasVisibleAllowances = providerSections.any(
       (section) => section.allowances.isNotEmpty,
@@ -39,14 +118,11 @@ class DashboardScreen extends StatelessWidget {
     final hasPurchasedAllowance = allAllowances.any(
       (allowance) => allowance.source == AllowanceSource.purchased,
     );
-    final showMissingPurchased =
-        caps.showAllowances &&
-        displayPreferences.purchased &&
-        !hasPurchasedAllowance;
-    final showPlatformSpend = displayPreferences.platform;
+    final showMissingPurchased = caps.showAllowances && !hasPurchasedAllowance;
+    final showPlatformSpend = true;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+    return PullToRefreshList(
+      onRefresh: widget.onRefresh,
       children: [
         _SyncHeader(snapshot: snapshot),
         const SizedBox(height: 16),
@@ -61,6 +137,7 @@ class DashboardScreen extends StatelessWidget {
         if (providerSections.isNotEmpty) ...[
           _ProviderDashboardSections(
             sections: providerSections,
+            sectionKeys: _sectionKeys,
             footer:
                 showMissingPurchased && hasVisibleAllowances
                     ? const MissingPurchasedUsageCard()
@@ -72,8 +149,8 @@ class DashboardScreen extends StatelessWidget {
           _CapabilityGapRow(
             title: 'Plan usage',
             explanation:
-                'Connect a Codex subscription in Settings to see plan limits.',
-            onOpenSettings: onOpenSettings,
+                'Connect a Codex subscription on the Providers tab to see plan limits.',
+            onOpenProviders: onOpenProviders,
           ),
           const SizedBox(height: 16),
         ],
@@ -92,8 +169,8 @@ class DashboardScreen extends StatelessWidget {
           _CapabilityGapRow(
             title: 'Spend',
             explanation:
-                'Connect OpenAI Platform reporting in Settings to see cost and limits.',
-            onOpenSettings: onOpenSettings,
+                'Connect OpenAI Platform reporting on the Providers tab to see cost and limits.',
+            onOpenProviders: onOpenProviders,
           ),
         ],
       ],
@@ -102,9 +179,9 @@ class DashboardScreen extends StatelessWidget {
 }
 
 class ConnectProviderPrompt extends StatelessWidget {
-  const ConnectProviderPrompt({super.key, this.onOpenSettings});
+  const ConnectProviderPrompt({super.key, this.onOpenProviders});
 
-  final VoidCallback? onOpenSettings;
+  final VoidCallback? onOpenProviders;
 
   @override
   Widget build(BuildContext context) {
@@ -120,17 +197,17 @@ class ConnectProviderPrompt extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Add an OpenAI, Anthropic, or Cursor connection in Settings.',
+              'Add an OpenAI, Anthropic, or Cursor connection on the Providers tab.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
-            if (onOpenSettings != null) ...[
+            if (onOpenProviders != null) ...[
               const SizedBox(height: 16),
               FilledButton(
-                onPressed: onOpenSettings,
-                child: const Text('Open Settings'),
+                onPressed: onOpenProviders,
+                child: const Text('Open Providers'),
               ),
             ],
           ],
@@ -144,12 +221,12 @@ class _CapabilityGapRow extends StatelessWidget {
   const _CapabilityGapRow({
     required this.title,
     required this.explanation,
-    this.onOpenSettings,
+    this.onOpenProviders,
   });
 
   final String title;
   final String explanation;
-  final VoidCallback? onOpenSettings;
+  final VoidCallback? onOpenProviders;
 
   Future<void> _showHelp(BuildContext context) async {
     final open = await showDialog<bool>(
@@ -163,16 +240,16 @@ class _CapabilityGapRow extends StatelessWidget {
                 onPressed: () => Navigator.of(context).pop(false),
                 child: const Text('Close'),
               ),
-              if (onOpenSettings != null)
+              if (onOpenProviders != null)
                 FilledButton(
                   onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('Open Settings'),
+                  child: const Text('Open Providers'),
                 ),
             ],
           ),
     );
     if (open == true) {
-      onOpenSettings?.call();
+      onOpenProviders?.call();
     }
   }
 
@@ -244,11 +321,7 @@ class MissingPurchasedUsageCard extends StatelessWidget {
 }
 
 class AllowanceSummaryCard extends StatelessWidget {
-  const AllowanceSummaryCard({
-    super.key,
-    required this.allowance,
-    this.accent,
-  });
+  const AllowanceSummaryCard({super.key, required this.allowance, this.accent});
 
   final AllowanceState allowance;
 
@@ -268,7 +341,10 @@ class AllowanceSummaryCard extends StatelessWidget {
       AllowanceSource.plan => '${allowance.remainingPercentLabel} left',
       AllowanceSource.purchased when allowance.unlimited => 'Unlimited',
       AllowanceSource.purchased =>
-        allowance.remaining?.label ?? 'Balance unavailable',
+        allowance.remaining?.label ??
+            (allowance.usedPercent != null
+                ? '${allowance.usedPercentLabel} used'
+                : 'Balance unavailable'),
     };
     final detail = switch (allowance.source) {
       AllowanceSource.plan when allowance.resetsAt != null =>
@@ -289,7 +365,11 @@ class AllowanceSummaryCard extends StatelessWidget {
                 Expanded(
                   child: Text(allowance.label, style: textTheme.titleMedium),
                 ),
-                StatusPill(status: allowance.status),
+                // A mark is an exception, never the norm: a column of healthy
+                // checkmarks outweighs the one warning the screen was opened
+                // for (PHONE_DASHBOARD_DESIGN.md).
+                if (allowance.status != ProviderStatus.ok)
+                  StatusPill(status: allowance.status),
               ],
             ),
             const SizedBox(height: 14),
@@ -321,38 +401,10 @@ class AllowanceSummaryCard extends StatelessWidget {
   }
 }
 
-class StatusPill extends StatelessWidget {
-  const StatusPill({super.key, required this.status, this.tooltip});
-
-  final ProviderStatus status;
-  final String? tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final message = tooltip ?? status.description;
-
-    return Tooltip(
-      message: message,
-      // Tap works on phone; hover still works on desktop/emulator with pointer.
-      triggerMode: TooltipTriggerMode.tap,
-      showDuration: const Duration(seconds: 6),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            _statusIcon(status),
-            color: providerStatusColor(colors, status),
-            size: 18,
-          ),
-          const SizedBox(width: 6),
-          Text(status.label),
-        ],
-      ),
-    );
-  }
-}
-
+/// Spend of one period across every connection — money only.
+///
+/// Limits are per connection, so the total has no ceiling to measure against:
+/// no bar, no percentage, and no status pill that would read `Unknown` forever.
 class BudgetSummaryCard extends StatelessWidget {
   const BudgetSummaryCard({
     super.key,
@@ -367,11 +419,6 @@ class BudgetSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final spentLabel = state.spent?.label;
-    final limit = state.limit;
-    final remaining = state.remaining;
-    final usedPercentLabel =
-        state.usedPercent == null ? null : state.usedPercentLabel;
-    final progress = state.usedFraction;
 
     return Card(
       child: Padding(
@@ -379,43 +426,11 @@ class BudgetSummaryCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(child: Text(title, style: textTheme.titleMedium)),
-                StatusPill(
-                  status: state.status,
-                  tooltip: state.statusExplanation,
-                ),
-              ],
-            ),
-            if (spentLabel != null) ...[
-              const SizedBox(height: 14),
-              Text(spentLabel, style: textTheme.headlineSmall),
-            ],
-            if (limit != null) ...[
-              const SizedBox(height: 4),
-              Text('Limit ${limit.label}'),
-            ],
-            if (progress != null) ...[
-              const SizedBox(height: 14),
-              BudgetProgressBar(state: state),
-            ],
-            if (usedPercentLabel != null || remaining != null) ...[
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  if (usedPercentLabel != null)
-                    Expanded(child: Text('$usedPercentLabel used')),
-                  if (remaining != null)
-                    Flexible(
-                      child: Text(
-                        'Left ${remaining.label}',
-                        textAlign: TextAlign.end,
-                      ),
-                    ),
-                ],
-              ),
-            ],
+            Text(title, style: textTheme.titleMedium),
+            const SizedBox(height: 14),
+            spentLabel == null
+                ? const Text('No spend reported')
+                : Text(spentLabel, style: textTheme.headlineSmall),
           ],
         ),
       ),
@@ -489,6 +504,8 @@ class _BudgetCards extends StatelessWidget {
       builder: (context, constraints) {
         if (constraints.maxWidth < 760) {
           return Column(
+            // A money-only card has no full-width row left to stretch it.
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               for (final card in cards) ...[
                 card,
@@ -514,49 +531,179 @@ class _BudgetCards extends StatelessWidget {
 
 class _ProviderDashboardSection {
   const _ProviderDashboardSection({
-    required this.account,
+    required this.provider,
+    required this.providerLabel,
+    required this.status,
+    required this.spent,
+    required this.flagged,
     required this.allowances,
+    required this.buckets,
+    required this.modelBreakdown,
   });
 
-  final ProviderSnapshot account;
+  final String provider;
+  final String providerLabel;
+  final ProviderStatus status;
+
+  /// What this family spent this month, or `null` when its accounts disagree on
+  /// a currency. Carried because ordering needs it and a section spans several
+  /// accounts, while spend is reported per account.
+  final Money? spent;
+
+  /// How many things this section is reporting as unhealthy: one per card that
+  /// deviates, or one for an account that deviates without a card of its own —
+  /// a platform connection reports spend, not meters, and its trouble would
+  /// otherwise have nowhere to show.
+  final int flagged;
   final List<AllowanceState> allowances;
+  final List<UsageBucket> buckets;
+  final List<ModelUsage> modelBreakdown;
 
-  bool get showUsageHistory => account.buckets.isNotEmpty;
+  bool get showUsageHistory => buckets.isNotEmpty;
 
-  bool get showModelUsage => account.modelBreakdown.isNotEmpty;
+  bool get showModelUsage => modelBreakdown.isNotEmpty;
 }
 
-/// Per-account dashboard groups in snapshot order (not cross-provider sums).
+/// One plaque per provider family (plan + platform share a header).
 ///
-/// Each provider plaque owns its allowances, usage history, and model breakdown.
+/// Claude/Cursor use one `ProviderKind` for both connections; grouping by kind
+/// keeps allowances, history, and model breakdown under a single accent bar.
 List<_ProviderDashboardSection> _providerDashboardSections(
-  List<ProviderSnapshot> accounts,
-  ConsumptionDisplayPreferences displayPreferences,
-) {
-  final sections = <_ProviderDashboardSection>[];
+  List<ProviderSnapshot> accounts, [
+  FrozenOrder? order,
+]) {
+  final grouped = <String, List<ProviderSnapshot>>{};
   for (final account in accounts) {
-    final allowances =
-        account.allowances
-            .where((allowance) => displayPreferences.allows(allowance.source))
-            .toList(growable: false);
-    final section = _ProviderDashboardSection(
-      account: account,
-      allowances: allowances,
-    );
-    if (allowances.isEmpty &&
-        !section.showUsageHistory &&
-        !section.showModelUsage) {
+    grouped
+        .putIfAbsent(account.provider, () => <ProviderSnapshot>[])
+        .add(account);
+  }
+
+  final sections = <_ProviderDashboardSection>[];
+  for (final group in grouped.values) {
+    final allowances = group
+        .expand((account) => account.allowances)
+        .toList(growable: false);
+    final buckets = group
+        .expand((account) => account.buckets)
+        .toList(growable: false);
+    final modelBreakdown = group
+        .expand((account) => account.modelBreakdown)
+        .toList(growable: false);
+    if (allowances.isEmpty && buckets.isEmpty && modelBreakdown.isEmpty) {
       continue;
     }
-    sections.add(section);
+    sections.add(
+      _ProviderDashboardSection(
+        provider: group.first.provider,
+        providerLabel: group.first.providerLabel,
+        spent: _monthSpend(group),
+        // A rollup covers what this section renders — its cards and the
+        // accounts behind them. Cards alone are not enough: an account can read
+        // healthy while a card crossed its own threshold, and it can read
+        // warning while reporting no card at all
+        // (PHONE_DASHBOARD_DESIGN.md).
+        status: worstProviderStatus([
+          ...group.map((account) => account.status),
+          ...allowances.map((allowance) => allowance.status),
+        ]),
+        flagged: group.fold(0, (total, account) {
+          final cards =
+              account.allowances
+                  .where((allowance) => allowance.status != ProviderStatus.ok)
+                  .length;
+          if (cards > 0) {
+            return total + cards;
+          }
+          return total + (account.status == ProviderStatus.ok ? 0 : 1);
+        }),
+        allowances: allowances,
+        buckets: buckets,
+        modelBreakdown: modelBreakdown,
+      ),
+    );
   }
+
+  sections.sort(_compareSections);
+  if (order == null) {
+    return sections;
+  }
+
+  // Held so a poll that only moves spend cannot slide a card out from under a
+  // finger; the ranking above decides again the moment a family's state moves.
+  final held = order.hold([for (final section in sections) _orderKey(section)]);
+  final position = {
+    for (var index = 0; index < held.length; index++) held[index]: index,
+  };
+  sections.sort(
+    (left, right) =>
+        position[_orderKey(left)]!.compareTo(position[_orderKey(right)]!),
+  );
   return sections;
 }
 
+/// What a held order is held against: the family, and the state it reports.
+///
+/// Spend is deliberately absent — it is the number this freezing exists to
+/// absorb. Status is deliberately present: a family falling into error climbs
+/// the poll it happens, rather than waiting for another family to appear.
+String _orderKey(_ProviderDashboardSection section) {
+  return '${section.provider} ${section.status.name}';
+}
+
+/// What needs action first, then what costs most, then a stable name.
+int _compareSections(
+  _ProviderDashboardSection left,
+  _ProviderDashboardSection right,
+) {
+  final statusCmp = compareByStatus(left.status, right.status);
+  if (statusCmp != 0) {
+    return statusCmp;
+  }
+  final spentCmp = compareBySpend(left.spent, right.spent);
+  if (spentCmp != 0) {
+    return spentCmp;
+  }
+  // The provider key, not the label: a copy edit must not move a card.
+  return left.provider.compareTo(right.provider);
+}
+
+/// This month's spend for a whole family, or `null` when its accounts report in
+/// different currencies — the core refuses to add those, and so does the order.
+Money? _monthSpend(List<ProviderSnapshot> group) {
+  Money? total;
+  for (final account in group) {
+    final spent = account.month.spent;
+    if (spent == null) {
+      continue;
+    }
+    if (total == null) {
+      total = spent;
+      continue;
+    }
+    if (total.currency != spent.currency) {
+      return null;
+    }
+    total = Money(
+      minorUnits: total.minorUnits + spent.minorUnits,
+      currency: total.currency,
+    );
+  }
+  return total;
+}
+
 class _ProviderDashboardSections extends StatelessWidget {
-  const _ProviderDashboardSections({required this.sections, this.footer});
+  const _ProviderDashboardSections({
+    required this.sections,
+    required this.sectionKeys,
+    this.footer,
+  });
 
   final List<_ProviderDashboardSection> sections;
+
+  /// Owned by the screen's state so a key survives rebuilds and stays a valid
+  /// scroll target between the tap and the frame that answers it.
+  final Map<String, GlobalKey> sectionKeys;
   final Widget? footer;
 
   @override
@@ -566,12 +713,12 @@ class _ProviderDashboardSections extends StatelessWidget {
       children: [
         for (final (index, section) in sections.indexed) ...[
           if (index > 0) const SizedBox(height: 20),
-          _ProviderDashboardSectionView(section: section),
+          KeyedSubtree(
+            key: sectionKeys.putIfAbsent(section.provider, GlobalKey.new),
+            child: _ProviderDashboardSectionView(section: section),
+          ),
         ],
-        if (footer case final footer?) ...[
-          const SizedBox(height: 12),
-          footer,
-        ],
+        if (footer case final footer?) ...[const SizedBox(height: 12), footer],
       ],
     );
   }
@@ -585,7 +732,11 @@ class _ProviderDashboardSectionView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final accent = providerFamilyColor(section.account.provider);
+    final chip = providerStatusChipColors(
+      Theme.of(context).colorScheme,
+      section.status,
+    );
+    final accent = providerFamilyColor(section.provider);
     final cards = [
       for (final allowance in section.allowances)
         AllowanceSummaryCard(allowance: allowance, accent: accent),
@@ -606,12 +757,21 @@ class _ProviderDashboardSectionView extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                section.account.providerLabel,
-                style: textTheme.titleMedium,
-              ),
+              child: Text(section.providerLabel, style: textTheme.titleMedium),
             ),
-            StatusPill(status: section.account.status),
+            // A rollup differs from a leaf in form: the card carries the glyph
+            // that states a fact, the header carries how many facts are below.
+            // The accent bar keeps naming the family, never the status.
+            if (section.flagged > 0)
+              Tooltip(
+                message: section.status.label,
+                triggerMode: TooltipTriggerMode.tap,
+                child: Badge(
+                  backgroundColor: chip.fill,
+                  textColor: chip.ink,
+                  label: Text('${section.flagged}'),
+                ),
+              ),
           ],
         ),
         if (cards.isNotEmpty) ...[
@@ -643,19 +803,13 @@ class _ProviderDashboardSectionView extends StatelessWidget {
         ],
         if (section.showUsageHistory) ...[
           const SizedBox(height: 12),
-          UsageHistoryChart(
-            buckets: section.account.buckets,
-            accent: accent,
-          ),
+          UsageHistoryChart(buckets: section.buckets, accent: accent),
         ],
         if (section.showModelUsage) ...[
           const SizedBox(height: 12),
           _SectionHeader(title: 'Model usage'),
           const SizedBox(height: 8),
-          _ModelUsagePanel(
-            models: section.account.modelBreakdown,
-            accent: accent,
-          ),
+          _ModelUsagePanel(models: section.modelBreakdown, accent: accent),
         ],
       ],
     );
@@ -819,16 +973,4 @@ class _EmptyAlertsCard extends StatelessWidget {
       ),
     );
   }
-}
-
-IconData _statusIcon(ProviderStatus status) {
-  return switch (status) {
-    ProviderStatus.ok => Icons.check_circle,
-    ProviderStatus.warning => Icons.warning_amber,
-    ProviderStatus.error => Icons.error,
-    ProviderStatus.rateLimited => Icons.speed,
-    ProviderStatus.authRequired => Icons.key,
-    ProviderStatus.stale => Icons.schedule,
-    ProviderStatus.unknown => Icons.help_outline,
-  };
 }

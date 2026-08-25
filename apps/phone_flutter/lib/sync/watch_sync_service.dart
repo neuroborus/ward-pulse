@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 
 import '../dashboard/dashboard_models.dart';
-import '../settings/consumption_display_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
 import 'manual_refresh_window.dart';
 import 'watch_credits_glance.dart';
@@ -12,9 +11,9 @@ import 'watch_credits_glance.dart';
 abstract interface class WatchSyncService {
   Future<void> sync(
     DashboardSnapshot snapshot,
-    ConsumptionDisplayPreferences displayPreferences,
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
+    bool mockDataMode = false,
   });
 
   /// Native → Dart: Wear Glance asked the phone to sync providers.
@@ -33,17 +32,17 @@ class MethodChannelWatchSyncService implements WatchSyncService {
   @override
   Future<void> sync(
     DashboardSnapshot snapshot,
-    ConsumptionDisplayPreferences displayPreferences,
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
+    bool mockDataMode = false,
   }) {
     return _channel.invokeMethod<void>(
       'syncWatchSummary',
       WatchDashboardSummaryPayload.fromSnapshot(
         snapshot,
-        displayPreferences,
         ringPreferences,
         manualRefreshAnchorAt: manualRefreshAnchorAt,
+        mockDataMode: mockDataMode,
       ).encode(),
     );
   }
@@ -74,47 +73,45 @@ class WatchDashboardSummaryPayload {
 
   factory WatchDashboardSummaryPayload.fromSnapshot(
     DashboardSnapshot snapshot,
-    ConsumptionDisplayPreferences displayPreferences,
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
     DateTime? clock,
+    bool mockDataMode = false,
   }) {
     final rings = orderWatchRingsForSurface(
       resolveWatchRings(snapshot, ringPreferences),
       snapshot: snapshot,
     );
-    final creditsGlance = resolveWatchCreditsGlance(
-      snapshot,
-      displayPreferences,
-    );
+    final creditsGlance = resolveWatchCreditsGlance(snapshot);
     final window = ManualRefreshWindow.fromLastSync(
       lastSyncAt: manualRefreshAnchorAt ?? snapshot.generatedAt,
       now: clock,
     );
+    final isLegacyMockProvider =
+        snapshot.accounts.isNotEmpty &&
+        snapshot.accounts.every((account) => account.provider == 'mock');
     return WatchDashboardSummaryPayload._({
-      'schemaVersion': 7,
-      'dataMode':
-          snapshot.accounts.isNotEmpty &&
-                  snapshot.accounts.every(
-                    (account) => account.provider == 'mock',
-                  )
-              ? 'mock'
-              : 'live',
+      'schemaVersion': 9,
+      'dataMode': mockDataMode || isLegacyMockProvider ? 'mock' : 'live',
       'generatedAt': snapshot.generatedAt.toUtc().toIso8601String(),
       'overallStatus': snapshot.overallStatus.wireName,
       'manualRefreshAllowed': window.allowed,
-      'manualRefreshAvailableAt':
-          window.availableAt?.toUtc().toIso8601String(),
+      'manualRefreshAvailableAt': window.availableAt?.toUtc().toIso8601String(),
       'rings': [
-        for (final ring in rings)
+        for (final (ring, split) in pairCursorPools(rings))
           {
             'id': ring.id,
-            'label': ring.label,
+            'label': _ringLabel(ring),
             // Round for glanceable surfaces — avoid float noise like 24.800000000000004.
             'usedPercent': double.parse(
               (ring.usedPercent ?? 0).toStringAsFixed(1),
             ),
             'status': ring.status.wireName,
+            // Budget strips read money, so it travels as structure — the
+            // currency code included, or Wear would have to assume one.
+            'spent': _moneyToJson(ring.spent),
+            'limit': _moneyToJson(ring.limit),
+            'split': split == null ? null : _splitToJson(split),
           },
       ],
       'creditsGlance': creditsGlance?.toJson(),
@@ -123,17 +120,16 @@ class WatchDashboardSummaryPayload {
       'allowances': [
         for (final account in snapshot.accounts)
           for (final allowance in account.allowances)
-            if (displayPreferences.allows(allowance.source))
-              {
-                'source': allowance.source.name,
-                // Disambiguate multi-provider Usage rows on Wear (no schema bump).
-                'label': '${account.providerLabel} · ${allowance.label}',
-                'usedPercent': allowance.usedPercent,
-                'remaining': _quantityToJson(allowance.remaining),
-                if (allowance.unlimited) 'unlimited': true,
-                'resetsAt': allowance.resetsAt?.toUtc().toIso8601String(),
-                'status': allowance.status.wireName,
-              },
+            {
+              'source': allowance.source.name,
+              // Disambiguate multi-provider Usage rows on Wear (no schema bump).
+              'label': '${account.providerLabel} · ${allowance.label}',
+              'usedPercent': allowance.usedPercent,
+              'remaining': _quantityToJson(allowance.remaining),
+              if (allowance.unlimited) 'unlimited': true,
+              'resetsAt': allowance.resetsAt?.toUtc().toIso8601String(),
+              'status': allowance.status.wireName,
+            },
       ],
       'providers': [
         for (final account in snapshot.accounts)
@@ -166,6 +162,22 @@ extension _ProviderStatusWireName on ProviderStatus {
       ProviderStatus.unknown => 'unknown',
     };
   }
+}
+
+/// Budget rings travel named (`Anthropic platform · Month`): the connection is
+/// the phone's vocabulary, and three bare `Month` rows read alike on Wear.
+/// Plan windows keep the pool name that Glance prefixes with its family.
+Map<String, Object?> _splitToJson(WatchRingMetric ring) {
+  return {
+    'id': ring.id,
+    'label': _ringLabel(ring),
+    'usedPercent': double.parse((ring.usedPercent ?? 0).toStringAsFixed(1)),
+    'status': ring.status.wireName,
+  };
+}
+
+String _ringLabel(WatchRingMetric ring) {
+  return ring.id.startsWith('budget.') ? ring.catalogTitle : ring.label;
 }
 
 Map<String, Object?> _budgetToJson(BudgetState budget) {

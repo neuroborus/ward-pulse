@@ -53,7 +53,9 @@ The Android ecosystem has four user-facing surfaces.
 Android phone app
    ↓
 Dashboard → Watchface → Widget → Providers → Settings
-(credentials / polling / alert rules stay in Settings; glance layout on Watchface + Widget tabs)
+(connection catalog + credentials + connection alert rules on Providers;
+ systemic prefs — polling, diagnostics, legal — on Settings;
+ glance layout on Watchface + Widget tabs)
 
 Phone home-screen widget
    ↓
@@ -68,8 +70,8 @@ WFF watch face
 Glanceable concentric remaining rings + tap target to open the Wear OS app
 ```
 
-The phone app is the primary product surface. It should feel like a compact analytics dashboard rather than a simple counter. Primary tab order (Phase 14 target; Watch display may
-still sit under Settings until then): Dashboard → Watchface → Widget → Providers → Settings.
+The phone app is the primary product surface. It should feel like a compact analytics dashboard rather than a simple counter. Primary tab order:
+Dashboard → Watchface → Widget → Providers → Settings.
 
 The phone widget is a launcher glance, not a second dashboard. It should answer the same
 pulse question as the watch face, with a **phone-native composition** (rectangular sizes,
@@ -184,6 +186,8 @@ ward-pulse/
     provider_account.schema.json
     usage_bucket.schema.json
     budget_state.schema.json
+    watch_dashboard_summary.schema.json
+    plan_recovery.schema.json
 
   brand/
     README.md                    # brand/trademark usage rules
@@ -522,43 +526,48 @@ About / legal
 ```
 
 Do **not** add a phone primary tab for Alerts. Active alerts stay on the Dashboard; alert
-**rules** live in Settings (see below). Wear keeps a compact Alerts detail screen for the
-latest computed list only — never rule editing on the watch.
+**rules** live on Providers, scoped to one connection each: a plan exposes usage windows, an
+organization key exposes spend against a limit the user sets. There are no global budget
+rules — a threshold must never fire because a different provider spent money. Wear keeps a compact Alerts detail screen for the latest computed list only — never
+rule editing on the watch.
 
 **Watchface** and **Widget** sit between Dashboard and Providers — Watchface first, then
 Widget. Surface configuration lives on those tabs, not under Settings.
 
-- **Watchface** — configure Wear / WFF ring slots, preview next watch payload (today’s
-  “Watch display” block moves here out of Settings).
+- **Watchface** — configure Wear / WFF ring slots and preview the next watch payload.
 - **Widget** — configure the phone home-screen widget metrics and preview (Phase 14).
-- **Settings** — credentials, polling, alert rules (connection + global budget thresholds),
-  diagnostics, legal — not glance surface layout.
+- **Providers** — full connection catalog (every plan/platform row, Connected or Not
+  connected), credentials / auth, **all** user alert thresholds (plan/purchased per
+  connection; Today/Week/Month on platform connections), the spend limits those budget
+  thresholds need — their own row entry, because a limit is a ceiling and not a rule —
+  and live status for synced accounts. Threshold UI speaks **% left**.
+- **Settings** — systemic only: global polling interval, diagnostics, data deletion,
+  legal, debug toggles — not connections, credentials, display surface toggles, alert
+  rules, glance layout, or a sixth Alerts tab.
 
 ### Home / Overview (Dashboard)
 
 Shows:
 
-- today spent vs daily limit;
-- week spent vs weekly limit;
-- month spent vs monthly limit if configured;
-- remaining budget;
+- today / week / month spend across connections — **money only**: a limit belongs to one
+  connection, so a sum of limits is a ceiling nobody set, and a percentage against it has no
+  owner (per-connection percentages live on the rings and in Providers);
 - additional credits if known;
 - overall provider status;
-- active alerts (computed; empty “No alerts” is valid until rules fire);
+- active alerts (from **user-configured** rules only; empty “No alerts” until rules fire);
 - last sync time.
 
 Example:
 
 ```text
 Today
-$12.40 / $50.00
-$37.60 remaining
-24% used
+$12.40
 
 Week
-$71.30 / $250.00
-Projected: $228.00
-Status: OK
+$71.30
+
+Month
+$212.10
 ```
 
 ### Charts
@@ -576,32 +585,36 @@ Charts should be useful before they are beautiful. The first implementation can 
 
 ### Providers
 
-Each provider account should show:
+Providers is the **connection hub**, not a read-only status list.
 
-- provider name;
-- account/workspace display name;
-- masked credential reference;
-- connection status;
-- last successful sync;
-- last error;
-- configured budgets;
-- supported metrics for that provider.
+It owns:
+
+- the full connection catalog (every plan/platform row in Not connected / Connected states);
+- credentials / auth entry for each connection (OAuth, session, API key — as today);
+- **all user-configured** alert thresholds:
+  - plan / purchased meters on plan rows (opt-in; no hard-coded cutoffs);
+  - Today / Week / Month spend budgets on organization-key rows, each a user-entered
+    limit plus its own threshold (providers do not report a budget). The limit is entered
+    through its own row action, not through the alert dialog — it is the ceiling every
+    percentage depends on, and a threshold without it can never fire;
+  - UI speaks **% left**; storage and Rust keep used%;
+- live status, last successful sync, last error, and supported metrics when connected.
+
+Rules can be prepared before the first successful sync because Not connected rows stay visible.
 
 ### Settings
 
-Settings should include:
+Settings is **systemic only** — no connection catalog, credentials, display toggles, or alerts:
 
 - global minimum polling interval;
-- per-provider enable/disable;
-- alert rules: connection-scoped thresholds on each catalog row, plus a global
-  Today / Week / Month budget warn-critical card (not duplicated per provider);
 - local-only diagnostics export;
 - data deletion;
 - legal disclaimer;
-- open-source license information.
+- open-source license information;
+- debug-only toggles (e.g. Mock data) when present.
 
 Do **not** keep Watchface or Widget layout controls in Settings once the Watchface / Widget
-tabs exist.
+tabs exist. Do **not** keep connection rows or alert rules in Settings — they live on Providers.
 
 #### Alerts ownership (phone)
 
@@ -609,17 +622,22 @@ Split runtime output from configuration:
 
 | Concern | Surface | Notes |
 |---------|---------|--------|
-| Active alerts | Dashboard alerts panel (and Wear Alerts detail) | Computed from the latest snapshot + rules |
-| Alert rules / thresholds | Settings, on connection rows (or a sub-screen from them) | Editable whether or not that connection is currently synced |
-| Global budget warn/critical | Settings card (Today / Week / Month) | Not duplicated onto every provider row |
+| Active alerts | Dashboard alerts panel (and Wear Alerts detail) | Only rules the user enabled, evaluated against the latest snapshot |
+| Plan / purchased alert rules | **Providers** (plan catalog rows) | One opt-in threshold per meter as **% left** |
+| Today / Week / Month budget **limits** | **Providers**, its own per-connection entry | The ceiling itself, not an alert — it is what makes a percentage exist at all. Platform / organization connections only; not under Settings and not inside the alert dialog |
+| Today / Week / Month budget **alert rules** | **Providers** (alert dialog) | Same remaining-% editor; a period stays disabled until that connection has a limit for it |
 
-Providers shows connected accounts and may surface status; it is **not** the place to create
-rules (an account row may be absent until the first successful sync). The Settings connection
-catalog already lists every plan/platform row in Not connected / Connected states, so rules
-can be prepared before credentials exist.
+**Product rule:** alerts are opt-in. Provider status chrome (`Warning` / `RateLimited` from
+reported utilization) must **not** invent dashboard alerts by itself. Empty “No alerts” is the
+correct default until the user configures at least one rule.
 
-Rust remains the owner of alert evaluation (`calculate_alerts` / budget helpers). Platform
-shells only persist rule preferences and render results.
+Rust remains the owner of alert evaluation (`calculate_alerts(snapshot, settings)` /
+`apply_alert_settings`, exposed to the phone via `ward_pulse_apply_alert_settings_result_json`)
+using the persisted user rules. Platform shells persist rule preferences and render results.
+Do not reintroduce automatic alerts from allowance/budget status alone.
+
+`build_dashboard_snapshot` always emits an empty alerts list; the phone host applies stored
+threshold prefs after each load (and on prefs change) before Dashboard / Wear sync.
 
 ---
 
@@ -629,47 +647,19 @@ The Wear OS app is a compact dashboard, not a full settings app.
 
 It should be built with Kotlin and Compose for Wear OS.
 
-### MVP screens
+### Surfaces
 
 ```text
-Today
-Week
-Providers
-Alerts
-Last sync
+Glance       — home page: how much is left
+Plan windows — second page: when each one comes back
+Alerts       — reached from the Glance pill
 ```
 
-The implemented app additionally has a Usage screen for plan and purchased allowances.
-Phase 13 puts configurable percent rings on the **watch face**; the Wear **app** home Glance is
-the locked text legend (`WEAR_GLANCE_DESIGN.md`) that maps face colors to providers, with
-per-metric detail screens kept secondary.
-
-### Today screen
-
-```text
-Today
-$12.40 / $50
-24% used
-$37.60 left
-OK
-```
-
-### Week screen
-
-```text
-Week
-$71 / $250
-Projected $228
-Normal
-```
-
-### Providers screen
-
-```text
-Codex   $8.10 OK
-Claude  $2.80 OK
-Cursor  68%  Warn
-```
+The MVP screens (Today, Week, Providers, Last sync, and an added Usage list) were replaced in
+Phase 17 by the surfaces above. Phase 13 puts configurable percent rings on the **watch face**
+and makes the app home the locked text legend (`WEAR_GLANCE_DESIGN.md`) that maps face colors to
+providers; the page beside it answers what the legend cannot, and its rules live in
+`apps/wear_android/README.md`.
 
 ### Alerts screen
 
@@ -682,7 +672,7 @@ Updated 4m ago
 ```
 
 Empty list is valid: show a short “No active alerts” state. Rule configuration stays on the
-phone Settings connection catalog / budget thresholds card.
+phone: every threshold is connection-scoped and lives on **Providers**.
 
 ### Wear OS rules
 
@@ -761,9 +751,15 @@ compact Rust `WatchSummary` view model. Monetary values use integer minor units 
 currency codes rather than presentation strings. The watch payload excludes account IDs,
 credentials, prompts, and raw provider data. Version 3 adds an explicit live/mock data mode and
 only the plan/purchased allowances selected by the phone display preference. Mock data is
-available only in debug builds and must be enabled explicitly on the phone. Phase 13 plans
+available only in debug builds and must be enabled explicitly on the phone. The debug toggle
+loads a seeded multi-provider demo dashboard (OpenAI / Codex / Claude / Cursor fixtures) that
+reshuffles utilization when Mock data is toggled or the phone refreshes (automatic sync keeps the
+current scenario); the Phase 1 single `mock` provider golden remains for
+CLI and FFI regression only. Phase 13 plans
 schema version 4, which replaces the preference-filtered allowance list with explicitly
-selected ring entries.
+selected ring entries. A split band has its own sanitized example,
+`fixtures/snapshots/watch_dashboard_summary_paired.json`: the phone asserts its whole payload
+against that file and Wear parses the same file, so a renamed key cannot pass both sides.
 
 ---
 
@@ -861,7 +857,7 @@ hard minimum across supported connections, rounded up; its upper bound is 60 min
 Undocumented contracts get conservative floors rather than optimistic ones. The per-provider
 clamp `effective_interval = max(user_setting, provider_minimum)` still applies. Freshness
 guidance does not clamp the cadence; it is surfaced as a visible note on the affected
-connection rows in Settings instead.
+connection rows on Providers instead.
 
 Detailed constants and their sources are defined in Phase 11.
 
@@ -934,7 +930,7 @@ presentation should be homogeneous:
 
 One authorization per connection kind is unavoidable: for every provider the subscription data
 and the organization reporting live behind different credentials and different endpoints. A
-single provider section in Settings groups both connections; neither implies the other.
+single provider section on Providers groups both connections; neither implies the other.
 
 ```text
 Provider   Plan connection                          Platform connection
@@ -1357,7 +1353,8 @@ automated Rust, Flutter, FFI, fixture, pagination, retry, and credential-masking
 Remaining acceptance:
 
 ```text
-save a valid OpenAI Admin API key in Settings on an Android phone or emulator
+save a valid OpenAI Admin API key on the phone connection catalog (Providers tab)
+  on an Android phone or emulator
 refresh and confirm that OpenAI today/week/month cost plus usage/model data are rendered
 confirm the saved key remains masked and no sensitive values appear in logcat
 ```
@@ -1370,7 +1367,8 @@ no desktop process, local server, or adb reverse dependency remains
 Rust normalizes plan windows, purchased credits, and daily token buckets without fake money values
 plan, purchased usage, and platform spend are visible by default; at least one surface stays on
 the same filtered allowance summary is propagated to Wear OS through schema version 3
-Android end-to-end acceptance remains: sign in from Settings and verify the live phone/watch UI
+Android end-to-end acceptance remains: sign in from the Providers connection catalog
+and verify the live phone/watch UI
 ```
 
 ### Phase 8 — MVP hardening
@@ -1416,12 +1414,13 @@ phone and watch flows survive sync failures
 Status: completed as of 2026-07-24.
 
 Rationale: Codex sign-in and the OpenAI Platform Admin key are one product relationship with
-OpenAI, but Settings presents them as two unrelated rows. Research in section 15 shows every
-provider follows the same dual shape, so Settings should group connections by provider.
+OpenAI, but Settings then presented them as two unrelated rows. Research in section 15 shows
+every provider follows the same dual shape, so connections were grouped by provider (now on
+the Providers tab).
 
 Deliverables:
 
-- one Settings section per provider: OpenAI, Anthropic, Cursor;
+- one provider section per provider: OpenAI, Anthropic, Cursor;
 - the OpenAI section contains both connections: Codex subscription (device-code OAuth) and
   Platform reporting (Admin API key);
 - a shared connection row component: connection kind, status, masked credential,
@@ -1438,12 +1437,16 @@ Deliverables:
 Acceptance:
 
 ```text
-Settings shows one OpenAI section containing the Codex and Platform rows
+Providers shows one OpenAI section containing the Codex and Platform rows
 an Admin API key can be saved with and without a custom label
-the label appears in Settings and provider details instead of the generic title
+the label appears on the Providers connection row instead of the generic title
 removing a credential also removes its label
 existing stored credentials survive the regrouping without re-entry
 ```
+
+Note (2026-07-27): the connection catalog lives on the **Providers** tab; Settings is
+systemic only. The Phase 9 grouping shape (one section per provider, plan + platform rows)
+is preserved.
 
 ### Phase 10 — capability-adaptive dashboard
 
@@ -1572,11 +1575,28 @@ no tokens, cookies, or raw payloads appear in logs
 
 ### Phase 13 — configurable watch rings
 
-Status: in progress as of 2026-07-25.
+Status: complete as of 2026-08-17. Every acceptance line below has something holding it, and
+the walk that established this named which:
+
+- **tests** for the payload and the Glance models — surface order, exhausted layers, and a
+  deselected ring never resolving again (`watch_ring_preferences_test.dart`, which every sync
+  builds its payload through), the manual-refresh window from the `PollCadence` floor and a
+  pair packed into one ring (`watch_sync_service_test.dart`), the seven refresh states, credits,
+  pair rows and label wording (`GlanceModelsTest.kt`);
+- **generated art plus a drift gate** for the face: `watchface.xml` and its ring-type drawables
+  come from `render-watchface.mjs`, and `just check-watchface` fails on drift;
+- **a look on the device** for the two nobody can assert from a host: that the Glance reads as a
+  legend rather than a face clone, and that ambient stays readable with rings visible.
+
+The second kind is the weak one, and it showed: on 2026-08-17 the Glance had drifted from its own
+review art by a row gap nobody's gate compares. The board set now carries the four-row ceiling
+(`glance-legend-full.svg`) so the crowded case is reviewable at all.
 
 Rationale: watch space is limited and must never show `Unknown` filler. Plan/allowance data
 across connected providers is percentage-first, so Wear and WFF standardize on concentric
-percent rings. This is not “always show every provider”: the user picks up to four metrics;
+percent rings. This is not “always show every provider”: the user picks up to three metrics;
+plan/budget percent only — purchased meters (Extra usage, on-demand, Codex credits) are never
+ring candidates (phone cards; alerts only via user thresholds);
 unselected or unavailable ones simply do not render. Face visual contract:
 `docs/product/WATCH_RING_DESIGN.md`. Wear **app** Glance (tile home) visual contract:
 `docs/product/WEAR_GLANCE_DESIGN.md` (text legend — not a face clone). Layout ownership under each app's
@@ -1585,28 +1605,38 @@ unselected or unavailable ones simply do not render. Face visual contract:
 Deliverables:
 
 - OpenPencil sources under `apps/watchface_wff/design/` and `apps/wear_android/design/` for
-  1–4 concentric layers on round and square plus ambient (WFF art uses the same concentric
-  language as Wear — not the old side-by-side `RING 1` / `RING 2` wireframe);
-- a ring binds to exactly one metric (provider plan window, purchased/credit percent when it
-  has a %, or local budget percent);
-- layer color is primarily **by provider/metric family** (OpenAI/Codex green, Anthropic
-  orange, Cursor teal, local budget blue), with status (warn/error) as a modulation;
+  1–3 concentric layers plus ambient (WFF art uses the same concentric language as Wear — not
+  the old side-by-side `RING 1` / `RING 2` wireframe); one board serves both shapes, since WFF
+  renders one 450-unit canvas and a square watch shows the same circle with its corners left
+  to the background;
+- a ring binds to exactly one metric of exactly one connection (provider **plan** window with a
+  %, or that connection's local budget percent for one period — never purchased Extra usage /
+  on-demand / credit meters, and never a sum across connections). One exception, added by the
+  split-band revision 2026-08-13: a Cursor plan's two pools may share a single band, split
+  lengthwise, and still cost one of the three ring slots the user picks (on the face they cost
+  two complications, and the outer halves of all three bands share one `ComplicationSlot`);
+- layer color is primarily **by provider family**, with status (warn/error) as a modulation; a
+  budget ring takes its connection's family color, and a neutral grey survives only as the
+  fallback for an unresolved family. The palette itself lives in `WATCH_RING_DESIGN.md`, which
+  since 2026-08-13 gives the two Cursor pools colors of their own;
 - **arc = remaining**: the colored sweep shrinks as the limit is consumed (not a “used”
-  fill that grows toward full);
+  fill that grows toward full); melt is clockwise from 12 (usage gap advances like a
+  clock hand; remaining ends at 12);
 - **sort by remaining**: the tightest remaining plan limit is innermost / nearest center;
   equal plan percents break ties by credit request-runway (internal credits-per-request
   constants; UI still shows credits only). Exhausted metrics (`usedPercent >= 100` or
   rate-limited empty) are omitted rather than drawn as empty/dead rings;
-- the phone **Watchface** tab selects up to four ring slots (not Settings); metrics from
+- the phone **Watchface** tab selects up to three ring slots (not Settings); metrics from
   unconnected providers stay visible but disabled with the same `?` help as the dashboard;
-  until the tab lands, the existing Settings “Watch display” block is the transitional UI;
+  purchased allowances are excluded from the ring catalog (phone cards only; alerts only when
+  the user configures thresholds for those meters on Providers);
 - no time-based rotation in the first iteration: simultaneous static layers are battery-safe;
 - aperture: large time as hero; upper inner rim reserved for future weather; lower chord uses
   short per-family strips (`%`, remaining credits, or `% · credits`) — see `WATCH_RING_DESIGN.md`;
-- optional remaining purchased credits on the center (first) strip when reported; credits-only
-  mode has no plan arcs; never LLM `TOK` counts on the face;
-- schema `creditsGlance` (v6) feeds the compact remaining-credits aggregate for strip TITLE /
-  credits-only — not LLM token counts;
+- remaining purchased credits on each strip for that provider family from watch `allowances`
+  (same per-provider lookup as Glance; compact `% · 320` on the face); never LLM `TOK`;
+- schema `creditsGlance` (v6) remains for credits-only faces (no plan rings) — not the
+  per-strip credit source when plan rings exist;
 - watch summary schema version 7: ordered selected ring entries (stable id, short label,
   percent, status) plus optional `creditsGlance`, phone-owned `manualRefreshAllowed` /
   `manualRefreshAvailableAt`, without credentials, account ids, or raw provider payloads;
@@ -1617,13 +1647,19 @@ Deliverables:
 Acceptance:
 
 ```text
-WATCH_RING_DESIGN.md baseline locked 2026-07-25 (time hero, remaining arcs, sunk strips)
+WATCH_RING_DESIGN.md baseline locked 2026-07-25 (time hero, remaining arcs, sunk strips);
+  melt/strip-accent revision 2026-07-27 (clockwise-from-12 melt; ColorRamp strip accents);
+  band-width 2026-08-02; per-connection budget 2026-08-08; budget-strip 2026-08-09;
+  ring-type 2026-08-11
 WEAR_GLANCE_DESIGN.md baseline locked 2026-07-26 (legend rows, OK/!OK refresh, Alerts pill)
 review SVGs/PNGs match those baselines (face: preview-3-plan-credits; Glance: preview-glance-legend-3)
-schema version 7 validates and sanitized fixtures stay current
+watchface.xml and its ring-type drawables are generated (render-watchface.mjs; check-watchface fails on XML drift)
+the watch payload validates against its schema (version 9 since the split band) and sanitized fixtures stay current
 watch surfaces show only configured, available, non-exhausted rings
-arc length = remaining; inner/center layer is the tightest remaining among selected rings
-credits strip / face glance only when purchased credits remain and display prefs allow them
+arc length = remaining; melt clockwise from 12; inner/center = tightest remaining
+a budget ring's band repeats its period as cut-out type (`D` / `7D` / `M`); plan rings carry none
+credits per provider family on face strips (`% · credits`) from allowances, like Glance;
+  creditsGlance for credits-only faces; never LLM TOK
 App Glance credits are per provider with an explicit credits label (not a footer sum)
 Glance refresh: OK/!OK inside dual-arrow glyph; optional muted problem detail below plate
 cadence cooldown = gray OK + disabled (no detail); provider rate limit = gray !OK + Rate limited + disabled
@@ -1639,31 +1675,44 @@ Landed so far:
 
 ```text
 schema version 4 + sanitized watch fixture; schema v5 tokenGlance → v6 creditsGlance → v7 manual refresh flags
-phone Watch display prefs, payload rings, and Settings UI (transitional — moves to Watchface tab)
+phone Watchface tab owns ring-slot prefs + payload preview; Settings is systemic only
 Watch ring visual baseline locked (WATCH_RING_DESIGN.md + render-watch-ring-designs.mjs)
 Wear Glance legend baseline locked 2026-07-26 (WEAR_GLANCE_DESIGN.md + glance-legend-* review art)
 Phone payload sorts tightest-remaining first (center/inner on face) and omits exhausted layers
 Wear Compose UsageRings: remaining arcs + sunk family strips (time stays on system/WFF)
-WFF v2 concentric remaining arcs (WeightedStroke + ColorRamp family colors) + sunk credits strip
-Center strip TEXT carries the full label (`100% · 500`) — WFF TITLE Conditions are unreliable
+WFF v2 concentric remaining arcs (WeightedStroke + ColorRamp) + sunk `%` / credits strips
+Strip TEXT carries the full label (`100% · 500`); accents via RANGED_VALUE ColorRamp
+Credits per provider family on face strips from allowances (same as Glance); creditsGlance for credits-only
+Clockwise-from-12 remaining melt (Transform startAngle; review art regenerated 2026-07-27)
 Wear Glance Compose text legend landed (GlanceLegendPage; watch→phone refresh request)
+Ring band widened to a measured 20.2 units at a 24-unit pitch, strip stack re-spaced (2026-08-07)
+Budget rings key by connection and take its family color; summed Today/Week/Month rings retired (2026-08-09)
+Budget strips read spend of limit (`$12.34/100`); the aggregate budget percentage is gone (2026-08-09)
+watchface.xml generated from tools/render-watchface.mjs (2026-08-10)
+Budget ring bands repeat their period as baked cut-out type from generated drawables, four sweeps broken on the diagonals (2026-08-11)
+A Cursor plan's two pools share one band: outer/inner halves, one complication slot for all three bands, schema v9 (2026-08-14 → 2026-08-16)
+Glance shows a pair as two adjacent rows, own pool first; the face keeps it one band (2026-08-15)
+Glance rows sit on the art's 54 pitch and keep 12 clear of the Alerts pill — four rows is the ceiling (2026-08-17)
 ```
 
 
 Future (not Phase 13 acceptance — product direction):
 
 ```text
-Phase 13 / locked baseline stays at up to four Watchface ring slots (watchRingSlotCount = 4).
+Phase 13 / locked baseline: up to three Watchface ring slots (watchRingSlotCount = 3);
+  purchased meters are not rings (phone cards; alerts only via user thresholds).
 Later: possibly up to three profiles/accounts for the same provider on one device.
-When multi-profile lands, same-provider rings need hatch/pattern as well as family color,
-and the face hard cap should tighten from four rings to three (update WATCH_RING_DESIGN,
-prefs, schema guidance, and acceptance in the same change).
+When multi-profile lands, same-provider rings need hatch/pattern as well as family color
+  (keep the three-ring face cap unless a later design revision raises it).
 ```
 
 ### Phase 14 — Watchface / Widget tabs and phone home-screen widget
 
-Status: planned (after Phase 13 device acceptance; may run in parallel with Phase 11
-headless polling once the watch ring baseline is closed).
+Status: largely landed (2026-07-27). Primary nav, Watchface + Widget tabs, locked
+`PHONE_WIDGET_DESIGN.md` review art, and the Android App Widget surface are in tree.
+Large (6-slot) prefs unlocked; launcher hugs complete rows/columns (1–6 by height;
+credits→label drop by width); Claude windows stay expanded on the phone widget;
+exhausted pools render as `0% left`.
 
 Rationale: glance configuration is a first-class product surface, not a Settings footnote.
 Watchface and Widget each get a primary tab between Dashboard and Providers. The phone
@@ -1680,47 +1729,52 @@ Primary tab order:
 Dashboard → Watchface → Widget → Providers → Settings
 ```
 
-- Move today’s Settings “Watch display” block onto the **Watchface** tab (slot picker +
-  payload preview); remove it from Settings.
-- Add the **Widget** tab for widget metric selection + preview; prefs are **independent** of
-  Watchface prefs so phone and watch can differ.
-- Settings keeps credentials, polling, alert rules (connection + global budget thresholds),
-  diagnostics, and legal only — not Watchface/Widget layout, and not a sixth Alerts tab.
+- **Watchface** owns Wear / WFF ring slots and payload preview (moved off Settings).
+- **Widget** owns phone home-widget metric slots, payload preview, and the Android App Widget
+  (`PHONE_WIDGET_DESIGN.md` locked; prefs independent of Watchface).
+- **Providers** already owns the connection catalog, credentials, and connection alert
+  thresholds.
+- Settings stays **systemic only**: global polling interval, diagnostics, data deletion,
+  legal — not connections, not credentials, not alert rules, not Watchface/Widget
+  layout, and not a sixth Alerts tab.
 
 #### Widget surface
 
-Visual contract (to lock before implementation): `docs/product/PHONE_WIDGET_DESIGN.md`
-(create in this phase; OpenPencil / SVG review art under `apps/phone_flutter/design/` per
-`docs/DESIGN_ASSETS.md`). Do not copy `WATCH_RING_DESIGN.md` layouts into the widget.
+Locked visual contract: `docs/product/PHONE_WIDGET_DESIGN.md` (review art under
+`apps/phone_flutter/design/`). Do not copy `WATCH_RING_DESIGN.md` layouts into the widget.
 
 Deliverables:
 
-- Android App Widget hosted by the Flutter phone shell (Glance / RemoteViews / conventional
-  Flutter-home-widget bridge — pick the smallest stack that supports the locked sizes);
+- Android App Widget hosted by the Flutter phone shell (`home_widget` + RemoteViews);
 - Widget tab selects which metrics appear (same catalog idea as Watchface: provider plan
-  windows, purchased/credit % when available, local budgets);
-- small / medium / optional large size variants defined in `PHONE_WIDGET_DESIGN.md` (exact
-  slot counts per size land with the design lock — keep denser than the watch, still
-  glanceable);
-- render only configured, available, non-exhausted metrics; omit empty slots rather than
-  inventing `Unknown` filler;
-- **remaining** language for percent metrics (same meaning as watch rings); family colors
-  from the shared palette (OpenAI/Codex green, Anthropic orange, Cursor teal, budget blue);
+  windows, purchased/credit % when available, per-connection local budgets);
+- small→tall resize shows 1–6 complete column-rows by allocated height (olive card hugs
+  rows/columns; width drops credits→label→%); day/night chrome + overlay face watermark;
+  prefs cap `phoneWidgetSlotCount = 6`; Claude windows stay expanded; exhausted pools as
+  `0% left`; Glance-style credits end-aligned (label centered);
+- render only configured, available metrics (exhausted stay as `0% left`); omit empty
+  slots rather than inventing `Unknown` filler;
+- **remaining** language for percent metrics (same meaning as watch rings); family colors from
+  the shared palette in `WATCH_RING_DESIGN.md`, with a budget row taking its connection's family
+  color;
 - update after provider sync / scheduled refresh without opening the full app; stale state
   is explicit when the last successful dashboard is too old;
-- tap opens the phone app (Dashboard or the tapped metric’s provider detail when practical);
+- tap opens the phone app (Dashboard);
 - no credentials, account ids, or raw provider payloads on the widget surface or in widget
   logs;
-- widget tests + emulator smoke for at least one size; sanitized preview fixtures for review art.
+- widget payload unit tests; emulator smoke for at least one size; review art in
+  `apps/phone_flutter/design/`.
 
 Acceptance:
 
 ```text
 primary nav is Dashboard → Watchface → Widget → Providers → Settings
 Watchface tab owns ring-slot prefs; Settings no longer hosts Watch display
+Providers owns connection catalog, credentials, and connection alert thresholds
+Settings is systemic only (polling, diagnostics, legal)
 Widget tab owns widget prefs independently of Watchface
-PHONE_WIDGET_DESIGN.md baseline locked with review art for the primary sizes
-widget shows only configured, available, non-exhausted metrics
+PHONE_WIDGET_DESIGN.md baseline locked with review art for small/medium
+widget shows configured available metrics (exhausted as 0% left); hugs complete rows/columns
 remaining-% / family colors match the product palette
 tap opens the phone app; no credential UI on the widget
 stale data is labeled after the freshness window
@@ -1735,6 +1789,292 @@ copying the concentric watch-face layout onto the phone
 burying Watchface / Widget config under Settings
 iOS widgets
 multi-profile hatch patterns (same future note as Phase 13)
+```
+
+### Phase 15 — plan recovery notifications
+
+Status: implementation complete; watch delivery unverified as of 2026-08-17.
+
+Everything but one acceptance line is covered by tests: the edge in the Rust core, the phone's
+memory of what was spent, the notification and what it may say, the wake booked from the reset
+instant, and the Settings switch with its permission ask. The open line is **"the notification
+reaches a paired watch exactly once"**. It was attempted on 2026-08-17 and could not be measured:
+on the two local AVDs nothing bridges from phone to watch at all — not this notification and not
+a control posted with `cmd notification post` — so a zero on the watch says nothing about
+bridging. Measuring it needs a phone paired through the Wear OS companion app; only then does the
+`notificationBridgeMode` question have an answer worth writing down.
+
+Rationale: an exhausted plan window is the one state the user is actively waiting to leave.
+Today the product says nothing when it ends — the ring simply reappears after the next poll,
+and the user learns it by opening the app they could not use. A recovery is worth an
+interruption; nothing else in the product is.
+
+**A recovery is an event, not an alert.** Alerts are user-configured thresholds that stay true
+while the condition holds and are listed on the Dashboard and counted on Wear. A recovery is an
+edge — `usedPercent >= 100` yesterday, usable now — that happens once, has no steady state, and
+needs no rule to configure. It must not enter the alerts list, must not be counted by Wear's
+`Alerts: N`, and must not bring back a phone Alerts tab.
+
+Deliverables:
+
+- the edge is computed in Rust from the windows the phone remembered as spent and the new
+  snapshot, so the rule stays deterministic and testable and the shells stay transport-only;
+- it fires only for a window that was **exhausted** — one that merely rolls over while it still
+  had headroom is not news. A reset instant is not required to fire: a provider that does not
+  say when a window rolls still has real recoveries, they simply arrive with the next poll
+  instead of a wake booked for the instant;
+- delivery is **scheduled from `AllowanceState.resets_at`**, not discovered by polling: the
+  reset instant is already modeled and all three plan families fill it in — Claude, Codex and
+  Cursor — while platform connections carry billing reports with no window to reset. So the
+  feature is not Claude-only, and no adapter needs new data. The refresh cadence (5–60
+  minutes, 5-minute floor) would make a polled notification late by up to an interval. The next
+  poll confirms, and a moved window reschedules or cancels;
+- notifications are **on by default** with one systemic switch in Settings (not a per-connection
+  rule on Providers — there is no threshold to configure). Android 13+ still governs
+  `POST_NOTIFICATIONS` at the OS level, so "on by default" means the app asks, not that it
+  bypasses;
+- the watch surface is **not** free: phone and Wear intentionally share the `app.wardpulse`
+  application id, and Wear suppresses bridging for an app it already carries on the assumption
+  that the watch app posts its own. So the watch side is a decision — post from the Wear app,
+  or set the notification bridging mode — and it can only be settled by watching it happen, on a
+  phone paired through the Wear OS companion app. Two AVDs on `adb` are not that pair: they carry
+  the Data Layer this product already uses and bridge no notifications at all;
+- plan and allowance windows only in the first iteration. A local budget rolls on the user's own
+  calendar rather than a provider clock, and whether that deserves the same interruption is a
+  separate question.
+
+Decided 2026-08-16, on the three questions the deliverables left open — all three answered by
+what the repository already carries:
+
+- **the notification is posted through `flutter_local_notifications`**, revised 2026-08-17. The
+  first answer was to post from the Android host over a method channel, on the grounds that a
+  dependency costs more than a channel and one `notify`. That was wrong about where the code
+  runs: an app-level channel is registered in `MainActivity.configureFlutterEngine`, so it
+  exists only in the Activity's engine. The wake that matters here fires with the app closed, in
+  the WorkManager background isolate, where `DartPluginRegistrant` registers pub plugins and
+  nothing else — a channel call from there raises `MissingPluginException`. A plugin is the
+  conventional way to reach the notification manager from that isolate, which is what the
+  repository's "conventional and clearly justified" exception is for;
+- **it is scheduled with `workmanager`**, already in the tree, as a one-off task delayed to
+  `resets_at`. An exact alarm is not available in practice: `SCHEDULE_EXACT_ALARM` is granted to
+  alarm and calendar apps, which this is not. Firing inside the Doze window is what "scheduled
+  from the reset instant rather than discovered by polling" means here, and the poll that runs
+  on waking is what confirms the recovery, reschedules a moved window, or cancels it;
+- **the watch receives the phone's notification by bridging**, rather than posting its own. A
+  second notifier on Wear is new code and a duplicate the moment bridging is on. The lever is
+  `com.google.android.wearable.notificationBridgeMode`, and it lives in the **Wear manifest**,
+  beside the `standalone` key already there — the phone manifest has no say. Android documents
+  bridging as the default and `NO_BRIDGING` as the way to switch it off, but does not document
+  the case this app is in, where phone and watch share `app.wardpulse`. So the deliverable is
+  first an observation on a companion-paired phone and only then a declaration: nothing if it
+  already arrives once, `NO_BRIDGING` if it arrives twice.
+
+The phone must also **persist which windows were spent**: the edge needs a past, and the process
+does not survive between polls. Keys, not whole snapshots — phone preferences live in
+platform-secure storage beside credentials, and a few window ids belong there in a way that
+kilobytes of usage data do not.
+
+Acceptance:
+
+```text
+a window crossing exhausted → usable notifies exactly once per crossing
+a window that was never exhausted notifies never
+a spent window books its wake from the reset instant, never sooner than the poll floor,
+  and none at all once that instant is behind and the provider still reads it spent
+a reset instant that moves reschedules; a disconnected provider cancels
+the recovery is absent from the Dashboard alerts list and from Wear's Alerts count
+the notification reaches a paired watch exactly once — not twice, not never
+the switch is in Settings, is on by default, and survives reinstall of the widget/watch surfaces
+no notification carries credentials, account ids, or raw provider payloads
+```
+
+Open question — a marker on the watch face:
+
+```text
+A filled family-colored dot in the upper aperture would say "this one is back" without the
+phone. Three things have to be settled before it can be drawn, and all three touch a locked
+baseline: WATCH_RING_DESIGN.md reserves the upper inner rim for a future weather glance and
+forbids placeholder chrome; a dot needs its own data channel (a complication slot) and a
+lifetime, since nothing on the face expires by itself; and one dot cannot carry two families
+when two plans recover together. Until those are answered the face already says it in its own
+language — an exhausted ring is omitted, so a recovered one reappears at 100% on the next sync.
+A marker lands only with a WATCH_RING_DESIGN.md revision and a schema field to carry it.
+```
+
+Non-goals for this phase:
+
+```text
+turning a recovery into an alert rule, a threshold, or an Alerts tab entry
+notifying on every window roll-over regardless of exhaustion
+a server, push service, or any inbound channel — scheduling is local to the phone
+desktop agent state (whether a coding agent is waiting on the user) — different sensor,
+  different transport, not this phase
+```
+
+### Phase 16 — one declared order for the phone tabs
+
+Status: completed as of 2026-08-16. Phone shells only; watch and widget **surface** order is
+locked by Phase 13 and is not touched here.
+
+Rationale: the phone answers "in what order do providers appear" three different ways today,
+and one of the three was never decided by anyone. Providers renders the catalog in enum order
+(`ProviderFamily { openai, anthropic, cursor }` × `ConnectionKind { plan, platform }`), which is
+repository history rather than meaning. The Dashboard has no declared order at all:
+`_providerDashboardSections` groups accounts into a `LinkedHashMap`, so `grouped.values` returns
+insertion order — which is the order the snapshot arrived in, which is the order
+`buildLiveProviderStack` chains its `connect(fallback: …)` links. Rewiring that chain for
+readability silently reorders the user's main screen, and no test holds it.
+
+The value being bought is **stability**: a dashboard opened ten times a day is fast because the
+card is where it was last time. So order by keys that change rarely, and let position move only
+when something real changed.
+
+Deliverables:
+
+- one ordering function per surface in the phone shell, declared and covered by tests — no
+  surface may inherit its order from assembly or from a map's insertion order;
+- composite comparators, matched to what each tab is for:
+
+| Tab | Its job | Keys, in order |
+| --- | --- | --- |
+| Dashboard | watching | needs action → usage over the period → alphabetical |
+| Providers | managing | connected → needs action → alphabetical |
+| Watchface / Widget | picking metrics | selectable → alphabetical |
+
+The two pickers already group before they sort: since 2026-08-16 both list their rows under a
+heading per kind of limit (plan usage, platform limits) and a sub-heading per connection
+(`groupMetricCatalog`). Ordering therefore has two questions to answer, not one — where a
+connection sits among its peers, and where its rows sit inside it — and the second one is
+already answered for budgets by the period order the catalog builds.
+
+- **"needs action" means status**, not percentage — and it is read off the scale that already
+  exists: `ProviderStatus::severity` (`Ok` 1 → `Error` 7) with its Dart mirror in
+  `provider_status_severity.dart`. Sort by that rank descending; do **not** enumerate a subset
+  here. A hand-written list of "the bad ones" is how the product ended up with five disagreeing
+  status scales once already, and it would silently drop `Error`, the worst of them. Status
+  changes weekly at most, so it can jump a row without shuffling the list;
+- **"usage" means spend or volume over the period**, never the live remaining percent. Remaining
+  percent crosses its neighbours on almost every poll, and a list that reshuffles itself on a
+  timer destroys the muscle memory this phase exists to protect. The key needs no new data —
+  `spent` per account is already in the snapshot;
+- **alphabetical sorts on a stable id**, never on the displayed label, so the order cannot
+  follow a copy edit or a future translation. Which id depends on what a row is: only the
+  pickers list connections, and they sort on the connection id. The Dashboard and Providers
+  both list families — one section per `account.provider`, one card per `ProviderFamily` — so
+  they sort on the provider key, with their other keys rolled up over the family's accounts or
+  connections. Neither tab reorders inside a family: a Providers card keeps plan above
+  platform, which is layout rather than order;
+- **"selectable" is not "connected"**, and only the pickers have this key at all. A provider that
+  is not connected has no account in the snapshot, so `watchRingCatalog` never builds a row for
+  it — there is nothing to sink. What the catalogs do keep visible but disabled is a row that
+  cannot be put on a ring: an allowance with no percentage, or a budget period with no limit
+  set. That is the state the pickers sort on, and `WatchRingMetric.isAvailable` already names
+  it. The Dashboard and Providers have no such row: the Dashboard shows no card for a provider
+  that reports nothing, and Providers ranks by whether a credential is stored.
+
+Decided 2026-08-16, and both answers are about the same thing — a list that does not move
+under the reader:
+
+- **numbers alone never reorder a surface.** A list is rebuilt when a provider changes state —
+  connected, gone unavailable, or a new status — and not when a poll merely moves its figures.
+  Where a key already steps only with that state, sorting delivers this on its own; where a key
+  is continuous, as spend is on the Dashboard, the computed order is held for the run and
+  recomputed on the next state change;
+- **all four tabs take their order from this phase**, each by its own rule from the table above.
+  Settings has no provider list and is not one of them.
+
+Acceptance:
+
+```text
+every phone surface takes its order from a named function, and a test fails if the order changes
+a refresh that changes only percentages or spend leaves every phone surface in the same order
+a provider changing state — connected, available, status — is the only thing that reorders
+the same accounts in a different order render the same Dashboard, whatever buildLiveProviderStack chains
+Dashboard and Providers rank status by ProviderStatus::severity; no sixth status scale appears
+equal keys are broken by the stable id — the provider key, or the connection id in a picker — and renaming a label moves nothing
+Watchface / Widget catalogs list selectable metrics first and keep the unselectable ones visible but disabled
+watch and widget surface order stays tightest-remaining-first (Phase 13), unaffected by this phase
+```
+
+Open question — a personal order:
+
+```text
+A dashboard is a personal shelf, and dragging cards into place would beat any default we pick.
+It also replaces the usage key rather than joining it: a user-defined order is the answer to
+"what matters to me". Worth doing after the declared order lands, not instead of it — an
+explicit default is what a personal order overrides.
+```
+
+Non-goals for this phase:
+
+```text
+reordering the primary tabs themselves (Dashboard → Watchface → Widget → Providers → Settings)
+sorting any phone surface by live remaining percent
+changing watch, Glance, or widget surface order
+```
+
+### Phase 17 — the watch's second page
+
+Status: completed as of 2026-08-17. Replaces the Today, Week, and Providers screens delivered by
+Phase 4, together with the Usage and Last sync screens and the menu that led to them; Phase 4
+stays as written, as the record of what the watch was before the Glance.
+
+Rationale: the menu is a leftover from the era when the app's home was a list of summaries. The
+Glance took that job in Phase 13 and answers *how much is left* better than any list — mini arcs,
+per-provider credits, one Alerts pill. Of the six menu entries exactly one was still needed:
+Alerts, the pill's destination. Usage and Providers repeated the Glance, the ring buttons above
+them repeated its rows, and Last sync answered a question the Glance already answers with
+`Stale`. Today and Week showed a currency total no design asks the watch for: the Glance carries
+per-provider credits and a budget row, and a money ceiling belongs on the face's budget strip.
+
+**The second page answers what the Glance does not: when a window comes back.** That is also the
+only place exhausted windows belong: the Glance omits them by design, so a plan at zero — the one
+state a user is actively waiting to leave — had nowhere to be read. The list keeps every plan
+window, spent or untouched, because it doubles as the inventory of what the watch knows; a list
+that changed shape with every poll would leave "not spent" indistinguishable from "not reported".
+
+Deliverables:
+
+- the row model is pure Kotlin with `now` as a parameter, tested the way `isStaleAt(now)` is —
+  order, filtering, and every phrasing rule are unit tests, not screenshots;
+- purchased meters never appear: they do not come back, they are bought again. Cursor's on-demand
+  pool is the one that carries an instant at all, and it is a billing cycle turning over rather
+  than capacity returning. Their home is the phone's cards;
+- order is exhausted first, then soonest return; a window that cannot name a **future** moment
+  sorts last inside its group. A reset already behind counts as none — the provider has not
+  caught up with its own clock, and printing a passed moment would say the window is late rather
+  than the number;
+- the line drops whichever half cannot be said, falls back from share to bare remainder for a
+  plan with no published ceiling, and reads `Unavailable` rather than rendering an empty line;
+- the page draws through the existing `SummaryScreen`, so the title takes the window's own status
+  color and urgency arrives for free; no new component;
+- rules live in `apps/wear_android/README.md` beside their owner. `WEAR_GLANCE_DESIGN.md` scopes
+  itself to the first page and only names the second in its surfaces table;
+- the removal takes its orphans with it: the ring detail route, the used-percent label, and the
+  last-sync formatters, each checked for callers across `main` and `test` before deletion.
+
+Acceptance:
+
+```text
+swiping up from the Glance lands on the plan windows themselves, with no menu in between
+an exhausted window is first, and a window whose reset is unpublished or behind ends its line
+  after the share instead of naming a time
+a window rolling today reads back at HH:MM; any other day carries its date
+purchased meters are absent from the page
+the Alerts pill still opens the Alerts screen, and swiping right returns to the Glance
+no app screen shows a currency total; money on the watch stays on the face's budget strip
+```
+
+Non-goals for this phase:
+
+```text
+bringing a currency total back to the watch under a new name
+rule editing on the watch — Alerts stays the active list only
+a face marker for a recovered window (that question belongs to WATCH_RING_DESIGN.md, Phase 15)
+review art for the page — the Glance generator draws a legend, not a list, and the README
+  sketch carries the layout until it becomes contested
+retiring the payload fields this phase orphaned (today, week, projectedTotal) — the Wear store
+  still requires them, so dropping one is a schema revision, not a cleanup
 ```
 
 ---
@@ -1754,7 +2094,7 @@ multi-profile hatch patterns (same future note as Phase 13)
 
 - widget tests for dashboard cards;
 - widget tests for provider states;
-- widget / App Widget tests for the Phase 14 home-screen surface when landed;
+- widget / App Widget payload tests for the Phase 14 home-screen surface;
 - snapshot/golden tests for key dashboard screens where practical;
 - integration smoke test on Android emulator.
 
@@ -1832,7 +2172,17 @@ wear-android.yml
 watchface.yml
   official WFF schema validation
   ./gradlew lintDebug assembleDebug bundleDebug
+
+designs.yml
+  review art still matches its generators (SVG only)
+
+docs.yml
+  documentation site builds
 ```
+
+Every workflow that can reach a shared contract also runs
+`tools/validate-fixtures/validate_json.py`: it validates the golden fixtures and checks that the
+watch payload version agrees across the schema, the phone, and the Wear store.
 
 Release CI can be added later:
 
@@ -1878,15 +2228,19 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Close Phase 13 acceptance on device/emulator (Wear rings + WFF concentric live arcs).
-OpenPencil sources, Wear `UsageRings`, WFF concentric remaining `RANGED_VALUE` arcs, and
-Phase 11 headless WorkManager polling are in place.
+Settle the one acceptance line Phase 15 could not measure: a recovery notification reaching a
+paired watch exactly once. It needs a phone paired through the Wear OS companion app — two AVDs
+on `adb` bridge no notifications at all. After it, the payload fields nothing draws any more
+(`today`, `week`, `projectedTotal`, orphaned by Phase 17) are worth a schema revision that
+retires them together.
 
-After the watch ring baseline is closed, schedule **Phase 14** (Dashboard → Watchface →
-Widget → Providers → Settings nav; move Watch display out of Settings; phone home-screen
-widget with its own design lock).
+Phase 13 acceptance closed on 2026-08-17; OpenPencil sources, the Wear Glance legend, WFF
+concentric remaining `RANGED_VALUE` arcs, and Phase 11 headless WorkManager polling are in
+place.
 
-Then continue with later watch / widget polish as listed below.
+Phase 14 App Widget delivery is in tree (locked `PHONE_WIDGET_DESIGN.md`, Widget tab prefs,
+Android `WardPulseAppWidget`). Remaining: large (6-slot) size if needed, and emulator smoke
+for add/remove/prefs update. Then continue with later watch / widget polish as listed below.
 
 Phase 6 passed Watch Face Format acceptance on 2026-07-19:
 

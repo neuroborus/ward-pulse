@@ -2,11 +2,7 @@ package app.wardpulse.wear.model
 
 import java.time.Duration
 import java.time.Instant
-import java.time.ZoneId
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
-import java.util.Locale
 
 enum class PulseStatus(
     val wireName: String,
@@ -84,6 +80,23 @@ data class RingSummary(
     val label: String,
     val usedPercent: Double,
     val status: PulseStatus,
+    /** Budget rings carry their money; a plan window has none, so both stay null. */
+    val spent: Money? = null,
+    val limit: Money? = null,
+    /**
+     * The other pool of the same plan, drawn as the outer half of this one band
+     * (`WATCH_RING_DESIGN.md`, Split band). One entry is one band, so a pair
+     * costs one of the three.
+     */
+    val split: RingHalf? = null,
+)
+
+/** The outer half of a split band: a pool, without money it never has. */
+data class RingHalf(
+    val id: String,
+    val label: String,
+    val usedPercent: Double,
+    val status: PulseStatus,
 )
 
 /** Compact remaining purchased credits for the watch-face SHORT_TEXT slot. */
@@ -155,22 +168,6 @@ data class WatchDashboardSummary(
         }
     }
 
-    /** Device-local wall clock for the Last sync screen. */
-    val lastSyncLabel: String
-        get() = try {
-            LAST_SYNC_LOCAL_FORMAT.format(Instant.parse(generatedAt))
-        } catch (_: DateTimeParseException) {
-            "Unknown"
-        }
-
-    /** UTC disclosure shown alongside [lastSyncLabel]. */
-    val lastSyncUtcLabel: String
-        get() = try {
-            LAST_SYNC_UTC_FORMAT.format(Instant.parse(generatedAt))
-        } catch (_: DateTimeParseException) {
-            "Unknown"
-        }
-
     fun isStaleAt(now: Instant): Boolean {
         if (isStale) {
             return true
@@ -184,46 +181,63 @@ data class WatchDashboardSummary(
     }
 
     private companion object {
-        val LAST_SYNC_LOCAL_FORMAT: DateTimeFormatter =
-            DateTimeFormatter.ofPattern("MMM d, HH:mm", Locale.US)
-                .withZone(ZoneId.systemDefault())
-        val LAST_SYNC_UTC_FORMAT: DateTimeFormatter =
-            DateTimeFormatter.ofPattern("MMM d, HH:mm 'UTC'", Locale.US)
-                .withZone(ZoneOffset.UTC)
         val STALE_AFTER: Duration = Duration.ofHours(2)
     }
 }
 
 object PreviewWatchDashboardSummary {
     val value = WatchDashboardSummary(
-        schemaVersion = 7,
+        schemaVersion = 9,
         dataMode = WatchDataMode.MOCK,
         generatedAt = "2026-06-27T18:42:00Z",
         overallStatus = PulseStatus.OK,
         rings = listOf(
             // Surface order: tightest remaining first (center/inner on face; top on Glance).
-            RingSummary("budget.week", "Week", 28.5, PulseStatus.OK),
-            RingSummary("budget.month", "Month", 26.5, PulseStatus.OK),
-            RingSummary("budget.today", "Today", 24.8, PulseStatus.OK),
+            RingSummary(
+                "budget.anthropic.platform.week",
+                "Week",
+                28.5,
+                PulseStatus.OK,
+                spent = Money(7_130, "USD"),
+                limit = Money(25_000, "USD"),
+            ),
+            RingSummary(
+                "budget.anthropic.platform.month",
+                "Month",
+                26.5,
+                PulseStatus.OK,
+                spent = Money(21_210, "USD"),
+                limit = Money(80_000, "USD"),
+            ),
+            RingSummary(
+                "budget.anthropic.platform.today",
+                "Today",
+                24.8,
+                PulseStatus.OK,
+                spent = Money(1_240, "USD"),
+                limit = Money(5_000, "USD"),
+            ),
         ),
         creditsGlance = CreditsGlance(text = "500", label = "Credits left", provider = "mock"),
+        // Period totals carry money only: limits are per connection, so the sum
+        // across connections has no ceiling, percentage, or status of its own.
         today = PeriodSummary(
             period = "today",
             spent = Money(1_240, "USD"),
-            limit = Money(5_000, "USD"),
-            remaining = Money(3_760, "USD"),
-            usedPercent = 24.8,
+            limit = null,
+            remaining = null,
+            usedPercent = null,
             projectedTotal = null,
-            status = PulseStatus.OK,
+            status = PulseStatus.UNKNOWN,
         ),
         week = PeriodSummary(
             period = "week",
             spent = Money(7_130, "USD"),
-            limit = Money(25_000, "USD"),
-            remaining = Money(17_870, "USD"),
-            usedPercent = 28.52,
+            limit = null,
+            remaining = null,
+            usedPercent = null,
             projectedTotal = Money(22_800, "USD"),
-            status = PulseStatus.OK,
+            status = PulseStatus.UNKNOWN,
         ),
         allowances = emptyList(),
         providers = listOf(
@@ -247,7 +261,13 @@ object PreviewWatchDashboardSummary {
         rings = listOf(
             RingSummary("allowance.codex.week", "Weekly plan", 92.0, PulseStatus.OK),
             RingSummary("allowance.claude.plan", "5h", 61.0, PulseStatus.OK),
-            RingSummary("allowance.cursor.week", "Weekly plan", 28.0, PulseStatus.OK),
+            // Matches fixtures/providers/cursor/usage_summary.json autoPercentUsed.
+            RingSummary(
+                "allowance.cursor.cursor-plan-models",
+                "Cursor Models",
+                47.0,
+                PulseStatus.OK,
+            ),
         ),
         creditsGlance = CreditsGlance(text = "400", label = "Credits left", provider = "codex"),
         allowances = listOf(

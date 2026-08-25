@@ -42,7 +42,8 @@
       stroke-width="5" />
     <circle cx="139.5" cy="245" r="17" fill="none" stroke="#65D78A"
       stroke-width="5" stroke-linecap="round"
-      stroke-dasharray="8.55 106.81"
+      stroke-dasharray="3.55 106.81"
+      stroke-dashoffset="-100.77"
       transform="rotate(-90 139.5 245)" />
     <text x="173.5" y="243.5"
       font-family="Noto Sans, sans-serif" font-size="16"
