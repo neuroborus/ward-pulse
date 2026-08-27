@@ -12,7 +12,7 @@
     <circle cx="225" cy="225" r="189.0" fill="none"
       stroke="#2E3632" stroke-width="8.1" />
   
-    <text x="225" y="250.1" text-anchor="middle"
+    <text x="225" y="228.4" text-anchor="middle"
       font-family="Noto Sans, sans-serif" font-size="69.8"
       font-weight="700" fill="#F4FBF8">10:08</text>
     <rect x="181.0" y="283.0"

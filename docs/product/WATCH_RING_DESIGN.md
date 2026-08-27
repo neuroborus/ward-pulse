@@ -279,6 +279,14 @@ and the caps fill exactly what the inset freed: at 50% used the gap measures **1
 a true 179.95°, on the full band and on both halves alike. Review art carries the same inset,
 which is why the boards and the watch still agree.
 
+**The clock sits above the centre, and the number is measured, not declared.** `watchface.xml`
+gives `TimeText` a box at `y=160, height=90`, whose centre is 20 units above the canvas centre;
+measured 2026-08-13, WFF renders the digits **21.7** up. That is the optical centre the hero rule
+asks for — the strip stack below pulls the eye down. Review art centred the clock geometrically
+and disagreed with the face by that much; it now carries the measured lift (`TIME_LIFT` in
+`tools/render-watch-ring-designs.mjs`), which is why the boards and the watch show the same
+screen.
+
 **A band that has spent nothing closes (revision 2026-08-17).** The cap inset above is what
 makes a small melt visible, but at `usedPercent == 0` there is no melt to inset and the inset
 leaves the ring open anyway: measured on the paired band, a seam of about **1°** at 12, four

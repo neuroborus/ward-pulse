@@ -30,7 +30,7 @@ const ANTHROPIC = '#E8915A'
 const FONT = 'Noto Sans'
 const FONT_FILE = '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf'
 
-/** The canvas the strip stack was measured on; every strip number below is in its units. */
+/** The canvas the face was measured on; every absolute number below is in its units. */
 const FACE = 450
 
 /**
@@ -55,6 +55,14 @@ const STRIP = {
   textWidth: 78,
   fontSize: 12,
 }
+
+/**
+ * How far above the canvas centre the clock sits, measured off the face: `watchface.xml`
+ * declares a `TimeText` box 20 up, and WFF renders the digits 21.7 up. The measured number is
+ * the one that counts, here as everywhere in `WATCH_RING_DESIGN.md` — a board that centred the
+ * time geometrically argued for a screen nobody ships.
+ */
+const TIME_LIFT = 21.7
 
 /**
  * The ring type drawn as texture: the budget period repeated round the band and punched out in
@@ -408,7 +416,7 @@ function faceSvg({
   }
 
   const timeSize = ambient ? size * 0.18 : size * 0.155
-  const timeY = cy + timeSize * 0.36
+  const timeY = cy - TIME_LIFT * (size / FACE) + timeSize * 0.36
   let content = `
     <text x="${cx}" y="${timeY.toFixed(1)}" text-anchor="middle"
       font-family="${FONT}, sans-serif" font-size="${timeSize.toFixed(1)}"
