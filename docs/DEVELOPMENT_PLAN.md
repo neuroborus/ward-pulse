@@ -2077,6 +2077,69 @@ retiring the payload fields this phase orphaned (today, week, projectedTotal) �
   still requires them, so dropping one is a schema revision, not a cleanup
 ```
 
+### Phase 18 — Codex Spark as the second half of a band
+
+Status: in progress as of 2026-08-30.
+
+Rationale: Codex reports more than one limit. Beside the plan's own window sits
+`GPT-5.3-Codex-Spark`, metered separately, with both a 5-hour and a weekly window of its own.
+The product does not see it: `_normalizeRateLimits` hard-codes `limitId: 'codex'`, reads only
+the root `rate_limit`, and never looks at `additional_rate_limits`, so Spark is discarded on the
+phone before Rust can normalize it. That is the shape Phase 13 already solved for Cursor's two
+pools — a band split lengthwise — so the answer is to reuse the split band rather than invent a
+second idiom.
+
+**The face's slot ceiling is what makes this more than an adapter change.** The eight-slot
+budget is already fully spent (`WATCH_RING_DESIGN.md`, which owns the rule), and the split band
+spends two of those slots on channels serving every band at once: one outer half and one far
+marker, each dispatching by `TITLE`. One slot renders one complication, so only one band can
+split at a time. Freeing a slot is therefore a precondition for showing Cursor's pair and
+Codex's pair together, not a later optimization.
+
+Deliverables:
+
+- a sanitized two-limit fixture whose shape is taken from a live Pro account, where the main
+  limit carries one weekly window and Spark carries both. Each record in `rateLimitsByLimitId`
+  states its own `limitId`: the allowance id is built from that field rather than the map key,
+  so a record that omits it silently collides with the main limit while every gate stays green;
+- a window naming rule that fires only when a limit has a name *and* both windows, so the
+  unnamed live Codex plan keeps the locked `Codex · Weekly plan` string byte for byte;
+- Spark recognized by a table from `metered_feature` to an id of our own (`codex_bengalfox` →
+  `spark`), never by the display name, which moves with every model version. An unknown feature
+  is skipped rather than shown under a codename — Spark may be absent, but never wrong;
+- `#186020` for Spark, clearing the palette's ΔE floor of 20 against every existing colour, with
+  its branch above the family branch on both surfaces: a `spark` id starts with `allowance.codex`
+  and the family branch would otherwise swallow it, losing the split with no error;
+- the far marker folded into its strip's own slot, paid for by a static colour chosen from a
+  closed vocabulary, which frees the slot that lets two bands split at once;
+- a paired band drawn as one Glance row rather than two, so three bands stay three rows;
+- per-limit collapse, so the plan's windows fold to one ring and Spark's to another before the
+  two are paired, and pairing stated as a rule over pools rather than the two Cursor ids it was
+  first written for;
+- a recorded device spike on whether a Watch Face Format expression can read a number out of
+  `TITLE`, and at what precision. Its outcome is the deliverable, either way: a negative result
+  settles the question and leaves everything above working.
+
+Acceptance:
+
+```text
+the watch face shows the Cursor pair and the Codex pair at the same time
+Spark's half carries #186020 and its own far marker, distinct from the plan's
+the Glance shows the pair as one row with two arcs and two percentages
+a ring selected before the update is still selected after it
+the unnamed Codex plan window reads exactly as it did before
+```
+
+Non-goals for this phase:
+
+```text
+quantising the arc through stepped title tokens — the face is measured to 21.7 and 179.95°,
+  and an inexact arc would be the only one on it
+a third pool in one band — the band has two halves and two markers, and that is the shape
+folding the outer half into its band's slot, which would make every band splittable; it lands
+  only if the spike above comes back positive on both precision and parsing
+```
+
 ---
 
 ## 20. Testing strategy
@@ -2228,11 +2291,13 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Settle the one acceptance line Phase 15 could not measure: a recovery notification reaching a
-paired watch exactly once. It needs a phone paired through the Wear OS companion app — two AVDs
-on `adb` bridge no notifications at all. After it, the payload fields nothing draws any more
-(`today`, `week`, `projectedTotal`, orphaned by Phase 17) are worth a schema revision that
-retires them together.
+Phase 18 is under way: Codex Spark reaches the face as the second half of a band.
+
+Still open from before it, and unchanged by it: the one acceptance line Phase 15 could not
+measure, a recovery notification reaching a paired watch exactly once. It needs a phone paired
+through the Wear OS companion app — two AVDs on `adb` bridge no notifications at all. After it,
+the payload fields nothing draws any more (`today`, `week`, `projectedTotal`, orphaned by
+Phase 17) are worth a schema revision that retires them together.
 
 Phase 13 acceptance closed on 2026-08-17; OpenPencil sources, the Wear Glance legend, WFF
 concentric remaining `RANGED_VALUE` arcs, and Phase 11 headless WorkManager polling are in
