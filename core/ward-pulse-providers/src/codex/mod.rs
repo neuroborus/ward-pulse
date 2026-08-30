@@ -376,6 +376,12 @@ mod tests {
 
     const REPORT_FIXTURE: &str = include_str!("../../../../fixtures/providers/codex/report.json");
 
+    /// The shape is a live Pro account: one plan window on the main limit, both on Spark. Every
+    /// number is chosen rather than captured — the balance because purchased credits are only
+    /// reported when held, the shares and resets so ordering has something to order.
+    const TWO_LIMITS_FIXTURE: &str =
+        include_str!("../../../../fixtures/providers/codex/report_two_limits.json");
+
     #[test]
     fn trims_trailing_zeros_from_credit_balance() {
         assert_eq!(trim_trailing_fraction_zeros("500.0000000000"), "500");
@@ -408,6 +414,30 @@ mod tests {
             })
         );
         assert_eq!(snapshot.buckets[1].total_tokens, Some(4_200_000));
+    }
+
+    #[test]
+    fn normalizes_every_limit_the_report_carries() {
+        let report = codex_provider_snapshot_from_report_json(TWO_LIMITS_FIXTURE)
+            .expect("normalize Codex account report");
+        let ids = report
+            .provider_snapshot
+            .allowances
+            .iter()
+            .map(|allowance| allowance.id.as_str())
+            .collect::<Vec<_>>();
+
+        // Both limits bring their own windows, and the credits sitting once at the root of the
+        // response stay one record: more limits must not mean more of them.
+        assert_eq!(
+            ids,
+            [
+                "codex-primary",
+                "spark-primary",
+                "spark-secondary",
+                "codex-purchased-credits"
+            ]
+        );
     }
 
     #[test]
