@@ -175,6 +175,11 @@ fn trim_trailing_fraction_zeros(value: &str) -> String {
     }
 }
 
+/// A named limit names its windows after itself, so a limit reporting both would label them
+/// identically; the shorter window token tells them apart. Only a named limit takes the token —
+/// an unnamed one falls back to [`window_label`], which names the window already. The token joins
+/// with a space, never ` · `: that separator means family-then-pool to every consumer of a label,
+/// and one inside a pool name would cost the Glance its family and the ring picker its pool.
 fn plan_allowance(
     rate_limit: &RawRateLimit,
     window_id: &str,
@@ -188,10 +193,10 @@ fn plan_allowance(
         ProviderStatus::Ok
     };
     let duration = window.window_duration_mins;
-    let label = rate_limit
-        .limit_name
-        .clone()
-        .unwrap_or_else(|| window_label(duration));
+    let label = match rate_limit.limit_name.as_deref() {
+        Some(name) => named_limit_label(name, rate_limit, duration),
+        None => window_label(duration),
+    };
 
     Ok(AllowanceState {
         id: format!(
@@ -209,6 +214,28 @@ fn plan_allowance(
         resets_at: window.resets_at.map(unix_seconds_to_utc).transpose()?,
         status,
     })
+}
+
+fn named_limit_label(name: &str, rate_limit: &RawRateLimit, duration: Option<u64>) -> String {
+    let both_windows = rate_limit.primary.is_some() && rate_limit.secondary.is_some();
+    match duration.filter(|_| both_windows).map(window_token) {
+        // A name that already says which window it is does not say it twice.
+        Some(token) if !name.contains(&token) => format!("{name} {token}"),
+        _ => name.to_string(),
+    }
+}
+
+/// The short form a watch row can carry beside a family name. `5h` and `Weekly` are the ones
+/// `WEAR_GLANCE_DESIGN.md` names; the rest shorten the same way, because a token has to exist for
+/// every duration or two windows stay indistinguishable.
+fn window_token(duration: u64) -> String {
+    match duration {
+        1_440 => "Daily".to_string(),
+        10_080 => "Weekly".to_string(),
+        minutes if minutes % 1_440 == 0 => format!("{}d", minutes / 1_440),
+        minutes if minutes % 60 == 0 => format!("{}h", minutes / 60),
+        minutes => format!("{minutes}m"),
+    }
 }
 
 fn window_label(duration: Option<u64>) -> String {
@@ -437,6 +464,74 @@ mod tests {
                 "spark-secondary",
                 "codex-purchased-credits"
             ]
+        );
+    }
+
+    fn plan_labels(report_json: &str) -> Vec<String> {
+        codex_provider_snapshot_from_report_json(report_json)
+            .expect("normalize Codex account report")
+            .provider_snapshot
+            .allowances
+            .iter()
+            .filter(|allowance| allowance.source == AllowanceSource::Plan)
+            .map(|allowance| allowance.label.clone())
+            .collect()
+    }
+
+    #[test]
+    fn tells_two_windows_of_one_named_limit_apart() {
+        assert_eq!(
+            plan_labels(TWO_LIMITS_FIXTURE),
+            ["Weekly plan", "Spark 5h", "Spark Weekly"]
+        );
+    }
+
+    #[test]
+    fn leaves_a_named_limit_reporting_one_window_alone() {
+        // `report.json` would not prove this: its name already contains its own token, so the
+        // containment rule would suppress the token anyway and hide a missing check here. This
+        // limit's name shares nothing with `Weekly`.
+        let report_json =
+            TWO_LIMITS_FIXTURE.replace("\"limitName\": null", "\"limitName\": \"Plan\"");
+
+        assert_eq!(
+            plan_labels(&report_json),
+            ["Plan", "Spark 5h", "Spark Weekly"]
+        );
+    }
+
+    #[test]
+    fn keeps_the_family_separator_out_of_a_label() {
+        // ` · ` means family-then-pool wherever a label is read, so one inside a pool name costs
+        // the Glance row its family and the ring picker its pool — both silently.
+        let labels = plan_labels(TWO_LIMITS_FIXTURE);
+        assert!(
+            labels.iter().all(|label| !label.contains(" · ")),
+            "a plan label carries the family separator: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn leaves_an_unnamed_limit_to_its_window_labels() {
+        let report_json =
+            TWO_LIMITS_FIXTURE.replace("\"limitName\": \"Spark\"", "\"limitName\": null");
+
+        // The live client sends no limit name while normalizing both windows, so this pairing is
+        // what real accounts hit; the locked `Codex · Weekly plan` row must survive it untouched.
+        assert_eq!(
+            plan_labels(&report_json),
+            ["Weekly plan", "5-hour plan", "Weekly plan"]
+        );
+    }
+
+    #[test]
+    fn does_not_repeat_a_name_that_already_says_the_window() {
+        let report_json = TWO_LIMITS_FIXTURE
+            .replace("\"limitName\": \"Spark\"", "\"limitName\": \"Weekly plan\"");
+
+        assert_eq!(
+            plan_labels(&report_json),
+            ["Weekly plan", "Weekly plan 5h", "Weekly plan"]
         );
     }
 

@@ -209,6 +209,15 @@ This is a compatibility integration, not a published third-party API contract. E
 changes may require an app update. WardPulse must surface that failure without exposing tokens or
 raw responses and must not expand this path into model execution or general ChatGPT access.
 
+A limit that carries a name labels both of its windows after itself, so a limit reporting two of
+them would label them identically. A named limit reporting both therefore appends the short window
+token a watch row can carry — `Spark 5h`, `Spark Weekly`. The token joins with a space rather than
+` · `, because that separator already means family-then-pool wherever a label is read: one inside a
+pool name would leave the Glance row without its family and the ring picker without its pool. An
+unnamed limit takes no token: it falls back to the window's own name, which already says which
+window it is, and appending to that would rewrite the locked `Codex · Weekly plan` row for every
+account reporting one.
+
 Capabilities:
 
 | Metric | Support | Notes |
