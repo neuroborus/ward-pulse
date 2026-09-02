@@ -22,6 +22,19 @@ class RingFamilyTest {
     }
 
     @Test
+    fun codexSparkPartsFromItsPlan() {
+        assertEquals(
+            RingFamily.CODEX_SPARK,
+            RingFamily.colorArgb("allowance.codex.spark-primary"),
+        )
+        assertEquals(
+            RingFamily.CODEX_SPARK,
+            RingFamily.colorArgb("allowance.codex.spark-secondary"),
+        )
+        assertEquals(RingFamily.CODEX, RingFamily.colorArgb("allowance.codex.codex-primary"))
+    }
+
+    @Test
     fun cursorPoolsPartWays() {
         assertEquals(
             RingFamily.CURSOR_OWN,

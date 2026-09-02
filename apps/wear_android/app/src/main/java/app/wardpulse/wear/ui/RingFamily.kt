@@ -6,6 +6,10 @@ package app.wardpulse.wear.ui
  */
 object RingFamily {
     const val CODEX = 0xFF65D78A.toInt()
+
+    /** The Codex plan's Spark limit — the one limit that leaves the family colour. */
+    const val CODEX_SPARK = 0xFF186020.toInt()
+
     const val CLAUDE = 0xFFE8915A.toInt()
 
     /** Cursor, and its external models pool by extension. */
@@ -20,6 +24,9 @@ object RingFamily {
     /** ARGB for WFF [COMPLICATION.RANGED_VALUE_COLORS] / Compose strokes. */
     fun colorArgb(ringId: String): Int =
         when {
+            // Before the family branch, or it would never be reached: the limit
+            // name sits inside an `allowance.codex.` id.
+            ringId.contains("codex.spark") -> CODEX_SPARK
             ringId.startsWith("allowance.codex") ||
                 ringId.contains(".codex.") ||
                 ringId.startsWith("allowance.openai") ||

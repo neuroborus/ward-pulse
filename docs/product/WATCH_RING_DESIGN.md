@@ -84,6 +84,7 @@ may modulate toward theme tertiary/error when needed.
 | Family | Stroke | Notes |
 |--------|--------|--------|
 | OpenAI / Codex | `#65D78A` | Green |
+| Codex · Spark | `#186020` | Dark green — the Spark limit on the Codex plan |
 | Anthropic / Claude | `#E8915A` | Orange (Anthropic presentation) |
 | Cursor · other models | `#67E8D4` | Cyan — external models on the Cursor plan |
 | Cursor · own models | `#7E93B8` | Grey-blue — the plan's own pool |
@@ -99,14 +100,17 @@ Grey is what remains when a ring id resolves to no family, which should not happ
 the product ships. It is deliberately colourless: the fallback used to be blue, and a blue
 fallback beside Cursor's grey-blue pool would read as a product colour at band scale.
 
-Distances, CIE76 ΔE on these values (a desk check, not a device one): the two Cursor pools sit
-52 apart, which is what lets them share a band. The tightest pair in the whole palette is the
-grey-blue pool against **demo blue at 21**, then the grey fallback at 25, then cyan against
-Codex green at 31 — all above the ~20 where hues start collapsing on a 17-pixel band. The first
-two never meet on a band anyway: the grey fallback should not ship at all, and demo blue belongs
-to the legacy single `mock` provider, whose accounts `watchRingCatalog` skips outright — the
-seeded debug demo invents real families instead, so its Cursor pools wear the pool colours.
-A new colour should clear 20 against every row here before it is proposed.
+Distances, CIE76 ΔE on these values (a desk check, not a device one): the two Cursor pools sit 52
+apart, which is what lets them share a band. Codex and its Spark limit sit **44.7** apart, the
+same way. Dark green's tightest neighbour is not a family at all but the **track at 44.6**, and it
+clears the surface by 53.6 — a half band still has to read against what it is drawn on. The
+tightest pair in the whole palette is the grey-blue pool against **demo blue at 21**, then the
+grey fallback at 25, then cyan against Codex green at 31 — all above the ~20 where hues start
+collapsing on a 17-pixel band. The first two never meet on a band anyway: the grey fallback should
+not ship at all, and demo blue belongs to the legacy single `mock` provider, whose accounts
+`watchRingCatalog` skips outright — the seeded debug demo invents real families instead, so its
+Cursor pools wear the pool colours. A new colour should clear 20 against every row here before it
+is proposed.
 
 Track (empty portion of the ring): muted graphite on dark surface (`#2E3632` in review art;
 theme `outlineVariant` at runtime).

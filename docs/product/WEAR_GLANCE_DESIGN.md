@@ -125,6 +125,7 @@ Same strokes as the face (`WATCH_RING_DESIGN.md`) for metric mini-arcs:
 | Family | Stroke |
 |--------|--------|
 | OpenAI / Codex | `#65D78A` |
+| Codex · Spark | `#186020` |
 | Anthropic / Claude | `#E8915A` |
 | Cursor · other models | `#67E8D4` |
 | Cursor · own models | `#7E93B8` |

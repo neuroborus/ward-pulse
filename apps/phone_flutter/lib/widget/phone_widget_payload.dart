@@ -131,6 +131,11 @@ int phoneWidgetAccentArgb(String metricId) {
   if (metricId.contains('cursor')) {
     return providerFamilyColor('cursor').toARGB32();
   }
+  // Before the family branch, or it would never be reached: the limit name sits
+  // inside a `codex` id (`WATCH_RING_DESIGN.md`, Split band).
+  if (metricId.contains('codex.spark')) {
+    return familyCodexSparkColor.toARGB32();
+  }
   if (metricId.contains('codex') || metricId.contains('openai')) {
     return providerFamilyColor('codex').toARGB32();
   }

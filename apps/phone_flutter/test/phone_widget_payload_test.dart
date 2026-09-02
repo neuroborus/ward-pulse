@@ -68,6 +68,15 @@ void main() {
       phoneWidgetAccentArgb('allowance.cursor.cursor-plan-other'),
       providerFamilyColor('cursor').toARGB32(),
     );
+    // The Spark limit leaves the family colour; the plan's own windows keep it.
+    expect(
+      phoneWidgetAccentArgb('allowance.codex.spark-primary'),
+      familyCodexSparkColor.toARGB32(),
+    );
+    expect(
+      phoneWidgetAccentArgb('allowance.codex.codex-primary'),
+      providerFamilyColor('codex').toARGB32(),
+    );
   });
 
   test('keeps exhausted Cursor Models as 0% left beside Other Models', () {

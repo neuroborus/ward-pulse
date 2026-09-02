@@ -73,7 +73,8 @@ from phone chrome. Legacy brand green (`#1F7A5A` sheen) stays out of new identit
 Used on Wear / WFF rings and on phone charts / plan bars / provider section accents
 (see [product/WATCH_RING_DESIGN.md](product/WATCH_RING_DESIGN.md)):
 
-- OpenAI / Codex: `#65D78A`.
+- OpenAI / Codex: `#65D78A`; Codex · Spark: `#186020` (Spark revision 2026-09-01 — the plan's
+  Spark limit is metered on its own, so it carries its own colour).
 - Anthropic / Claude: `#E8915A`.
 - Cursor · other models: `#67E8D4`; Cursor · own models: `#7E93B8` (split-band revision
   2026-08-13 — the two pools of one plan carry their own colours).

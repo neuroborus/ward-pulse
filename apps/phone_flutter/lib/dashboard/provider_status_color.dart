@@ -12,6 +12,10 @@ const _familyOpenAi = Color(0xFF65D78A);
 /// (`WATCH_RING_DESIGN.md`, Split band).
 const familyCursorOwnColor = Color(0xFF7E93B8);
 
+/// The Codex plan's Spark limit — the one limit that leaves the family colour
+/// (`WATCH_RING_DESIGN.md`, Split band).
+const familyCodexSparkColor = Color(0xFF186020);
+
 /// Demo data keeps the blue it has always had; it is not an unresolved family.
 const _familyMock = Color(0xFF8AB4F8);
 
