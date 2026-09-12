@@ -131,12 +131,14 @@ void main() {
 
     final result = await client.fetchReport(session);
     final report = jsonDecode(result.reportJson) as Map<String, dynamic>;
-    final limits =
-        (report['rateLimits'] as Map<String, dynamic>)['rateLimits']
-            as Map<String, dynamic>;
+    final rateLimits = report['rateLimits'] as Map<String, dynamic>;
+    final limits = rateLimits['rateLimits'] as Map<String, dynamic>;
     final activity =
         (report['usage'] as Map<String, dynamic>)['dailyUsageBuckets'] as List;
 
+    expect(rateLimits.containsKey('rateLimitsByLimitId'), isFalse);
+    expect(limits['limitId'], 'codex');
+    expect(limits['limitName'], isNull);
     expect(
       (limits['primary'] as Map<String, dynamic>)['windowDurationMins'],
       10080,
@@ -152,6 +154,98 @@ void main() {
       '/backend-api/wham/usage',
       '/backend-api/wham/profiles/me',
     ]);
+  });
+
+  test('normalizes every known Codex limit without copying credits', () async {
+    // Synthetic values model the live multi-limit shape without captured
+    // account data.
+    final transport = _QueueTransport([
+      _jsonResponse({
+        'plan_type': 'pro',
+        'rate_limit': {
+          'primary_window': {
+            'used_percent': 30,
+            'limit_window_seconds': 604800,
+            'reset_at': 1788272022,
+          },
+          'secondary_window': null,
+        },
+        'additional_rate_limits': [
+          {
+            'limit_name': 'GPT-5.3-Codex-Spark',
+            'metered_feature': 'codex_bengalfox',
+            'rate_limit': {
+              'primary_window': {
+                'used_percent': 12,
+                'limit_window_seconds': 18000,
+                'reset_at': 1787832779,
+              },
+              'secondary_window': {
+                'used_percent': 4,
+                'limit_window_seconds': 604800,
+                'reset_at': 1788419579,
+              },
+            },
+          },
+          {
+            'limit_name': 'Unknown experimental limit',
+            'metered_feature': 'codex_unknown',
+            'rate_limit': {
+              'primary_window': {
+                'used_percent': 1,
+                'limit_window_seconds': 3600,
+              },
+            },
+          },
+        ],
+        'credits': {'has_credits': true, 'unlimited': false, 'balance': '12.5'},
+      }),
+      _jsonResponse({
+        'stats': {'daily_usage_buckets': <Object>[]},
+      }),
+    ]);
+    final client = CodexAccountClient(
+      transport: transport,
+      clock: () => DateTime.utc(2026, 8, 27),
+    );
+    final session = CodexAccountSession(
+      accessToken: _jwt(expiresAt: DateTime.utc(2026, 9)),
+      refreshToken: 'refresh-token',
+      accountId: 'account-1',
+      refreshedAt: DateTime.utc(2026, 8, 27),
+    );
+
+    final result = await client.fetchReport(session);
+    final report = jsonDecode(result.reportJson) as Map<String, dynamic>;
+    final envelope = report['rateLimits'] as Map<String, dynamic>;
+    final root = envelope['rateLimits'] as Map<String, dynamic>;
+    final byId = envelope['rateLimitsByLimitId'] as Map<String, dynamic>;
+    final codex = byId['codex'] as Map<String, dynamic>;
+    final spark = byId['spark'] as Map<String, dynamic>;
+
+    expect(byId.keys, ['codex', 'spark']);
+    expect(root['limitId'], 'codex');
+    expect(root['limitName'], isNull);
+    expect(root['secondary'], isNull);
+    expect((root['credits'] as Map<String, dynamic>)['balance'], '12.5');
+    expect(codex['limitId'], 'codex');
+    expect(
+      (codex['primary'] as Map<String, dynamic>)['windowDurationMins'],
+      10080,
+    );
+    expect(codex.containsKey('credits'), isFalse);
+    expect(spark['limitId'], 'spark');
+    expect(spark['limitName'], 'Spark');
+    expect(
+      (spark['primary'] as Map<String, dynamic>)['windowDurationMins'],
+      300,
+    );
+    expect(
+      (spark['secondary'] as Map<String, dynamic>)['windowDurationMins'],
+      10080,
+    );
+    expect(spark.containsKey('credits'), isFalse);
+    expect(byId.containsKey('codex_unknown'), isFalse);
   });
 
   test('refreshes an expired access token before loading usage', () async {

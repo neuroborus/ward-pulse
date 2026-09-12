@@ -209,6 +209,15 @@ This is a compatibility integration, not a published third-party API contract. E
 changes may require an app update. WardPulse must surface that failure without exposing tokens or
 raw responses and must not expand this path into model execution or general ChatGPT access.
 
+The usage response keeps the unnamed main limit in the root `rate_limit`, puts separately metered
+limits in `additional_rate_limits` with `limit_name`, `metered_feature`, and a nested `rate_limit`,
+and reports `credits` once at the response root. The phone keeps the main limit under the local id
+`codex`, retains credits only on that root report record, and builds the report's
+`rateLimitsByLimitId` map from the main limit plus known additional limits. Additional limits are
+recognized by a local `metered_feature` table: `codex_bengalfox` maps to `spark` / `Spark`. The
+API's versioned `limit_name` is not a stable label, and an unknown feature is omitted until the
+table is updated rather than exposed under an internal code name.
+
 A limit that carries a name labels both of its windows after itself, so a limit reporting two of
 them would label them identically. A named limit reporting both therefore appends the short window
 token a watch row can carry — `Spark 5h`, `Spark Weekly`. The token joins with a space rather than
