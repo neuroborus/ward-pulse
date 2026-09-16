@@ -18,8 +18,17 @@ const claudePlanRingId = 'allowance.claude.plan';
 /// selection stored under it.
 const cursorPlanRingId = 'allowance.cursor.plan';
 
-/// What a shared band is called where a pair counts as one: the payload preview.
-const cursorPlanRingLabel = 'Cursor plan';
+const cursorOwnPoolId = 'allowance.cursor.cursor-plan-models';
+const cursorOtherPoolId = 'allowance.cursor.cursor-plan-other';
+
+/// Disjoint pairs in fixed inner/outer order; band names are family + ` plan`.
+const _splitBands = [
+  (
+    innerId: cursorOwnPoolId,
+    outerId: cursorOtherPoolId,
+    bandLabel: 'Cursor plan',
+  ),
+];
 
 /// Claude plan window allowance ids, tie-break order (shorter / primary first).
 const _claudePlanWindowIds = <String>[
@@ -339,15 +348,16 @@ List<WatchRingMetric> watchRingCatalog(
   return metrics;
 }
 
-/// What a selection costs in ring slots: **bands**, not pools. Both Cursor pools
-/// picked together share one band, so they cost one slot; either alone is an
+/// What a selection costs in ring slots: **bands**, not pools. Both halves of a
+/// configured pair share one band, so they cost one slot; either alone is an
 /// ordinary ring (`WATCH_RING_DESIGN.md`, Split band).
 int watchRingSlotCost(Iterable<String> ids) {
   final selected = ids.toList(growable: false);
-  final shared =
-      selected.contains(cursorOwnPoolId) &&
-      selected.contains(cursorOtherPoolId);
-  return selected.length - (shared ? 1 : 0);
+  final shared = _splitBands.where(
+    (band) =>
+        selected.contains(band.innerId) && selected.contains(band.outerId),
+  );
+  return selected.length - shared.length;
 }
 
 /// Keeps ids in order while they fit the slot budget, counting by band.
@@ -401,32 +411,35 @@ List<WatchRingMetric> resolveWatchRings(
   ];
 }
 
-/// The Cursor plan's two pools share one band, so they travel as one entry: the
-/// own-models pool with the external one folded into its `split`
-/// (`WATCH_RING_DESIGN.md`, Split band).
+/// Packs configured pairs into one entry, with the outer half in its `split`.
 ///
 /// The pair keeps the place of its **tighter** half, which is where the surface
-/// order already put it, while inside the entry the order is by pool — own
-/// first — because that side is a name, not a rank.
-const cursorOwnPoolId = 'allowance.cursor.cursor-plan-models';
-const cursorOtherPoolId = 'allowance.cursor.cursor-plan-other';
-
-List<(WatchRingMetric, WatchRingMetric?)> pairCursorPools(
+/// order already put it. Inside the entry, the table fixes inner/outer order
+/// because that side is a name, not a rank (`WATCH_RING_DESIGN.md`, Split band).
+List<(WatchRingMetric, WatchRingMetric?)> pairWatchRings(
   List<WatchRingMetric> rings,
 ) {
-  final own = rings.where((ring) => ring.id == cursorOwnPoolId).firstOrNull;
-  final other = rings.where((ring) => ring.id == cursorOtherPoolId).firstOrNull;
-  if (own == null || other == null) {
-    return [for (final ring in rings) (ring, null)];
-  }
-  final tighter = rings.indexOf(own) < rings.indexOf(other) ? own : other;
-  return [
-    for (final ring in rings)
-      if (ring.id == tighter.id)
-        (own, other)
-      else if (ring.id != cursorOwnPoolId && ring.id != cursorOtherPoolId)
-        (ring, null),
+  var bands = <(WatchRingMetric, WatchRingMetric?)>[
+    for (final ring in rings) (ring, null),
   ];
+  for (final definition in _splitBands) {
+    final inner =
+        rings.where((ring) => ring.id == definition.innerId).firstOrNull;
+    final outer =
+        rings.where((ring) => ring.id == definition.outerId).firstOrNull;
+    if (inner == null || outer == null) {
+      continue;
+    }
+    final tighter = rings.indexOf(inner) < rings.indexOf(outer) ? inner : outer;
+    bands = [
+      for (final band in bands)
+        if (band.$1.id == tighter.id)
+          (inner, outer)
+        else if (band.$1.id != inner.id && band.$1.id != outer.id)
+          band,
+    ];
+  }
+  return bands;
 }
 
 /// Display order for Wear/WFF/Glance: omit exhausted layers, tightest remaining first.
@@ -490,13 +503,13 @@ List<WatchRingMetric> orderWatchRingsForSurface(
 
 /// Short subtitle for Watchface preview and Settings diagnostics.
 ///
-/// Counts **bands**, not pools: a Cursor pair travels as one payload entry and
-/// costs one slot, so it is named once, by the row the user checked.
+/// Counts **bands**, not pools: a pair travels as one payload entry and costs
+/// one slot, so it is named once using the table's band label.
 String watchRingPayloadSubtitle(
   DashboardSnapshot snapshot,
   WatchRingPreferences ringPreferences,
 ) {
-  final bands = pairCursorPools(
+  final bands = pairWatchRings(
     orderWatchRingsForSurface(
       resolveWatchRings(snapshot, ringPreferences),
       snapshot: snapshot,
@@ -512,14 +525,22 @@ String watchRingPayloadSubtitle(
         split == null || ring.remainingPercent! <= split.remainingPercent!
             ? ring
             : split;
-    final title = split == null ? ring.catalogTitle : cursorPlanRingLabel;
+    final title = _watchRingBandTitle(ring, split);
     return '$title ${tightest.remainingPercent!.round()}% left';
   }
   final titles = [
-    for (final (ring, split) in bands)
-      if (split == null) ring.catalogTitle else cursorPlanRingLabel,
+    for (final (ring, split) in bands) _watchRingBandTitle(ring, split),
   ];
   return '${bands.length} rings · ${titles.join(', ')}';
+}
+
+String _watchRingBandTitle(WatchRingMetric ring, WatchRingMetric? split) {
+  if (split == null) {
+    return ring.catalogTitle;
+  }
+  return _splitBands
+      .firstWhere((band) => band.innerId == ring.id && band.outerId == split.id)
+      .bandLabel;
 }
 
 /// Owning provider for `allowance.<provider>.…`, or null for budgets / unknown.

@@ -107,6 +107,59 @@ void main() {
     expect(payload, expected);
   });
 
+  for (final (innerUsed, outerUsed) in [(47.0, 62.0), (62.0, 47.0)]) {
+    test('keeps Cursor payload order at $innerUsed/$outerUsed used', () {
+      final json =
+          jsonDecode(
+                File(
+                  '../../fixtures/snapshots/dashboard_today.json',
+                ).readAsStringSync(),
+              )
+              as Map<String, dynamic>;
+      final account = (json['accounts'] as List).first as Map<String, dynamic>;
+      account['provider'] = 'cursor';
+      account['connection'] = 'cursor.plan';
+      account['allowances'] = [
+        _cursorPool('cursor-plan-models', 'Cursor Models', innerUsed),
+        _cursorPool('cursor-plan-other', 'Other Models', outerUsed),
+      ];
+      final dashboard = DashboardSnapshot.fromJson(json);
+      const preferences = WatchRingPreferences(
+        selectedIds: [cursorOtherPoolId, cursorOwnPoolId],
+      );
+      final payload =
+          jsonDecode(
+                WatchDashboardSummaryPayload.fromSnapshot(
+                  dashboard,
+                  preferences,
+                ).encode(),
+              )
+              as Map<String, dynamic>;
+
+      expect(payload['schemaVersion'], 9);
+      expect(payload['rings'], [
+        {
+          'id': cursorOwnPoolId,
+          'label': 'Cursor Models',
+          'usedPercent': innerUsed,
+          'status': 'ok',
+          'spent': null,
+          'limit': null,
+          'split': {
+            'id': cursorOtherPoolId,
+            'label': 'Other Models',
+            'usedPercent': outerUsed,
+            'status': 'ok',
+          },
+        },
+      ]);
+      expect(
+        watchRingPayloadSubtitle(dashboard, preferences),
+        'Cursor plan 38% left',
+      );
+    });
+  }
+
   test('marks the previous watch summary stale after a sync failure', () {
     final dashboard =
         DashboardSnapshot.fromJsonString(

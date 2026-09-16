@@ -99,7 +99,7 @@ void main() {
     // Cutting at three rings dropped a pool and the band arrived undivided.
     expect(surface.map((ring) => ring.id), contains(cursorOwnPoolId));
     expect(surface.map((ring) => ring.id), contains(cursorOtherPoolId));
-    final packed = pairCursorPools(surface);
+    final packed = pairWatchRings(surface);
     // Two bands: Codex is tighter and sorts first, the pair follows whole.
     expect(packed.length, 2);
     expect(packed.last.$1.id, cursorOwnPoolId);
@@ -154,32 +154,39 @@ void main() {
     status: ProviderStatus.ok,
   );
 
-  test('the Cursor pools travel as one entry, own models first', () {
-    final packed = pairCursorPools([
-      ring(cursorOtherPoolId, 90),
-      ring('allowance.claude.plan', 40),
-      ring(cursorOwnPoolId, 10),
-    ]);
+  for (final innerIsTighter in [true, false]) {
+    test('pairs Cursor inner-first when inner is tighter: $innerIsTighter', () {
+      final inner = ring(cursorOwnPoolId, innerIsTighter ? 90 : 10);
+      final outer = ring(cursorOtherPoolId, innerIsTighter ? 10 : 90);
+      final tightest = ring('allowance.codex.codex-primary', 95);
+      final middle = ring(claudePlanRingId, 40);
+      final packed = pairWatchRings(
+        orderWatchRingsForSurface([inner, outer, middle, tightest]),
+      );
 
-    // One band, so one entry — and it keeps the place of the tighter half.
-    expect(packed.length, 2);
-    expect(packed.first.$1.id, cursorOwnPoolId);
-    expect(packed.first.$2?.id, cursorOtherPoolId);
-    expect(packed.last.$1.id, 'allowance.claude.plan');
-    expect(packed.last.$2, isNull);
-  });
+      // The pair follows the tighter half, but its internal order never swaps.
+      expect(packed, [(tightest, null), (inner, outer), (middle, null)]);
+    });
+  }
 
-  test('one Cursor pool alone is an ordinary ring', () {
-    final packed = pairCursorPools([ring(cursorOwnPoolId, 10)]);
+  for (final id in [cursorOwnPoolId, cursorOtherPoolId]) {
+    test('a lone $id is an ordinary ring', () {
+      final single = ring(id, 10);
+      expect(pairWatchRings([single]), [(single, null)]);
+      expect(watchRingSlotCost([id]), 1);
+    });
+  }
 
-    expect(packed.length, 1);
-    expect(packed.single.$2, isNull);
+  test('packing an empty selection produces no bands', () {
+    expect(pairWatchRings([]), isEmpty);
+    expect(watchRingSlotCost([]), 0);
   });
 
   test('two pools cost one slot, one pool costs one too', () {
     // The pair is a band, not two rings: picking both spends a single slot, so
     // a third ring still fits (`WATCH_RING_DESIGN.md`, Split band).
     expect(watchRingSlotCost([cursorOwnPoolId, cursorOtherPoolId]), 1);
+    expect(watchRingSlotCost([cursorOtherPoolId, cursorOwnPoolId]), 1);
     expect(watchRingSlotCost([cursorOwnPoolId]), 1);
     expect(
       watchRingSlotCost([
@@ -595,14 +602,14 @@ void main() {
     );
 
     // Two rows, one band: the payload packs them into a single entry.
-    final packed = pairCursorPools(resolveWatchRings(withPair, both));
+    final packed = pairWatchRings(resolveWatchRings(withPair, both));
     expect(packed.length, 1);
     expect(packed.single.$1.id, cursorOwnPoolId);
     expect(packed.single.$2?.id, cursorOtherPoolId);
 
     // One pool alone stays an ordinary ring, undivided.
     const own = WatchRingPreferences(selectedIds: [cursorOwnPoolId]);
-    final alone = pairCursorPools(resolveWatchRings(withPair, own));
+    final alone = pairWatchRings(resolveWatchRings(withPair, own));
     expect(alone.single.$2, isNull);
   });
 

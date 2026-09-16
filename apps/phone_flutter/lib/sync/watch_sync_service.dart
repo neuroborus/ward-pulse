@@ -98,7 +98,7 @@ class WatchDashboardSummaryPayload {
       'manualRefreshAllowed': window.allowed,
       'manualRefreshAvailableAt': window.availableAt?.toUtc().toIso8601String(),
       'rings': [
-        for (final (ring, split) in pairCursorPools(rings))
+        for (final (ring, split) in pairWatchRings(rings))
           {
             'id': ring.id,
             'label': _ringLabel(ring),
