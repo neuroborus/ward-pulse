@@ -9,7 +9,8 @@ its family color; the summed Today / Week / Month rings are retired); budget-str
 **2026-08-11** (a budget ring repeats its period around its own band as cut-out type);
 split-band revision **2026-08-13** (one Cursor plan's two pools may share a single band, and
 Cursor's own models take a colour of their own); full-ring revision **2026-08-17** (a band with
-nothing spent closes instead of carrying a seam) —
+nothing spent closes instead of carrying a seam); two-split-slot revision **2026-09-16**
+(far markers move into strip slots; slots 106/109 carry the two outer halves) —
 accepted visual target for Wear OS and Watch Face Format until the next explicit design
 revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
@@ -175,7 +176,7 @@ Rules:
   ring slot, drawn in its connection's family color; do not ship a “4 providers” face variant in
   review art.
 
-## Split band (revision 2026-08-13)
+## Split band (revised 2026-09-16)
 
 A Cursor plan reports two pools — its own models and the external ones — and they are not
 substitutes: exhausting one does not let the work continue on the other, it changes the tool.
@@ -199,11 +200,20 @@ on its own value.
 4. **The strip splits with the band.** A pair's strip carries a marker at each end, in the two
    colours, and two percentages in one TEXT, as every strip label is composed whole. One marker
    stays the rule for every other strip: two of the same colour would say a thing twice, which is
-   the defect this language exists to avoid. The second marker cannot be painted from the band's
-   own strip slot: `[COMPLICATION.RANGED_VALUE_COLORS]` is scoped to one `ComplicationSlot`, so
-   the two ends need two of them. The fourth strip — the last spare rule 7's budget had — was
-   spent on this on **2026-08-16**: one slot for all three rows, the row chosen by its own
-   `TITLE`, the same shape as the shared ring slot. The eight-slot budget is now fully spent.
+   the defect this language exists to avoid. Each strip's `TITLE` carries a closed outer-pool
+   token: `cursor-other` selects the static palette colour `#67E8D4`. An empty or unknown token
+   paints no far marker. The inner accent keeps `[COMPLICATION.RANGED_VALUE_COLORS]`; the
+   outer accent does not borrow its colour. A new outer pool requires a matching token in Wear
+   and the face generator. The far marker keeps its 3x14 geometry inside the strip's own slot,
+   replacing the shared marker slot introduced on **2026-08-16**.
+
+   **Old-face compatibility:** service names remain stable, but their data changes. With one
+   pair, old slot 109 receives `NoData` and its far marker disappears. With two pairs, the first
+   keeps both arcs without its marker; the second has no outer arc because old slot 109 still
+   draws a marker. It interprets the second split's outside-counted band index as a payload row
+   and may mark another row. Updating the face restores the matching layout; retaining service
+   names alone cannot preserve the old rendering.
+
 5. **A split strip carries no credits.** The well is measured for one worst-case label, and two
    percentages spend that width. Nothing is lost: Glance already lists purchased credits per
    provider, and that is where a reader looks for a number rather than a warning.
@@ -213,21 +223,25 @@ on its own value.
    strip. Cursor's external pool runs out routinely, so this is the common state, not the corner
    case — a half-empty split band would spend the scarcest space on a number that is already
    zero.
-7. **One payload entry, two complications — and one shared slot for the outer half.** A
+7. **One payload entry, two complications — two shared slots for outer halves.** A
    `RANGED_VALUE` complication carries one value, so two melts need two complications however the
-   payload is shaped: the entry travels whole and Wear publishes its two pools separately. Where
-   they land is decided by a hard limit: **a WFF scene holds at most eight `ComplicationSlot`
-   elements** (`maxOccurs="8"`, unchanged in format versions 2, 4 and 5), and this face has held
-   exactly eight since 2026-07-25. A second slot per band would need nine and does not exist.
-   What those eight *are* has changed twice since — the fourth ring became the shared outer half,
-   the fourth strip became the split marker — but never how many.
-   So the outer half gets **one slot for all three bands**, taking over the fourth ring slot the
-   face declares and never draws. Its `BoundingArc` is thick enough to reach every band, and a
-   `Condition` on its own `TITLE` — the band index, written by the watch — picks which band it
-   draws on. The band's own slot learns from its own `TITLE` that it is now half a band. Both are
-   the same mechanism the ring type already uses: a slot can only read its own complication, so
-   everything it needs to know arrives in that string. The two uses never collide — a `TITLE`
-   holds a period only for a budget ring, and a pair is always two plan pools.
+   payload is shaped. A WFF scene holds at most eight `ComplicationSlot` elements (`maxOccurs="8"`,
+   unchanged in format versions 2, 4 and 5), and this face still uses exactly eight: three band
+   slots, two outer-half slots and three strips. Moving the marker into each strip frees slot
+   109 for the second outer half without adding a slot.
+
+   `RingSplitComplicationDataSourceService` selects split ordinal 0 in slot 106;
+   `StripSplitComplicationDataSourceService` selects ordinal 1 in slot 109. Ordinals follow the
+   payload's split entries, not all its rings. A missing or exhausted selected outer half yields
+   `NoData`; an exhausted entry does not shift the next ordinal. Each slot's `BoundingArc`
+   reaches all three bands. Its `TITLE` names the band index **counted from the outside**, mapped
+   from the payload index by `RingSurfaceOrder`, and a string comparison selects the radius.
+   At most two bands can split; a third outer half has no slot.
+
+   The band's own `TITLE` still says `split` for an inner half. Period tokens belong only to
+   budget rings, so these uses cannot collide. The phone currently offers only the Cursor pair;
+   a second pair is routing capacity until its separate product change lands.
+
 8. **The payload says "one band", not "two rings".** The contract caps `rings` at three entries
    (`schemas/watch_dashboard_summary.schema.json`, `maxItems: 3`), and three entries mean three
    bands. If a pair travelled as two entries, a face holding a pair and two other rings would
@@ -340,13 +354,19 @@ The strip stack was resized with the rings — 88x18 boxes stepping 21 units fro
 stack pitch of its own that has nothing to do with the 24-unit ring pitch. The previous 96x20
 stack reached radius 142.3 and would have cut into the widened inner band.
 
-Only three strips render, matching the three-ring cap. The fourth **ring** slot is no longer a
-fourth ring at all: since the split-band revision shipped it draws the outer half of whichever
-band is shared, at whatever radius that band sits (Split band, rule 7). The fourth **strip** slot is no longer a fourth row
-either: since 2026-08-16 it carries the far-end marker of a split strip, a box over all three
-rows that paints one 3x14 arc at the right edge of the row its `TITLE` names (measured on the
-watch: the marker lands at x 265–268 of the 181–269 strip, on the paired row only). Nothing in
-the eight-slot budget is spare now.
+Only three strips render, matching the three-ring cap. As of **2026-09-16**, the former fourth
+**ring** slot (106) carries the first split's outer half, and the former fourth **strip** slot
+(109) carries the second split's outer half. Both reach all three radii and select the band by
+its outside-counted `TITLE`. The far-end marker now lives inside each strip slot, selected by
+its outer-pool token, with the same declared 3x14 arc and right-edge position. Nothing in the
+eight-slot budget is spare now.
+
+The historical **2026-08-16** reading remains: the shared marker landed at x 265–268 of the
+181–269 strip, on the paired row only. This is evidence for the previous rendering, not a new
+measurement after the move. Marker equivalence on the updated face is **deferred until live-data
+verification**. Keep the geometry constants and review art unchanged pending that check. Any new measurement must record its date and the actual device;
+for the planned check this is `wardpulse_wear_round_api36_1`, a round API-36 emulator, not shipped
+watch hardware.
 
 `tools/render-watch-ring-designs.mjs` carries the same measured values, so review art shows
 what the watch shows. Before that revision the generator drew the nominal 26, roughly 2.3x
@@ -466,7 +486,7 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
 | Surface | Role |
 |---------|------|
 | Wear OS app Glance | **Not** this face language — locked text legend (`WEAR_GLANCE_DESIGN.md`, 2026-07-26) |
-| WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs plus sunk `RANGED_VALUE` strips (`%` / `% · credits` / `$12.34/100` for budgets) in `watchface.xml`. Every strip TEXT is the full label (WFF `length(TITLE)` Conditions are unreliable). Strip accents use `[COMPLICATION.RANGED_VALUE_COLORS]` (family ColorRamp). Keep progress/track spans below 360° (scale onto 359.9°) — a closed circle collapses to a ROUND tip. Remaining melt is clockwise from 12: Transform `startAngle` to `(1 - value/max) * 359.9` with fixed `endAngle` 359.9. Strips need their own `BoundingBox` slots (`BoundingArc` clips content to the arc band). A scene holds **at most eight** `ComplicationSlot` elements in every format version and this face has used all eight since 2026-07-25, so a new slot has to come out of that budget (Split band, rule 7). |
+| WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs plus sunk `RANGED_VALUE` strips (`%` / `% · credits` / `$12.34/100` for budgets) in `watchface.xml`. Every strip TEXT is the full label (WFF `length(TITLE)` Conditions are unreliable). Inner strip accents use `[COMPLICATION.RANGED_VALUE_COLORS]` (family ColorRamp); far markers use static palette colours selected by strip `TITLE` (Split band, rule 4). Keep progress/track spans below 360° (scale onto 359.9°) — a closed circle collapses to a ROUND tip. Remaining melt is clockwise from 12: Transform `startAngle` to `(1 - value/max) * 359.9` with fixed `endAngle` 359.9. Strips need their own `BoundingBox` slots (`BoundingArc` clips content to the arc band). A scene holds **at most eight** `ComplicationSlot` elements in every format version and this face has used all eight since 2026-07-25, so a new slot has to come out of that budget (Split band, rule 7). |
 | Phone Watchface tab | Slot selection + preview of next payload rings (not Settings). Rows are grouped since 2026-08-16: a heading per kind of connection, a sub-heading per connection, the same outline the Widget tab uses |
 
 ## Non-goals

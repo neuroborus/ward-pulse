@@ -4,8 +4,8 @@
  * `apps/watchface_wff/src/main/res/raw/watchface.xml` and the ring-type drawables
  * it names (geometry and language rules: `docs/product/WATCH_RING_DESIGN.md`).
  *
- * Four rings and four strips are the same block four times over, and ring type
- * multiplies the ring block again — one branch per period, one image per branch.
+ * Three rings, two shared outer-half slots and three strips spend eight slots.
+ * Ring type multiplies the ring block — one branch per period, one image per branch.
  * Hand-editing means editing one and missing eight; the next such feature
  * multiplies the copies again, not the ideas.
  *
@@ -87,13 +87,14 @@ const OUTER_HALF_INSET = 10
 const INNER_HALF_INSET = 30
 
 /**
- * One slot draws the outer half of whichever band is shared, because a WFF scene
- * holds at most eight `ComplicationSlot` elements and this face spends all eight
- * (`WATCH_RING_DESIGN.md`, Split band, rule 7). It takes the id the fourth ring
- * used to hold, and picks its radius from the band index the watch writes into
- * TITLE — counted from the outside, mirroring the payload order.
+ * Two outer-half slots dispatch by outside-counted band index in TITLE.
+ * Moving the far marker into each strip frees slot 109 without exceeding eight.
+ * Keep ordinal 0 on 106 so an installed old face retains its first outer arc.
  */
-const OUTER_HALF = { slotId: 106, service: 'RingSplit' }
+const OUTER_HALVES = [
+  { slotId: 106, service: 'RingSplit', label: 'outer_half_complication' },
+  { slotId: 109, service: 'StripSplit', label: 'split_marker_complication' },
+]
 
 /** The token a band's own slot sends when it draws only its inner half. */
 const SPLIT_TOKEN = 'split'
@@ -235,15 +236,8 @@ const STRIPS = [
   { slotId: 108, service: 'Strip3' },
 ]
 
-/**
- * The far end of a split band's strip: one slot for all three rows, the last
- * one the eight-slot budget had (`WATCH_RING_DESIGN.md`, Split band, rule 4).
- * `[COMPLICATION.RANGED_VALUE_COLORS]` is scoped to its own slot, so the second
- * colour cannot come from the strip that already carries the first; it comes
- * from here, and TITLE — the strip row, which is the payload index — says which
- * row to mark.
- */
-const SPLIT_MARKER = { slotId: 109, service: 'StripSplit' }
+/** Closed vocabulary shared with WatchComplicationText.splitPoolToken. */
+const SPLIT_POOLS = [{ token: 'cursor-other', color: '#67E8D4' }]
 
 /** Every slot names a service in the Wear app; nothing else may fill them. */
 function provider(service) {
@@ -266,6 +260,7 @@ const HEADER = `<?xml version="1.0" encoding="utf-8"?>
 
   BoundingArc clips ring-slot content — strips use BoundingBox slots after clock.
   Strip TEXT = full label (\`46%\` or \`100% · 500\` on the owning family).
+  Strip TITLE = closed outer-pool token; the far marker uses its static palette color.
   Remaining melt: Transform startAngle (1 - value/max)*359.9, endAngle fixed 359.9
   so usage opens clockwise from 12 and remaining ends at 12.
 -->`
@@ -535,10 +530,10 @@ ${bandArcs(diameter, BAND_THICKNESS, ' '.repeat(36))}${ringTexture(diameter, ind
 }
 
 /**
- * The outer half of whichever band is shared. One slot, three radii: the watch
+ * One selected split ordinal, three possible radii: the watch
  * writes the band index — counted from the outside — into TITLE, and the branch
- * below turns it into a radius. `NoData` while no band is shared, which is the
- * usual state, and then this slot draws nothing at all.
+ * below turns it into a radius. A missing split ordinal yields `NoData`, so
+ * that slot draws nothing.
  *
  * Its `BoundingArc` has to reach every band it may draw on, so it spans from the
  * outermost half down to the innermost one rather than hugging a single band.
@@ -546,13 +541,13 @@ ${bandArcs(diameter, BAND_THICKNESS, ' '.repeat(36))}${ringTexture(diameter, ind
  * slot, which take twice their centre line. Measured 2026-08-16: with `width`
  * set to twice the centre the clip cut the outermost half in half.
  */
-function outerHalfSlot() {
+function outerHalfSlot({ slotId, service, label }) {
   const centres = RINGS.map(({ diameter }) => (diameter - OUTER_HALF_INSET) / 2)
   const clipOuter = Math.max(...centres) + HALF_THICKNESS
   const clipInner = Math.min(...centres) - HALF_THICKNESS
   const branches = RINGS.map(
     ({ diameter }, index) => `                    <Compare expression="isBand${index}">
-                        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="outerHalf${index + 1}">
+                        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="outerHalf${slotId}_${index + 1}">
 ${bandArcs(diameter - OUTER_HALF_INSET, HALF_THICKNESS, ' '.repeat(28))}
                         </Group>
                     </Compare>`,
@@ -566,12 +561,12 @@ ${bandArcs(diameter - OUTER_HALF_INSET, HALF_THICKNESS, ' '.repeat(28))}
             y="0"
             width="${FACE.size}"
             height="${FACE.size}"
-            slotId="${OUTER_HALF.slotId}"
-            displayName="@string/outer_half_complication"
+            slotId="${slotId}"
+            displayName="@string/${label}"
             supportedTypes="RANGED_VALUE EMPTY"
             isCustomizable="FALSE">
             <DefaultProviderPolicy
-                primaryProvider="${provider(OUTER_HALF.service)}"
+                primaryProvider="${provider(service)}"
                 primaryProviderType="RANGED_VALUE"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
@@ -702,6 +697,7 @@ function stripSlot({ slotId, service }, index) {
                                 cap="BUTT" />
                         </Arc>
                     </PartDraw>
+${splitMarker()}
                     <PartText x="${textInset}" y="0" width="${textWidth}" height="${height}">
                         <Text align="CENTER" ellipsis="TRUE">
                             <Font family="SYNC_TO_DEVICE" size="${fontSize}" weight="BOLD" color="${
@@ -719,60 +715,35 @@ function stripSlot({ slotId, service }, index) {
         </ComplicationSlot>`
 }
 
-/** Mirrors the accent on the left of a strip, at the right edge of one row. */
-function splitMarkerSlot() {
-  const { width, height, pitch } = STRIP
-  const rows = STRIPS.length
-  const branches = STRIPS.map(
-    (_, index) => `                    <Compare expression="isRow${index}">
-                        <PartDraw x="0" y="${index * pitch}" width="${width}" height="${height}">
-                            <Arc
-                                centerX="${width - 1.5}"
-                                centerY="${height / 2}"
-                                width="3"
-                                height="14"
-                                startAngle="${SWEEP.start}"
-                                endAngle="${SWEEP.end}">
-                                <WeightedStroke
-                                    thickness="3"
-                                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-                                    cap="BUTT" />
-                            </Arc>
-                        </PartDraw>
-                    </Compare>`,
+/** The strip owns both accents; only its inner pool uses the ColorRamp. */
+function splitMarker() {
+  const { width, height } = STRIP
+  const expressions = SPLIT_POOLS.map(
+    ({ token }, index) =>
+      `                            <Expression name="isPool${index}"><![CDATA[[COMPLICATION.TITLE] == "${token}"]]></Expression>`,
   ).join('\n')
-  const expressions = STRIPS.map(
-    (_, index) =>
-      `                        <Expression name="isRow${index}"><![CDATA[[COMPLICATION.TITLE] == "${index}"]]></Expression>`,
+  const branches = SPLIT_POOLS.map(
+    ({ color }, index) => `                        <Compare expression="isPool${index}">
+                            <PartDraw x="0" y="0" width="${width}" height="${height}">
+                                <Arc
+                                    centerX="${width - 1.5}"
+                                    centerY="${height / 2}"
+                                    width="3"
+                                    height="14"
+                                    startAngle="${SWEEP.start}"
+                                    endAngle="${SWEEP.end}">
+                                    <Stroke thickness="3" color="${color}" cap="BUTT" />
+                                </Arc>
+                            </PartDraw>
+                        </Compare>`,
   ).join('\n')
-  return `        <ComplicationSlot
-            x="${STRIP.x}"
-            y="${STRIP.top}"
-            width="${width}"
-            height="${(rows - 1) * pitch + height}"
-            slotId="${SPLIT_MARKER.slotId}"
-            displayName="@string/split_marker_complication"
-            supportedTypes="RANGED_VALUE EMPTY"
-            isCustomizable="FALSE">
-            <DefaultProviderPolicy
-                primaryProvider="${provider(SPLIT_MARKER.service)}"
-                primaryProviderType="RANGED_VALUE"
-                defaultSystemProvider="EMPTY"
-                defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="${width}" height="${(rows - 1) * pitch + height}" />
-            <Complication type="RANGED_VALUE">
-                <Group x="0" y="0" width="${width}" height="${(rows - 1) * pitch + height}" name="split_marker" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <Condition>
+  // No Default branch: an empty or unknown token paints no far marker.
+  return `                    <Condition>
                         <Expressions>
 ${expressions}
                         </Expressions>
 ${branches}
-                    </Condition>
-                </Group>
-            </Complication>
-            <Complication type="EMPTY" />
-        </ComplicationSlot>`
+                    </Condition>`
 }
 
 function face() {
@@ -780,13 +751,16 @@ function face() {
   // the first ring sits on and the comment introduces the strip stack, so
   // neither is cut off from what follows it.
   const body = [
-    [lift(), RINGS.map(ringSlot).join('\n\n'), outerHalfSlot()].join('\n\n'),
+    [
+      lift(),
+      RINGS.map(ringSlot).join('\n\n'),
+      OUTER_HALVES.map(outerHalfSlot).join('\n\n'),
+    ].join('\n\n'),
     clock(),
     [
       wordmark(),
       stripComment(),
       STRIPS.map(stripSlot).join('\n\n'),
-      splitMarkerSlot(),
     ].join('\n'),
   ].join('\n\n')
   return `${HEADER}

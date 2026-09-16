@@ -1,5 +1,6 @@
 package app.wardpulse.wear.complication
 
+import androidx.wear.watchface.complications.data.NoDataComplicationData
 import app.wardpulse.wear.model.AllowanceSummary
 import app.wardpulse.wear.model.CreditsGlance
 import app.wardpulse.wear.model.PreviewWatchDashboardSummary
@@ -11,9 +12,109 @@ import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.WatchDataMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WatchComplicationTextTest {
+    private val cursorPair =
+        RingSummary(
+            "allowance.cursor.cursor-plan-models",
+            "Cursor Models",
+            18.0,
+            PulseStatus.OK,
+            split = RingHalf("allowance.cursor.cursor-plan-other", "Other Models", 59.0, PulseStatus.OK),
+        )
+
+    @Test
+    fun outerHalfServicesSelectTheirSplitOrdinalAndMirrorTheBandIndex() {
+        val single = RingSummary("allowance.claude.plan", "Weekly", 30.0, PulseStatus.OK)
+        // A synthetic second pair exercises routing before the phone supports two pairs.
+        val secondPair =
+            cursorPair.copy(
+                id = "allowance.test.inner",
+                split = RingHalf("allowance.test.outer", "Test outer", 25.0, PulseStatus.OK),
+            )
+        val first = RingSplitComplicationDataSourceService.SPLIT_INDEX
+        val second = StripSplitComplicationDataSourceService.SPLIT_INDEX
+        assertEquals(0, first)
+        assertEquals(1, second)
+
+        fun selected(rings: List<RingSummary>, ordinal: Int, half: RingHalf?, outsideIndex: Int) {
+            // Capture routing without creating Android tap actions in a host-side test.
+            val built = NoDataComplicationData()
+            var called = false
+            val result =
+                outerHalfComplicationData(rings, ordinal) { actualHalf, actualIndex ->
+                    called = true
+                    assertEquals(half, actualHalf)
+                    assertEquals(outsideIndex, actualIndex)
+                    built
+                }
+            assertTrue(called)
+            assertSame(built, result)
+        }
+
+        selected(listOf(cursorPair), first, cursorPair.split, 0)
+        selected(listOf(single, cursorPair), first, cursorPair.split, 0)
+        selected(listOf(cursorPair, single), first, cursorPair.split, 1)
+        val twoPairs = listOf(cursorPair, single, secondPair)
+        selected(twoPairs, first, cursorPair.split, 2)
+        selected(twoPairs, second, secondPair.split, 0)
+        selected(listOf(single, cursorPair, secondPair), first, cursorPair.split, 1)
+        val exhausted = cursorPair.copy(split = cursorPair.split!!.copy(usedPercent = 100.0))
+        selected(listOf(exhausted, single, secondPair), second, secondPair.split, 0)
+    }
+
+    @Test
+    fun absentOrExhaustedSplitsReturnNoDataWithoutBuildingAnArc() {
+        val single = cursorPair.copy(split = null)
+        val exhausted = cursorPair.copy(split = cursorPair.split!!.copy(usedPercent = 100.0))
+        val first = RingSplitComplicationDataSourceService.SPLIT_INDEX
+        val second = StripSplitComplicationDataSourceService.SPLIT_INDEX
+        val cases =
+            listOf(
+                emptyList<RingSummary>() to first,
+                emptyList<RingSummary>() to second,
+                listOf(single) to first,
+                listOf(single) to second,
+                listOf(cursorPair) to second,
+                listOf(exhausted, cursorPair) to first,
+                listOf(cursorPair, exhausted) to second,
+            )
+        for ((rings, ordinal) in cases) {
+            val result =
+                outerHalfComplicationData(rings, ordinal) { _, _ ->
+                    error("Missing or exhausted split must clear the arc")
+                }
+            assertTrue(result is NoDataComplicationData)
+        }
+    }
+
+    @Test
+    fun stripTitleUsesOnlyTheKnownActiveOuterPool() {
+        assertEquals(
+            "cursor-other",
+            WatchComplicationText.splitPoolToken("allowance.cursor.cursor-plan-other"),
+        )
+        assertNull(WatchComplicationText.splitPoolToken("allowance.cursor.cursor-plan-models"))
+        assertNull(WatchComplicationText.splitPoolToken("allowance.test.outer"))
+        assertNull(WatchComplicationText.splitPoolToken(""))
+        assertEquals("cursor-other", WatchComplicationText.stripTitleToken(cursorPair))
+        assertNull(WatchComplicationText.stripTitleToken(cursorPair.copy(split = null)))
+        assertNull(WatchComplicationText.stripTitleToken(cursorPair.copy(usedPercent = 100.0)))
+        assertNull(
+            WatchComplicationText.stripTitleToken(
+                cursorPair.copy(split = cursorPair.split!!.copy(usedPercent = 100.0)),
+            ),
+        )
+        assertNull(
+            WatchComplicationText.stripTitleToken(
+                cursorPair.copy(split = cursorPair.split!!.copy(id = "allowance.test.outer")),
+            ),
+        )
+    }
+
     @Test
     fun formatsUsagePercentages() {
         val summary = PreviewWatchDashboardSummary.value

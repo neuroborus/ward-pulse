@@ -17,6 +17,7 @@ import androidx.wear.watchface.complications.datasource.SuspendingComplicationDa
 import app.wardpulse.wear.MainActivity
 import app.wardpulse.wear.data.WatchSummaryStore
 import app.wardpulse.wear.model.PulseStatus
+import app.wardpulse.wear.model.RingHalf
 import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.RingSurfaceOrder
 import app.wardpulse.wear.model.WatchDashboardSummary
@@ -56,36 +57,36 @@ abstract class ShortTextComplicationDataSourceService :
  * The outer half of a split band: the other pool of a plan that shares one band
  * (`WATCH_RING_DESIGN.md`, Split band).
  *
- * **One service for all three bands.** A WFF scene holds at most eight
- * `ComplicationSlot` elements and this face has spent all eight, so a second
- * slot per band does not exist. The face gives the outer half a single slot
- * that reaches every band and picks the radius from this complication's TITLE:
- * the band index counted **from the outside**, which is not the payload index —
- * [RingSurfaceOrder] mirrors one into the other.
+ * Split ordinal 0 uses slot 106. Class name kept for installed faces.
  *
- * Stays `NoData` while no ring carries a `split`, which is every band on most
- * watches.
+ * On an old face, one pair loses its far marker. With two pairs, the first keeps
+ * both arcs without its marker; the second loses its outer arc, and old slot 109
+ * treats that arc's data as a marker, possibly on another row. Update the face
+ * together with the app to restore the matching layout.
  */
-class RingSplitComplicationDataSourceService : SuspendingComplicationDataSourceService() {
+class RingSplitComplicationDataSourceService : SplitBandComplicationDataSourceService(SPLIT_INDEX) {
+    internal companion object {
+        const val SPLIT_INDEX = 0
+    }
+}
+
+/** Two outer-half services share selection by split ordinal and outside-counted TITLE. */
+abstract class SplitBandComplicationDataSourceService(private val splitIndex: Int) :
+    SuspendingComplicationDataSourceService() {
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
         if (request.complicationType != ComplicationType.RANGED_VALUE) {
             return null
         }
         val rings = WatchSummaryStore(this).load()?.rings.orEmpty()
-        val payloadIndex = rings.indexOfFirst { it.split != null }
-        val half = rings.getOrNull(payloadIndex)?.split
-        val outerSlot = RingSurfaceOrder.outerSlotForPayloadIndex(rings.size, payloadIndex)
-        val remaining = half?.let { WatchComplicationText.remainingPercent(it.usedPercent) }
-        if (half == null || outerSlot == null || remaining == null || remaining <= 0f) {
-            return NoDataComplicationData()
+        return outerHalfComplicationData(rings, splitIndex) { half, outerSlot ->
+            ComplicationBuilders.ranged(
+                this,
+                WatchComplicationText.remainingPercent(half.usedPercent),
+                title = outerSlot.toString(),
+                colorArgb = RingFamily.colorArgb(half.id),
+                contentDescription = half.label,
+            )
         }
-        return ComplicationBuilders.ranged(
-            this,
-            remaining,
-            title = outerSlot.toString(),
-            colorArgb = RingFamily.colorArgb(half.id),
-            contentDescription = half.label,
-        )
     }
 
     override fun getPreviewData(type: ComplicationType): ComplicationData? =
@@ -100,6 +101,23 @@ class RingSplitComplicationDataSourceService : SuspendingComplicationDataSourceS
         } else {
             null
         }
+}
+
+/** Missing/exhausted splits clear stale data; ordinal selection never skips an exhausted split. */
+internal fun outerHalfComplicationData(
+    rings: List<RingSummary>,
+    splitIndex: Int,
+    build: (RingHalf, Int) -> ComplicationData,
+): ComplicationData {
+    val payloadIndex = rings.indices.filter { rings[it].split != null }.getOrNull(splitIndex)
+        ?: return NoDataComplicationData()
+    val half = rings[payloadIndex].split ?: return NoDataComplicationData()
+    val outerSlot = RingSurfaceOrder.outerSlotForPayloadIndex(rings.size, payloadIndex)
+        ?: return NoDataComplicationData()
+    if (WatchComplicationText.remainingPercent(half.usedPercent) <= 0f) {
+        return NoDataComplicationData()
+    }
+    return build(half, outerSlot)
 }
 
 abstract class RingComplicationDataSourceService :
@@ -219,12 +237,13 @@ private object ComplicationBuilders {
             .build()
     }
 
-    /** Strip row: full label in TEXT + family ColorRamp for the accent (no face arc). */
+    /** Strip row: full TEXT, inner ColorRamp and optional outer-pool token in TITLE. */
     fun strip(
         context: Context,
         label: String,
         remainingPercent: Float,
         colorArgb: Int,
+        title: String? = null,
     ): ComplicationData {
         val value = remainingPercent.coerceIn(0.1f, 100f)
         return RangedValueComplicationData.Builder(
@@ -233,6 +252,11 @@ private object ComplicationBuilders {
             max = 100f,
             contentDescription = PlainComplicationText.Builder(label).build(),
         ).setText(PlainComplicationText.Builder(label).build())
+            .apply {
+                if (!title.isNullOrBlank()) {
+                    setTitle(PlainComplicationText.Builder(title).build())
+                }
+            }
             .setColorRamp(ColorRamp(intArrayOf(colorArgb), /* interpolated = */ false))
             .setTapAction(tapAction(context))
             .build()
@@ -326,6 +350,7 @@ abstract class RingStripComplicationDataSourceService : SuspendingComplicationDa
             label = label,
             remainingPercent = remaining,
             colorArgb = colorArgb,
+            title = ring?.let { WatchComplicationText.stripTitleToken(it) },
         )
     }
 
@@ -355,49 +380,18 @@ class Strip3ComplicationDataSourceService : RingStripComplicationDataSourceServi
 }
 
 /**
- * The far end of a split band's strip (`WATCH_RING_DESIGN.md`, Split band, rule
- * 4): one marker, in the second pool's colour, on the row that band occupies.
+ * Split ordinal 1 in slot 109, formerly the far strip marker. Class name kept
+ * for installed faces; the updater still requests both outer-half services.
  *
- * `[COMPLICATION.RANGED_VALUE_COLORS]` is scoped to its own slot, so the second
- * colour cannot come from the strip that already carries the first. TITLE is the
- * strip row — the payload index, which strips use directly — and the face turns
- * it into a position. `NoData` while no band is shared.
+ * On an old face, one pair loses its far marker because this service returns
+ * NoData. With two pairs, the first keeps both arcs without its marker; the
+ * second has no outer arc, and slot 109 interprets its outside-counted TITLE
+ * as a strip row, possibly marking another row. Updating the face fixes both.
  */
-class StripSplitComplicationDataSourceService : SuspendingComplicationDataSourceService() {
-    override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
-        if (request.complicationType != ComplicationType.RANGED_VALUE) {
-            return null
-        }
-        val rings = WatchSummaryStore(this).load()?.rings.orEmpty()
-        val row = rings.indexOfFirst { it.split != null }
-        val half = rings.getOrNull(row)?.split ?: return NoDataComplicationData()
-        val remaining = WatchComplicationText.remainingPercent(half.usedPercent)
-        if (remaining <= 0f) {
-            return NoDataComplicationData()
-        }
-        // `ranged`, not `strip`: the row travels in TITLE, and this slot draws a
-        // marker rather than a label.
-        return ComplicationBuilders.ranged(
-            this,
-            remaining,
-            title = row.toString(),
-            colorArgb = RingFamily.colorArgb(half.id),
-            contentDescription = half.label,
-        )
+class StripSplitComplicationDataSourceService : SplitBandComplicationDataSourceService(SPLIT_INDEX) {
+    internal companion object {
+        const val SPLIT_INDEX = 1
     }
-
-    override fun getPreviewData(type: ComplicationType): ComplicationData? =
-        if (type == ComplicationType.RANGED_VALUE) {
-            ComplicationBuilders.ranged(
-                this,
-                62f,
-                title = "0",
-                colorArgb = RingFamily.CURSOR,
-                contentDescription = "Other Models",
-            )
-        } else {
-            null
-        }
 }
 
 object WatchComplicationText {
@@ -407,6 +401,25 @@ object WatchComplicationText {
      * `tools/render-watchface.mjs`.
      */
     const val SPLIT_TOKEN = "split"
+
+    /**
+     * Closed outer-pool vocabulary. A new pool color needs a matching static
+     * branch in tools/render-watchface.mjs and an entry in the design palette.
+     */
+    fun splitPoolToken(ringId: String): String? =
+        when (ringId) {
+            "allowance.cursor.cursor-plan-other" -> "cursor-other"
+            else -> null
+        }
+
+    /** No marker for an ordinary band, an exhausted half, or an unknown pool. */
+    fun stripTitleToken(ring: RingSummary): String? {
+        val half = ring.split ?: return null
+        if (remainingPercent(ring.usedPercent) <= 0f || remainingPercent(half.usedPercent) <= 0f) {
+            return null
+        }
+        return splitPoolToken(half.id)
+    }
 
     /** Remaining capacity 0–100 for RANGED_VALUE / strip-style labels. */
     fun remainingPercent(usedPercent: Double): Float =
