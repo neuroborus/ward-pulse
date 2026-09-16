@@ -38,45 +38,26 @@
     <text x="225" y="101.0" text-anchor="middle"
       font-family="Noto Sans, sans-serif" font-size="13"
       font-weight="700" fill="#65D78A">OK</text>
-    <circle cx="132" cy="191" r="17" fill="none" stroke="#2E3632"
+    <circle cx="102" cy="245" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
-    <circle cx="132" cy="191" r="17" fill="none" stroke="#65D78A"
+    <circle cx="102" cy="245" r="17" fill="none" stroke="#7E93B8"
       stroke-width="5" stroke-linecap="round"
-      stroke-dasharray="3.55 106.81"
-      stroke-dashoffset="-100.77"
-      transform="rotate(-90 132 191)" />
-    <text x="166" y="189.5"
-      font-family="Noto Sans, sans-serif" font-size="16"
-      font-weight="700" fill="#F4FBF8">Codex · Weekly plan</text>
-    <text x="166" y="209.0"
-      font-family="Noto Sans, sans-serif" font-size="14"
-      font-weight="700" fill="#8A968F">8% left · 320 credits</text>
-    <circle cx="132" cy="245" r="17" fill="none" stroke="#2E3632"
+      stroke-dasharray="82.59 106.81"
+      stroke-dashoffset="-21.73"
+      transform="rotate(-90 102 245)" />
+    <circle cx="153" cy="245" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
-    <circle cx="132" cy="245" r="17" fill="none" stroke="#7E93B8"
+    <circle cx="153" cy="245" r="17" fill="none" stroke="#67E8D4"
       stroke-width="5" stroke-linecap="round"
-      stroke-dasharray="51.61 106.81"
-      stroke-dashoffset="-52.70"
-      transform="rotate(-90 132 245)" />
-    <text x="166" y="243.5"
+      stroke-dasharray="38.79 106.81"
+      stroke-dashoffset="-65.52"
+      transform="rotate(-90 153 245)" />
+    <text x="187" y="243.5"
       font-family="Noto Sans, sans-serif" font-size="16"
-      font-weight="700" fill="#F4FBF8">Cursor Models</text>
-    <text x="166" y="263.0"
+      font-weight="700" fill="#F4FBF8">Cursor plan</text>
+    <text x="187" y="263.0"
       font-family="Noto Sans, sans-serif" font-size="14"
-      font-weight="700" fill="#8A968F">53% left</text>
-    <circle cx="132" cy="299" r="17" fill="none" stroke="#2E3632"
-      stroke-width="5" />
-    <circle cx="132" cy="299" r="17" fill="none" stroke="#67E8D4"
-      stroke-width="5" stroke-linecap="round"
-      stroke-dasharray="61.22 106.81"
-      stroke-dashoffset="-43.09"
-      transform="rotate(-90 132 299)" />
-    <text x="166" y="297.5"
-      font-family="Noto Sans, sans-serif" font-size="16"
-      font-weight="700" fill="#F4FBF8">Cursor · Other Models</text>
-    <text x="166" y="317.0"
-      font-family="Noto Sans, sans-serif" font-size="14"
-      font-weight="700" fill="#8A968F">62% left</text>
+      font-weight="700" fill="#8A968F">82% · 41% left · 320 credits</text>
     <rect x="161.0" y="372" width="128.0"
       height="36" rx="18" fill="#171B18" stroke="#2A302C"
       stroke-width="1"

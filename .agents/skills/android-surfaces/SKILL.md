@@ -53,6 +53,12 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 
 - **App Glance (home page)** follows `docs/product/WEAR_GLANCE_DESIGN.md` (**locked 2026-07-26**):
   text legend (not a face clone) — mini remaining arcs, tightest-first, per-provider credits.
+  **2026-09-16 revision:** one row per band, at most three rows. An active pair has two
+  coloured arcs and inner-first percentages, title = family + ` plan` (`Cursor plan`),
+  subtitle = `82% · 41% left · 320 credits` (credits once, omitted when unavailable).
+  One exhausted half leaves an ordinary pool row; both exhausted remove it. Keep typography,
+  54-unit row pitch and 12-unit Alerts clearance. Legend-well width, clipping and visual
+  verification are deferred until live-data verification; record no new measured numbers.
   Refresh: `OK`/`!OK` inside dual-arrow glyph; cadence = gray `OK`+disabled; provider limit =
   gray `!OK`+`Rate limited`+disabled; `Stale` = orange `!OK`+enabled. `Alerts: N` when `N > 0`.
   Phone owns allowance (`manualRefreshAllowed` / `manualRefreshAvailableAt` on schema v7)

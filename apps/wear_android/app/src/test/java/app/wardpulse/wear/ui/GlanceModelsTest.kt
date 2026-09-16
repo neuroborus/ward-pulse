@@ -147,50 +147,77 @@ class GlanceModelsTest {
         assertEquals("8% left · 320 credits", rows[0].subtitle)
         // The pool name already opens with its family — do not name it twice.
         assertEquals("Cursor Models", rows[1].title)
+        assertEquals("24% left", rows[1].subtitle)
+        assertNull(rows[1].secondaryArc)
         assertEquals("Budget · Today", rows[2].title)
         assertEquals("60% left", rows[2].subtitle)
     }
 
-    /** The face shares a band between two pools; Glance never does. */
     @Test
-    fun legendRows_listBothPoolsOfAPairedBand() {
-        val rows =
-            glanceLegendRows(
-                baseSummary(
-                    rings =
-                        listOf(
-                            RingSummary(
-                                "allowance.cursor.cursor-plan-models",
-                                "Cursor Models",
-                                53.0,
-                                PulseStatus.OK,
-                                split =
-                                    RingHalf(
-                                        "allowance.cursor.cursor-plan-other",
-                                        "Other Models",
-                                        38.0,
-                                        PulseStatus.OK,
-                                    ),
-                            ),
-                        ),
-                ),
-            )
-        assertEquals(2, rows.size)
-        assertEquals("Cursor Models", rows[0].title)
-        assertEquals("47% left", rows[0].subtitle)
-        assertEquals("Cursor · Other Models", rows[1].title)
-        assertEquals("62% left", rows[1].subtitle)
-        // Each pool carries its own colour, which is the point of splitting them.
-        assertEquals(RingFamily.colorArgb("allowance.cursor.cursor-plan-models"), rows[0].colorArgb)
-        assertEquals(RingFamily.colorArgb("allowance.cursor.cursor-plan-other"), rows[1].colorArgb)
+    fun legendRows_pairHasTwoArcsAndOneCreditsSuffix() {
+        val row = glanceLegendRows(
+            baseSummary(
+                rings = listOf(cursorPair()),
+                allowances = listOf(cursorCredits()),
+            ),
+        ).single()
+        assertEquals("Cursor plan", row.title)
+        assertEquals("82% · 41% left · 320 credits", row.subtitle)
+        assertEquals(0.82f, row.remainingFraction, 0.0001f)
+        assertEquals(RingFamily.CURSOR_OWN, row.colorArgb)
+        val outer = requireNotNull(row.secondaryArc)
+        assertEquals(0.41f, outer.remainingFraction, 0.0001f)
+        assertEquals(RingFamily.CURSOR, outer.colorArgb)
     }
 
-    /**
-     * A pair is one band, so its rows travel with it: the phone ranks bands, and
-     * the second pool follows its own band rather than its own percent
-     * (`WEAR_GLANCE_DESIGN.md`). The board sorts every row by remaining, which is
-     * why this is worth pinning here.
-     */
+    @Test
+    fun legendRows_pairWithoutCreditsKeepsInnerFirstRegardlessOfPercent() {
+        for ((innerUsed, outerUsed, subtitle) in listOf(
+            Triple(18.0, 59.0, "82% · 41% left"),
+            Triple(59.0, 18.0, "41% · 82% left"),
+        )) {
+            val row = glanceLegendRows(
+                baseSummary(rings = listOf(cursorPair(innerUsed, outerUsed))),
+            ).single()
+            assertEquals("Cursor plan", row.title)
+            assertEquals(subtitle, row.subtitle)
+            assertEquals(RingFamily.CURSOR_OWN, row.colorArgb)
+            assertEquals(RingFamily.CURSOR, requireNotNull(row.secondaryArc).colorArgb)
+        }
+    }
+
+    @Test
+    fun legendRows_exhaustedHalfLeavesAnOrdinaryPoolRow() {
+        for ((innerUsed, outerUsed) in listOf(100.0 to 59.0, 18.0 to 100.0)) {
+            val pair = cursorPair(innerUsed, outerUsed)
+            val survivor = if (innerUsed >= 100.0) {
+                val outer = requireNotNull(pair.split)
+                RingSummary(outer.id, outer.label, outer.usedPercent, outer.status)
+            } else {
+                pair.copy(split = null)
+            }
+            val allowances = listOf(cursorCredits())
+            val actual = glanceLegendRows(baseSummary(rings = listOf(pair), allowances = allowances))
+            val ordinary = glanceLegendRows(baseSummary(rings = listOf(survivor), allowances = allowances))
+            assertEquals(ordinary, actual)
+            assertNull(actual.single().secondaryArc)
+            assertEquals(
+                if (innerUsed >= 100.0) "Cursor · Other Models" else "Cursor Models",
+                actual.single().title,
+            )
+            assertEquals(
+                if (innerUsed >= 100.0) "41% left · 320 credits" else "82% left · 320 credits",
+                actual.single().subtitle,
+            )
+        }
+    }
+
+    @Test
+    fun legendRows_exhaustedPairDisappears() {
+        assertTrue(glanceLegendRows(baseSummary(rings = listOf(cursorPair(100.0, 120.0)))).isEmpty())
+    }
+
+    /** A pair is one row at the band's position supplied by the phone. */
     @Test
     fun legendRows_keepAPairTogetherWhereItsBandLands() {
         val rows =
@@ -210,7 +237,7 @@ class GlanceModelsTest {
                                 53.0,
                                 PulseStatus.OK,
                                 // Loosest metric on the watch: sorted on its own
-                                // percent it would come last, not second.
+                                // percent it would come last, not in the second band.
                                 split =
                                     RingHalf(
                                         "allowance.cursor.cursor-plan-other",
@@ -231,11 +258,14 @@ class GlanceModelsTest {
         assertEquals(
             listOf(
                 "Codex · Weekly plan",
-                "Cursor Models",
-                "Cursor · Other Models",
+                "Cursor plan",
                 "Budget · Today",
             ),
             rows.map { it.title },
+        )
+        assertEquals(
+            listOf("8% left", "47% · 80% left", "60% left"),
+            rows.map { it.subtitle },
         )
     }
 
@@ -273,6 +303,24 @@ class GlanceModelsTest {
         assertEquals("60% left", rows.single().subtitle)
         assertEquals(RingFamily.CLAUDE, rows.single().colorArgb)
     }
+
+    private fun cursorPair(innerUsed: Double = 18.0, outerUsed: Double = 59.0) = RingSummary(
+        "allowance.cursor.cursor-plan-models",
+        "Cursor Models",
+        innerUsed,
+        PulseStatus.OK,
+        split = RingHalf("allowance.cursor.cursor-plan-other", "Other Models", outerUsed, PulseStatus.OK),
+    )
+
+    private fun cursorCredits() = AllowanceSummary(
+        source = "purchased",
+        label = "Cursor · Credits",
+        usedPercent = null,
+        remaining = Quantity("320", "credits"),
+        unlimited = false,
+        resetsAt = null,
+        status = PulseStatus.OK,
+    )
 
     private fun baseSummary(
         overall: PulseStatus = PulseStatus.OK,

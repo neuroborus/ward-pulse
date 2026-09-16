@@ -138,11 +138,9 @@ private fun glanceMetricsFor(diameter: Dp): GlanceMetrics {
         miniStroke = art(5f),
         textGap = art(12f),
         // Row pitch, as the art lays it out: 54 covers the mini arc and both
-        // lines, and rows sit one after another with no gap added on top. A gap
-        // here is 18px of drift across four rows, which is the whole slack.
+        // lines, and rows sit one after another with no gap added on top.
         rowHeight = art(54f),
         // The art keeps the block clear of the pill by 12 (`alertsBtnY - 12`).
-        // Without it a fourth row lands against the pill.
         alertsGap = art(12f),
         timeClearance = art(62f),
         // alertsBtnY = SIZE-78, h=36 → 42px below pill to rim.
@@ -305,6 +303,15 @@ private fun GlanceLegendRow(
             stroke = metrics.miniStroke,
             modifier = Modifier.size(metrics.miniArcSize),
         )
+        row.secondaryArc?.let { arc ->
+            Spacer(modifier = Modifier.width(metrics.textGap))
+            MiniRemainingArc(
+                remainingFraction = arc.remainingFraction,
+                color = Color(arc.colorArgb),
+                stroke = metrics.miniStroke,
+                modifier = Modifier.size(metrics.miniArcSize),
+            )
+        }
         Spacer(modifier = Modifier.width(metrics.textGap))
         Column {
             Text(

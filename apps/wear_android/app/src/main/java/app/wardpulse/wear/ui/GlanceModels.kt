@@ -19,6 +19,12 @@ data class GlanceLegendRowModel(
     val subtitle: String,
     val remainingFraction: Float,
     val colorArgb: Int,
+    val secondaryArc: GlanceLegendArcModel? = null,
+)
+
+data class GlanceLegendArcModel(
+    val remainingFraction: Float,
+    val colorArgb: Int,
 )
 
 /**
@@ -60,14 +66,27 @@ fun glanceRefreshChrome(
  * Active (non-exhausted) pools already ordered tightest-remaining first by the phone.
  *
  * A pair travels as one entry with its second pool inside (`WATCH_RING_DESIGN.md`,
- * Split band). Only the face shares a band; here every pool keeps its own row.
+ * Split band). Glance keeps one row per band, with the inner pool first.
  */
 fun glanceLegendRows(summary: WatchDashboardSummary): List<GlanceLegendRowModel> {
-    return summary.rings.flatMap { ring ->
-        listOfNotNull(
-            glanceLegendRow(summary, ring.id, ring.label, ring.usedPercent),
-            ring.split?.let { glanceLegendRow(summary, it.id, it.label, it.usedPercent) },
-        )
+    return summary.rings.mapNotNull { ring ->
+        val inner = glanceLegendRow(summary, ring.id, ring.label, ring.usedPercent)
+        val split = ring.split ?: return@mapNotNull inner
+        val outer = glanceLegendRow(summary, split.id, split.label, split.usedPercent)
+        when {
+            inner == null -> outer
+            outer == null -> inner
+            else -> inner.copy(
+                title = "${glanceFamilyName(ring.id) ?: ring.label} plan",
+                subtitle = glanceSubtitle(
+                    summary,
+                    ring.id,
+                    "${remainingPercent(ring.usedPercent).roundToInt()}% · " +
+                        "${remainingPercent(split.usedPercent).roundToInt()}% left",
+                ),
+                secondaryArc = GlanceLegendArcModel(outer.remainingFraction, outer.colorArgb),
+            )
+        }
     }
 }
 
@@ -80,14 +99,17 @@ private fun glanceLegendRow(
     if (usedPercent >= 100.0) {
         return null
     }
-    val remaining = (100.0 - usedPercent.coerceIn(0.0, 100.0)).coerceAtLeast(0.0)
+    val remaining = remainingPercent(usedPercent)
     return GlanceLegendRowModel(
         title = glancePrimaryLabel(ringId, label),
-        subtitle = glanceSubtitle(summary, ringId, remaining),
+        subtitle = glanceSubtitle(summary, ringId, "${remaining.roundToInt()}% left"),
         remainingFraction = (remaining / 100.0).toFloat(),
         colorArgb = RingFamily.colorArgb(ringId),
     )
 }
+
+private fun remainingPercent(usedPercent: Double): Double =
+    100.0 - usedPercent.coerceIn(0.0, 100.0)
 
 internal fun glancePrimaryLabel(ringId: String, label: String): String {
     val family = glanceFamilyName(ringId) ?: return label
@@ -112,9 +134,8 @@ internal fun glanceFamilyName(ringId: String): String? = when {
 private fun glanceSubtitle(
     summary: WatchDashboardSummary,
     ringId: String,
-    remaining: Double,
+    left: String,
 ): String {
-    val left = "${remaining.roundToInt()}% left"
     val credits = purchasedCreditsSuffix(summary, ringId) ?: return left
     return "$left · $credits"
 }
