@@ -26,15 +26,15 @@ class WatchComplicationTextTest {
             split = RingHalf("allowance.cursor.cursor-plan-other", "Other Models", 59.0, PulseStatus.OK),
         )
 
+    private val codexPair = RingSummary(
+        "allowance.codex.plan", "Weekly plan", 18.0, PulseStatus.OK,
+        split = RingHalf("allowance.codex.spark", "Spark 5h", 59.0, PulseStatus.OK),
+    )
+
     @Test
     fun outerHalfServicesSelectTheirSplitOrdinalAndMirrorTheBandIndex() {
         val single = RingSummary("allowance.claude.plan", "Weekly", 30.0, PulseStatus.OK)
-        // A synthetic second pair exercises routing before the phone supports two pairs.
-        val secondPair =
-            cursorPair.copy(
-                id = "allowance.test.inner",
-                split = RingHalf("allowance.test.outer", "Test outer", 25.0, PulseStatus.OK),
-            )
+        val secondPair = codexPair
         val first = RingSplitComplicationDataSourceService.SPLIT_INDEX
         val second = StripSplitComplicationDataSourceService.SPLIT_INDEX
         assertEquals(0, first)
@@ -97,6 +97,14 @@ class WatchComplicationTextTest {
             "cursor-other",
             WatchComplicationText.splitPoolToken("allowance.cursor.cursor-plan-other"),
         )
+        assertEquals("spark", WatchComplicationText.splitPoolToken("allowance.codex.spark"))
+        assertEquals("spark", WatchComplicationText.stripTitleToken(codexPair))
+        assertNull(WatchComplicationText.splitPoolToken("allowance.codex.plan"))
+        assertNull(WatchComplicationText.stripTitleToken(codexPair.copy(split = null)))
+        assertNull(WatchComplicationText.stripTitleToken(codexPair.copy(usedPercent = 100.0)))
+        assertNull(WatchComplicationText.stripTitleToken(
+            codexPair.copy(split = codexPair.split!!.copy(usedPercent = 100.0)),
+        ))
         assertNull(WatchComplicationText.splitPoolToken("allowance.cursor.cursor-plan-models"))
         assertNull(WatchComplicationText.splitPoolToken("allowance.test.outer"))
         assertNull(WatchComplicationText.splitPoolToken(""))

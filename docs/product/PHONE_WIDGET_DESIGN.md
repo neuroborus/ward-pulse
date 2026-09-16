@@ -5,6 +5,10 @@ credits-end, picker preview sample, day/night olive chrome; revised **2026-08-02
 two-line label carrying the provider family). Review art:
 `apps/phone_flutter/design/` (`widget-small.svg` / `widget-medium.svg` / `widget-dark.svg`).
 
+**Revision 2026-09-16 — Codex windows:** Codex and Spark remain per-window metrics on
+the widget, with existing selections preserved. Their Watchface collapse/pairing does not
+change widget behavior or geometry.
+
 Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 14). Asset ownership: `docs/DESIGN_ASSETS.md`.
 Do **not** copy [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md) layouts onto the phone launcher.
 
@@ -20,8 +24,11 @@ Configuration lives on the phone **Widget** tab and is **independent** of Watchf
    period, a provider plan window, or a purchased meter (Extra usage, on-demand, credits %) when
    the provider reports a %. There is no summed Today / Week / Month slot: see
    `WATCH_RING_DESIGN.md` layer rule 1 for why a percentage across connections has no owner.
-2. **Claude plan windows stay expanded** on the phone widget (`5h`, `Weekly`, Opus/Sonnet weekly
-   when present). Watchface/Glance still collapse Claude to one tightest ring.
+2. **Claude and Codex plan windows stay expanded** on the phone widget: Claude `5h`,
+   `Weekly`, Opus/Sonnet weekly when present; Codex main and Spark primary/secondary
+   windows when reported, including `Spark 5h` / `Spark Weekly`. Existing per-window
+   selections survive unchanged. Watchface/Glance collapse Claude to one ring and Codex
+   independently to one main-limit ring and one Spark ring before pairing.
 3. **Cursor Models and Other Models** are separate selectable rows whenever the usage-summary
    reports both pool percents.
 4. **Remaining language** — display `(100 - usedPercent)` for percent metrics; family colors match

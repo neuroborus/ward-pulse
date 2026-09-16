@@ -6,6 +6,57 @@ import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
 
 void main() {
+  test('Codex widget keeps every window and its saved selection', () {
+    final base = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    const ids = [
+      'codex-primary',
+      'codex-secondary',
+      'spark-primary',
+      'spark-secondary',
+    ];
+    final snapshot = DashboardSnapshot.fromJson(
+      base.toJson()
+        ..['accounts'] = [
+          {
+            ...base.primaryAccount!.toJson(),
+            'provider': 'codex',
+            'connection': 'openai.plan',
+            'allowances': [
+              for (final id in ids)
+                {
+                  'id': id,
+                  'source': 'plan',
+                  'label': id,
+                  'usedPercent': 100.0,
+                  'used': null,
+                  'limit': null,
+                  'remaining': null,
+                  'unlimited': false,
+                  'windowMinutes': 300,
+                  'resetsAt': null,
+                  'status': 'ok',
+                },
+            ],
+          },
+        ],
+    );
+    final selected = [for (final id in ids) 'allowance.codex.$id'];
+    final preferences = phoneWidgetPreferencesFromStoredIds(selected);
+    expect(preferences.migratedIds, selected);
+    expect(PhoneWidgetPreferences(selectedIds: selected).migratedIds, selected);
+    expect(phoneWidgetCatalog(snapshot).take(4).map((m) => m.id), selected);
+    expect(
+      resolvePhoneWidgetMetrics(snapshot, preferences).map((m) => m.id),
+      selected,
+    );
+    expect(watchRingCatalog(snapshot).take(2).map((m) => m.id), [
+      codexPlanRingId,
+      codexSparkRingId,
+    ]);
+  });
+
   test('defaults are unset and clamp to large slot count', () {
     const prefs = PhoneWidgetPreferences();
     expect(prefs.usesDefaults, isTrue);

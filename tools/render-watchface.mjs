@@ -237,7 +237,10 @@ const STRIPS = [
 ]
 
 /** Closed vocabulary shared with WatchComplicationText.splitPoolToken. */
-const SPLIT_POOLS = [{ token: 'cursor-other', color: '#67E8D4' }]
+const SPLIT_POOLS = [
+  { token: 'cursor-other', color: '#67E8D4' },
+  { token: 'spark', color: '#186020' },
+]
 
 /** Every slot names a service in the Wear app; nothing else may fill them. */
 function provider(service) {

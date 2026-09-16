@@ -171,6 +171,31 @@ class GlanceModelsTest {
     }
 
     @Test
+    fun legendRows_twoPairsKeepBandNamesInnerFirstAndCreditsOnce() {
+        val codex = RingSummary(
+            "allowance.codex.plan", "Weekly plan", 18.0, PulseStatus.OK,
+            split = RingHalf("allowance.codex.spark", "Spark 5h", 59.0, PulseStatus.OK),
+        )
+        val single = RingSummary("allowance.claude.plan", "Weekly", 10.0, PulseStatus.OK)
+        val credits = cursorCredits().copy(label = "Codex · Purchased credits")
+        val rows = glanceLegendRows(baseSummary(
+            rings = listOf(cursorPair(), codex, single),
+            allowances = listOf(credits),
+        ))
+        assertEquals(listOf("Cursor plan", "Codex plan", "Claude · Weekly"), rows.map { it.title })
+        assertEquals("82% · 41% left", rows[0].subtitle)
+        assertEquals("82% · 41% left · 320 credits", rows[1].subtitle)
+        assertEquals(RingFamily.CODEX, rows[1].colorArgb)
+        assertEquals(RingFamily.CODEX_SPARK, requireNotNull(rows[1].secondaryArc).colorArgb)
+        assertNull(rows[2].secondaryArc)
+        val switched = codex.copy(split = codex.split!!.copy(label = "Spark Weekly"))
+        assertEquals("Codex plan", glanceLegendRows(baseSummary(rings = listOf(switched))).single().title)
+        val remainingSpark = glanceLegendRows(baseSummary(rings = listOf(codex.copy(usedPercent = 100.0)))).single()
+        assertEquals("Codex · Spark 5h", remainingSpark.title)
+        assertNull(remainingSpark.secondaryArc)
+    }
+
+    @Test
     fun legendRows_pairWithoutCreditsKeepsInnerFirstRegardlessOfPercent() {
         for ((innerUsed, outerUsed, subtitle) in listOf(
             Triple(18.0, 59.0, "82% · 41% left"),

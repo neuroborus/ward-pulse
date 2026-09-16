@@ -68,7 +68,7 @@
             ]
           },
           "split": {
-            "description": "The other pool of the same plan, drawn as the outer half of this one band (WATCH_RING_DESIGN.md, Split band). One entry stays one band, so three entries stay three bands. Null for every ring that is not a pair. Plan pools carry no money, so no spent/limit here.",
+            "description": "The other pool or limit of the same plan of the same connection, drawn as the outer half of this one band (WATCH_RING_DESIGN.md, Split band). One entry stays one band, so three entries stay three bands. Null for every ring that is not a pair. Plan pools carry no money, so no spent/limit here.",
             "anyOf": [
               {
                 "type": "object",

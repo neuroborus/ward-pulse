@@ -1127,6 +1127,7 @@
                     <Condition>
                         <Expressions>
                             <Expression name="isPool0"><![CDATA[[COMPLICATION.TITLE] == "cursor-other"]]></Expression>
+                            <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "spark"]]></Expression>
                         </Expressions>
                         <Compare expression="isPool0">
                             <PartDraw x="0" y="0" width="88" height="18">
@@ -1138,6 +1139,19 @@
                                     startAngle="0"
                                     endAngle="359.9">
                                     <Stroke thickness="3" color="#67E8D4" cap="BUTT" />
+                                </Arc>
+                            </PartDraw>
+                        </Compare>
+                        <Compare expression="isPool1">
+                            <PartDraw x="0" y="0" width="88" height="18">
+                                <Arc
+                                    centerX="86.5"
+                                    centerY="9"
+                                    width="3"
+                                    height="14"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke thickness="3" color="#186020" cap="BUTT" />
                                 </Arc>
                             </PartDraw>
                         </Compare>
@@ -1195,6 +1209,7 @@
                     <Condition>
                         <Expressions>
                             <Expression name="isPool0"><![CDATA[[COMPLICATION.TITLE] == "cursor-other"]]></Expression>
+                            <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "spark"]]></Expression>
                         </Expressions>
                         <Compare expression="isPool0">
                             <PartDraw x="0" y="0" width="88" height="18">
@@ -1206,6 +1221,19 @@
                                     startAngle="0"
                                     endAngle="359.9">
                                     <Stroke thickness="3" color="#67E8D4" cap="BUTT" />
+                                </Arc>
+                            </PartDraw>
+                        </Compare>
+                        <Compare expression="isPool1">
+                            <PartDraw x="0" y="0" width="88" height="18">
+                                <Arc
+                                    centerX="86.5"
+                                    centerY="9"
+                                    width="3"
+                                    height="14"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke thickness="3" color="#186020" cap="BUTT" />
                                 </Arc>
                             </PartDraw>
                         </Compare>
@@ -1263,6 +1291,7 @@
                     <Condition>
                         <Expressions>
                             <Expression name="isPool0"><![CDATA[[COMPLICATION.TITLE] == "cursor-other"]]></Expression>
+                            <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "spark"]]></Expression>
                         </Expressions>
                         <Compare expression="isPool0">
                             <PartDraw x="0" y="0" width="88" height="18">
@@ -1274,6 +1303,19 @@
                                     startAngle="0"
                                     endAngle="359.9">
                                     <Stroke thickness="3" color="#67E8D4" cap="BUTT" />
+                                </Arc>
+                            </PartDraw>
+                        </Compare>
+                        <Compare expression="isPool1">
+                            <PartDraw x="0" y="0" width="88" height="18">
+                                <Arc
+                                    centerX="86.5"
+                                    centerY="9"
+                                    width="3"
+                                    height="14"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke thickness="3" color="#186020" cap="BUTT" />
                                 </Arc>
                             </PartDraw>
                         </Compare>

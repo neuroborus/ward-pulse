@@ -10,6 +10,10 @@ and two remaining percentages for an active pair. Typography, row pitch and Aler
 are unchanged. Legend-well width, absence of clipping and visual equivalence are **deferred
 until live-data verification**; this revision records no new device measurements.
 
+**Revision 2026-09-16 — Codex/Spark:** the full board now shows two pairs in three
+rows. Codex main is the first arc/percentage and Spark the second; the title is
+`Codex plan`. Geometry and typography stay fixed; device fit remains deferred as above.
+
 Do not reintroduce a face clone (large concentric stacks, sunk strips, watermark, or
 time-as-hero), stacked icon-above-label refresh, or conflating cadence cooldown with
 `!OK` / `Rate limited`.
@@ -58,11 +62,14 @@ Rules:
   has to show — so the sweep is drawn short by one cap at each end and the caps fill it back in.
   Without that a nearly full row reads as a closed ring (`WATCH_RING_DESIGN.md`, Ring geometry,
   where the same correction is measured on the face).
-- Primary line for a pair: **family name + ` plan`**, exactly `Cursor plan` for Cursor.
+- Primary line for a pair: **family name + ` plan`**, exactly `Cursor plan` for Cursor and
+  `Codex plan` for Codex/Spark.
   The phone uses the same rule for its band label; the payload carries pool labels, not a
   separate band name. For an ordinary row: family/provider + metric label. Codex keeps
   `Weekly plan`; Cursor Pro+/Ultra
   plan pools use `Cursor Models` / `Other Models` (exhausted pools stay off the face).
+  Codex main and Spark windows collapse independently; an unpaired Spark row names
+  its winning window (`Codex · Spark 5h` / `Codex · Spark Weekly`).
   Claude’s subscription plan windows (`5h`, `Weekly`, optional Opus/Sonnet weekly) collapse to
   **one** ring on the phone; Glance shows which window is active via the short label
   (`Claude · 5h` / `Claude · Weekly`).
@@ -141,8 +148,8 @@ Same strokes as the face (`WATCH_RING_DESIGN.md`) for metric mini-arcs:
 | Unresolved family | `#8A968F` — fallback only |
 
 A local budget row takes the family color of the connection it belongs to; the period lives in
-the row label, not in a color of its own. **A Cursor plan's two pools share one row**, each
-with its own coloured mini arc and remaining fraction. The pair reaches the watch as one
+the row label, not in a color of its own. **Cursor pools or Codex main/Spark limits share one row**,
+each with its own coloured mini arc and remaining fraction. The pair reaches the watch as one
 payload entry with its second pool inside (`WATCH_RING_DESIGN.md`, Split band). When either
 pool is exhausted, the survivor becomes an ordinary row with its pool label, one arc and one
 percentage; when both are exhausted the row disappears. Purchased credits appear once per
@@ -168,7 +175,7 @@ xdg-open apps/wear_android/design/preview-glance-legend-3.png
 | `glance-legend-3.svg` | **Primary** — three providers, `OK` refresh enabled, Alerts disabled |
 | `glance-legend-1.svg` | Single provider with credits |
 | `glance-legend-pair.svg` | One Cursor pair — one row, two coloured arcs, inner-first percentages and credits once |
-| `glance-legend-full.svg` | Three rows — the ceiling: three bands, currently one paired; device fit remains deferred |
+| `glance-legend-full.svg` | Three rows — the ceiling: three bands, currently two paired; device fit remains deferred |
 | `glance-legend-budget.svg` | Plan rows (with credits) + a connection budget row (family color, no credits) |
 | `glance-legend-stale.svg` | `!OK` + detail `Stale`, refresh enabled, Alerts active |
 | `glance-legend-cadence.svg` | Healthy `OK` but refresh **disabled** (cadence cooldown; no detail) |
@@ -184,7 +191,7 @@ Wear only: `apps/wear_android/design/`. OpenPencil `.fig` inventory optional.
 text legend + mini remaining arcs (not a face clone)
 one row per band, at most three rows; band order matches the phone/face
 paired arcs and percentages: inner first, outer second; each retains its own colour
-paired title = family + " plan"; Cursor plan exactly
+paired title = family + " plan"; Cursor plan and Codex plan exactly
 paired subtitle = "82% · 41% left · 320 credits" (omit credits suffix when unavailable)
 54-unit row pitch; 12-unit Alerts clearance; device width/clipping checks deferred
 per-provider credits with explicit credits label (no footer sum)

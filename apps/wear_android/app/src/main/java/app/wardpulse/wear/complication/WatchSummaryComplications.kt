@@ -409,6 +409,7 @@ object WatchComplicationText {
     fun splitPoolToken(ringId: String): String? =
         when (ringId) {
             "allowance.cursor.cursor-plan-other" -> "cursor-other"
+            "allowance.codex.spark" -> "spark"
             else -> null
         }
 

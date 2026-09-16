@@ -39,6 +39,7 @@ const SIZE = 450
 // own models carry a color of their own (`WATCH_RING_DESIGN.md`, palette).
 const FAMILY = {
   codex: { name: 'Codex', color: '#65D78A' },
+  codexSpark: { name: 'Codex', color: '#186020' },
   claude: { name: 'Claude', color: '#E8915A' },
   cursor: { name: 'Cursor', color: '#67E8D4' },
   cursorOwn: { name: 'Cursor', color: '#7E93B8' },
@@ -451,9 +452,9 @@ const variants = [
     alerts: 0,
   },
   {
-    // Three rows is the ceiling: three bands, currently one active pair.
+    // Three rows is the ceiling: three bands, with both supported pairs active.
     file: 'glance-legend-full.svg',
-    name: 'Glance · legend · three rows (three bands, one paired)',
+    name: 'Glance · legend · three rows (three bands, two paired)',
     ok: true,
     refreshEnabled: true,
     rows: [
@@ -470,7 +471,13 @@ const variants = [
           credits: '1716',
         },
       },
-      { family: FAMILY.codex, metric: 'Weekly plan', used: 0.09, credits: '4500' },
+      {
+        family: FAMILY.codex,
+        metric: 'Weekly plan',
+        used: 0.18,
+        credits: '320',
+        split: { family: FAMILY.codexSpark, metric: 'Spark 5h', used: 0.59 },
+      },
     ],
     alerts: 0,
   },

@@ -25,6 +25,7 @@ const BACKGROUND = '#0A0D0B'
 
 /** The one family accent worn by two entries — a plan ring and a budget ring share it. */
 const ANTHROPIC = '#E8915A'
+const CODEX_SPARK = '#186020'
 
 /** SIL OFL-1.1. Bold for watch-scale labels. */
 const FONT = 'Noto Sans'
@@ -103,6 +104,12 @@ const CATALOG = {
     id: 'codex',
     used: 0.92,
     color: '#65D78A',
+  },
+  codexPair: {
+    id: 'codex',
+    used: 0.18,
+    color: '#65D78A',
+    split: { used: 0.59, color: CODEX_SPARK },
   },
   claude: {
     id: 'claude',
@@ -289,7 +296,9 @@ function barLabel(layer, { showPlan, showCredits }) {
 }
 
 function sortByRemaining(layers) {
-  return [...layers].sort((a, b) => b.used - a.used)
+  return [...layers].sort((a, b) =>
+    Math.max(b.used, b.split?.used ?? b.used) - Math.max(a.used, a.split?.used ?? a.used),
+  )
 }
 
 function providerBars({ layers, showPlan, showCredits, size }) {
@@ -488,6 +497,13 @@ const variants = [
     showCredits: false,
   },
   {
+    file: 'round-3-plan-two-pairs.svg',
+    name: 'Round · 3 bands · Cursor and Codex plan pairs',
+    layers: [CATALOG.claude, CATALOG.codexPair, CATALOG.cursorPair],
+    showPlan: true,
+    showCredits: false,
+  },
+  {
     // A band at 100% remaining closes: no melt to inset, so no seam at 12. The
     // rest of the board is the everyday case, so the closed ring is the only
     // thing to compare.
@@ -562,6 +578,7 @@ const wffFiles = new Set([
   'round-3-plan-credits.svg',
   // A split band is a face-only channel, so its board belongs beside the face too.
   'round-3-plan-split.svg',
+  'round-3-plan-two-pairs.svg',
   // Ring type is a face-only channel, so its board belongs beside the face too.
   'round-3-budget-periods.svg',
   // Closing a full ring is a face drawing rule, so its board goes beside it.

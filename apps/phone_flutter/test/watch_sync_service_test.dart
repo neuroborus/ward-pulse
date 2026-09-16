@@ -65,6 +65,105 @@ void main() {
     expect(rings.first['limit'], {'minorUnits': 25000, 'currency': 'USD'});
   });
 
+  for (final sparkUsed in [59.0, 100.0]) {
+    test('ships two pairs or a surviving Codex half at Spark $sparkUsed', () {
+      final source = DashboardSnapshot.fromJsonString(
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync(),
+      );
+      final base = source.primaryAccount!.toJson();
+      final dashboard = DashboardSnapshot.fromJson(
+        source.toJson()
+          ..['accounts'] = [
+            {
+              ...base,
+              'provider': 'codex',
+              'connection': 'openai.plan',
+              'allowances': [
+                _cursorPool('codex-primary', 'Weekly plan', 18),
+                _cursorPool('spark-primary', 'Spark 5h', sparkUsed),
+                _cursorPool('spark-secondary', 'Spark Weekly', 100),
+                {
+                  ..._cursorPool(
+                    'codex-purchased-credits',
+                    'Purchased credits',
+                    0,
+                  ),
+                  'source': 'purchased',
+                  'remaining': {'value': '320', 'unit': 'credits'},
+                },
+              ],
+            },
+            {
+              ...base,
+              'provider': 'cursor',
+              'connection': 'cursor.plan',
+              'allowances': [
+                _cursorPool('cursor-plan-models', 'Cursor Models', 70),
+                _cursorPool('cursor-plan-other', 'Other Models', 40),
+              ],
+            },
+            {
+              ...base,
+              'provider': 'claude',
+              'connection': 'anthropic.plan',
+              'allowances': [_cursorPool('claude-five-hour', '5h', 10)],
+            },
+          ],
+      );
+      const preferences = WatchRingPreferences(
+        selectedIds: [
+          'allowance.codex.codex-primary',
+          'allowance.codex.spark-primary',
+          cursorOwnPoolId,
+          cursorOtherPoolId,
+          claudePlanRingId,
+        ],
+      );
+      final payload =
+          jsonDecode(
+                WatchDashboardSummaryPayload.fromSnapshot(
+                  dashboard,
+                  preferences,
+                ).encode(),
+              )
+              as Map<String, dynamic>;
+      expect(payload['schemaVersion'], 9);
+      final rings = payload['rings'] as List;
+      expect(rings.map((r) => r['id']), [
+        cursorOwnPoolId,
+        codexPlanRingId,
+        claudePlanRingId,
+      ]);
+      expect(rings.first['split']['id'], cursorOtherPoolId);
+      final codex = rings[1];
+      expect(codex['label'], 'Weekly plan');
+      expect(codex['usedPercent'], 18);
+      if (sparkUsed < 100) {
+        expect(codex['split']['id'], codexSparkRingId);
+        expect(codex['split']['label'], 'Spark 5h');
+        expect(codex['split']['usedPercent'], 59);
+        expect(
+          watchRingPayloadSubtitle(
+            dashboard,
+            const WatchRingPreferences(
+              selectedIds: [codexPlanRingId, codexSparkRingId],
+            ),
+          ),
+          'Codex plan 41% left',
+        );
+      } else {
+        expect(codex['split'], isNull);
+      }
+      final credits = (payload['allowances'] as List).where(
+        (a) => a['source'] == 'purchased',
+      );
+      expect(credits, hasLength(1));
+      expect(credits.single['remaining'], {'value': '320', 'unit': 'credits'});
+    });
+  }
+
   test('packs a Cursor pair into one ring carrying its second pool', () {
     final json =
         jsonDecode(

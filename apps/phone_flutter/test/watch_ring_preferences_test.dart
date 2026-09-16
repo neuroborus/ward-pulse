@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 
@@ -302,6 +303,225 @@ void main() {
       'allowance.codex.codex-weekly',
     ]);
   });
+
+  group('Codex plan collapse', () {
+    AllowanceState window(String id, double? used) => AllowanceState.fromJson({
+      ..._planAllowance(
+        id: id,
+        label:
+            id.startsWith('spark')
+                ? (id.endsWith('primary') ? 'Spark 5h' : 'Spark Weekly')
+                : 'Weekly plan',
+        usedPercent: used ?? 0,
+        windowMinutes: 300,
+      ),
+      'usedPercent': used,
+    });
+
+    test(
+      'limits collapse independently with stable titles and window subtitles',
+      () {
+        final rings = collapseCodexPlanRings([
+          window('spark-secondary', 80),
+          window('codex-primary', 30),
+          window('spark-primary', 20),
+          window('codex-secondary', 10),
+        ]);
+        expect(rings.map((r) => r.id), [codexPlanRingId, codexSparkRingId]);
+        expect(rings.map((r) => r.usedPercent), [30, 80]);
+        expect(rings.map((r) => r.catalogTitle), [
+          'Codex plan',
+          'Codex · Spark',
+        ]);
+        expect(rings.last.catalogSubtitle, 'Spark Weekly · 20% left · OK');
+        final switched =
+            collapseCodexPlanRings([
+              window('spark-primary', 90),
+              window('spark-secondary', 80),
+            ]).single;
+        expect(switched.catalogTitle, rings.last.catalogTitle);
+        expect(switched.label, 'Spark 5h');
+        expect(switched.catalogSubtitle, 'Spark 5h · 10% left · OK');
+      },
+    );
+
+    test('empty, unavailable and exhausted limits follow Claude semantics', () {
+      expect(collapseCodexPlanRings([]), isEmpty);
+      final unavailable =
+          collapseCodexPlanRings([
+            window('codex-secondary', null),
+            window('codex-primary', null),
+          ]).single;
+      expect(unavailable.id, codexPlanRingId);
+      expect(unavailable.isAvailable, isFalse);
+      expect(
+        unavailable.unavailableReason,
+        'This allowance has no percentage to show.',
+      );
+      final rings = collapseCodexPlanRings([
+        window('codex-primary', 100),
+        window('codex-secondary', 100),
+        window('spark-primary', null),
+        window('spark-secondary', 40),
+      ]);
+      expect(rings.map((r) => r.usedPercent), [100, 40]);
+      expect(orderWatchRingsForSurface(rings).single.id, codexSparkRingId);
+    });
+
+    test(
+      'missing or exhausted halves resolve to an ordinary surviving ring',
+      () {
+        for (final (mainUsed, sparkUsed, expected) in [
+          (null, 40.0, codexSparkRingId),
+          (100.0, 40.0, codexSparkRingId),
+          (40.0, null, codexPlanRingId),
+          (40.0, 100.0, codexPlanRingId),
+        ]) {
+          final source = _cursorPairAndCodexSnapshot();
+          final codex =
+              source.accounts.firstWhere((a) => a.provider == 'codex').toJson()
+                ..['allowances'] = [
+                  window('codex-primary', mainUsed).toJson(),
+                  window('spark-primary', sparkUsed).toJson(),
+                ];
+          final dashboard = DashboardSnapshot.fromJson(
+            source.toJson()..['accounts'] = [codex],
+          );
+          final bands = pairWatchRings(
+            orderWatchRingsForSurface(
+              resolveWatchRings(
+                dashboard,
+                const WatchRingPreferences(
+                  selectedIds: [codexPlanRingId, codexSparkRingId],
+                ),
+              ),
+            ),
+          );
+          expect(bands.single.$1.id, expected);
+          expect(bands.single.$2, isNull);
+        }
+      },
+    );
+
+    test(
+      'active windows win and ties prefer primary regardless of input order',
+      () {
+        for (final reversed in [false, true]) {
+          final windows = [
+            window('spark-secondary', 50),
+            window('spark-primary', 50),
+          ];
+          expect(
+            collapseCodexPlanRings(
+              reversed ? windows.reversed : windows,
+            ).single.label,
+            'Spark 5h',
+          );
+        }
+        expect(
+          collapseCodexPlanRings([
+            window('spark-primary', 25),
+            window('spark-secondary', 100),
+          ]).single.usedPercent,
+          25,
+        );
+        expect(
+          collapseCodexPlanRings([
+            window('spark-primary', 100),
+            window('spark-secondary', 25),
+          ]).single.label,
+          'Spark Weekly',
+        );
+      },
+    );
+  });
+
+  test(
+    'Codex migration deduplicates before budgeting and preserves first order',
+    () {
+      const original = [
+        'allowance.codex.spark-secondary',
+        'allowance.codex.spark-primary',
+        'allowance.codex.codex-secondary',
+        'allowance.codex.codex-primary',
+        cursorOtherPoolId,
+        cursorPlanRingId,
+        claudePlanRingId,
+      ];
+      const expected = [
+        codexSparkRingId,
+        codexPlanRingId,
+        cursorOtherPoolId,
+        cursorOwnPoolId,
+        claudePlanRingId,
+      ];
+      expect(migrateWatchRingSelectedIds(original), expected);
+      expect(migrateWatchRingSelectedIds(expected), expected);
+      expect(
+        const WatchRingPreferences(selectedIds: original).migratedIds,
+        expected,
+      );
+      expect(watchRingPreferencesFromStoredIds(original).selectedIds, expected);
+      expect(watchRingSlotCost(expected), 3);
+      expect(const WatchRingPreferences().usesDefaults, isTrue);
+      expect(watchRingPreferencesFromStoredIds([]).usesDefaults, isFalse);
+    },
+  );
+
+  test(
+    'secure preferences migrate on read and write without losing later bands',
+    () async {
+      const key = 'wardpulse.watch.ringIds';
+      const original = [
+        'allowance.codex.codex-primary',
+        'allowance.codex.codex-secondary',
+        'allowance.codex.spark-primary',
+        'allowance.codex.spark-secondary',
+        cursorOwnPoolId,
+        cursorOtherPoolId,
+        claudePlanRingId,
+      ];
+      const expected = [
+        codexPlanRingId,
+        codexSparkRingId,
+        cursorOwnPoolId,
+        cursorOtherPoolId,
+        claudePlanRingId,
+      ];
+      FlutterSecureStorage.setMockInitialValues({key: jsonEncode(original)});
+      const storage = FlutterSecureStorage();
+      final store = SecureWatchRingPreferenceStore(storage: storage);
+      expect((await store.read()).selectedIds, expected);
+      expect(jsonDecode((await storage.read(key: key))!), expected);
+      expect((await store.read()).selectedIds, expected);
+      await store.write(const WatchRingPreferences(selectedIds: original));
+      expect(jsonDecode((await storage.read(key: key))!), expected);
+      await store.write(const WatchRingPreferences(selectedIds: []));
+      expect((await store.read()).selectedIds, isEmpty);
+      await store.write(const WatchRingPreferences());
+      expect((await store.read()).usesDefaults, isTrue);
+    },
+  );
+
+  for (final innerIsTighter in [false, true]) {
+    test(
+      'two pairs fit three bands with Codex inner-first: $innerIsTighter',
+      () {
+        final codex = ring(codexPlanRingId, innerIsTighter ? 80 : 20);
+        final spark = ring(codexSparkRingId, innerIsTighter ? 20 : 80);
+        final cursor = ring(cursorOwnPoolId, 90);
+        final other = ring(cursorOtherPoolId, 10);
+        final claude = ring(claudePlanRingId, 50);
+        final packed = pairWatchRings(
+          orderWatchRingsForSurface([spark, claude, other, codex, cursor]),
+        );
+        expect(packed, [(cursor, other), (codex, spark), (claude, null)]);
+        for (final half in [codex, spark]) {
+          expect(pairWatchRings([half]), [(half, null)]);
+        }
+      },
+    );
+  }
 
   group('Claude plan collapse', () {
     test('catalog exposes one Claude plan slot for multiple windows', () {

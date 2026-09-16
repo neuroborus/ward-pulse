@@ -23,6 +23,12 @@ Canonical face generator: `tools/render-watchface.mjs` — it writes the shipped
 and the ring-type drawables beside it.  
 Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and sibling variants).
 
+**Revision 2026-09-16 — Codex/Spark pair:** Codex plan windows collapse per limit,
+then the main limit and Spark may share one band. The main limit is inside/left;
+Spark is outside/right in `#186020`. Geometry and typography are unchanged. Both
+pairs and far markers, Glance clipping and visual fit are **deferred until live-data
+verification**; this revision records no new device measurements.
+
 ## Goal
 
 Glanceable **remaining** capacity for up to **three** user-selected percent metrics, with
@@ -45,8 +51,8 @@ pair's, whose second value is the other pool's percent (see Split band).
    Claude subscription plan windows are an exception at **selection** time: the phone exposes one
    Claude plan slot and resolves it to the tightest remaining window (window name lives on Glance,
    not on face strips).
-   A Cursor plan's two pools are an exception at **drawing** time: they may share one band, split
-   lengthwise (see Split band). That is the only division, and it stays one slot.
+   The two Cursor pools or the main Codex and Spark limits may share one band at
+   **drawing** time, split lengthwise (see Split band). Each pair stays one slot.
 2. **Arc = remaining** — the colored sweep is `(100 - usedPercent)`. As the limit is consumed, the
    arc shrinks (do not grow a separate “used” fill). Melt is **clockwise from 12**: usage opens a
    gap at 12 o’clock and advances like a clock hand; remaining stays anchored ending at 12.
@@ -60,7 +66,7 @@ pair's, whose second value is the other pool's percent (see Split band).
 5. **Max three** — phone **Watchface** tab chooses slots (`watchRingSlotCount = 3`); payload carries
    only the resolved surface order after omit + sort. Plan/budget percent metrics only. A split
    pair counts as **one** against the cap on both sides: it draws one band, and the Watchface tab
-   charges the two Cursor pools one slot, or the face could never hold a pair and two other rings.
+   charges either configured pair one slot: two pairs and one ordinary ring fit three slots.
 6. **A budget ring is offered where spend is reported, and enabled once a limit is set** — the
    slot exists for a (connection, period) pair that reports spend, which is what makes a
    ceiling meaningful; subscription plans report none and carry allowance windows instead, and
@@ -184,14 +190,23 @@ Both deserve a ring, and spending two of three slots on one subscription is what
 useless for everything else. So the two share **one band, split lengthwise**, each half melting
 on its own value.
 
-1. **Only this case, only when both are picked, and only one slot.** The division is allowed for
-   two pools of the same plan of the same connection. Everything else stays one ring, one metric.
+1. **Only when both are picked, and only one slot.** The division is allowed for
+   two pools or limits of the same plan of the same connection: Cursor own/external pools
+   and Codex main/Spark limits. Everything else stays one ring, one metric.
    The Watchface tab offers each pool as its own row: **ticking both** is what shares a band —
    either alone is an ordinary, undivided ring. A pair costs one of the three slots, which is the
    whole point: a plan with two pools does not cost two.
-2. **The order inside a pair is fixed by pool, never by usage.** Own models take the inner half
-   and the left marker; external models the outer half and the right one. Position inside the
-   pair is a name, not a rank: urgency is already carried twice, by each half's own melt and by
+   Codex windows collapse independently to `allowance.codex.plan` and
+   `allowance.codex.spark`, choosing the tightest non-exhausted window per limit;
+   ties prefer primary. Empty limits offer no ring, unavailable limits remain disabled,
+   and fully exhausted limits are omitted from the face. The picker keeps `Codex plan`
+   and `Codex · Spark` stable; the winning window remains in the subtitle and payload.
+   Old per-window Watchface selections migrate before deduplication and the band budget;
+   widget selections remain per-window. Spark window labels are `Spark 5h` / `Spark Weekly`.
+2. **The order inside a pair is fixed by pool, never by usage.** Cursor own models take the
+   inner half and left marker; external models take the outer half and right marker. Codex main
+   takes inside/left, Spark outside/right; its darker `#186020` reads on the longer outer arc.
+   Position inside the pair is a name, not a rank: urgency is already carried twice, by each half's own melt and by
    where the pair sits among the rings. A third encoding would only make the colours swap sides
    at the moment the reader is looking at a problem.
 3. **The pair sorts by its tighter half.** Layer rule 3 is unchanged and still means what it
@@ -201,8 +216,8 @@ on its own value.
    colours, and two percentages in one TEXT, as every strip label is composed whole. One marker
    stays the rule for every other strip: two of the same colour would say a thing twice, which is
    the defect this language exists to avoid. Each strip's `TITLE` carries a closed outer-pool
-   token: `cursor-other` selects the static palette colour `#67E8D4`. An empty or unknown token
-   paints no far marker. The inner accent keeps `[COMPLICATION.RANGED_VALUE_COLORS]`; the
+   token: `cursor-other` selects static `#67E8D4`, and `spark` selects static `#186020`.
+   An empty or unknown token paints no far marker. The inner accent keeps `[COMPLICATION.RANGED_VALUE_COLORS]`; the
    outer accent does not borrow its colour. A new outer pool requires a matching token in Wear
    and the face generator. The far marker keeps its 3x14 geometry inside the strip's own slot,
    replacing the shared marker slot introduced on **2026-08-16**.
@@ -239,8 +254,8 @@ on its own value.
    At most two bands can split; a third outer half has no slot.
 
    The band's own `TITLE` still says `split` for an inner half. Period tokens belong only to
-   budget rings, so these uses cannot collide. The phone currently offers only the Cursor pair;
-   a second pair is routing capacity until its separate product change lands.
+   budget rings, so these uses cannot collide. The phone offers Cursor and Codex/Spark pairs;
+   both outer-half slots can be active together.
 
 8. **The payload says "one band", not "two rings".** The contract caps `rings` at three entries
    (`schemas/watch_dashboard_summary.schema.json`, `maxItems: 3`), and three entries mean three
@@ -468,6 +483,7 @@ xdg-open apps/wear_android/design/preview-3-plan-credits.png
 |------|---------|
 | `round-3-plan-credits.svg` | **Primary baseline** — three providers, plan + credits |
 | `round-3-plan-split.svg` | **Split band baseline** — a Cursor plan's two pools on one band, two markers and two percents on its strip |
+| `round-3-plan-two-pairs.svg` | Three bands with Cursor and Codex/Spark pairs, fixed inner/outer order and two far markers |
 | `round-3-plan-untouched.svg` | A pool nobody has spent: its half closes, while the pool beside it keeps its gap |
 | `round-3-plan-budget.svg` | Two plan rings + a budget ring reading `$71.30/250`; only its band carries type |
 | `round-3-budget-periods.svg` | **Ring type baseline** — one connection's three budget periods, told apart by `7D` / `M` / `D` alone |
