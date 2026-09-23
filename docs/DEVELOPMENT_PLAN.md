@@ -2079,20 +2079,26 @@ retiring the payload fields this phase orphaned (today, week, projectedTotal) �
 
 ### Phase 18 — Codex Spark as the second half of a band
 
-Status: in progress as of 2026-08-30.
+Status: code complete as of 2026-09-16; acceptance deferred until live-data verification.
+
+Landed in order: `26c321a` (two-limit fixture), `e13be9f` (window naming rule), `299e3f5`
+(Spark colour), `7724071` (phone reads every limit), `f73e389` (a slot freed), `e6295e1`
+(paired Glance row), `90bd63e` (split bands as a table), `7ae235f` (Codex paired with Spark).
+Every gate passed on each; the acceptance block below is what remains, because each of its
+lines is observed on a device or against a live account.
 
 Rationale: Codex reports more than one limit. Beside the plan's own window sits
 `GPT-5.3-Codex-Spark`, metered separately, with both a 5-hour and a weekly window of its own.
-The product does not see it: `_normalizeRateLimits` hard-codes `limitId: 'codex'`, reads only
-the root `rate_limit`, and never looks at `additional_rate_limits`, so Spark is discarded on the
-phone before Rust can normalize it. That is the shape Phase 13 already solved for Cursor's two
-pools — a band split lengthwise — so the answer is to reuse the split band rather than invent a
+The product did not see it: `_normalizeRateLimits` hard-coded `limitId: 'codex'`, read only
+the root `rate_limit`, and never looked at `additional_rate_limits`, so Spark was discarded on
+the phone before Rust could normalize it. That is the shape Phase 13 already solved for Cursor's
+two pools — a band split lengthwise — so the answer is to reuse the split band rather than invent a
 second idiom.
 
-**The face's slot ceiling is what makes this more than an adapter change.** The eight-slot
-budget is already fully spent (`WATCH_RING_DESIGN.md`, which owns the rule), and the split band
-spends two of those slots on channels serving every band at once: one outer half and one far
-marker, each dispatching by `TITLE`. One slot renders one complication, so only one band can
+**The face's slot ceiling is what made this more than an adapter change.** The eight-slot
+budget was already fully spent (`WATCH_RING_DESIGN.md`, which owns the rule), and the split band
+spent two of those slots on channels serving every band at once: one outer half and one far
+marker, each dispatching by `TITLE`. One slot renders one complication, so only one band could
 split at a time. Freeing a slot is therefore a precondition for showing Cursor's pair and
 Codex's pair together, not a later optimization.
 
@@ -2120,7 +2126,7 @@ Deliverables:
   `TITLE`, and at what precision. Its outcome is the deliverable, either way: a negative result
   settles the question and leaves everything above working.
 
-Acceptance:
+Acceptance — **not yet run**, deferred with the live-data work below:
 
 ```text
 the watch face shows the Cursor pair and the Codex pair at the same time
@@ -2291,7 +2297,12 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-Phase 18 is under way: Codex Spark reaches the face as the second half of a band.
+Phase 18 is code complete and waiting on a device. Codex Spark reaches the face as the second
+half of a band, every gate passes, and what is left cannot be settled by a gate: signing into a
+Codex account and reading both limits off the phone's cards, seeing both pairs drawn at once,
+measuring the Glance legend well, and running the spike on whether a Watch Face Format
+expression can read a number out of `TITLE`. Folding the outer half into its band's slot waits
+on that spike's result, either way.
 
 Still open from before it, and unchanged by it: the one acceptance line Phase 15 could not
 measure, a recovery notification reaching a paired watch exactly once. It needs a phone paired
