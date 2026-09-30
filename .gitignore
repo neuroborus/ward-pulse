@@ -64,3 +64,6 @@ Thumbs.db
 # Generated bindings are reproducible. Keep directory placeholders.
 bindings/**/generated/*
 !bindings/**/generated/.gitkeep
+
+# Local toolchain copies for sandboxed gate runs; never committed.
+.toolchains/
