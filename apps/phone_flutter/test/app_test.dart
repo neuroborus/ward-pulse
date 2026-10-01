@@ -24,6 +24,39 @@ import 'package:ward_pulse_phone/sync/recovery_watchlist.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 
 void main() {
+  for (final brightness in Brightness.values) {
+    testWidgets(
+      'app bar keeps the WardPulse mark and title in ${brightness.name}',
+      (tester) async {
+        tester.platformDispatcher.platformBrightnessTestValue = brightness;
+        addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+
+        await tester.pumpWidget(
+          WardPulseApp(repository: const NoProvidersDashboardRepository()),
+        );
+        await tester.pumpAndSettle();
+
+        final appBar = find.byType(AppBar);
+        final leading = tester.widget<AppBar>(appBar).leading;
+        expect(leading, isA<Center>());
+        final mark = (leading! as Center).child;
+        expect(mark, isA<Image>());
+        final image = mark! as Image;
+        final asset = image.image as AssetImage;
+
+        expect(asset.assetName, 'assets/brand/wardpulse.png');
+        expect(image.width, 32);
+        expect(image.height, 32);
+        expect(image.excludeFromSemantics, isTrue);
+        expect(
+          find.descendant(of: appBar, matching: find.text('WardPulse')),
+          findsOneWidget,
+        );
+        expect(Theme.of(tester.element(appBar)).brightness, brightness);
+      },
+    );
+  }
+
   testWidgets('renders mock history and opens Providers catalog', (
     tester,
   ) async {

@@ -576,6 +576,14 @@ class _DashboardHostState extends State<DashboardHost> {
 
         return Scaffold(
           appBar: AppBar(
+            leading: const Center(
+              child: Image(
+                image: AssetImage('assets/brand/wardpulse.png'),
+                width: 32,
+                height: 32,
+                excludeFromSemantics: true,
+              ),
+            ),
             title: const Text('WardPulse'),
             actions: [
               if (snapshot != null)

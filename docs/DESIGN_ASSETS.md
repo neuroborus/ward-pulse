@@ -39,8 +39,9 @@ installing anything, or install a desktop build from the
 - Exported runtime assets belong in the consuming platform's normal asset or resource directory.
 - Keep only locked previews under `brand/watchface/` — no scratch placement boards.
 
-Runtime targets are `apps/phone_flutter/android/app/src/main/res/`,
-`apps/wear_android/app/src/main/res/`, and `apps/watchface_wff/src/main/res/`.
+Runtime targets are `apps/phone_flutter/assets/`,
+`apps/phone_flutter/android/app/src/main/res/`, `apps/wear_android/app/src/main/res/`, and
+`apps/watchface_wff/src/main/res/`.
 
 Do not create a repository-wide design system or duplicate a source file between owners. Files
 under `brand/` remain outside the Apache-2.0 source license unless explicitly stated otherwise.
@@ -104,7 +105,9 @@ ring language. The pulse communicates activity and throughput. The small eye sig
 local monitoring — keep it in the upper-right of the mark and preserve its scale relative to the
 pulse.
 
-Use the **color metal+ring** mark for phone and Wear launchers.
+Use the **color metal+ring** mark for the phone app bar and phone / Wear launchers. Its opaque
+metal disc keeps the compact app-bar mark distinct in both themes; reserve the ringless mono
+wordmark for quiet watermark treatments.
 
 ### Watch-face watermark (locked)
 
@@ -130,6 +133,7 @@ Canonical preview: `brand/watchface/preview-face-active-quiet.png`.
 | Mono watermark (canonical SVG) | `brand/icons/wardpulse-mono.svg` |
 | PNG previews (incl. faded mono) | `brand/icons/previews/` |
 | Face placement preview | `brand/watchface/preview-face-active-quiet.png` |
+| Flutter app-bar mark (1× / 2× / 3× PNG) | `apps/phone_flutter/assets/brand/` |
 | Phone / Wear launcher mipmaps | `mipmap-*/ic_launcher.png` |
 | Phone adaptive foreground | `drawable-*/ic_launcher_foreground.png` |
 | WFF runtime mono (faded PNG) | `apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png` |
@@ -139,6 +143,9 @@ Canonical preview: `brand/watchface/preview-face-active-quiet.png`.
 Prefer regenerating exports with `just export-icons` rather than editing PNGs by hand. The mono
 drawable must go through `tools/fade-watermark-png.py` (wired in `tools/export-icons.sh`).
 Commit runtime exports when an application build consumes them.
+
+The Flutter app-bar copies are bundled WardPulse branding. Moving them into the APK does not
+place them under Apache-2.0 or grant downstream use of the WardPulse mark.
 
 The last row is the exception: the ring type is not a brand export but the face's own type,
 baked by `tools/render-watchface.mjs` (`just render-watchface`) alongside the XML that names it.
