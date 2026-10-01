@@ -36,7 +36,11 @@ class ProviderConnectionRow extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < _compactWidth;
-        final trailing = [...actions, if (!compact) status];
+        final stackedActions = compact && actions.length > 1;
+        final trailing = [
+          if (!stackedActions) ...actions,
+          if (!compact) status,
+        ];
         return ListTile(
           leading: Icon(icon),
           title: Text(title),
@@ -49,6 +53,20 @@ class ProviderConnectionRow extends StatelessWidget {
                       Text(subtitle),
                       const SizedBox(height: 4),
                       status,
+                      if (stackedActions)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            for (final action in actions)
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  minWidth: kMinInteractiveDimension,
+                                  minHeight: kMinInteractiveDimension,
+                                ),
+                                child: action,
+                              ),
+                          ],
+                        ),
                     ],
                   )
                   : Text(subtitle),

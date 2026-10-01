@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/providers/claude_account_service.dart';
@@ -11,39 +12,81 @@ import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 
 void main() {
   group('connection row layout', () {
-    testWidgets('keeps copy readable and moves status below it at 320dp', (
+    testWidgets('stacks two actions without splitting words at 320dp', (
       tester,
     ) async {
       await _pumpProvidersAtSize(tester, const Size(320, 640));
 
-      const title = 'Organization reporting';
-      const subtitle = 'Admin API key · stored on this phone';
+      for (final title in const ['Organization reporting', 'Team Admin API']) {
+        await tester.scrollUntilVisible(
+          find.text(title),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+
+        final row = find.widgetWithText(ListTile, title);
+        final titleText = _inRow(title, find.text(title));
+        final subtitleText = _inRow(
+          title,
+          find.textContaining('Admin API key'),
+        );
+        final status = _inRow(title, find.text('Not connected'));
+        final budget = _inRow(title, find.byTooltip('Budget limits'));
+        final alerts = _inRow(title, find.byTooltip('Alert thresholds'));
+
+        expect(row, findsOneWidget);
+        expect(budget, findsOneWidget);
+        expect(alerts, findsOneWidget);
+        _expectWordsStayIntact(tester, titleText, title);
+
+        final rowRect = tester.getRect(row);
+        final subtitleRect = tester.getRect(subtitleText);
+        final statusRect = tester.getRect(status);
+        final budgetRect = tester.getRect(budget);
+        final alertsRect = tester.getRect(alerts);
+        expect(statusRect.left, closeTo(subtitleRect.left, 0.1));
+        expect(statusRect.top, greaterThan(subtitleRect.bottom));
+        expect(budgetRect.top, greaterThanOrEqualTo(statusRect.bottom));
+        expect(alertsRect.center.dy, closeTo(budgetRect.center.dy, 0.1));
+        expect(alertsRect.left, greaterThanOrEqualTo(budgetRect.right));
+
+        for (final action in [budget, alerts]) {
+          final size = tester.getSize(action);
+          final rect = tester.getRect(action);
+          expect(size.width, greaterThanOrEqualTo(48));
+          expect(size.height, greaterThanOrEqualTo(48));
+          expect(rect.left, greaterThanOrEqualTo(rowRect.left));
+          expect(rect.right, lessThanOrEqualTo(rowRect.right));
+          expect(rect.bottom, lessThanOrEqualTo(rowRect.bottom));
+        }
+      }
+    });
+
+    testWidgets('keeps one compact action in the trailing slot', (
+      tester,
+    ) async {
+      await _pumpProvidersAtSize(tester, const Size(320, 640));
+
+      const title = 'Claude subscription';
+      await tester.scrollUntilVisible(
+        find.text(title),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
       final row = find.widgetWithText(ListTile, title);
-      final titleText = _inRow(title, find.text(title));
-      final subtitleText = _inRow(title, find.text(subtitle));
+      final tile = tester.widget<ListTile>(row);
       final status = _inRow(title, find.text('Not connected'));
-      final budget = _inRow(title, find.byTooltip('Budget limits'));
       final alerts = _inRow(title, find.byTooltip('Alert thresholds'));
 
-      expect(row, findsOneWidget);
-      expect(budget, findsOneWidget);
-      expect(alerts, findsOneWidget);
-      final rowWidth = tester.getSize(row).width;
+      expect(tile.trailing, isA<Row>());
+      expect((tile.trailing! as Row).children, hasLength(1));
       expect(
-        tester.getSize(titleText).width,
-        greaterThanOrEqualTo(rowWidth / 4),
+        tester.getRect(alerts).left,
+        greaterThan(tester.getRect(status).right),
       );
-      expect(
-        tester.getSize(subtitleText).width,
-        greaterThanOrEqualTo(rowWidth / 4),
-      );
-
-      final subtitleRect = tester.getRect(subtitleText);
-      final statusRect = tester.getRect(status);
-      expect(statusRect.left, closeTo(subtitleRect.left, 0.1));
-      expect(statusRect.top, greaterThan(subtitleRect.bottom));
-      expect(tester.getRect(budget).left, greaterThan(statusRect.left));
-      expect(tester.getRect(alerts).left, greaterThan(statusRect.left));
     });
 
     testWidgets('keeps the current trailing status at 411dp', (tester) async {
@@ -54,14 +97,21 @@ void main() {
       final status = _inRow(title, find.text('Not connected'));
       final budget = _inRow(title, find.byTooltip('Budget limits'));
       final alerts = _inRow(title, find.byTooltip('Alert thresholds'));
+      final tile = tester.widget<ListTile>(row);
 
       expect(row, findsOneWidget);
       expect(budget, findsOneWidget);
       expect(alerts, findsOneWidget);
+      expect(tile.subtitle, isA<Text>());
+      expect(tile.trailing, isA<Row>());
+      expect((tile.trailing! as Row).children, hasLength(3));
 
       final statusRect = tester.getRect(status);
+      final budgetRect = tester.getRect(budget);
       final alertsRect = tester.getRect(alerts);
+      expect(alertsRect.left, greaterThanOrEqualTo(budgetRect.right));
       expect(statusRect.left, greaterThanOrEqualTo(alertsRect.right));
+      expect(budgetRect.center.dy, closeTo(alertsRect.center.dy, 0.1));
       expect(statusRect.center.dy, closeTo(alertsRect.center.dy, 0.1));
     });
 
@@ -430,6 +480,20 @@ Finder _inRow(String title, Finder matching) => find.descendant(
   of: find.widgetWithText(ListTile, title),
   matching: matching,
 );
+
+void _expectWordsStayIntact(WidgetTester tester, Finder text, String contents) {
+  final paragraph = tester.renderObject<RenderParagraph>(text);
+  for (final word in RegExp(r'\S+').allMatches(contents)) {
+    final boxes = paragraph.getBoxesForSelection(
+      TextSelection(baseOffset: word.start, extentOffset: word.end),
+    );
+    expect(
+      boxes,
+      hasLength(1),
+      reason: '"${word.group(0)}" must not split across lines in "$contents"',
+    );
+  }
+}
 
 Future<void> _pumpProvidersAtSize(WidgetTester tester, Size size) async {
   _setTestSurface(tester, size);
