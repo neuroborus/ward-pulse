@@ -164,7 +164,7 @@ void main() {
     });
   }
 
-  test('packs a Cursor pair into one ring carrying its second pool', () {
+  test('ships a lone Cursor pool whole and packs both pools into one ring', () {
     final json =
         jsonDecode(
               File(
@@ -186,7 +186,20 @@ void main() {
     );
 
     final dashboard = DashboardSnapshot.fromJson(json);
-    final payload =
+    final lonePayload =
+        jsonDecode(
+              WatchDashboardSummaryPayload.fromSnapshot(
+                dashboard,
+                const WatchRingPreferences(selectedIds: [cursorOwnPoolId]),
+              ).encode(),
+            )
+            as Map<String, dynamic>;
+    final loneRings = lonePayload['rings'] as List;
+    expect(loneRings, hasLength(1));
+    expect(loneRings.single['id'], cursorOwnPoolId);
+    expect(loneRings.single['split'], isNull);
+
+    final pairedPayload =
         jsonDecode(
               WatchDashboardSummaryPayload.fromSnapshot(
                 dashboard,
@@ -203,7 +216,9 @@ void main() {
     // (`WATCH_RING_DESIGN.md`, Split band). The golden is the whole payload
     // because Wear parses this very file (`WatchSummaryStoreTest`) — a renamed
     // key has to fail on one side or the other, not quietly on neither.
-    expect(payload, expected);
+    expect(pairedPayload, expected);
+    final pairedRings = pairedPayload['rings'] as List;
+    expect(pairedRings.single['split']['label'], 'Other Models');
   });
 
   for (final (innerUsed, outerUsed) in [(47.0, 62.0), (62.0, 47.0)]) {

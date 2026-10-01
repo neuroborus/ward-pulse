@@ -120,6 +120,23 @@ internal fun outerHalfComplicationData(
     return build(half, outerSlot)
 }
 
+/** Selects the ring for one fixed face slot before Android complication construction. */
+internal fun ringComplicationData(
+    rings: List<RingSummary>,
+    ringIndex: Int,
+    build: (RingSummary, Float, String) -> ComplicationData,
+): ComplicationData {
+    val dataIndex =
+        RingSurfaceOrder.payloadIndexForOuterSlot(rings.size, ringIndex)
+            ?: return NoDataComplicationData()
+    val ring = rings[dataIndex]
+    val remaining = WatchComplicationText.remainingPercent(ring.usedPercent)
+    if (remaining <= 0f) {
+        return NoDataComplicationData()
+    }
+    return build(ring, remaining, WatchComplicationText.ringTitleToken(ring))
+}
+
 abstract class RingComplicationDataSourceService :
     SuspendingComplicationDataSourceService() {
     protected abstract val ringIndex: Int
@@ -133,22 +150,20 @@ abstract class RingComplicationDataSourceService :
         val rings = summary?.rings.orEmpty()
         val dataIndex = RingSurfaceOrder.payloadIndexForOuterSlot(rings.size, ringIndex)
         val ring = dataIndex?.let { rings[it] }
-        val remaining = ring?.let { WatchComplicationText.remainingPercent(it.usedPercent) }
         val label = ring?.label
         return when (request.complicationType) {
             // NoData clears a previous arc; null would leave stale complication data.
             ComplicationType.RANGED_VALUE ->
-                if (ring == null || remaining == null || remaining <= 0f) {
-                    NoDataComplicationData()
-                } else {
+                ringComplicationData(rings, ringIndex) { selectedRing, remaining, title ->
                     // Credits live on the center strip; TITLE carries what the
-                    // face branches on — the budget period, or `split`.
+                    // face branches on — the budget period, `split`, or the
+                    // explicit empty full-band state.
                     ComplicationBuilders.ranged(
                         this,
                         remaining,
-                        title = WatchComplicationText.ringTitleToken(ring),
-                        colorArgb = RingFamily.colorArgb(ring.id),
-                        contentDescription = label,
+                        title = title,
+                        colorArgb = RingFamily.colorArgb(selectedRing.id),
+                        contentDescription = selectedRing.label,
                     )
                 }
             ComplicationType.SHORT_TEXT -> {
@@ -210,7 +225,7 @@ private object ComplicationBuilders {
     fun ranged(
         context: Context,
         percent: Float,
-        title: String? = null,
+        title: String,
         colorArgb: Int = RingFamily.FALLBACK,
         contentDescription: String? = null,
     ): ComplicationData {
@@ -218,7 +233,7 @@ private object ComplicationBuilders {
         val amount = WatchComplicationText.percentAmount(value)
         val description =
             contentDescription?.let { "$it $amount%" }
-                ?: title?.let { "$amount% · $it" }
+                ?: title.takeIf { it.isNotEmpty() }?.let { "$amount% · $it" }
                 ?: WatchComplicationText.percentLabel(value)
         return RangedValueComplicationData.Builder(
             value = value,
@@ -226,11 +241,7 @@ private object ComplicationBuilders {
             max = 100f,
             contentDescription = PlainComplicationText.Builder(description).build(),
         ).setText(PlainComplicationText.Builder(amount).build())
-            .apply {
-                if (!title.isNullOrBlank()) {
-                    setTitle(PlainComplicationText.Builder(title).build())
-                }
-            }
+            .setTitle(PlainComplicationText.Builder(title).build())
             // Drives WFF WeightedStroke via [COMPLICATION.RANGED_VALUE_COLORS].
             .setColorRamp(ColorRamp(intArrayOf(colorArgb), /* interpolated = */ false))
             .setTapAction(tapAction(context))
@@ -429,13 +440,14 @@ object WatchComplicationText {
     /**
      * Everything a ring slot tells the face about itself, in the one string a
      * complication may carry: [SPLIT_TOKEN] when the band is shared with a
-     * second pool, otherwise its budget period.
+     * second pool, otherwise its budget period or an explicit empty value for
+     * an unpaired plan.
      *
      * The two can never collide — only a budget ring has a period, and a pair
      * is always two plan pools (`WATCH_RING_DESIGN.md`, Split band).
      */
-    fun ringTitleToken(ring: RingSummary): String? =
-        if (ring.split != null) SPLIT_TOKEN else ringPeriodToken(ring.id)
+    fun ringTitleToken(ring: RingSummary): String =
+        if (ring.split != null) SPLIT_TOKEN else ringPeriodToken(ring.id).orEmpty()
 
     /**
      * The period token the watch face repeats around a ring, read off the ring

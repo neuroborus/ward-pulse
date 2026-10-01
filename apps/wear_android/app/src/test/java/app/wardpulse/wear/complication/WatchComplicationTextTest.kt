@@ -92,6 +92,45 @@ class WatchComplicationTextTest {
     }
 
     @Test
+    fun loneSplitCapablePoolUsesAFullBandWhileAPairUsesTwoHalves() {
+        val single = cursorPair.copy(split = null)
+
+        fun normalTitle(ring: RingSummary): String {
+            val built = NoDataComplicationData()
+            var captured: String? = null
+            val result =
+                ringComplicationData(listOf(ring), 0) { actualRing, remaining, title ->
+                    assertEquals(ring, actualRing)
+                    assertEquals(82f, remaining)
+                    captured = title
+                    built
+                }
+            assertSame(built, result)
+            return requireNotNull(captured)
+        }
+
+        assertEquals("", normalTitle(single))
+        val loneOuter =
+            outerHalfComplicationData(listOf(single), 0) { _, _ ->
+                error("A lone pool must not publish outer-half data")
+            }
+        assertTrue(loneOuter is NoDataComplicationData)
+
+        assertEquals(WatchComplicationText.SPLIT_TOKEN, normalTitle(cursorPair))
+        val builtOuter = NoDataComplicationData()
+        var outerBuilt = false
+        val pairedOuter =
+            outerHalfComplicationData(listOf(cursorPair), 0) { half, outerSlot ->
+                outerBuilt = true
+                assertEquals(cursorPair.split, half)
+                assertEquals(0, outerSlot)
+                builtOuter
+            }
+        assertTrue(outerBuilt)
+        assertSame(builtOuter, pairedOuter)
+    }
+
+    @Test
     fun stripTitleUsesOnlyTheKnownActiveOuterPool() {
         assertEquals(
             "cursor-other",
@@ -301,7 +340,7 @@ class WatchComplicationTextTest {
                 47.0,
                 PulseStatus.OK,
             )
-        assertNull(WatchComplicationText.ringTitleToken(pool))
+        assertEquals("", WatchComplicationText.ringTitleToken(pool))
         assertEquals(
             "split",
             WatchComplicationText.ringTitleToken(
