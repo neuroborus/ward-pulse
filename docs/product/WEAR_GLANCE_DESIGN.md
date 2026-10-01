@@ -7,12 +7,29 @@ watch-face baseline in [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md): this scre
 
 **Revision 2026-09-16 — paired bands:** one Glance row per band, with two mini arcs
 and two remaining percentages for an active pair. Typography, row pitch and Alerts clearance
-are unchanged. Legend-well width, absence of clipping and visual equivalence are **deferred
-until live-data verification**; this revision records no new device measurements.
+are unchanged; the 2026-10-01 revision below verifies the paired-row fit on both screen shapes.
 
 **Revision 2026-09-16 — Codex/Spark:** the full board now shows two pairs in three
 rows. Codex main is the first arc/percentage and Spark the second; the title is
-`Codex plan`. Geometry and typography stay fixed; device fit remains deferred as above.
+`Codex plan`. Geometry and typography stay fixed; the paired-row footprint and three-row fit
+are covered by the 2026-10-01 verification below.
+
+**Revision 2026-10-01 — round/notround fit verified:** the same three-band payload, with
+`Cursor Models` and `Other Models` paired in the middle row, was measured on `emulator-5554`
+(`round`, 384×384) and `wardpulse_wear_square_api36_1` (`notround`, 360×360).
+
+| Measurement | Round 384×384 | Notround 360×360 |
+|-------------|---------------|------------------|
+| Row pitch | 46 px (0.120 of screen height) | 43 px (0.119 of screen height) |
+| Arc left edge | x 112 (0.292 of screen width) | x 102 (0.283 of screen width) |
+| Paired inner pool | x 102…132, left | x 102…132, left |
+| Paired outer pool | x 155…187, right | x 143…173, right |
+
+Both screens keep the inner pool before the outer pool, fit all three rows with the Alerts pill,
+and show every label without clipping. Glance lays out against the available width without
+screen-shape-specific behavior; it does not render a fixed-size canvas. WFF is different: its
+fixed 450-unit canvas and inscribed circle make a separate round-versus-square fit check
+unnecessary.
 
 Do not reintroduce a face clone (large concentric stacks, sunk strips, watermark, or
 time-as-hero), stacked icon-above-label refresh, or conflating cadence cooldown with
@@ -80,8 +97,8 @@ Rules:
 - Rows are laid out on a **54-unit pitch** with nothing added between them: the pitch already
   covers the mini arcs and both lines.
 - The block keeps **12 units clear of the Alerts pill**. Three rows is the ceiling, one per
-  band, regardless of how many bands are paired. Device fit and clipping remain deferred
-  until live-data verification; the three-row rule is not a new measurement.
+  band, regardless of how many bands are paired. The 2026-10-01 round/notround measurement
+  verifies the three-row fit, available width and absence of clipping on both screen shapes.
 - Empty / exhausted: short copy centered between refresh and Alerts; no placeholder rings.
 
 | Empty state | Copy |
@@ -175,7 +192,7 @@ xdg-open apps/wear_android/design/preview-glance-legend-3.png
 | `glance-legend-3.svg` | **Primary** — three providers, `OK` refresh enabled, Alerts disabled |
 | `glance-legend-1.svg` | Single provider with credits |
 | `glance-legend-pair.svg` | One Cursor pair — one row, two coloured arcs, inner-first percentages and credits once |
-| `glance-legend-full.svg` | Three rows — the ceiling: three bands, currently two paired; device fit remains deferred |
+| `glance-legend-full.svg` | Three rows — the ceiling: three bands, currently two paired; three-row and paired-row geometry verified on-device 2026-10-01 |
 | `glance-legend-budget.svg` | Plan rows (with credits) + a connection budget row (family color, no credits) |
 | `glance-legend-stale.svg` | `!OK` + detail `Stale`, refresh enabled, Alerts active |
 | `glance-legend-cadence.svg` | Healthy `OK` but refresh **disabled** (cadence cooldown; no detail) |
@@ -193,7 +210,7 @@ one row per band, at most three rows; band order matches the phone/face
 paired arcs and percentages: inner first, outer second; each retains its own colour
 paired title = family + " plan"; Cursor plan and Codex plan exactly
 paired subtitle = "82% · 41% left · 320 credits" (omit credits suffix when unavailable)
-54-unit row pitch; 12-unit Alerts clearance; device width/clipping checks deferred
+54-unit row pitch; 12-unit Alerts clearance; round 384 / notround 360 width and clipping verified 2026-10-01
 per-provider credits with explicit credits label (no footer sum)
 OK / !OK inside dual-arrow refresh glyph; same label font size
 optional muted problem detail below the plate (never on the ring)
