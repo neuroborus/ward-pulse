@@ -468,10 +468,31 @@ Run the phone Android acceptance checks:
 
 ```sh
 just build-android-rust
-cd apps/phone_flutter
-flutter build apk --debug
-flutter run
+(cd apps/phone_flutter && flutter build apk --debug)
+ANDROID_SERIAL="$PHONE_SERIAL" just install-phone
 ```
+
+The default debug build includes every configured ABI. On a storage-constrained target, build
+only the matching architecture before running the same installation recipe:
+
+```sh
+# x86_64 emulator
+(cd apps/phone_flutter && flutter build apk --debug --target-platform android-x64)
+
+# arm64 device
+(cd apps/phone_flutter && flutter build apk --debug --target-platform android-arm64)
+```
+
+`install-phone` deliberately leaves compilation and ABI selection to the preceding build. It
+requires an explicit phone serial because the phone and Wear shells share `app.wardpulse`, then
+compares the package's `lastUpdateTime` before and after `adb install -r`. Comparing those two
+values supports a first installation and does not depend on the device clock, which can lag after
+an emulator snapshot is restored.
+
+Do not treat a shortened `adb` transcript as installation evidence. A command such as
+`adb install ... | tail -1` returns `tail`'s status rather than `adb`'s and can hide the failure
+line. Even visible output does not prove that the package changed, so the recipe also fails when
+the post-install timestamp is missing or unchanged.
 
 For Codex acceptance, open the phone **Providers** tab → Codex / plan row, start sign-in, open
 the external OpenAI page, and enter the one-time code. Plan usage, purchased usage, and

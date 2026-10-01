@@ -66,6 +66,18 @@ build-android-rust:
 run-phone: build-android-rust
     cd apps/phone_flutter && flutter run
 
+install-phone:
+    @test -n "${ANDROID_SERIAL:-}" || { echo "Set ANDROID_SERIAL to a phone device serial."; exit 1; }
+    @set -e; \
+        before="$(adb -s "$ANDROID_SERIAL" shell dumpsys package app.wardpulse | grep -m 1 'lastUpdateTime' || true)"; \
+        adb -s "$ANDROID_SERIAL" install -r apps/phone_flutter/build/app/outputs/flutter-apk/app-debug.apk; \
+        after="$(adb -s "$ANDROID_SERIAL" shell dumpsys package app.wardpulse | grep -m 1 'lastUpdateTime' || true)"; \
+        test -n "$after" || { echo "Phone package lastUpdateTime is unavailable after installation."; exit 1; }; \
+        test "$before" != "$after" || { echo "Phone package lastUpdateTime did not change after installation."; exit 1; }
+
+test-install-phone:
+    tools/test-install-phone/run.sh
+
 check-wear:
     cd apps/wear_android && ./gradlew --no-daemon lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest
 
