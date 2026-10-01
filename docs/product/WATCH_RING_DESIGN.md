@@ -11,9 +11,10 @@ split-band revision **2026-08-13** (one Cursor plan's two pools may share a sing
 Cursor's own models take a colour of their own); full-ring revision **2026-08-17** (a band with
 nothing spent closes instead of carrying a seam); two-split-slot revision **2026-09-16**
 (far markers move into strip slots; slots 106/109 carry the two outer halves); near-exhaustion
-revision **2026-10-01** (a positive remainder below the two-cap cutoff stays visible) —
-accepted visual target for Wear OS and Watch Face Format until the next explicit design
-revision.
+revision **2026-10-01** (a positive remainder below the two-cap cutoff stays visible);
+clock-colon revision **2026-10-01** (the device-font one-pixel imbalance is accepted without
+splitting the time) — accepted visual target for Wear OS and Watch Face Format until the next
+explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
 wireframes, large remaining-% heroes, or bordered strip cards.
 
@@ -320,6 +321,29 @@ asks for — the strip stack below pulls the eye down. Review art centred the cl
 and disagreed with the face by that much; it now carries the measured lift (`TIME_LIFT` in
 `tools/render-watch-ring-designs.mjs`), which is why the boards and the watch show the same
 screen.
+
+**Clock colon spacing stays device-defined (revision 2026-10-01).** On the `emulator-5554`
+screenshot used for the 2026-09-26 decision, `03:24` at 384×384 produced these bright-pixel
+spans:
+
+| Glyph | `0` | `3` | `:` | `2` | `4` |
+|---|---:|---:|---:|---:|---:|
+| Columns | 118–145 | 151–180 | 187–195 | 203–231 | 237–266 |
+| Width | 28 | 30 | 9 | 29 | 30 |
+
+The four inter-glyph gaps were 5 / 6 / 7 / 5 px, so the colon had 6 px on its left and 7 px
+on its right. Its centre was column 191 against 192 for the full time's bright-pixel span: one
+screen pixel left, or `450 / 384 = 1.17`, approximately **1.2 design units**. The digit widths
+were 28 / 30 / 29 / 30, so the device font is proportional rather than tabular and the
+imbalance changes with the value; `12:24` will not lay out like `03:24`.
+
+Both active and ambient modes intentionally keep one complete `TimeText` with `format="hh:mm"`,
+`align="CENTER"`, and `family="SYNC_TO_DEVICE"`. The generator centres each whole string, but
+the device's clock font owns the spacing inside it. The one-pixel imbalance is accepted and the
+layout stays unchanged. Baking tabular digits would pin the metrics—the ring-type texture
+already uses baked Noto Sans Bold—but would abandon the intentionally device-synced clock font.
+Splitting hours, colon, and minutes would use three elements per mode, six total, and would
+centre their boxes rather than their ink because the system colon metrics remain unknown.
 
 **A band that has spent nothing closes (revision 2026-08-17).** The cap inset above is what
 makes a small melt visible, but at `usedPercent == 0` there is no melt to inset and the inset
