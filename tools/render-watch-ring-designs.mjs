@@ -211,8 +211,52 @@ function esc(text) {
     .replaceAll('>', '&gt;')
 }
 
-function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
+function twoCapCutoff(r, thickness) {
+  const capLength = thickness / 2
+  return (2 * capLength) / (2 * Math.PI * r)
+}
+
+function ringArcGeometry(r, thickness, remaining) {
   const circ = 2 * Math.PI * r
+  const left = Math.min(Math.max(remaining, 0), 0.999)
+  const nearEmpty = left <= twoCapCutoff(r, thickness)
+  return {
+    circ,
+    left,
+    nearEmpty,
+    paint: circ * left - (nearEmpty ? 0 : thickness),
+    used: circ * (1 - left) + (nearEmpty ? 0 : thickness / 2),
+  }
+}
+
+function assertNearExhaustedArcs() {
+  const epsilon = 0.000001
+  for (const diameter of [404, 356, 308]) {
+    const r = diameter / 2
+    const thickness = 40
+    const cutoff = twoCapCutoff(r, thickness)
+    const below = ringArcGeometry(r, thickness, cutoff - epsilon)
+    if (!below.nearEmpty || below.paint <= 0) {
+      throw new Error(
+        `ring ${diameter}: a remainder below the two-cap cutoff must stay visible`,
+      )
+    }
+
+    const aboveRemaining = cutoff + epsilon
+    const above = ringArcGeometry(r, thickness, aboveRemaining)
+    const expectedPaint = above.circ * aboveRemaining - thickness
+    const expectedUsed = above.circ * (1 - aboveRemaining) + thickness / 2
+    if (
+      above.nearEmpty ||
+      above.paint !== expectedPaint ||
+      above.used !== expectedUsed
+    ) {
+      throw new Error(`ring ${diameter}: geometry above the two-cap cutoff must stay inset`)
+    }
+  }
+}
+
+function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
   const valueColor = ambient ? '#8A968F' : color
   if (remaining >= 1) {
     // Nothing spent: a closed ring, because the cap inset below would leave a
@@ -224,20 +268,18 @@ function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${valueColor}"
       stroke-width="${thickness}" />`
   }
-  const left = Math.max(0.02, Math.min(remaining, 0.999))
+  const geometry = ringArcGeometry(r, thickness, remaining)
   // Round caps reach half a thickness past each end, so the drawn span is
-  // shortened by one cap on each side and started half a cap later: what the
-  // eye sees then ends where the value does, as on the face
-  // (`WATCH_RING_DESIGN.md`, Ring geometry).
-  const paint = Math.max(0, circ * left - thickness)
-  const used = circ * (1 - left) + thickness / 2
+  // shortened by one cap on each side and started half a cap later. Below that
+  // two-cap cutoff the proportional centreline is left uninset, so its caps
+  // meet as a visible point instead of inventing a minimum sweep.
   return `
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
       stroke-width="${thickness}" />
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${valueColor}"
       stroke-width="${thickness}" stroke-linecap="round"
-      stroke-dasharray="${paint.toFixed(2)} ${circ.toFixed(2)}"
-      stroke-dashoffset="${(-used).toFixed(2)}"
+      stroke-dasharray="${geometry.paint.toFixed(2)} ${geometry.circ.toFixed(2)}"
+      stroke-dashoffset="${(-geometry.used).toFixed(2)}"
       transform="rotate(-90 ${cx} ${cy})" />`
 }
 
@@ -463,6 +505,11 @@ await mkdir(wffDir, { recursive: true })
 const three = [CATALOG.codex, CATALOG.claude, CATALOG.cursor]
 const two = [CATALOG.codex, CATALOG.claude]
 const one = [CATALOG.codex]
+const nearExhausted = [
+  { ...CATALOG.codex, used: 0.98 },
+  { ...CATALOG.claude, used: 0.31 },
+  { ...CATALOG.cursor, used: 0.06 },
+]
 // One connection's three budget periods. The type baseline and its ambient counterpart draw
 // the same rings, and sharing the set is what keeps the two boards from drifting apart.
 const budgetPeriods = [
@@ -510,6 +557,15 @@ const variants = [
     file: 'round-3-plan-untouched.svg',
     name: 'Round · 3 providers · an untouched pool closes its half',
     layers: [CATALOG.codex, CATALOG.claude, CATALOG.cursorPairUntouched],
+    showPlan: true,
+    showCredits: false,
+  },
+  {
+    // Reproduces the 2026-09-26 device report: the critical 2% remainder stays
+    // visible beside ordinary 69% and 94% rings.
+    file: 'round-3-plan-near-exhausted.svg',
+    name: 'Round · 3 providers · 2%, 69%, and 94% remaining',
+    layers: nearExhausted,
     showPlan: true,
     showCredits: false,
   },
@@ -583,11 +639,14 @@ const wffFiles = new Set([
   'round-3-budget-periods.svg',
   // Closing a full ring is a face drawing rule, so its board goes beside it.
   'round-3-plan-untouched.svg',
+  'round-3-plan-near-exhausted.svg',
   'round-1-plan-credits.svg',
   'round-credits-only.svg',
   'round-ambient-3.svg',
   'round-ambient-budget.svg',
 ])
+
+assertNearExhaustedArcs()
 
 for (const variant of variants) {
   const svg = faceSvg({

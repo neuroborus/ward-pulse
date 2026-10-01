@@ -409,6 +409,66 @@ function capDegrees(diameter, thickness) {
   return Number(((thickness / 2 / radius) * (180 / Math.PI)).toFixed(2))
 }
 
+function meltGeometry(diameter, thickness) {
+  const cap = capDegrees(diameter, thickness)
+  return {
+    cap,
+    twoCapCutoff: (2 * cap) / SWEEP.end,
+    insetEnd: SWEEP.end - cap,
+  }
+}
+
+function meltAngles(diameter, thickness, remaining) {
+  const geometry = meltGeometry(diameter, thickness)
+  const nearEmpty = remaining <= geometry.twoCapCutoff
+  return {
+    nearEmpty,
+    start: (1 - remaining) * SWEEP.end + (nearEmpty ? 0 : geometry.cap),
+    end: nearEmpty ? SWEEP.end : geometry.insetEnd,
+  }
+}
+
+function assertNearExhaustedArcs() {
+  const epsilon = 0.000001
+  for (const { diameter } of RINGS) {
+    const geometry = meltGeometry(diameter, BAND_THICKNESS)
+    const below = meltAngles(
+      diameter,
+      BAND_THICKNESS,
+      geometry.twoCapCutoff - epsilon,
+    )
+    if (!below.nearEmpty || below.end <= below.start) {
+      throw new Error(
+        `ring ${diameter}: a remainder below the two-cap cutoff must stay visible`,
+      )
+    }
+
+    const aboveRemaining = geometry.twoCapCutoff + epsilon
+    const above = meltAngles(diameter, BAND_THICKNESS, aboveRemaining)
+    const expectedStart = (1 - aboveRemaining) * SWEEP.end + geometry.cap
+    if (
+      above.nearEmpty ||
+      above.start !== expectedStart ||
+      above.end !== geometry.insetEnd
+    ) {
+      throw new Error(`ring ${diameter}: geometry above the two-cap cutoff must stay inset`)
+    }
+
+    const markup = bandArcs(diameter, BAND_THICKNESS, '')
+    const rawStart = `(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end}`
+    if (
+      !markup.includes(`<= ${geometry.twoCapCutoff.toFixed(6)}`) ||
+      !markup.includes('<Compare expression="isNearEmpty">') ||
+      !markup.includes(`value="${rawStart}"`) ||
+      !markup.includes(`* ${SWEEP.end} + ${geometry.cap}`)
+    ) {
+      throw new Error(
+        `ring ${diameter}: generated markup does not preserve both melt branches`,
+      )
+    }
+  }
+}
+
 /**
  * Track plus melt for one arc. The melt keeps its own `PartDraw` so ambient can
  * dim it without touching the track underneath.
@@ -417,6 +477,7 @@ function capDegrees(diameter, thickness) {
  * where the value does: the caps then fill exactly the space the inset freed.
  */
 function bandArcs(diameter, thickness, pad) {
+  const geometry = meltGeometry(diameter, thickness)
   return `${pad}<PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}">
 ${pad}    <Arc
 ${pad}        centerX="${FACE.center}"
@@ -431,6 +492,7 @@ ${pad}</PartDraw>
 ${pad}<Condition>
 ${pad}    <Expressions>
 ${pad}        <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+${pad}        <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= ${geometry.twoCapCutoff.toFixed(6)}]]></Expression>
 ${pad}    </Expressions>
 ${pad}    <!-- Nothing spent yet: there is no melt to inset, and the inset would
 ${pad}         leave a seam at 12 on a ring that has spent nothing. Drawn without
@@ -444,7 +506,30 @@ ${pad}                centerY="${FACE.center}"
 ${pad}                width="${diameter}"
 ${pad}                height="${diameter}"
 ${pad}                startAngle="${SWEEP.start}"
-${pad}                endAngle="${(SWEEP.end - capDegrees(diameter, thickness)).toFixed(2)}">
+${pad}                endAngle="${geometry.insetEnd.toFixed(2)}">
+${pad}                <WeightedStroke
+${pad}                    thickness="${thickness}"
+${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+${pad}                    cap="ROUND" />
+${pad}            </Arc>
+${pad}        </PartDraw>
+${pad}    </Compare>
+${pad}    <!-- The two-cap inset cannot represent a smaller positive remainder:
+${pad}         its sweep would be zero or negative. Keep the proportional
+${pad}         centreline without either inset so the round caps meet visibly. -->
+${pad}    <Compare expression="isNearEmpty">
+${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
+${pad}            <Variant mode="AMBIENT" target="alpha" value="140" />
+${pad}            <Arc
+${pad}                centerX="${FACE.center}"
+${pad}                centerY="${FACE.center}"
+${pad}                width="${diameter}"
+${pad}                height="${diameter}"
+${pad}                startAngle="${SWEEP.start}"
+${pad}                endAngle="${SWEEP.end}">
+${pad}                <Transform
+${pad}                    target="startAngle"
+${pad}                    value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end}" />
 ${pad}                <WeightedStroke
 ${pad}                    thickness="${thickness}"
 ${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -461,10 +546,10 @@ ${pad}                centerY="${FACE.center}"
 ${pad}                width="${diameter}"
 ${pad}                height="${diameter}"
 ${pad}                startAngle="${SWEEP.start}"
-${pad}                endAngle="${(SWEEP.end - capDegrees(diameter, thickness)).toFixed(2)}">
+${pad}                endAngle="${geometry.insetEnd.toFixed(2)}">
 ${pad}                <Transform
 ${pad}                    target="startAngle"
-${pad}                    value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end} + ${capDegrees(diameter, thickness)}, ${SWEEP.start}, ${(SWEEP.end - capDegrees(diameter, thickness)).toFixed(2)})" />
+${pad}                    value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end} + ${geometry.cap}, ${SWEEP.start}, ${geometry.insetEnd.toFixed(2)})" />
 ${pad}                <WeightedStroke
 ${pad}                    thickness="${thickness}"
 ${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -780,6 +865,7 @@ ${body}
 
 const xml = face()
 
+assertNearExhaustedArcs()
 await emit(target, xml, 'render-watchface')
 
 // Textures are rasterized, not compared: ImageMagick stamps metadata that

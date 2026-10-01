@@ -10,7 +10,8 @@ its family color; the summed Today / Week / Month rings are retired); budget-str
 split-band revision **2026-08-13** (one Cursor plan's two pools may share a single band, and
 Cursor's own models take a colour of their own); full-ring revision **2026-08-17** (a band with
 nothing spent closes instead of carrying a seam); two-split-slot revision **2026-09-16**
-(far markers move into strip slots; slots 106/109 carry the two outer halves) —
+(far markers move into strip slots; slots 106/109 carry the two outer halves); near-exhaustion
+revision **2026-10-01** (a positive remainder below the two-cap cutoff stays visible) —
 accepted visual target for Wear OS and Watch Face Format until the next explicit design
 revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
@@ -329,6 +330,25 @@ maximum, the same arc is drawn without the start transform and the two caps clos
 other. Boards do the same (`ringArc`, `remaining >= 1`), which is why
 `round-3-plan-untouched.svg` shows a closed inner half beside a spending outer one.
 
+**A positive remainder below the two-cap cutoff stays visible (revision 2026-10-01).** The
+owner reproduced a face with strips reading `2%`, `69%`, and `94%` on `emulator-5554` on
+2026-09-26: the 2% strip still had data, but its ring showed only the track. The inset above
+had consumed more than that ring's remaining centreline. Its cutoff is derived per ring as
+`2 * capDegrees(diameter, thickness) / 359.9`, not chosen by eye:
+
+| Ring | Diameter | Remaining cutoff |
+|---|---:|---:|
+| 101 Today | 404 | 3.15% |
+| 102 Week | 356 | 3.58% |
+| 105 Ring3 | 308 | 4.13% |
+
+At or below its cutoff, a positive remainder keeps its proportional centreline without the
+two cap insets, so the round caps meet as a visible point. Above the cutoff the measured inset
+geometry is unchanged. This deliberately does not impose a minimum sweep: doing so would
+overstate remaining capacity at the edge of the scale. The existing zero-spend/full-ring branch,
+band thickness, split halves, and slots are unchanged. Review art mirrors the rule in
+`round-3-plan-near-exhausted.svg` with the observed `2%`, `69%`, and `94%` values.
+
 **Halves of a band, measured 2026-08-13.** A split band (see Split band) is two arcs inside one
 ring slot, and the numbers that work are **centre lines at `outer − 5` and `outer − 15`, both at
 `thickness="10"`** — 197 and 187 on the outermost band, 173 and 163 on the next, 149 and 139 on
@@ -485,6 +505,7 @@ xdg-open apps/wear_android/design/preview-3-plan-credits.png
 | `round-3-plan-split.svg` | **Split band baseline** — a Cursor plan's two pools on one band, two markers and two percents on its strip |
 | `round-3-plan-two-pairs.svg` | Three bands with Cursor and Codex/Spark pairs, fixed inner/outer order and two far markers |
 | `round-3-plan-untouched.svg` | A pool nobody has spent: its half closes, while the pool beside it keeps its gap |
+| `round-3-plan-near-exhausted.svg` | Near-exhaustion regression — `2%`, `69%`, and `94%` remain, and the 2% ring still has a visible mark |
 | `round-3-plan-budget.svg` | Two plan rings + a budget ring reading `$71.30/250`; only its band carries type |
 | `round-3-budget-periods.svg` | **Ring type baseline** — one connection's three budget periods, told apart by `7D` / `M` / `D` alone |
 | `round-2-plan-credits.svg` | Two providers |
