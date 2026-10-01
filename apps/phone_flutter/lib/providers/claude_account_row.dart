@@ -4,10 +4,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../sync/claude_account_client.dart';
 import 'claude_account_service.dart';
 import 'connected_account_dialog.dart';
-import 'cursor_plan_row.dart';
 import 'provider_connection.dart';
-import 'provider_credential_store.dart';
 import 'provider_connection_row.dart';
+import 'provider_credential_store.dart';
 
 /// Claude subscription row: Claude Code OAuth sign-in, reconnect, disconnect.
 ///
@@ -20,7 +19,7 @@ class ClaudeAccountRow extends StatefulWidget {
     required this.credentialStore,
     required this.onCredentialsChanged,
     required this.onPastedSecretCleared,
-    required this.buildTrailing,
+    required this.buildControls,
   });
 
   final ProviderConnection connection;
@@ -30,7 +29,7 @@ class ClaudeAccountRow extends StatefulWidget {
 
   /// OAuth supersedes a pasted token; lets the screen drop its cached flag.
   final VoidCallback onPastedSecretCleared;
-  final ConnectionTrailingBuilder buildTrailing;
+  final ConnectionRowControlsBuilder buildControls;
 
   @override
   State<ClaudeAccountRow> createState() => _ClaudeAccountRowState();
@@ -153,17 +152,19 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow> {
 
   @override
   Widget build(BuildContext context) {
+    final controls = widget.buildControls(
+      status: switch ((_hasAccount, _isConnecting)) {
+        (_, true) || (null, _) => const RowProgress(),
+        (true, _) => const Text('Connected'),
+        (false, _) => const Text('Not connected'),
+      },
+    );
     return ProviderConnectionRow(
       icon: Icons.account_circle_outlined,
       title: widget.connection.listTitle,
       subtitle: widget.connection.listSubtitle,
-      trailing: widget.buildTrailing(
-        status: switch ((_hasAccount, _isConnecting)) {
-          (_, true) || (null, _) => const RowProgress(),
-          (true, _) => const Text('Connected'),
-          (false, _) => const Text('Not connected'),
-        },
-      ),
+      status: controls.status,
+      actions: controls.actions,
       onTap: _hasAccount == null || _isConnecting ? null : _editAccount,
     );
   }

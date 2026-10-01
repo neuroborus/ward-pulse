@@ -5,7 +5,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../sync/codex_account_client.dart';
 import 'codex_account_service.dart';
 import 'connected_account_dialog.dart';
-import 'cursor_plan_row.dart';
 import 'provider_connection.dart';
 import 'provider_connection_row.dart';
 
@@ -18,13 +17,13 @@ class CodexAccountRow extends StatefulWidget {
     required this.connection,
     required this.accountService,
     required this.onCredentialsChanged,
-    required this.buildTrailing,
+    required this.buildControls,
   });
 
   final ProviderConnection connection;
   final CodexAccountService accountService;
   final VoidCallback onCredentialsChanged;
-  final ConnectionTrailingBuilder buildTrailing;
+  final ConnectionRowControlsBuilder buildControls;
 
   @override
   State<CodexAccountRow> createState() => _CodexAccountRowState();
@@ -135,17 +134,19 @@ class _CodexAccountRowState extends State<CodexAccountRow> {
 
   @override
   Widget build(BuildContext context) {
+    final controls = widget.buildControls(
+      status: switch ((_hasAccount, _isConnecting)) {
+        (_, true) || (null, _) => const RowProgress(),
+        (true, _) => const Text('Connected'),
+        (false, _) => const Text('Not connected'),
+      },
+    );
     return ProviderConnectionRow(
       icon: Icons.account_circle_outlined,
       title: widget.connection.listTitle,
       subtitle: widget.connection.listSubtitle,
-      trailing: widget.buildTrailing(
-        status: switch ((_hasAccount, _isConnecting)) {
-          (_, true) || (null, _) => const RowProgress(),
-          (true, _) => const Text('Connected'),
-          (false, _) => const Text('Not connected'),
-        },
-      ),
+      status: controls.status,
+      actions: controls.actions,
       onTap: _hasAccount == null || _isConnecting ? null : _editAccount,
     );
   }

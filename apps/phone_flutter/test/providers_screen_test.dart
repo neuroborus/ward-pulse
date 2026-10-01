@@ -4,11 +4,115 @@ import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/providers/claude_account_service.dart';
 import 'package:ward_pulse_phone/providers/codex_account_service.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
+import 'package:ward_pulse_phone/providers/provider_connection_row.dart';
 import 'package:ward_pulse_phone/providers/providers_screen.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 
 void main() {
+  group('connection row layout', () {
+    testWidgets('keeps copy readable and moves status below it at 320dp', (
+      tester,
+    ) async {
+      await _pumpProvidersAtSize(tester, const Size(320, 640));
+
+      const title = 'Organization reporting';
+      const subtitle = 'Admin API key · stored on this phone';
+      final row = find.widgetWithText(ListTile, title);
+      final titleText = _inRow(title, find.text(title));
+      final subtitleText = _inRow(title, find.text(subtitle));
+      final status = _inRow(title, find.text('Not connected'));
+      final budget = _inRow(title, find.byTooltip('Budget limits'));
+      final alerts = _inRow(title, find.byTooltip('Alert thresholds'));
+
+      expect(row, findsOneWidget);
+      expect(budget, findsOneWidget);
+      expect(alerts, findsOneWidget);
+      final rowWidth = tester.getSize(row).width;
+      expect(
+        tester.getSize(titleText).width,
+        greaterThanOrEqualTo(rowWidth / 4),
+      );
+      expect(
+        tester.getSize(subtitleText).width,
+        greaterThanOrEqualTo(rowWidth / 4),
+      );
+
+      final subtitleRect = tester.getRect(subtitleText);
+      final statusRect = tester.getRect(status);
+      expect(statusRect.left, closeTo(subtitleRect.left, 0.1));
+      expect(statusRect.top, greaterThan(subtitleRect.bottom));
+      expect(tester.getRect(budget).left, greaterThan(statusRect.left));
+      expect(tester.getRect(alerts).left, greaterThan(statusRect.left));
+    });
+
+    testWidgets('keeps the current trailing status at 411dp', (tester) async {
+      await _pumpProvidersAtSize(tester, const Size(411, 640));
+
+      const title = 'Organization reporting';
+      final row = find.widgetWithText(ListTile, title);
+      final status = _inRow(title, find.text('Not connected'));
+      final budget = _inRow(title, find.byTooltip('Budget limits'));
+      final alerts = _inRow(title, find.byTooltip('Alert thresholds'));
+
+      expect(row, findsOneWidget);
+      expect(budget, findsOneWidget);
+      expect(alerts, findsOneWidget);
+
+      final statusRect = tester.getRect(status);
+      final alertsRect = tester.getRect(alerts);
+      expect(statusRect.left, greaterThanOrEqualTo(alertsRect.right));
+      expect(statusRect.center.dy, closeTo(alertsRect.center.dy, 0.1));
+    });
+
+    testWidgets('compact row grows for a long status', (tester) async {
+      _setTestSurface(tester, const Size(320, 640));
+      const longStatus =
+          'Waiting for account authorization before usage can refresh';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Card(
+                  child: ProviderConnectionRow(
+                    icon: Icons.key_outlined,
+                    title: 'Organization reporting',
+                    subtitle: 'Admin API key · stored on this phone',
+                    status: const Text(longStatus),
+                    actions: [
+                      IconButton(
+                        tooltip: 'Budget limits',
+                        onPressed: () {},
+                        icon: const Icon(Icons.savings_outlined),
+                      ),
+                      IconButton(
+                        tooltip: 'Alert thresholds',
+                        onPressed: () {},
+                        icon: const Icon(Icons.notifications_none_outlined),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final row = find.widgetWithText(ListTile, 'Organization reporting');
+      final status = find.text(longStatus);
+      final rowRect = tester.getRect(row);
+      final statusRect = tester.getRect(status);
+      expect(statusRect.height, greaterThan(40));
+      expect(rowRect.height, greaterThan(88));
+      expect(statusRect.bottom, lessThan(rowRect.bottom));
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   testWidgets('Cursor plan row shows Not connected and help Advanced paste', (
     tester,
   ) async {
@@ -326,6 +430,36 @@ Finder _inRow(String title, Finder matching) => find.descendant(
   of: find.widgetWithText(ListTile, title),
   matching: matching,
 );
+
+Future<void> _pumpProvidersAtSize(WidgetTester tester, Size size) async {
+  _setTestSurface(tester, size);
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: ProvidersScreen(
+          onRefresh: _noRefresh,
+          credentialStore: _MemoryCredentialStore(),
+          codexAccountService: const EmptyCodexAccountService(),
+          claudeAccountService: const EmptyClaudeAccountService(),
+          onCredentialsChanged: () {},
+          alertThresholds: const AlertThresholdPreferences(),
+          onAlertThresholdsChanged: (_) async {},
+          cursorPlanSignIn: (_) async => null,
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+void _setTestSurface(WidgetTester tester, Size size) {
+  tester.view.devicePixelRatio = 1;
+  tester.view.physicalSize = size;
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+}
 
 class _MemoryCredentialStore implements ProviderCredentialStore {
   final _secrets = <ProviderConnectionId, String>{};

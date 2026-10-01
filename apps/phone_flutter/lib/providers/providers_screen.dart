@@ -209,17 +209,15 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     }
   }
 
-  /// Binds [_statusTrailing] to one connection so extracted rows can reuse it.
-  ConnectionTrailingBuilder _trailingBuilderFor(ProviderConnection connection) {
+  /// Binds [_rowControls] to one connection so extracted rows can reuse it.
+  ConnectionRowControlsBuilder _controlsBuilderFor(
+    ProviderConnection connection,
+  ) {
     return ({List<Widget> leading = const [], required Widget status}) =>
-        _statusTrailing(
-          connection: connection,
-          leading: leading,
-          status: status,
-        );
+        _rowControls(connection: connection, leading: leading, status: status);
   }
 
-  Widget _statusTrailing({
+  ConnectionRowControls _rowControls({
     required ProviderConnection connection,
     required Widget status,
     List<Widget> leading = const [],
@@ -228,9 +226,8 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     // Only a connection that reports spend can be held to a limit.
     final offersBudget = connection.id.kind == ConnectionKind.platform;
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
+    return (
+      actions: [
         ...leading,
         if (offersBudget)
           IconButton(
@@ -249,8 +246,8 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
                 : Icons.notifications_none_outlined,
           ),
         ),
-        status,
       ],
+      status: status,
     );
   }
 
@@ -260,7 +257,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
         connection: connection,
         accountService: widget.codexAccountService,
         onCredentialsChanged: widget.onCredentialsChanged,
-        buildTrailing: _trailingBuilderFor(connection),
+        buildControls: _controlsBuilderFor(connection),
       );
     }
     if (connection.id == ProviderConnections.claudePlan) {
@@ -273,7 +270,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
             () => setState(() {
               _hasSecret[ProviderConnections.claudePlan.storageKey] = false;
             }),
-        buildTrailing: _trailingBuilderFor(connection),
+        buildControls: _controlsBuilderFor(connection),
       );
     }
     if (connection.id == ProviderConnections.cursorPlan) {
@@ -282,7 +279,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
         credentialStore: widget.credentialStore,
         onCredentialsChanged: widget.onCredentialsChanged,
         signIn: widget.cursorPlanSignIn,
-        buildTrailing: _trailingBuilderFor(connection),
+        buildControls: _controlsBuilderFor(connection),
       );
     }
 
@@ -292,6 +289,15 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     }
 
     final hasSecret = _hasSecret[connection.id.storageKey];
+    final controls = _rowControls(
+      connection: connection,
+      status: switch (hasSecret) {
+        null => const RowProgress(),
+        // Match OAuth row copy: connection state, not "field empty/filled".
+        true => const Text('Connected'),
+        false => const Text('Not connected'),
+      },
+    );
     return ProviderConnectionRow(
       icon:
           connection.id.kind == ConnectionKind.plan
@@ -299,15 +305,8 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
               : Icons.key_outlined,
       title: connection.listTitle,
       subtitle: connection.listSubtitle,
-      trailing: _statusTrailing(
-        connection: connection,
-        status: switch (hasSecret) {
-          null => const RowProgress(),
-          // Match OAuth row copy: connection state, not "field empty/filled".
-          true => const Text('Connected'),
-          false => const Text('Not connected'),
-        },
-      ),
+      status: controls.status,
+      actions: controls.actions,
       onTap:
           hasSecret == null
               ? null

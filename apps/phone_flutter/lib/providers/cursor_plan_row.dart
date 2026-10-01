@@ -12,10 +12,6 @@ import 'provider_credential_store.dart';
 /// Opens Cursor dashboard sign-in and returns a session token, or null.
 typedef CursorPlanSignIn = Future<String?> Function(BuildContext context);
 
-/// Screen-owned trailing so every catalog row keeps the same chrome.
-typedef ConnectionTrailingBuilder =
-    Widget Function({List<Widget> leading, required Widget status});
-
 /// Cursor plan row: WebView sign-in, token paste, and disconnect.
 ///
 /// Owns its own connected/connecting state so the Providers screen does not.
@@ -25,14 +21,14 @@ class CursorPlanRow extends StatefulWidget {
     required this.connection,
     required this.credentialStore,
     required this.onCredentialsChanged,
-    required this.buildTrailing,
+    required this.buildControls,
     this.signIn,
   });
 
   final ProviderConnection connection;
   final ProviderCredentialStore credentialStore;
   final VoidCallback onCredentialsChanged;
-  final ConnectionTrailingBuilder buildTrailing;
+  final ConnectionRowControlsBuilder buildControls;
 
   /// Test seam; defaults to [CursorPlanSignInScreen.open].
   final CursorPlanSignIn? signIn;
@@ -224,20 +220,22 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
       (true, _) => const Text('Connected'),
       (false, _) => const Text('Not connected'),
     };
+    final controls = widget.buildControls(
+      leading: [
+        IconButton(
+          tooltip: 'About Cursor sign-in',
+          onPressed: _isConnecting ? null : _showHelp,
+          icon: const Icon(Icons.help_outline),
+        ),
+      ],
+      status: status,
+    );
     return ProviderConnectionRow(
       icon: Icons.account_circle_outlined,
       title: widget.connection.listTitle,
       subtitle: widget.connection.listSubtitle,
-      trailing: widget.buildTrailing(
-        leading: [
-          IconButton(
-            tooltip: 'About Cursor sign-in',
-            onPressed: _isConnecting ? null : _showHelp,
-            icon: const Icon(Icons.help_outline),
-          ),
-        ],
-        status: status,
-      ),
+      status: controls.status,
+      actions: controls.actions,
       onTap: _hasAccount == null || _isConnecting ? null : _editAccount,
     );
   }
