@@ -2275,9 +2275,16 @@ and verifies that the package's `lastUpdateTime` changed. Its fake-`adb` regress
 missing serial, install failure, unchanged timestamp, and successful installation; the verified
 workflow is recorded in `docs/ANDROID_TOOLCHAIN.md`.
 
-This closes the silent-installation problem only. It does not create storage: the logged-in
-phone AVD still needs a data partition large enough for current debug APKs without deleting the
-saved provider sessions.
+The separate storage follow-up closed on 2026-10-02: the phone AVD was recreated with a 24 GB
+data partition configured before its first boot. `7fb15d2` records that recipe in
+`docs/ANDROID_TOOLCHAIN.md`: `/data` is materialized on first boot, and an image with snapshots
+cannot be resized later. After boot, `df -h /data` reported 23 GB at 6% used; `just install-phone`
+installed the full 147 MB debug APK and left 22 GB free.
+
+Recreating the AVD removed the old `wardpulse-logged-in` snapshot and its Claude, Cursor, and
+Codex sign-ins. Restoring those sign-ins is owner-owned setup for live-account acceptance,
+especially Phase 18, and recreating the snapshot is an owner follow-up. Neither is development
+work or a code blocker.
 
 ---
 
@@ -2366,6 +2373,3 @@ architecture proves Rust core can feed both surfaces
 2. Complete Phase 15's remaining acceptance line on a phone paired through the Wear OS companion
    app: the recovery notification must reach the watch exactly once. Two independently running
    AVDs do not bridge even a control notification, so they cannot answer it.
-3. Give the logged-in phone AVD an adequately sized data partition so current debug APKs install
-   without deleting its saved sign-ins. `6b73899` now detects and reports a failed or unchanged
-   installation, but installation verification does not solve the open storage shortage.
