@@ -271,10 +271,17 @@ printf 'no\n' | avdmanager create avd \
   --device pixel_7 \
   --force
 
-# avdmanager may leave this disabled even for a Play Store image.
-sed -i 's/^PlayStore.enabled=no$/PlayStore.enabled=yes/' \
+# avdmanager may leave Play Store disabled. Set /data before the first boot.
+sed -i \
+  -e 's/^PlayStore.enabled=no$/PlayStore.enabled=yes/' \
+  -e 's/^disk.dataPartition.size=.*$/disk.dataPartition.size=24G/' \
   "$HOME/.android/avd/wardpulse_phone_play_api36.avd/config.ini"
 ```
+
+Set the size before starting the emulator: `/data` is materialized on first boot, and an AVD
+image with snapshots cannot be resized afterward. Otherwise the AVD must be recreated, which
+means signing in to its provider connections again. The storage-constrained single-ABI build
+guidance near `install-phone` can reduce APK size, but does not replace sizing the AVD up front.
 
 List and start it with:
 
