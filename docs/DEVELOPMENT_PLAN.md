@@ -1487,7 +1487,13 @@ mock mode still renders the full dashboard
 
 ### Phase 11 — polling cadence constants and the global refresh slider
 
-Status: complete as of 2026-07-26 (including headless WorkManager sync).
+Status: completion was declared on 2026-07-26 from code and tests, but headless WorkManager
+sync was not operational then. It was fixed by `b842e9a` and device-verified on 2026-10-04.
+
+The July gates did not expose the defect, which was visible only in device execution: the
+activity-owned `app.wardpulse/watch_sync` channel was absent from the background Flutter engine.
+The resulting `MissingPluginException` was swallowed by `providerSyncOnce`'s outer catch, so the
+widget update after the watch step never ran either.
 
 Rationale: automatic polling needs explicit per-provider cadence floors before it ships.
 Reporting endpoints are rate-limited separately from model inference and agent traffic, so
@@ -1536,7 +1542,10 @@ Acceptance:
 ```text
 constants exist with doc-linked comments and unit tests
 the slider persists and automatic sync honors it while the app runs
-headless WorkManager sync continues after process death at max(slider, 15 min)
+headless WorkManager sync continues after process death at max(slider, 15 min);
+device-verified 2026-10-04 on emulator-5556 when a background tick reached WardPulseSync and
+updated HomeWidgetPreferences.xml (the emulator Data Layer AvailabilityException was unrelated
+to this defect)
 Settings subtitle states the open-app vs background cadence
 each connection never syncs faster than its floor
 a 429 response still slows the affected provider without blocking others
