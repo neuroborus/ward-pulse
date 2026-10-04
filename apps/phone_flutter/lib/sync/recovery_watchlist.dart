@@ -74,6 +74,10 @@ final class DisabledRecoveryWatchlistStore implements RecoveryWatchlistStore {
 /// [mockData] empties the list instead of filling it, and reports nothing. Demo
 /// windows are invented, so remembering them would make the first live poll
 /// after leaving demo mode look like a recovery.
+///
+/// [rethrowFailures] lets a caller with its own per-step guard record an outer
+/// storage or scheduling failure. Foreground callers retain the best-effort
+/// default.
 Future<void> syncPlanRecoveries(
   DashboardSnapshot snapshot,
   RecoveryWatchlistStore store,
@@ -84,6 +88,7 @@ Future<void> syncPlanRecoveries(
   ReadPlanRecoveries readRecoveries = planRecoveries,
   ReadExhaustedWindows readWindows = exhaustedWindows,
   DateTime Function() now = DateTime.now,
+  bool rethrowFailures = false,
 }) async {
   try {
     if (mockData) {
@@ -125,8 +130,11 @@ Future<void> syncPlanRecoveries(
       );
       await wake.scheduleAt(soonest.isBefore(floor) ? floor : soonest);
     }
-  } catch (_) {
-    // A poll must never crash over bookkeeping; the next one writes the list
-    // again.
+  } catch (error, stackTrace) {
+    if (rethrowFailures) {
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+    // A foreground poll must never crash over bookkeeping; the next one writes
+    // the list again. Headless sync rethrows into its per-step guard to log it.
   }
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import 'package:ward_pulse_watch_sync/ward_pulse_watch_sync.dart';
 
 import '../dashboard/dashboard_models.dart';
 import '../settings/watch_ring_preferences.dart';
@@ -25,7 +26,9 @@ abstract interface class WatchSyncService {
 class MethodChannelWatchSyncService implements WatchSyncService {
   const MethodChannelWatchSyncService();
 
-  static const _channel = MethodChannel('app.wardpulse/watch_sync');
+  static const _watchRefreshChannel = MethodChannel(
+    'app.wardpulse/watch_refresh',
+  );
   static const _watchRefreshMethod = 'watchRefreshRequested';
   static const _watchRefreshReadyMethod = 'watchRefreshChannelReady';
 
@@ -36,8 +39,7 @@ class MethodChannelWatchSyncService implements WatchSyncService {
     DateTime? manualRefreshAnchorAt,
     bool mockDataMode = false,
   }) {
-    return _channel.invokeMethod<void>(
-      'syncWatchSummary',
+    return WardPulseWatchSync.syncSummary(
       WatchDashboardSummaryPayload.fromSnapshot(
         snapshot,
         ringPreferences,
@@ -49,20 +51,22 @@ class MethodChannelWatchSyncService implements WatchSyncService {
 
   @override
   void bindWatchRefreshListener(void Function() onRefresh) {
-    _channel.setMethodCallHandler((call) async {
+    _watchRefreshChannel.setMethodCallHandler((call) async {
       if (call.method == _watchRefreshMethod) {
         onRefresh();
       }
     });
     // Flush a refresh tap that arrived before the Dart handler was bound.
     unawaited(
-      _channel.invokeMethod<void>(_watchRefreshReadyMethod).catchError((_) {}),
+      _watchRefreshChannel
+          .invokeMethod<void>(_watchRefreshReadyMethod)
+          .catchError((_) {}),
     );
   }
 
   @override
   void unbindWatchRefreshListener() {
-    _channel.setMethodCallHandler(null);
+    _watchRefreshChannel.setMethodCallHandler(null);
   }
 }
 

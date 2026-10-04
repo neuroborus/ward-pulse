@@ -14,45 +14,100 @@ import 'recovery_wake.dart';
 import 'recovery_watchlist.dart';
 import 'watch_sync_service.dart';
 
+typedef ProviderSyncWorkLoader = Future<ProviderSyncWork> Function();
+typedef ProviderSyncFailureLogger =
+    void Function(String step, Object error, StackTrace stackTrace);
+
+/// Work that can proceed independently once a provider snapshot is available.
+final class ProviderSyncWork {
+  const ProviderSyncWork({
+    required this.syncWatch,
+    required this.syncWidget,
+    required this.syncRecoveries,
+  });
+
+  final Future<void> Function() syncWatch;
+  final Future<void> Function() syncWidget;
+  final Future<void> Function() syncRecoveries;
+}
+
 /// One provider sync + watch push with no UI (headless WorkManager tick).
 ///
-/// Failures are swallowed so a background tick never crashes the host.
-Future<void> providerSyncOnce() async {
+/// Setup and delivery failures are recorded but swallowed so one surface never
+/// prevents another from receiving the newest snapshot.
+Future<void> providerSyncOnce({
+  ProviderSyncWorkLoader load = _loadProviderSyncWork,
+  ProviderSyncFailureLogger logFailure = _logProviderSyncFailure,
+}) async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  final ProviderSyncWork work;
   try {
-    final live = PhoneLiveBindings.create();
-    final ringPreferences = await SecureWatchRingPreferenceStore().read();
-    final widgetPreferences = await SecurePhoneWidgetPreferenceStore().read();
-    final alertThresholds = await SecureAlertThresholdPreferenceStore().read();
-    final notifyOnRecovery =
-        await SecureRecoveryNotificationPreferenceStore().read();
-    final snapshot = applyUserAlertSettings(
-      await live.repository.load(),
-      alertThresholds,
-    );
-    await const MethodChannelWatchSyncService().sync(snapshot, ringPreferences);
-    try {
-      await HomeWidgetPhoneWidgetSyncService().sync(
-        snapshot,
-        widgetPreferences,
-      );
-    } catch (error) {
-      // The outer catch would swallow this without a word; name the cause.
-      developer.log(
-        'headless sync could not update the widget: $error',
-        name: phoneWidgetLogName,
-      );
-    }
-    // Bookkeeping last: what the reader can see is pushed first, and a store
-    // that stalls must not hold up the watch.
-    await syncPlanRecoveries(
-      snapshot,
-      SecureRecoveryWatchlistStore(),
-      LocalRecoveryNotifier(),
-      const WorkmanagerRecoveryWakeScheduler(),
-      notifications: notifyOnRecovery,
-    );
-  } catch (_) {
-    // Automatic / headless sync keeps the last successful snapshot visible.
+    work = await load();
+  } catch (error, stackTrace) {
+    logFailure('setup', error, stackTrace);
+    return;
   }
+
+  await _attemptProviderSyncStep('watch', work.syncWatch, logFailure);
+  await _attemptProviderSyncStep('widget', work.syncWidget, logFailure);
+  // Bookkeeping last: reader-visible surfaces are pushed first, but neither
+  // surface can prevent the recovery state from advancing.
+  await _attemptProviderSyncStep('recovery', work.syncRecoveries, logFailure);
+}
+
+Future<ProviderSyncWork> _loadProviderSyncWork() async {
+  final live = PhoneLiveBindings.create();
+  final ringPreferences = await SecureWatchRingPreferenceStore().read();
+  final widgetPreferences = await SecurePhoneWidgetPreferenceStore().read();
+  final alertThresholds = await SecureAlertThresholdPreferenceStore().read();
+  final notifyOnRecovery =
+      await SecureRecoveryNotificationPreferenceStore().read();
+  final snapshot = applyUserAlertSettings(
+    await live.repository.load(),
+    alertThresholds,
+  );
+
+  return ProviderSyncWork(
+    syncWatch:
+        () => const MethodChannelWatchSyncService().sync(
+          snapshot,
+          ringPreferences,
+        ),
+    syncWidget:
+        () => HomeWidgetPhoneWidgetSyncService().sync(
+          snapshot,
+          widgetPreferences,
+        ),
+    syncRecoveries:
+        () => syncPlanRecoveries(
+          snapshot,
+          SecureRecoveryWatchlistStore(),
+          LocalRecoveryNotifier(),
+          const WorkmanagerRecoveryWakeScheduler(),
+          notifications: notifyOnRecovery,
+          rethrowFailures: true,
+        ),
+  );
+}
+
+Future<void> _attemptProviderSyncStep(
+  String step,
+  Future<void> Function() run,
+  ProviderSyncFailureLogger logFailure,
+) async {
+  try {
+    await run();
+  } catch (error, stackTrace) {
+    logFailure(step, error, stackTrace);
+  }
+}
+
+void _logProviderSyncFailure(String step, Object error, StackTrace stackTrace) {
+  developer.log(
+    'Headless sync $step failed.',
+    name: 'WardPulse.ProviderSync',
+    error: error,
+    stackTrace: stackTrace,
+  );
 }

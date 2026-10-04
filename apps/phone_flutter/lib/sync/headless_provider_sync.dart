@@ -7,6 +7,8 @@ import 'poll_cadence.dart';
 import 'provider_sync_once.dart';
 import 'recovery_wake.dart';
 
+typedef ProviderSyncRunner = Future<void> Function();
+
 /// WorkManager-backed sync after Android reclaims the UI isolate.
 ///
 /// Cadence is [PollCadence.headlessInterval] (at least 15 minutes). While the
@@ -59,10 +61,21 @@ void callbackDispatcher() {
     // Both names run the same poll: the periodic tick, and the wake booked for
     // a spent window's reset. A name without a branch here would "succeed"
     // without doing anything at all.
-    if (task == HeadlessProviderSync.taskName ||
-        task == WorkmanagerRecoveryWakeScheduler.taskName) {
-      await providerSyncOnce();
-    }
-    return true;
+    return runHeadlessProviderTask(task);
   });
+}
+
+/// Runs a recognized WardPulse task and keeps its WorkManager result green.
+///
+/// Persistent setup or surface failures are logged inside [providerSyncOnce];
+/// the periodic schedule supplies the next attempt without a retry storm.
+Future<bool> runHeadlessProviderTask(
+  String task, {
+  ProviderSyncRunner sync = providerSyncOnce,
+}) async {
+  if (task == HeadlessProviderSync.taskName ||
+      task == WorkmanagerRecoveryWakeScheduler.taskName) {
+    await sync();
+  }
+  return true;
 }
