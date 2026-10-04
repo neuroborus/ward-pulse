@@ -1719,7 +1719,7 @@ Maintenance follow-up (2026-10-01) — completed:
   `docs/product/WATCH_RING_DESIGN.md` revision;
 - `511158b` measured the three-band Glance on round and notround screens and removed the three
   layout deferrals in `docs/product/WEAR_GLANCE_DESIGN.md`. This verifies paired-row fit and
-  clipping, not the still-unavailable live Spark path, so Phase 18 acceptance remains deferred;
+  clipping under injected load and contributes to the completed Phase 18 acceptance;
 - `533e35e` recorded the decision to keep device-font clock spacing unchanged in the dated
   `docs/product/WATCH_RING_DESIGN.md` revision, including the measured alternatives and their
   costs.
@@ -2111,21 +2111,28 @@ retiring the payload fields this phase orphaned (today, week, projectedTotal) �
 
 ### Phase 18 — Codex Spark as the second half of a band
 
-Status: code complete as of 2026-09-16; acceptance deferred until live-data verification.
+Status: completed as of 2026-10-04.
+
+Acceptance uses reproducible injected load because Codex no longer reports the second named
+limit; the current `gpt-reserve` entry is a base-model reserve, not its substitute.
 
 Landed in order: `26c321a` (two-limit fixture), `e13be9f` (window naming rule), `299e3f5`
 (Spark colour), `7724071` (phone reads every limit), `f73e389` (a slot freed), `e6295e1`
 (paired Glance row), `90bd63e` (split bands as a table), `7ae235f` (Codex paired with Spark).
-Every gate passed on each; the acceptance block below is what remains, because each of its
-lines is observed on a device or against a live account.
+Every gate passed on each.
 
-Rationale: Codex reports more than one limit. Beside the plan's own window sits
+Rationale: on 2026-08-21 Codex reported more than one limit. Beside the plan's own window sat
 `GPT-5.3-Codex-Spark`, metered separately, with both a 5-hour and a weekly window of its own.
-The product did not see it: `_normalizeRateLimits` hard-coded `limitId: 'codex'`, read only
-the root `rate_limit`, and never looked at `additional_rate_limits`, so Spark was discarded on
-the phone before Rust could normalize it. That is the shape Phase 13 already solved for Cursor's
-two pools — a band split lengthwise — so the answer is to reuse the split band rather than invent a
+The product did not see it: `_normalizeRateLimits` hard-coded `limitId: 'codex'`, read only the
+root `rate_limit`, and never looked at `additional_rate_limits`, so Spark was discarded on the
+phone before Rust could normalize it. That is the shape Phase 13 already solved for Cursor's two
+pools — a band split lengthwise — so the answer was to reuse the split band rather than invent a
 second idiom.
+
+The split-band mechanism is provider-independent: its table can pair any configured two pools
+of one plan. The only provider-facing Spark binding is `codex_bengalfox` in
+`_additionalRateLimits` (`apps/phone_flutter/lib/sync/codex_account_client.dart`); recognizing
+another named limit requires one entry in that table, not a repeat of Phase 18.
 
 **The face's slot ceiling is what made this more than an adapter change.** The eight-slot
 budget was already fully spent (`WATCH_RING_DESIGN.md`, which owns the rule), and the split band
@@ -2158,15 +2165,19 @@ Deliverables:
   `TITLE`, and at what precision. Its outcome is the deliverable, either way: a negative result
   settles the question and leaves everything above working.
 
-Acceptance — **not yet run**, deferred with the live-data work below:
+Acceptance — completed 2026-10-04. Injected-load device checks verified fixed half order, a lone
+pool returning to a full band, and the one-row Glance pair. Regressions in
+`watch_ring_preferences_test.dart`, `watch_sync_service_test.dart`, `GlanceModelsTest.kt`, and
+`WatchComplicationTextTest.kt`, with `RingFamilyTest.kt` for the Spark colour, cover packing,
+migration, labels, arcs, and split/full-band data. The locked 2026-09-16 revisions of
+`docs/product/WATCH_RING_DESIGN.md` and `docs/product/WEAR_GLANCE_DESIGN.md` define the pair
+geometry and colours; the Glance document's 2026-10-01 revision records paired-row measurements
+on round and notround devices.
 
-```text
-the watch face shows the Cursor pair and the Codex pair at the same time
-Spark's half carries #186020 and its own far marker, distinct from the plan's
-the Glance shows the pair as one row with two arcs and two percentages
-a ring selected before the update is still selected after it
-the unnamed Codex plan window reads exactly as it did before
-```
+- [x] Spark's half carries `#186020` and its own far marker, distinct from the plan's.
+- [x] The Glance shows the pair as one row with two arcs and two percentages.
+- [x] A ring selected before the update is still selected after it.
+- [x] The unnamed Codex plan window reads exactly as it did before.
 
 Non-goals for this phase:
 
@@ -2291,9 +2302,8 @@ cannot be resized later. After boot, `df -h /data` reported 23 GB at 6% used; `j
 installed the full 147 MB debug APK and left 22 GB free.
 
 Recreating the AVD removed the old `wardpulse-logged-in` snapshot and its Claude, Cursor, and
-Codex sign-ins. Restoring those sign-ins is owner-owned setup for live-account acceptance,
-especially Phase 18, and recreating the snapshot is an owner follow-up. Neither is development
-work or a code blocker.
+Codex sign-ins. Restoring those sign-ins and recreating the snapshot are owner-owned setup, not
+development work or code blockers. Phase 18 no longer depends on that setup.
 
 ---
 
@@ -2375,10 +2385,6 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-1. Run Phase 18's deferred acceptance against a live Codex account when Spark is reported again.
-   Codex has not returned Spark since 2026-08-27; the current `gpt-reserve` entry is a separate
-   base-model reserve and must not be substituted for it. The round/notround Glance measurement
-   in `511158b` closed layout deferrals only, not this live-account acceptance.
-2. Complete Phase 15's remaining acceptance line on a phone paired through the Wear OS companion
+1. Complete Phase 15's remaining acceptance line on a phone paired through the Wear OS companion
    app: the recovery notification must reach the watch exactly once. Two independently running
    AVDs do not bridge even a control notification, so they cannot answer it.
