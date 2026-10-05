@@ -9,7 +9,13 @@ import '../sync/poll_cadence.dart';
 import 'refresh_interval_preferences.dart';
 import 'watch_ring_preferences.dart';
 
-/// Systemic phone settings: poll cadence, diagnostics, and debug toggles.
+const _independentProductDisclaimer =
+    'WardPulse is an independent usage monitor. It is not affiliated with, '
+    'endorsed by, or sponsored by OpenAI, Anthropic, Cursor, Google, or any '
+    'other provider. Product names are trademarks of their respective owners.';
+
+/// Systemic phone settings: poll cadence, notifications, diagnostics, legal,
+/// and debug toggles.
 /// Not connections, credentials, Watchface/Widget layout, or alert thresholds
 /// (those live on Providers).
 class SettingsScreen extends StatefulWidget {
@@ -293,7 +299,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
+          const SizedBox(height: 16),
         ],
+        const _SettingsSectionHeader(title: 'Legal'),
+        const Card(
+          child: ListTile(
+            leading: Icon(Icons.info_outline),
+            title: Text('Independent product'),
+            subtitle: Text(_independentProductDisclaimer),
+          ),
+        ),
       ],
     );
   }

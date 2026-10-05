@@ -230,6 +230,38 @@ void main() {
     expect(find.text('Watch summary'), findsOneWidget);
   });
 
+  testWidgets('Settings always shows the independent-product disclaimer', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: const _FailingDashboardRepository(
+          DashboardSyncIssue.dashboardUnavailable,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Debug'), findsNothing);
+    expect(find.text('Diagnostics'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('Legal'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Legal'), findsOneWidget);
+    expect(
+      find.text(
+        'WardPulse is an independent usage monitor. It is not affiliated with, '
+        'endorsed by, or sponsored by OpenAI, Anthropic, Cursor, Google, or any '
+        'other provider. Product names are trademarks of their respective owners.',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('slot cards say where metrics come from when there are none', (
     tester,
   ) async {
