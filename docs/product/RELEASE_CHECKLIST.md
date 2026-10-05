@@ -38,7 +38,7 @@ This checklist is a gate, not a schedule.
 ## Privacy And Legal
 
 - App includes the independent-product disclaimer.
-- Privacy policy draft exists.
+- [Privacy policy draft](PRIVACY_POLICY.md) exists.
 - Data deletion flow exists.
 - Apache-2.0 license scope and Rust package metadata are still accurate.
 - WardPulse trademark and brand asset boundaries are documented.

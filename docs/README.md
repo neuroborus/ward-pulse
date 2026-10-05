@@ -20,6 +20,7 @@ This directory is the documentation gate for the project. Root files should stay
 - [product/ANDROID_GOALS.md](product/ANDROID_GOALS.md) defines the MVP goal, surfaces, and non-goals.
 - [product/PROVIDER_NOTES.md](product/PROVIDER_NOTES.md) tracks provider integration assumptions and open questions.
 - [product/SECURITY_MODEL.md](product/SECURITY_MODEL.md) defines local-first credential and diagnostics rules.
+- [product/PRIVACY_POLICY.md](product/PRIVACY_POLICY.md) is the public privacy policy for the Android product.
 - [product/RELEASE_CHECKLIST.md](product/RELEASE_CHECKLIST.md) is the release readiness gate for phone, Wear OS, and watch face builds.
 - [../LICENSE](../LICENSE), [../TRADEMARKS.md](../TRADEMARKS.md), [../THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md), and [../brand/README.md](../brand/README.md) define the source license, attribution gate, and brand boundaries.
 

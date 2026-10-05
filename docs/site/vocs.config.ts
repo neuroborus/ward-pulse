@@ -24,6 +24,7 @@ export default defineConfig({
         { text: 'Phone dashboard design', link: '/product/phone-dashboard-design' },
         { text: 'Provider notes', link: '/product/provider-notes' },
         { text: 'Security model', link: '/product/security-model' },
+        { text: 'Privacy policy', link: '/product/privacy-policy' },
         { text: 'Release checklist', link: '/product/release-checklist' },
       ],
     },
