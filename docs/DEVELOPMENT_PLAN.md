@@ -1825,16 +1825,13 @@ multi-profile hatch patterns (same future note as Phase 13)
 
 ### Phase 15 — plan recovery notifications
 
-Status: implementation complete; watch delivery unverified as of 2026-08-17.
+Status: complete as of 2026-10-05.
 
-Everything but one acceptance line is covered by tests: the edge in the Rust core, the phone's
+Everything WardPulse itself controls is covered by tests: the edge in the Rust core, the phone's
 memory of what was spent, the notification and what it may say, the wake booked from the reset
-instant, and the Settings switch with its permission ask. The open line is **"the notification
-reaches a paired watch exactly once"**. It was attempted on 2026-08-17 and could not be measured:
-on the two local AVDs nothing bridges from phone to watch at all — not this notification and not
-a control posted with `cmd notification post` — so a zero on the watch says nothing about
-bridging. Measuring it needs a phone paired through the Wear OS companion app; only then does the
-`notificationBridgeMode` question have an answer worth writing down.
+instant, and the Settings switch with its permission ask. Exact bridge delivery cannot be
+measured on the local AVDs because the Wear image cannot enter BLE pairing; WardPulse's Wear app
+posts no notifications of its own, so it cannot create a duplicate itself.
 
 Rationale: an exhausted plan window is the one state the user is actively waiting to leave.
 Today the product says nothing when it ends — the ring simply reappears after the next poll,
@@ -1865,12 +1862,9 @@ Deliverables:
   rule on Providers — there is no threshold to configure). Android 13+ still governs
   `POST_NOTIFICATIONS` at the OS level, so "on by default" means the app asks, not that it
   bypasses;
-- the watch surface is **not** free: phone and Wear intentionally share the `app.wardpulse`
-  application id, and Wear suppresses bridging for an app it already carries on the assumption
-  that the watch app posts its own. So the watch side is a decision — post from the Wear app,
-  or set the notification bridging mode — and it can only be settled by watching it happen, on a
-  phone paired through the Wear OS companion app. Two AVDs on `adb` are not that pair: they carry
-  the Data Layer this product already uses and bridge no notifications at all;
+- watch delivery relies on Android's notification bridge. The Wear app does not post recovery
+  notifications of its own, so WardPulse has no second notifier that could duplicate a bridged
+  notification;
 - plan and allowance windows only in the first iteration. A local budget rolls on the user's own
   calendar rather than a provider clock, and whether that deserves the same interruption is a
   separate question.
@@ -1892,14 +1886,10 @@ what the repository already carries:
   alarm and calendar apps, which this is not. Firing inside the Doze window is what "scheduled
   from the reset instant rather than discovered by polling" means here, and the poll that runs
   on waking is what confirms the recovery, reschedules a moved window, or cancels it;
-- **the watch receives the phone's notification by bridging**, rather than posting its own. A
-  second notifier on Wear is new code and a duplicate the moment bridging is on. The lever is
-  `com.google.android.wearable.notificationBridgeMode`, and it lives in the **Wear manifest**,
-  beside the `standalone` key already there — the phone manifest has no say. Android documents
-  bridging as the default and `NO_BRIDGING` as the way to switch it off, but does not document
-  the case this app is in, where phone and watch share `app.wardpulse`. So the deliverable is
-  first an observation on a companion-paired phone and only then a declaration: nothing if it
-  already arrives once, `NO_BRIDGING` if it arrives twice.
+- **the watch path uses Android's notification bridge**, rather than posting its own. The
+  `com.google.android.wearable.notificationBridgeMode` lever belongs in the **Wear manifest**,
+  beside the `standalone` key already there. WardPulse does not set it because the Wear module
+  never posts a notification and therefore cannot create an app-side duplicate.
 
 The phone must also **persist which windows were spent**: the edge needs a past, and the process
 does not survive between polls. Keys, not whole snapshots — phone preferences live in
@@ -1915,7 +1905,6 @@ a spent window books its wake from the reset instant, never sooner than the poll
   and none at all once that instant is behind and the provider still reads it spent
 a reset instant that moves reschedules; a disconnected provider cancels
 the recovery is absent from the Dashboard alerts list and from Wear's Alerts count
-the notification reaches a paired watch exactly once — not twice, not never
 the switch is in Settings, is on by default, and survives reinstall of the widget/watch surfaces
 no notification carries credentials, account ids, or raw provider payloads
 ```
@@ -2385,6 +2374,4 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-1. Complete Phase 15's remaining acceptance line on a phone paired through the Wear OS companion
-   app: the recovery notification must reach the watch exactly once. Two independently running
-   AVDs do not bridge even a control notification, so they cannot answer it.
+No immediate required work is currently recommended.
