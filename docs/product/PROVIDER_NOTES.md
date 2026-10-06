@@ -308,7 +308,14 @@ raw response bodies.
 
 ## Cursor team Admin API
 
-Status: implemented on 2026-07-25 for team and enterprise administrators.
+Status: implemented on 2026-07-25 for Enterprise team administrators.
+
+Eligibility is narrower than the API's name suggests. Cursor's API overview states that the
+Admin and AI Code Tracking APIs require Enterprise teams, so a paid Teams plan alone does not
+grant access; checked 2026-10-06. An Enterprise team administrator creates the key under
+`cursor.com/dashboard` → API Keys. Keys are issued as `crsr_…`, belong to the organization
+rather than their creator, and stay visible to every administrator, so WardPulse treats one as
+an organization-wide administrative secret.
 
 Scope:
 
