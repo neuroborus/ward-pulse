@@ -418,28 +418,41 @@ function meltGeometry(diameter, thickness) {
   }
 }
 
-function meltAngles(diameter, thickness, remaining) {
-  const geometry = meltGeometry(diameter, thickness)
-  const nearEmpty = remaining <= geometry.twoCapCutoff
+function meltBranchAngles(geometry, remaining, nearEmpty) {
   return {
     nearEmpty,
+    strokeCap: nearEmpty ? 'BUTT' : 'ROUND',
     start: (1 - remaining) * SWEEP.end + (nearEmpty ? 0 : geometry.cap),
     end: nearEmpty ? SWEEP.end : geometry.insetEnd,
   }
 }
 
+function meltAngles(diameter, thickness, remaining) {
+  const geometry = meltGeometry(diameter, thickness)
+  const nearEmpty = remaining <= geometry.twoCapCutoff
+  return meltBranchAngles(geometry, remaining, nearEmpty)
+}
+
+function visibleSweep(angles, roundCap) {
+  return angles.end - angles.start + (angles.strokeCap === 'ROUND' ? 2 * roundCap : 0)
+}
+
 function assertNearExhaustedArcs() {
   const epsilon = 0.000001
+  const tolerance = 0.000000001
   for (const { diameter } of RINGS) {
     const geometry = meltGeometry(diameter, BAND_THICKNESS)
-    const below = meltAngles(
-      diameter,
-      BAND_THICKNESS,
-      geometry.twoCapCutoff - epsilon,
-    )
-    if (!below.nearEmpty || below.end <= below.start) {
+    const belowRemaining = geometry.twoCapCutoff - epsilon
+    const below = meltAngles(diameter, BAND_THICKNESS, belowRemaining)
+    const expectedBelowSweep = belowRemaining * SWEEP.end
+    if (
+      !below.nearEmpty ||
+      below.strokeCap !== 'BUTT' ||
+      below.end <= below.start ||
+      Math.abs(visibleSweep(below, geometry.cap) - expectedBelowSweep) > tolerance
+    ) {
       throw new Error(
-        `ring ${diameter}: a remainder below the two-cap cutoff must stay visible`,
+        `ring ${diameter}: a remainder below the two-cap cutoff must stay visible and proportional`,
       )
     }
 
@@ -448,19 +461,33 @@ function assertNearExhaustedArcs() {
     const expectedStart = (1 - aboveRemaining) * SWEEP.end + geometry.cap
     if (
       above.nearEmpty ||
+      above.strokeCap !== 'ROUND' ||
       above.start !== expectedStart ||
-      above.end !== geometry.insetEnd
+      above.end !== geometry.insetEnd ||
+      Math.abs(visibleSweep(above, geometry.cap) - aboveRemaining * SWEEP.end) > tolerance
     ) {
       throw new Error(`ring ${diameter}: geometry above the two-cap cutoff must stay inset`)
     }
 
+    const buttAtCutoff = meltBranchAngles(geometry, geometry.twoCapCutoff, true)
+    const roundAtCutoff = meltBranchAngles(geometry, geometry.twoCapCutoff, false)
+    const cutoffSweep = geometry.twoCapCutoff * SWEEP.end
+    if (
+      Math.abs(visibleSweep(buttAtCutoff, geometry.cap) - cutoffSweep) > tolerance ||
+      Math.abs(visibleSweep(roundAtCutoff, geometry.cap) - cutoffSweep) > tolerance
+    ) {
+      throw new Error(`ring ${diameter}: melt branches must meet at the two-cap cutoff`)
+    }
+
     const markup = bandArcs(diameter, BAND_THICKNESS, '')
     const rawStart = `(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end}`
+    const caps = [...markup.matchAll(/cap="(ROUND|BUTT)"/g)].map((match) => match[1])
     if (
       !markup.includes(`<= ${geometry.twoCapCutoff.toFixed(6)}`) ||
       !markup.includes('<Compare expression="isNearEmpty">') ||
       !markup.includes(`value="${rawStart}"`) ||
-      !markup.includes(`* ${SWEEP.end} + ${geometry.cap}`)
+      !markup.includes(`* ${SWEEP.end} + ${geometry.cap}`) ||
+      caps.join(',') !== 'ROUND,ROUND,BUTT,ROUND'
     ) {
       throw new Error(
         `ring ${diameter}: generated markup does not preserve both melt branches`,
@@ -473,8 +500,9 @@ function assertNearExhaustedArcs() {
  * Track plus melt for one arc. The melt keeps its own `PartDraw` so ambient can
  * dim it without touching the track underneath.
  *
- * The melt is drawn **inset by one cap at each end**, so what the eye sees ends
- * where the value does: the caps then fill exactly the space the inset freed.
+ * Above the cutoff, the melt is inset by one cap at each end, so the round caps
+ * fill exactly the space the inset freed. At or below it, straight ends keep the
+ * visible sweep equal to the proportional centreline.
  */
 function bandArcs(diameter, thickness, pad) {
   const geometry = meltGeometry(diameter, thickness)
@@ -516,7 +544,8 @@ ${pad}        </PartDraw>
 ${pad}    </Compare>
 ${pad}    <!-- The two-cap inset cannot represent a smaller positive remainder:
 ${pad}         its sweep would be zero or negative. Keep the proportional
-${pad}         centreline without either inset so the round caps meet visibly. -->
+${pad}         centreline without either inset and use straight ends so the
+${pad}         visible sweep does not overstate the remainder. -->
 ${pad}    <Compare expression="isNearEmpty">
 ${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
 ${pad}            <Variant mode="AMBIENT" target="alpha" value="140" />
@@ -533,7 +562,7 @@ ${pad}                    value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMP
 ${pad}                <WeightedStroke
 ${pad}                    thickness="${thickness}"
 ${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-${pad}                    cap="ROUND" />
+${pad}                    cap="BUTT" />
 ${pad}            </Arc>
 ${pad}        </PartDraw>
 ${pad}    </Compare>

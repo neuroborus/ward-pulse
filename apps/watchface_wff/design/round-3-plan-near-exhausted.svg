@@ -12,7 +12,7 @@
     <circle cx="225" cy="225" r="143.91" fill="none" stroke="#2E3632"
       stroke-width="20.205000000000002" />
     <circle cx="225" cy="225" r="143.91" fill="none" stroke="#65D78A"
-      stroke-width="20.205000000000002" stroke-linecap="round"
+      stroke-width="20.205000000000002" stroke-linecap="butt"
       stroke-dasharray="18.08 904.21"
       stroke-dashoffset="-886.13"
       transform="rotate(-90 225 225)" />

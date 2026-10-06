@@ -13,8 +13,9 @@ nothing spent closes instead of carrying a seam); two-split-slot revision **2026
 (far markers move into strip slots; slots 106/109 carry the two outer halves); near-exhaustion
 revision **2026-10-01** (a positive remainder below the two-cap cutoff stays visible);
 clock-colon revision **2026-10-01** (the device-font one-pixel imbalance is accepted without
-splitting the time) — accepted visual target for Wear OS and Watch Face Format until the next
-explicit design revision.
+splitting the time); near-exhaustion correction **2026-10-06** (straight ends keep that
+remainder proportional) — accepted visual target for Wear OS and Watch Face Format until the
+next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
 wireframes, large remaining-% heroes, or bordered strip cards.
 
@@ -367,11 +368,17 @@ had consumed more than that ring's remaining centreline. Its cutoff is derived p
 | 105 Ring3 | 308 | 4.13% |
 
 At or below its cutoff, a positive remainder keeps its proportional centreline without the
-two cap insets, so the round caps meet as a visible point. Above the cutoff the measured inset
-geometry is unchanged. This deliberately does not impose a minimum sweep: doing so would
-overstate remaining capacity at the edge of the scale. The existing zero-spend/full-ring branch,
-band thickness, split halves, and slots are unchanged. Review art mirrors the rule in
+two cap insets and uses straight ends. Above the cutoff the measured round-cap inset geometry
+is unchanged. This deliberately does not impose a minimum sweep: doing so would overstate
+remaining capacity at the edge of the scale. The existing zero-spend/full-ring branch, band
+thickness, split halves, and slots are unchanged. Review art mirrors the rule in
 `round-3-plan-near-exhausted.svg` with the observed `2%`, `69%`, and `94%` values.
+
+**Measured correction 2026-10-06.** On the owner's 384×384 capture, a 1% remainder on Ring3
+occupied 5.06% of the circumference; the previous below-cutoff branch left both round caps
+outside the proportional centreline, adding one band thickness to the visible arc. A straight
+cap removes that overstatement: the visible arc now equals the true remainder, and it meets the
+ordinary round-cap branch continuously at the cutoff.
 
 **Halves of a band, measured 2026-08-13.** A split band (see Split band) is two arcs inside one
 ring slot, and the numbers that work are **centre lines at `outer − 5` and `outer − 15`, both at

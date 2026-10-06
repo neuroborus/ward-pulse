@@ -216,29 +216,45 @@ function twoCapCutoff(r, thickness) {
   return (2 * capLength) / (2 * Math.PI * r)
 }
 
-function ringArcGeometry(r, thickness, remaining) {
+function ringArcBranchGeometry(r, thickness, remaining, nearEmpty) {
   const circ = 2 * Math.PI * r
   const left = Math.min(Math.max(remaining, 0), 0.999)
-  const nearEmpty = left <= twoCapCutoff(r, thickness)
   return {
     circ,
     left,
     nearEmpty,
+    strokeCap: nearEmpty ? 'butt' : 'round',
     paint: circ * left - (nearEmpty ? 0 : thickness),
     used: circ * (1 - left) + (nearEmpty ? 0 : thickness / 2),
   }
 }
 
+function ringArcGeometry(r, thickness, remaining) {
+  const left = Math.min(Math.max(remaining, 0), 0.999)
+  return ringArcBranchGeometry(r, thickness, left, left <= twoCapCutoff(r, thickness))
+}
+
+function visibleRingArcLength(geometry, thickness) {
+  return geometry.paint + (geometry.strokeCap === 'round' ? thickness : 0)
+}
+
 function assertNearExhaustedArcs() {
   const epsilon = 0.000001
+  const tolerance = 0.000000001
   for (const diameter of [404, 356, 308]) {
     const r = diameter / 2
     const thickness = 40
     const cutoff = twoCapCutoff(r, thickness)
-    const below = ringArcGeometry(r, thickness, cutoff - epsilon)
-    if (!below.nearEmpty || below.paint <= 0) {
+    const belowRemaining = cutoff - epsilon
+    const below = ringArcGeometry(r, thickness, belowRemaining)
+    if (
+      !below.nearEmpty ||
+      below.strokeCap !== 'butt' ||
+      below.paint <= 0 ||
+      Math.abs(visibleRingArcLength(below, thickness) - below.circ * belowRemaining) > tolerance
+    ) {
       throw new Error(
-        `ring ${diameter}: a remainder below the two-cap cutoff must stay visible`,
+        `ring ${diameter}: a remainder below the two-cap cutoff must stay visible and proportional`,
       )
     }
 
@@ -248,10 +264,34 @@ function assertNearExhaustedArcs() {
     const expectedUsed = above.circ * (1 - aboveRemaining) + thickness / 2
     if (
       above.nearEmpty ||
+      above.strokeCap !== 'round' ||
       above.paint !== expectedPaint ||
-      above.used !== expectedUsed
+      above.used !== expectedUsed ||
+      Math.abs(visibleRingArcLength(above, thickness) - above.circ * aboveRemaining) > tolerance
     ) {
       throw new Error(`ring ${diameter}: geometry above the two-cap cutoff must stay inset`)
+    }
+
+    const buttAtCutoff = ringArcBranchGeometry(r, thickness, cutoff, true)
+    const roundAtCutoff = ringArcBranchGeometry(r, thickness, cutoff, false)
+    const cutoffLength = buttAtCutoff.circ * cutoff
+    if (
+      Math.abs(visibleRingArcLength(buttAtCutoff, thickness) - cutoffLength) > tolerance ||
+      Math.abs(visibleRingArcLength(roundAtCutoff, thickness) - cutoffLength) > tolerance
+    ) {
+      throw new Error(`ring ${diameter}: arc branches must meet at the two-cap cutoff`)
+    }
+
+    const markupArgs = { cx: 225, cy: 225, r, thickness, color: '#ffffff', ambient: false }
+    if (
+      !ringArc({ ...markupArgs, remaining: belowRemaining }).includes(
+        'stroke-linecap="butt"',
+      ) ||
+      !ringArc({ ...markupArgs, remaining: aboveRemaining }).includes(
+        'stroke-linecap="round"',
+      )
+    ) {
+      throw new Error(`ring ${diameter}: generated markup must select the branch cap`)
     }
   }
 }
@@ -271,13 +311,13 @@ function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
   const geometry = ringArcGeometry(r, thickness, remaining)
   // Round caps reach half a thickness past each end, so the drawn span is
   // shortened by one cap on each side and started half a cap later. Below that
-  // two-cap cutoff the proportional centreline is left uninset, so its caps
-  // meet as a visible point instead of inventing a minimum sweep.
+  // two-cap cutoff the proportional centreline stays uninset and uses straight
+  // ends so its visible length remains equal to the value.
   return `
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
       stroke-width="${thickness}" />
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${valueColor}"
-      stroke-width="${thickness}" stroke-linecap="round"
+      stroke-width="${thickness}" stroke-linecap="${geometry.strokeCap}"
       stroke-dasharray="${geometry.paint.toFixed(2)} ${geometry.circ.toFixed(2)}"
       stroke-dashoffset="${(-geometry.used).toFixed(2)}"
       transform="rotate(-90 ${cx} ${cy})" />`
