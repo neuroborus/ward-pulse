@@ -412,7 +412,8 @@ API 36.1 image. Compile SDK and runtime system image versions are intentionally 
 ### Isolated Android Studio display
 
 For work that exists only in Android Studio's desktop UI, run Studio on a separate nested
-display. This leaves the owner's session, focus, pointer, and window layout untouched. The
+display. This leaves the owner's session, focus, pointer, and window layout untouched, but it
+is not complete isolation — see the shared configuration note at the end of this section. The
 following stack was verified on **2026-10-06**:
 
 ```sh
@@ -451,6 +452,15 @@ empty afterward; restart the display stack to change its geometry.
 Emulators do not need this display. Continue to inspect and control them through ADB with an
 explicit serial, using `exec-out screencap -p`, `input tap`, and `input keyevent`. When Studio
 work is complete, stop the stack in reverse order: Studio, `kwin_x11`, then `Xwayland :7`.
+
+`kwin_x11 --replace` shares configuration with the owner's account. It reads and writes the
+same `~/.config/kwinrc` as the running session, and global key bindings belong to the
+account-wide `kglobalaccel` service rather than to a display. On 2026-10-06
+`~/.config/kglobalshortcutsrc` was rewritten while the nested compositor started; its bindings
+were unchanged and each one was still registered to exactly one component. The nested display
+therefore does not contain compositor configuration the way it contains focus and pointer
+input. Confirm the owner's global shortcuts still fire after a session on it, and re-register
+them with `systemctl --user restart plasma-kglobalaccel` rather than restarting the session.
 
 ### Pairing the canonical phone and Wear AVDs
 
