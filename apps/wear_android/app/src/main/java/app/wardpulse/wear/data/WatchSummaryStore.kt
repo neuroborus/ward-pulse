@@ -9,6 +9,7 @@ import app.wardpulse.wear.model.AllowanceSummary
 import app.wardpulse.wear.model.Money
 import app.wardpulse.wear.model.PeriodSummary
 import app.wardpulse.wear.model.ProviderSummary
+import app.wardpulse.wear.model.RingHalf
 import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.Quantity
@@ -119,6 +120,16 @@ private fun RingSummary.toJson() = JSONObject().apply {
     put("label", label)
     put("usedPercent", usedPercent)
     put("status", status.wireName)
+    put("spent", spent?.toJson() ?: JSONObject.NULL)
+    put("limit", limit?.toJson() ?: JSONObject.NULL)
+    put("split", split?.toJson() ?: JSONObject.NULL)
+}
+
+private fun RingHalf.toJson() = JSONObject().apply {
+    put("id", id)
+    put("label", label)
+    put("usedPercent", usedPercent)
+    put("status", status.wireName)
 }
 
 private fun PeriodSummary.toJson() = JSONObject().apply {
@@ -211,6 +222,20 @@ private fun JSONObject.toRingSummary(): RingSummary {
         label = getString("label").also { require(it.isNotEmpty()) },
         usedPercent = usedPercent,
         status = getString("status").toPulseStatus(),
+        spent = nullableObject("spent")?.toMoney(),
+        limit = nullableObject("limit")?.toMoney(),
+        split = nullableObject("split")?.toRingHalf(),
+    )
+}
+
+private fun JSONObject.toRingHalf(): RingHalf {
+    val usedPercent = getDouble("usedPercent")
+    require(usedPercent >= 0.0)
+    return RingHalf(
+        id = getString("id").also { require(it.isNotEmpty()) },
+        label = getString("label").also { require(it.isNotEmpty()) },
+        usedPercent = usedPercent,
+        status = getString("status").toPulseStatus(),
     )
 }
 
@@ -287,8 +312,8 @@ private inline fun <T> JSONArray.mapObjects(transform: (JSONObject) -> T): List<
 
 private fun String.toPulseStatus(): PulseStatus = requireNotNull(PulseStatus.fromWireName(this))
 
-private const val SCHEMA_VERSION = 7
-private const val MAX_RINGS = 4
+private const val SCHEMA_VERSION = 9
+private const val MAX_RINGS = 3
 private val CURRENCY_PATTERN = Regex("^[A-Z]{3}$")
 private val PROVIDERS = setOf("openai", "codex", "claude", "cursor", "mock")
 private val ALLOWANCE_SOURCES = setOf("plan", "purchased")

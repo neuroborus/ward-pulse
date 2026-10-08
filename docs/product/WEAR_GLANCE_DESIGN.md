@@ -5,6 +5,32 @@
 watch-face baseline in [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md): this screen is a
 **text legend** for face ring colors, not a face clone.
 
+**Revision 2026-09-16 — paired bands:** one Glance row per band, with two mini arcs
+and two remaining percentages for an active pair. Typography, row pitch and Alerts clearance
+are unchanged; the 2026-10-01 revision below verifies the paired-row fit on both screen shapes.
+
+**Revision 2026-09-16 — Codex/Spark:** the full board now shows two pairs in three
+rows. Codex main is the first arc/percentage and Spark the second; the title is
+`Codex plan`. Geometry and typography stay fixed; the paired-row footprint and three-row fit
+are covered by the 2026-10-01 verification below.
+
+**Revision 2026-10-01 — round/notround fit verified:** the same three-band payload, with
+`Cursor Models` and `Other Models` paired in the middle row, was measured on `emulator-5554`
+(`round`, 384×384) and `wardpulse_wear_square_api36_1` (`notround`, 360×360).
+
+| Measurement | Round 384×384 | Notround 360×360 |
+|-------------|---------------|------------------|
+| Row pitch | 46 px (0.120 of screen height) | 43 px (0.119 of screen height) |
+| Arc left edge | x 112 (0.292 of screen width) | x 102 (0.283 of screen width) |
+| Paired inner pool | x 102…132, left | x 102…132, left |
+| Paired outer pool | x 155…187, right | x 143…173, right |
+
+Both screens keep the inner pool before the outer pool, fit all three rows with the Alerts pill,
+and show every label without clipping. Glance lays out against the available width without
+screen-shape-specific behavior; it does not render a fixed-size canvas. WFF is different: its
+fixed 450-unit canvas and inscribed circle make a separate round-versus-square fit check
+unnecessary.
+
 Do not reintroduce a face clone (large concentric stacks, sunk strips, watermark, or
 time-as-hero), stacked icon-above-label refresh, or conflating cadence cooldown with
 `!OK` / `Rate limited`.
@@ -16,9 +42,9 @@ Primary preview: `apps/wear_android/design/preview-glance-legend-3.png`.
 
 ## Goal
 
-Name each selected ring metric with its provider/family, show remaining % and optional
-per-provider purchased credits, and keep a small remaining arc beside each row so the user can
-map face colors to providers.
+Name each selected band with its provider/family, show remaining % and optional
+per-provider purchased credits, and keep one mini arc per active pool beside its row so the
+user can map face colors to providers.
 
 ## Composition
 
@@ -33,25 +59,46 @@ map face colors to providers.
   (●)  Claude · 5h
        39% left · 80 credits
 
-  (●)  Cursor · Weekly plan
-       72% left
+  (●)  Cursor Models
+       53% left
 
       [ Alerts: 0 ]          ← pill button; disabled when N = 0
 ```
 
 Rules:
 
-- One row = one selected ring metric from the watch summary (same set as the face).
+- One row = one selected band from the watch summary (same set and order as the face).
 - Row order = **tightest remaining first** (highest `usedPercent` first; equal percents break
   ties by credit request-runway from internal costs — credits shown, not request counts),
-  matching the face.
-- Mini arc = **remaining** (`100 - usedPercent`), family color from the face palette.
-- Primary line: family/provider + metric label; same wording for the same window kind
-  (Codex and Cursor both `Weekly plan`). Claude’s subscription plan windows
-  (`5h`, `Weekly`, optional Opus/Sonnet weekly) collapse to **one** ring on the phone;
-  Glance shows which window is active via the short label (`Claude · 5h` / `Claude · Weekly`).
-- Secondary line: `N% left`; append `· N credits` when that provider reports purchased credits.
-  Per provider only — not a footer sum, not face `creditsGlance`, never LLM `TOK`.
+  matching the face. A pair keeps its band position and uses **one row**. Its two mini arcs
+  and percentages always put the inner pool first (left), outer pool second (right),
+  independently of which percentage is tighter.
+- Mini arc = **remaining** (`100 - usedPercent`), family color from the face palette;
+  same clockwise-from-12 melt as the watch face (usage gap opens at 12). Its round caps reach
+  half a stroke past each end — on a 17-unit arc that is 8.4° per cap, more than a 4%-used row
+  has to show — so the sweep is drawn short by one cap at each end and the caps fill it back in.
+  Without that a nearly full row reads as a closed ring (`WATCH_RING_DESIGN.md`, Ring geometry,
+  where the same correction is measured on the face).
+- Primary line for a pair: **family name + ` plan`**, exactly `Cursor plan` for Cursor and
+  `Codex plan` for Codex/Spark.
+  The phone uses the same rule for its band label; the payload carries pool labels, not a
+  separate band name. For an ordinary row: family/provider + metric label. Codex keeps
+  `Weekly plan`; Cursor Pro+/Ultra
+  plan pools use `Cursor Models` / `Other Models` (exhausted pools stay off the face).
+  Codex main and Spark windows collapse independently; an unpaired Spark row names
+  its winning window (`Codex · Spark 5h` / `Codex · Spark Weekly`).
+  Claude’s subscription plan windows (`5h`, `Weekly`, optional Opus/Sonnet weekly) collapse to
+  **one** ring on the phone; Glance shows which window is active via the short label
+  (`Claude · 5h` / `Claude · Weekly`).
+- Secondary line: ordinary rows keep `N% left`. A pair shows `82% · 41% left`, inner pool
+  first, with one `left` applying to both remaining percentages. Append purchased credits
+  once when available: `82% · 41% left · 320 credits`. Per provider only — not a footer sum,
+  not face `creditsGlance`, never LLM `TOK`.
+- Rows are laid out on a **54-unit pitch** with nothing added between them: the pitch already
+  covers the mini arcs and both lines.
+- The block keeps **12 units clear of the Alerts pill**. Three rows is the ceiling, one per
+  band, regardless of how many bands are paired. The 2026-10-01 round/notround measurement
+  verifies the three-row fit, available width and absence of clipping on both screen shapes.
 - Empty / exhausted: short copy centered between refresh and Alerts; no placeholder rings.
 
 | Empty state | Copy |
@@ -83,6 +130,11 @@ Pulse (`OK` / `!OK`) and interactivity are **independent**:
 - When a **specific problem** is known, show it under the control (`Stale`, `Auth required`,
   `Rate limited`, `Mock data`, …). Keep the primary glyph as `OK` / `!OK` only.
 - Cadence cooldown is **not** a problem — do not show `Rate limited` or flip to `!OK` for it.
+- Only **one** detail fits, so problems have a precedence: `Mock data`, then `Stale`, then
+  `Rate limited`, then the remaining statuses. Trustworthiness of the numbers outranks the
+  reason a refresh failed, because a rate limit already shows as a gray disabled control while
+  age has no other channel. Precedence changes the detail line only — the control still follows
+  the rate limit.
 - The **phone** decides allowance from the **PollCadence hard floor** (strictest provider
   minimum, currently 5 minutes) — not the Settings auto-poll slider — and pushes
   `manualRefreshAllowed` / `manualRefreshAvailableAt` on the watch summary. Wear reflects those
@@ -106,9 +158,19 @@ Same strokes as the face (`WATCH_RING_DESIGN.md`) for metric mini-arcs:
 | Family | Stroke |
 |--------|--------|
 | OpenAI / Codex | `#65D78A` |
+| Codex · Spark | `#186020` |
 | Anthropic / Claude | `#E8915A` |
-| Cursor | `#67E8D4` |
-| Local budget | `#8AB4F8` |
+| Cursor · other models | `#67E8D4` |
+| Cursor · own models | `#7E93B8` |
+| Unresolved family | `#8A968F` — fallback only |
+
+A local budget row takes the family color of the connection it belongs to; the period lives in
+the row label, not in a color of its own. **Cursor pools or Codex main/Spark limits share one row**,
+each with its own coloured mini arc and remaining fraction. The pair reaches the watch as one
+payload entry with its second pool inside (`WATCH_RING_DESIGN.md`, Split band). When either
+pool is exhausted, the survivor becomes an ordinary row with its pool label, one arc and one
+percentage; when both are exhausted the row disappears. Purchased credits appear once per
+row — a split face strip gives its width to the second percentage instead.
 
 Refresh `OK` reuses Codex green as status affordance on this control only — do not spread that
 into Alerts chrome or general Wear buttons. Surface / track / label match face review art
@@ -129,7 +191,9 @@ xdg-open apps/wear_android/design/preview-glance-legend-3.png
 |------|---------|
 | `glance-legend-3.svg` | **Primary** — three providers, `OK` refresh enabled, Alerts disabled |
 | `glance-legend-1.svg` | Single provider with credits |
-| `glance-legend-budget.svg` | Plan rows (with credits) + Budget (blue, no credits) |
+| `glance-legend-pair.svg` | One Cursor pair — one row, two coloured arcs, inner-first percentages and credits once |
+| `glance-legend-full.svg` | Three rows — the ceiling: three bands, currently two paired; three-row and paired-row geometry verified on-device 2026-10-01 |
+| `glance-legend-budget.svg` | Plan rows (with credits) + a connection budget row (family color, no credits) |
 | `glance-legend-stale.svg` | `!OK` + detail `Stale`, refresh enabled, Alerts active |
 | `glance-legend-cadence.svg` | Healthy `OK` but refresh **disabled** (cadence cooldown; no detail) |
 | `glance-legend-rate-limit.svg` | `!OK` + detail `Rate limited`, refresh **disabled** (provider) |
@@ -142,7 +206,11 @@ Wear only: `apps/wear_android/design/`. OpenPencil `.fig` inventory optional.
 
 ```text
 text legend + mini remaining arcs (not a face clone)
-row order = tightest remaining first (plan %; credit runway tie-break)
+one row per band, at most three rows; band order matches the phone/face
+paired arcs and percentages: inner first, outer second; each retains its own colour
+paired title = family + " plan"; Cursor plan and Codex plan exactly
+paired subtitle = "82% · 41% left · 320 credits" (omit credits suffix when unavailable)
+54-unit row pitch; 12-unit Alerts clearance; round 384 / notround 360 width and clipping verified 2026-10-01
 per-provider credits with explicit credits label (no footer sum)
 OK / !OK inside dual-arrow refresh glyph; same label font size
 optional muted problem detail below the plate (never on the ring)
@@ -152,7 +220,8 @@ phone owns allowance via summary manualRefreshAllowed / manualRefreshAvailableAt
 Stale = orange !OK + Stale + enabled
 Alerts: N pill; active when N > 0; disabled at 0
 empty / exhausted centered copy between refresh and Alerts
-metric labels consistent across providers for the same window kind
+ordinary metric labels unchanged (Codex Weekly plan; Cursor Models / Other Models)
+one exhausted half restores an ordinary row; both exhausted remove the row
 review art: render-wear-glance-designs.mjs → preview-glance-legend-*.png
 primary preview: preview-glance-legend-3.png
 ```
@@ -162,7 +231,7 @@ primary preview: preview-glance-legend-3.png
 | Surface | Role |
 |---------|------|
 | Wear OS app Glance (page 1) | This legend + refresh control + Alerts button |
-| Wear OS app Menu / detail | Secondary pages (rings list, Today, Alerts, …) |
+| Wear OS app second page | Plan windows and when each comes back (`apps/wear_android/README.md`) |
 | Phone | Owns PollCadence floor for Wear taps; pushes `manualRefreshAllowed` /
   `manualRefreshAvailableAt`; Settings slider drives automatic polling only |
 | WFF / face | [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md) — concentric remaining arcs |

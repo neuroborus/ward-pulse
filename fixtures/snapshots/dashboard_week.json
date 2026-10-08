@@ -5,34 +5,34 @@
   "todayTotal": {
     "period": "today",
     "spent": { "minorUnits": 1240, "currency": "USD" },
-    "limit": { "minorUnits": 5000, "currency": "USD" },
-    "remaining": { "minorUnits": 3760, "currency": "USD" },
-    "usedPercent": 24.8,
+    "limit": null,
+    "remaining": null,
+    "usedPercent": null,
     "projectedTotal": null,
-    "status": "ok"
+    "status": "unknown"
   },
   "weekTotal": {
     "period": "week",
     "spent": { "minorUnits": 7130, "currency": "USD" },
-    "limit": { "minorUnits": 25000, "currency": "USD" },
-    "remaining": { "minorUnits": 17870, "currency": "USD" },
-    "usedPercent": 28.52,
+    "limit": null,
+    "remaining": null,
+    "usedPercent": null,
     "projectedTotal": { "minorUnits": 22800, "currency": "USD" },
-    "status": "ok"
+    "status": "unknown"
   },
   "monthTotal": {
     "period": "month",
     "spent": { "minorUnits": 21210, "currency": "USD" },
-    "limit": { "minorUnits": 80000, "currency": "USD" },
-    "remaining": { "minorUnits": 58790, "currency": "USD" },
-    "usedPercent": 26.5125,
+    "limit": null,
+    "remaining": null,
+    "usedPercent": null,
     "projectedTotal": { "minorUnits": 74200, "currency": "USD" },
-    "status": "ok"
+    "status": "unknown"
   },
   "alerts": [],
   "watchSummary": {
-    "todayUsedPercent": 24.8,
-    "weekUsedPercent": 28.52,
+    "todayUsedPercent": null,
+    "weekUsedPercent": null,
     "status": "ok"
   }
 }

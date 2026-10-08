@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ward_pulse_widget_title">WardPulse</string>
+    <string name="ward_pulse_widget_description">Glanceable remaining usage on the home screen</string>
+    <string name="ward_pulse_widget_stale">Stale</string>
+    <string name="ward_pulse_widget_empty">No metrics</string>
+</resources>

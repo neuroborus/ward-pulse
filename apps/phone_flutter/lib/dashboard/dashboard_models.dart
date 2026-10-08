@@ -22,18 +22,6 @@ extension ProviderStatusLabel on ProviderStatus {
       ProviderStatus.unknown => 'Unknown',
     };
   }
-
-  String get description {
-    return switch (this) {
-      ProviderStatus.ok => 'Provider data is current.',
-      ProviderStatus.warning => 'Usage is approaching a configured limit.',
-      ProviderStatus.error => 'Provider sync failed.',
-      ProviderStatus.rateLimited => 'Provider rate limit reached.',
-      ProviderStatus.authRequired => 'Provider authentication is required.',
-      ProviderStatus.stale => 'Showing data from the last successful sync.',
-      ProviderStatus.unknown => 'Provider status is unavailable.',
-    };
-  }
 }
 
 enum DashboardSyncIssue {
@@ -59,9 +47,9 @@ extension DashboardSyncIssueMessage on DashboardSyncIssue {
   String get message {
     return switch (this) {
       DashboardSyncIssue.noProviders =>
-        'Connect a provider in Settings to load dashboard data.',
+        'Connect a provider on the Providers tab to load dashboard data.',
       DashboardSyncIssue.credentialUnavailable =>
-        'The saved key could not be read. Re-enter it in Settings.',
+        'The saved key could not be read. Re-enter it on the Providers tab.',
       DashboardSyncIssue.authentication =>
         'The provider rejected the credential. Check that you pasted the full key or token.',
       DashboardSyncIssue.permissionDenied =>
@@ -73,7 +61,7 @@ extension DashboardSyncIssueMessage on DashboardSyncIssue {
       DashboardSyncIssue.invalidResponse =>
         'The provider returned an unsupported reporting response.',
       DashboardSyncIssue.codexAuthentication =>
-        'Codex sign-in expired. Reconnect your ChatGPT account in Settings.',
+        'Codex sign-in expired. Reconnect your ChatGPT account on the Providers tab.',
       DashboardSyncIssue.codexPermissionDenied =>
         'This Codex account cannot access usage reporting.',
       DashboardSyncIssue.codexUnavailable =>
@@ -81,7 +69,7 @@ extension DashboardSyncIssueMessage on DashboardSyncIssue {
       DashboardSyncIssue.codexInvalidResponse =>
         'Codex returned an unsupported usage response.',
       DashboardSyncIssue.claudeAuthentication =>
-        'Claude sign-in expired. Reconnect your Claude account in Settings.',
+        'Claude sign-in expired. Reconnect your Claude account on the Providers tab.',
       DashboardSyncIssue.claudePermissionDenied =>
         'This Claude account cannot access usage reporting.',
       DashboardSyncIssue.claudeUnavailable =>
@@ -224,6 +212,7 @@ class ProviderSnapshot {
   const ProviderSnapshot({
     required this.accountId,
     required this.provider,
+    this.connection,
     required this.status,
     required this.today,
     required this.week,
@@ -238,6 +227,12 @@ class ProviderSnapshot {
 
   final String accountId;
   final String provider;
+
+  /// Connection storage key stamped by the Rust adapter, when present.
+  ///
+  /// Carried verbatim so the round trip back into the core keeps alert rules
+  /// keyed by connection rather than by provider family.
+  final String? connection;
   final ProviderStatus status;
   final BudgetState today;
   final BudgetState week;
@@ -253,6 +248,7 @@ class ProviderSnapshot {
     return ProviderSnapshot(
       accountId: json['accountId'] as String,
       provider: json['provider'] as String,
+      connection: json['connection'] as String?,
       status: _statusFromJson(json['status']),
       today: BudgetState.fromJson(_jsonMap(json['today'])),
       week: BudgetState.fromJson(_jsonMap(json['week'])),
@@ -275,6 +271,7 @@ class ProviderSnapshot {
   Map<String, dynamic> toJson() => {
     'accountId': accountId,
     'provider': provider,
+    if (connection != null) 'connection': connection,
     'status': status.name,
     'today': today.toJson(),
     'week': week.toJson(),
@@ -287,28 +284,7 @@ class ProviderSnapshot {
     'lastError': lastError?.toJson(),
   };
 
-  String get providerLabel {
-    return switch (provider) {
-      'openai' => 'OpenAI',
-      'codex' => 'Codex',
-      'claude' => 'Claude',
-      'cursor' => 'Cursor',
-      'mock' => 'Mock',
-      _ => provider,
-    };
-  }
-
-  /// User-facing title for provider lists and details.
-  ///
-  /// [platformLabel] is phone-local display metadata for platform Admin API
-  /// key connections and is never part of the watch payload.
-  String displayTitle({String? platformLabel}) {
-    final label = platformLabel?.trim();
-    if (label != null && label.isNotEmpty) {
-      return label;
-    }
-    return providerLabel;
-  }
+  String get providerLabel => providerDisplayLabel(provider);
 
   ProviderSnapshot _withStatus(ProviderStatus value) {
     return ProviderSnapshot(
@@ -594,15 +570,6 @@ class BudgetState {
     'status': status.name,
   };
 
-  double? get usedFraction {
-    final value = usedPercent;
-    if (value == null) {
-      return null;
-    }
-
-    return (value / 100).clamp(0.0, 1.0).toDouble();
-  }
-
   String get periodLabel {
     return switch (period) {
       'today' => 'Today',
@@ -610,32 +577,6 @@ class BudgetState {
       'month' => 'Month',
       _ => period,
     };
-  }
-
-  String get usedPercentLabel {
-    final value = usedPercent;
-    if (value == null) {
-      return 'Unknown';
-    }
-
-    final places = value.truncateToDouble() == value ? 0 : 1;
-    return '${value.toStringAsFixed(places)}%';
-  }
-
-  /// Why this budget card shows its status — shown on StatusPill tap/hover.
-  String get statusExplanation {
-    if (status != ProviderStatus.unknown) {
-      return status.description;
-    }
-    if (spent != null && limit == null) {
-      return 'Organization/platform API spend has no local budget limit yet, '
-          'so percent used and status stay Unknown. Subscription credit '
-          'purchases are not included in these totals.';
-    }
-    if (spent == null) {
-      return 'No organization/platform API spend was reported for this period.';
-    }
-    return status.description;
   }
 }
 
@@ -796,6 +737,16 @@ class WatchSummary {
     );
   }
 }
+
+/// Display name for a raw provider key (`cursor` → `Cursor`).
+String providerDisplayLabel(String provider) => switch (provider) {
+  'openai' => 'OpenAI',
+  'codex' => 'Codex',
+  'claude' => 'Claude',
+  'cursor' => 'Cursor',
+  'mock' => 'Mock',
+  _ => provider,
+};
 
 /// Device-local wall clock for sync / reset labels.
 String formatLocal(DateTime value) {

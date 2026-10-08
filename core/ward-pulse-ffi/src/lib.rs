@@ -3,9 +3,12 @@ use std::ffi::{c_char, CStr, CString};
 use std::fmt;
 use std::ptr;
 
-use ward_pulse_core::build_dashboard_snapshot;
 use ward_pulse_core::model::{DashboardSnapshot, ProviderSnapshot};
 use ward_pulse_core::time::DateTimeUtc;
+use ward_pulse_core::{
+    apply_alert_settings, build_dashboard_snapshot, exhausted_windows, plan_recoveries,
+    AlertSettings, WindowKey,
+};
 use ward_pulse_providers::claude::{
     anthropic_provider_snapshot_from_report_json, claude_provider_snapshot_from_report_json,
     AnthropicReportError, ClaudeReportError,
@@ -16,7 +19,8 @@ use ward_pulse_providers::cursor::{
     CursorPlanReportError, CursorPlatformReportError,
 };
 use ward_pulse_providers::mock::{
-    mock_provider_snapshot_from_usage_fixture, MockUsageFixtureError,
+    debug_multi_provider_dashboard_json, mock_provider_snapshot_from_usage_fixture,
+    DebugDemoDashboardError, MockUsageFixtureError,
 };
 use ward_pulse_providers::openai::{openai_provider_snapshot_from_report_json, OpenAiReportError};
 
@@ -30,11 +34,14 @@ enum DashboardSnapshotJsonError {
     Codex(CodexReportError),
     CursorPlan(CursorPlanReportError),
     CursorPlatform(CursorPlatformReportError),
+    DebugDemo(DebugDemoDashboardError),
     Fixture(MockUsageFixtureError),
     OpenAi(OpenAiReportError),
     EmptySnapshots,
     Deserialize(serde_json::Error),
     Serialize(serde_json::Error),
+    AlertSettings(serde_json::Error),
+    PlanRecovery(serde_json::Error),
 }
 
 impl fmt::Display for DashboardSnapshotJsonError {
@@ -56,6 +63,7 @@ impl fmt::Display for DashboardSnapshotJsonError {
                 formatter,
                 "failed to normalize Cursor platform report: {error}"
             ),
+            Self::DebugDemo(error) => write!(formatter, "{error}"),
             Self::Fixture(error) => {
                 write!(formatter, "failed to build dashboard snapshot: {error}")
             }
@@ -72,6 +80,12 @@ impl fmt::Display for DashboardSnapshotJsonError {
             Self::Serialize(error) => {
                 write!(formatter, "failed to serialize dashboard snapshot: {error}")
             }
+            Self::PlanRecovery(error) => {
+                write!(formatter, "failed to read a plan recovery request: {error}")
+            }
+            Self::AlertSettings(error) => {
+                write!(formatter, "failed to parse alert settings: {error}")
+            }
         }
     }
 }
@@ -84,10 +98,14 @@ impl StdError for DashboardSnapshotJsonError {
             Self::Codex(error) => Some(error),
             Self::CursorPlan(error) => Some(error),
             Self::CursorPlatform(error) => Some(error),
+            Self::DebugDemo(error) => Some(error),
             Self::Fixture(error) => Some(error),
             Self::OpenAi(error) => Some(error),
             Self::EmptySnapshots => None,
-            Self::Deserialize(error) | Self::Serialize(error) => Some(error),
+            Self::Deserialize(error)
+            | Self::Serialize(error)
+            | Self::AlertSettings(error)
+            | Self::PlanRecovery(error) => Some(error),
         }
     }
 }
@@ -113,6 +131,10 @@ fn dashboard_snapshot_json() -> Result<String, DashboardSnapshotJsonError> {
         .map_err(DashboardSnapshotJsonError::Fixture)?;
 
     dashboard_json(fixture.generated_at, vec![fixture.provider_snapshot])
+}
+
+fn debug_dashboard_snapshot_json(seed: u64) -> Result<String, DashboardSnapshotJsonError> {
+    debug_multi_provider_dashboard_json(seed).map_err(DashboardSnapshotJsonError::DebugDemo)
 }
 
 fn openai_dashboard_snapshot_json(report_json: &str) -> Result<String, DashboardSnapshotJsonError> {
@@ -175,11 +197,69 @@ fn merge_dashboard_snapshots_json(
     dashboard_json(generated_at, accounts)
 }
 
+fn apply_alert_settings_json(request_json: &str) -> Result<String, DashboardSnapshotJsonError> {
+    let value: serde_json::Value =
+        serde_json::from_str(request_json).map_err(DashboardSnapshotJsonError::AlertSettings)?;
+    let snapshot: DashboardSnapshot = serde_json::from_value(
+        value
+            .get("snapshot")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+    )
+    .map_err(DashboardSnapshotJsonError::AlertSettings)?;
+    let settings: AlertSettings = match value.get("settings") {
+        Some(settings) => serde_json::from_value(settings.clone())
+            .map_err(DashboardSnapshotJsonError::AlertSettings)?,
+        None => AlertSettings::default(),
+    };
+    let snapshot = apply_alert_settings(snapshot, &settings);
+    serde_json::to_string(&snapshot).map_err(DashboardSnapshotJsonError::Serialize)
+}
+
+/// Windows the phone should remember as spent, from a snapshot it just loaded.
+fn exhausted_windows_json(snapshot_json: &str) -> Result<String, DashboardSnapshotJsonError> {
+    let snapshot: DashboardSnapshot =
+        serde_json::from_str(snapshot_json).map_err(DashboardSnapshotJsonError::PlanRecovery)?;
+    serde_json::to_string(&exhausted_windows(&snapshot))
+        .map_err(DashboardSnapshotJsonError::Serialize)
+}
+
+/// Windows from `exhausted` that the snapshot reports usable again.
+///
+/// Both halves arrive in one object, as alert settings do: the shared string
+/// transform takes a single argument.
+fn plan_recoveries_json(request_json: &str) -> Result<String, DashboardSnapshotJsonError> {
+    let value: serde_json::Value =
+        serde_json::from_str(request_json).map_err(DashboardSnapshotJsonError::PlanRecovery)?;
+    let snapshot: DashboardSnapshot = serde_json::from_value(
+        value
+            .get("snapshot")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+    )
+    .map_err(DashboardSnapshotJsonError::PlanRecovery)?;
+    let exhausted: Vec<WindowKey> = match value.get("exhausted") {
+        Some(exhausted) => serde_json::from_value(exhausted.clone())
+            .map_err(DashboardSnapshotJsonError::PlanRecovery)?,
+        None => Vec::new(),
+    };
+    serde_json::to_string(&plan_recoveries(&exhausted, &snapshot))
+        .map_err(DashboardSnapshotJsonError::Serialize)
+}
+
 fn snapshot_result_json(result: Result<String, DashboardSnapshotJsonError>) -> Option<String> {
+    result_json("dashboardJson", result)
+}
+
+/// The result envelope every entry point returns, named by what it carries.
+fn result_json(
+    payload_key: &str,
+    result: Result<String, DashboardSnapshotJsonError>,
+) -> Option<String> {
     let envelope = match result {
-        Ok(dashboard_json) => serde_json::json!({
+        Ok(payload) => serde_json::json!({
             "status": "success",
-            "dashboardJson": dashboard_json,
+            payload_key: payload,
         }),
         Err(error) => serde_json::json!({
             "status": "error",
@@ -189,14 +269,28 @@ fn snapshot_result_json(result: Result<String, DashboardSnapshotJsonError>) -> O
     serde_json::to_string(&envelope).ok()
 }
 
+/// Builds the bundled mock dashboard and returns a JSON result envelope.
 #[no_mangle]
-pub extern "C" fn ward_pulse_dashboard_snapshot_json() -> *mut c_char {
+pub extern "C" fn ward_pulse_dashboard_snapshot_result_json() -> *mut c_char {
+    result_json_into_raw(dashboard_snapshot_json)
+}
+
+/// Builds a seeded multi-provider debug dashboard for the phone Mock data toggle
+/// and returns a JSON result envelope.
+#[no_mangle]
+pub extern "C" fn ward_pulse_debug_dashboard_snapshot_result_json(seed: u64) -> *mut c_char {
+    result_json_into_raw(move || debug_dashboard_snapshot_json(seed))
+}
+
+/// Wraps a snapshot build in the shared result envelope and hands the string
+/// to the caller, who releases it with [`ward_pulse_string_free`].
+fn result_json_into_raw(
+    build: impl FnOnce() -> Result<String, DashboardSnapshotJsonError> + std::panic::UnwindSafe,
+) -> *mut c_char {
     match std::panic::catch_unwind(|| {
-        dashboard_snapshot_json()
-            .ok()
-            .and_then(|snapshot| CString::new(snapshot).ok())
+        snapshot_result_json(build()).and_then(|result| CString::new(result).ok())
     }) {
-        Ok(Some(snapshot)) => snapshot.into_raw(),
+        Ok(Some(result)) => result.into_raw(),
         Ok(None) | Err(_) => ptr::null_mut(),
     }
 }
@@ -285,6 +379,38 @@ pub unsafe extern "C" fn ward_pulse_cursor_platform_dashboard_snapshot_result_js
     })
 }
 
+/// Lists the plan windows a snapshot reports as spent, for the phone to keep
+/// until its next poll, and returns a JSON result envelope.
+///
+/// # Safety
+///
+/// `snapshot_json` must be a non-null pointer to a valid, null-terminated UTF-8
+/// string.
+#[no_mangle]
+pub unsafe extern "C" fn ward_pulse_exhausted_windows_result_json(
+    snapshot_json: *const c_char,
+) -> *mut c_char {
+    transform_report_json(snapshot_json, |json| {
+        result_json("windowsJson", exhausted_windows_json(json))
+    })
+}
+
+/// Reports which remembered windows have room again and returns a JSON result
+/// envelope. The request carries `snapshot` and `exhausted` in one object.
+///
+/// # Safety
+///
+/// `request_json` must be a non-null pointer to a valid, null-terminated UTF-8
+/// string.
+#[no_mangle]
+pub unsafe extern "C" fn ward_pulse_plan_recoveries_result_json(
+    request_json: *const c_char,
+) -> *mut c_char {
+    transform_report_json(request_json, |json| {
+        result_json("recoveriesJson", plan_recoveries_json(json))
+    })
+}
+
 unsafe fn transform_report_json(
     report_json: *const c_char,
     transform: fn(&str) -> Option<String>,
@@ -313,6 +439,22 @@ pub unsafe extern "C" fn ward_pulse_merge_dashboard_snapshots_result_json(
 ) -> *mut c_char {
     transform_report_json(snapshots_json, |json| {
         snapshot_result_json(merge_dashboard_snapshots_json(json))
+    })
+}
+
+/// Applies user alert threshold settings to a dashboard snapshot JSON.
+///
+/// Request body: `{ "snapshot": <DashboardSnapshot>, "settings": <AlertSettings> }`.
+///
+/// # Safety
+///
+/// `request_json` must be a non-null pointer to a valid, null-terminated UTF-8 JSON object.
+#[no_mangle]
+pub unsafe extern "C" fn ward_pulse_apply_alert_settings_result_json(
+    request_json: *const c_char,
+) -> *mut c_char {
+    transform_report_json(request_json, |json| {
+        snapshot_result_json(apply_alert_settings_json(json))
     })
 }
 
@@ -348,16 +490,131 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
+    /// The golden both sides read: this crate builds it, and the phone parses
+    /// the same file. A drift here is a contract break, not a test detail.
     #[test]
-    fn c_api_returns_owned_snapshot_json() {
-        let value = ward_pulse_dashboard_snapshot_json();
+    fn plan_recoveries_match_the_golden_fixture() {
+        let golden: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../fixtures/snapshots/plan_recovery.json"
+        ))
+        .expect("parse golden plan recovery");
+
+        let spent = snapshot_with_weekly_percent(100.0);
+        let windows: serde_json::Value =
+            serde_json::from_str(&exhausted_windows_json(&spent).expect("list exhausted windows"))
+                .expect("parse exhausted windows");
+        assert_eq!(windows, golden["exhausted"]);
+
+        let request = serde_json::json!({
+            "snapshot": serde_json::from_str::<serde_json::Value>(&snapshot_with_weekly_percent(
+                4.0,
+            ))
+            .expect("parse snapshot"),
+            "exhausted": golden["exhausted"],
+        });
+        let recoveries: serde_json::Value = serde_json::from_str(
+            &plan_recoveries_json(&request.to_string()).expect("list recoveries"),
+        )
+        .expect("parse recoveries");
+
+        assert_eq!(recoveries, golden["recoveries"]);
+    }
+
+    #[test]
+    fn a_recovery_request_without_remembered_windows_is_empty() {
+        let request = serde_json::json!({
+            "snapshot": serde_json::from_str::<serde_json::Value>(&snapshot_with_weekly_percent(
+                4.0,
+            ))
+            .expect("parse snapshot"),
+        });
+
+        let recoveries = plan_recoveries_json(&request.to_string()).expect("list recoveries");
+
+        assert_eq!(recoveries, "[]");
+    }
+
+    /// A one-account dashboard whose weekly window sits at `used_percent`.
+    fn snapshot_with_weekly_percent(used_percent: f64) -> String {
+        let mut snapshot: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../fixtures/snapshots/dashboard_today.json"
+        ))
+        .expect("parse golden dashboard snapshot");
+        snapshot["accounts"] = serde_json::json!([{
+            "accountId": "claude-local",
+            "provider": "claude",
+            "status": "ok",
+            "today": snapshot["todayTotal"],
+            "week": snapshot["weekTotal"],
+            "month": snapshot["monthTotal"],
+            "credits": [],
+            "allowances": [
+                {
+                    "id": "claude-weekly",
+                    "source": "plan",
+                    "label": "Weekly plan",
+                    "usedPercent": used_percent,
+                    "used": null,
+                    "limit": null,
+                    "remaining": null,
+                    "windowMinutes": null,
+                    "resetsAt": "2026-08-17T09:00:00Z",
+                    "status": "ok"
+                },
+                {
+                    "id": "claude-session",
+                    "source": "plan",
+                    "label": "5-hour session",
+                    "usedPercent": 100.0,
+                    "used": null,
+                    "limit": null,
+                    "remaining": null,
+                    "windowMinutes": 300,
+                    "resetsAt": "2026-08-17T09:00:00Z",
+                    "status": "warning"
+                }
+            ],
+            "buckets": [],
+            "modelBreakdown": [],
+            "lastSuccessfulSyncAt": null,
+            "lastError": null
+        }]);
+        snapshot.to_string()
+    }
+
+    #[test]
+    fn debug_dashboard_includes_all_providers() {
+        let json = debug_dashboard_snapshot_json(99).expect("debug dashboard");
+        let snapshot: serde_json::Value =
+            serde_json::from_str(&json).expect("parse debug dashboard");
+        let providers: Vec<&str> = snapshot["accounts"]
+            .as_array()
+            .expect("accounts")
+            .iter()
+            .filter_map(|account| account["provider"].as_str())
+            .collect();
+        assert!(providers.contains(&"openai"));
+        assert!(providers.contains(&"codex"));
+        assert!(providers.contains(&"claude"));
+        assert!(providers.contains(&"cursor"));
+        assert!(!providers.contains(&"mock"));
+    }
+
+    #[test]
+    fn c_api_returns_owned_snapshot_envelope() {
+        let value = ward_pulse_dashboard_snapshot_result_json();
         assert!(!value.is_null());
 
         let json = unsafe { CStr::from_ptr(value) }
             .to_str()
-            .expect("dashboard snapshot is UTF-8");
+            .expect("dashboard envelope is UTF-8");
+        let envelope: serde_json::Value =
+            serde_json::from_str(json).expect("parse dashboard envelope JSON");
+        assert_eq!(envelope["status"], "success");
+
         let snapshot: serde_json::Value =
-            serde_json::from_str(json).expect("parse dashboard snapshot JSON");
+            serde_json::from_str(envelope["dashboardJson"].as_str().expect("dashboard JSON"))
+                .expect("parse dashboard snapshot JSON");
         assert_eq!(snapshot["accounts"][0]["accountId"], "mock-local");
 
         unsafe { ward_pulse_string_free(value) };
@@ -467,6 +724,44 @@ mod tests {
         assert_eq!(snapshot["accounts"].as_array().unwrap().len(), 2);
         assert_eq!(snapshot["accounts"][0]["provider"], "mock");
         assert_eq!(snapshot["accounts"][1]["provider"], "codex");
+
+        unsafe { ward_pulse_string_free(value) };
+    }
+
+    #[test]
+    fn result_api_applies_alert_settings() {
+        let snapshot: serde_json::Value = serde_json::from_str(
+            &dashboard_snapshot_json().expect("serialize mock dashboard snapshot"),
+        )
+        .expect("parse mock dashboard snapshot");
+        let request = CString::new(
+            serde_json::json!({
+                "snapshot": snapshot,
+                "settings": {
+                    "connections": {
+                        "mock.plan": { "today": { "at": 20 } }
+                    }
+                }
+            })
+            .to_string(),
+        )
+        .expect("request has no null bytes");
+
+        let value = unsafe { ward_pulse_apply_alert_settings_result_json(request.as_ptr()) };
+        assert!(!value.is_null());
+        let result: serde_json::Value = serde_json::from_str(
+            unsafe { CStr::from_ptr(value) }
+                .to_str()
+                .expect("result is UTF-8"),
+        )
+        .expect("parse result JSON");
+        assert_eq!(result["status"], "success");
+        let applied: serde_json::Value =
+            serde_json::from_str(result["dashboardJson"].as_str().expect("dashboard JSON"))
+                .expect("parse dashboard JSON");
+        let alerts = applied["alerts"].as_array().expect("alerts");
+        assert_eq!(alerts.len(), 1);
+        assert_eq!(alerts[0]["severity"], "warning");
 
         unsafe { ward_pulse_string_free(value) };
     }

@@ -143,7 +143,10 @@ class _CursorPlanSignInScreenState extends State<CursorPlanSignInScreen> {
     if (!mounted) {
       return;
     }
-    _poll = Timer.periodic(widget.pollInterval, (_) => unawaited(_probeCookies()));
+    _poll = Timer.periodic(
+      widget.pollInterval,
+      (_) => unawaited(_probeCookies()),
+    );
   }
 
   @override

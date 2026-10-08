@@ -8,7 +8,10 @@ pub mod poll;
 
 use ward_pulse_core::model::ProviderKind;
 
-pub use mock::mock_provider_snapshot;
+pub use mock::{
+    debug_multi_provider_dashboard, debug_multi_provider_dashboard_json, mock_provider_snapshot,
+    DebugDemoDashboardError,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BucketCapabilities {

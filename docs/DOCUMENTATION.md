@@ -14,9 +14,13 @@ Vocs pages import authoritative Markdown files. Do not copy their content into t
 
 ## Toolchain
 
-The documentation workspace uses Node.js 24.18.0, npm 11.16.0, Vocs 2.6.0, Waku
-1.0.0-beta.7, and Vite 8.1.5. `.nvmrc` pins Node.js, `packageManager` pins npm, and exact
+The documentation workspace uses Node.js 24.18.0, npm 11.16.0, Vocs 2.8.0, Waku
+1.0.0-beta.8, and Vite 8.2.0. `.nvmrc` pins Node.js, `packageManager` pins npm, and exact
 dependency versions are recorded in `package-lock.json`.
+
+`build.mjs` resolves two Vocs internal module paths to drop the unused OpenAPI UI. They are
+not public API, so re-run `just check-docs` after any Vocs upgrade: if the paths move, the
+chunk-budget guard fails the build rather than shipping the larger bundle silently.
 
 With nvm, select the repository runtime from the project root:
 

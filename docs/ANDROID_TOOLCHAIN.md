@@ -40,12 +40,14 @@ build and test gates is ready:
   unchanged after the phone app is force-stopped and the Wear app is restarted.
 - The official WFF validator accepts the declarative watch face, and the package builds as
   APK/AAB without dex files.
-- The watch face installs and renders on the round Wear AVD; tap-to-open and ambient mode
-  pass emulator acceptance.
+- The watch face installs and renders on the round and square Wear AVDs; tap-to-open and
+  ambient mode pass emulator acceptance (ambient is entered with `KEYCODE_SLEEP` — see Wear
+  emulator navigation).
 
 The Phase 2 phone-dashboard, Phase 3 Rust-bridge, and Phase 4 Wear-app acceptance gates
 passed on **2026-07-18**. Phase 5 paired-device and Phase 6 WFF acceptance passed on
-**2026-07-19**.
+**2026-07-19**. The face was checked on the square AVD, and ambient on both shapes, on
+**2026-08-12**.
 
 Chrome and Linux desktop warnings from `flutter doctor` are out of scope. WardPulse targets
 Android phone, Wear OS, and Watch Face Format in the current product plan.
@@ -67,8 +69,7 @@ Android phone, Wear OS, and Watch Face Format in the current product plan.
 | Android SDK Build Tools | `build-tools;36.0.0` | Android build baseline |
 | Android SDK Platform Tools | 37.0.0 | `adb` |
 | Android Emulator | 36.6.11.0, build 15507667 | Phone emulator |
-| Android phone system image | `system-images;android-36;google_apis;x86_64`, revision 7 | Phone AVD |
-| Android phone Play Store image | `system-images;android-36;google_apis_playstore;x86_64`, revision 7 | Paired phone AVD |
+| Android phone system image | `system-images;android-36;google_apis_playstore;x86_64`, revision 7 | Phone AVD (Play Store) |
 | Android Wear system image | `system-images;android-36.1;android-wear-signed;x86_64`, revision 1 | Wear OS 6.1 AVDs |
 | Gradle Wrapper | 9.1.0 | Flutter Android build |
 | Android Gradle Plugin | 9.0.1 | Flutter Android runner |
@@ -108,11 +109,9 @@ Flutter SDK:       $HOME/develop/flutter
 Android SDK:       $HOME/Android/Sdk
 Android Studio:    $HOME/.local/opt/android-studio
 Java home:         /usr/lib/jvm/java-21-openjdk-amd64
-Phone AVD:         wardpulse_phone_api36
+Phone AVD:         wardpulse_phone_play_api36
 Phone platform:    android-36
-Phone system image system-images;android-36;google_apis;x86_64
-Paired phone AVD:  wardpulse_phone_play_api36
-Paired phone image system-images;android-36;google_apis_playstore;x86_64
+Phone system image system-images;android-36;google_apis_playstore;x86_64
 Wear compile SDK:  platforms;android-37.1
 Wear system image: system-images;android-36.1;android-wear-signed;x86_64
 Wear round AVD:    wardpulse_wear_round_api36_1
@@ -259,38 +258,8 @@ rustup target list --installed
 
 ## Phone AVD
 
-Create the canonical phone AVD:
-
-```sh
-avdmanager create avd \
-  --name wardpulse_phone_api36 \
-  --package "system-images;android-36;google_apis;x86_64" \
-  --force
-```
-
-Accept the default `no` answer when asked whether to create a custom hardware profile.
-
-List and start it with:
-
-```sh
-emulator -list-avds
-emulator -accel-check
-emulator @wardpulse_phone_api36
-```
-
-Verify the running device from another shell:
-
-```sh
-adb devices -l
-flutter devices
-```
-
-The expected Flutter device is an Android x64 emulator running Android 16 / API 36.
-
-### Phase 5 paired phone AVD
-
-Wear Data Layer emulator pairing requires a phone image with the Play Store. Install the
-image and create a separate AVD without replacing the canonical CLI phone AVD:
+Use **one** phone AVD with the Play Store image. It covers Flutter CLI work and Wear Data
+Layer pairing (a second non-Play phone AVD only caused local confusion).
 
 ```sh
 android --sdk="$ANDROID_HOME" sdk install \
@@ -302,17 +271,42 @@ printf 'no\n' | avdmanager create avd \
   --device pixel_7 \
   --force
 
-# avdmanager may leave this disabled even for a Play Store image.
-sed -i 's/^PlayStore.enabled=no$/PlayStore.enabled=yes/' \
+# avdmanager may leave Play Store disabled. Set /data before the first boot.
+sed -i \
+  -e 's/^PlayStore.enabled=no$/PlayStore.enabled=yes/' \
+  -e 's/^disk.dataPartition.size=.*$/disk.dataPartition.size=24G/' \
   "$HOME/.android/avd/wardpulse_phone_play_api36.avd/config.ini"
 ```
 
-Start `wardpulse_phone_play_api36` and one canonical Wear AVD, then pair them with Android
-Studio's Wear OS emulator pairing assistant. Installing the Google Pixel Watch companion
-from Play Store requires a Google account on the phone AVD; use a dedicated test account.
-The companion's optional `Associate` action is not part of this acceptance flow and is not
-required for Data Layer. Both WardPulse APKs must use application ID `app.wardpulse` and the
-same signing certificate; the Wear Kotlin namespace remains `app.wardpulse.wear`.
+Set the size before starting the emulator: `/data` is materialized on first boot, and
+`qemu-img resize` refuses to resize an AVD image that has snapshots. Treat the size as
+immutable after that first boot; do not delete and recreate a configured canonical AVD merely
+to change it. The storage-constrained single-ABI build guidance near `install-phone` can reduce
+APK size, but does not replace sizing the AVD up front.
+
+List and start it with:
+
+```sh
+emulator -list-avds
+emulator -accel-check
+emulator @wardpulse_phone_play_api36
+```
+
+Verify the running device from another shell:
+
+```sh
+adb devices -l
+flutter devices
+```
+
+The expected Flutter device is an Android x64 emulator running Android 16 / API 36 with Play
+Store. Start it together with one Wear AVD, then follow **Pairing the canonical phone and Wear
+AVDs** below. The flow starts in Android Studio and completes companion consent through ADB.
+Installing the Google Pixel Watch companion from Play Store requires a Google account on the
+phone AVD; use a dedicated test account. The companion's optional `Associate` action is not
+part of this acceptance flow and is not required for Data Layer. Both WardPulse APKs must use
+application ID `app.wardpulse` and the same signing certificate; the Wear Kotlin namespace
+remains `app.wardpulse.wear`.
 
 ## Wear OS AVDs
 
@@ -364,16 +358,239 @@ adb -s "$WEAR_SERIAL" shell am start \
   -n app.wardpulse/app.wardpulse.wear.MainActivity
 ```
 
+After `am start`, `keyevent 4` returns to the face — but send it once: from the face itself
+both `4` and `3` open the launcher, and `4` from the launcher lands back on the face. When the
+keys leave you stranded in the launcher, `am force-stop com.google.android.wearable.sysui`
+restarts the system UI on the watch face.
+
+To put a chosen summary on the face, write the app's prefs and then **start the app once**:
+
+```sh
+adb -s "$WEAR_SERIAL" push summary.xml /data/local/tmp/watch_summary.xml
+adb -s "$WEAR_SERIAL" shell run-as app.wardpulse \
+  cp /data/local/tmp/watch_summary.xml /data/data/app.wardpulse/shared_prefs/watch_summary.xml
+adb -s "$WEAR_SERIAL" shell am start -n app.wardpulse/app.wardpulse.wear.MainActivity
+```
+
+The start is not optional: complications refresh only when something calls
+`WatchComplicationUpdater.requestUpdate` (`MainActivity`, or the Data Layer listener). A prefs
+file written behind the app's back leaves every slot showing its previous value, and the face
+then measures exactly as it did before the change — which reads like a broken change rather
+than a stale one.
+
+Two more ways this misleads. After `pm clear` the app has no `shared_prefs/` directory at all,
+so the `cp` above fails and the face falls back to `NoData` — arcs and strips vanish together,
+which looks like a rendering bug rather than an empty payload; start the app once first so the
+directory exists. And reinstalling the **face** package resets its slots the same way, so seed
+after the install, not before.
+
+Ambient is `KEYCODE_SLEEP`, not the power button — `keyevent 26` leaves this image
+interactive:
+
+```sh
+adb -s "$WEAR_SERIAL" shell input keyevent 223   # Dozing / DOZE_SUSPEND
+adb -s "$WEAR_SERIAL" shell input keyevent 224   # back to interactive
+```
+
+`screencap` in doze captures the frame after the system's own dimming, which is neither a
+scale nor a gamma of the interactive one. Use it to check that ambient renders what it should;
+never read alpha levels off it.
+
+Tap coordinates measured off a screenshot are a guess: the image is scaled, and a system dialog
+sits above whatever it covers, so a near miss lands on the screen underneath and quietly changes
+something else. Read the bounds instead, then tap their centre:
+
+```sh
+adb -s "$PHONE_SERIAL" shell uiautomator dump /sdcard/ui.xml
+adb -s "$PHONE_SERIAL" shell cat /sdcard/ui.xml | tr '<' '\n' | grep -i "don.t allow"
+# bounds="[133,1400][947,1547]" → tap 540 1473
+```
+
 The app compiles against Android SDK 37.1 but targets API 36 and runs on the Wear OS 6.1 /
 API 36.1 image. Compile SDK and runtime system image versions are intentionally independent.
 
+### Isolated Android Studio display
+
+For work that exists only in Android Studio's desktop UI, run Studio on a separate nested
+display. This leaves the owner's session, focus, pointer, and window layout untouched, but it
+is not complete isolation — see the shared configuration note at the end of this section. The
+following stack was verified on **2026-10-06**:
+
+```sh
+WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000 \
+  Xwayland :7 -geometry 1280x800 -noreset &
+
+DISPLAY=:7 WAYLAND_DISPLAY= XDG_RUNTIME_DIR=/run/user/1000 \
+  KWIN_COMPOSE=N kwin_x11 --replace &
+
+DISPLAY=:7 WAYLAND_DISPLAY= XDG_RUNTIME_DIR=/run/user/1000 \
+  ~/.local/opt/android-studio/bin/studio &
+```
+
+Capture the complete nested desktop and send keyboard input with:
+
+```sh
+DISPLAY=:7 import -window root shot.png
+DISPLAY=:7 xte 'key Tab' 'key Down' 'str Device Manager' 'key Return'
+```
+
+`KWIN_COMPOSE=N` is required. With composition enabled, `import -window root` captures an
+empty frame; without it, windows draw directly into the root window and the capture contains
+the whole desktop.
+
+Pointer automation is unavailable in this rootful Xwayland stack. XTEST `mousemove` and
+`mouseclick` events do not reach clients: hovering produces no pixel change, and clicking
+opens no window. Keyboard XTEST works fully, so operate Studio entirely from the keyboard.
+
+Keep the display at 1280×800. It fits the 560×448 pairing assistant, the 320×534 Device
+Manager panel, and the 800×800 welcome window, while keeping screenshots readable at native
+scale. A larger display only consumes more memory and forces captures to be scaled for review.
+Set the geometry when Xwayland starts. Although
+`xrandr --output XWAYLAND0 --mode 1280x800` changes the advertised size, root captures are
+empty afterward; restart the display stack to change its geometry.
+
+Emulators do not need this display. Continue to inspect and control them through ADB with an
+explicit serial, using `exec-out screencap -p`, `input tap`, and `input keyevent`. When Studio
+work is complete, stop the stack in reverse order: Studio, `kwin_x11`, then `Xwayland :7`.
+
+`kwin_x11 --replace` shares configuration with the owner's account. It reads and writes the
+same `~/.config/kwinrc` as the running session, and global key bindings belong to the
+account-wide `kglobalaccel` service rather than to a display. On 2026-10-06
+`~/.config/kglobalshortcutsrc` was rewritten while the nested compositor started; its bindings
+were unchanged and each one was still registered to exactly one component. The nested display
+therefore does not contain compositor configuration the way it contains focus and pointer
+input. Confirm the owner's global shortcuts still fire after a session on it, and re-register
+them with `systemctl --user restart plasma-kglobalaccel` rather than restarting the session.
+
+### Pairing the canonical phone and Wear AVDs
+
+The canonical pair was established on **2026-10-06**. These are Wear network node IDs, not
+ADB device serials; continue to address every ADB command with the discovered serial variables.
+
+| Device | AVD | Wear node ID |
+| --- | --- | --- |
+| Watch | `wardpulse_wear_round_api36_1` | `502cc269` |
+| Phone | `wardpulse_phone_play_api36` | `f71537bc` |
+
+Pair the two AVDs once. Emulator pairing does not require BLE:
+
+1. In Android Studio, open Device Manager, open the watch row's overflow menu, choose **Pair
+   Wearable**, select the phone, and continue. With keyboard-only control, press `Tab`, then
+   `Down` until the watch row is selected. Press `Tab` twice, moving past the stop button to
+   the overflow button, then `Space`; **Pair Wearable** is already selected, so press `Return`.
+   Press `Return` again to confirm the selected phone.
+2. The assistant creates the ADB bridge and starts the companion activity on the phone:
+
+   ```sh
+   am start -n <companionAppId>/.EmulatorActivity \
+     --es emulator-name "<wear AVD>" --es emulator-id "<wear node ID>"
+   ```
+
+   This command is implemented by `NonInteractivePairing` in Android Studio's
+   `plugins/android/lib/android.jar`. The assistant follows
+   `[EMULATOR_PAIRING:<state>]` markers in the phone's logcat.
+3. In this verified flow, the assistant reaches `CONSENT` and reports **Failed to enable
+   emulator pairing** even though the companion activity is open and waiting on the phone.
+   This is a timeout, not a failed pair. Complete each consent screen through ADB:
+
+   ```sh
+   adb -s "$PHONE_SERIAL" exec-out screencap -p > /tmp/ph.png
+   adb -s "$PHONE_SERIAL" shell input tap 782 2240   # More, then I agree
+   ```
+
+   Repeat the tap after capturing the next screen. The coordinate is for a 1080×2400 display.
+   Prefer the `uiautomator dump` bounds workflow described above over a fixed coordinate.
+4. After about 30 seconds, the companion reports **Connected**. Verify both services:
+
+   ```sh
+   adb -s "$WEAR_SERIAL" shell dumpsys activity service WearableService \
+     | grep -m1 'Name=network'
+   adb -s "$PHONE_SERIAL" shell dumpsys activity service WearableService \
+     | grep 'Peer:'
+   ```
+
+   The watch must report `IsConnected=true, PeerNodeId=f71537bc`. The phone must report
+   `Role=2, Address=EmulatorAddr-502cc269` and `IsConnected=true`.
+5. ADB-driven consent skips the companion's notification-access prompt, so a pair that reports
+   **Connected** still bridges no notifications. Grant the listener explicitly, before saving
+   the snapshots:
+
+   ```sh
+   adb -s "$PHONE_SERIAL" shell cmd notification allow_listener \
+     com.google.android.apps.wear.companion/com.google.android.libraries.wear.companion.notification.service.CompanionNotificationListenerService
+   ```
+
+   Measured on 2026-10-08. Without the grant a notification posted on the phone never reaches
+   the watch. With it the phone logs `WearNotifPipeline: [Sender] Putting notification data
+   item /bridger/stream_item:…` and the watch logs `WearServices: [WBridgedItemsController]
+   Displaying bridged notification … creatorNodeId=<phone node ID>`.
+
+   A bridged notification does not pass through the watch's own `NotificationManager`, so
+   `dumpsys notification` on the watch never lists it and its `NotificationRecord` count does
+   not move. Read the watch logcat or the watch screen instead.
+6. Save both paired states immediately. Snapshot saving requires `Vulkan = off` in
+   `~/.android/advancedFeatures.ini`; otherwise the emulator returns `UNSUPPORTED_VK_APP`.
+
+   ```sh
+   adb -s "$PHONE_SERIAL" emu avd snapshot save paired
+   adb -s "$WEAR_SERIAL" emu avd snapshot save paired
+   ```
+
+For an end-to-end check, start `app.wardpulse` on the phone. The watch logcat must contain
+`I/WardPulseSync: Watch summary received.`; all watch-face complications then refresh, and
+their values must match the phone panel.
+
+### Restarting a paired emulator set
+
+The pairing record lives on `/data` and survives an emulator restart, including a cold boot
+with `-no-snapshot-load`. After boot, both devices still report their pairing configuration,
+including `Role=2, Address=EmulatorAddr-502cc269` on the phone, but initially report
+`IsConnected=false` because the assistant's transient port forwarding ended with the previous
+emulator processes.
+
+Restore that bridge without Android Studio:
+
+```sh
+adb -s "$PHONE_SERIAL" forward tcp:5601 tcp:5601
+adb -s "$WEAR_SERIAL" reverse tcp:5601 tcp:5601
+adb -s "$WEAR_SERIAL" shell am broadcast -a com.google.android.gms.wearable.EMULATOR \
+  --es operation refresh-emulator-connection
+```
+
+Google Play services reports `Emulator connection refresh succeeded.` Within a few seconds,
+the watch must return to `IsConnected=true, PeerNodeId=f71537bc`; starting `app.wardpulse` on
+the phone must again produce the WardPulse receipt log on the watch. When a known pair reports
+`IsConnected=false`, restore this bridge first. Do not run the pairing flow again.
+
+Do not rely on restoring the phone's `paired` snapshot. On the canonical phone AVD,
+`emulator @wardpulse_phone_play_api36 -snapshot paired` loaded the snapshot and then failed
+twice with `ERROR | Failed to find EmulatedEglImage`; its `config.ini` has `hw.gpu.enabled=no`
+with `hw.gpu.mode=auto`. Start that AVD reliably with
+`emulator @wardpulse_phone_play_api36 -no-snapshot-load` instead. The pairing record remains on
+`/data`, and the canonical Wear AVD's paired snapshot restores normally.
+
+### Preserving emulator state
+
+Treat the configured AVDs as persistent development devices:
+
+- Save a snapshot before any risky operation, with Vulkan disabled as described above.
+- Do not delete or recreate an AVD to troubleshoot it. That discards Google sign-in, browser
+  sessions, system settings, keyboard layout, and any existing phone-watch pairing.
+- Never run `pm clear com.google.android.gms` on the watch; it destroys the pairing record.
+- To restart the WardPulse app process without canceling scheduled WorkManager work, use
+  `am kill app.wardpulse`, not `am force-stop app.wardpulse`. This rule is scoped to the app;
+  the targeted `am force-stop com.google.android.wearable.sysui` recovery above remains valid.
+- Size `/data` before first boot. Its size is fixed once materialized, and snapshots prevent
+  `qemu-img resize` from changing the image afterward.
+
 ## Watch Face Format
 
-The Phase 6 watch face is a separate resource-only package in `apps/watchface_wff/`:
+The watch face is a separate resource-only package in `apps/watchface_wff/` (Phase 13
+concentric baseline — `docs/product/WATCH_RING_DESIGN.md`):
 
 | Setting | Value | Purpose |
 | --- | --- | --- |
-| Watch Face Format | version 2 | Concentric rings via WeightedStroke + RANGED_VALUE colors (Wear OS 5+) |
+| Watch Face Format | version 2 | Concentric remaining arcs + strip accents via WeightedStroke / RANGED_VALUE ColorRamp (Wear OS 5+). A scene takes at most **8** `ComplicationSlot` elements — the same in v2/v4/v5, so a raise cannot buy more |
 | Application ID | `app.wardpulse.watchface` | Independent watch face package |
 | Minimum SDK | API 34 | Minimum runtime for WFF v2 |
 | Compile SDK | Android SDK 37.1 | Shared Android build baseline |
@@ -434,15 +651,37 @@ Run the phone Android acceptance checks:
 
 ```sh
 just build-android-rust
-cd apps/phone_flutter
-flutter build apk --debug
-flutter run
+(cd apps/phone_flutter && flutter build apk --debug)
+ANDROID_SERIAL="$PHONE_SERIAL" just install-phone
 ```
 
-For Codex acceptance, open **Settings > Codex account**, start sign-in, open the external OpenAI
-page, and enter the one-time code. Plan usage, purchased usage, and platform spend are on by
-default; any can be hidden in Settings if at least one surface remains. The OAuth session stays
-in phone-secure storage and does not require a Codex CLI, local server, or `adb reverse`.
+The default debug build includes every configured ABI. On a storage-constrained target, build
+only the matching architecture before running the same installation recipe:
+
+```sh
+# x86_64 emulator
+(cd apps/phone_flutter && flutter build apk --debug --target-platform android-x64)
+
+# arm64 device
+(cd apps/phone_flutter && flutter build apk --debug --target-platform android-arm64)
+```
+
+`install-phone` deliberately leaves compilation and ABI selection to the preceding build. It
+requires an explicit phone serial because the phone and Wear shells share `app.wardpulse`, then
+compares the package's `lastUpdateTime` before and after `adb install -r`. Comparing those two
+values supports a first installation and does not depend on the device clock, which can lag after
+an emulator snapshot is restored.
+
+Do not treat a shortened `adb` transcript as installation evidence. A command such as
+`adb install ... | tail -1` returns `tail`'s status rather than `adb`'s and can hide the failure
+line. Even visible output does not prove that the package changed, so the recipe also fails when
+the post-install timestamp is missing or unchanged.
+
+For Codex acceptance, open the phone **Providers** tab → Codex / plan row, start sign-in, open
+the external OpenAI page, and enter the one-time code. Plan usage, purchased usage, and
+platform spend are on by default; any can be hidden via Settings consumption-display toggles
+if at least one surface remains. The OAuth session stays in phone-secure storage and does not
+require a Codex CLI, local server, or `adb reverse`.
 
 Run the Wear OS acceptance checks with one canonical Wear AVD active:
 
@@ -466,9 +705,11 @@ just prepare-phone-watch-sync
 just test-phone-watch-sync
 ```
 
-The preparation command is one-time; pairing still completes in Android Studio. The test
-command discovers one online phone and one online Wear device without hardcoded emulator
-ports. Set `PHONE_SERIAL` and `WEAR_SERIAL` explicitly when additional devices are online.
+The preparation command is one-time. Follow **Pairing the canonical phone and Wear AVDs** for
+the Studio assistant and ADB consent steps. After a restart, restore the transient bridge
+instead of pairing again. The test command discovers one online phone and one online Wear
+device without hardcoded emulator ports. Set `PHONE_SERIAL` and `WEAR_SERIAL` explicitly when
+additional devices are online.
 
 Do not hardcode `emulator-5554` in project automation; resolve the active device through
 `flutter devices` or `adb devices` because the emulator port can change.

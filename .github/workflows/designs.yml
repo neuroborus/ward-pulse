@@ -1,0 +1,36 @@
+name: Review Art
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "tools/render-watch-ring-designs.mjs"
+      - "tools/render-wear-glance-designs.mjs"
+      - "tools/render-phone-widget-designs.mjs"
+      - "tools/render-brand-icons.mjs"
+      - "tools/design-output.mjs"
+      - "apps/*/design/**"
+      - "brand/icons/**"
+      - ".github/workflows/designs.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  designs:
+    name: Check against generators
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - name: Install Noto and Pillow
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fonts-noto-core python3-pil
+      - run: node tools/render-watch-ring-designs.mjs --check
+      - run: node tools/render-wear-glance-designs.mjs --check
+      - run: node tools/render-phone-widget-designs.mjs --check
+      - run: node tools/render-brand-icons.mjs --check

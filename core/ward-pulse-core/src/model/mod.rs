@@ -26,6 +26,47 @@ pub enum ProviderStatus {
     Unknown,
 }
 
+impl ProviderStatus {
+    /// Most severe status, or `Unknown` when there is nothing to judge.
+    pub fn worst(statuses: impl IntoIterator<Item = Self>) -> Self {
+        statuses
+            .into_iter()
+            .max_by_key(|status| status.severity())
+            .unwrap_or(Self::Unknown)
+    }
+
+    /// Aggregation rank. Ranks are distinct, so [`Self::worst`] never depends on
+    /// input order. `Unknown` outranks `Ok`: a surface that reported nothing
+    /// must not read as healthy.
+    fn severity(self) -> u8 {
+        match self {
+            Self::Ok => 1,
+            Self::Unknown => 2,
+            Self::Stale => 3,
+            Self::Warning => 4,
+            Self::RateLimited => 5,
+            Self::AuthRequired => 6,
+            Self::Error => 7,
+        }
+    }
+}
+
+/// Phone `ProviderConnectionId.storageKey` values.
+///
+/// One provider kind can back two connections — a subscription plan and an
+/// organization API — so [`ProviderKind`] alone cannot say which one produced a
+/// snapshot. The adapter that owns a connection stamps its key into
+/// [`ProviderSnapshot::connection`], and user alert rules are keyed by it.
+pub mod connection {
+    pub const CODEX_PLAN: &str = "openai.plan";
+    pub const OPENAI_PLATFORM: &str = "openai.platform";
+    pub const CLAUDE_PLAN: &str = "anthropic.plan";
+    pub const ANTHROPIC_PLATFORM: &str = "anthropic.platform";
+    pub const CURSOR_PLAN: &str = "cursor.plan";
+    pub const CURSOR_PLATFORM: &str = "cursor.platform";
+    pub const MOCK_PLAN: &str = "mock.plan";
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum BudgetPeriod {
@@ -208,6 +249,10 @@ pub struct ProviderErrorSummary {
 pub struct ProviderSnapshot {
     pub account_id: AccountId,
     pub provider: ProviderKind,
+    /// Owning connection, as a [`connection`] key. `None` on snapshots built
+    /// before adapters stamped it; alerts then fall back to the provider's plan.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connection: Option<String>,
     pub status: ProviderStatus,
     pub today: BudgetState,
     pub week: BudgetState,
@@ -259,7 +304,39 @@ pub struct DashboardSnapshot {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::*;
+
+    #[test]
+    fn worst_status_keeps_an_unreported_surface_above_a_healthy_one() {
+        let statuses = [ProviderStatus::Unknown, ProviderStatus::Ok];
+
+        assert_eq!(ProviderStatus::worst(statuses), ProviderStatus::Unknown);
+    }
+
+    /// Distinct ranks are what keep [`ProviderStatus::worst`] order-independent:
+    /// `max_by_key` would otherwise return whichever tied value came last.
+    #[test]
+    fn every_status_has_a_distinct_severity() {
+        let statuses = [
+            ProviderStatus::Ok,
+            ProviderStatus::Warning,
+            ProviderStatus::Error,
+            ProviderStatus::RateLimited,
+            ProviderStatus::AuthRequired,
+            ProviderStatus::Stale,
+            ProviderStatus::Unknown,
+        ];
+
+        let severities: BTreeSet<u8> = statuses.iter().map(|status| status.severity()).collect();
+        assert_eq!(severities.len(), statuses.len());
+    }
+
+    #[test]
+    fn worst_status_of_nothing_is_unknown() {
+        assert_eq!(ProviderStatus::worst([]), ProviderStatus::Unknown);
+    }
 
     #[test]
     fn serializes_provider_kinds_as_stable_contract_values() {

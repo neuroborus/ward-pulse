@@ -34,13 +34,14 @@ installing anything, or install a desktop build from the
 - Shared WardPulse identity sources belong in `brand/icons/`.
 - Watch-face placement previews live under `brand/watchface/` (not a second SVG source).
 - App-specific sources belong in a `design/` directory under the owning app
-  (phone widget review art: `apps/phone_flutter/design/` when Phase 14 locks
+  (phone widget review art: `apps/phone_flutter/design/` — locked with
   `docs/product/PHONE_WIDGET_DESIGN.md`).
 - Exported runtime assets belong in the consuming platform's normal asset or resource directory.
 - Keep only locked previews under `brand/watchface/` — no scratch placement boards.
 
-Runtime targets are `apps/phone_flutter/android/app/src/main/res/`,
-`apps/wear_android/app/src/main/res/`, and `apps/watchface_wff/src/main/res/`.
+Runtime targets are `apps/phone_flutter/assets/`,
+`apps/phone_flutter/android/app/src/main/res/`, `apps/wear_android/app/src/main/res/`, and
+`apps/watchface_wff/src/main/res/`.
 
 Do not create a repository-wide design system or duplicate a source file between owners. Files
 under `brand/` remain outside the Apache-2.0 source license unless explicitly stated otherwise.
@@ -73,19 +74,23 @@ from phone chrome. Legacy brand green (`#1F7A5A` sheen) stays out of new identit
 Used on Wear / WFF rings and on phone charts / plan bars / provider section accents
 (see [product/WATCH_RING_DESIGN.md](product/WATCH_RING_DESIGN.md)):
 
-- OpenAI / Codex: `#65D78A`.
+- OpenAI / Codex: `#65D78A`; Codex · Spark: `#186020` (Spark revision 2026-09-01 — the plan's
+  Spark limit is metered on its own, so it carries its own colour).
 - Anthropic / Claude: `#E8915A`.
-- Cursor: `#67E8D4`.
-- Local / platform budget: `#8AB4F8`.
+- Cursor · other models: `#67E8D4`; Cursor · own models: `#7E93B8` (split-band revision
+  2026-08-13 — the two pools of one plan carry their own colours).
+- Unresolved family: `#8A968F` — fallback only. A budget metric is drawn in the family color of
+  the connection it belongs to, so the grey should not appear on a shipped surface.
 
-Review exports: `tools/render-watch-ring-designs.mjs` → `round-*-plan-credits.svg` (center/first
-strip secondary value = remaining purchased credits, never LLM `TOK`). Primary preview:
+Review exports: `tools/render-watch-ring-designs.mjs` → `round-*.svg`
+(matching-provider strip may append remaining purchased credits, never LLM `TOK`;
+remaining arcs melt clockwise from 12). Primary preview:
 `apps/wear_android/design/preview-3-plan-credits.png`.
 
 Wear **app** Glance legend (**baseline locked 2026-07-26**, not the face):
 `tools/render-wear-glance-designs.mjs` → `glance-legend-*.svg` /
 `preview-glance-legend-*.png`. Primary preview:
-`apps/wear_android/design/preview-glance-legend-3.png`. Variants: `3`, `1`, `budget`,
+`apps/wear_android/design/preview-glance-legend-3.png`. Variants: `3`, `1`, `pair`, `budget`,
 `stale`, `cadence`, `rate-limit`, `empty`, `exhausted`.
 See [`product/WEAR_GLANCE_DESIGN.md`](product/WEAR_GLANCE_DESIGN.md).
 
@@ -100,7 +105,9 @@ ring language. The pulse communicates activity and throughput. The small eye sig
 local monitoring — keep it in the upper-right of the mark and preserve its scale relative to the
 pulse.
 
-Use the **color metal+ring** mark for phone and Wear launchers.
+Use the **color metal+ring** mark for the phone app bar and phone / Wear launchers. Its opaque
+metal disc keeps the compact app-bar mark distinct in both themes; reserve the ringless mono
+wordmark for quiet watermark treatments.
 
 ### Watch-face watermark (locked)
 
@@ -113,6 +120,8 @@ Quiet branding on WFF — not a second hero. Locked with the concentric face bas
   (`tools/fade-watermark-png.py` during `just export-icons`), so the pulse softens into
   the metrics instead of competing with them.
 - Eye placement matches the color mark; pupil stays inside the almond rim.
+- **Phone home widget** reuses the same faded mono PNG (`wardpulse_mono`), tinted for
+  day/night olive chrome, quiet overlay top-end (does not reserve a header band).
 
 Canonical preview: `brand/watchface/preview-face-active-quiet.png`.
 
@@ -124,16 +133,29 @@ Canonical preview: `brand/watchface/preview-face-active-quiet.png`.
 | Mono watermark (canonical SVG) | `brand/icons/wardpulse-mono.svg` |
 | PNG previews (incl. faded mono) | `brand/icons/previews/` |
 | Face placement preview | `brand/watchface/preview-face-active-quiet.png` |
+| Flutter app-bar mark (1× / 2× / 3× PNG) | `apps/phone_flutter/assets/brand/` |
 | Phone / Wear launcher mipmaps | `mipmap-*/ic_launcher.png` |
 | Phone adaptive foreground | `drawable-*/ic_launcher_foreground.png` |
 | WFF runtime mono (faded PNG) | `apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png` |
+| Phone widget mono (same faded PNG) | `apps/phone_flutter/android/app/src/main/res/drawable/wardpulse_mono.png` |
+| WFF ring type, one per ring and period | `apps/watchface_wff/src/main/res/drawable-nodpi/ring{1,2,3}_type_{day,week,month}.png` |
 
 Prefer regenerating exports with `just export-icons` rather than editing PNGs by hand. The mono
 drawable must go through `tools/fade-watermark-png.py` (wired in `tools/export-icons.sh`).
 Commit runtime exports when an application build consumes them.
 
+The Flutter app-bar copies are bundled WardPulse branding. Moving them into the APK does not
+place them under Apache-2.0 or grant downstream use of the WardPulse mark.
+
+The last row is the exception: the ring type is not a brand export but the face's own type,
+baked by `tools/render-watchface.mjs` (`just render-watchface`) alongside the XML that names it.
+Regenerate it there.
+
 ImageMagick is required; Inkscape is preferred for mono SVG→PNG when available.
 `tools/fade-watermark-png.py` needs Pillow (`pip`/`apt` package `python3-pil`).
+`tools/render-watch-ring-designs.mjs` and `tools/render-wear-glance-designs.mjs` need it too,
+plus the Noto Sans Bold file they measure labels against: they stop on a missing font rather
+than guess a width, so committed art never depends on the machine that rendered it.
 
 ## Setup
 

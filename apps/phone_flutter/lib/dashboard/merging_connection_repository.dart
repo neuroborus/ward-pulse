@@ -57,9 +57,7 @@ final class MergingConnectionRepository extends DashboardRepository {
     } catch (error) {
       return _recover(
         fallback,
-        _mapError(
-          StateError('Normalize failed: ${loadFailureDetails(error)}'),
-        ),
+        _mapError(StateError('Normalize failed: ${loadFailureDetails(error)}')),
       );
     }
 

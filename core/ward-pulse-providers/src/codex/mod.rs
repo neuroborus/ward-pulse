@@ -5,11 +5,12 @@ use std::fmt;
 use serde::Deserialize;
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
-    AllowanceSource, AllowanceState, BudgetPeriod, ProviderKind, ProviderSnapshot, ProviderStatus,
-    Quantity, QuantityUnit, UsageBucket,
+    connection, AllowanceSource, AllowanceState, BudgetPeriod, ProviderKind, ProviderSnapshot,
+    ProviderStatus, Quantity, QuantityUnit, UsageBucket,
 };
 use ward_pulse_core::time::DateTimeUtc;
 
+use crate::allowance::worst_status;
 use crate::{BucketCapabilities, ProviderCapabilities};
 
 pub const PROVIDER_NAME: &str = "Codex";
@@ -110,11 +111,7 @@ pub fn codex_provider_snapshot_from_report_json(
         }
     }
 
-    let status = allowances
-        .iter()
-        .map(|allowance| allowance.status)
-        .max_by_key(status_rank)
-        .unwrap_or(ProviderStatus::Unknown);
+    let status = worst_status(&allowances);
     let buckets = report
         .usage
         .daily_usage_buckets
@@ -126,6 +123,7 @@ pub fn codex_provider_snapshot_from_report_json(
     let provider_snapshot = ProviderSnapshot {
         account_id: "codex-local".to_string(),
         provider: ProviderKind::Codex,
+        connection: Some(connection::CODEX_PLAN.to_string()),
         status,
         today: unknown_budget(BudgetPeriod::Today),
         week: unknown_budget(BudgetPeriod::Week),
@@ -177,6 +175,11 @@ fn trim_trailing_fraction_zeros(value: &str) -> String {
     }
 }
 
+/// A named limit names its windows after itself, so a limit reporting both would label them
+/// identically; the shorter window token tells them apart. Only a named limit takes the token —
+/// an unnamed one falls back to [`window_label`], which names the window already. The token joins
+/// with a space, never ` · `: that separator means family-then-pool to every consumer of a label,
+/// and one inside a pool name would cost the Glance its family and the ring picker its pool.
 fn plan_allowance(
     rate_limit: &RawRateLimit,
     window_id: &str,
@@ -190,10 +193,10 @@ fn plan_allowance(
         ProviderStatus::Ok
     };
     let duration = window.window_duration_mins;
-    let label = rate_limit
-        .limit_name
-        .clone()
-        .unwrap_or_else(|| window_label(duration));
+    let label = match rate_limit.limit_name.as_deref() {
+        Some(name) => named_limit_label(name, rate_limit, duration),
+        None => window_label(duration),
+    };
 
     Ok(AllowanceState {
         id: format!(
@@ -211,6 +214,28 @@ fn plan_allowance(
         resets_at: window.resets_at.map(unix_seconds_to_utc).transpose()?,
         status,
     })
+}
+
+fn named_limit_label(name: &str, rate_limit: &RawRateLimit, duration: Option<u64>) -> String {
+    let both_windows = rate_limit.primary.is_some() && rate_limit.secondary.is_some();
+    match duration.filter(|_| both_windows).map(window_token) {
+        // A name that already says which window it is does not say it twice.
+        Some(token) if !name.contains(&token) => format!("{name} {token}"),
+        _ => name.to_string(),
+    }
+}
+
+/// The short form a watch row can carry beside a family name. `5h` and `Weekly` are the ones
+/// `WEAR_GLANCE_DESIGN.md` names; the rest shorten the same way, because a token has to exist for
+/// every duration or two windows stay indistinguishable.
+fn window_token(duration: u64) -> String {
+    match duration {
+        1_440 => "Daily".to_string(),
+        10_080 => "Weekly".to_string(),
+        minutes if minutes % 1_440 == 0 => format!("{}d", minutes / 1_440),
+        minutes if minutes % 60 == 0 => format!("{}h", minutes / 60),
+        minutes => format!("{minutes}m"),
+    }
 }
 
 fn window_label(duration: Option<u64>) -> String {
@@ -317,18 +342,6 @@ fn civil_from_days(days_since_epoch: i64) -> Option<(i64, i64, i64)> {
     Some((year, month, day))
 }
 
-fn status_rank(status: &ProviderStatus) -> u8 {
-    match status {
-        ProviderStatus::Ok => 1,
-        ProviderStatus::Unknown => 2,
-        ProviderStatus::Stale => 3,
-        ProviderStatus::Warning => 4,
-        ProviderStatus::RateLimited => 5,
-        ProviderStatus::AuthRequired => 6,
-        ProviderStatus::Error => 7,
-    }
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RawReport {
@@ -390,6 +403,12 @@ mod tests {
 
     const REPORT_FIXTURE: &str = include_str!("../../../../fixtures/providers/codex/report.json");
 
+    /// The shape is a live Pro account: one plan window on the main limit, both on Spark. Every
+    /// number is chosen rather than captured — the balance because purchased credits are only
+    /// reported when held, the shares and resets so ordering has something to order.
+    const TWO_LIMITS_FIXTURE: &str =
+        include_str!("../../../../fixtures/providers/codex/report_two_limits.json");
+
     #[test]
     fn trims_trailing_zeros_from_credit_balance() {
         assert_eq!(trim_trailing_fraction_zeros("500.0000000000"), "500");
@@ -417,11 +436,103 @@ mod tests {
         assert_eq!(
             snapshot.allowances[1].remaining,
             Some(Quantity {
-                value: "12.5".to_string(),
+                value: "500".to_string(),
                 unit: QuantityUnit::Credits,
             })
         );
         assert_eq!(snapshot.buckets[1].total_tokens, Some(4_200_000));
+    }
+
+    #[test]
+    fn normalizes_every_limit_the_report_carries() {
+        let report = codex_provider_snapshot_from_report_json(TWO_LIMITS_FIXTURE)
+            .expect("normalize Codex account report");
+        let ids = report
+            .provider_snapshot
+            .allowances
+            .iter()
+            .map(|allowance| allowance.id.as_str())
+            .collect::<Vec<_>>();
+
+        // Both limits bring their own windows, and the credits sitting once at the root of the
+        // response stay one record: more limits must not mean more of them.
+        assert_eq!(
+            ids,
+            [
+                "codex-primary",
+                "spark-primary",
+                "spark-secondary",
+                "codex-purchased-credits"
+            ]
+        );
+    }
+
+    fn plan_labels(report_json: &str) -> Vec<String> {
+        codex_provider_snapshot_from_report_json(report_json)
+            .expect("normalize Codex account report")
+            .provider_snapshot
+            .allowances
+            .iter()
+            .filter(|allowance| allowance.source == AllowanceSource::Plan)
+            .map(|allowance| allowance.label.clone())
+            .collect()
+    }
+
+    #[test]
+    fn tells_two_windows_of_one_named_limit_apart() {
+        assert_eq!(
+            plan_labels(TWO_LIMITS_FIXTURE),
+            ["Weekly plan", "Spark 5h", "Spark Weekly"]
+        );
+    }
+
+    #[test]
+    fn leaves_a_named_limit_reporting_one_window_alone() {
+        // `report.json` would not prove this: its name already contains its own token, so the
+        // containment rule would suppress the token anyway and hide a missing check here. This
+        // limit's name shares nothing with `Weekly`.
+        let report_json =
+            TWO_LIMITS_FIXTURE.replace("\"limitName\": null", "\"limitName\": \"Plan\"");
+
+        assert_eq!(
+            plan_labels(&report_json),
+            ["Plan", "Spark 5h", "Spark Weekly"]
+        );
+    }
+
+    #[test]
+    fn keeps_the_family_separator_out_of_a_label() {
+        // ` · ` means family-then-pool wherever a label is read, so one inside a pool name costs
+        // the Glance row its family and the ring picker its pool — both silently.
+        let labels = plan_labels(TWO_LIMITS_FIXTURE);
+        assert!(
+            labels.iter().all(|label| !label.contains(" · ")),
+            "a plan label carries the family separator: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn leaves_an_unnamed_limit_to_its_window_labels() {
+        let report_json =
+            TWO_LIMITS_FIXTURE.replace("\"limitName\": \"Spark\"", "\"limitName\": null");
+
+        // The live client sends no limit name while normalizing both windows, so this pairing is
+        // what real accounts hit; the locked `Codex · Weekly plan` row must survive it untouched.
+        assert_eq!(
+            plan_labels(&report_json),
+            ["Weekly plan", "5-hour plan", "Weekly plan"]
+        );
+    }
+
+    #[test]
+    fn does_not_repeat_a_name_that_already_says_the_window() {
+        let report_json = TWO_LIMITS_FIXTURE
+            .replace("\"limitName\": \"Spark\"", "\"limitName\": \"Weekly plan\"");
+
+        assert_eq!(
+            plan_labels(&report_json),
+            ["Weekly plan", "Weekly plan 5h", "Weekly plan"]
+        );
     }
 
     #[test]
@@ -448,7 +559,7 @@ mod tests {
     fn preserves_unlimited_purchased_credits() {
         let report_json = REPORT_FIXTURE
             .replace("\"unlimited\": false", "\"unlimited\": true")
-            .replace("\"balance\": \"12.5\"", "\"balance\": null");
+            .replace("\"balance\": \"500\"", "\"balance\": null");
         let report = codex_provider_snapshot_from_report_json(&report_json)
             .expect("normalize unlimited Codex credits");
         let allowance = &report.provider_snapshot.allowances[1];

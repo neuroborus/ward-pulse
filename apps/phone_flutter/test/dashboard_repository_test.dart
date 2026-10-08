@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -56,6 +57,36 @@ void main() {
     preferences.value = true;
 
     expect(await repository.load(), same(mock));
+  });
+
+  test('demo repository reshuffles by seed', () async {
+    var loads = 0;
+    final repository = DemoDashboardRepository(
+      loadDebugDashboardJson: (seed) {
+        loads += 1;
+        final json =
+            jsonDecode(
+                  File(
+                    '../../fixtures/snapshots/dashboard_today.json',
+                  ).readAsStringSync(),
+                )
+                as Map<String, dynamic>;
+        (json['accounts'] as List).first['accountId'] = 'seed-$seed';
+        return jsonEncode(json);
+      },
+      seedForLoad: () => 42,
+    );
+
+    final first = await repository.load();
+    final second = await repository.load();
+    expect(first.accounts.single.accountId, 'seed-42');
+    expect(identical(first, second), isTrue);
+    expect(loads, 1);
+
+    repository.invalidate();
+    final third = await repository.load();
+    expect(third.accounts.single.accountId, 'seed-42');
+    expect(loads, 2);
   });
 
   test('does not double-count cached input tokens', () {

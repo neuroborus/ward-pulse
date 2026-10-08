@@ -9,10 +9,15 @@
  * Usage: node tools/render-wear-glance-designs.mjs
  */
 
-import { execFileSync } from 'node:child_process'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
+
+import { emit } from './design-output.mjs'
+
+const runFile = promisify(execFile)
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -29,40 +34,53 @@ const FONT = 'Noto Sans'
 const FONT_FILE = '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf'
 const SIZE = 450
 
+// A budget row belongs to one connection and takes that connection's family
+// color, so `cursorPlatform` repeats the Cursor teal on purpose. A Cursor plan's
+// own models carry a color of their own (`WATCH_RING_DESIGN.md`, palette).
 const FAMILY = {
   codex: { name: 'Codex', color: '#65D78A' },
+  codexSpark: { name: 'Codex', color: '#186020' },
   claude: { name: 'Claude', color: '#E8915A' },
   cursor: { name: 'Cursor', color: '#67E8D4' },
-  budget: { name: 'Budget', color: '#8AB4F8' },
+  cursorOwn: { name: 'Cursor', color: '#7E93B8' },
+  cursorPlatform: { name: 'Cursor platform', color: '#67E8D4' },
 }
 
-function loadFontMetrics(fontSize, texts) {
-  const fallback = {
-    widths: Object.fromEntries(texts.map((t) => [t, fontSize * 0.55 * t.length])),
-    ascent: fontSize,
-    descent: fontSize * 0.25,
-  }
-  try {
-    const out = execFileSync(
-      'python3',
+/**
+ * Wear drops the family prefix when the pool name already opens with it
+ * (`glancePrimaryLabel`), so the board must not print `Cursor · Cursor Models`.
+ */
+function rowTitle(row) {
+  if (row.split) return `${row.family.name} plan`
+  // Wear compares the first word, not a prefix, so `Cursorish` would still be named.
+  return row.metric.split(' ')[0] === row.family.name
+    ? row.metric
+    : `${row.family.name} · ${row.metric}`
+}
+
+/**
+ * Real metrics or nothing. These place every baseline and size the alerts plate, so a guessed
+ * width moves the art: the fallback this replaces returned character-count estimates without
+ * a word, which made committed SVGs depend on whether the rendering machine had Pillow.
+ */
+async function loadFontMetrics(fontSize, texts) {
+  const { stdout } = await runFile(
+    'python3',
+    [
+      '-c',
       [
-        '-c',
-        [
-          'import json',
-          'from PIL import ImageFont',
-          `font = ImageFont.truetype(${JSON.stringify(FONT_FILE)}, ${fontSize})`,
-          `texts = ${JSON.stringify(texts)}`,
-          'asc, desc = font.getmetrics()',
-          'widths = {t: font.getbbox(t)[2] - font.getbbox(t)[0] for t in texts}',
-          'print(json.dumps({"widths": widths, "ascent": asc, "descent": desc}))',
-        ].join('\n'),
-      ],
-      { encoding: 'utf8' },
-    )
-    return JSON.parse(out)
-  } catch {
-    return fallback
-  }
+        'import json',
+        'from PIL import ImageFont',
+        `font = ImageFont.truetype(${JSON.stringify(FONT_FILE)}, ${fontSize})`,
+        `texts = ${JSON.stringify(texts)}`,
+        'asc, desc = font.getmetrics()',
+        'widths = {t: font.getbbox(t)[2] - font.getbbox(t)[0] for t in texts}',
+        'print(json.dumps({"widths": widths, "ascent": asc, "descent": desc}))',
+      ].join('\n'),
+    ],
+    { encoding: 'utf8' },
+  )
+  return JSON.parse(stdout)
 }
 
 function esc(text) {
@@ -76,12 +94,14 @@ function miniArc({ cx, cy, r, thickness, remaining, color }) {
   const circ = 2 * Math.PI * r
   const left = Math.max(0.02, Math.min(remaining, 0.999))
   const paint = circ * left
+  const used = circ * (1 - left)
   return `
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
       stroke-width="${thickness}" />
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}"
       stroke-width="${thickness}" stroke-linecap="round"
-      stroke-dasharray="${paint.toFixed(2)} ${circ.toFixed(2)}"
+      stroke-dasharray="${Math.max(0, paint - thickness).toFixed(2)} ${circ.toFixed(2)}"
+      stroke-dashoffset="${(-(used + thickness / 2)).toFixed(2)}"
       transform="rotate(-90 ${cx} ${cy})" />`
 }
 
@@ -128,7 +148,7 @@ function refreshArrow(cx, cy, startDeg, tipDeg, arcR, sw, fill, opacity) {
  * Status label in the open center of a dual-arrow refresh ring.
  * Returns { markup, plateR } so callers can place detail text below the plate.
  */
-function refreshStatusControl({
+async function refreshStatusControl({
   cx,
   cy,
   r,
@@ -142,7 +162,7 @@ function refreshStatusControl({
   const textFill = enabled ? accent : DISABLED
   const plate = enabled ? '#141916' : '#121512'
   const opacity = enabled ? 1 : 0.7
-  const labelMetrics = loadFontMetrics(labelSize, [text])
+  const labelMetrics = await loadFontMetrics(labelSize, [text])
   const baseline =
     cy + (labelMetrics.ascent - labelMetrics.descent) / 2
   const sw = 2.2
@@ -162,20 +182,38 @@ function refreshStatusControl({
   return { markup, plateR: r }
 }
 
-/** Tightest remaining first — same order rule as the watch face. */
+/**
+ * Tightest remaining first — same order rule as the watch face.
+ *
+ * Sort bands by their tighter half, keeping the inner pool first within a row.
+ */
 function sortByRemaining(rows) {
-  return [...rows].sort((a, b) => b.used - a.used)
+  return [...rows]
+    .flatMap((row) => {
+      if (row.used >= 1) {
+        return row.split && row.split.used < 1
+          ? [{ ...row.split, credits: row.credits ?? row.split.credits }]
+          : []
+      }
+      return [row.split?.used >= 1 ? { ...row, split: null } : row]
+    })
+    .sort((a, b) =>
+      Math.max(b.used, b.split?.used ?? b.used) - Math.max(a.used, a.split?.used ?? a.used),
+    )
 }
 
 function rowSubLine(row) {
   const pct = Math.round((1 - row.used) * 100)
+  const left = row.split
+    ? `${pct}% · ${Math.round((1 - row.split.used) * 100)}% left`
+    : `${pct}% left`
   if (row.credits == null || row.credits === '') {
-    return `${pct}% left`
+    return left
   }
-  return `${pct}% left · ${row.credits} credits`
+  return `${left} · ${row.credits} credits`
 }
 
-function glanceSvg({
+async function glanceSvg({
   name,
   ok = true,
   refreshEnabled = true,
@@ -197,6 +235,7 @@ function glanceSvg({
   const miniT = 5
   const arcColW = 44
   const textGap = 12
+  const secondArcOffset = miniR * 2 + miniT + textGap
   const alertsLabel = `Alerts: ${alerts}`
   const alertsActive = alerts > 0
   const alertsFill = alertsActive ? '#2A322C' : '#171B18'
@@ -204,22 +243,27 @@ function glanceSvg({
   const alertsText = alertsActive ? LABEL : DISABLED
 
   const ordered = sortByRemaining(rows)
-  const titles = ordered.map((row) => `${row.family.name} · ${row.metric}`)
+  const titles = ordered.map(rowTitle)
   const subs = ordered.map((row) => rowSubLine(row))
-  const titleMetrics = loadFontMetrics(titleSize, titles)
-  const subMetrics = loadFontMetrics(subSize, [...subs, alertsLabel])
-  const alertsMetrics = loadFontMetrics(alertsSize, [alertsLabel])
+  const titleMetrics = await loadFontMetrics(titleSize, titles)
+  const subMetrics = await loadFontMetrics(subSize, [...subs, alertsLabel])
+  const alertsMetrics = await loadFontMetrics(alertsSize, [alertsLabel])
   const maxTitleW = Math.max(0, ...titles.map((t) => titleMetrics.widths[t] ?? 0))
   const maxSubW = Math.max(0, ...subs.map((t) => subMetrics.widths[t] ?? 0))
   const textColW = Math.max(maxTitleW, maxSubW)
-  const blockW = arcColW + textGap + textColW
+  const blockW = Math.max(
+    arcColW + textGap + textColW,
+    ...ordered.map((row, i) =>
+      arcColW + (row.split ? secondArcOffset : 0) + textGap +
+        Math.max(titleMetrics.widths[titles[i]], subMetrics.widths[subs[i]]),
+    ),
+  )
   const blockLeft = Math.max(42, Math.min(cx - blockW / 2, SIZE - 42 - blockW))
   const arcX = blockLeft + arcColW / 2
-  const contentLeft = blockLeft + arcColW + textGap
 
   const refreshCy = 96
   const refreshR = 34
-  const refresh = refreshStatusControl({
+  const refresh = await refreshStatusControl({
     cx,
     cy: refreshCy,
     r: refreshR,
@@ -262,7 +306,7 @@ function glanceSvg({
 
   if (emptyMessage) {
     const lines = emptyMessage.split('\n')
-    const emptyMetrics = loadFontMetrics(titleSize, lines)
+    const emptyMetrics = await loadFontMetrics(titleSize, lines)
     const lineGap = 22
     const blockH =
       (lines.length - 1) * lineGap +
@@ -292,7 +336,7 @@ function glanceSvg({
 
     for (const row of ordered) {
       const remaining = 1 - row.used
-      const title = `${row.family.name} · ${row.metric}`
+      const title = rowTitle(row)
       const sub = rowSubLine(row)
       const rowMid = y + rowH / 2
       body += miniArc({
@@ -303,6 +347,17 @@ function glanceSvg({
         remaining,
         color: row.family.color,
       })
+      if (row.split) {
+        body += miniArc({
+          cx: arcX + secondArcOffset,
+          cy: rowMid,
+          r: miniR,
+          thickness: miniT,
+          remaining: 1 - row.split.used,
+          color: row.split.family.color,
+        })
+      }
+      const contentLeft = blockLeft + arcColW + (row.split ? secondArcOffset : 0) + textGap
       const titleBaseline =
         rowMid - 8 + (titleMetrics.ascent - titleMetrics.descent) / 2
       const subBaseline =
@@ -355,7 +410,8 @@ await mkdir(wearDir, { recursive: true })
 const three = [
   { family: FAMILY.codex, metric: 'Weekly plan', used: 0.92, credits: '320' },
   { family: FAMILY.claude, metric: '5h', used: 0.61, credits: '80' },
-  { family: FAMILY.cursor, metric: 'Weekly plan', used: 0.28 },
+  // Matches fixtures/providers/cursor/usage_summary.json autoPercentUsed.
+  { family: FAMILY.cursorOwn, metric: 'Cursor Models', used: 0.47 },
 ]
 
 const variants = [
@@ -378,6 +434,54 @@ const variants = [
     alerts: 0,
   },
   {
+    // One band, one row: inner pool first, even when the outer pool is tighter.
+    file: 'glance-legend-pair.svg',
+    name: 'Glance · legend · Cursor pair · OK refresh',
+    ok: true,
+    refreshEnabled: true,
+    rows: [
+      {
+        family: FAMILY.cursorOwn,
+        metric: 'Cursor Models',
+        used: 0.18,
+        credits: '320',
+        // Synthetic active pools exercise the paired row and its credits suffix.
+        split: { family: FAMILY.cursor, metric: 'Other Models', used: 0.59 },
+      },
+    ],
+    alerts: 0,
+  },
+  {
+    // Three rows is the ceiling: three bands, with both supported pairs active.
+    file: 'glance-legend-full.svg',
+    name: 'Glance · legend · three rows (three bands, two paired)',
+    ok: true,
+    refreshEnabled: true,
+    rows: [
+      { family: FAMILY.claude, metric: 'Opus weekly', used: 0.94, credits: '387' },
+      {
+        family: FAMILY.cursorOwn,
+        metric: 'Cursor Models',
+        used: 0.0,
+        credits: '1716',
+        split: {
+          family: FAMILY.cursor,
+          metric: 'Other Models',
+          used: 0.25,
+          credits: '1716',
+        },
+      },
+      {
+        family: FAMILY.codex,
+        metric: 'Weekly plan',
+        used: 0.18,
+        credits: '320',
+        split: { family: FAMILY.codexSpark, metric: 'Spark 5h', used: 0.59 },
+      },
+    ],
+    alerts: 0,
+  },
+  {
     file: 'glance-legend-budget.svg',
     name: 'Glance · legend · plan + budget · OK refresh',
     ok: true,
@@ -395,7 +499,9 @@ const variants = [
         used: 0.4,
         credits: '80',
       },
-      { family: FAMILY.budget, metric: 'Today', used: 0.55 },
+      // Cursor platform reports billing-cycle spend only, so a monthly budget
+      // is the one it can actually carry.
+      { family: FAMILY.cursorPlatform, metric: 'Month', used: 0.55 },
     ],
     alerts: 0,
   },
@@ -446,8 +552,6 @@ const variants = [
 ]
 
 for (const variant of variants) {
-  const svg = glanceSvg(variant)
-  const path = join(wearDir, variant.file)
-  await writeFile(path, svg)
-  console.log(`wrote ${path}`)
+  const svg = await glanceSvg(variant)
+  await emit(join(wearDir, variant.file), svg, 'render-designs')
 }

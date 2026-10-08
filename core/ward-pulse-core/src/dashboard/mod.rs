@@ -1,4 +1,3 @@
-use crate::alerts::alerts_for_budget_state;
 use crate::budget::calculate_budget_state;
 use crate::model::{
     BudgetPeriod, BudgetState, DashboardSnapshot, Money, ProviderSnapshot, ProviderStatus,
@@ -25,20 +24,9 @@ pub fn build_dashboard_snapshot(
     // App-bar / overall pulse reflects connected providers — not local budget
     // cards. Budget totals without a configured limit stay Unknown and must not
     // bury Ok provider sync behind a misleading Unknown chrome.
-    let overall_status = if accounts.is_empty() {
-        ProviderStatus::Unknown
-    } else {
-        accounts
-            .iter()
-            .map(|account| account.status)
-            .fold(ProviderStatus::Ok, worst_status)
-    };
+    let overall_status = ProviderStatus::worst(accounts.iter().map(|account| account.status));
 
-    let mut alerts = Vec::new();
-    alerts.extend(alerts_for_budget_state("Today", &today_total));
-    alerts.extend(alerts_for_budget_state("Week", &week_total));
-    alerts.extend(alerts_for_budget_state("Month", &month_total));
-
+    // Alerts stay empty until the shell applies user rules via calculate_alerts.
     let watch_summary = WatchSummary {
         today_used_percent: today_total.used_percent,
         week_used_percent: week_total.used_percent,
@@ -52,7 +40,7 @@ pub fn build_dashboard_snapshot(
         today_total,
         week_total,
         month_total,
-        alerts,
+        alerts: Vec::new(),
         watch_summary,
     }
 }
@@ -62,25 +50,24 @@ fn total_state<'a>(
     states: impl Iterator<Item = &'a BudgetState>,
 ) -> BudgetState {
     let mut spent = MoneyTotal::default();
-    let mut limit = MoneyTotal::default();
     let mut projected_total = MoneyTotal::default();
 
     for state in states {
         if let Some(value) = &state.spent {
             spent.add(value);
         }
-        if let Some(value) = &state.limit {
-            limit.add(value);
-        }
         if let Some(value) = &state.projected_total {
             projected_total.add(value);
         }
     }
 
+    // Limits are set per connection, so a sum of them is a ceiling nobody chose:
+    // spend from every connection measured against the few that have a limit.
+    // The aggregate reports money and leaves percentage to the connection cards.
     calculate_budget_state(
         period,
         spent.into_option(),
-        limit.into_option(),
+        None,
         projected_total.into_option(),
     )
 }
@@ -112,26 +99,6 @@ impl MoneyTotal {
     }
 }
 
-fn worst_status(left: ProviderStatus, right: ProviderStatus) -> ProviderStatus {
-    if status_rank(&right) > status_rank(&left) {
-        right
-    } else {
-        left
-    }
-}
-
-fn status_rank(status: &ProviderStatus) -> u8 {
-    match status {
-        ProviderStatus::Ok => 1,
-        ProviderStatus::Unknown => 2,
-        ProviderStatus::Stale => 3,
-        ProviderStatus::Warning => 4,
-        ProviderStatus::RateLimited => 5,
-        ProviderStatus::AuthRequired => 6,
-        ProviderStatus::Error => 7,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -152,6 +119,7 @@ mod tests {
         ProviderSnapshot {
             account_id: account_id.to_string(),
             provider: crate::model::ProviderKind::Mock,
+            connection: None,
             status: ProviderStatus::Ok,
             today,
             week: budget_state(BudgetPeriod::Week, usd(0), usd(100)),
@@ -166,7 +134,7 @@ mod tests {
     }
 
     #[test]
-    fn sums_totals_when_currency_matches() {
+    fn sums_spend_but_never_limits() {
         let snapshot = build_dashboard_snapshot(
             DateTimeUtc::from("2026-06-27T18:42:00Z"),
             vec![
@@ -176,8 +144,9 @@ mod tests {
         );
 
         assert_eq!(snapshot.today_total.spent, Some(usd(300)));
-        assert_eq!(snapshot.today_total.limit, Some(usd(2_000)));
-        assert_eq!(snapshot.today_total.used_percent, Some(15.0));
+        assert_eq!(snapshot.today_total.limit, None);
+        assert_eq!(snapshot.today_total.remaining, None);
+        assert_eq!(snapshot.today_total.used_percent, None);
     }
 
     #[test]
@@ -191,8 +160,6 @@ mod tests {
         );
 
         assert_eq!(snapshot.today_total.spent, None);
-        assert_eq!(snapshot.today_total.limit, None);
-        assert_eq!(snapshot.today_total.used_percent, None);
         assert_eq!(snapshot.today_total.status, ProviderStatus::Unknown);
     }
 
@@ -206,6 +173,7 @@ mod tests {
             vec![ProviderSnapshot {
                 account_id: "codex".to_string(),
                 provider: crate::model::ProviderKind::Mock,
+                connection: None,
                 status: ProviderStatus::Ok,
                 today: open_budget.clone(),
                 week: open_budget.clone(),

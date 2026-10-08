@@ -16,7 +16,8 @@ enum ClaudeAccountFailure {
   cancelled,
 }
 
-typedef ClaudeSessionChanged = Future<void> Function(ClaudeAccountSession value);
+typedef ClaudeSessionChanged =
+    Future<void> Function(ClaudeAccountSession value);
 
 final class ClaudeAccountException implements Exception {
   const ClaudeAccountException(this.failure, [this.details]);
@@ -144,8 +145,7 @@ final class ClaudeAccountClient {
        _random = random ?? Random.secure();
 
   static const clientId = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
-  static const redirectUri =
-      'https://platform.claude.com/oauth/code/callback';
+  static const redirectUri = 'https://platform.claude.com/oauth/code/callback';
   static const _scope =
       'user:inference user:profile user:sessions:claude_code user:mcp_servers';
   static const _tokenTimeout = Duration(seconds: 120);
@@ -188,16 +188,17 @@ final class ClaudeAccountClient {
     required String pastedCode,
   }) async {
     final parsed = _parsePastedCode(pastedCode, expectedState: request.state);
-    final body = Uri(
-      queryParameters: {
-        'grant_type': 'authorization_code',
-        'code': parsed.code,
-        'redirect_uri': redirectUri,
-        'client_id': clientId,
-        'code_verifier': request.codeVerifier,
-        'state': parsed.state,
-      },
-    ).query;
+    final body =
+        Uri(
+          queryParameters: {
+            'grant_type': 'authorization_code',
+            'code': parsed.code,
+            'redirect_uri': redirectUri,
+            'client_id': clientId,
+            'code_verifier': request.codeVerifier,
+            'state': parsed.state,
+          },
+        ).query;
     final response = await _transport.send(
       'POST',
       _tokenUri,
@@ -235,13 +236,14 @@ final class ClaudeAccountClient {
   }
 
   Future<ClaudeAccountSession> refresh(ClaudeAccountSession session) async {
-    final body = Uri(
-      queryParameters: {
-        'grant_type': 'refresh_token',
-        'refresh_token': session.refreshToken,
-        'client_id': clientId,
-      },
-    ).query;
+    final body =
+        Uri(
+          queryParameters: {
+            'grant_type': 'refresh_token',
+            'refresh_token': session.refreshToken,
+            'client_id': clientId,
+          },
+        ).query;
     final response = await _transport.send(
       'POST',
       _tokenUri,

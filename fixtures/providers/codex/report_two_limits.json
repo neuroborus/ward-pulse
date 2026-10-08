@@ -1,0 +1,58 @@
+{
+  "generatedAt": "2026-08-27T12:00:00Z",
+  "rateLimits": {
+    "rateLimits": {
+      "limitId": "codex",
+      "limitName": null,
+      "primary": {
+        "usedPercent": 30,
+        "windowDurationMins": 10080,
+        "resetsAt": 1788264000
+      },
+      "secondary": null,
+      "credits": {
+        "hasCredits": true,
+        "unlimited": false,
+        "balance": "250"
+      }
+    },
+    "rateLimitsByLimitId": {
+      "codex": {
+        "limitId": "codex",
+        "limitName": null,
+        "primary": {
+          "usedPercent": 30,
+          "windowDurationMins": 10080,
+          "resetsAt": 1788264000
+        },
+        "secondary": null
+      },
+      "spark": {
+        "limitId": "spark",
+        "limitName": "Spark",
+        "primary": {
+          "usedPercent": 12,
+          "windowDurationMins": 300,
+          "resetsAt": 1787842800
+        },
+        "secondary": {
+          "usedPercent": 4,
+          "windowDurationMins": 10080,
+          "resetsAt": 1788436800
+        }
+      }
+    }
+  },
+  "usage": {
+    "dailyUsageBuckets": [
+      {
+        "startDate": "2026-08-26",
+        "tokens": 2100000
+      },
+      {
+        "startDate": "2026-08-27",
+        "tokens": 3600000
+      }
+    ]
+  }
+}

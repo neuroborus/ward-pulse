@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="88" viewBox="0 0 220 88" role="img" aria-label="Phone widget · empty">
+  <rect width="220" height="88" rx="20" fill="#F2F4F1" stroke="#5F675C" stroke-opacity="0.1"/>
+  <g transform="translate(150, 20)" opacity="0.28" fill="none" stroke="#5F675C" stroke-width="1.6" stroke-linecap="round">
+    <text x="18" y="0" font-family="Noto Sans, sans-serif" font-size="5" font-weight="700" letter-spacing="0.5" fill="#5F675C" stroke="none" text-anchor="middle">WARDPULSE</text>
+    <path d="M2 10 L8 10 L12 4 L18 14 L24 8 L30 8"/>
+  </g>
+  <text x="14" y="46" font-family="Noto Sans, sans-serif" font-size="13" fill="#5F675C">No metrics</text>
+</svg>

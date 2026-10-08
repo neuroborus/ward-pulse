@@ -128,6 +128,9 @@ final class CodexAccountClient {
   static const _loginTimeout = Duration(minutes: 15);
   static const _refreshInterval = Duration(days: 8);
   static const _refreshWindow = Duration(minutes: 5);
+  static const Map<String, ({String id, String name})> _additionalRateLimits = {
+    'codex_bengalfox': (id: 'spark', name: 'Spark'),
+  };
 
   final CodexHttpTransport _transport;
   final Uri _issuer;
@@ -354,7 +357,7 @@ final class CodexAccountClient {
     final profile = _jsonMap(responses[1].body, 'Codex activity');
     final report = {
       'generatedAt': _clock().toUtc().toIso8601String(),
-      'rateLimits': {'rateLimits': _normalizeRateLimits(limits)},
+      'rateLimits': _normalizeRateLimits(limits),
       'usage': {'dailyUsageBuckets': _normalizeDailyBuckets(profile)},
     };
     try {
@@ -373,7 +376,7 @@ final class CodexAccountClient {
   Map<String, dynamic> _normalizeRateLimits(Map<String, dynamic> response) {
     final rateLimit = _optionalMap(response['rate_limit']);
     final credits = _optionalMap(response['credits']);
-    return {
+    final main = <String, dynamic>{
       'limitId': 'codex',
       'limitName': null,
       'primary': _normalizeWindow(rateLimit?['primary_window']),
@@ -388,6 +391,34 @@ final class CodexAccountClient {
               },
       'planType': _nonEmptyString(response['plan_type']),
       'rateLimitReachedType': response['rate_limit_reached_type'],
+    };
+    final additional = <String, Map<String, dynamic>>{};
+    if (response['additional_rate_limits'] case final List<Object?> values) {
+      for (final value in values) {
+        final raw = _optionalMap(value);
+        final feature = _nonEmptyString(raw?['metered_feature']);
+        final known = _additionalRateLimits[feature];
+        final nested = _optionalMap(raw?['rate_limit']);
+        if (known == null || nested == null) {
+          continue;
+        }
+        additional[known.id] = {
+          'limitId': known.id,
+          'limitName': known.name,
+          'primary': _normalizeWindow(nested['primary_window']),
+          'secondary': _normalizeWindow(nested['secondary_window']),
+        };
+      }
+    }
+    if (additional.isEmpty) {
+      return {'rateLimits': main};
+    }
+
+    final mainWithoutCredits = Map<String, dynamic>.from(main)
+      ..remove('credits');
+    return {
+      'rateLimits': main,
+      'rateLimitsByLimitId': {'codex': mainWithoutCredits, ...additional},
     };
   }
 

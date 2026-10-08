@@ -13,7 +13,7 @@
       "credits": {
         "hasCredits": true,
         "unlimited": false,
-        "balance": "12.5"
+        "balance": "500"
       }
     },
     "rateLimitsByLimitId": {
@@ -29,7 +29,7 @@
         "credits": {
           "hasCredits": true,
           "unlimited": false,
-          "balance": "12.5"
+          "balance": "500"
         }
       }
     }

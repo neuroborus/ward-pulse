@@ -66,19 +66,24 @@ final class MobileClaudeAccountService implements ClaudeAccountService {
 
     return ClaudeLoginAttempt(
       authorization: authorization,
-      completeWithCode: (pastedCode) => _serialized(() async {
-        if (cancellation.isCompleted) {
-          throw const ClaudeAccountException(ClaudeAccountFailure.cancelled);
-        }
-        final session = await _client.exchangeAuthorizationCode(
-          request: authorization,
-          pastedCode: pastedCode,
-        );
-        if (cancellation.isCompleted) {
-          throw const ClaudeAccountException(ClaudeAccountFailure.cancelled);
-        }
-        await _writeSession(session);
-      }),
+      completeWithCode:
+          (pastedCode) => _serialized(() async {
+            if (cancellation.isCompleted) {
+              throw const ClaudeAccountException(
+                ClaudeAccountFailure.cancelled,
+              );
+            }
+            final session = await _client.exchangeAuthorizationCode(
+              request: authorization,
+              pastedCode: pastedCode,
+            );
+            if (cancellation.isCompleted) {
+              throw const ClaudeAccountException(
+                ClaudeAccountFailure.cancelled,
+              );
+            }
+            await _writeSession(session);
+          }),
       cancel: () {
         if (!cancellation.isCompleted) {
           cancellation.complete();

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Do not set a tight maxResizeHeight — when an existing span is taller than the max,
+  Pixel hides vertical handles. Leave max unset so users can drag the bottom handle
+  up to the olive card and reclaim empty launcher cells.
+  targetCellHeight≈3 fits ~4–6 metric rows on typical phone grids.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="110dp"
+    android:minHeight="56dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="56dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="3"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/ward_pulse_app_widget"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:description="@string/ward_pulse_widget_description"
+    android:previewLayout="@layout/ward_pulse_app_widget_preview" />

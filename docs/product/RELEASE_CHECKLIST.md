@@ -21,7 +21,8 @@ This checklist is a gate, not a schedule.
 ## Wear OS
 
 - Wear app runs on emulator.
-- Today, week, providers, alerts (active list), and last sync screens are readable.
+- The Glance, the plan windows page, and the active alert list are readable.
+- Exhausted plan windows lead the second page.
 - Stale data state is visible.
 - Latest successful summary survives sync failure.
 - Missing phone data does not create an implicit mock summary.
@@ -37,8 +38,10 @@ This checklist is a gate, not a schedule.
 ## Privacy And Legal
 
 - App includes the independent-product disclaimer.
-- Privacy policy draft exists.
-- Data deletion flow exists.
+- [Privacy policy](PRIVACY_POLICY.md) is current.
+- Provider credentials can be removed per connection.
+- Local settings can be cleared through Android system settings.
+- WardPulse stores no user data on developer-operated infrastructure.
 - Apache-2.0 license scope and Rust package metadata are still accurate.
 - WardPulse trademark and brand asset boundaries are documented.
 - Third-party notices are current for bundled dependencies and assets.

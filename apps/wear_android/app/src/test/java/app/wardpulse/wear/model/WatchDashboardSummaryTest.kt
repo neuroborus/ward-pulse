@@ -8,22 +8,10 @@ import org.junit.Test
 
 class WatchDashboardSummaryTest {
     @Test
-    fun formatsLastSyncInLocalAndUtc() {
-        val summary = PreviewWatchDashboardSummary.value
-
-        assertEquals("Jun 27, 18:42 UTC", summary.lastSyncUtcLabel)
-        assertFalse(summary.lastSyncLabel.contains("UTC"))
-        assertTrue(
-            summary.lastSyncLabel.matches(Regex("""[A-Z][a-z]{2} \d{1,2}, \d{2}:\d{2}""")),
-        )
-    }
-
-    @Test
-    fun handlesInvalidTimestamp() {
+    fun treatsAnUnreadableTimestampAsStale() {
         val summary = PreviewWatchDashboardSummary.value.copy(generatedAt = "invalid")
 
-        assertEquals("Unknown", summary.lastSyncLabel)
-        assertEquals("Unknown", summary.lastSyncUtcLabel)
+        // A timestamp that cannot be read is treated as too old to trust.
         assertTrue(summary.isStaleAt(Instant.EPOCH))
     }
 

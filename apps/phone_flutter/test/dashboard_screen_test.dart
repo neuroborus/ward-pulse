@@ -2,10 +2,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/app/surface_order.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_theme.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_screen.dart';
-import 'package:ward_pulse_phone/settings/consumption_display_preferences.dart';
+import 'package:ward_pulse_phone/dashboard/status_pill.dart';
 
 void main() {
   test('trims trailing zeros from quantity labels', () {
@@ -21,18 +22,80 @@ void main() {
     expect(formatQuantityValue('100'), '100');
   });
 
-  test('explains unknown platform spend without a local limit', () {
+  test('the app bar counts sections, not the problems inside them', () {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    Map<String, dynamic> account(String provider, List<String> statuses) {
+      return source.primaryAccount!.toJson()
+        ..['accountId'] = '$provider-local'
+        ..['provider'] = provider
+        ..['status'] = 'ok'
+        ..['allowances'] = [
+          for (final (index, status) in statuses.indexed)
+            {
+              'id': '$provider-$index',
+              'source': 'plan',
+              'label': '$provider $index',
+              'usedPercent': 50.0,
+              'used': null,
+              'limit': null,
+              'remaining': null,
+              'unlimited': false,
+              'windowMinutes': null,
+              'resetsAt': null,
+              'status': status,
+            },
+        ]
+        ..['buckets'] = <Object>[]
+        ..['modelBreakdown'] = <Object>[];
+    }
+
+    final snapshot = DashboardSnapshot.fromJson(
+      source.toJson()
+        ..['accounts'] = [
+          account('cursor', ['warning', 'rateLimited']),
+          account('claude', ['ok']),
+          account('codex', ['error']),
+        ],
+    );
+
+    final problems = dashboardProblems(snapshot);
+
+    // Three unhealthy cards live in two families, and a tap can only take the
+    // reader to a family (PHONE_DASHBOARD_DESIGN.md).
+    expect(problems.sections, 2);
+    // The worst family, not the one that happened to arrive first: Codex is in
+    // error while Cursor is only rate limited.
+    expect(problems.first, 'codex');
+    expect(problems.status, ProviderStatus.error);
+  });
+
+  testWidgets('aggregate spend card shows money and nothing to measure it', (
+    tester,
+  ) async {
     final state = BudgetState.fromJson({
       'period': 'today',
-      'spent': {'minorUnits': 0, 'currency': 'USD'},
+      'spent': {'minorUnits': 1240, 'currency': 'USD'},
       'limit': null,
       'remaining': null,
       'usedPercent': null,
       'projectedTotal': null,
       'status': 'unknown',
     });
-    expect(state.statusExplanation, contains('no local budget limit'));
-    expect(state.statusExplanation, contains('Subscription credit'));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: wardPulseLightTheme,
+        home: Scaffold(body: BudgetSummaryCard(title: 'Today', state: state)),
+      ),
+    );
+
+    expect(find.text('USD 12.40'), findsOneWidget);
+    // Limits are per connection, so the total has no ceiling: a bar or a pill
+    // here could only say Unknown, next to a sum that is exactly known.
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(find.byType(StatusPill), findsNothing);
   });
 
   testWidgets('shows allowances from every connected provider', (tester) async {
@@ -72,10 +135,8 @@ void main() {
         theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
+            onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
-            displayPreferences: const ConsumptionDisplayPreferences(
-              purchased: true,
-            ),
           ),
         ),
       ),
@@ -85,6 +146,8 @@ void main() {
     expect(find.text('Purchased credits'), findsOneWidget);
     expect(find.text('Unlimited'), findsOneWidget);
     expect(find.text('Unknown'), findsNothing);
+    // Healthy families say nothing at all.
+    expect(find.byType(Badge), findsNothing);
 
     expect(find.text('OpenAI'), findsOneWidget);
     await tester.scrollUntilVisible(
@@ -108,7 +171,73 @@ void main() {
     expect(find.text('Today'), findsOneWidget);
   });
 
-  testWidgets('hides platform spend when the display preference is off', (
+  testWidgets('shows Cursor Models and Other Models plan pools', (
+    tester,
+  ) async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final cursor =
+        source.primaryAccount!.toJson()
+          ..['accountId'] = 'cursor-local'
+          ..['provider'] = 'cursor'
+          ..['allowances'] = [
+            {
+              'id': 'cursor-plan-models',
+              'source': 'plan',
+              'label': 'Cursor Models',
+              'usedPercent': 47.0,
+              'used': null,
+              'limit': null,
+              'remaining': null,
+              'unlimited': false,
+              'windowMinutes': null,
+              'resetsAt': null,
+              'status': 'ok',
+            },
+            {
+              'id': 'cursor-plan-other',
+              'source': 'plan',
+              'label': 'Other Models',
+              'usedPercent': 100.0,
+              'used': null,
+              'limit': null,
+              'remaining': null,
+              'unlimited': false,
+              'windowMinutes': null,
+              'resetsAt': null,
+              'status': 'rateLimited',
+            },
+          ]
+          ..['buckets'] = <Object>[]
+          ..['modelBreakdown'] = <Object>[];
+    final dashboard = source.toJson()..['accounts'] = [cursor];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: wardPulseLightTheme,
+        home: Scaffold(
+          body: DashboardScreen(
+            onRefresh: _noRefresh,
+            snapshot: DashboardSnapshot.fromJson(dashboard),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Cursor Models'), findsOneWidget);
+    expect(find.text('Other Models'), findsOneWidget);
+    expect(find.text('53% left'), findsOneWidget);
+    expect(find.text('0% left'), findsOneWidget);
+    expect(find.byIcon(Icons.speed), findsOneWidget);
+    // A card marks a deviation, never health, and the header says how many
+    // deviate below it (PHONE_DASHBOARD_DESIGN.md).
+    expect(_pillsInCardOf(find.text('Cursor Models')), findsNothing);
+    expect(_pillsInCardOf(find.text('Other Models')), findsOneWidget);
+    expect(find.widgetWithText(Badge, '1'), findsOneWidget);
+  });
+
+  testWidgets('always shows platform spend when budgets are available', (
     tester,
   ) async {
     final source = DashboardSnapshot.fromJsonString(
@@ -124,20 +253,23 @@ void main() {
         theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
+            onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
-            displayPreferences: const ConsumptionDisplayPreferences(
-              platform: false,
-            ),
           ),
         ),
       ),
     );
 
-    expect(find.text('Platform spend'), findsNothing);
-    expect(find.text('Today'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('Platform spend'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Platform spend'), findsOneWidget);
+    expect(find.text('Today'), findsWidgets);
   });
 
-  testWidgets('hides plan Unknowns for OpenAI-only and offers Settings help', (
+  testWidgets('hides plan Unknowns for OpenAI-only and offers Providers help', (
     tester,
   ) async {
     final source = DashboardSnapshot.fromJsonString(
@@ -148,15 +280,16 @@ void main() {
           ..['provider'] = 'openai'
           ..['allowances'] = <Object>[];
     final dashboard = source.toJson()..['accounts'] = [openAi];
-    var openedSettings = false;
+    var openedProviders = false;
 
     await tester.pumpWidget(
       MaterialApp(
         theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
+            onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
-            onOpenSettings: () => openedSettings = true,
+            onOpenProviders: () => openedProviders = true,
           ),
         ),
       ),
@@ -168,12 +301,14 @@ void main() {
     await tester.tap(find.byTooltip('Why is this hidden?'));
     await tester.pumpAndSettle();
     expect(
-      find.text('Connect a Codex subscription in Settings to see plan limits.'),
+      find.text(
+        'Connect a Codex subscription on the Providers tab to see plan limits.',
+      ),
       findsOneWidget,
     );
-    await tester.tap(find.text('Open Settings'));
+    await tester.tap(find.text('Open Providers'));
     await tester.pumpAndSettle();
-    expect(openedSettings, isTrue);
+    expect(openedProviders, isTrue);
 
     await tester.scrollUntilVisible(
       find.text('Platform spend'),
@@ -215,6 +350,7 @@ void main() {
         theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
+            onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
           ),
         ),
@@ -276,6 +412,7 @@ void main() {
         theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
+            onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
           ),
         ),
@@ -295,40 +432,42 @@ void main() {
     final source = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
     );
-    final claude = source.primaryAccount!.toJson()
-      ..['accountId'] = 'claude-local'
-      ..['provider'] = 'claude'
-      ..['allowances'] = [
-        {
-          'id': 'claude-five-hour',
-          'source': 'plan',
-          'label': '5-hour session',
-          'usedPercent': 0,
-          'used': null,
-          'limit': null,
-          'remaining': null,
-          'unlimited': false,
-          'windowMinutes': 300,
-          'resetsAt': null,
-          'status': 'ok',
-        },
-      ]
-      ..['buckets'] = <Object>[]
-      ..['modelBreakdown'] = <Object>[];
-    final codex = source.primaryAccount!.toJson()
-      ..['accountId'] = 'codex-local'
-      ..['provider'] = 'codex'
-      ..['allowances'] = <Object>[]
-      ..['modelBreakdown'] = <Object>[];
+    final claude =
+        source.primaryAccount!.toJson()
+          ..['accountId'] = 'claude-local'
+          ..['provider'] = 'claude'
+          ..['allowances'] = [
+            {
+              'id': 'claude-five-hour',
+              'source': 'plan',
+              'label': '5-hour session',
+              'usedPercent': 0,
+              'used': null,
+              'limit': null,
+              'remaining': null,
+              'unlimited': false,
+              'windowMinutes': 300,
+              'resetsAt': null,
+              'status': 'ok',
+            },
+          ]
+          ..['buckets'] = <Object>[]
+          ..['modelBreakdown'] = <Object>[];
+    final codex =
+        source.primaryAccount!.toJson()
+          ..['accountId'] = 'codex-local'
+          ..['provider'] = 'codex'
+          ..['allowances'] = <Object>[]
+          ..['modelBreakdown'] = <Object>[];
     // Keep fixture buckets on Codex only.
-    final dashboard =
-        source.toJson()..['accounts'] = [claude, codex];
+    final dashboard = source.toJson()..['accounts'] = [claude, codex];
 
     await tester.pumpWidget(
       MaterialApp(
         theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
+            onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
           ),
         ),
@@ -346,6 +485,65 @@ void main() {
     final historyTitle = tester.getTopLeft(find.text('Usage history'));
     expect(claudeHeader.dy, lessThan(codexHeader.dy));
     expect(codexHeader.dy, lessThan(historyTitle.dy));
+  });
+
+  testWidgets('keeps Cursor plan and platform under one provider plaque', (
+    tester,
+  ) async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final plan =
+        source.primaryAccount!.toJson()
+          ..['accountId'] = 'cursor-plan'
+          ..['provider'] = 'cursor'
+          ..['status'] = 'ok'
+          ..['allowances'] = [
+            {
+              'id': 'cursor-plan-models',
+              'source': 'plan',
+              'label': 'Cursor Models',
+              'usedPercent': 47,
+              'used': null,
+              'limit': null,
+              'remaining': null,
+              'unlimited': false,
+              'windowMinutes': null,
+              'resetsAt': null,
+              'status': 'ok',
+            },
+          ]
+          ..['buckets'] = <Object>[]
+          ..['modelBreakdown'] = <Object>[];
+    final platform =
+        source.primaryAccount!.toJson()
+          ..['accountId'] = 'cursor-platform'
+          ..['provider'] = 'cursor'
+          ..['status'] = 'warning'
+          ..['allowances'] = <Object>[]
+          ..['modelBreakdown'] = <Object>[];
+    final dashboard = source.toJson()..['accounts'] = [plan, platform];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: wardPulseLightTheme,
+        home: Scaffold(
+          body: DashboardScreen(
+            onRefresh: _noRefresh,
+            snapshot: DashboardSnapshot.fromJson(dashboard),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Cursor'), findsOneWidget);
+    expect(find.text('Cursor Models'), findsOneWidget);
+    expect(find.text('Usage history'), findsOneWidget);
+    expect(find.byTooltip('Warning'), findsOneWidget);
+
+    final cursorHeader = tester.getTopLeft(find.text('Cursor'));
+    final historyTitle = tester.getTopLeft(find.text('Usage history'));
+    expect(cursorHeader.dy, lessThan(historyTitle.dy));
   });
 
   testWidgets('explains missing purchased usage when enabled', (tester) async {
@@ -377,11 +575,8 @@ void main() {
         theme: wardPulseLightTheme,
         home: Scaffold(
           body: DashboardScreen(
+            onRefresh: _noRefresh,
             snapshot: DashboardSnapshot.fromJson(dashboard),
-            displayPreferences: const ConsumptionDisplayPreferences(
-              plan: true,
-              purchased: true,
-            ),
           ),
         ),
       ),
@@ -396,4 +591,227 @@ void main() {
       findsOneWidget,
     );
   });
+
+  group('the declared card order', () {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+
+    Map<String, dynamic> account(
+      String provider, {
+      String status = 'ok',
+      int spent = 0,
+      String currency = 'USD',
+    }) {
+      return source.primaryAccount!.toJson()
+        ..['accountId'] = '$provider-local'
+        ..['provider'] = provider
+        ..['status'] = status
+        ..['allowances'] = [
+          {
+            'id': '$provider-plan',
+            'source': 'plan',
+            'label': '$provider plan',
+            'usedPercent': 50.0,
+            'used': null,
+            'limit': null,
+            'remaining': null,
+            'unlimited': false,
+            'windowMinutes': null,
+            'resetsAt': null,
+            'status': status,
+          },
+        ]
+        ..['buckets'] = <Object>[]
+        ..['modelBreakdown'] = <Object>[]
+        ..['month'] = {
+          'period': 'month',
+          'spent': {'minorUnits': spent, 'currency': currency},
+          'limit': null,
+          'remaining': null,
+          'usedPercent': null,
+          'projectedTotal': null,
+          'status': status,
+        };
+    }
+
+    DashboardSnapshot snapshotOf(List<Map<String, dynamic>> accounts) {
+      return DashboardSnapshot.fromJson(
+        source.toJson()..['accounts'] = accounts,
+      );
+    }
+
+    /// Provider plaques top to bottom.
+    List<String> renderedOrder(WidgetTester tester) {
+      final headers =
+          [
+              'Codex',
+              'Claude',
+              'Cursor',
+            ].where((label) => find.text(label).evaluate().isNotEmpty).toList()
+            ..sort(
+              (left, right) => tester
+                  .getTopLeft(find.text(left))
+                  .dy
+                  .compareTo(tester.getTopLeft(find.text(right)).dy),
+            );
+      return headers;
+    }
+
+    Future<void> show(
+      WidgetTester tester,
+      DashboardSnapshot snapshot, {
+      FrozenOrder? order,
+    }) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: wardPulseLightTheme,
+          home: Scaffold(
+            body: DashboardScreen(
+              snapshot: snapshot,
+              order: order,
+              onRefresh: _noRefresh,
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('needs action first, then spend, then name', (tester) async {
+      await show(
+        tester,
+        snapshotOf([
+          account('claude', spent: 100),
+          account('codex', spent: 900),
+          account('cursor', status: 'error'),
+        ]),
+      );
+
+      // Cursor is broken and comes first though it spent nothing; Codex
+      // outspends Claude and takes the rest.
+      expect(renderedOrder(tester), ['Cursor', 'Codex', 'Claude']);
+    });
+
+    testWidgets('equal keys fall back to the provider, not the label', (
+      tester,
+    ) async {
+      await show(
+        tester,
+        snapshotOf([account('cursor'), account('codex'), account('claude')]),
+      );
+
+      expect(renderedOrder(tester), ['Claude', 'Codex', 'Cursor']);
+    });
+
+    testWidgets('the same accounts in another order render the same screen', (
+      tester,
+    ) async {
+      final accounts = [
+        account('claude', spent: 100),
+        account('codex', spent: 900),
+        account('cursor', status: 'error'),
+      ];
+
+      await show(tester, snapshotOf(accounts));
+      final first = renderedOrder(tester);
+
+      await show(tester, snapshotOf(accounts.reversed.toList()));
+
+      expect(renderedOrder(tester), first);
+    });
+
+    testWidgets('a poll that only moves spend leaves the cards alone', (
+      tester,
+    ) async {
+      final order = FrozenOrder();
+      await show(
+        tester,
+        snapshotOf([
+          account('claude', spent: 100),
+          account('codex', spent: 900),
+        ]),
+        order: order,
+      );
+      expect(renderedOrder(tester), ['Codex', 'Claude']);
+
+      // Claude overtakes Codex on spend; the reader's list must not swap under
+      // the finger, because no provider changed state.
+      await show(
+        tester,
+        snapshotOf([
+          account('claude', spent: 5000),
+          account('codex', spent: 900),
+        ]),
+        order: order,
+      );
+
+      expect(renderedOrder(tester), ['Codex', 'Claude']);
+    });
+
+    testWidgets('a family falling into error climbs the same poll', (
+      tester,
+    ) async {
+      final order = FrozenOrder();
+      await show(
+        tester,
+        snapshotOf([
+          account('claude', spent: 100),
+          account('codex', spent: 900),
+        ]),
+        order: order,
+      );
+      expect(renderedOrder(tester), ['Codex', 'Claude']);
+
+      // The same two families, so nothing joined or left — but one of them now
+      // needs the reader, and a held order must not sit on that.
+      await show(
+        tester,
+        snapshotOf([
+          account('claude', status: 'error', spent: 100),
+          account('codex', spent: 900),
+        ]),
+        order: order,
+      );
+
+      expect(renderedOrder(tester), ['Claude', 'Codex']);
+    });
+
+    testWidgets('a family joining reranks, and the badge follows the cards', (
+      tester,
+    ) async {
+      final order = FrozenOrder();
+      await show(
+        tester,
+        snapshotOf([
+          account('claude', spent: 100),
+          account('codex', spent: 900),
+        ]),
+        order: order,
+      );
+
+      final withCursor = snapshotOf([
+        account('claude', spent: 100),
+        account('codex', spent: 900),
+        account('cursor', status: 'error'),
+      ]);
+      await show(tester, withCursor, order: order);
+
+      expect(renderedOrder(tester), ['Cursor', 'Codex', 'Claude']);
+      // What the app-bar mark scrolls to is read off the same order, so it
+      // cannot point past a card sitting higher up.
+      expect(dashboardProblems(withCursor, order).first, 'cursor');
+    });
+  });
 }
+
+/// Status pills inside the card that carries [label], so a leaf assertion stays
+/// a leaf assertion once family and app-bar rollups change around it.
+Finder _pillsInCardOf(Finder label) {
+  return find.descendant(
+    of: find.ancestor(of: label, matching: find.byType(Card)),
+    matching: find.byType(StatusPill),
+  );
+}
+
+/// These tests drive the screen, not the reload behind the pull.
+Future<void> _noRefresh() async {}

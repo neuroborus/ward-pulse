@@ -1,0 +1,145 @@
+import 'dart:convert';
+
+import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
+
+import 'dashboard_models.dart';
+
+/// One plan window, named the only way it is unique: allowance ids repeat
+/// across accounts, so the account travels with them.
+typedef WindowKey = ({String accountId, String allowanceId});
+
+/// A window that was spent and has room again.
+///
+/// `accountId` keys the notification so a repeat replaces it; it is never part
+/// of what a reader sees. `provider` is: two subscriptions can both call a
+/// window "Weekly plan", and the family is what tells them apart.
+typedef PlanRecovery =
+    ({
+      String accountId,
+      String provider,
+      String allowanceId,
+      String label,
+      DateTime? resetsAt,
+    });
+
+/// Windows `snapshot` reports as spent (Rust core in production; a test seam
+/// everywhere else, since host tests load no `.so`).
+typedef ReadExhaustedWindows =
+    List<WindowKey> Function(DashboardSnapshot snapshot);
+
+/// Windows from `exhausted` that `snapshot` reports usable again (Rust core in
+/// production; a test seam everywhere else, since host tests load no `.so`).
+typedef ReadPlanRecoveries =
+    List<PlanRecovery> Function(
+      DashboardSnapshot snapshot,
+      List<WindowKey> exhausted,
+    );
+
+/// Asks the core which windows are spent right now.
+///
+/// The rule lives there and only there: the phone remembers the answer between
+/// polls but never decides what "exhausted" means.
+List<WindowKey> exhaustedWindows(DashboardSnapshot snapshot) {
+  return _decodeWindowKeys(exhaustedWindowsJson(snapshot.toJsonString()));
+}
+
+/// Asks the core which of [exhausted] have room again in [snapshot].
+List<PlanRecovery> planRecoveries(
+  DashboardSnapshot snapshot,
+  List<WindowKey> exhausted,
+) {
+  final recoveries = jsonDecode(
+    planRecoveriesJson(snapshot.toJsonString(), encodeWindowKeys(exhausted)),
+  );
+  return [
+    for (final recovery in recoveries as List<dynamic>)
+      planRecoveryFromJson(recovery as Map<String, dynamic>),
+  ];
+}
+
+/// The soonest a window in [exhausted] is expected to roll [after] a given
+/// instant, or `null` when none of them says.
+///
+/// Only instants still ahead count. A reset already behind means the provider
+/// has not caught up with its own clock — Cursor aggregates about hourly — and
+/// booking a wake for it would put the phone in a five-minute loop against a
+/// window that keeps reading spent. The ordinary cadence covers that case.
+///
+/// Reading, not judging: the core decides which windows are spent, and the
+/// shell decides when to look again — scheduling is the shell's side of the
+/// boundary, as the poll cadence already is.
+DateTime? nextResetAmong(
+  DashboardSnapshot snapshot,
+  List<WindowKey> exhausted, {
+  required DateTime after,
+}) {
+  DateTime? soonest;
+  for (final account in snapshot.accounts) {
+    for (final allowance in account.allowances) {
+      final isExhausted = exhausted.any(
+        (key) =>
+            key.accountId == account.accountId &&
+            key.allowanceId == allowance.id,
+      );
+      final resetsAt = allowance.resetsAt;
+      if (!isExhausted || resetsAt == null || !resetsAt.isAfter(after)) {
+        continue;
+      }
+      if (soonest == null || resetsAt.isBefore(soonest)) {
+        soonest = resetsAt;
+      }
+    }
+  }
+  return soonest;
+}
+
+/// Window keys as the core reads them, ready to be stored between polls.
+String encodeWindowKeys(List<WindowKey> keys) {
+  return jsonEncode([
+    for (final key in keys)
+      {'accountId': key.accountId, 'allowanceId': key.allowanceId},
+  ]);
+}
+
+/// Inverse of [encodeWindowKeys]; anything unreadable reads as "nothing was
+/// remembered", which costs one missed recovery rather than a crash on launch.
+///
+/// Unreadable covers more than unparseable text: a store holding `null`, an
+/// object, or entries without the two fields parses fine and then fails on the
+/// cast, and that failure would land on a background poll where nobody sees it.
+List<WindowKey> decodeWindowKeys(String json) {
+  try {
+    return _decodeWindowKeys(json);
+  } on FormatException {
+    return const [];
+  } on TypeError {
+    return const [];
+  }
+}
+
+List<WindowKey> _decodeWindowKeys(String json) {
+  return [
+    for (final key in jsonDecode(json) as List<dynamic>)
+      (
+        accountId: (key as Map<String, dynamic>)['accountId'] as String,
+        allowanceId: key['allowanceId'] as String,
+      ),
+  ];
+}
+
+/// One recovery as the core writes it. Exposed for the round-trip test that
+/// keeps this side and the Rust side describing the same payload.
+PlanRecovery planRecoveryFromJson(Map<String, dynamic> json) {
+  final resetsAt = json['resetsAt'];
+  return (
+    accountId: json['accountId'] as String,
+    provider: json['provider'] as String,
+    allowanceId: json['allowanceId'] as String,
+    label: json['label'] as String,
+    // `tryParse`, because the core passes provider instants through rather than
+    // rejecting them (`DateTimeUtc`). An unreadable one leaves the window with
+    // no reset instant — still real news, just nothing to schedule a wake for —
+    // while throwing here would take the whole poll's bookkeeping with it.
+    resetsAt: resetsAt is String ? DateTime.tryParse(resetsAt) : null,
+  );
+}

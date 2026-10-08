@@ -6,7 +6,10 @@ void main() {
     final value = DateTime.utc(2026, 7, 25, 18, 42, 0);
 
     expect(formatLocal(value), isNot(contains('UTC')));
-    expect(formatLocal(value), matches(RegExp(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$')));
+    expect(
+      formatLocal(value),
+      matches(RegExp(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$')),
+    );
   });
 
   test('formatUtc keeps an explicit UTC label for disclosure', () {

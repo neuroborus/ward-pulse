@@ -17,11 +17,16 @@ import androidx.wear.watchface.complications.datasource.SuspendingComplicationDa
 import app.wardpulse.wear.MainActivity
 import app.wardpulse.wear.data.WatchSummaryStore
 import app.wardpulse.wear.model.PulseStatus
+import app.wardpulse.wear.model.RingHalf
+import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.RingSurfaceOrder
 import app.wardpulse.wear.model.WatchDashboardSummary
+import app.wardpulse.wear.model.WatchDataMode
 import app.wardpulse.wear.ui.RingFamily
 import app.wardpulse.wear.ui.formatPercentAmount
 import app.wardpulse.wear.ui.formatPercentLabel
+import app.wardpulse.wear.ui.formatBudgetStripLabel
+import app.wardpulse.wear.ui.purchasedCreditsCompact
 import java.util.Locale
 
 abstract class ShortTextComplicationDataSourceService :
@@ -48,6 +53,90 @@ abstract class ShortTextComplicationDataSourceService :
     }
 }
 
+/**
+ * The outer half of a split band: the other pool of a plan that shares one band
+ * (`WATCH_RING_DESIGN.md`, Split band).
+ *
+ * Split ordinal 0 uses slot 106. Class name kept for installed faces.
+ *
+ * On an old face, one pair loses its far marker. With two pairs, the first keeps
+ * both arcs without its marker; the second loses its outer arc, and old slot 109
+ * treats that arc's data as a marker, possibly on another row. Update the face
+ * together with the app to restore the matching layout.
+ */
+class RingSplitComplicationDataSourceService : SplitBandComplicationDataSourceService(SPLIT_INDEX) {
+    internal companion object {
+        const val SPLIT_INDEX = 0
+    }
+}
+
+/** Two outer-half services share selection by split ordinal and outside-counted TITLE. */
+abstract class SplitBandComplicationDataSourceService(private val splitIndex: Int) :
+    SuspendingComplicationDataSourceService() {
+    override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
+        if (request.complicationType != ComplicationType.RANGED_VALUE) {
+            return null
+        }
+        val rings = WatchSummaryStore(this).load()?.rings.orEmpty()
+        return outerHalfComplicationData(rings, splitIndex) { half, outerSlot ->
+            ComplicationBuilders.ranged(
+                this,
+                WatchComplicationText.remainingPercent(half.usedPercent),
+                title = outerSlot.toString(),
+                colorArgb = RingFamily.colorArgb(half.id),
+                contentDescription = half.label,
+            )
+        }
+    }
+
+    override fun getPreviewData(type: ComplicationType): ComplicationData? =
+        if (type == ComplicationType.RANGED_VALUE) {
+            ComplicationBuilders.ranged(
+                this,
+                62f,
+                title = "0",
+                colorArgb = RingFamily.CURSOR,
+                contentDescription = "Other Models",
+            )
+        } else {
+            null
+        }
+}
+
+/** Missing/exhausted splits clear stale data; ordinal selection never skips an exhausted split. */
+internal fun outerHalfComplicationData(
+    rings: List<RingSummary>,
+    splitIndex: Int,
+    build: (RingHalf, Int) -> ComplicationData,
+): ComplicationData {
+    val payloadIndex = rings.indices.filter { rings[it].split != null }.getOrNull(splitIndex)
+        ?: return NoDataComplicationData()
+    val half = rings[payloadIndex].split ?: return NoDataComplicationData()
+    val outerSlot = RingSurfaceOrder.outerSlotForPayloadIndex(rings.size, payloadIndex)
+        ?: return NoDataComplicationData()
+    if (WatchComplicationText.remainingPercent(half.usedPercent) <= 0f) {
+        return NoDataComplicationData()
+    }
+    return build(half, outerSlot)
+}
+
+/** Selects the ring for one fixed face slot before Android complication construction. */
+internal fun ringComplicationData(
+    rings: List<RingSummary>,
+    ringIndex: Int,
+    build: (RingSummary, Float, String) -> ComplicationData,
+): ComplicationData {
+    val dataIndex =
+        RingSurfaceOrder.payloadIndexForOuterSlot(rings.size, ringIndex)
+            ?: return NoDataComplicationData()
+    val ring = rings[dataIndex]
+    val remaining = WatchComplicationText.remainingPercent(ring.usedPercent)
+    if (remaining <= 0f) {
+        return NoDataComplicationData()
+    }
+    return build(ring, remaining, WatchComplicationText.ringTitleToken(ring))
+}
+
 abstract class RingComplicationDataSourceService :
     SuspendingComplicationDataSourceService() {
     protected abstract val ringIndex: Int
@@ -61,41 +150,37 @@ abstract class RingComplicationDataSourceService :
         val rings = summary?.rings.orEmpty()
         val dataIndex = RingSurfaceOrder.payloadIndexForOuterSlot(rings.size, ringIndex)
         val ring = dataIndex?.let { rings[it] }
-        val remaining = ring?.let { WatchComplicationText.remainingPercent(it.usedPercent) }
         val label = ring?.label
         return when (request.complicationType) {
             // NoData clears a previous arc; null would leave stale complication data.
             ComplicationType.RANGED_VALUE ->
-                if (ring == null || remaining == null || remaining <= 0f) {
-                    NoDataComplicationData()
-                } else {
-                    // Credits live on the center strip; keep RANGED_VALUE TITLE empty.
+                ringComplicationData(rings, ringIndex) { selectedRing, remaining, title ->
+                    // Credits live on the center strip; TITLE carries what the
+                    // face branches on — the budget period, `split`, or the
+                    // explicit empty full-band state.
                     ComplicationBuilders.ranged(
                         this,
                         remaining,
-                        title = null,
-                        colorArgb = RingFamily.colorArgb(ring.id),
-                        contentDescription = label,
+                        title = title,
+                        colorArgb = RingFamily.colorArgb(selectedRing.id),
+                        contentDescription = selectedRing.label,
                     )
                 }
             ComplicationType.SHORT_TEXT -> {
                 // Dedicated strip slots own SHORT_TEXT; this path is rarely used.
-                val payload =
+                val labelText =
                     if (summary != null && dataIndex != null) {
-                        WatchComplicationText.stripPayload(summary, dataIndex)
+                        WatchComplicationText.stripLabel(summary, dataIndex)
                     } else {
                         null
                     }
-                if (payload == null || summary == null || dataIndex == null) {
+                if (labelText == null) {
                     NoDataComplicationData()
                 } else {
                     ComplicationBuilders.shortText(
                         this,
-                        value = payload.text,
-                        title = payload.title,
-                        contentDescription = label
-                            ?: WatchComplicationText.stripLabel(summary, dataIndex)
-                            ?: payload.text,
+                        value = labelText,
+                        contentDescription = label ?: labelText,
                     )
                 }
             }
@@ -140,7 +225,7 @@ private object ComplicationBuilders {
     fun ranged(
         context: Context,
         percent: Float,
-        title: String? = null,
+        title: String,
         colorArgb: Int = RingFamily.FALLBACK,
         contentDescription: String? = null,
     ): ComplicationData {
@@ -148,7 +233,7 @@ private object ComplicationBuilders {
         val amount = WatchComplicationText.percentAmount(value)
         val description =
             contentDescription?.let { "$it $amount%" }
-                ?: title?.let { "$amount% · $it" }
+                ?: title.takeIf { it.isNotEmpty() }?.let { "$amount% · $it" }
                 ?: WatchComplicationText.percentLabel(value)
         return RangedValueComplicationData.Builder(
             value = value,
@@ -156,12 +241,33 @@ private object ComplicationBuilders {
             max = 100f,
             contentDescription = PlainComplicationText.Builder(description).build(),
         ).setText(PlainComplicationText.Builder(amount).build())
+            .setTitle(PlainComplicationText.Builder(title).build())
+            // Drives WFF WeightedStroke via [COMPLICATION.RANGED_VALUE_COLORS].
+            .setColorRamp(ColorRamp(intArrayOf(colorArgb), /* interpolated = */ false))
+            .setTapAction(tapAction(context))
+            .build()
+    }
+
+    /** Strip row: full TEXT, inner ColorRamp and optional outer-pool token in TITLE. */
+    fun strip(
+        context: Context,
+        label: String,
+        remainingPercent: Float,
+        colorArgb: Int,
+        title: String? = null,
+    ): ComplicationData {
+        val value = remainingPercent.coerceIn(0.1f, 100f)
+        return RangedValueComplicationData.Builder(
+            value = value,
+            min = 0f,
+            max = 100f,
+            contentDescription = PlainComplicationText.Builder(label).build(),
+        ).setText(PlainComplicationText.Builder(label).build())
             .apply {
                 if (!title.isNullOrBlank()) {
                     setTitle(PlainComplicationText.Builder(title).build())
                 }
             }
-            // Drives WFF WeightedStroke via [COMPLICATION.RANGED_VALUE_COLORS].
             .setColorRamp(ColorRamp(intArrayOf(colorArgb), /* interpolated = */ false))
             .setTapAction(tapAction(context))
             .build()
@@ -205,13 +311,6 @@ class Ring3ComplicationDataSourceService : RingComplicationDataSourceService() {
     override val previewLabel = "Ring 3"
 }
 
-class Ring4ComplicationDataSourceService : RingComplicationDataSourceService() {
-    override val ringIndex = 3
-    override val previewPercent = 75f
-    override val previewColorArgb = RingFamily.BUDGET
-    override val previewLabel = "Ring 4"
-}
-
 class StatusComplicationDataSourceService : ShortTextComplicationDataSourceService() {
     override val previewText = "SYNC"
 
@@ -220,67 +319,60 @@ class StatusComplicationDataSourceService : ShortTextComplicationDataSourceServi
 }
 
 /**
- * Center-most sunk strip SHORT_TEXT provider (payload index 0 / tightest).
+ * Payload-index strip provider (0 = tightest / nearest center).
  *
- * WFF `length([COMPLICATION.TITLE])` Conditions are unreliable, so TEXT carries the full
- * human label (`100%`, `100% · 500`, or credits-only `500`). Template is `%s` (no extra `%`).
+ * Emits [RANGED_VALUE] so WFF can paint the family accent from
+ * `[COMPLICATION.RANGED_VALUE_COLORS]` — same ColorRamp path as the arcs.
+ * TEXT is the full strip label (`46%`, `100% · 500`); the ranged value is unused for an arc.
  *
- * Class name kept for WFF primaryProvider continuity; payload field is creditsGlance.
+ * Class name kept for WFF primaryProvider continuity.
  */
-class TokensComplicationDataSourceService : SuspendingComplicationDataSourceService() {
-    override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
-        if (request.complicationType != ComplicationType.SHORT_TEXT) {
-            return null
-        }
-        val summary = WatchSummaryStore(this).load() ?: return NoDataComplicationData()
-        // Strip stack top (nearest center) = payload index 0 = tightest.
-        val label = WatchComplicationText.stripLabel(summary, 0) ?: return NoDataComplicationData()
-        return ComplicationBuilders.shortText(
-            this,
-            value = label,
-            contentDescription = label,
-        )
-    }
-
-    override fun getPreviewData(type: ComplicationType): ComplicationData? =
-        if (type == ComplicationType.SHORT_TEXT) {
-            ComplicationBuilders.shortText(
-                this,
-                value = "8% · 500",
-                contentDescription = "8% · 500",
-            )
-        } else {
-            null
-        }
+class TokensComplicationDataSourceService : RingStripComplicationDataSourceService() {
+    override val ringIndex = 0
+    override val previewText = "8% · 500"
+    override val previewColorArgb = RingFamily.CODEX
 }
 
 abstract class RingStripComplicationDataSourceService : SuspendingComplicationDataSourceService() {
     protected abstract val ringIndex: Int
     protected abstract val previewText: String
-    protected open val previewTitle: String? = null
+    protected open val previewColorArgb: Int = RingFamily.FALLBACK
 
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
-        if (request.complicationType != ComplicationType.SHORT_TEXT) {
+        if (request.complicationType != ComplicationType.RANGED_VALUE) {
             return null
         }
-        val summary = WatchSummaryStore(this).load()
-        val payload = summary?.let { WatchComplicationText.stripPayload(it, ringIndex) }
-        return if (payload == null) {
-            NoDataComplicationData()
-        } else {
-            ComplicationBuilders.shortText(
-                this,
-                value = payload.text,
-                title = payload.title,
-                contentDescription = WatchComplicationText.stripLabel(summary, ringIndex)
-                    ?: payload.text,
-            )
-        }
+        val summary = WatchSummaryStore(this).load() ?: return NoDataComplicationData()
+        val label = WatchComplicationText.stripLabel(summary, ringIndex)
+            ?: return NoDataComplicationData()
+        val ring = summary.rings.getOrNull(ringIndex)
+        val colorArgb =
+            when {
+                ring != null -> RingFamily.colorArgb(ring.id)
+                else ->
+                    summary.creditsGlance?.provider?.let { provider ->
+                        RingFamily.colorArgb("allowance.$provider.credits")
+                    } ?: RingFamily.FALLBACK
+            }
+        val remaining =
+            ring?.let { WatchComplicationText.remainingPercent(it.usedPercent) } ?: 100f
+        return ComplicationBuilders.strip(
+            this,
+            label = label,
+            remainingPercent = remaining,
+            colorArgb = colorArgb,
+            title = ring?.let { WatchComplicationText.stripTitleToken(it) },
+        )
     }
 
     override fun getPreviewData(type: ComplicationType): ComplicationData? =
-        if (type == ComplicationType.SHORT_TEXT) {
-            ComplicationBuilders.shortText(this, previewText, title = previewTitle)
+        if (type == ComplicationType.RANGED_VALUE) {
+            ComplicationBuilders.strip(
+                this,
+                label = previewText,
+                remainingPercent = 100f,
+                colorArgb = previewColorArgb,
+            )
         } else {
             null
         }
@@ -288,63 +380,149 @@ abstract class RingStripComplicationDataSourceService : SuspendingComplicationDa
 
 class Strip2ComplicationDataSourceService : RingStripComplicationDataSourceService() {
     override val ringIndex = 1
-    override val previewText = "39"
+    override val previewText = "39%"
+    override val previewColorArgb = RingFamily.CLAUDE
 }
 
 class Strip3ComplicationDataSourceService : RingStripComplicationDataSourceService() {
     override val ringIndex = 2
-    override val previewText = "72"
+    override val previewText = "72%"
+    override val previewColorArgb = RingFamily.CURSOR
 }
 
-class Strip4ComplicationDataSourceService : RingStripComplicationDataSourceService() {
-    override val ringIndex = 3
-    override val previewText = "75"
+/**
+ * Split ordinal 1 in slot 109, formerly the far strip marker. Class name kept
+ * for installed faces; the updater still requests both outer-half services.
+ *
+ * On an old face, one pair loses its far marker because this service returns
+ * NoData. With two pairs, the first keeps both arcs without its marker; the
+ * second has no outer arc, and slot 109 interprets its outside-counted TITLE
+ * as a strip row, possibly marking another row. Updating the face fixes both.
+ */
+class StripSplitComplicationDataSourceService : SplitBandComplicationDataSourceService(SPLIT_INDEX) {
+    internal companion object {
+        const val SPLIT_INDEX = 1
+    }
 }
 
 object WatchComplicationText {
+    /**
+     * What a band's own slot puts in TITLE when it draws only its inner half.
+     * The face branches on this string; keep it in step with
+     * `tools/render-watchface.mjs`.
+     */
+    const val SPLIT_TOKEN = "split"
+
+    /**
+     * Closed outer-pool vocabulary. A new pool color needs a matching static
+     * branch in tools/render-watchface.mjs and an entry in the design palette.
+     */
+    fun splitPoolToken(ringId: String): String? =
+        when (ringId) {
+            "allowance.cursor.cursor-plan-other" -> "cursor-other"
+            "allowance.codex.spark" -> "spark"
+            else -> null
+        }
+
+    /** No marker for an ordinary band, an exhausted half, or an unknown pool. */
+    fun stripTitleToken(ring: RingSummary): String? {
+        val half = ring.split ?: return null
+        if (remainingPercent(ring.usedPercent) <= 0f || remainingPercent(half.usedPercent) <= 0f) {
+            return null
+        }
+        return splitPoolToken(half.id)
+    }
+
     /** Remaining capacity 0–100 for RANGED_VALUE / strip-style labels. */
     fun remainingPercent(usedPercent: Double): Float =
         (100.0 - usedPercent.coerceIn(0.0, 100.0)).toFloat().coerceIn(0f, 100f)
 
+    /**
+     * Everything a ring slot tells the face about itself, in the one string a
+     * complication may carry: [SPLIT_TOKEN] when the band is shared with a
+     * second pool, otherwise its budget period or an explicit empty value for
+     * an unpaired plan.
+     *
+     * The two can never collide — only a budget ring has a period, and a pair
+     * is always two plan pools (`WATCH_RING_DESIGN.md`, Split band).
+     */
+    fun ringTitleToken(ring: RingSummary): String =
+        if (ring.split != null) SPLIT_TOKEN else ringPeriodToken(ring.id).orEmpty()
+
+    /**
+     * The period token the watch face repeats around a ring, read off the ring
+     * id the way [RingFamily.colorArgb] reads the family. Null for a ring that
+     * has no period — a plan window or an allowance is a moving window, not a
+     * calendar period — and the face draws no texture for a slot that names
+     * none.
+     *
+     * `7D` rather than `W`: at ring scale `W` and `M` are near-mirror shapes,
+     * and the watch already labels the Claude window `5h`, so duration tokens
+     * are the house vocabulary (`docs/product/WATCH_RING_DESIGN.md`).
+     */
+    fun ringPeriodToken(ringId: String): String? =
+        when {
+            !ringId.startsWith("budget.") -> null
+            ringId.endsWith(".today") -> "D"
+            ringId.endsWith(".week") -> "7D"
+            ringId.endsWith(".month") -> "M"
+            else -> null
+        }
+
     data class StripPayload(
-        /** Remaining digits only — WFF Template appends '%'. */
+        /** Full strip label for WFF Template `%s` (`46%`, `100% · 500`). */
         val text: String,
-        /** Optional remaining credits for the center (first) strip (`8% · 500`). */
-        val title: String? = null,
     )
 
-    /** Digits (+ optional title) for WFF SHORT_TEXT strip slots. */
+    /** Full label for WFF SHORT_TEXT strip slots. */
     fun stripPayload(summary: WatchDashboardSummary, index: Int): StripPayload? {
-        val ring = summary.rings.getOrNull(index) ?: return null
-        val remaining = remainingPercent(ring.usedPercent)
-        if (remaining <= 0f) {
-            return null
-        }
-        val credits =
-            if (index == 0) summary.creditsGlance?.text?.takeIf { it.isNotBlank() } else null
-        return StripPayload(text = percentAmount(remaining), title = credits)
+        val label = stripLabel(summary, index) ?: return null
+        return StripPayload(text = label)
     }
 
     /**
      * Human strip label for surface ring [index] (`WATCH_RING_DESIGN.md`):
-     * `8%`, `8% · 500`, or credits-only on strip 0 when there is no plan ring.
+     * `8%`, or `8% · 500` when that ring's provider reports purchased credits
+     * (same per-family source as Glance). Credits-only on strip 0 when there is
+     * no plan ring. A budget ring reads its money instead — `$12.34/100`.
      */
     fun stripLabel(summary: WatchDashboardSummary?, index: Int): String? {
         if (summary == null) {
             return null
         }
-        val payload = stripPayload(summary, index)
-        if (payload != null) {
-            return if (payload.title != null) {
-                "${payload.text}% · ${payload.title}"
+        val ring = summary.rings.getOrNull(index)
+        if (ring != null) {
+            val remaining = remainingPercent(ring.usedPercent)
+            if (remaining <= 0f) {
+                return null
+            }
+            formatBudgetStripLabel(ring.spent, ring.limit)?.let { return it }
+            val percent = percentAmount(remaining)
+            // A split band spends the well on its second percent instead of
+            // credits (`WATCH_RING_DESIGN.md`, Split band, rules 4 and 5).
+            val half = ring.split?.let { remainingPercent(it.usedPercent) }
+            if (half != null && half > 0f) {
+                return "$percent% · ${percentAmount(half)}%"
+            }
+            val credits = purchasedCreditsCompact(summary, ring.id)
+            return if (credits != null) {
+                "$percent% · $credits"
             } else {
-                "${payload.text}%"
+                "$percent%"
             }
         }
         if (index == 0) {
             return summary.creditsGlance?.text?.takeIf { it.isNotBlank() }
         }
         return null
+    }
+
+    /** `allowance.<provider>.…` → provider id; budgets / unknown → null. */
+    fun providerFromRingId(ringId: String): String? {
+        if (!ringId.startsWith("allowance.")) {
+            return null
+        }
+        return ringId.split('.').getOrNull(1)?.takeIf { it.isNotBlank() }
     }
 
     /** Remaining-% label for surface ring [index] (payload order, not budget period). */
@@ -361,9 +539,14 @@ object WatchComplicationText {
         formatPercentAmount(percent?.toDouble()) ?: "—"
 
     fun status(summary: WatchDashboardSummary): String {
-        val source = when (summary.providers.size) {
-            0 -> "NO DATA"
-            1 -> summary.providers.single().providerLabel.uppercase(Locale.US)
+        val source = when {
+            // Mock outranks the provider names, matching the Glance detail order
+            // (`WEAR_GLANCE_DESIGN.md`): the demo impersonates real families, so
+            // nothing else here would say the numbers are not real.
+            summary.dataMode == WatchDataMode.MOCK -> "MOCK"
+            summary.providers.isEmpty() -> "NO DATA"
+            summary.providers.size == 1 ->
+                summary.providers.single().providerLabel.uppercase(Locale.US)
             else -> "${summary.providers.size} PRV"
         }
         val pulse = when {
@@ -391,12 +574,12 @@ object WatchComplicationUpdater {
         TodayComplicationDataSourceService::class.java,
         WeekComplicationDataSourceService::class.java,
         Ring3ComplicationDataSourceService::class.java,
-        Ring4ComplicationDataSourceService::class.java,
+        RingSplitComplicationDataSourceService::class.java,
         StatusComplicationDataSourceService::class.java,
         TokensComplicationDataSourceService::class.java,
         Strip2ComplicationDataSourceService::class.java,
         Strip3ComplicationDataSourceService::class.java,
-        Strip4ComplicationDataSourceService::class.java,
+        StripSplitComplicationDataSourceService::class.java,
     )
 
     fun requestUpdate(context: Context) {

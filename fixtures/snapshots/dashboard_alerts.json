@@ -5,6 +5,7 @@
     {
       "accountId": "mock-local",
       "provider": "mock",
+      "connection": "mock.plan",
       "status": "ok",
       "today": {
         "period": "today",
@@ -164,17 +165,11 @@
       "minorUnits": 4500,
       "currency": "USD"
     },
-    "limit": {
-      "minorUnits": 5000,
-      "currency": "USD"
-    },
-    "remaining": {
-      "minorUnits": 500,
-      "currency": "USD"
-    },
-    "usedPercent": 90.0,
+    "limit": null,
+    "remaining": null,
+    "usedPercent": null,
     "projectedTotal": null,
-    "status": "warning"
+    "status": "unknown"
   },
   "weekTotal": {
     "period": "week",
@@ -182,20 +177,14 @@
       "minorUnits": 7130,
       "currency": "USD"
     },
-    "limit": {
-      "minorUnits": 25000,
-      "currency": "USD"
-    },
-    "remaining": {
-      "minorUnits": 17870,
-      "currency": "USD"
-    },
-    "usedPercent": 28.52,
+    "limit": null,
+    "remaining": null,
+    "usedPercent": null,
     "projectedTotal": {
       "minorUnits": 22800,
       "currency": "USD"
     },
-    "status": "ok"
+    "status": "unknown"
   },
   "monthTotal": {
     "period": "month",
@@ -203,30 +192,24 @@
       "minorUnits": 21210,
       "currency": "USD"
     },
-    "limit": {
-      "minorUnits": 80000,
-      "currency": "USD"
-    },
-    "remaining": {
-      "minorUnits": 58790,
-      "currency": "USD"
-    },
-    "usedPercent": 26.5125,
+    "limit": null,
+    "remaining": null,
+    "usedPercent": null,
     "projectedTotal": {
       "minorUnits": 74200,
       "currency": "USD"
     },
-    "status": "ok"
+    "status": "unknown"
   },
   "alerts": [
     {
       "severity": "warning",
-      "message": "Today budget is above the warning threshold."
+      "message": "Mock budget for today reached the alert threshold."
     }
   ],
   "watchSummary": {
-    "todayUsedPercent": 90.0,
-    "weekUsedPercent": 28.52,
+    "todayUsedPercent": null,
+    "weekUsedPercent": null,
     "status": "ok"
   }
 }

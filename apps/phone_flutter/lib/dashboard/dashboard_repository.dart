@@ -43,13 +43,53 @@ final class RustDashboardRepository extends DashboardRepository {
   }
 }
 
+typedef DebugDashboardJsonLoader = String Function(int seed);
+
+/// Debug Mock data: full multi-provider fixture dashboard.
+///
+/// Cached until [invalidate] so automatic sync ticks stay stable; phone refresh
+/// and the Mock data toggle clear the cache and draw a new seed.
+final class DemoDashboardRepository extends DashboardRepository {
+  DemoDashboardRepository({
+    this.loadDebugDashboardJson = loadDebugDashboardSnapshotJson,
+    this.seedForLoad,
+  });
+
+  final DebugDashboardJsonLoader loadDebugDashboardJson;
+  final int Function()? seedForLoad;
+  DashboardSnapshot? _cached;
+
+  @override
+  Future<DashboardSnapshot> load() async {
+    final cached = _cached;
+    if (cached != null) {
+      return cached;
+    }
+    try {
+      final seed = seedForLoad?.call() ?? DateTime.now().microsecondsSinceEpoch;
+      final snapshot = DashboardSnapshot.fromJsonString(
+        loadDebugDashboardJson(seed),
+      );
+      _cached = snapshot;
+      return snapshot;
+    } catch (_) {
+      throw const DashboardLoadException();
+    }
+  }
+
+  @override
+  void invalidate() {
+    _cached = null;
+  }
+}
+
 final class DebugDashboardRepository extends DashboardRepository {
-  const DebugDashboardRepository({
+  DebugDashboardRepository({
     required DashboardRepository live,
     required DebugDataPreferenceStore preferences,
-    DashboardRepository mock = const RustDashboardRepository(),
+    DashboardRepository? mock,
   }) : _live = live,
-       _mock = mock,
+       _mock = mock ?? DemoDashboardRepository(),
        _preferences = preferences;
 
   final DashboardRepository _live;

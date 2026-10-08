@@ -12,7 +12,7 @@ This repository is intentionally organized as one product monorepo with separate
 - `apps/phone_flutter/` contains the Flutter phone app shell.
 - `apps/wear_android/` contains the native Kotlin/Compose for Wear OS shell.
 - `apps/watchface_wff/` contains the declarative Watch Face Format package.
-- `schemas/` contains shared JSON schemas for snapshots, accounts, usage buckets, and budgets.
+- `schemas/` contains shared JSON schemas for payloads crossing a language or device boundary.
 - `fixtures/` contains sanitized provider fixtures and stable dashboard snapshots.
 - `bindings/` contains platform binding wrappers.
 - `brand/` contains protected product identity, shared OpenPencil sources, and store artwork.
@@ -21,8 +21,9 @@ This repository is intentionally organized as one product monorepo with separate
 
 ## Current Phase
 
-Phase 7 provider reporting and Phase 8 hardening are in progress. OpenAI Platform organization
-reporting is separate from Codex subscription usage; both are fetched directly by the phone.
+Phase 13 (configurable watch rings / WFF face) is in progress on device. Provider reporting
+for Codex, Claude, Cursor plan, and OpenAI Platform continues in parallel; Cursor plan uses
+in-app WebView sign-in (not OAuth).
 
 ## Useful Commands
 
@@ -39,6 +40,7 @@ just build-android-rust
 just run-phone
 just check-wear
 just validate-watchface
+just render-watchface
 just check-watchface
 just docs-dev
 just check-docs
@@ -56,6 +58,7 @@ Direct Rust commands work from `core/`:
 ```sh
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
 cargo test --workspace
 cargo run --quiet -p ward-pulse-cli
 ```
