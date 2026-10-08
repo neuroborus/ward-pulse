@@ -1829,11 +1829,14 @@ Status: complete as of 2026-10-05.
 
 Everything WardPulse itself controls is covered by tests: the edge in the Rust core, the phone's
 memory of what was spent, the notification and what it may say, the wake booked from the reset
-instant, and the Settings switch with its permission ask. Exact bridge delivery was measured on
+instant, and the Settings switch with its permission ask. Data Layer delivery was measured on
 the local AVDs on 2026-10-06: Android Studio paired them over its ADB bridge without BLE, and
 starting `app.wardpulse` on the phone produced `I/WardPulseSync: Watch summary received.` on the
-watch before its complications refreshed to match the phone panel. WardPulse's Wear app posts no
-notifications of its own, so it cannot create a duplicate itself.
+watch before its complications refreshed to match the phone panel. The notification bridge that
+carries a recovery to the watch was measured separately on 2026-10-08, once the companion held
+notification access: a notification posted on the phone appeared on the watch, bridged by
+`WearServices` rather than reposted. WardPulse's Wear app posts no notifications of its own, so
+it cannot create a duplicate itself.
 
 Rationale: an exhausted plan window is the one state the user is actively waiting to leave.
 Today the product says nothing when it ends — the ring simply reappears after the next poll,

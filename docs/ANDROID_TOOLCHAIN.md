@@ -511,7 +511,24 @@ Pair the two AVDs once. Emulator pairing does not require BLE:
 
    The watch must report `IsConnected=true, PeerNodeId=f71537bc`. The phone must report
    `Role=2, Address=EmulatorAddr-502cc269` and `IsConnected=true`.
-5. Save both paired states immediately. Snapshot saving requires `Vulkan = off` in
+5. ADB-driven consent skips the companion's notification-access prompt, so a pair that reports
+   **Connected** still bridges no notifications. Grant the listener explicitly, before saving
+   the snapshots:
+
+   ```sh
+   adb -s "$PHONE_SERIAL" shell cmd notification allow_listener \
+     com.google.android.apps.wear.companion/com.google.android.libraries.wear.companion.notification.service.CompanionNotificationListenerService
+   ```
+
+   Measured on 2026-10-08. Without the grant a notification posted on the phone never reaches
+   the watch. With it the phone logs `WearNotifPipeline: [Sender] Putting notification data
+   item /bridger/stream_item:…` and the watch logs `WearServices: [WBridgedItemsController]
+   Displaying bridged notification … creatorNodeId=<phone node ID>`.
+
+   A bridged notification does not pass through the watch's own `NotificationManager`, so
+   `dumpsys notification` on the watch never lists it and its `NotificationRecord` count does
+   not move. Read the watch logcat or the watch screen instead.
+6. Save both paired states immediately. Snapshot saving requires `Vulkan = off` in
    `~/.android/advancedFeatures.ini`; otherwise the emulator returns `UNSUPPORTED_VK_APP`.
 
    ```sh
