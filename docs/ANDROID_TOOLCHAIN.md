@@ -617,7 +617,52 @@ just run-watchface
 ```
 
 The preview image is a sanitized emulator capture. After visual changes, replace it with a
-fresh interactive-mode capture from the canonical round Wear AVD.
+fresh interactive-mode capture from the canonical round Wear AVD. The shipped one is stale and
+advertises a retired layout — see *The preview in the face picker* in
+`docs/product/WATCH_RING_DESIGN.md`.
+
+### The package ships no code, and the system owns its complication slots
+
+Measured on `emulator-5554`, 2026-10-09. The point is not bookkeeping: it decides who can
+change which provider sits in which slot, and the answer is never WardPulse.
+
+- **The APK contains no code.** `unzip -l` on `WardPulseWatchFace-debug.apk` lists **zero**
+  `.dex` entries, and `apps/watchface_wff/src/main/AndroidManifest.xml` declares
+  `android:hasCode="false"` with no `<activity>` and no `<service>` — only the watch
+  `<uses-feature>`, the `com.google.android.wearable.standalone` metadata, and
+  `com.google.wear.watchface.format.version`. The package is resources and nothing else.
+- **A Google process draws it.** `adb shell dumpsys wallpaper` reports
+
+  ```text
+  mWallpaperComponent=ComponentInfo{com.google.wear.watchface.runtime/com.google.wear.watchface.runtime.DeclarativeWatchFaceRuntime0}
+  ```
+
+  The package `com.google.wear.watchface.runtime` declares `DeclarativeWatchFaceRuntime`,
+  `DeclarativeWatchFaceRuntime0` and `DeclarativeWatchFaceRuntime1`. A WFF face is not its own
+  wallpaper service; it is data that Google's runtime interprets, and `app.wardpulse.watchface`
+  never runs.
+- **The provider chooser is a system activity.**
+  `com.google.android.clockwork.sysui.experiences.complications.ProviderChooserActivity` lives
+  in `com.google.android.wearable.sysui`, beside the system providers
+  (`DayOfWeekProviderService`, `StepsProviderService`, `SunriseSunsetProviderService`) and the
+  face picker, `mainui.module.watchfacepicker2.WatchFacePickerAllFacesActivity` in that same
+  package.
+
+So a WFF face cannot own an editor: there is nowhere in it for one to run. This is the shape of
+the format, not a gap in ours. Everything the face gets to say about a slot it says in markup —
+`isCustomizable`, `supportedTypes` (`EMPTY` among them) and `DefaultProviderPolicy` — and the
+wearer changes the rest in the system UI. The WardPulse phone app is excluded twice over: it has
+no API that writes another package's slot configuration, and the configuration does not belong
+to our package in the first place. `ComplicationDataSourceUpdateRequester` only asks our own
+provider services to refresh the data they already supply.
+
+**Not verified.** That the system chooser offers a *none* or *empty* entry for a slot whose
+`supportedTypes` include `EMPTY`. A long press reached the face picker on this AVD — its
+controls read `Activate WardPulse` and `Move watch face left` — but the per-slot chooser was not
+reached, so the wearer's ability to clear a cell follows from the declaration rather than from a
+reading. The schema is no help either: in `complicationSlotElement.xsd` lines 53–57 declare
+`slotId`, `supportedTypes`, `displayName`, `isCustomizable` and `blendMode` as bare types with
+no annotation, so it says nothing about behaviour.
 
 ## Routine Verification
 

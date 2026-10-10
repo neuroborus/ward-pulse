@@ -12,7 +12,8 @@
   band and punched out in the background colour at low alpha, so the arc underneath keeps
   the family and the type stays a shade in the band.
 
-  BoundingArc clips ring-slot content — strips use BoundingBox slots after clock.
+  Ring slots take a full-canvas BoundingBox: a BoundingArc clips a slot to its own
+  band and halves its stroke, so each band declares the 20 units it paints.
   Strip TEXT = full label (`46%` or `100% · 500` on the owning family).
   Strip TITLE = closed outer-pool token; the far marker uses its static palette color.
   Remaining melt: Transform startAngle (1 - value/max)*359.9, endAngle fixed 359.9
@@ -50,15 +51,7 @@
                 primaryProviderType="RANGED_VALUE"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingArc
-                centerX="225"
-                centerY="225"
-                width="404"
-                height="404"
-                thickness="40"
-                startAngle="0"
-                endAngle="359.9"
-                isRoundEdge="TRUE" />
+            <BoundingBox x="0" y="0" width="450" height="450" />
             <Complication type="RANGED_VALUE">
                 <Condition>
                     <Expressions>
@@ -164,17 +157,17 @@
                                         <Arc
                                             centerX="225"
                                             centerY="225"
-                                            width="404"
-                                            height="404"
+                                            width="384"
+                                            height="384"
                                             startAngle="0"
                                             endAngle="359.9">
-                                            <Stroke color="#ff2e3632" thickness="40" cap="ROUND" />
+                                            <Stroke color="#ff2e3632" thickness="20" cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
                                     <Condition>
                                         <Expressions>
                                             <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                            <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.031509]]></Expression>
+                                            <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.016560]]></Expression>
                                         </Expressions>
                                         <!-- Nothing spent yet: there is no melt to inset, and the inset would
                                              leave a seam at 12 on a ring that has spent nothing. Drawn without
@@ -185,12 +178,12 @@
                                                 <Arc
                                                     centerX="225"
                                                     centerY="225"
-                                                    width="404"
-                                                    height="404"
+                                                    width="384"
+                                                    height="384"
                                                     startAngle="0"
-                                                    endAngle="354.23">
+                                                    endAngle="356.92">
                                                     <WeightedStroke
-                                                        thickness="40"
+                                                        thickness="20"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                                         cap="ROUND" />
                                                 </Arc>
@@ -206,15 +199,15 @@
                                                 <Arc
                                                     centerX="225"
                                                     centerY="225"
-                                                    width="404"
-                                                    height="404"
+                                                    width="384"
+                                                    height="384"
                                                     startAngle="0"
                                                     endAngle="359.9">
                                                     <Transform
                                                         target="startAngle"
                                                         value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
                                                     <WeightedStroke
-                                                        thickness="40"
+                                                        thickness="20"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                                         cap="BUTT" />
                                                 </Arc>
@@ -226,15 +219,15 @@
                                                 <Arc
                                                     centerX="225"
                                                     centerY="225"
-                                                    width="404"
-                                                    height="404"
+                                                    width="384"
+                                                    height="384"
                                                     startAngle="0"
-                                                    endAngle="354.23">
+                                                    endAngle="356.92">
                                                     <Transform
                                                         target="startAngle"
-                                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 5.67, 0, 354.23)" />
+                                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 2.98, 0, 356.92)" />
                                                     <WeightedStroke
-                                                        thickness="40"
+                                                        thickness="20"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                                         cap="ROUND" />
                                                 </Arc>
@@ -290,15 +283,7 @@
                 primaryProviderType="RANGED_VALUE"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingArc
-                centerX="225"
-                centerY="225"
-                width="356"
-                height="356"
-                thickness="40"
-                startAngle="0"
-                endAngle="359.9"
-                isRoundEdge="TRUE" />
+            <BoundingBox x="0" y="0" width="450" height="450" />
             <Complication type="RANGED_VALUE">
                 <Condition>
                     <Expressions>
@@ -404,17 +389,17 @@
                                         <Arc
                                             centerX="225"
                                             centerY="225"
-                                            width="356"
-                                            height="356"
+                                            width="336"
+                                            height="336"
                                             startAngle="0"
                                             endAngle="359.9">
-                                            <Stroke color="#ff2e3632" thickness="40" cap="ROUND" />
+                                            <Stroke color="#ff2e3632" thickness="20" cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
                                     <Condition>
                                         <Expressions>
                                             <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                            <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.035788]]></Expression>
+                                            <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.018950]]></Expression>
                                         </Expressions>
                                         <!-- Nothing spent yet: there is no melt to inset, and the inset would
                                              leave a seam at 12 on a ring that has spent nothing. Drawn without
@@ -425,12 +410,12 @@
                                                 <Arc
                                                     centerX="225"
                                                     centerY="225"
-                                                    width="356"
-                                                    height="356"
+                                                    width="336"
+                                                    height="336"
                                                     startAngle="0"
-                                                    endAngle="353.46">
+                                                    endAngle="356.49">
                                                     <WeightedStroke
-                                                        thickness="40"
+                                                        thickness="20"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                                         cap="ROUND" />
                                                 </Arc>
@@ -446,15 +431,15 @@
                                                 <Arc
                                                     centerX="225"
                                                     centerY="225"
-                                                    width="356"
-                                                    height="356"
+                                                    width="336"
+                                                    height="336"
                                                     startAngle="0"
                                                     endAngle="359.9">
                                                     <Transform
                                                         target="startAngle"
                                                         value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
                                                     <WeightedStroke
-                                                        thickness="40"
+                                                        thickness="20"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                                         cap="BUTT" />
                                                 </Arc>
@@ -466,15 +451,15 @@
                                                 <Arc
                                                     centerX="225"
                                                     centerY="225"
-                                                    width="356"
-                                                    height="356"
+                                                    width="336"
+                                                    height="336"
                                                     startAngle="0"
-                                                    endAngle="353.46">
+                                                    endAngle="356.49">
                                                     <Transform
                                                         target="startAngle"
-                                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 6.44, 0, 353.46)" />
+                                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 3.41, 0, 356.49)" />
                                                     <WeightedStroke
-                                                        thickness="40"
+                                                        thickness="20"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                                         cap="ROUND" />
                                                 </Arc>
@@ -530,15 +515,7 @@
                 primaryProviderType="RANGED_VALUE"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingArc
-                centerX="225"
-                centerY="225"
-                width="308"
-                height="308"
-                thickness="40"
-                startAngle="0"
-                endAngle="359.9"
-                isRoundEdge="TRUE" />
+            <BoundingBox x="0" y="0" width="450" height="450" />
             <Complication type="RANGED_VALUE">
                 <Condition>
                     <Expressions>
@@ -644,17 +621,17 @@
                                         <Arc
                                             centerX="225"
                                             centerY="225"
-                                            width="308"
-                                            height="308"
+                                            width="288"
+                                            height="288"
                                             startAngle="0"
                                             endAngle="359.9">
-                                            <Stroke color="#ff2e3632" thickness="40" cap="ROUND" />
+                                            <Stroke color="#ff2e3632" thickness="20" cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
                                     <Condition>
                                         <Expressions>
                                             <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                            <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.041345]]></Expression>
+                                            <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.022117]]></Expression>
                                         </Expressions>
                                         <!-- Nothing spent yet: there is no melt to inset, and the inset would
                                              leave a seam at 12 on a ring that has spent nothing. Drawn without
@@ -665,12 +642,12 @@
                                                 <Arc
                                                     centerX="225"
                                                     centerY="225"
-                                                    width="308"
-                                                    height="308"
+                                                    width="288"
+                                                    height="288"
                                                     startAngle="0"
-                                                    endAngle="352.46">
+                                                    endAngle="355.92">
                                                     <WeightedStroke
-                                                        thickness="40"
+                                                        thickness="20"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                                         cap="ROUND" />
                                                 </Arc>
@@ -686,15 +663,15 @@
                                                 <Arc
                                                     centerX="225"
                                                     centerY="225"
-                                                    width="308"
-                                                    height="308"
+                                                    width="288"
+                                                    height="288"
                                                     startAngle="0"
                                                     endAngle="359.9">
                                                     <Transform
                                                         target="startAngle"
                                                         value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
                                                     <WeightedStroke
-                                                        thickness="40"
+                                                        thickness="20"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                                         cap="BUTT" />
                                                 </Arc>
@@ -706,15 +683,15 @@
                                                 <Arc
                                                     centerX="225"
                                                     centerY="225"
-                                                    width="308"
-                                                    height="308"
+                                                    width="288"
+                                                    height="288"
                                                     startAngle="0"
-                                                    endAngle="352.46">
+                                                    endAngle="355.92">
                                                     <Transform
                                                         target="startAngle"
-                                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 7.44, 0, 352.46)" />
+                                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 3.98, 0, 355.92)" />
                                                     <WeightedStroke
-                                                        thickness="40"
+                                                        thickness="20"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                                         cap="ROUND" />
                                                 </Arc>

@@ -14,7 +14,15 @@ nothing spent closes instead of carrying a seam); two-split-slot revision **2026
 revision **2026-10-01** (a positive remainder below the two-cap cutoff stays visible);
 clock-colon revision **2026-10-01** (the device-font one-pixel imbalance is accepted without
 splitting the time); near-exhaustion correction **2026-10-06** (straight ends keep that
-remainder proportional) — accepted visual target for Wear OS and Watch Face Format until the
+remainder proportional); upper-cell revision **2026-10-09** (three user-owned complication
+cells above the clock; the legend strips fold into their own ring slots and the stack anchors
+to the bottom row; `BoundingArc` is measured as the cause of the half-nominal band; the default
+temperature and UV reading is the face's own scene chrome from the built-in `WEATHER.*` source
+and costs no slot); melt-length correction **2026-10-09** (each band declares the 20 units it
+paints instead of 40 under a clip, and the melt grows to the remainder it always meant);
+cell-layout correction **2026-10-09** (the three cells leave the straight row for an arc
+concentric with the face, shrink to 42 units, and a cell showing nothing takes a graded rim so
+that empty reads as empty) — accepted visual target for Wear OS and Watch Face Format until the
 next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
 wireframes, large remaining-% heroes, or bordered strip cards.
@@ -64,7 +72,10 @@ pair's, whose second value is the other pool's percent (see Split band).
    percents tie, secondary sort uses estimated remaining **request-equivalents** from that
    provider’s purchased credits (`credits /` internal credits-per-request constants — sort only,
    never shown as requests). Strips still show credits only. Payload index 0 is the critical
-   limit: innermost ring and the strip nearest the center. Outer rings are looser.
+   limit: the innermost band that renders, and the topmost strip row that renders. Outer rings
+   are looser. The strip stack anchors to its bottom row, so with fewer than three rings the
+   tightest strip is the topmost **occupied** row rather than the top of the well area (see
+   Upper cells, rule 3).
 4. **Omit exhausted** — `usedPercent >= 100` (or empty/unavailable) does not render.
 5. **Max three** — phone **Watchface** tab chooses slots (`watchRingSlotCount = 3`); payload carries
    only the resolved surface order after omit + sort. Plan/budget percent metrics only. A split
@@ -128,16 +139,17 @@ theme `outlineVariant` at runtime).
 ## Composition (active)
 
 ```text
-  ┌──── remaining arcs (0–3 slots; hard max three) ─────────────┐
+  ┌──── remaining arcs (0–3 slots; hard max three) ──────────────┐
   │                                                              │
-  │        upper aperture: weather reserve (empty)               │
+  │                       ( 18° )                                │
+  │             ( Tue )              ( UV 7 )                    │  ← three cells, on an arc
   │                                                              │
   │                       10:08                                  │  ← large time (hero)
   │                   WARDPULSE watermark                        │  ← quiet mono, no ring
   │            ┌─ sunk well ──────────────┐                      │
   │            │▌ 8% · 500                │                      │  ▌ = family accent
-  │            │▌ 39%                      │                      │
-  │            │▌ 72%                      │                      │
+  │            │▌ 39%                     │                      │
+  │            │▌ 72%                     │                      │
   │            └──────────────────────────┘                      │
   └──────────────────────────────────────────────────────────────┘
 ```
@@ -145,7 +157,13 @@ theme `outlineVariant` at runtime).
 Rules:
 
 - **Time is the hero** — optically centered; not a large remaining %.
-- **Upper inner rim** reserved for a future weather glance (no placeholder chrome yet).
+- **Upper cells** — three customizable complication cells in the band the baseline reserved for
+  a weather glance until **2026-10-09**. They sit on an arc concentric with the face, so the
+  middle one rides higher than the outer two and all three keep the same gap to the inner band.
+  The wearer chooses what each one holds. A fresh install shows the day of the week, the
+  temperature and the UV index, but only the day is a complication: the two weather readings are
+  the face's own chrome, so all three cells stay free for the wearer. A cell showing nothing is
+  a well with a graded rim, which is how an empty cell says it is empty (see Upper cells).
 - **Watermark** — ringless mono `WARDPULSE` + pulse/eye between time and strips; low PartImage
   alpha with a bottom dissolve into the strip stack. Same faded PNG is reused on the phone
   home widget (day/night tint). Details: `docs/DESIGN_ASSETS.md`.
@@ -157,7 +175,10 @@ Rules:
     label `100% · 10.0M` (compact `K`/`M`/`B`/`T` credits) so wells stay inside the
     clear aperture and do not cover arcs;
   - measured horizontal padding so Bold labels clear the well edges;
-  - strip order = tightest remaining on top (nearest center) when plan rings exist;
+  - strip order = tightest remaining on top (nearest center) when plan rings exist; since
+    **2026-10-09** each strip is drawn by its own ring's slot and the stack fills from its
+    bottom row upward, so one and two rings sit low rather than leaving a gap mid-stack
+    (see Upper cells, rule 3);
   - content: `%`, or `% · credits` when that strip’s provider family reports purchased remaining
     (per-provider from `allowances`, same as Glance — not gated on aggregate `creditsGlance`);
     omit unused halves / omit empty strips;
@@ -244,8 +265,10 @@ on its own value.
 7. **One payload entry, two complications — two shared slots for outer halves.** A
    `RANGED_VALUE` complication carries one value, so two melts need two complications however the
    payload is shaped. A WFF scene holds at most eight `ComplicationSlot` elements (`maxOccurs="8"`,
-   unchanged in format versions 2, 4 and 5), and this face still uses exactly eight: three band
-   slots, two outer-half slots and three strips. Moving the marker into each strip frees slot
+   unchanged in format versions 2, 4 and 5), and this face still uses exactly eight. Until
+   **2026-10-09** those were three band slots, two outer-half slots and three strips; since that
+   revision they are three band slots that each also draw their own strip, two outer-half slots,
+   and three upper cells (see Upper cells, rule 2). Moving the marker into each strip frees slot
    109 for the second outer half without adding a slot.
 
    `RingSplitComplicationDataSourceService` selects split ordinal 0 in slot 106;
@@ -278,14 +301,438 @@ Geometry was settled on a device, not in arithmetic: the halves measure 9.75 uni
 meet without a seam — numbers, and the four readings behind them, in Ring geometry under
 *Halves of a band*.
 
+## Upper cells (revision 2026-10-09)
+
+The band above the clock was reserved for a weather glance from the baseline until this
+revision, and carried nothing. It now carries **three complication cells the wearer fills**.
+The reasoning is that the conventional watch metrics a wearer expects of any watch — the
+temperature, the UV index, the date, a step count — are precisely what a face that otherwise
+speaks only about AI spend has no way to say, and a reserve with no owner says nothing at all.
+
+The weather the band was held for does arrive, and without taking a cell: WFF reads it from a
+built-in source in an expression, so the face draws the temperature and the UV index itself,
+beneath two of the cells, and yields them the moment the wearer puts something there (rule 11).
+What the old reservation had wrong was not the content but the price it assumed.
+
+**A note on the word.** These are *cells*, not apertures. This document already uses **clear
+aperture** for the circular region inside the innermost band that the strip wells must stay
+within, and that meaning is load-bearing in the strip-width rule. The earlier composition
+called this band the "upper aperture"; it is the same band.
+
+1. **Three cells of 42 units on an arc concentric with the face, not in a row.** Their centres
+   lie on a circle of radius **106.8** around the face centre `225, 225`, at **−29°, 0, +29°**
+   from vertical. The middle cell is the highest, because it is the one on the vertical axis.
+
+   | Cell | Centre | Box origin, integer | Radius from face centre |
+   |---|---|---|---:|
+   | left | 173.22, 131.59 | `152, 111` | 106.80 |
+   | middle | 225.00, 118.20 | `204, 97` | 106.80 |
+   | right | 276.78, 131.59 | `256, 111` | 106.80 |
+
+   The clearances this buys, against the clear aperture of **133.8** (the innermost band's
+   outer edge at 154, less the 20.2 the band renders inward) and the `TimeText` box at `y=160`:
+
+   | | Value |
+   |---|---:|
+   | Cell to inner band, all three | **6.00** |
+   | Lowest cell to the clock | 7.41 |
+   | Between neighbouring cells | 11.48 |
+   | Middle cell above the outer two | 13.39 |
+
+   **The equal clearance is the whole point, and it is equal by construction rather than by
+   fitting.** A constant radius means a constant distance to a band that is itself a circle, so
+   there is no number to tune and nothing to drift when the arc moves. Everything after it —
+   the diameter of 42, the angle of 29° — is what makes the other two clearances positive at
+   that radius.
+
+   **What the straight row got wrong.** Until this revision the cells were 48 units at
+   `y=134`, on `x=169 / 225 / 281`. A straight row under a circular boundary cannot hold an
+   even gap:
+
+   | Cell | Radius of centre | Far edge | Gap to the band |
+   |---|---:|---:|---:|
+   | left | 106.85 | 130.85 | **2.95** |
+   | middle | 91.00 | 115.00 | **18.80** |
+   | right | 106.85 | 130.85 | **2.95** |
+
+   A spread of **6.4 times** across one row, and — the three cells sharing one `y` — **2.0**
+   units between all of them and the clock. What the eye reads there is not three discs but the
+   wedge of empty space between them and the band, narrowing towards the outer two — the row
+   looked uneven because it was, and the measurement came after the owner said so, not before.
+
+   The square `BoundingBox` around a cell is a separate shape and it does cross the inner band —
+   its far corner reaches **135.37** — but nothing is painted out there. The well is an ellipse
+   inscribed in that box, reaching **127.8** at its far edge, and the text sits in a line box
+   inset inside the ellipse (rule 7), whose own far corner reaches **123.71**. A bounding box is
+   where taps land (rule 9), not where the cell draws.
+
+   The coordinates above are derived from this document's own locked geometry; the layout has
+   been rendered on the round AVD and approved from those captures, not measured off them glyph
+   by glyph.
+
+2. **The three cells cost the three strip slots, and each strip folds into its own ring's
+   slot.** The eight-slot cap is now established twice over: a ninth `ComplicationSlot` is
+   rejected by the validator in format versions 2 and 5, and the schema states it outright
+   (`sceneElement.xsd:45`, `ComplicationSlot maxOccurs="8"`). Raising the format version buys
+   nothing. The budget after this revision:
+
+   | Slot | Draws |
+   |---|---|
+   | 101 | outer band + its own legend strip |
+   | 102 | middle band + its own legend strip |
+   | 105 | inner band + its own legend strip |
+   | 106 | outer half of the first split |
+   | 109 | outer half of the second split |
+   | 201 / 202 / 203 | upper cells — the wearer's choice, above the clock |
+
+   Folding is only possible because the band slots give up their `BoundingArc`, which clips a
+   slot's drawing to its own band and would erase a strip lying below it (Ring geometry, *The
+   cause of the half-nominal band*). What the two jobs do to the slot's data channels is rule 4.
+
+   **A changed slot does not pick up its new default on an installed face.** Measured
+   2026-10-09, in this order: cells declared on the freed ids 104 / 107 / 108 drew nothing;
+   moving them to the unused ids 201 / 202 / 203 drew nothing either, with the runtime logging
+   `id[201] : EMPTY`; only uninstalling and reinstalling the package made the slots take their
+   declared providers, after which the same ids logged `SHORT_TEXT`. So the binding is held
+   against the installed face rather than against the slot id, and a fresh id is not an escape
+   from it. This is a fact about updating a face in place, and it is the same hazard the
+   migration note in `docs/DEVELOPMENT_PLAN.md` Phase 20 records for the Wear services.
+
+   The cells are nonetheless given ids of their own rather than the freed 104 / 107 / 108. That
+   is a choice, not a remedy: an id that once named a WardPulse strip and later names a cell the
+   wearer configures is a name that means two things across the face's history, and this
+   document has kept slot ids stable and meaningful since the baseline. Reusing them buys
+   nothing, since neither id survives the update without a reinstall.
+
+3. **The strip stack anchors to its bottom row.** Each ring slot paints its strip at a fixed
+   height — 105 at `y=283`, 102 at `y=304`, 101 at `y=325` — and nothing in the markup varies
+   with how many rings are active. That is sound because arc slots always fill from the outside
+   (`RingSurfaceOrder` maps slot *k* counted from the outside to payload `n-1-k`), so the
+   occupied rows are always contiguous and always end at `y=325`:
+
+   | Rings | Bands drawn | Strip rows | Tightest |
+   |---|---|---|---|
+   | 3 | 101, 102, 105 | 283 / 304 / 325 | `y=283` |
+   | 2 | 101, 102 | 304 / 325 | `y=304` |
+   | 1 | 101 | 325 | `y=325` |
+
+   Layer rule 3 therefore holds at every count: the tightest remainder is the topmost occupied
+   row, and the stack never opens a hole in the middle. The visible change is that one and two
+   rings now sit low in the well area instead of hugging the watermark. A top-anchored stack
+   cannot be folded at all — the row a slot must paint would move with the ring count, and one
+   slot has one height.
+
+4. **One slot, two jobs: only `TITLE` collides.** Audited against the shipped `watchface.xml`
+   by which slots read which channel:
+
+   | Channel | Read by | Folded |
+   |---|---|---|
+   | `RANGED_VALUE_VALUE` | band and outer-half slots only | free |
+   | `TEXT` | strip slots only | free — a band slot never reads it, so it carries the strip label |
+   | `RANGED_VALUE_COLORS` | both | same family colour either way |
+   | `TITLE` | both — bands branch on `D` / `7D` / `M` / `split`, strips on `cursor-other` / `spark` | **collides** |
+
+   The collision is resolved by a combined closed vocabulary, with each branch comparing against
+   the full set of combinations joined by `||`. The validator accepts the form. It has **not**
+   executed on a device: live data still sends a plain `split`, so the combined branch has never
+   been taken at runtime. Note also that the validator does not check expression keywords at
+   all — calibrated 2026-10-09, an invented `[COMPLICATION.BOGUS_FIELD]` passes — so a
+   validator pass is evidence of well-formed markup and nothing more.
+
+5. **The cells belong to the wearer, and nothing of ours can own them.** Slot configuration is
+   edited by the system — a long press on the watch, or the Wear OS companion app on the phone
+   — and the reason is stronger than an API we happen to lack. This package ships **no code**:
+   zero `.dex` entries, `android:hasCode="false"`, no activity and no service. A Google process
+   draws it, `com.google.wear.watchface.runtime/DeclarativeWatchFaceRuntime0`, and the provider
+   chooser is a system activity in `com.google.android.wearable.sysui`. A WFF face therefore
+   cannot hold an editor at all, and the configuration is not our package's to write. Measured
+   2026-10-09; the readings are in `docs/ANDROID_TOOLCHAIN.md`, *Watch Face Format*. The
+   WardPulse phone app is excluded twice over, since
+   `ComplicationDataSourceUpdateRequester` only asks our own providers to refresh their data.
+   What this document owns is the declaration: the cells are `isCustomizable="TRUE"`
+   with supported types `SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY`, and that only the
+   left cell ships bound to a provider, `DAY_OF_WEEK`. The other two ship `EMPTY`, with the
+   temperature and the UV index showing through from the face's own chrome beneath them
+   (rule 11). A fresh install therefore reads as a finished watch without spending a cell to
+   look like one, and the wearer who wants all three keeps all three.
+
+6. **A cell holds about four glyphs.** 42 design units is 36 px at 384 — an icon, or a short
+   label such as `72%`, `$12`, `2h`, `UV 7`. This is why the budget label stays on a strip: the
+   locked worst case `$999.99/999` is a strip-width number and has no reading at cell scale.
+   A cell never carries a value that only makes sense at full strip width.
+
+   The ink measurements behind "about four" were taken in the **48-unit** cell this revision
+   replaced: `Tue` 23 units, `18°` 18, `UV 7` 27, against a widest label of 27 in 48. At 42 the
+   same three labels were rendered on the AVD in the 37-unit line box of rule 7 and read
+   cleanly, but their ink was not remeasured, so the headroom at the new size is seen rather
+   than counted.
+
+7. **A complication has no appearance of its own; the face draws all of it.** WFF gives a
+   provider no say in how its data looks. What arrives is data — `TEXT`, an optional `TITLE`, an
+   optional monochromatic icon, a ranged value and a colour ramp — and every visual decision is
+   the face's: font, size, weight, colour, alignment, and what to draw at all. A cell cannot
+   inherit a system style, and nothing stops three cells fed by three unrelated providers from
+   reading as one row. `SHORT_TEXT` draws `TEXT` alone, centred on one line, in the face's own
+   label voice: Bold, `#fff4fbf8`, size 14 in the 450-unit language, ellipsised. It sits in the
+   same 18-unit line box the strips use, centred in the 42-unit cell at `y=12` by
+   `(42 - 18) / 2`, and inset horizontally to where the well still admits that box's full
+   height: a circle of radius 21 has a half-width of `sqrt(441 - 81)` = 18.97 at 9 units off its
+   midline, so the box is **37 units wide at `x=2`**. Without the inset a glyph's corner would
+   cross the rim, since the well is only as wide as 42 units on its midline and narrower
+   everywhere else. The provider's `TITLE` and its icon are both dropped. At four glyphs there
+   is no second line to put a title on, and a cell's own position is the label the wearer
+   learned when they chose it; an icon beside the text would halve the text, and the value is
+   what the cell was filled for. Size 14 is what the 2026-10-09 spike rendered — `Tue`, `0` and
+   `UV0` all read at 384 px — not an optimum; this revision fixes the rule, and the kerned fit
+   is measured when the generator changes.
+
+   **`x=2` carries one unit of asymmetry, and it is the grid's, not a choice.** WFF coordinates
+   are integers: the validator rejects a fractional one outright, `'152.2' is not a valid value
+   for 'integer'`. The exact inset is `(42 - 37) / 2` = 2.5, so the box runs 2..39 inside 42 and
+   sits half a unit left of the cell's own centre. An even leftover — a 36-unit box at `x=3` —
+   would land exactly, but it has not been rendered, so it is recorded as where the number comes
+   from rather than as a recommendation.
+
+   **A trailing mark is not part of the number, and the box moves so the digits are centred.**
+   Centring the whole string puts the *string* on the cell's axis and the digits to the left of
+   it: measured 2026-10-09, `18°` sat with its string centre at 224.5 against a cell centre of
+   225, while its **digits** sat at **222.5** — 2.5 units left. The degree sign drags them.
+   The temperature's line box therefore shifts right by **2** (`x=4`), after which the digits
+   measured **224.5**, half a unit out and below what the method can resolve.
+
+   The rule generalises and should be read as the rule, not as a constant for `18°`: the shift
+   is **half the advance of the trailing mark**, and it does not depend on how many digits
+   precede it. A box centres the whole string, so the gap between the string's midpoint and the
+   digit group's midpoint is always half the mark's width, whatever the digits are. `5°`, `18°`
+   and `-12°` all land the same way.
+
+8. **The other accepted types, and the two that are refused.** `MONOCHROMATIC_IMAGE` is the one
+   type whose whole content is an icon. It is drawn at 21 units centred in the 42-unit cell and
+   tinted `#fff4fbf8`, the same colour as the text, so an icon reads as face text rather than as
+   a foreign mark; half the diameter leaves the well's rim clear on a round recess. It is
+   deliberately not tinted a family colour: on this face a family colour means *this ring's
+   provider*, and a cell is not a ring. `RANGED_VALUE` is drawn as **text, never as an arc** —
+   `TEXT` when the provider sends it, the value itself otherwise. A small arc in a cell would
+   put a second arc language on a face whose arcs already mean one thing, layer rule 1's *one
+   ring = one metric of one connection*, and it would say it a few units from the real ones —
+   rule 1 puts every cell's far edge six units from the innermost band.
+   The ramp colour goes unused for the same reason the icon tint does. What a provider that
+   sends no `TEXT` renders is declared here, not measured.
+
+   `SMALL_IMAGE` and `LONG_TEXT` are left out of `supportedTypes` on purpose, which is what
+   keeps the system editor from offering a provider that supplies only one of them.
+   `SMALL_IMAGE` is the provider's own picture in the provider's own colours and WFF offers no
+   tint for it — a foreign colour image in a 42-unit circle, on a face whose whole palette is
+   family colours over near-black, reads as a sticker on the glass. `LONG_TEXT` is sized for a
+   slot several times this one and has no reading at four glyphs (rule 6).
+
+9. **A tap reaches the cell, not the band under it.** Folding makes each band slot claim the
+   whole canvas, so all three bands lie under the cells. Measured 2026-10-09 on
+   `wardpulse_wear_round_api36_1` with every bounding arc replaced by a full-canvas
+   `BoundingBox`, resetting to the face between taps:
+
+   | Tap at (x, y), screen px at 384 | On | Opened |
+   |---|---|---|
+   | 192, 20 | outer band | `app.wardpulse/MainActivity` |
+   | 70, 192 | outer band | `app.wardpulse/MainActivity` |
+   | 192, 300 | band only, below the clock | `app.wardpulse/MainActivity` |
+   | 144, 114 | cell bound to `DAY_OF_WEEK` | nothing — that provider carries no tap action |
+   | 240, 114 | cell bound to `WATCH_BATTERY` | the watch Settings app |
+
+   These are screen pixels, not design units — a tap is delivered in the device's own
+   coordinates, so recording it in the 450-unit language would be a conversion with no source.
+   The two bindings are the spike's, chosen because they differ in whether they carry a tap
+   action at all; the shipped defaults are rule 5's.
+
+   WardPulse opened on no tap into a cell. A third-party complication placed in a cell therefore
+   opens its own app, which is the whole point of giving the cells away.
+
+10. **An empty cell carries no mark of ours, but it does say it is empty.** No glyph, no
+    WardPulse logo — the non-goal "Brand/marketing chrome, floating badges" stands, and the face
+    already carries the wordmark once, as a watermark. An empty cell shows its well, and the
+    weather reading where the face declares one beneath that cell (rule 11); nothing else. The
+    well sits over the face background `#ff0a0d0b` and its radial lift (`#18201C → #101412 →
+    #0A0D0B`, centred `225, 216`, radius 279).
+
+    **The well has three treatments, chosen by what the cell is showing — not by what it is
+    called.** A flat well told the wearer nothing: until this revision a cell holding a
+    complication and a cell holding nothing were the same dark disc, distinguishable only by the
+    presence of text, so an empty cell read as a fault rather than as an invitation.
+
+    | Cell shows | Well | Drawn |
+    |---|---|---|
+    | a complication | flat `#ff0b0e0c` | inside the slot — it is the occluder |
+    | our weather reading | flat `#eb0b0e0c` | scene chrome |
+    | nothing at all | graded, below | scene chrome |
+
+    The third is a radial gradient centred on the cell at radius 21, running
+    `#ff0b0e0c #ff0b0e0c #ff242a27` at positions `0.0 0.55 1.0`: opaque, and lightening only
+    across the outer 45 % of the radius. It reads because the rim `#242a27` is `36, 42, 39`
+    against a surrounding lift of `19, 24, 22`. Branching between the second and third is
+    expressible — `WEATHER.IS_AVAILABLE` in a `Condition` — and the left cell has no weather
+    under it at all, so its chrome is always the third.
+
+    **`#242a27` is a new colour, and it is the only one this revision adds.** The face's chrome
+    palette was four entries — background `#ff0a0d0b`, track `#ff2e3632`, well `#eb0b0e0c`, text
+    `#fff4fbf8` — and this is a fifth. Adding to a palette that small deserves its reason
+    stated rather than passed over.
+
+    The obvious candidate was the track, since the palette already holds it. Two things against
+    it. The track means something here: it is the unspent part of a band, the groove an arc runs
+    in, and a cell is not a ring — rule 8 refuses a family colour in a cell for the same kind of
+    reason. And it is brighter: `#2e3632` is `46, 54, 50`, which against a surround of
+    `19, 24, 22` is a step of 27 to 30 levels per channel, where `#242a27` is 17 to 18. A rim at
+    the track's contrast stops reading as the lit edge of a dish and starts reading as a drawn
+    ring — which is the hairline the paragraph below rejects, arrived at by the back door. That
+    last point is arithmetic and reasoning: the track colour was never rendered as a rim, so it
+    is an argument, not a reading. `#242a27` sits between the lift's brightest stop, `#18201C` =
+    `24, 32, 28`, and the track — a surface catching light just short of the groove's own value.
+
+    **Why a gradient rather than an outline.** Three treatments were rendered and compared on
+    the AVD: this gradient, a stronger one, and a hairline ring. The ring reads most literally —
+    a socket waiting to be filled — and it was still rejected, because a ring around a cell is a
+    border around a card, which the non-goals refuse, and taking it would mean writing an
+    exception into that list. The gradient needs no exception: this face already states depth
+    with a radial gradient, in the lift itself, so the empty cell borrows a voice the face owns
+    rather than introducing one. Approved from three captured states — the shipped default, one
+    cell cleared, and all three cleared.
+
+    **What makes a well read as sunk is the fill, not where it sits** — and not, as this
+    revision first claimed, a lift that is brighter at the cells than at the strips. It is not:
+    measured on the shipped face in screen pixels at 384, the whole spread across the cells and
+    the three strip rows is two levels out of 255, and the gradient reproduces every reading to
+    within a level. Position does nothing for depth either way. The fill does all of it, taking
+    the lift under a well down by eight to eleven levels per channel, and a step that size needs
+    no shadow behind it.
+
+    **The arc of rule 1 evened the lift too, which was not the point of it.** The lift is a
+    radial gradient about `225, 216`, a different centre from the one the cells are arranged
+    around, so a cell's distance to it is not its distance to the face centre. The straight row
+    stood at 82 for the middle cell and 99.3 for the outer two, reading `20, 26, 23` against
+    `19, 24, 22`. On the arc the three sit at **97.80, 99.02 and 99.02**, and all three read
+    **`19, 24, 22`** — measured at screen pixels `192, 101`, `236, 112` and `148, 112`, with the
+    face active, confirmed by a control of `24, 32, 28` at the screen centre, the gradient's
+    first stop. So the three wells now composite to one colour, which the straight row never
+    managed. It is a consequence of the constant radius, not a thing that was designed for.
+
+    The well is **scene chrome drawn behind the slot**, not slot content. Measured 2026-10-09:
+    markup placed inside `<Complication type="EMPTY">` does not render. With the slot's type
+    confirmed as `EMPTY` in the runtime log, the centre pixel of the cell stayed at the
+    background value `19, 24, 22`, against `243, 250, 247` in a filled neighbour. Drawing the
+    well outside the slot is also what makes rules 11 and 12 expressible.
+
+    **A filled cell draws a second well of its own, and that one is opaque.** It is `#ff0b0e0c`,
+    not the chrome's `#eb0b0e0c`, because it has to cover whatever the chrome put under it.
+    Measured 2026-10-09 against deliberately hostile chrome — a cell filled pure `#ffff0000`, so
+    any leak lands in one channel — a `#eb0b0e0c` well read `30, 13, 11` at three points inside
+    it, against `17, 22, 20` for the bare face just outside it — a darker reading than the
+    `19, 24, 22` quoted above because it sits further out in the lift, not a disagreement.
+    Alpha `0xeb` is 235/255, so 7.8 % of what
+    lies beneath comes through: `0.9216·11 + 0.0784·255 = 30.1`, `0.9216·14 = 12.9`,
+    `0.9216·12 = 11.1`, which is the reading. The leak does not only add the colour underneath,
+    it drops green and blue *below* the surrounding face, so the cell reads as a warm disc
+    rather than a neutral recess. The same markup filled `#ff0b0e0c` read `11, 14, 12` — the
+    declared colour exactly, with nothing from beneath. Over a real reading the leak would be
+    milder than over red, but it is structural: the colour of a well would depend on what the
+    face happened to be drawing under it.
+
+    Splitting the occluder from the chrome costs nothing visible. Composited over that
+    `17, 22, 20`, `#eb0b0e0c`
+    comes to `11.5, 14.6, 12.7` against the opaque `11, 14, 12` — under a unit per channel,
+    derived from the measurements above rather than measured as a pair. That is also why the
+    graded well above can be opaque without looking different from the translucent one: at these
+    luminances the lift contributes less than a level. The strips keep `#eb0b0e0c`: nothing lies
+    beneath them but the lift, and letting it through is the point.
+
+11. **The default weather is the face's own chrome, not a complication.** WFF carries a built-in
+    `WEATHER.*` data source — `WEATHER.TEMPERATURE`, `WEATHER.UV_INDEX`, `WEATHER.CONDITION`,
+    `WEATHER.IS_AVAILABLE` and the rest — available in format version 2, the version this face
+    declares. It is read in an expression like any clock field and **costs no complication
+    slot**. The face draws the temperature beneath the middle cell and the UV index beneath the
+    right one, as scene chrome declared in `Scene` ahead of the first `ComplicationSlot`, which
+    is what puts it under every slot's content. Nothing is declared beneath the left cell, so
+    its chrome is the graded well of rule 10 whenever the wearer clears it.
+
+    So the default costs the wearer nothing. All three cells stay theirs: the moment one is
+    filled, its opaque well covers the chrome under it and that reading is gone; empty it again
+    and the reading comes back. Measured 2026-10-09 — a cell bound to `DAY_OF_WEEK` drew `Tue`
+    on its own well with the chrome beneath invisible, while the two cells left `EMPTY` showed
+    their chrome through, carrying `[WEATHER.TEMPERATURE]` and `[WEATHER.UV_INDEX]`.
+
+    There is no other way to make weather a default. `defaultProviderType` is a closed
+    enumeration — `APP_SHORTCUT, DATE, DAY_AND_DATE, DAY_OF_WEEK, EMPTY, FAVORITE_CONTACT,
+    HEART_RATE, NEXT_EVENT, STEP_COUNT, SUNRISE_SUNSET, TIME_AND_DATE,
+    UNREAD_NOTIFICATION_COUNT, WATCH_BATTERY, WORLD_CLOCK` — with no weather entry, so a face
+    cannot ship a cell bound to weather even where a weather provider is installed. On the round
+    AVD none of the 23 installed providers is one, although the package
+    `com.google.android.wearable.dwf.weather` is present.
+
+    **What a real reading looks like has not been seen.** The AVD has no weather provider, and
+    on it `[WEATHER.TEMPERATURE]` rendered an empty string while `[WEATHER.UV_INDEX]` rendered
+    `0`. The spike proves that the expressions evaluate and that the chrome sits in the right
+    layer; it proves nothing about the format of a temperature, its unit, or whether that unit
+    follows the wearer's setting. The face reads `WEATHER.IS_AVAILABLE` and falls back to the
+    graded well of rule 10, because a cell reading `0` or nothing at all is worse than a cell
+    that is plainly empty — and that branch has not run against real data either. This revision
+    fixes the rules; the readings they will show are measured when the generator changes.
+
+12. **Ambient: the wells stay, the values dim.** Three things make up a cell across its two
+    states — a filled one has a value over an occluder, an empty one has a recess and whatever
+    chrome shows on it — and ambient takes each by the job it does, not by what it is called.
+
+    **The value dims.** A complication in a filled cell, or the weather reading showing through
+    an empty one, dims with the bands in the proportion the face already uses — ring type goes
+    `alpha="115"` to `63` as the arcs go 255 to 140. It dims rather than switching off because a
+    cell is the only thing on the face carrying its own value: a strip restates what its band
+    already shows, so ambient can drop it, while dropping a cell loses the reading outright.
+
+    **The occluder stays, and it has to.** The opaque well a filled cell draws inside its own
+    slot (rule 10) is not chrome; it is the one thing standing between the complication and the
+    chrome under it, and nothing else can do that job — the chrome is declared outside the slot,
+    and no expression in the scene can ask whether a slot is filled. Switch it off in ambient
+    and the weather reading comes back out from under the complication, with two values drawn
+    over each other in the same 42 units, which is exactly what rule 11 says a filled cell puts
+    an end to.
+
+    **The recess stays too**, in both of the forms rule 10 gives it, and this overturns the rule
+    as this revision first wrote it, which had every well switch off with the strips. A well
+    here is not a lit element but a darkening: `#eb0b0e0c` over a lift measured at `19, 24, 22`
+    composites to about `12, 15, 13`, so switching it off in ambient would make that patch
+    *brighter*, which is the reverse of what switching anything off in ambient is for. The
+    graded well is darker still across the middle and only lifts at its rim, so the same holds
+    for it. The lift carries no ambient variant and renders identically in both modes, so that
+    arithmetic holds there as well. The strips are no counter-example: a strip's well goes
+    because the whole strip goes, and a row that is not drawn should not leave an empty socket
+    behind. A cell is drawn in both modes, filled or not.
+
+    The exact dimmed level and the square-screen layout are to be measured when the generator
+    changes; this revision fixes the rule, not the number.
+
+13. **One WardPulse metric belongs in a cell: sync freshness.** A stale face lies silently —
+    every arc keeps its last value and nothing says when that was. Nothing else in this language
+    says it, and `StatusComplicationDataSourceService` already composes it. The summary could
+    also feed spend today, credits remaining, an alert count, or the time to the next window
+    reset; those are things a cell *may* hold, offered to the wearer like any other provider.
+    This revision commits the face to none of them.
+
+14. **The recovery marker is not part of this design.** It remains the open question recorded in
+    `docs/DEVELOPMENT_PLAN.md` Phase 15, and the face keeps saying it in its own language: an
+    exhausted ring is omitted, so a recovered one reappears. Giving the cells to the wearer does
+    not reserve one for it.
+
 ## Ring geometry (revised 2026-08-02)
 
 Numbers here are **measured off a device screenshot**, never read off `watchface.xml`. Two
 things the file does not say:
 
 - WFF draws a band at roughly **half the nominal `thickness`** — `thickness="25"` rendered a
-  10 px band on a 384 px round watch, which is why arcs read thinner than every review board;
-- `width` sets the band's **outer edge**, not its centre line, so the stroke grows inward.
+  10 px band on a 384 px round watch, which is why arcs read thinner than every review board.
+  Corrected **2026-10-09**: this was never a property of WFF. It was the slot's `BoundingArc`,
+  which the three ring slots no longer carry; each band now declares the 20 units it paints.
+  See *The cause of the half-nominal band* and *The declaration was restated* below;
+- `width` sets the band's **outer edge** on a `BoundingArc`, and twice the **centre line** on an
+  arc drawn inside a slot. The two are not the same number, and conflating them is what made the
+  clip cut exactly half.
 
 Every number in this document is a **design unit**: the 450-unit language the generator is
 written in, the boards are drawn in, and the shipped `watchface.xml` declares as its canvas —
@@ -295,8 +742,9 @@ type texture for the one feature that tempted it and why it no longer does.
 
 | | Value |
 |---|---|
-| Nominal `thickness` | 40 |
-| Rendered band | 20.2 units (17 px at 384) |
+| Declared `thickness` | 20 since **2026-10-09**; 40 before it, when a `BoundingArc` cut half away |
+| Declared `width` | 384 / 336 / 288 — twice the centre line, not the outer edge |
+| Rendered band | 20.2 units (17 px at 384) — unchanged by the restatement |
 | Ring pitch (outer edge to outer edge) | 24 units |
 | Outer edges, outer to inner | 202 / 178 / 154 / 130 |
 | Gap between bands | 3.5–4.8 units |
@@ -308,12 +756,32 @@ because the band renders 20.2, not the 18.8 a 0.44 factor predicted. Measure aft
 change — the factor is not exact.
 
 **A `ROUND` cap reaches past the angle it is drawn to, so the melt is inset by one.** Measured
-2026-08-16: a 40-unit band at radius 159 lost **6.42° per end**, half its nominal thickness laid
-along the arc, so a ring at 4% used showed a 3° gap instead of 14° and read as closed. The face
-now draws the melt short by one cap at each end (`capDegrees` in `tools/render-watchface.mjs`),
-and the caps fill exactly what the inset freed: at 50% used the gap measures **180.3°** against
-a true 179.95°, on the full band and on both halves alike. Review art carries the same inset,
-which is why the boards and the watch still agree.
+2026-08-16: a band declaring `thickness="40"` lost **6.42° per end**, half its nominal thickness
+laid along the arc, so a ring at 4% used showed a 3° gap instead of 14° and read as closed. The
+face draws the melt short by one cap at each end (`capDegrees` in `tools/render-watchface.mjs`).
+
+Two things in that note need correcting, and both were found on 2026-10-09 rather than
+remeasured. The reading was recorded as *"at radius 159"*, and no ring has that radius — the
+diameters in `RINGS` were 404 / 356 / 308 at `df3cdae`, as they are now. 6.42° of a 20-unit
+reach belongs to **radius 178**, ring 102 under its old declaration, which is also what
+`capDegrees` computed for that ring. The radius in the original note matches nothing in the
+geometry of its own commit and is recorded here as an error in the note, not a measurement to
+preserve. The same note's *"at 50% used the gap measures 180.3° against a true 179.95°"* is a
+**historical reading of the clipped geometry** and the face no longer draws that way; it is kept
+for the record, like the 2026-08-16 marker reading further down, and has not been remeasured —
+no ring on the emulator currently sits near 50%.
+
+The claim that *"review art carries the same inset, which is why the boards and the watch still
+agree"* was written in good faith, and was **false from the day it was written until
+2026-10-09**.
+Review art has always drawn the measured model — `tools/render-watch-ring-designs.mjs` sets its
+own `outer = size * 0.4264`, `gap = size * 0.0084` and `thickness = size * 0.0449`, which is
+centre line 191.88 and a 20.2-unit band, with a comment saying so — while the face declared 40
+under a clip and inset its melt by a cap of 20 units instead of 10. The boards drew the true
+remainder; the watch drew it short. Nothing caught it: `just check-designs` compares the art
+against its own generator, never against the face. The two agree as of the melt-length
+correction below, to within the 0.1 unit between the art's measured 20.2 and the face's
+declared 20.
 
 **The clock sits above the centre, and the number is measured, not declared.** `watchface.xml`
 gives `TimeText` a box at `y=160, height=90`, whose centre is 20 units above the canvas centre;
@@ -359,13 +827,23 @@ other. Boards do the same (`ringArc`, `remaining >= 1`), which is why
 owner reproduced a face with strips reading `2%`, `69%`, and `94%` on `emulator-5554` on
 2026-09-26: the 2% strip still had data, but its ring showed only the track. The inset above
 had consumed more than that ring's remaining centreline. Its cutoff is derived per ring as
-`2 * capDegrees(diameter, thickness) / 359.9`, not chosen by eye:
+`2 * capDegrees(width, thickness) / 359.9`, not chosen by eye.
 
-| Ring | Diameter | Remaining cutoff |
-|---|---:|---:|
-| 101 Today | 404 | 3.15% |
-| 102 Week | 356 | 3.58% |
-| 105 Ring3 | 308 | 4.13% |
+The arguments are the band's **declared** `width` and `thickness`, which is not the `diameter`
+in `RINGS` — that entry is twice the band's outer edge and still reads 404 / 356 / 308. What
+changed on 2026-10-09 is what reaches `capDegrees`: the declaration now carries the 20 units the
+band paints rather than 40 under a clip, so the cap halves and every cutoff halves with it.
+
+| Ring | `RINGS` diameter | Declared `width` | Cap | Remaining cutoff |
+|---|---:|---:|---:|---:|
+| 101 Today | 404 | 384 | 2.98° | 1.66% |
+| 102 Week | 356 | 336 | 3.41° | 1.89% |
+| 105 Ring3 | 308 | 288 | 3.98° | 2.21% |
+
+Until that revision the same column read 3.15% / 3.58% / 4.13%, computed from a cap of 5.67° /
+6.44° / 7.44°. Those are the figures of the clipped geometry and no longer describe the face.
+Both melt branches still deliver the true remainder on either side of the line, so only the
+switching point moved; `assertNearExhaustedArcs` asserts that continuity on every render.
 
 At or below its cutoff, a positive remainder keeps its proportional centreline without the
 two cap insets and uses straight ends. Above the cutoff the measured round-cap inset geometry
@@ -412,9 +890,119 @@ by the other. All four readings, same device, same session:
 | Ring slot | `width=394` / `374`, `thickness=10` | 192.25–202.25 and 182.5–192.25 — 9.75 each |
 
 The half-nominal rule at the top of this section holds for the first row and is what the
-shipped band was fitted to; rows three and four paint the full nominal instead. The slot's
-`BoundingArc` is the obvious suspect — it clips ring content to its own band — but that is a
-guess, and this document does not keep guesses next to measurements.
+shipped band was fitted to; rows three and four paint the full nominal instead.
+
+**The cause of the half-nominal band, measured 2026-10-09.** The `BoundingArc` was the obvious
+suspect and this document kept it as a guess. It is now the measurement. The same face was
+rendered twice, changing nothing but the bounding element on the five arc slots:
+
+| Slot bound | Declared | Painted |
+|---|---|---|
+| `BoundingArc` | `thickness="40"` | 20.1 / 19.9 / 20.5 |
+| full-canvas `BoundingBox` | `thickness="40"` | 40.4 / 44.3 |
+
+So a `BoundingArc` does two things to the slot it bounds: it clips the slot's drawing to its own
+band, and it halves the stroke. The Surfaces table has asserted the clipping since the strips
+got their own `BoundingBox` slots; the halving is what this reading adds, and the two are the
+same mechanism.
+
+This matters beyond bookkeeping, because the upper cells are paid for by folding each legend
+strip into its own band's slot, and a strip cannot be drawn inside a `BoundingArc` — it lies off
+the band and is clipped away. The folded face therefore bounds its band slots with a full-canvas
+`BoundingBox`, and the **declared** thickness has to fall to keep the locked 20.2-unit rendered
+band. The rendered band is the constant; the declaration follows it and must be re-measured on
+the device when the generator changes, exactly as every other number in this section was. The
+40.4 and 44.3 above are one declaration measured on two bands, and that spread is itself a
+reason not to predict the new declaration arithmetically.
+
+**Without the clip, a band both doubles and re-centres.** On the 2026-10-09 spike the inner
+band painted from design radius **134 to 175**, against 133.8 to 154 for the shipped band at
+the same `width`. So dropping the `BoundingArc` moves rows two and three of the table above
+into each other: the stroke goes from 20.2 units with `width/2` as its outer edge to the full
+nominal centred on `width/2`, and the band grows outward over the gap and its neighbour. On the
+spike that read as a grey mass filling the middle of the face.
+
+Where those figures come from, since two of them are not the subtraction a reader would try.
+Two scans of the same capture — one along a single row, one radial at four angles clear of the
+coloured arcs and the text — read the inner edge at 134.8 and 133.9, and the outer at 175.2 and
+174.4. The edges are therefore quoted whole: most of a unit separates two reads of one
+antialiased edge, and the method does not carry tenths. The **span** is each scan's own
+difference, **40.4 and 40.5** units, not the difference of the rounded edges, and it agrees with
+the 40.4 this section's table measures for a declaration of 40 under a full-canvas box. The
+**centre**, 154, is the slot's `width/2` and not a reading at all; the two scans' midpoints
+bracket it at 155.0 and 154.2. The same radial scan reads the shipped band at 133.9 to 154.1,
+against the locked 133.8 and 154.
+
+Both halves of that are recoverable in the declaration, and the rule is one this document
+already records for arcs drawn inside a slot: give `width` **twice the centre line** and
+`thickness` the true band. Keeping each band exactly where it is today was therefore a generator
+change rather than a visual compromise, and it was re-measured on the device rather than
+derived — the 40.4 and 44.3 above are one declaration reading differently on two bands, which
+is why no arithmetic was trusted here. The restatement and its readings are below.
+
+**The ring-type textures need no clip and are unaffected.** They are square files, but their ink
+is not: measured by radial alpha profile, `ring3_type_day.png` carries ink only between radius
+135 and 153 and is fully transparent inside 135, and `ring1_type_month.png` only between 183 and
+201. Each texture already carries its own geometry, which is what being baked per ring and
+period means. They survive the change as long as the bands stay where they are; they would have
+to be redrawn only if a band moved.
+
+**The declaration was restated on 2026-10-09, and the melt grew.** The three ring slots gave up
+their `BoundingArc` for a full-canvas `BoundingBox`, and each band now declares what it paints:
+
+| Slot | Was, inside a `BoundingArc` | Is, unclipped | Paints |
+|---|---|---|---|
+| 101 Today | `width=404 thickness=40` | `width=384 thickness=20` | 182 – 202 |
+| 102 Week | `width=356 thickness=40` | `width=336 thickness=20` | 158 – 178 |
+| 105 Ring3 | `width=308 thickness=40` | `width=288 thickness=20` | 134 – 154 |
+
+The rule is `width = diameter - thickness`, because a `RINGS` diameter is twice the band's outer
+edge while an arc inside a slot takes twice its centre line. The nine textures came out of the
+regeneration byte-identical, as the paragraph above predicted.
+
+Why the clip took exactly half is now plain rather than measured: its outer edge was `diameter /
+2`, which is precisely where the stroke's own centre line sat, so the outer half of every stroke
+fell outside the clip and the inner half survived. Nothing about WFF was involved.
+
+**A clipped `ROUND` cap is a wedge, and the melt was drawn short because of it.** A clip cuts
+across a band, never along it, so it never shortened a cap in the direction the cap actually
+reaches. What it did was shave the cap's disc radially: a 40-unit stroke ends in a disc of
+radius 20, and keeping only the half inside the band left a wedge that reached its full 20 units
+at the band's **outer edge** and tapered to nothing at the inner one. On the centre line it
+reached `sqrt(20² - 10²)` = 17.3 units, not 20 — and the melt was inset by the full 20. So the
+visible arc fell short everywhere except the band's outer rim, by 2.7 units of arc length on
+the centre line, which is a different angle on each ring:
+
+| Ring | Centre line | 2.7 units, predicted shortfall per end |
+|---|---:|---:|
+| 101 Today | 192 | 0.81° |
+| 102 Week | 168 | 0.92° |
+| 105 Ring3 | 144 | 1.07° |
+
+The measurement comes in under that: ring 102 gained 1.45° in total, so **0.73° per end**
+against the model's 0.92°. The model is the upper bound and the reading is the fact. They part
+company because a wedge tapers to a point, and its last fraction of a unit covers a pixel only
+partly — the colour threshold a scan uses still finds that pixel, so the measured end sits a
+little past the geometric one. Only ring 102 was measurable: the other two bands take branches
+that use no round cap, which is also why neither moved.
+
+Measured on `emulator-5554`, tangential scan along each band's centre line, searching for the
+family colour, before and after the restatement on the same three rings:
+
+| Ring | Before | After | True remainder |
+|---|---|---|---|
+| 101 Today, 100% | 0.95° – 359.00° | unchanged | — |
+| 102 Week, 36% | 231.05° – 359.15°, span **128.10°** | 230.40° – 359.95°, span **129.55°** | **129.56°** |
+| 105 Ring3, 1% | 355.90° – 359.90° | unchanged | — |
+
+An independent scan of the same two captures read 127.90° and 129.35° for ring 102 — the two
+differ by about 0.2° on where an antialiased end begins, which is the method's own precision,
+and agree on the 1.45° the melt gained. Rings 101 and 105 do not move because neither uses a
+round cap: a band with nothing spent takes the closed branch, and one below the two-cap cutoff
+takes the straight-ended branch.
+
+So this is not a change the face absorbs invisibly. A partially spent band now shows the
+remainder it always meant to, and the boards have been showing that all along.
 
 The strip stack was resized with the rings — 88x18 boxes stepping 21 units from y=283, a
 stack pitch of its own that has nothing to do with the 24-unit ring pitch. The previous 96x20
@@ -426,6 +1014,12 @@ Only three strips render, matching the three-ring cap. As of **2026-09-16**, the
 its outside-counted `TITLE`. The far-end marker now lives inside each strip slot, selected by
 its outer-pool token, with the same declared 3x14 arc and right-edge position. Nothing in the
 eight-slot budget is spare now.
+
+As of **2026-10-09** the strips no longer hold slots of their own: each one is drawn by its own
+band's slot at a fixed row, and the three slots this frees are spent on upper cells under new
+ids (Upper cells, rule 2). The stack geometry above is unchanged — the same 88x18 boxes at the
+same 21-unit pitch from `y=283` — but which slot paints which row is now fixed rather than
+following the payload index, which is why the stack anchors to its bottom row.
 
 The historical **2026-08-16** reading remains: the shared marker landed at x 265–268 of the
 181–269 strip, on the paired row only. This is evidence for the previous rendering, not a new
@@ -519,6 +1113,17 @@ the ring, not chrome to switch off. `round-ambient-budget.svg` shows that it sur
 what level: review art mutes an ambient arc to one gray, while the face keeps the family color
 and dims it, so the two cannot agree on a number.
 
+In the upper cells the wells stay and the values dim (revision **2026-10-09**). The dimming
+follows the division this section already draws: what restates something else on the face can
+go, and what is the only carrier of its own value cannot. A strip repeats its band, so ambient
+drops it; a complication in a cell repeats nothing, and neither does the weather chrome showing
+through an empty one, so both dim instead. The wells go the other way from the strips' for two
+reasons. A filled cell's well is the only thing hiding the weather chrome beneath it, so it has
+to survive ambient or two readings land in the same 42 units. And a well darkens the lift rather
+than lighting it, so switching one off would raise ambient luminance instead of lowering it.
+The dimmed level is to be measured when the generator changes, in the proportion the face
+already uses for the ring type — see Upper cells, rule 12.
+
 ## Review variants
 
 Regenerate with `node tools/render-watch-ring-designs.mjs`, then optional PNG previews:
@@ -554,17 +1159,34 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
 | Surface | Role |
 |---------|------|
 | Wear OS app Glance | **Not** this face language — locked text legend (`WEAR_GLANCE_DESIGN.md`, 2026-07-26) |
-| WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs plus sunk `RANGED_VALUE` strips (`%` / `% · credits` / `$12.34/100` for budgets) in `watchface.xml`. Every strip TEXT is the full label (WFF `length(TITLE)` Conditions are unreliable). Inner strip accents use `[COMPLICATION.RANGED_VALUE_COLORS]` (family ColorRamp); far markers use static palette colours selected by strip `TITLE` (Split band, rule 4). Keep progress/track spans below 360° (scale onto 359.9°) — a closed circle collapses to a ROUND tip. Remaining melt is clockwise from 12: Transform `startAngle` to `(1 - value/max) * 359.9` with fixed `endAngle` 359.9. Strips need their own `BoundingBox` slots (`BoundingArc` clips content to the arc band). A scene holds **at most eight** `ComplicationSlot` elements in every format version and this face has used all eight since 2026-07-25, so a new slot has to come out of that budget (Split band, rule 7). |
+| WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs plus sunk `RANGED_VALUE` strips (`%` / `% · credits` / `$12.34/100` for budgets) in `watchface.xml`. Every strip TEXT is the full label (WFF `length(TITLE)` Conditions are unreliable). Inner strip accents use `[COMPLICATION.RANGED_VALUE_COLORS]` (family ColorRamp); far markers use static palette colours selected by strip `TITLE` (Split band, rule 4). Keep progress/track spans below 360° (scale onto 359.9°) — a closed circle collapses to a ROUND tip. Remaining melt is clockwise from 12: Transform `startAngle` to `(1 - value/max) * 359.9` with fixed `endAngle` 359.9. A `BoundingArc` clips its slot's content to the arc band and halves its stroke (measured 2026-10-09, Ring geometry), so a slot that must draw both a band and a strip takes a full-canvas `BoundingBox` instead. A scene holds **at most eight** `ComplicationSlot` elements in every format version — the validator rejects a ninth, and `sceneElement.xsd:45` says `maxOccurs="8"` — and this face has used all eight since 2026-07-25, so a new slot has to come out of that budget (Split band, rule 7; Upper cells, rule 2). Three of them are customizable upper cells and belong to the wearer, edited in the system watch-face editor rather than by the WardPulse phone app (Upper cells, rule 5). The temperature and UV index a fresh install shows are not complications at all: they are scene chrome reading the built-in `WEATHER.*` source, declared ahead of the first slot, so a filled cell's opaque `#ff0b0e0c` well covers them while the strips keep their translucent `#eb0b0e0c` (Upper cells, rules 10 and 11). |
 | Phone Watchface tab | Slot selection + preview of next payload rings (not Settings). Rows are grouped since 2026-08-16: a heading per kind of connection, a sub-heading per connection, the same outline the Widget tab uses |
 
 ## Non-goals
 
 - Side-by-side `RING 1` / `RING 2` wireframe complications as the target language.
-- Large remaining % as the aperture hero.
+- Large remaining % as the hero in the middle of the face, in place of the time.
 - High-contrast bordered strip “cards” or ring-cast drop shadows as strip chrome.
 - Time-based rotation of which metric is “on top” in the first iteration.
 - Brand/marketing chrome, floating badges, or dense face captions.
 - LLM token counts (`TOK`) on the face — those belong on phone history charts, not strips.
+- A second arc language anywhere on the face: a ranged value in an upper cell reads as text,
+  never as a small arc of its own (Upper cells, rule 8).
+
+### The preview in the face picker shows the first non-goal
+
+Found 2026-10-09 while reading the system face picker on `emulator-5554`. The picker renders
+`apps/watchface_wff/src/main/res/xml/watch_face_info.xml`, which points at
+`@drawable/preview`, and `apps/watchface_wff/src/main/res/drawable/preview.png` — 450×450,
+unchanged since `2c5aec3` — draws two hollow rings side by side labelled `RING 1 25%` and
+`RING 2 49%`, under a `WARDPULSE` heading and over an `OPENAI · OK` line.
+
+That is the first entry in the list above, drawn at full size. The picker is where a wearer
+chooses the face, so the retired wireframe language is the first and sometimes only thing they
+see of it, and it resembles nothing the face has rendered since the 2026-07-25 concentric
+baseline. `just check-watchface` cannot catch this — the preview is an opaque asset, gated by
+no generator — and `docs/ANDROID_TOOLCHAIN.md` already asks for a fresh capture after visual
+changes, which this file has not had.
 
 ## Future direction (not locked baseline)
 

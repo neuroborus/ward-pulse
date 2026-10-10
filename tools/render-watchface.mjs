@@ -63,9 +63,9 @@ const COLOR = {
 }
 
 /**
- * Rings, outermost first. Diameters step by 48 because the band is thicker than
- * it declares: WFF paints about half the nominal `thickness`, so 40 draws close
- * to 20 units (`TEXTURE.band`) and neighbours touch at the old 18-unit pitch.
+ * Rings, outermost first. A `diameter` here is twice the band's **outer edge**,
+ * which is what the ring textures and the split halves are laid out against.
+ * They step by 48, so at a 20-unit band the neighbouring gap is 4 units.
  */
 const RINGS = [
   { slotId: 101, diameter: 404, service: 'Today' },
@@ -73,7 +73,27 @@ const RINGS = [
   { slotId: 105, diameter: 308, service: 'Ring3' },
 ]
 
-const BAND_THICKNESS = 40
+/**
+ * The band as painted. Until 2026-10-09 this declared 40 and a `BoundingArc` on
+ * the slot cut half of it away: the clip's outer edge sat on the stroke's own
+ * centre line, so only the inner half survived and the band measured about 20.
+ * The clip has to go — a slot cannot draw a legend strip outside its own band
+ * while one is in force — so the stroke now declares what it paints.
+ *
+ * The clip never trimmed a `ROUND` cap along the arc, only across it, which is
+ * why the 2026-08-16 reading found a cap of half the *nominal* thickness. At a
+ * true 20-unit stroke the cap is half of that, `capDegrees` is fed the real
+ * number, and the two-cap cutoff moves with it (`WATCH_RING_DESIGN.md`).
+ */
+const BAND_THICKNESS = 20
+
+/**
+ * An arc inside a slot takes **twice its centre line** in `width`, so a band
+ * whose outer edge is `diameter / 2` is drawn one half-thickness further in.
+ */
+function bandCentre(diameter) {
+  return diameter - BAND_THICKNESS
+}
 
 /**
  * Halves of a shared band, measured on the watch 2026-08-13
@@ -121,9 +141,10 @@ const SPLIT_TOKEN = 'split'
  */
 const TEXTURE = {
   /**
-   * What WFF paints of `BAND_THICKNESS` — about half, never the nominal. This
-   * is the band measured off a device screenshot in `WATCH_RING_DESIGN.md`,
-   * kept identical here so the texture cannot drift from the baseline.
+   * The band measured off a device screenshot in `WATCH_RING_DESIGN.md`, kept
+   * identical here so the texture cannot drift from the baseline. It runs a
+   * little over the declared `BAND_THICKNESS` because a measured edge carries
+   * its own antialiasing; the declaration is the geometry, this is the reading.
    */
   band: 20.2,
   /**
@@ -261,7 +282,8 @@ const HEADER = `<?xml version="1.0" encoding="utf-8"?>
   band and punched out in the background colour at low alpha, so the arc underneath keeps
   the family and the type stays a shade in the band.
 
-  BoundingArc clips ring-slot content — strips use BoundingBox slots after clock.
+  Ring slots take a full-canvas BoundingBox: a BoundingArc clips a slot to its own
+  band and halves its stroke, so each band declares the 20 units it paints.
   Strip TEXT = full label (\`46%\` or \`100% · 500\` on the owning family).
   Strip TITLE = closed outer-pool token; the far marker uses its static palette color.
   Remaining melt: Transform startAngle (1 - value/max)*359.9, endAngle fixed 359.9
@@ -441,9 +463,10 @@ function assertNearExhaustedArcs() {
   const epsilon = 0.000001
   const tolerance = 0.000000001
   for (const { diameter } of RINGS) {
-    const geometry = meltGeometry(diameter, BAND_THICKNESS)
+    const centre = bandCentre(diameter)
+    const geometry = meltGeometry(centre, BAND_THICKNESS)
     const belowRemaining = geometry.twoCapCutoff - epsilon
-    const below = meltAngles(diameter, BAND_THICKNESS, belowRemaining)
+    const below = meltAngles(centre, BAND_THICKNESS, belowRemaining)
     const expectedBelowSweep = belowRemaining * SWEEP.end
     if (
       !below.nearEmpty ||
@@ -457,7 +480,7 @@ function assertNearExhaustedArcs() {
     }
 
     const aboveRemaining = geometry.twoCapCutoff + epsilon
-    const above = meltAngles(diameter, BAND_THICKNESS, aboveRemaining)
+    const above = meltAngles(centre, BAND_THICKNESS, aboveRemaining)
     const expectedStart = (1 - aboveRemaining) * SWEEP.end + geometry.cap
     if (
       above.nearEmpty ||
@@ -479,7 +502,7 @@ function assertNearExhaustedArcs() {
       throw new Error(`ring ${diameter}: melt branches must meet at the two-cap cutoff`)
     }
 
-    const markup = bandArcs(diameter, BAND_THICKNESS, '')
+    const markup = bandArcs(centre, BAND_THICKNESS, '')
     const rawStart = `(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end}`
     const caps = [...markup.matchAll(/cap="(ROUND|BUTT)"/g)].map((match) => match[1])
     if (
@@ -605,15 +628,7 @@ function ringSlot({ slotId, diameter, service }, index) {
                 primaryProviderType="RANGED_VALUE"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingArc
-                centerX="${FACE.center}"
-                centerY="${FACE.center}"
-                width="${diameter}"
-                height="${diameter}"
-                thickness="${BAND_THICKNESS}"
-                startAngle="${SWEEP.start}"
-                endAngle="${SWEEP.end}"
-                isRoundEdge="TRUE" />
+            <BoundingBox x="0" y="0" width="${FACE.size}" height="${FACE.size}" />
             <Complication type="RANGED_VALUE">
                 <Condition>
                     <Expressions>
@@ -635,7 +650,7 @@ ${bandArcs(diameter - INNER_HALF_INSET, HALF_THICKNESS, ' '.repeat(36))}
                             </Compare>
                             <Default>
                                 <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}">
-${bandArcs(diameter, BAND_THICKNESS, ' '.repeat(36))}${ringTexture(diameter, index)}
+${bandArcs(bandCentre(diameter), BAND_THICKNESS, ' '.repeat(36))}${ringTexture(diameter, index)}
                                 </Group>
                             </Default>
                         </Condition>

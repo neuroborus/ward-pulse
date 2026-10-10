@@ -1917,14 +1917,20 @@ no notification carries credentials, account ids, or raw provider payloads
 Open question — a marker on the watch face:
 
 ```text
-A filled family-colored dot in the upper aperture would say "this one is back" without the
-phone. Three things have to be settled before it can be drawn, and all three touch a locked
-baseline: WATCH_RING_DESIGN.md reserves the upper inner rim for a future weather glance and
-forbids placeholder chrome; a dot needs its own data channel (a complication slot) and a
+A filled family-colored dot above the clock would say "this one is back" without the phone.
+Three things had to be settled before it could be drawn. The first was the band it would sit
+in: WATCH_RING_DESIGN.md reserved the upper inner rim for a future weather glance and forbade
+placeholder chrome. That reservation resolved on 2026-10-09, and not in the marker's favour:
+the weather it was held for is now drawn as the face's own chrome at no slot cost, and the
+band holds three cells that belong to the wearer, none of them reserved for anything of ours.
+The other two are untouched: a dot needs its own data channel (a complication slot) and a
 lifetime, since nothing on the face expires by itself; and one dot cannot carry two families
-when two plans recover together. Until those are answered the face already says it in its own
-language — an exhausted ring is omitted, so a recovered one reappears at 100% on the next sync.
-A marker lands only with a WATCH_RING_DESIGN.md revision and a schema field to carry it.
+when two plans recover together. The weather is no precedent for the first of those — WFF
+reads weather from a built-in source, while a recovery marker carries WardPulse data, and a
+complication slot is the only way that reaches the face.
+Until those are answered the face already says it in its own language — an exhausted ring is
+omitted, so a recovered one reappears at 100% on the next sync. A marker lands only with a
+WATCH_RING_DESIGN.md revision and a schema field to carry it.
 ```
 
 Non-goals for this phase:
@@ -2022,13 +2028,16 @@ Watchface / Widget catalogs list selectable metrics first and keep the unselecta
 watch and widget surface order stays tightest-remaining-first (Phase 13), unaffected by this phase
 ```
 
-Open question — a personal order:
+Open question — a personal order (**skipped 2026-10-08 by the owner**):
 
 ```text
 A dashboard is a personal shelf, and dragging cards into place would beat any default we pick.
 It also replaces the usage key rather than joining it: a user-defined order is the answer to
 "what matters to me". Worth doing after the declared order lands, not instead of it — an
 explicit default is what a personal order overrides.
+
+Skipped on 2026-10-08: the owner does not consider a user-arranged card order worth the work.
+The declared order from this phase stands as the answer. Reopen only on a user request for it.
 ```
 
 Non-goals for this phase:
@@ -2210,6 +2219,190 @@ the app bundle resolves 1x, 2x, and 3x raster densities at the intended logical 
 the mark and title remain present in both light and dark themes
 the phone adds no dependency to render the app-bar mark
 the mono wordmark remains reserved for watermark use and is not duplicated beside the title
+```
+
+---
+
+### Phase 20 — three upper cells on the watch face
+
+Status: design locked 2026-10-09 in `docs/product/WATCH_RING_DESIGN.md` (upper-cell revision,
+with the melt-length and cell-layout corrections of the same day), and the first implementation
+pass is in the tree. `tools/render-watchface.mjs` now bounds the
+three ring slots with a full-canvas `BoundingBox` and declares each band at the 20 units it
+paints; `watchface.xml` is regenerated from it. The nine ring textures came out byte-identical,
+and the review-art generators and the Wear complication sources are still untouched. The rest of
+this entry is what the design commits the remaining passes to.
+
+Unrelated to the cells, and found while reading the system face picker on 2026-10-09: the
+picker advertises the face with `drawable/preview.png`, unchanged since `2c5aec3`, which draws
+the side-by-side `RING 1` / `RING 2` wireframe — the first non-goal in the design baseline. No
+generator owns that asset, so no check compares it to the face. Recorded under *The preview in
+the face picker* in `docs/product/WATCH_RING_DESIGN.md`.
+
+Rationale: the face says a great deal about AI spend and nothing a watch is ordinarily expected
+to say. The band above the clock has been reserved for a weather glance since the 2026-07-25
+baseline and has carried nothing in that time, which is the weakest form a reservation can take
+— space that is spent but not used. Giving it to the wearer as three customizable cells spends
+it on whatever that person actually wants on their wrist, and costs the product nothing it was
+using. The weather that reservation was held for arrives in the end anyway, and not as a
+complication: WFF reads it from a built-in source in an expression, so the face draws the
+temperature and the UV index itself beneath two of the cells and still hands all three to the
+wearer. What the reservation had wrong was not the content but the price it assumed.
+
+The obstacle was the slot budget, not the space. A scene holds at most eight complication
+slots, the face has used all eight since the baseline, and three cells need three. They are
+paid for by folding each legend strip into its own band's slot. That became possible only after
+measuring what `BoundingArc` does.
+
+Measured during the design (recorded with its numbers in the design baseline):
+
+- a ninth `ComplicationSlot` is rejected in format versions 2 and 5, and `sceneElement.xsd:45`
+  states `maxOccurs="8"`, so the cap is not a version problem;
+- `BoundingArc` clips its slot's drawing to its own band **and** halves the stroke — declared 40
+  paints 20.1/19.9/20.5 bounded by an arc, 40.4/44.3 bounded by a full-canvas box. The long-held
+  belief that WFF paints half the nominal was a property of our own markup, not of the platform.
+  Without the arc a band also re-centres, painting 134–175 where the shipped one paints
+  133.8–154, so the declaration has to give `width` twice the centre line to hold each band in
+  place. Those spike edges are quoted whole because two scans of the capture differ by most of a
+  unit on them; the baseline carries the readings. The nine ring-type textures are **not**
+  affected: a radial alpha profile shows their ink already confined to its own annulus (135–153
+  for `ring3_type_day`, 183–201 for `ring1_type_month`) and fully transparent inside, so they
+  need no clip and no redraw;
+- the clip also made the melt short, which only the first pass revealed. A `BoundingArc` cuts
+  across a band and never along it, so it shaved a `ROUND` cap's disc radially instead of
+  shortening its reach: a 40-unit stroke ends in a disc of radius 20, and the surviving wedge
+  reached its full 20 units only at the band's outer edge, `sqrt(20**2 - 10**2)` = 17.3 units on
+  the centre line. The melt was inset by the full 20 either way, so the visible arc fell about
+  0.7° short at each end. Measured on the centre lines before and after the restatement: ring
+  102 at 36% went from 128.10° to 129.55° against a true 129.564°, while rings 101 and 105 did
+  not move, neither of them using a round cap. The two-cap cutoffs halve with the cap, to 1.66%
+  / 1.89% / 2.21%;
+- review art was right and the face was wrong, for as long as both have existed. The boards
+  always drew the measured model and the true remainder; `just check-designs` never caught the
+  disagreement because it compares the art against its own generator, never against the face;
+- a tap on a cell reaches the cell and not the band beneath it, even when the band's slot claims
+  the whole canvas, so a third-party complication in a cell opens its own app;
+- markup inside `<Complication type="EMPTY">` does not render, so an empty cell's well is scene
+  chrome drawn behind the slot;
+- a filled slot's content draws over scene chrome declared earlier in the document, and an empty
+  slot lets that chrome through. A cell bound to `DAY_OF_WEEK` drew `Tue` on its own well with a
+  deliberately hostile pure-red chrome invisible beneath it, while two cells left `EMPTY` showed
+  their chrome carrying `[WEATHER.TEMPERATURE]` and `[WEATHER.UV_INDEX]`. This is what lets the
+  default weather cost no complication slot, which matters because `defaultProviderType` is a
+  closed enumeration with no weather entry — a face cannot bind a cell to weather even where a
+  weather provider is installed, and none of the 23 providers on the round AVD is one;
+- a well at the strips' `#eb0b0e0c` leaks what lies under it. Over that red chrome it read
+  `30, 13, 11` at three points, against `17, 22, 20` for the face beside it — alpha `0xeb` is
+  235/255, so 7.8 % of the layer beneath comes through, and it drops green and blue below the
+  surrounding face as well as adding red. The same markup at `#ff0b0e0c` read `11, 14, 12`, the
+  declared colour exactly. A cell's own well is therefore opaque, while the strips keep theirs
+  translucent because nothing but the lift lies under them;
+- the first cell layout was uneven, and measurably so. Three cells of 48 units in a straight row
+  at `y=134` stood 2.95 units from the inner band at the ends and 18.80 in the middle — a spread
+  of 6.4 times — with 2.0 units left under the lowest cell before the clock. A straight row
+  under a circular boundary cannot do better. Moving the centres onto an arc concentric with the
+  face, radius 106.8 at −29° / 0 / +29°, makes that gap 6.00 for all three by construction, and
+  the diameter falls to 42 to buy 7.41 to the clock and 11.48 between neighbours. The arc also
+  evened the radial lift under the cells, from 82 and 99.3 to 97.80 and 99.02, so all three
+  wells now composite to the same `19, 24, 22`;
+- a trailing mark pulls a centred string off the digits. `18°` centred as a whole string put its
+  digits 2.5 units left of the cell axis; shifting the line box right by half the mark's advance
+  put them at 224.5 against 225, and the correction is independent of the digit count;
+- an empty cell was indistinguishable from a filled one except by the absence of text, which
+  reads as a fault rather than as an invitation. A cell showing nothing now takes a graded well,
+  `#ff0b0e0c` to `#ff242a27` across the outer 45 % of its radius — rim `36, 42, 39` against a
+  surrounding `19, 24, 22`. A hairline ring read more literally and was rejected as a border
+  around a card, which the non-goals refuse;
+- a changed slot does not pick up its declared default on an installed face. Cells on the freed
+  strip ids drew nothing; cells on unused ids drew nothing either, logging `id[201] : EMPTY`;
+  only uninstalling and reinstalling the package made them take their providers. The binding is
+  held against the installed face, not against the slot id, so renumbering is not an escape. An
+  uninstall is available while debugging and is not something a wearer will do, which is what
+  makes the migration risk below a real one rather than a cosmetic one;
+- the wearer's ownership of the cells is a property of the format, not a choice this phase made.
+  The watch face package ships zero `.dex` entries and declares `android:hasCode="false"` with
+  no activity and no service; the drawing process is
+  `com.google.wear.watchface.runtime/DeclarativeWatchFaceRuntime0`, and the provider chooser is
+  a system activity in `com.google.android.wearable.sysui`. A WFF face has nowhere to run an
+  editor, so it cannot own slot configuration, and neither can the phone app. Readings in
+  `docs/ANDROID_TOOLCHAIN.md`, *Watch Face Format*. What the chooser offers for a slot carrying
+  `EMPTY` was not reached on the AVD and is unverified.
+
+Scope when the implementation runs:
+
+- `tools/render-watchface.mjs` — three cell slots of 42 units on new ids, centred on the arc of
+  radius 106.8 at −29° / 0 / +29° (boxes at `152, 111`, `204, 97`, `256, 111`), the wells as
+  scene chrome with the temperature and UV index read from the built-in `WEATHER.*` source and
+  declared ahead of the first slot, an opaque `#ff0b0e0c` well inside each filled cell and a
+  graded well where a cell shows nothing, the cell typography and the per-type treatment (text
+  only in a 37×18 box at `x=2, y=12`, no `TITLE` and no provider icon, the temperature's box
+  shifted right by half the degree mark; a tinted 21-unit `MONOCHROMATIC_IMAGE`; a
+  `RANGED_VALUE` as text rather than an arc), the folded strips, and the combined `TITLE`
+  vocabulary. The `BoundingBox` and the restated band declarations are **done** — see the first
+  pass above;
+- `tools/render-watch-ring-designs.mjs` needs **no geometry change**: its drawing path already
+  works in the measured model (`outer = size * 0.4264`, `thickness = size * 0.0449`, centre
+  lines 191.88 / 167.89 / 143.91 against the face's 192 / 168 / 144), so the boards and the
+  watch agree for the first time as of the first pass. It changes only for what the cells add to
+  the boards;
+- `apps/wear_android/.../complication/WatchSummaryComplications.kt` and the Wear manifest: the
+  three strip services fold into the ring services, which gain the strip label on `TEXT` and the
+  combined token on `TITLE`.
+
+Migration risk, named here rather than in the design baseline: the Wear complication sources
+already carry comments reading *class name kept for installed faces*, because earlier slot
+reshuffles broke faces that were installed at the time, and Split band rule 4 records the exact
+shape of that damage. This revision moves more slots than any revision before it — three slots
+change what they draw, and three more are new. An installed old face paired with the new app
+will show wrong data until both are updated, and keeping the service names stable cannot prevent
+it, as the 2026-09-16 revision already learned. The face and the app have to ship together.
+
+Acceptance:
+
+```text
+the face declares exactly eight complication slots and the validator passes
+three cells render above the clock, customizable; the left one ships bound to DAY_OF_WEEK and
+  the other two ship EMPTY over the face's own temperature and UV chrome
+the three cells sit on the arc, not in a row: the middle one rides 13.39 units above the outer
+  two, and all three measure 6.00 units clear of the inner band on the device
+a filled cell's opaque well covers the chrome beneath it with no tint carried up from it, and
+  emptying that cell brings the reading back
+the face shows the graded well, not a zero or an empty string, when weather is unavailable
+a cell draws text in the face's own label voice, with no provider TITLE, icon, or arc, and a
+  MONOCHROMATIC_IMAGE tinted to the face's text colour
+a tap on a cell opens that cell's own provider, never the WardPulse app
+an empty cell shows a recessed well — no mark, glyph, or wordmark — carrying only the weather
+  reading where the face declares one under it; a cell showing nothing at all takes the graded
+  rim, so a filled cell and an empty one are told apart without reading their contents
+the temperature's digits sit on the cell axis, not its string: the degree mark hangs off centre
+the three legend strips render from their own bands' slots at y=283 / 304 / 325
+with one and two rings the strip stack fills from its bottom row and leaves no gap mid-stack
+the tightest remaining is the topmost occupied strip row at one, two, and three rings
+the rendered band stays at the locked 20.2 units, in the same place, after the bounding
+  element changes, measured on the device rather than derived
+a partially spent band's melt spans the true remainder on its centre line, not one cap short
+each band's ring type still registers with its band, the nine textures unchanged
+in ambient the occluder and the recess both stay and every value dims — the complication in a
+  filled cell, and the weather showing through an empty one; the filled cell's well still hides
+  the chrome under it, so no cell ever shows two readings at once
+just check-designs passes, and the boards are compared against a device capture by hand —
+  check-designs only proves the art matches its own generator, never that it matches the face
+```
+
+Non-goals for this phase:
+
+```text
+the recovery marker on the face — it stays the Phase 15 open question, and no cell is
+  reserved for it
+a WardPulse-owned micro-widget beyond sync freshness; the others are offered, not committed
+a user-facing switch for whether a cell survives ambient — no configuration element may appear
+  inside a Complication, and a BooleanOption may not contain a ComplicationSlot, so the face
+  cannot offer the choice around slot content either way
+raising the eight-slot cap, or the three-ring cap, by any means
+a fourth cell, or a cell below the clock
+a complication slot spent on weather — weather is the face's own chrome and costs no slot
+a small arc inside a cell; a ranged value in a cell reads as text, so the face keeps one
+  arc language
 ```
 
 ---
