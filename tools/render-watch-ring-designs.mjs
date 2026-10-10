@@ -23,6 +23,33 @@ const WELL = '#0B0E0C'
 /** The ground under everything; ring type is punched down to it rather than inked on top. */
 const BACKGROUND = '#0A0D0B'
 
+/**
+ * The lit rim of a cell the wearer has not filled. The one colour the upper-cell
+ * revision added: not the track, whose contrast would make the rim read as a
+ * drawn ring rather than as the edge of a dish.
+ */
+const CELL_RIM = '#242A27'
+
+/**
+ * The cells above the clock, in the face's own units. The readings are the
+ * shipped default: the day of the week is a complication, the temperature and
+ * the UV index are the face's own chrome and cost no slot.
+ */
+const CELL = {
+  size: 42,
+  radius: 106.8,
+  fontSize: 14,
+  /** The shipped default: a day-of-week complication, then the face's own weather. */
+  readings: [
+    { angle: -29, text: 'Tue' },
+    { angle: 0, text: '18°' },
+    { angle: 29, text: 'UV 7' },
+  ],
+}
+
+/** The baseline caps the face at three bands, so the strip stack is three rows deep. */
+const MAX_RINGS = 3
+
 /** The one family accent worn by two entries — a plan ring and a budget ring share it. */
 const ANTHROPIC = '#E8915A'
 const CODEX_SPARK = '#186020'
@@ -45,6 +72,7 @@ const FACE = 450
  */
 const STRIP = {
   x: 181,
+  /** The top row of a full stack; a shorter one starts further down. */
   y: 283,
   width: 88,
   height: 18,
@@ -383,6 +411,42 @@ function sortByRemaining(layers) {
   )
 }
 
+/**
+ * The three cells above the clock, as a fresh install shows them: the left one
+ * bound to the day of the week, the other two left empty over the face's own
+ * weather chrome. Centres on a circle concentric with the face, so the gap to
+ * the innermost band is the same for all three by construction
+ * (`WATCH_RING_DESIGN.md`, Upper cells, rules 1 and 11).
+ *
+ * Most boards show the shipped default, which is the state a wearer meets first.
+ * A cell the wearer cleared shows the graded recess of rule 10 instead — the one
+ * thing that tells an empty cell from a broken one — so one board carries that
+ * state and `just check-designs` gates it with the rest.
+ */
+function upperCells({ size, ambient, clearedCells = [] }) {
+  const k = size / FACE
+  const r = (CELL.size / 2) * k
+  // Ambient keeps the recess and dims the reading: a well is a darkening, so
+  // switching it off would make the patch brighter, which is backwards.
+  const textOpacity = ambient ? 0.55 : 1
+  return CELL.readings
+    .map(({ angle, text }, index) => {
+      const radians = (angle * Math.PI) / 180
+      const cx = (FACE / 2 + CELL.radius * Math.sin(radians)) * k
+      const cy = (FACE / 2 - CELL.radius * Math.cos(radians)) * k
+      const disc = (fill) => `
+    <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${fill}" />`
+      if (clearedCells.includes(index)) {
+        return disc('url(#cellRecess)')
+      }
+      return `${disc(WELL)}
+    <text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" text-anchor="middle" dominant-baseline="central"
+      font-family="${FONT}, sans-serif" font-size="${(CELL.fontSize * k).toFixed(1)}"
+      font-weight="700" fill="${LABEL}" fill-opacity="${textOpacity}">${esc(text)}</text>`
+    })
+    .join('')
+}
+
 function providerBars({ layers, showPlan, showCredits, size }) {
   const ordered = showPlan ? sortByRemaining(layers) : layers.slice(0, 1)
   const rows = ordered
@@ -403,10 +467,16 @@ function providerBars({ layers, showPlan, showCredits, size }) {
   const k = size / FACE
   const textX = (STRIP.x + STRIP.textInset + STRIP.textWidth / 2) * k
 
+  // The stack anchors to its bottom row, as the face's does since each strip
+  // moved into its own ring's slot: the rows a face draws are always contiguous
+  // and always end on the lowest one, so a short stack sits low rather than
+  // leaving a gap under it (`WATCH_RING_DESIGN.md`, Upper cells, rule 3).
+  const topRow = STRIP.y + (MAX_RINGS - rows.length) * STRIP.pitch
+
   let out = ''
   rows.forEach((row, index) => {
     const { layer, text } = row
-    const y = (STRIP.y + index * STRIP.pitch) * k
+    const y = (topRow + index * STRIP.pitch) * k
     out += `
     <rect x="${(STRIP.x * k).toFixed(1)}" y="${y.toFixed(1)}"
       width="${(STRIP.width * k).toFixed(1)}" height="${(STRIP.height * k).toFixed(1)}"
@@ -441,6 +511,7 @@ function faceSvg({
   ambient = false,
   showPlan = true,
   showCredits = false,
+  clearedCells = [],
 }) {
   const cx = size / 2
   const cy = size / 2
@@ -508,7 +579,8 @@ function faceSvg({
 
   const timeSize = ambient ? size * 0.18 : size * 0.155
   const timeY = cy - TIME_LIFT * (size / FACE) + timeSize * 0.36
-  let content = `
+  let content = upperCells({ size, ambient, clearedCells })
+  content += `
     <text x="${cx}" y="${timeY.toFixed(1)}" text-anchor="middle"
       font-family="${FONT}, sans-serif" font-size="${timeSize.toFixed(1)}"
       font-weight="700" fill="${LABEL}">10:08</text>`
@@ -528,6 +600,11 @@ function faceSvg({
       <stop offset="0%" stop-color="#18201C"/>
       <stop offset="55%" stop-color="${SURFACE}"/>
       <stop offset="100%" stop-color="${BACKGROUND}"/>
+    </radialGradient>
+    <radialGradient id="cellRecess" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="${WELL}"/>
+      <stop offset="55%" stop-color="${WELL}"/>
+      <stop offset="100%" stop-color="${CELL_RIM}"/>
     </radialGradient>
   </defs>
   <rect width="${size}" height="${size}" fill="url(#lift)"/>
@@ -643,6 +720,17 @@ const variants = [
     showCredits: true,
   },
   {
+    // The left cell has no weather under it, so clearing it is the one way to
+    // meet the bare recess — the state the gradient exists for
+    // (`WATCH_RING_DESIGN.md`, Upper cells, rules 10 and 11).
+    file: 'round-3-plan-cell-cleared.svg',
+    name: 'Round · 3 providers · cleared upper cell',
+    layers: three,
+    showPlan: true,
+    showCredits: true,
+    clearedCells: [0],
+  },
+  {
     file: 'round-credits-only.svg',
     name: 'Round · credits only',
     layers: one,
@@ -682,6 +770,8 @@ const wffFiles = new Set([
   'round-3-plan-near-exhausted.svg',
   'round-1-plan-credits.svg',
   'round-credits-only.svg',
+  // An empty cell is a face drawing rule, so its board belongs beside the face.
+  'round-3-plan-cell-cleared.svg',
   'round-ambient-3.svg',
   'round-ambient-budget.svg',
 ])
@@ -696,6 +786,7 @@ for (const variant of variants) {
     ambient: variant.ambient === true,
     showPlan: variant.showPlan,
     showCredits: variant.showCredits,
+    clearedCells: variant.clearedCells ?? [],
   })
   await emit(join(wearDir, variant.file), svg, 'render-designs')
   if (wffFiles.has(variant.file)) {

@@ -1184,6 +1184,7 @@ xdg-open apps/wear_android/design/preview-3-plan-credits.png
 | `round-1-plan.svg` | Single plan ring, `%` strip only |
 | `round-1-plan-credits.svg` | Single plan + credits |
 | `round-credits-only.svg` | No plan rings — time + the lone credits strip, on the bottom row |
+| `round-3-plan-cell-cleared.svg` | **Empty-cell baseline** — the left cell cleared, showing the graded recess beside two filled ones |
 | `round-ambient-3.svg` | Ambient, three muted rings |
 | `round-ambient-budget.svg` | Ambient with type — the band dims and takes its type with it |
 
