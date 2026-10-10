@@ -26,17 +26,18 @@ Plan with `plan-authoring`, execute with `plan-execution`. `polishing` finalizes
 existing change set **without committing**, which is what AGENTS.md wants when the owner has
 not asked for a commit.
 
-Two things this repository has already learned the hard way:
+**Who runs which check is settled in `.agents/skills/finalization/agent-runner.md`**, the
+finalization gate the runner loads at `FINALIZE`. It carries the division between what a step
+proves inside its sandbox and what the owner runs on the host, with the reasons and the dates.
+Read it before scoping a task's gates; do not restate it here and do not re-derive it per task.
+A task's own gates section overrides it for that step.
+
+One thing this repository has learned the hard way, and it belongs here rather than there:
 
 - **Trusted-check configuration is frozen at run start.** Editing
   `LOCAL_ARTIFACTS/agent-runner.json` while a run exists leaves that run unable to resume *and*
   unable to cancel — the protected-input guard refuses both. Prepare the selection before
   starting, never during.
-- **The runner cannot grant network or a device.** Gradle, npm and the WFF validator all need
-  the network; `adb` needs the emulator. A worker that declares them reports `unsupported`, and
-  no configuration fixes that. Scope the runner's required checks to what runs inside its
-  sandbox, and state plainly in `task.md` that the host checks and any device acceptance belong
-  to the operator, performed after the run. That is correct scoping, not a weakened gate.
 
 Aliases live in the runner-root catalog or in the project's own
 `LOCAL_ARTIFACTS/agent-runner.json`; a project selection replaces the root selection, so list
