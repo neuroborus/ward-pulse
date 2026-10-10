@@ -99,9 +99,10 @@ Kotlin lives under `app/src/main/java/app/wardpulse/wear/` (ignore the empty top
 One declarative file, `src/main/res/raw/watchface.xml`, plus the ring-type drawables it names
 (`res/drawable-nodpi/`) — all **generated** by `tools/render-watchface.mjs`
 (`just render-watchface`, needs ImageMagick); edit the generator, never its output.
-`just check-watchface` fails on drift. Metadata in `res/xml/watch_face_info.xml`. Validate with
-`just validate-watchface`. Geometry and language rules are locked in
-`docs/product/WATCH_RING_DESIGN.md` — read it before changing the face.
+`just check-watchface` fails on drift; it wraps `node tools/render-watchface.mjs --check`,
+which proves the same drift on its own and needs no network. Metadata in
+`res/xml/watch_face_info.xml`. Validate with `just validate-watchface`. Geometry and language
+rules are locked in `docs/product/WATCH_RING_DESIGN.md` — read it before changing the face.
 
 ### Shared contracts and goldens
 
@@ -236,6 +237,23 @@ After durable documentation, Vocs page, or navigation changes, run:
 ```bash
 just check-docs
 ```
+
+### When a check cannot run where you are
+
+Every check above stays required. What changes, in a sandbox with no network or no device, is
+**who runs it**. Name the checks you could not run and hand them to the operator. Never skip one
+in silence, and never report one as passing that you did not execute.
+
+| Reaches for | Checks |
+| --- | --- |
+| The network | `just check-docs` (npm), `just check-watchface` and `just check-wear` (Gradle), `just validate-watchface` (fetches the validator JAR), `cargo` against a cold registry cache |
+| A device or emulator | `just test-install-phone`, `just test-wear-device`, `just test-phone-watch-sync`, and the emulator check in the `finalization` skill |
+| Nothing but the checkout | `just validate-fixtures`, `just check-designs`, `node tools/render-watchface.mjs --check`, the skill validator |
+
+The last row is what an isolated agent can still prove on its own, and it covers generator
+drift, schemas and review art. The rest is reported, not assumed: the change is unfinished until
+someone with the network and the device has run them. The same test applies to any check not
+listed — does it reach past the checkout?
 
 ## Documentation
 

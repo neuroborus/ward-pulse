@@ -39,6 +39,11 @@ description: Post-change finalization checklist for WardPulse (Rust core, Flutte
 
 ## 4. Tests And Checks
 
+Most of this section reaches for the network or a device, so an isolated agent cannot finish it
+alone. That does not excuse a box: name every check you could not run and hand it to the
+operator, never tick one you did not execute. `AGENTS.md`, *When a check cannot run where you
+are*, lists which is which.
+
 - [ ] If Rust code changed, run:
 
 ```bash

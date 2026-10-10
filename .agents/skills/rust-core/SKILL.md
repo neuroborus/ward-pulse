@@ -49,4 +49,8 @@ cd core && RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document
 cd core && cargo test --workspace
 ```
 
+These need the crate registry whenever the cache is cold, so an agent without the network
+reports them to the operator rather than skipping them — `AGENTS.md`, *When a check cannot run
+where you are*.
+
 Add or update tests when changing budget math, projection logic, alert rules, status aggregation, provider normalization, or public FFI shape.

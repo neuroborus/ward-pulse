@@ -97,7 +97,9 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 - `watchface.xml` is written by `tools/render-watchface.mjs` (`just render-watchface`), together
   with the ring-type drawables it names (`res/drawable-nodpi/`, ImageMagick as `just
   export-icons` already uses). Change the generator, never the XML or the PNGs;
-  `just check-watchface` fails on drift. Geometry and canvas are both the **450**-unit design
+  `just check-watchface` fails on drift, and `node tools/render-watchface.mjs --check` proves
+  the same drift without the network that the Gradle half of it needs — see `AGENTS.md`,
+  *When a check cannot run where you are*. Geometry and canvas are both the **450**-unit design
   language `WATCH_RING_DESIGN.md` locks — the canvas is what WFF renders at before scaling to
   the screen, so raising it softens every edge on the face. Do not raise it to sharpen type:
   WFF rounds each glyph of a `TextCircular` to a whole canvas unit, and the answer to that is
