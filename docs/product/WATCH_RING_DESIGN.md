@@ -22,8 +22,9 @@ and costs no slot); melt-length correction **2026-10-09** (each band declares th
 paints instead of 40 under a clip, and the melt grows to the remainder it always meant);
 cell-layout correction **2026-10-09** (the three cells leave the straight row for an arc
 concentric with the face, shrink to 42 units, and a cell showing nothing takes a graded rim so
-that empty reads as empty) — accepted visual target for Wear OS and Watch Face Format until the
-next explicit design revision.
+that empty reads as empty); occupied-cell revision **2026-10-10** (a cell showing anything
+wears a hairline, so a ring means occupied and a recess means free) — accepted visual target
+for Wear OS and Watch Face Format until the next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
 wireframes, large remaining-% heroes, or bordered strip cards.
 
@@ -595,11 +596,28 @@ called this band the "upper aperture"; it is the same band.
     complication and a cell holding nothing were the same dark disc, distinguishable only by the
     presence of text, so an empty cell read as a fault rather than as an invitation.
 
-    | Cell shows | Well | Drawn |
-    |---|---|---|
-    | a complication | flat `#ff0b0e0c` | inside the slot — it is the occluder |
-    | our weather reading | flat `#eb0b0e0c` | scene chrome |
-    | nothing at all | graded, below | scene chrome |
+    | Cell shows | Well | Ring | Drawn |
+    |---|---|---|---|
+    | a complication | flat `#ff0b0e0c` | yes | inside the slot — it is the occluder |
+    | our weather reading | flat `#eb0b0e0c` | yes | scene chrome |
+    | nothing at all | graded, below | no | scene chrome |
+
+    **The ring is what says a cell is occupied (revision 2026-10-10).** A stroke of 1 on a path
+    of 41 — radius 20.25 to 20.75, a quarter of a unit inside the well's edge at 21 — in the
+    face's own text colour at `0xaa`, `#aaf4fbf8`. It goes on whatever the cell is showing,
+    the wearer's complication and the face's own weather reading alike, and never on an empty
+    one. That is the whole of the language: **a ring means occupied, a recess means free**, and
+    a cell is never both.
+
+    It was added because a filled cell had no edge at all. The occluder is `#ff0b0e0c` on a
+    lift measured at `19, 24, 22` — a step of eight to eleven levels, which reads as depth
+    under a recess but leaves a filled cell as a dark disc on a dark field, so only the glyphs
+    registered and the cell itself went unseen. Three widths were rendered and compared on the
+    AVD: 1 unit at 40 % of the text colour, the same at 67 %, and 2 units at full strength. The
+    first does not read at a glance; the last competes with the text it encloses and with the
+    bands behind it. The middle one is the shipped value. Giving the weather cell the same ring
+    is a decision, not a carry-over: without it the face would have three kinds of cell instead
+    of two, and the wearer would have to learn which of two dark discs was theirs to fill.
 
     The third is a radial gradient centred on the cell at radius 21, running
     `#ff0b0e0c #ff0b0e0c #ff242a27` at positions `0.0 0.55 1.0`: opaque, and lightening only
@@ -608,10 +626,11 @@ called this band the "upper aperture"; it is the same band.
     expressible — `WEATHER.IS_AVAILABLE` in a `Condition` — and the left cell has no weather
     under it at all, so its chrome is always the third.
 
-    **`#242a27` is a new colour, and it is the only one this revision adds.** The face's chrome
-    palette was four entries — background `#ff0a0d0b`, track `#ff2e3632`, well `#eb0b0e0c`, text
-    `#fff4fbf8` — and this is a fifth. Adding to a palette that small deserves its reason
-    stated rather than passed over.
+    **`#242a27` is a new colour.** The face's chrome palette was four entries — background
+    `#ff0a0d0b`, track `#ff2e3632`, well `#eb0b0e0c`, text `#fff4fbf8` — and this is a fifth.
+    Adding to a palette that small deserves its reason stated rather than passed over. The ring
+    above adds no sixth: `#aaf4fbf8` is the text colour at a lower alpha, which is why a ring
+    reads as the same light as the reading it encloses rather than as a colour of its own.
 
     The obvious candidate was the track, since the palette already holds it. Two things against
     it. The track means something here: it is the unspent part of a band, the groove an arc runs
@@ -624,14 +643,19 @@ called this band the "upper aperture"; it is the same band.
     is an argument, not a reading. `#242a27` sits between the lift's brightest stop, `#18201C` =
     `24, 32, 28`, and the track — a surface catching light just short of the groove's own value.
 
-    **Why a gradient rather than an outline.** Three treatments were rendered and compared on
-    the AVD: this gradient, a stronger one, and a hairline ring. The ring reads most literally —
-    a socket waiting to be filled — and it was still rejected, because a ring around a cell is a
-    border around a card, which the non-goals refuse, and taking it would mean writing an
-    exception into that list. The gradient needs no exception: this face already states depth
-    with a radial gradient, in the lift itself, so the empty cell borrows a voice the face owns
-    rather than introducing one. Approved from three captured states — the shipped default, one
-    cell cleared, and all three cleared.
+    **Why the empty cell keeps a gradient rather than an outline.** Three treatments were
+    rendered and compared on the AVD for the empty cell: this gradient, a stronger one, and a
+    hairline ring. The ring reads most literally — a socket waiting to be filled — and it was
+    still not taken here, and the reason has outlived the one first written down. It was
+    recorded as *a ring around a cell is a border around a card, which the non-goals refuse*;
+    that is no longer the governing argument, because a ring is exactly what a cell holding
+    something now wears, and the non-goals carry the exception that says so.
+
+    What survives is the stronger reason, and this revision is what made it legible: a ring and
+    a recess now mean opposite things. Putting a ring on an empty cell would say *occupied* of
+    a cell that is free, and would leave nothing to say *free* with. The gradient also borrows a
+    voice the face already owns, since the lift states depth the same way. Approved from three
+    captured states — the shipped default, one cell cleared, and all three cleared.
 
     **What makes a well read as sunk is the fill, not where it sits** — and not, as this
     revision first claimed, a lift that is brighter at the cells than at the strips. It is not:
@@ -740,6 +764,14 @@ called this band the "upper aperture"; it is the same band.
     arithmetic holds there as well. The strips are no counter-example: a strip's well goes
     because the whole strip goes, and a row that is not drawn should not leave an empty socket
     behind. A cell is drawn in both modes, filled or not.
+
+    **The ring dims, because a ring is the one part of a cell that lights.** Everything above
+    turns on a well being a darkening, and the hairline of rule 10 is the opposite: it adds
+    light where there was none. Leaving it at full strength would make the brightest thing on
+    an ambient face the outline of a cell rather than anything a cell is saying, in the one
+    mode where lit pixels are kept few. So it goes with the value it encloses, in the arcs' own
+    proportion, 255 to 140 — the ring is not exempt from the division this rule draws, it falls
+    on the other side of it from the well.
 
     The exact dimmed level and the square-screen layout are to be measured when the generator
     changes; this revision fixes the rule, not the number.
@@ -1203,7 +1235,14 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
 
 - Side-by-side `RING 1` / `RING 2` wireframe complications as the target language.
 - Large remaining % as the hero in the middle of the face, in place of the time.
-- High-contrast bordered strip “cards” or ring-cast drop shadows as strip chrome.
+- High-contrast bordered strip “cards” or ring-cast drop shadows as strip chrome. The hairline
+  an occupied upper cell wears (Upper cells, rule 10) is the one exception, written in on
+  **2026-10-10**: this refuses chrome that frames content which is already legible without it,
+  and a filled cell was not — an opaque well on the lift is a step of eight to eleven levels,
+  which reads as depth under a recess but leaves a filled cell edgeless, so only its glyphs
+  registered. The ring is a one-unit line in the face's own text colour, run a quarter of a
+  unit inside the well's own edge, carrying no fill, no shadow and no colour of its own, and it
+  is what makes *occupied* and *free* distinct at a glance.
 - Time-based rotation of which metric is “on top” in the first iteration.
 - Brand/marketing chrome, floating badges, or dense face captions.
 - LLM token counts (`TOK`) on the face — those belong on phone history charts, not strips.

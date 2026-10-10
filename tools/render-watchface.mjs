@@ -68,11 +68,19 @@ const COLOR = {
    */
   cellWell: '#ff0b0e0c',
   /**
-   * The lit rim of an empty cell, and the only colour this revision adds. Not
-   * the track: that colour means the unspent part of a band, and at its
-   * contrast a rim reads as a drawn ring rather than as the edge of a dish.
+   * The lit rim of an empty cell. Not the track: that colour means the unspent
+   * part of a band, and at its contrast a rim reads as a drawn ring rather than
+   * as the edge of a dish.
    */
   cellRim: '#ff242a27',
+  /**
+   * The hairline a cell draws while it is showing something. The face's own
+   * text colour at `0xaa`, so the ring is the same light as the reading it
+   * encloses and never a colour of its own. At 40% it does not read at a
+   * glance; at full strength it competes with the text inside it and with the
+   * bands behind it (`WATCH_RING_DESIGN.md`, Upper cells, rule 10).
+   */
+  cellRing: '#aaf4fbf8',
 }
 
 /**
@@ -319,6 +327,21 @@ const CELL = {
    * 42 leaves 10.5 a side and the grid is integral.
    */
   iconSize: 21,
+  /**
+   * The hairline that says a cell is holding something. A stroke of 1 centred
+   * on a path of 41 lies between radius 20.25 and 20.75, a quarter of a unit
+   * inside the well's own edge at 21, so the rim stays clear of it.
+   */
+  ringDiameter: 41,
+  ringThickness: 1,
+  /**
+   * The ring dims in ambient with everything else a cell carries. Rule 12 keeps
+   * the well because a well darkens, and switching a darkening off would raise
+   * the luminance; a ring lights, so the same reasoning dims it rather than
+   * leaving the brightest thing on an ambient face around a cell's edge. The
+   * proportion is the arcs' own, 255 to 140.
+   */
+  ringAmbientAlpha: 140,
 }
 
 /**
@@ -457,11 +480,35 @@ ${pad}</PartDraw>`
 }
 
 /**
+ * The hairline a cell wears while it is showing something, whether that is the
+ * wearer's complication or the face's own weather reading. Without it a filled
+ * cell is a dark disc on a dark field and only the glyphs read, so the cell
+ * itself goes unseen. An empty cell does not wear one: its recess already says
+ * what it is, and the two together make the language exact — ring means
+ * occupied, recess means free.
+ */
+function cellRing(pad) {
+  const centre = CELL.size / 2
+  return `${pad}<PartDraw x="0" y="0" width="${CELL.size}" height="${CELL.size}" alpha="255">
+${pad}    <Variant mode="AMBIENT" target="alpha" value="${CELL.ringAmbientAlpha}" />
+${pad}    <Arc
+${pad}        centerX="${centre}"
+${pad}        centerY="${centre}"
+${pad}        width="${CELL.ringDiameter}"
+${pad}        height="${CELL.ringDiameter}"
+${pad}        startAngle="${SWEEP.start}"
+${pad}        endAngle="${SWEEP.end}">
+${pad}        <Stroke thickness="${CELL.ringThickness}" color="${COLOR.cellRing}" cap="BUTT" />
+${pad}    </Arc>
+${pad}</PartDraw>`
+}
+
+/**
  * The recess a cell shows when it has nothing at all on it: the same well, lit
  * across its outer 45% so it reads as a dish waiting to be filled rather than
- * as a fault. A ring would say it more literally and would also be a border
- * around a card, which the non-goals refuse; the face already states depth with
- * a radial gradient, in the lift, so this borrows a voice it owns.
+ * as a fault. It wears no ring, which is what separates it at a glance from a
+ * cell that is holding something; depth here is stated with a radial gradient,
+ * the voice the lift already uses.
  */
 function cellWellGraded(pad) {
   const centre = CELL.size / 2
@@ -497,6 +544,7 @@ function cellChrome({ x, y, label }, index) {
                 <Compare expression="hasWeather">
                     <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}Reading">
 ${cellWellFlat(COLOR.strip, ' '.repeat(24))}
+${cellRing(' '.repeat(24))}
 ${cellText(expression, shift, ' '.repeat(24))}
                     </Group>
                 </Compare>
@@ -528,7 +576,8 @@ ${body}
  */
 function cellSlot({ slotId, x, y, label, provider: systemProvider, type }) {
   const pad = ' '.repeat(20)
-  const well = cellWellFlat(COLOR.cellWell, pad)
+  const well = `${cellWellFlat(COLOR.cellWell, pad)}
+${cellRing(pad)}`
   const body = (parameter) => `            <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}">
 ${well}
 ${cellText(parameter, 0, pad)}

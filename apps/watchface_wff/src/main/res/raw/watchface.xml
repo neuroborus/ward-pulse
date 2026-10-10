@@ -70,6 +70,18 @@
                                 <Fill color="#eb0b0e0c" />
                             </Ellipse>
                         </PartDraw>
+                        <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                            <Arc
+                                centerX="21"
+                                centerY="21"
+                                width="41"
+                                height="41"
+                                startAngle="0"
+                                endAngle="359.9">
+                                <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                            </Arc>
+                        </PartDraw>
                         <PartText x="4" y="12" width="37" height="18" alpha="255">
                             <Variant mode="AMBIENT" target="alpha" value="140" />
                             <Text align="CENTER" ellipsis="TRUE">
@@ -112,6 +124,18 @@
                             <Ellipse x="0" y="0" width="42" height="42">
                                 <Fill color="#eb0b0e0c" />
                             </Ellipse>
+                        </PartDraw>
+                        <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                            <Arc
+                                centerX="21"
+                                centerY="21"
+                                width="41"
+                                height="41"
+                                startAngle="0"
+                                endAngle="359.9">
+                                <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                            </Arc>
                         </PartDraw>
                         <PartText x="2" y="12" width="37" height="18" alpha="255">
                             <Variant mode="AMBIENT" target="alpha" value="140" />
@@ -1691,6 +1715,18 @@
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
+                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Arc
+                            centerX="21"
+                            centerY="21"
+                            width="41"
+                            height="41"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                        </Arc>
+                    </PartDraw>
                     <PartText x="2" y="12" width="37" height="18" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Text align="CENTER" ellipsis="TRUE">
@@ -1710,6 +1746,18 @@
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
+                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Arc
+                            centerX="21"
+                            centerY="21"
+                            width="41"
+                            height="41"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                        </Arc>
+                    </PartDraw>
                     <PartText x="2" y="12" width="37" height="18" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Text align="CENTER" ellipsis="TRUE">
@@ -1728,6 +1776,18 @@
                         <Ellipse x="0" y="0" width="42" height="42">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
+                    </PartDraw>
+                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Arc
+                            centerX="21"
+                            centerY="21"
+                            width="41"
+                            height="41"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                        </Arc>
                     </PartDraw>
                 <Group x="10" y="10" width="21" height="21" name="cell1Tint" tintColor="#fff4fbf8">
                     <PartImage x="0" y="0" width="21" height="21" alpha="255">
@@ -1760,6 +1820,18 @@
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
+                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Arc
+                            centerX="21"
+                            centerY="21"
+                            width="41"
+                            height="41"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                        </Arc>
+                    </PartDraw>
                     <PartText x="2" y="12" width="37" height="18" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Text align="CENTER" ellipsis="TRUE">
@@ -1779,6 +1851,18 @@
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
+                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Arc
+                            centerX="21"
+                            centerY="21"
+                            width="41"
+                            height="41"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                        </Arc>
+                    </PartDraw>
                     <PartText x="2" y="12" width="37" height="18" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Text align="CENTER" ellipsis="TRUE">
@@ -1797,6 +1881,18 @@
                         <Ellipse x="0" y="0" width="42" height="42">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
+                    </PartDraw>
+                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Arc
+                            centerX="21"
+                            centerY="21"
+                            width="41"
+                            height="41"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                        </Arc>
                     </PartDraw>
                 <Group x="10" y="10" width="21" height="21" name="cell2Tint" tintColor="#fff4fbf8">
                     <PartImage x="0" y="0" width="21" height="21" alpha="255">
@@ -1829,6 +1925,18 @@
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
+                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Arc
+                            centerX="21"
+                            centerY="21"
+                            width="41"
+                            height="41"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                        </Arc>
+                    </PartDraw>
                     <PartText x="2" y="12" width="37" height="18" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Text align="CENTER" ellipsis="TRUE">
@@ -1848,6 +1956,18 @@
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
+                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Arc
+                            centerX="21"
+                            centerY="21"
+                            width="41"
+                            height="41"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                        </Arc>
+                    </PartDraw>
                     <PartText x="2" y="12" width="37" height="18" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Text align="CENTER" ellipsis="TRUE">
@@ -1866,6 +1986,18 @@
                         <Ellipse x="0" y="0" width="42" height="42">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
+                    </PartDraw>
+                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Arc
+                            centerX="21"
+                            centerY="21"
+                            width="41"
+                            height="41"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                        </Arc>
                     </PartDraw>
                 <Group x="10" y="10" width="21" height="21" name="cell3Tint" tintColor="#fff4fbf8">
                     <PartImage x="0" y="0" width="21" height="21" alpha="255">

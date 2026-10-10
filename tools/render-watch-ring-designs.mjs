@@ -39,6 +39,16 @@ const CELL = {
   size: 42,
   radius: 106.8,
   fontSize: 14,
+  /**
+   * The hairline a cell wears while it holds something: a stroke of 1 on a path
+   * of 41, a quarter unit inside the well's edge. An empty cell wears none, so
+   * a ring means occupied and a recess means free.
+   */
+  ringDiameter: 41,
+  ringThickness: 1,
+  /** `0xaa` of the face's text colour, and the arcs' own ambient proportion. */
+  ringAlpha: 0xaa / 255,
+  ringAmbientAlpha: 140,
   /** The shipped default: a day-of-week complication, then the face's own weather. */
   readings: [
     { angle: -29, text: 'Tue' },
@@ -427,8 +437,15 @@ function upperCells({ size, ambient, clearedCells = [] }) {
   const k = size / FACE
   const r = (CELL.size / 2) * k
   // Ambient keeps the recess and dims the reading: a well is a darkening, so
-  // switching it off would make the patch brighter, which is backwards.
+  // switching it off would make the patch brighter, which is backwards. The
+  // ring goes the other way — it lights — so it dims with the reading it
+  // encloses rather than staying the brightest thing on an ambient face.
   const textOpacity = ambient ? 0.55 : 1
+  const ringRadius = (CELL.ringDiameter / 2) * k
+  const ringWidth = CELL.ringThickness * k
+  // The face draws the ring in its text colour at `0xaa` and takes the whole
+  // part from 255 to 140 in ambient, so the board's opacity is that product.
+  const ringOpacity = (CELL.ringAlpha * (ambient ? CELL.ringAmbientAlpha / 255 : 1)).toFixed(2)
   return CELL.readings
     .map(({ angle, text }, index) => {
       const radians = (angle * Math.PI) / 180
@@ -440,6 +457,9 @@ function upperCells({ size, ambient, clearedCells = [] }) {
         return disc('url(#cellRecess)')
       }
       return `${disc(WELL)}
+    <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${ringRadius.toFixed(1)}" fill="none"
+      stroke="${LABEL}" stroke-width="${ringWidth.toFixed(2)}"
+      stroke-opacity="${ringOpacity}" />
     <text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" text-anchor="middle" dominant-baseline="central"
       font-family="${FONT}, sans-serif" font-size="${(CELL.fontSize * k).toFixed(1)}"
       font-weight="700" fill="${LABEL}" fill-opacity="${textOpacity}">${esc(text)}</text>`
