@@ -25,8 +25,11 @@ concentric with the face, shrink to 42 units, and a cell showing nothing takes a
 that empty reads as empty); occupied-cell revision **2026-10-10** (a cell showing anything
 wears a hairline, so a ring means occupied and a recess means free); ambient-legend revision
 **2026-10-10** (the legend strips dim at alpha 90 instead of switching off, so ambient keeps
-the credits and the budget money that live nowhere else on the face) — accepted visual target
-for Wear OS and Watch Face Format until the next explicit design revision.
+the credits and the budget money that live nowhere else on the face); preview-ownership
+revision **2026-10-10** (the picker image and the face review previews this document cites
+are generated from their boards instead of carried by hand, so no preview keeps a face the
+product has left behind) — accepted visual target for Wear OS and Watch Face Format until the
+next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
 wireframes, large remaining-% heroes, or bordered strip cards.
 
@@ -1349,7 +1352,7 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
 - A second arc language anywhere on the face: a ranged value in an upper cell reads as text,
   never as a small arc of its own (Upper cells, rule 8).
 
-### The preview in the face picker shows the first non-goal
+### Previews are generated — and the picker's showed the first non-goal
 
 Found 2026-10-09 while reading the system face picker on `emulator-5554`. The picker renders
 `apps/watchface_wff/src/main/res/xml/watch_face_info.xml`, which points at
@@ -1363,6 +1366,76 @@ see of it, and it resembles nothing the face has rendered since the 2026-07-25 c
 baseline. `just check-watchface` cannot catch this — the preview is an opaque asset, gated by
 no generator — and `docs/ANDROID_TOOLCHAIN.md` already asks for a fresh capture after visual
 changes, which this file has not had.
+
+**Preview-ownership revision 2026-10-10.** A preview nothing regenerates is a preview that
+will lie: it keeps the face it was made from while the face moves on, and it is read as current
+either way — by a wearer choosing in the picker, by a reviewer checking the baseline. Ownership
+belongs to a generator, not to a command in a README that someone has to remember to run. The
+principle is general, and another baseline may adopt it word for word; the authority of this
+one is not, so what follows locks it for the two previews this document owns — the shipped
+picker asset, and the face review previews it cites.
+
+For the shipped asset that means `apps/watchface_wff/src/main/res/drawable/preview.png`, named
+by `watch_face_info.xml`, is generated from `round-3-plan-credits.svg`, the **Primary baseline**
+of Review variants, which is already 450×450 in its own viewBox and already draws the face's
+language: three concentric bands, three upper cells behind their hairlines, the time hero, and
+the three legend strips. A generator owns the rasterization and rewrites the file whenever the
+face art is rendered. Which generator that is belongs to implementation; that there is one does
+not. The defect above was never the picture alone — it was that nothing regenerated it.
+`2c5aec3` is dated **2026-07-25**, the day the baseline was locked, so every revision in the
+chain at the head of this document postdates the file and none of them reached it.
+
+The rule governs the face review previews this document cites — the `preview-*.png` renders of
+the Review variants boards, `preview-3-plan-credits.png` among them, which the head of this
+document calls canonical. They carried the identical defect, measured **2026-10-10**: that file
+is 675×675 and dated 2026-08-18, while the `round-3-plan-credits.svg` it is made from had been
+regenerated the same day, and `design/README.md` carries its
+`convert -background none -density 144 …` line as something a person runs. Running that exact
+command and comparing against the committed file gives **9,694 differing pixels** at identical
+dimensions — content, not metadata — and the committed image has no upper cells at all, so the
+whole of Upper cells is missing from the picture this document calls canonical. A preview the
+baseline cites is held to the baseline.
+
+It reaches no further than that. `apps/wear_android/design/` also holds the Glance boards and
+their `preview-glance-legend-*.png` renders, which belong to
+`docs/product/WEAR_GLANCE_DESIGN.md`, and the face placement preview
+`brand/watchface/preview-face-active-quiet.png` is called canonical by
+`docs/DESIGN_ASSETS.md:126` and lives under separate brand ownership. Those are their own
+documents' to rule on, and root `AGENTS.md` keeps component guidance beside its owner. Sharing
+a directory with a face board confers nothing here.
+
+No preview carries a byte comparison, and that is a decision rather than a gap.
+`tools/design-output.mjs:12-15` already refuses one for generated images: "SVG is compared byte
+for byte because it is text the generator wrote. PNG previews are not compared here:
+ImageMagick stamps metadata that changes between runs, so equal images differ as bytes." What
+stands in its place is that every one of them is rewritten from its generator on every render;
+the shipped asset is held twice over, because `watch_face_info.xml` names it by resource and a
+missing one stops the build. The tree already holds two working ways to keep such a file from
+churning in the diff: `tools/export-icons.sh:8` renders to a candidate and runs
+`compare -metric AE`, replacing the committed PNG only when the pixels differ — that is how
+`apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png`, a watch face drawable, is
+written — and `tools/render-watchface.mjs:674` passes `-strip` so the render timestamp never
+reaches the bytes. Either settles the churn. Neither is mandated here.
+
+What the gate cannot do, it does not claim: `just check-designs` compares the boards against
+their own generator and nothing else (`justfile:103`), so a preview generated from a board is
+proved to match that board, never to match the face. The face is what a device capture proves,
+by hand, as the acceptance for this phase already asks.
+
+A preview draws only what the face draws, from the face's own declared sources, and never an
+invented complication set. In the cells that means the weather chrome of Upper cells, rule 11,
+where `WEATHER.IS_AVAILABLE` is true; the graded well of rule 10 where it is not; and a
+complication where a slot is bound — the `Tue` on the primary board is a `DAY_OF_WEEK` reading
+on the left cell, which rule 11 leaves with no chrome declared beneath it, not weather. It takes
+no marketing chrome, no badge, no caption, and no reading a wearer could not get.
+
+The board's `18°` and `UV 7` are therefore the weather-available state, not a universal one.
+Measured on `emulator-5554`, **2026-10-10**, on a fresh install from this baseline: the left
+cell drew `Sat` with its hairline, and the middle and right cells drew empty graded wells, no
+weather being available to that device. A preview may show the available state — it is a state
+the face renders — but no rule here may be read as requiring a fresh install to produce it. A
+preview that flatters the face by showing what it does not do is the same failure as the
+wireframe it replaces, one generation later.
 
 ## Future direction (not locked baseline)
 
