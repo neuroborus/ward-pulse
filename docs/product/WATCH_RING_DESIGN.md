@@ -415,6 +415,20 @@ called this band the "upper aperture"; it is the same band.
    | 3 | 101, 102, 105 | 283 / 304 / 325 | `y=283` |
    | 2 | 101, 102 | 304 / 325 | `y=304` |
    | 1 | 101 | 325 | `y=325` |
+   | 0 | none | 325 — credits only | — |
+
+   **The zero row is a shipped state, not an edge case.** A payload may carry purchased
+   credits and no plan ring at all, and the face has always shown that as a lone strip; before
+   the fold it was strip 0's job, by the branch in `stripLabel` that falls back to
+   `creditsGlance` when no ring sits at that index. The row follows the rule rather than the
+   old numbering: one row that is contiguous and ends at `y=325` **is** the row at `y=325`, so
+   the bottom row carries it and slot 101 paints it. Putting it on `y=283`, where strip 0 used
+   to live, would open under it exactly the hole this anchoring exists to prevent.
+
+   The slot cannot tell that case from an ordinary one by its value — a credits row carries a
+   full bar — so it says so in `TITLE` instead, with `credits` (rule 4), and the face branches
+   the band away on that token rather than on the number. That is why the row draws with no arc
+   behind it.
 
    Layer rule 3 therefore holds at every count: the tightest remainder is the topmost occupied
    row, and the stack never opens a hole in the middle. The visible change is that one and two
@@ -433,11 +447,29 @@ called this band the "upper aperture"; it is the same band.
    | `TITLE` | both — bands branch on `D` / `7D` / `M` / `split`, strips on `cursor-other` / `spark` | **collides** |
 
    The collision is resolved by a combined closed vocabulary, with each branch comparing against
-   the full set of combinations joined by `||`. The validator accepts the form. It has **not**
-   executed on a device: live data still sends a plain `split`, so the combined branch has never
-   been taken at runtime. Note also that the validator does not check expression keywords at
-   all — calibrated 2026-10-09, an invented `[COMPLICATION.BOGUS_FIELD]` passes — so a
-   validator pass is evidence of well-formed markup and nothing more.
+   the full set of combinations joined by `||` — WFF has no prefix test, so a token is matched
+   whole or not at all. The set is short, because only a split band carries a pool token and a
+   budget ring is never shared, so no period token ever gains a suffix:
+
+   | `TITLE` | Band | Strip |
+   |---|---|---|
+   | *(empty)* | a plan ring's full band | no far marker |
+   | `D` / `7D` / `M` | a budget ring's band, with its type | no far marker |
+   | `split` | the inner half only | no far marker — pool unknown or exhausted |
+   | `split:cursor-other` | the inner half only | the Cursor pool's marker |
+   | `split:spark` | the inner half only | the Spark pool's marker |
+   | `credits` | **no band at all** | the lone credits row (rule 3) |
+
+   **The combined branch has now executed.** Until the generator changed, live data sent a plain
+   `split` and this was recorded here as unverified through several revisions. It is not any
+   more, and not by accident: the Wear service composes the suffix by construction whenever a
+   shared band has a known pool. Measured on `wardpulse_wear_round_api36_1` — a Cursor pair
+   rendered its inner half with the teal far marker on its row, which is the
+   `split:cursor-other` branch and nothing else.
+
+   Note that the validator does not check expression keywords at all — calibrated 2026-10-09, an
+   invented `[COMPLICATION.BOGUS_FIELD]` passes — so a validator pass is evidence of well-formed
+   markup and nothing more. The reading above is the evidence; the validator is not.
 
 5. **The cells belong to the wearer, and nothing of ours can own them.** Slot configuration is
    edited by the system — a long press on the watch, or the Wear OS companion app on the phone
@@ -507,9 +539,13 @@ called this band the "upper aperture"; it is the same band.
    and `-12°` all land the same way.
 
 8. **The other accepted types, and the two that are refused.** `MONOCHROMATIC_IMAGE` is the one
-   type whose whole content is an icon. It is drawn at 21 units centred in the 42-unit cell and
+   type whose whole content is an icon. It is drawn at 21 units in the 42-unit cell and
    tinted `#fff4fbf8`, the same colour as the text, so an icon reads as face text rather than as
-   a foreign mark; half the diameter leaves the well's rim clear on a round recess. It is
+   a foreign mark; half the diameter leaves the well's rim clear on a round recess. Like the
+   line box of rule 7 it cannot be centred exactly: 21 in 42 leaves 10.5 a side on an integer
+   grid, so the icon sits at `x=10` and half a unit in from centre — the same remainder, in the
+   same direction, and the grid's rather than a choice. The tint goes on a group of its own
+   rather than on the slot, since tinting the slot would take the well with it. It is
    deliberately not tinted a family colour: on this face a family colour means *this ring's
    provider*, and a cell is not a ring. `RANGED_VALUE` is drawn as **text, never as an arc** —
    `TEXT` when the provider sends it, the value itself otherwise. A small arc in a cell would
@@ -1147,7 +1183,7 @@ xdg-open apps/wear_android/design/preview-3-plan-credits.png
 | `round-2-plan-credits.svg` | Two providers |
 | `round-1-plan.svg` | Single plan ring, `%` strip only |
 | `round-1-plan-credits.svg` | Single plan + credits |
-| `round-credits-only.svg` | No plan rings — time + credits strip |
+| `round-credits-only.svg` | No plan rings — time + the lone credits strip, on the bottom row |
 | `round-ambient-3.svg` | Ambient, three muted rings |
 | `round-ambient-budget.svg` | Ambient with type — the band dims and takes its type with it |
 

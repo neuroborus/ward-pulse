@@ -5,9 +5,6 @@
     <string name="week_complication">WardPulse ring 2</string>
     <string name="ring3_complication">WardPulse ring 3</string>
     <string name="status_complication">WardPulse status</string>
-    <string name="tokens_complication">WardPulse strip 1</string>
-    <string name="strip2_complication">WardPulse strip 2</string>
-    <string name="strip3_complication">WardPulse strip 3</string>
     <string name="split_marker_complication">WardPulse · outer half 2</string>
     <string name="ring_split_complication">WardPulse · outer half 1</string>
 </resources>

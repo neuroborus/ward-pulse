@@ -122,56 +122,8 @@
                 android:value="0" />
         </service>
 
-        <service
-            android:name=".complication.TokensComplicationDataSourceService"
-            android:exported="true"
-            android:icon="@drawable/ic_complication"
-            android:label="@string/tokens_complication"
-            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
-            <intent-filter>
-                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
-            </intent-filter>
-            <meta-data
-                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
-                android:value="RANGED_VALUE" />
-            <meta-data
-                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
-                android:value="0" />
-        </service>
 
-        <service
-            android:name=".complication.Strip2ComplicationDataSourceService"
-            android:exported="true"
-            android:icon="@drawable/ic_complication"
-            android:label="@string/strip2_complication"
-            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
-            <intent-filter>
-                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
-            </intent-filter>
-            <meta-data
-                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
-                android:value="RANGED_VALUE" />
-            <meta-data
-                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
-                android:value="0" />
-        </service>
 
-        <service
-            android:name=".complication.Strip3ComplicationDataSourceService"
-            android:exported="true"
-            android:icon="@drawable/ic_complication"
-            android:label="@string/strip3_complication"
-            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
-            <intent-filter>
-                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
-            </intent-filter>
-            <meta-data
-                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
-                android:value="RANGED_VALUE" />
-            <meta-data
-                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
-                android:value="0" />
-        </service>
 
         <service
             android:name=".complication.StripSplitComplicationDataSourceService"

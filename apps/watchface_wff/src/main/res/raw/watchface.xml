@@ -13,9 +13,12 @@
   the family and the type stays a shade in the band.
 
   Ring slots take a full-canvas BoundingBox: a BoundingArc clips a slot to its own
-  band and halves its stroke, so each band declares the 20 units it paints.
-  Strip TEXT = full label (`46%` or `100% · 500` on the owning family).
-  Strip TITLE = closed outer-pool token; the far marker uses its static palette color.
+  band and halves its stroke, so each band declares the 20 units it paints. That clip
+  is also what kept a strip out, so since 2026-10-09 each ring slot draws its own
+  legend row and the three slots that freed carry the upper cells instead.
+  Ring TEXT = full strip label (`46%` or `100% · 500` on the owning family).
+  Ring TITLE = the band's own token, suffixed with the outer-pool token when the
+  band is shared: one slot, two jobs, one string to say both in.
   Remaining melt: Transform startAngle (1 - value/max)*359.9, endAngle fixed 359.9
   so usage opens clockwise from 12 and remaining ends at 12.
 -->
@@ -36,6 +39,110 @@
                 </Fill>
             </Ellipse>
         </PartDraw>
+        <!-- What lies under the cells, declared ahead of every slot so a filled
+             cell's own opaque well covers it: 152,111  204,97  256,111 at 42 units, centres on a
+             circle of radius 106.8 about the face centre. The middle and right cells
+             carry the default weather, which costs no complication slot. -->
+        <Group x="152" y="111" width="42" height="42" name="cell1Chrome">
+            <PartDraw x="0" y="0" width="42" height="42">
+                <Ellipse x="0" y="0" width="42" height="42">
+                    <Fill color="#ff0b0e0c">
+                        <RadialGradient
+                            centerX="21"
+                            centerY="21"
+                            radius="21"
+                            colors="#ff0b0e0c #ff0b0e0c #ff242a27"
+                            positions="0.0 0.55 1.0" />
+                    </Fill>
+                </Ellipse>
+            </PartDraw>
+        </Group>
+
+        <Group x="204" y="97" width="42" height="42" name="cell2Chrome">
+            <Condition>
+                <Expressions>
+                    <Expression name="hasWeather"><![CDATA[[WEATHER.IS_AVAILABLE]]]></Expression>
+                </Expressions>
+                <Compare expression="hasWeather">
+                    <Group x="0" y="0" width="42" height="42" name="cell2Reading">
+                        <PartDraw x="0" y="0" width="42" height="42">
+                            <Ellipse x="0" y="0" width="42" height="42">
+                                <Fill color="#eb0b0e0c" />
+                            </Ellipse>
+                        </PartDraw>
+                        <PartText x="4" y="12" width="37" height="18" alpha="255">
+                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                    <Template>%s
+                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                    </Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Group>
+                </Compare>
+                <Default>
+                    <Group x="0" y="0" width="42" height="42" name="cell2Bare">
+                        <PartDraw x="0" y="0" width="42" height="42">
+                            <Ellipse x="0" y="0" width="42" height="42">
+                                <Fill color="#ff0b0e0c">
+                                    <RadialGradient
+                                        centerX="21"
+                                        centerY="21"
+                                        radius="21"
+                                        colors="#ff0b0e0c #ff0b0e0c #ff242a27"
+                                        positions="0.0 0.55 1.0" />
+                                </Fill>
+                            </Ellipse>
+                        </PartDraw>
+                    </Group>
+                </Default>
+            </Condition>
+        </Group>
+
+        <Group x="256" y="111" width="42" height="42" name="cell3Chrome">
+            <Condition>
+                <Expressions>
+                    <Expression name="hasWeather"><![CDATA[[WEATHER.IS_AVAILABLE]]]></Expression>
+                </Expressions>
+                <Compare expression="hasWeather">
+                    <Group x="0" y="0" width="42" height="42" name="cell3Reading">
+                        <PartDraw x="0" y="0" width="42" height="42">
+                            <Ellipse x="0" y="0" width="42" height="42">
+                                <Fill color="#eb0b0e0c" />
+                            </Ellipse>
+                        </PartDraw>
+                        <PartText x="2" y="12" width="37" height="18" alpha="255">
+                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                    <Template>%s
+                                        <Parameter expression="[WEATHER.UV_INDEX]" />
+                                    </Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Group>
+                </Compare>
+                <Default>
+                    <Group x="0" y="0" width="42" height="42" name="cell3Bare">
+                        <PartDraw x="0" y="0" width="42" height="42">
+                            <Ellipse x="0" y="0" width="42" height="42">
+                                <Fill color="#ff0b0e0c">
+                                    <RadialGradient
+                                        centerX="21"
+                                        centerY="21"
+                                        radius="21"
+                                        colors="#ff0b0e0c #ff0b0e0c #ff242a27"
+                                        positions="0.0 0.55 1.0" />
+                                </Fill>
+                            </Ellipse>
+                        </PartDraw>
+                    </Group>
+                </Default>
+            </Condition>
+        </Group>
 
         <ComplicationSlot
             x="0"
@@ -53,18 +160,20 @@
                 defaultSystemProviderType="EMPTY" />
             <BoundingBox x="0" y="0" width="450" height="450" />
             <Complication type="RANGED_VALUE">
+                <!-- The band, unless this is the lone credits row: that one has a
+                     reading but no ring behind it, so it draws its strip only. -->
                 <Condition>
                     <Expressions>
-                        <Expression name="hasRing">
-                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]>
+                        <Expression name="hasBand">
+                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && !([COMPLICATION.TITLE] == "credits")]]>
                         </Expression>
                     </Expressions>
-                    <Compare expression="hasRing">
+                    <Compare expression="hasBand">
                         <!-- Shared band: this slot keeps the inner half, the outer one
                              comes from the slot that serves every band. -->
                         <Condition>
                             <Expressions>
-                                <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split"]]></Expression>
+                                <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:spark"]]></Expression>
                             </Expressions>
                             <Compare expression="isSplit">
                                 <Group x="0" y="0" width="450" height="450" name="ring1Half">
@@ -265,6 +374,70 @@
                         </Condition>
                     </Compare>
                 </Condition>
+                <!-- The legend row this ring owns. Its own slot since 2026-10-09:
+                     the three the strips held are the three the cells took. -->
+                <Group x="181" y="325" width="88" height="18" name="ring1_strip" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <PartDraw x="0" y="0" width="88" height="18">
+                        <RoundRectangle x="0" y="0" width="88" height="18" cornerRadiusX="6" cornerRadiusY="6">
+                            <Fill color="#eb0b0e0c" />
+                        </RoundRectangle>
+                        <!-- Family accent from ColorRamp (same path as matching ring). -->
+                        <Arc
+                            centerX="1.5"
+                            centerY="9"
+                            width="3"
+                            height="14"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <WeightedStroke
+                                thickness="3"
+                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                cap="BUTT" />
+                        </Arc>
+                    </PartDraw>
+                    <Condition>
+                        <Expressions>
+                            <Expression name="isPool0"><![CDATA[[COMPLICATION.TITLE] == "split:cursor-other"]]></Expression>
+                            <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "split:spark"]]></Expression>
+                        </Expressions>
+                        <Compare expression="isPool0">
+                            <PartDraw x="0" y="0" width="88" height="18">
+                                <Arc
+                                    centerX="86.5"
+                                    centerY="9"
+                                    width="3"
+                                    height="14"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke thickness="3" color="#67E8D4" cap="BUTT" />
+                                </Arc>
+                            </PartDraw>
+                        </Compare>
+                        <Compare expression="isPool1">
+                            <PartDraw x="0" y="0" width="88" height="18">
+                                <Arc
+                                    centerX="86.5"
+                                    centerY="9"
+                                    width="3"
+                                    height="14"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke thickness="3" color="#186020" cap="BUTT" />
+                                </Arc>
+                            </PartDraw>
+                        </Compare>
+                    </Condition>
+                    <PartText x="6" y="0" width="78" height="18">
+                        <Text align="CENTER" ellipsis="TRUE">
+                            <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                <Template>%s
+                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                </Template>
+                            </Font>
+                        </Text>
+                    </PartText>
+                </Group>
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>
@@ -285,18 +458,20 @@
                 defaultSystemProviderType="EMPTY" />
             <BoundingBox x="0" y="0" width="450" height="450" />
             <Complication type="RANGED_VALUE">
+                <!-- The band, unless this is the lone credits row: that one has a
+                     reading but no ring behind it, so it draws its strip only. -->
                 <Condition>
                     <Expressions>
-                        <Expression name="hasRing">
-                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]>
+                        <Expression name="hasBand">
+                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && !([COMPLICATION.TITLE] == "credits")]]>
                         </Expression>
                     </Expressions>
-                    <Compare expression="hasRing">
+                    <Compare expression="hasBand">
                         <!-- Shared band: this slot keeps the inner half, the outer one
                              comes from the slot that serves every band. -->
                         <Condition>
                             <Expressions>
-                                <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split"]]></Expression>
+                                <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:spark"]]></Expression>
                             </Expressions>
                             <Compare expression="isSplit">
                                 <Group x="0" y="0" width="450" height="450" name="ring2Half">
@@ -497,6 +672,70 @@
                         </Condition>
                     </Compare>
                 </Condition>
+                <!-- The legend row this ring owns. Its own slot since 2026-10-09:
+                     the three the strips held are the three the cells took. -->
+                <Group x="181" y="304" width="88" height="18" name="ring2_strip" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <PartDraw x="0" y="0" width="88" height="18">
+                        <RoundRectangle x="0" y="0" width="88" height="18" cornerRadiusX="6" cornerRadiusY="6">
+                            <Fill color="#eb0b0e0c" />
+                        </RoundRectangle>
+                        <!-- Family accent from ColorRamp (same path as matching ring). -->
+                        <Arc
+                            centerX="1.5"
+                            centerY="9"
+                            width="3"
+                            height="14"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <WeightedStroke
+                                thickness="3"
+                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                cap="BUTT" />
+                        </Arc>
+                    </PartDraw>
+                    <Condition>
+                        <Expressions>
+                            <Expression name="isPool0"><![CDATA[[COMPLICATION.TITLE] == "split:cursor-other"]]></Expression>
+                            <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "split:spark"]]></Expression>
+                        </Expressions>
+                        <Compare expression="isPool0">
+                            <PartDraw x="0" y="0" width="88" height="18">
+                                <Arc
+                                    centerX="86.5"
+                                    centerY="9"
+                                    width="3"
+                                    height="14"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke thickness="3" color="#67E8D4" cap="BUTT" />
+                                </Arc>
+                            </PartDraw>
+                        </Compare>
+                        <Compare expression="isPool1">
+                            <PartDraw x="0" y="0" width="88" height="18">
+                                <Arc
+                                    centerX="86.5"
+                                    centerY="9"
+                                    width="3"
+                                    height="14"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke thickness="3" color="#186020" cap="BUTT" />
+                                </Arc>
+                            </PartDraw>
+                        </Compare>
+                    </Condition>
+                    <PartText x="6" y="0" width="78" height="18">
+                        <Text align="CENTER" ellipsis="TRUE">
+                            <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                <Template>%s
+                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                </Template>
+                            </Font>
+                        </Text>
+                    </PartText>
+                </Group>
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>
@@ -517,18 +756,20 @@
                 defaultSystemProviderType="EMPTY" />
             <BoundingBox x="0" y="0" width="450" height="450" />
             <Complication type="RANGED_VALUE">
+                <!-- The band, unless this is the lone credits row: that one has a
+                     reading but no ring behind it, so it draws its strip only. -->
                 <Condition>
                     <Expressions>
-                        <Expression name="hasRing">
-                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]>
+                        <Expression name="hasBand">
+                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && !([COMPLICATION.TITLE] == "credits")]]>
                         </Expression>
                     </Expressions>
-                    <Compare expression="hasRing">
+                    <Compare expression="hasBand">
                         <!-- Shared band: this slot keeps the inner half, the outer one
                              comes from the slot that serves every band. -->
                         <Condition>
                             <Expressions>
-                                <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split"]]></Expression>
+                                <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:spark"]]></Expression>
                             </Expressions>
                             <Compare expression="isSplit">
                                 <Group x="0" y="0" width="450" height="450" name="ring3Half">
@@ -729,6 +970,70 @@
                         </Condition>
                     </Compare>
                 </Condition>
+                <!-- The legend row this ring owns. Its own slot since 2026-10-09:
+                     the three the strips held are the three the cells took. -->
+                <Group x="181" y="283" width="88" height="18" name="ring3_strip" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <PartDraw x="0" y="0" width="88" height="18">
+                        <RoundRectangle x="0" y="0" width="88" height="18" cornerRadiusX="6" cornerRadiusY="6">
+                            <Fill color="#eb0b0e0c" />
+                        </RoundRectangle>
+                        <!-- Family accent from ColorRamp (same path as matching ring). -->
+                        <Arc
+                            centerX="1.5"
+                            centerY="9"
+                            width="3"
+                            height="14"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <WeightedStroke
+                                thickness="3"
+                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                cap="BUTT" />
+                        </Arc>
+                    </PartDraw>
+                    <Condition>
+                        <Expressions>
+                            <Expression name="isPool0"><![CDATA[[COMPLICATION.TITLE] == "split:cursor-other"]]></Expression>
+                            <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "split:spark"]]></Expression>
+                        </Expressions>
+                        <Compare expression="isPool0">
+                            <PartDraw x="0" y="0" width="88" height="18">
+                                <Arc
+                                    centerX="86.5"
+                                    centerY="9"
+                                    width="3"
+                                    height="14"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke thickness="3" color="#67E8D4" cap="BUTT" />
+                                </Arc>
+                            </PartDraw>
+                        </Compare>
+                        <Compare expression="isPool1">
+                            <PartDraw x="0" y="0" width="88" height="18">
+                                <Arc
+                                    centerX="86.5"
+                                    centerY="9"
+                                    width="3"
+                                    height="14"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke thickness="3" color="#186020" cap="BUTT" />
+                                </Arc>
+                            </PartDraw>
+                        </Compare>
+                    </Condition>
+                    <PartText x="6" y="0" width="78" height="18">
+                        <Text align="CENTER" ellipsis="TRUE">
+                            <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                <Template>%s
+                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                </Template>
+                            </Font>
+                        </Text>
+                    </PartText>
+                </Group>
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>
@@ -1362,251 +1667,213 @@
                 <Image resource="wardpulse_mono" />
             </PartImage>
         </Group>
-        <!-- Equal-width strips (88) at x=181; y=283/304/325 — kept inside the
-             inner ring aperture after the 2026-08-02 band widening.
-             Sized for "100% · 10.0M". RANGED_VALUE + ColorRamp accents match ring families. -->
+
+        <!-- Three cells the wearer fills, above the clock. The system owns what goes
+             in them; this face owns only the declaration and how it is drawn.
+             (docs/product/WATCH_RING_DESIGN.md, Upper cells, revision 2026-10-09) -->
         <ComplicationSlot
-            x="181"
-            y="283"
-            width="88"
-            height="18"
-            slotId="104"
-            displayName="@string/strip1_complication"
-            supportedTypes="RANGED_VALUE EMPTY"
-            isCustomizable="FALSE">
+            x="152"
+            y="111"
+            width="42"
+            height="42"
+            slotId="201"
+            displayName="@string/cell1_complication"
+            supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
+            isCustomizable="TRUE">
             <DefaultProviderPolicy
-                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.TokensComplicationDataSourceService"
-                primaryProviderType="RANGED_VALUE"
-                defaultSystemProvider="EMPTY"
-                defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="88" height="18" />
-            <Complication type="RANGED_VALUE">
-                <Group x="0" y="0" width="88" height="18" name="ring1_strip" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <PartDraw x="0" y="0" width="88" height="18">
-                        <RoundRectangle x="0" y="0" width="88" height="18" cornerRadiusX="6" cornerRadiusY="6">
-                            <Fill color="#eb0b0e0c" />
-                        </RoundRectangle>
-                        <!-- Family accent from ColorRamp (same path as matching ring). -->
-                        <Arc
-                            centerX="1.5"
-                            centerY="9"
-                            width="3"
-                            height="14"
-                            startAngle="0"
-                            endAngle="359.9">
-                            <WeightedStroke
-                                thickness="3"
-                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-                                cap="BUTT" />
-                        </Arc>
+                defaultSystemProvider="DAY_OF_WEEK"
+                defaultSystemProviderType="SHORT_TEXT" />
+            <BoundingBox x="0" y="0" width="42" height="42" />
+            <Complication type="SHORT_TEXT">
+            <Group x="0" y="0" width="42" height="42" name="cell1">
+                    <PartDraw x="0" y="0" width="42" height="42">
+                        <Ellipse x="0" y="0" width="42" height="42">
+                            <Fill color="#ff0b0e0c" />
+                        </Ellipse>
                     </PartDraw>
-                    <Condition>
-                        <Expressions>
-                            <Expression name="isPool0"><![CDATA[[COMPLICATION.TITLE] == "cursor-other"]]></Expression>
-                            <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "spark"]]></Expression>
-                        </Expressions>
-                        <Compare expression="isPool0">
-                            <PartDraw x="0" y="0" width="88" height="18">
-                                <Arc
-                                    centerX="86.5"
-                                    centerY="9"
-                                    width="3"
-                                    height="14"
-                                    startAngle="0"
-                                    endAngle="359.9">
-                                    <Stroke thickness="3" color="#67E8D4" cap="BUTT" />
-                                </Arc>
-                            </PartDraw>
-                        </Compare>
-                        <Compare expression="isPool1">
-                            <PartDraw x="0" y="0" width="88" height="18">
-                                <Arc
-                                    centerX="86.5"
-                                    centerY="9"
-                                    width="3"
-                                    height="14"
-                                    startAngle="0"
-                                    endAngle="359.9">
-                                    <Stroke thickness="3" color="#186020" cap="BUTT" />
-                                </Arc>
-                            </PartDraw>
-                        </Compare>
-                    </Condition>
-                    <PartText x="6" y="0" width="78" height="18">
+                    <PartText x="2" y="12" width="37" height="18" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Text align="CENTER" ellipsis="TRUE">
-                            <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
                                 <Template>%s
                                     <Parameter expression="[COMPLICATION.TEXT]" />
                                 </Template>
                             </Font>
                         </Text>
                     </PartText>
+            </Group>
+            </Complication>
+            <Complication type="RANGED_VALUE">
+            <Group x="0" y="0" width="42" height="42" name="cell1">
+                    <PartDraw x="0" y="0" width="42" height="42">
+                        <Ellipse x="0" y="0" width="42" height="42">
+                            <Fill color="#ff0b0e0c" />
+                        </Ellipse>
+                    </PartDraw>
+                    <PartText x="2" y="12" width="37" height="18" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Text align="CENTER" ellipsis="TRUE">
+                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                <Template>%s
+                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                </Template>
+                            </Font>
+                        </Text>
+                    </PartText>
+            </Group>
+            </Complication>
+            <Complication type="MONOCHROMATIC_IMAGE">
+            <Group x="0" y="0" width="42" height="42" name="cell1Icon">
+                    <PartDraw x="0" y="0" width="42" height="42">
+                        <Ellipse x="0" y="0" width="42" height="42">
+                            <Fill color="#ff0b0e0c" />
+                        </Ellipse>
+                    </PartDraw>
+                <Group x="10" y="10" width="21" height="21" name="cell1Tint" tintColor="#fff4fbf8">
+                    <PartImage x="0" y="0" width="21" height="21" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                    </PartImage>
                 </Group>
+            </Group>
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>
 
         <ComplicationSlot
-            x="181"
-            y="304"
-            width="88"
-            height="18"
-            slotId="107"
-            displayName="@string/strip2_complication"
-            supportedTypes="RANGED_VALUE EMPTY"
-            isCustomizable="FALSE">
+            x="204"
+            y="97"
+            width="42"
+            height="42"
+            slotId="202"
+            displayName="@string/cell2_complication"
+            supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
+            isCustomizable="TRUE">
             <DefaultProviderPolicy
-                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.Strip2ComplicationDataSourceService"
-                primaryProviderType="RANGED_VALUE"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="88" height="18" />
-            <Complication type="RANGED_VALUE">
-                <Group x="0" y="0" width="88" height="18" name="ring2_strip" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <PartDraw x="0" y="0" width="88" height="18">
-                        <RoundRectangle x="0" y="0" width="88" height="18" cornerRadiusX="6" cornerRadiusY="6">
-                            <Fill color="#eb0b0e0c" />
-                        </RoundRectangle>
-                        <!-- Family accent from ColorRamp (same path as matching ring). -->
-                        <Arc
-                            centerX="1.5"
-                            centerY="9"
-                            width="3"
-                            height="14"
-                            startAngle="0"
-                            endAngle="359.9">
-                            <WeightedStroke
-                                thickness="3"
-                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-                                cap="BUTT" />
-                        </Arc>
+            <BoundingBox x="0" y="0" width="42" height="42" />
+            <Complication type="SHORT_TEXT">
+            <Group x="0" y="0" width="42" height="42" name="cell2">
+                    <PartDraw x="0" y="0" width="42" height="42">
+                        <Ellipse x="0" y="0" width="42" height="42">
+                            <Fill color="#ff0b0e0c" />
+                        </Ellipse>
                     </PartDraw>
-                    <Condition>
-                        <Expressions>
-                            <Expression name="isPool0"><![CDATA[[COMPLICATION.TITLE] == "cursor-other"]]></Expression>
-                            <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "spark"]]></Expression>
-                        </Expressions>
-                        <Compare expression="isPool0">
-                            <PartDraw x="0" y="0" width="88" height="18">
-                                <Arc
-                                    centerX="86.5"
-                                    centerY="9"
-                                    width="3"
-                                    height="14"
-                                    startAngle="0"
-                                    endAngle="359.9">
-                                    <Stroke thickness="3" color="#67E8D4" cap="BUTT" />
-                                </Arc>
-                            </PartDraw>
-                        </Compare>
-                        <Compare expression="isPool1">
-                            <PartDraw x="0" y="0" width="88" height="18">
-                                <Arc
-                                    centerX="86.5"
-                                    centerY="9"
-                                    width="3"
-                                    height="14"
-                                    startAngle="0"
-                                    endAngle="359.9">
-                                    <Stroke thickness="3" color="#186020" cap="BUTT" />
-                                </Arc>
-                            </PartDraw>
-                        </Compare>
-                    </Condition>
-                    <PartText x="6" y="0" width="78" height="18">
+                    <PartText x="2" y="12" width="37" height="18" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Text align="CENTER" ellipsis="TRUE">
-                            <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
                                 <Template>%s
                                     <Parameter expression="[COMPLICATION.TEXT]" />
                                 </Template>
                             </Font>
                         </Text>
                     </PartText>
+            </Group>
+            </Complication>
+            <Complication type="RANGED_VALUE">
+            <Group x="0" y="0" width="42" height="42" name="cell2">
+                    <PartDraw x="0" y="0" width="42" height="42">
+                        <Ellipse x="0" y="0" width="42" height="42">
+                            <Fill color="#ff0b0e0c" />
+                        </Ellipse>
+                    </PartDraw>
+                    <PartText x="2" y="12" width="37" height="18" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Text align="CENTER" ellipsis="TRUE">
+                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                <Template>%s
+                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                </Template>
+                            </Font>
+                        </Text>
+                    </PartText>
+            </Group>
+            </Complication>
+            <Complication type="MONOCHROMATIC_IMAGE">
+            <Group x="0" y="0" width="42" height="42" name="cell2Icon">
+                    <PartDraw x="0" y="0" width="42" height="42">
+                        <Ellipse x="0" y="0" width="42" height="42">
+                            <Fill color="#ff0b0e0c" />
+                        </Ellipse>
+                    </PartDraw>
+                <Group x="10" y="10" width="21" height="21" name="cell2Tint" tintColor="#fff4fbf8">
+                    <PartImage x="0" y="0" width="21" height="21" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                    </PartImage>
                 </Group>
+            </Group>
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>
 
         <ComplicationSlot
-            x="181"
-            y="325"
-            width="88"
-            height="18"
-            slotId="108"
-            displayName="@string/strip3_complication"
-            supportedTypes="RANGED_VALUE EMPTY"
-            isCustomizable="FALSE">
+            x="256"
+            y="111"
+            width="42"
+            height="42"
+            slotId="203"
+            displayName="@string/cell3_complication"
+            supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
+            isCustomizable="TRUE">
             <DefaultProviderPolicy
-                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.Strip3ComplicationDataSourceService"
-                primaryProviderType="RANGED_VALUE"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="88" height="18" />
-            <Complication type="RANGED_VALUE">
-                <Group x="0" y="0" width="88" height="18" name="ring3_strip" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <PartDraw x="0" y="0" width="88" height="18">
-                        <RoundRectangle x="0" y="0" width="88" height="18" cornerRadiusX="6" cornerRadiusY="6">
-                            <Fill color="#eb0b0e0c" />
-                        </RoundRectangle>
-                        <!-- Family accent from ColorRamp (same path as matching ring). -->
-                        <Arc
-                            centerX="1.5"
-                            centerY="9"
-                            width="3"
-                            height="14"
-                            startAngle="0"
-                            endAngle="359.9">
-                            <WeightedStroke
-                                thickness="3"
-                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-                                cap="BUTT" />
-                        </Arc>
+            <BoundingBox x="0" y="0" width="42" height="42" />
+            <Complication type="SHORT_TEXT">
+            <Group x="0" y="0" width="42" height="42" name="cell3">
+                    <PartDraw x="0" y="0" width="42" height="42">
+                        <Ellipse x="0" y="0" width="42" height="42">
+                            <Fill color="#ff0b0e0c" />
+                        </Ellipse>
                     </PartDraw>
-                    <Condition>
-                        <Expressions>
-                            <Expression name="isPool0"><![CDATA[[COMPLICATION.TITLE] == "cursor-other"]]></Expression>
-                            <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "spark"]]></Expression>
-                        </Expressions>
-                        <Compare expression="isPool0">
-                            <PartDraw x="0" y="0" width="88" height="18">
-                                <Arc
-                                    centerX="86.5"
-                                    centerY="9"
-                                    width="3"
-                                    height="14"
-                                    startAngle="0"
-                                    endAngle="359.9">
-                                    <Stroke thickness="3" color="#67E8D4" cap="BUTT" />
-                                </Arc>
-                            </PartDraw>
-                        </Compare>
-                        <Compare expression="isPool1">
-                            <PartDraw x="0" y="0" width="88" height="18">
-                                <Arc
-                                    centerX="86.5"
-                                    centerY="9"
-                                    width="3"
-                                    height="14"
-                                    startAngle="0"
-                                    endAngle="359.9">
-                                    <Stroke thickness="3" color="#186020" cap="BUTT" />
-                                </Arc>
-                            </PartDraw>
-                        </Compare>
-                    </Condition>
-                    <PartText x="6" y="0" width="78" height="18">
+                    <PartText x="2" y="12" width="37" height="18" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Text align="CENTER" ellipsis="TRUE">
-                            <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
                                 <Template>%s
                                     <Parameter expression="[COMPLICATION.TEXT]" />
                                 </Template>
                             </Font>
                         </Text>
                     </PartText>
+            </Group>
+            </Complication>
+            <Complication type="RANGED_VALUE">
+            <Group x="0" y="0" width="42" height="42" name="cell3">
+                    <PartDraw x="0" y="0" width="42" height="42">
+                        <Ellipse x="0" y="0" width="42" height="42">
+                            <Fill color="#ff0b0e0c" />
+                        </Ellipse>
+                    </PartDraw>
+                    <PartText x="2" y="12" width="37" height="18" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Text align="CENTER" ellipsis="TRUE">
+                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                <Template>%s
+                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                </Template>
+                            </Font>
+                        </Text>
+                    </PartText>
+            </Group>
+            </Complication>
+            <Complication type="MONOCHROMATIC_IMAGE">
+            <Group x="0" y="0" width="42" height="42" name="cell3Icon">
+                    <PartDraw x="0" y="0" width="42" height="42">
+                        <Ellipse x="0" y="0" width="42" height="42">
+                            <Fill color="#ff0b0e0c" />
+                        </Ellipse>
+                    </PartDraw>
+                <Group x="10" y="10" width="21" height="21" name="cell3Tint" tintColor="#fff4fbf8">
+                    <PartImage x="0" y="0" width="21" height="21" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                    </PartImage>
                 </Group>
+            </Group>
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>

@@ -9,7 +9,9 @@ import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.Quantity
 import app.wardpulse.wear.model.RingHalf
 import app.wardpulse.wear.model.RingSummary
+import app.wardpulse.wear.model.RingSurfaceOrder
 import app.wardpulse.wear.model.WatchDataMode
+import app.wardpulse.wear.ui.RingFamily
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -17,6 +19,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WatchComplicationTextTest {
+    /** Face arc slots, outermost first — the order `RingSurfaceOrder` mirrors. */
+    private val RINGS_SLOT_ORDER = listOf(0, 1, 2)
+
     private val cursorPair =
         RingSummary(
             "allowance.cursor.cursor-plan-models",
@@ -116,7 +121,9 @@ class WatchComplicationTextTest {
             }
         assertTrue(loneOuter is NoDataComplicationData)
 
-        assertEquals(WatchComplicationText.SPLIT_TOKEN, normalTitle(cursorPair))
+        // The pair names its outer pool in the same string: one slot draws both
+        // the band and the legend row that marks it.
+        assertEquals("split:cursor-other", normalTitle(cursorPair))
         val builtOuter = NoDataComplicationData()
         var outerBuilt = false
         val pairedOuter =
@@ -229,12 +236,86 @@ class WatchComplicationTextTest {
                 rings = emptyList(),
                 creditsGlance = CreditsGlance(text = "500", label = "Credits left", provider = "codex"),
             )
-        assertEquals(
-            WatchComplicationText.StripPayload(text = "500"),
-            WatchComplicationText.stripPayload(creditsOnly, 0),
-        )
         assertEquals("500", WatchComplicationText.stripLabel(creditsOnly, 0))
         assertNull(WatchComplicationText.stripLabel(creditsOnly, 1))
+    }
+
+    @Test
+    fun theLoneCreditsRowCarriesItsLabelAndItsProvidersColour() {
+        val creditsOnly =
+            PreviewWatchDashboardSummary.value.copy(
+                rings = emptyList(),
+                allowances = emptyList(),
+                creditsGlance =
+                    CreditsGlance(text = "500", label = "Credits left", provider = "codex"),
+            )
+
+        var builtLabel: String? = null
+        var builtColor: Int? = null
+        val built = NoDataComplicationData()
+        val result =
+            creditsOnlyComplicationData(creditsOnly) { label, colorArgb ->
+                builtLabel = label
+                builtColor = colorArgb
+                built
+            }
+
+        assertSame(built, result)
+        assertEquals("500", builtLabel)
+        assertEquals(RingFamily.colorArgb("allowance.codex.credits"), builtColor)
+
+        // Nothing to say: the row is not drawn rather than drawn empty.
+        val nothing = creditsOnly.copy(creditsGlance = null)
+        assertTrue(
+            creditsOnlyComplicationData(nothing) { _, _ ->
+                error("A payload with no credits must not publish a row")
+            } is NoDataComplicationData,
+        )
+    }
+
+    @Test
+    fun onlyTheBottomRowCarriesCreditsWhenNoRingExists() {
+        // The stack anchors to its bottom row, and the outermost slot paints it.
+        assertEquals(0, CREDITS_RING_INDEX)
+        // With no rings, no slot resolves a payload index, so the fallback is the
+        // only thing that can draw a row at all.
+        RINGS_SLOT_ORDER.forEach { slot ->
+            assertNull(RingSurfaceOrder.payloadIndexForOuterSlot(0, slot))
+        }
+    }
+
+    @Test
+    fun eachRingSlotPrintsTheRowItsPayloadIndexOwns() {
+        val multi =
+            PreviewWatchDashboardSummary.value.copy(
+                rings =
+                    listOf(
+                        RingSummary("allowance.codex.plan", "Codex", 92.0, PulseStatus.OK),
+                        RingSummary("allowance.claude.plan", "Claude", 61.0, PulseStatus.OK),
+                        RingSummary("allowance.cursor.plan", "Cursor", 54.0, PulseStatus.OK),
+                    ),
+                allowances = emptyList(),
+                creditsGlance = null,
+            )
+
+        // Tightest first in the payload; outermost slot binds the loosest, so the
+        // row a slot prints is the row its own payload index owns.
+        for (ringCount in 1..3) {
+            val rings = multi.rings.take(ringCount)
+            val summary = multi.copy(rings = rings)
+            RINGS_SLOT_ORDER.take(ringCount).forEach { slot ->
+                val dataIndex =
+                    requireNotNull(RingSurfaceOrder.payloadIndexForOuterSlot(ringCount, slot))
+                assertEquals(
+                    WatchComplicationText.stripLabel(summary, dataIndex),
+                    WatchComplicationText.stripLabel(summary, ringCount - 1 - slot),
+                )
+            }
+            // Slots past the count draw neither band nor row.
+            RINGS_SLOT_ORDER.drop(ringCount).forEach { slot ->
+                assertNull(RingSurfaceOrder.payloadIndexForOuterSlot(ringCount, slot))
+            }
+        }
     }
 
     @Test
@@ -342,7 +423,7 @@ class WatchComplicationTextTest {
             )
         assertEquals("", WatchComplicationText.ringTitleToken(pool))
         assertEquals(
-            "split",
+            "split:cursor-other",
             WatchComplicationText.ringTitleToken(
                 pool.copy(
                     split =
@@ -350,6 +431,31 @@ class WatchComplicationTextTest {
                             "allowance.cursor.cursor-plan-other",
                             "Other Models",
                             38.0,
+                            PulseStatus.OK,
+                        ),
+                ),
+            ),
+        )
+        // A pool outside the closed vocabulary leaves the band token bare: the
+        // face has no branch to paint a marker it does not know.
+        assertEquals(
+            WatchComplicationText.SPLIT_TOKEN,
+            WatchComplicationText.ringTitleToken(
+                pool.copy(
+                    split = RingHalf("allowance.cursor.unknown", "Unknown", 38.0, PulseStatus.OK),
+                ),
+            ),
+        )
+        // An exhausted half marks nothing either, but the band is still shared.
+        assertEquals(
+            WatchComplicationText.SPLIT_TOKEN,
+            WatchComplicationText.ringTitleToken(
+                pool.copy(
+                    split =
+                        RingHalf(
+                            "allowance.cursor.cursor-plan-other",
+                            "Other Models",
+                            100.0,
                             PulseStatus.OK,
                         ),
                 ),

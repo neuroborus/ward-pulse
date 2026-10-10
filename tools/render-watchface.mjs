@@ -60,6 +60,19 @@ const COLOR = {
   track: '#ff2e3632',
   strip: '#eb0b0e0c',
   text: '#fff4fbf8',
+  /**
+   * The occluder a filled cell draws inside its own slot, and the middle of an
+   * empty cell's recess. Opaque where the strip well is not: it has to cover
+   * whatever chrome the scene put under it, and `0xeb` leaks 7.8% of that
+   * through (`WATCH_RING_DESIGN.md`, Upper cells, rule 10).
+   */
+  cellWell: '#ff0b0e0c',
+  /**
+   * The lit rim of an empty cell, and the only colour this revision adds. Not
+   * the track: that colour means the unspent part of a band, and at its
+   * contrast a rim reads as a drawn ring rather than as the edge of a dish.
+   */
+  cellRim: '#ff242a27',
 }
 
 /**
@@ -118,6 +131,16 @@ const OUTER_HALVES = [
 
 /** The token a band's own slot sends when it draws only its inner half. */
 const SPLIT_TOKEN = 'split'
+
+/**
+ * The token that lone strip sends when there is no ring at all — a credits
+ * reading with no band under it. It is a `TITLE` value rather than a second
+ * slot because the slot that carries it is a ring slot doing its other job.
+ */
+const CREDITS_TOKEN = 'credits'
+
+/** Joins a band's own token to the outer-pool token of the strip it now carries. */
+const TOKEN_SEPARATOR = ':'
 
 /**
  * Ring type as texture: the budget period repeated around the band, drawn from a
@@ -251,16 +274,103 @@ const STRIP = {
  */
 const WORDMARK = { centerX: FACE.center, centerY: 260, size: 66, ambientSize: 54 }
 
-const STRIPS = [
-  { slotId: 104, service: 'Tokens' },
-  { slotId: 107, service: 'Strip2' },
-  { slotId: 108, service: 'Strip3' },
+/**
+ * Which row of the stack a ring's own slot paints, counted from the top.
+ *
+ * The stack anchors to its **bottom** row, so the outermost ring — which binds
+ * the loosest payload when several are active — takes the lowest row, and the
+ * innermost takes the highest. Arc slots fill from the outside, so the occupied
+ * rows are always contiguous and always end at y=325, whatever the ring count
+ * (`WATCH_RING_DESIGN.md`, Upper cells, rule 3). A top-anchored stack could not
+ * be folded at all: the row a slot paints would move with the ring count, and
+ * one slot has one height.
+ */
+function stripRowY(ringIndex) {
+  return STRIP.top + (RINGS.length - 1 - ringIndex) * STRIP.pitch
+}
+
+/** The bottom row, and so the row a lone strip belongs on. */
+const CREDITS_RING_INDEX = 0
+
+/**
+ * The three cells above the clock, on a circle concentric with the face rather
+ * than in a row: a constant radius against a band that is itself a circle keeps
+ * the clearance equal by construction, with nothing left to tune. Origins are
+ * the integers `WATCH_RING_DESIGN.md` rule 1 locks — WFF rejects a fractional
+ * coordinate outright — and the middle cell is the highest because it is the
+ * one on the vertical axis.
+ */
+const CELL = {
+  size: 42,
+  /** The 18-unit line box the strips use, centred by `(42 - 18) / 2`. */
+  textY: 12,
+  /**
+   * Inset to where the well still admits that box's full height: a circle of
+   * radius 21 is `sqrt(441 - 81)` = 18.97 wide at 9 units off its midline. The
+   * exact inset is 2.5 and the grid is integral, so the box sits half a unit
+   * left of the cell's own centre.
+   */
+  textX: 2,
+  textWidth: 37,
+  fontSize: 14,
+  /**
+   * Half the diameter, so an icon leaves the rim of a round recess clear. It
+   * cannot sit exactly centred for the same reason the line box cannot: 21 in
+   * 42 leaves 10.5 a side and the grid is integral.
+   */
+  iconSize: 21,
+}
+
+/**
+ * A trailing mark is not part of the number. Centring the whole string puts the
+ * string on the cell's axis and drags the digits left by half the mark's
+ * advance, measured at 2 units for the degree sign, so the box moves back by
+ * that much and the digits land centred whatever their count.
+ */
+const CELL_MARK_SHIFT = 2
+
+const CELLS = [
+  { slotId: 201, x: 152, y: 111, label: 'cell1', provider: 'DAY_OF_WEEK', type: 'SHORT_TEXT' },
+  { slotId: 202, x: 204, y: 97, label: 'cell2', provider: 'EMPTY', type: 'EMPTY' },
+  { slotId: 203, x: 256, y: 111, label: 'cell3', provider: 'EMPTY', type: 'EMPTY' },
+]
+
+/**
+ * What the face draws under a cell when the wearer has not filled it. WFF reads
+ * weather from a built-in source in an expression, so the default costs no
+ * complication slot; a filled cell's opaque well simply covers it. Nothing is
+ * declared under the left cell, so its recess is bare whenever it is cleared.
+ */
+const CELL_CHROME = [
+  { expression: null, shift: 0 },
+  { expression: '[WEATHER.TEMPERATURE]', shift: CELL_MARK_SHIFT },
+  { expression: '[WEATHER.UV_INDEX]', shift: 0 },
 ]
 
 /** Closed vocabulary shared with WatchComplicationText.splitPoolToken. */
 const SPLIT_POOLS = [
   { token: 'cursor-other', color: '#67E8D4' },
   { token: 'spark', color: '#186020' },
+]
+
+/**
+ * One slot now has two jobs and one `TITLE` to say both in, so the vocabulary
+ * is the product of the two closed sets rather than either one
+ * (`WATCH_RING_DESIGN.md`, Upper cells, rule 4). Only a split band carries a
+ * pool token — a budget ring never shares — so the product is short: the band
+ * token alone, plus `split` suffixed with each pool.
+ *
+ * Every branch below compares against the whole set it means, joined by `||`,
+ * because WFF has no prefix test and a token is matched whole or not at all.
+ */
+function titleEquals(...tokens) {
+  return tokens.map((token) => `[COMPLICATION.TITLE] == "${token}"`).join(' || ')
+}
+
+/** Every spelling of `split`: bare, or carrying one of the pool tokens. */
+const SPLIT_TITLES = [
+  SPLIT_TOKEN,
+  ...SPLIT_POOLS.map(({ token }) => `${SPLIT_TOKEN}${TOKEN_SEPARATOR}${token}`),
 ]
 
 /** Every slot names a service in the Wear app; nothing else may fill them. */
@@ -283,9 +393,12 @@ const HEADER = `<?xml version="1.0" encoding="utf-8"?>
   the family and the type stays a shade in the band.
 
   Ring slots take a full-canvas BoundingBox: a BoundingArc clips a slot to its own
-  band and halves its stroke, so each band declares the 20 units it paints.
-  Strip TEXT = full label (\`46%\` or \`100% · 500\` on the owning family).
-  Strip TITLE = closed outer-pool token; the far marker uses its static palette color.
+  band and halves its stroke, so each band declares the 20 units it paints. That clip
+  is also what kept a strip out, so since 2026-10-09 each ring slot draws its own
+  legend row and the three slots that freed carry the upper cells instead.
+  Ring TEXT = full strip label (\`46%\` or \`100% · 500\` on the owning family).
+  Ring TITLE = the band's own token, suffixed with the outer-pool token when the
+  band is shared: one slot, two jobs, one string to say both in.
   Remaining melt: Transform startAngle (1 - value/max)*359.9, endAngle fixed 359.9
   so usage opens clockwise from 12 and remaining ends at 12.
 -->`
@@ -304,6 +417,164 @@ function lift() {
                 </Fill>
             </Ellipse>
         </PartDraw>`
+}
+
+function cellChromeComment() {
+  const rows = CELLS.map(({ x, y }) => `${x},${y}`).join('  ')
+  return `        <!-- What lies under the cells, declared ahead of every slot so a filled
+             cell's own opaque well covers it: ${rows} at ${CELL.size} units, centres on a
+             circle of radius 106.8 about the face centre. The middle and right cells
+             carry the default weather, which costs no complication slot. -->`
+}
+
+function cellComment() {
+  return `        <!-- Three cells the wearer fills, above the clock. The system owns what goes
+             in them; this face owns only the declaration and how it is drawn.
+             (docs/product/WATCH_RING_DESIGN.md, Upper cells, revision 2026-10-09) -->`
+}
+
+/** A cell's text, in the face's own label voice — the provider gets no say. */
+function cellText(parameter, shift, pad) {
+  return `${pad}<PartText x="${CELL.textX + shift}" y="${CELL.textY}" width="${CELL.textWidth}" height="18" alpha="255">
+${pad}    <Variant mode="AMBIENT" target="alpha" value="140" />
+${pad}    <Text align="CENTER" ellipsis="TRUE">
+${pad}        <Font family="SYNC_TO_DEVICE" size="${CELL.fontSize}" weight="BOLD" color="${COLOR.text}">
+${pad}            <Template>%s
+${pad}                <Parameter expression="${parameter}" />
+${pad}            </Template>
+${pad}        </Font>
+${pad}    </Text>
+${pad}</PartText>`
+}
+
+/** The flat recess a cell shows while our own reading sits on it. */
+function cellWellFlat(color, pad) {
+  return `${pad}<PartDraw x="0" y="0" width="${CELL.size}" height="${CELL.size}">
+${pad}    <Ellipse x="0" y="0" width="${CELL.size}" height="${CELL.size}">
+${pad}        <Fill color="${color}" />
+${pad}    </Ellipse>
+${pad}</PartDraw>`
+}
+
+/**
+ * The recess a cell shows when it has nothing at all on it: the same well, lit
+ * across its outer 45% so it reads as a dish waiting to be filled rather than
+ * as a fault. A ring would say it more literally and would also be a border
+ * around a card, which the non-goals refuse; the face already states depth with
+ * a radial gradient, in the lift, so this borrows a voice it owns.
+ */
+function cellWellGraded(pad) {
+  const centre = CELL.size / 2
+  return `${pad}<PartDraw x="0" y="0" width="${CELL.size}" height="${CELL.size}">
+${pad}    <Ellipse x="0" y="0" width="${CELL.size}" height="${CELL.size}">
+${pad}        <Fill color="${COLOR.cellWell}">
+${pad}            <RadialGradient
+${pad}                centerX="${centre}"
+${pad}                centerY="${centre}"
+${pad}                radius="${centre}"
+${pad}                colors="${COLOR.cellWell} ${COLOR.cellWell} ${COLOR.cellRim}"
+${pad}                positions="0.0 0.55 1.0" />
+${pad}        </Fill>
+${pad}    </Ellipse>
+${pad}</PartDraw>`
+}
+
+/**
+ * What lies under a cell, drawn ahead of every slot so a filled cell's own
+ * opaque well simply covers it. Where the face declares a weather reading it
+ * shows on a flat well while the data is there and falls back to the bare
+ * recess when it is not — a cell reading `0` or nothing at all is worse than a
+ * cell that is plainly empty.
+ */
+function cellChrome({ x, y, label }, index) {
+  const { expression, shift } = CELL_CHROME[index]
+  const pad = ' '.repeat(12)
+  const body = expression
+    ? `            <Condition>
+                <Expressions>
+                    <Expression name="hasWeather"><![CDATA[[WEATHER.IS_AVAILABLE]]]></Expression>
+                </Expressions>
+                <Compare expression="hasWeather">
+                    <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}Reading">
+${cellWellFlat(COLOR.strip, ' '.repeat(24))}
+${cellText(expression, shift, ' '.repeat(24))}
+                    </Group>
+                </Compare>
+                <Default>
+                    <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}Bare">
+${cellWellGraded(' '.repeat(24))}
+                    </Group>
+                </Default>
+            </Condition>`
+    : cellWellGraded(pad)
+  return `        <Group x="${x}" y="${y}" width="${CELL.size}" height="${CELL.size}" name="${label}Chrome">
+${body}
+        </Group>`
+}
+
+/**
+ * A cell the wearer owns. Every visual decision here is the face's: WFF gives a
+ * provider no say in how its data looks, so the cell draws `TEXT` alone in its
+ * own voice and drops the provider's `TITLE` and icon — at four glyphs there is
+ * no second line for a title, and an icon beside the text would halve the text.
+ *
+ * `RANGED_VALUE` is drawn as text, never as an arc: a small arc here would put
+ * a second arc language on a face whose arcs already mean one ring, one metric,
+ * and it would say it six units from the real ones.
+ *
+ * The well inside the slot is the occluder, and it is opaque for that reason.
+ * It carries no ambient variant: switching it off would let the chrome back out
+ * from under the complication, with two values in the same 42 units.
+ */
+function cellSlot({ slotId, x, y, label, provider: systemProvider, type }) {
+  const pad = ' '.repeat(20)
+  const well = cellWellFlat(COLOR.cellWell, pad)
+  const body = (parameter) => `            <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}">
+${well}
+${cellText(parameter, 0, pad)}
+            </Group>`
+  // 21 in 42 leaves 10.5 a side and the grid is integral, so the icon sits half
+  // a unit in from centre — the same rounding, in the same direction, that
+  // rule 7 records for the line box.
+  const inset = Math.floor((CELL.size - CELL.iconSize) / 2)
+  // The tint goes on a group of its own, not on the slot: tinting the slot
+  // would take the well with it. It is the text colour rather than a family
+  // colour — on this face a family colour means *this ring's provider*, and a
+  // cell is not a ring — so an icon reads as face text rather than as a
+  // foreign mark.
+  const icon = `            <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}Icon">
+${well}
+                <Group x="${inset}" y="${inset}" width="${CELL.iconSize}" height="${CELL.iconSize}" name="${label}Tint" tintColor="${COLOR.text}">
+                    <PartImage x="0" y="0" width="${CELL.iconSize}" height="${CELL.iconSize}" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                    </PartImage>
+                </Group>
+            </Group>`
+  return `        <ComplicationSlot
+            x="${x}"
+            y="${y}"
+            width="${CELL.size}"
+            height="${CELL.size}"
+            slotId="${slotId}"
+            displayName="@string/${label}_complication"
+            supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
+            isCustomizable="TRUE">
+            <DefaultProviderPolicy
+                defaultSystemProvider="${systemProvider}"
+                defaultSystemProviderType="${type}" />
+            <BoundingBox x="0" y="0" width="${CELL.size}" height="${CELL.size}" />
+            <Complication type="SHORT_TEXT">
+${body('[COMPLICATION.TEXT]')}
+            </Complication>
+            <Complication type="RANGED_VALUE">
+${body('[COMPLICATION.TEXT]')}
+            </Complication>
+            <Complication type="MONOCHROMATIC_IMAGE">
+${icon}
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>`
 }
 
 /** The drawable a ring's period is baked into, and the name WFF resolves it by. */
@@ -405,9 +676,11 @@ function ringTextureBranch(diameter, index, period) {
  */
 function ringTexture(diameter, index) {
   if (index >= TEXTURE_RINGS) return ''
+  // A period token needs no combined spelling: only a split band carries a pool
+  // token, and a budget ring is never shared (`WATCH_RING_DESIGN.md`, Split band).
   const expressions = TOKENS.map(
     ({ period, title }) =>
-      `                                    <Expression name="is${period}"><![CDATA[[COMPLICATION.TITLE] == "${title}"]]></Expression>`,
+      `                                    <Expression name="is${period}"><![CDATA[${titleEquals(title)}]]></Expression>`,
   ).join('\n')
   return `
                             <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
@@ -630,18 +903,20 @@ function ringSlot({ slotId, diameter, service }, index) {
                 defaultSystemProviderType="EMPTY" />
             <BoundingBox x="0" y="0" width="${FACE.size}" height="${FACE.size}" />
             <Complication type="RANGED_VALUE">
+                <!-- The band, unless this is the lone credits row: that one has a
+                     reading but no ring behind it, so it draws its strip only. -->
                 <Condition>
                     <Expressions>
-                        <Expression name="hasRing">
-                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]>
+                        <Expression name="hasBand">
+                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && !(${titleEquals(CREDITS_TOKEN)})]]>
                         </Expression>
                     </Expressions>
-                    <Compare expression="hasRing">
+                    <Compare expression="hasBand">
                         <!-- Shared band: this slot keeps the inner half, the outer one
                              comes from the slot that serves every band. -->
                         <Condition>
                             <Expressions>
-                                <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "${SPLIT_TOKEN}"]]></Expression>
+                                <Expression name="isSplit"><![CDATA[${titleEquals(...SPLIT_TITLES)}]]></Expression>
                             </Expressions>
                             <Compare expression="isSplit">
                                 <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}Half">
@@ -656,6 +931,9 @@ ${bandArcs(bandCentre(diameter), BAND_THICKNESS, ' '.repeat(36))}${ringTexture(d
                         </Condition>
                     </Compare>
                 </Condition>
+                <!-- The legend row this ring owns. Its own slot since 2026-10-09:
+                     the three the strips held are the three the cells took. -->
+${stripRow(index, ' '.repeat(16))}
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>`
@@ -781,101 +1059,89 @@ function wordmark() {
         </Group>`
 }
 
-function stripComment() {
-  const rows = STRIPS.map((_, index) => STRIP.top + index * STRIP.pitch).join('/')
-  return `        <!-- Equal-width strips (${STRIP.width}) at x=${STRIP.x}; y=${rows} — kept inside the
-             inner ring aperture after the 2026-08-02 band widening.
-             Sized for "100% · 10.0M". RANGED_VALUE + ColorRamp accents match ring families. -->`
+/**
+ * One legend row, drawn by the slot of the ring it belongs to rather than by a
+ * slot of its own: that is what freed the three slots the cells took. The box
+ * is placed in face coordinates because its group spans the whole canvas now,
+ * and the row is fixed per slot — nothing here varies with the ring count.
+ *
+ * Strips still switch off in ambient. A strip restates what its band already
+ * shows, so dropping it loses nothing, and a row that is not drawn should not
+ * leave an empty socket behind.
+ */
+function stripRow(ringIndex, pad) {
+  const y = stripRowY(ringIndex)
+  const { x, width, height, radius, textInset, textWidth, fontSize } = STRIP
+  return `${pad}<Group x="${x}" y="${y}" width="${width}" height="${height}" name="ring${ringIndex + 1}_strip" alpha="255">
+${pad}    <Variant mode="AMBIENT" target="alpha" value="0" />
+${pad}    <PartDraw x="0" y="0" width="${width}" height="${height}">
+${pad}        <RoundRectangle x="0" y="0" width="${width}" height="${height}" cornerRadiusX="${radius}" cornerRadiusY="${radius}">
+${pad}            <Fill color="${COLOR.strip}" />
+${pad}        </RoundRectangle>
+${pad}        <!-- Family accent from ColorRamp (same path as matching ring). -->
+${pad}        <Arc
+${pad}            centerX="1.5"
+${pad}            centerY="${height / 2}"
+${pad}            width="3"
+${pad}            height="14"
+${pad}            startAngle="${SWEEP.start}"
+${pad}            endAngle="${SWEEP.end}">
+${pad}            <WeightedStroke
+${pad}                thickness="3"
+${pad}                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+${pad}                cap="BUTT" />
+${pad}        </Arc>
+${pad}    </PartDraw>
+${splitMarker(pad + ' '.repeat(4))}
+${pad}    <PartText x="${textInset}" y="0" width="${textWidth}" height="${height}">
+${pad}        <Text align="CENTER" ellipsis="TRUE">
+${pad}            <Font family="SYNC_TO_DEVICE" size="${fontSize}" weight="BOLD" color="${COLOR.text}">
+${pad}                <Template>%s
+${pad}                    <Parameter expression="[COMPLICATION.TEXT]" />
+${pad}                </Template>
+${pad}            </Font>
+${pad}        </Text>
+${pad}    </PartText>
+${pad}</Group>`
 }
 
-function stripSlot({ slotId, service }, index) {
-  const y = STRIP.top + index * STRIP.pitch
-  const { width, height, radius, textInset, textWidth, fontSize } = STRIP
-  return `        <ComplicationSlot
-            x="${STRIP.x}"
-            y="${y}"
-            width="${width}"
-            height="${height}"
-            slotId="${slotId}"
-            displayName="@string/strip${index + 1}_complication"
-            supportedTypes="RANGED_VALUE EMPTY"
-            isCustomizable="FALSE">
-            <DefaultProviderPolicy
-                primaryProvider="${provider(service)}"
-                primaryProviderType="RANGED_VALUE"
-                defaultSystemProvider="EMPTY"
-                defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="${width}" height="${height}" />
-            <Complication type="RANGED_VALUE">
-                <Group x="0" y="0" width="${width}" height="${height}" name="ring${
-                  index + 1
-                }_strip" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <PartDraw x="0" y="0" width="${width}" height="${height}">
-                        <RoundRectangle x="0" y="0" width="${width}" height="${height}" cornerRadiusX="${radius}" cornerRadiusY="${radius}">
-                            <Fill color="${COLOR.strip}" />
-                        </RoundRectangle>
-                        <!-- Family accent from ColorRamp (same path as matching ring). -->
-                        <Arc
-                            centerX="1.5"
-                            centerY="${height / 2}"
-                            width="3"
-                            height="14"
-                            startAngle="${SWEEP.start}"
-                            endAngle="${SWEEP.end}">
-                            <WeightedStroke
-                                thickness="3"
-                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-                                cap="BUTT" />
-                        </Arc>
-                    </PartDraw>
-${splitMarker()}
-                    <PartText x="${textInset}" y="0" width="${textWidth}" height="${height}">
-                        <Text align="CENTER" ellipsis="TRUE">
-                            <Font family="SYNC_TO_DEVICE" size="${fontSize}" weight="BOLD" color="${
-                              COLOR.text
-                            }">
-                                <Template>%s
-                                    <Parameter expression="[COMPLICATION.TEXT]" />
-                                </Template>
-                            </Font>
-                        </Text>
-                    </PartText>
-                </Group>
-            </Complication>
-            <Complication type="EMPTY" />
-        </ComplicationSlot>`
-}
-
-/** The strip owns both accents; only its inner pool uses the ColorRamp. */
-function splitMarker() {
+/**
+ * The strip owns both accents; only its inner pool uses the ColorRamp.
+ *
+ * The pool token now arrives suffixed to the band's own `split`, because one
+ * slot says both in one `TITLE`, so each branch matches the whole combined
+ * string rather than the pool name alone.
+ */
+function splitMarker(pad) {
   const { width, height } = STRIP
   const expressions = SPLIT_POOLS.map(
     ({ token }, index) =>
-      `                            <Expression name="isPool${index}"><![CDATA[[COMPLICATION.TITLE] == "${token}"]]></Expression>`,
+      `${pad}        <Expression name="isPool${index}"><![CDATA[${titleEquals(
+        `${SPLIT_TOKEN}${TOKEN_SEPARATOR}${token}`,
+      )}]]></Expression>`,
   ).join('\n')
   const branches = SPLIT_POOLS.map(
-    ({ color }, index) => `                        <Compare expression="isPool${index}">
-                            <PartDraw x="0" y="0" width="${width}" height="${height}">
-                                <Arc
-                                    centerX="${width - 1.5}"
-                                    centerY="${height / 2}"
-                                    width="3"
-                                    height="14"
-                                    startAngle="${SWEEP.start}"
-                                    endAngle="${SWEEP.end}">
-                                    <Stroke thickness="3" color="${color}" cap="BUTT" />
-                                </Arc>
-                            </PartDraw>
-                        </Compare>`,
+    ({ color }, index) => `${pad}    <Compare expression="isPool${index}">
+${pad}        <PartDraw x="0" y="0" width="${width}" height="${height}">
+${pad}            <Arc
+${pad}                centerX="${width - 1.5}"
+${pad}                centerY="${height / 2}"
+${pad}                width="3"
+${pad}                height="14"
+${pad}                startAngle="${SWEEP.start}"
+${pad}                endAngle="${SWEEP.end}">
+${pad}                <Stroke thickness="3" color="${color}" cap="BUTT" />
+${pad}            </Arc>
+${pad}        </PartDraw>
+${pad}    </Compare>`,
   ).join('\n')
   // No Default branch: an empty or unknown token paints no far marker.
-  return `                    <Condition>
-                        <Expressions>
+  return `${pad}<Condition>
+${pad}    <Expressions>
 ${expressions}
-                        </Expressions>
+${pad}    </Expressions>
 ${branches}
-                    </Condition>`
+${pad}</Condition>`
 }
 
 function face() {
@@ -885,14 +1151,18 @@ function face() {
   const body = [
     [
       lift(),
+      cellChromeComment(),
+      CELLS.map(cellChrome).join('\n\n'),
+    ].join('\n'),
+    [
       RINGS.map(ringSlot).join('\n\n'),
       OUTER_HALVES.map(outerHalfSlot).join('\n\n'),
     ].join('\n\n'),
     clock(),
+    wordmark(),
     [
-      wordmark(),
-      stripComment(),
-      STRIPS.map(stripSlot).join('\n\n'),
+      cellComment(),
+      CELLS.map(cellSlot).join('\n\n'),
     ].join('\n'),
   ].join('\n\n')
   return `${HEADER}
