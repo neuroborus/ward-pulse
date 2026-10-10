@@ -1114,15 +1114,15 @@ function wordmark() {
  * is placed in face coordinates because its group spans the whole canvas now,
  * and the row is fixed per slot — nothing here varies with the ring count.
  *
- * Strips still switch off in ambient. A strip restates what its band already
- * shows, so dropping it loses nothing, and a row that is not drawn should not
- * leave an empty socket behind.
+ * Ambient dims the whole row to alpha 90. The variant stays on this enclosing
+ * group so it reaches the family accent painted from the complication's
+ * ranged-value colours as well as the well, marker, and label.
  */
 function stripRow(ringIndex, pad) {
   const y = stripRowY(ringIndex)
   const { x, width, height, radius, textInset, textWidth, fontSize } = STRIP
   return `${pad}<Group x="${x}" y="${y}" width="${width}" height="${height}" name="ring${ringIndex + 1}_strip" alpha="255">
-${pad}    <Variant mode="AMBIENT" target="alpha" value="0" />
+${pad}    <Variant mode="AMBIENT" target="alpha" value="90" />
 ${pad}    <PartDraw x="0" y="0" width="${width}" height="${height}">
 ${pad}        <RoundRectangle x="0" y="0" width="${width}" height="${height}" cornerRadiusX="${radius}" cornerRadiusY="${radius}">
 ${pad}            <Fill color="${COLOR.strip}" />

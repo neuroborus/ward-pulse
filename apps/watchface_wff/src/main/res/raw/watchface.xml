@@ -401,7 +401,7 @@
                 <!-- The legend row this ring owns. Its own slot since 2026-10-09:
                      the three the strips held are the three the cells took. -->
                 <Group x="181" y="325" width="88" height="18" name="ring1_strip" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <Variant mode="AMBIENT" target="alpha" value="90" />
                     <PartDraw x="0" y="0" width="88" height="18">
                         <RoundRectangle x="0" y="0" width="88" height="18" cornerRadiusX="6" cornerRadiusY="6">
                             <Fill color="#eb0b0e0c" />
@@ -699,7 +699,7 @@
                 <!-- The legend row this ring owns. Its own slot since 2026-10-09:
                      the three the strips held are the three the cells took. -->
                 <Group x="181" y="304" width="88" height="18" name="ring2_strip" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <Variant mode="AMBIENT" target="alpha" value="90" />
                     <PartDraw x="0" y="0" width="88" height="18">
                         <RoundRectangle x="0" y="0" width="88" height="18" cornerRadiusX="6" cornerRadiusY="6">
                             <Fill color="#eb0b0e0c" />
@@ -997,7 +997,7 @@
                 <!-- The legend row this ring owns. Its own slot since 2026-10-09:
                      the three the strips held are the three the cells took. -->
                 <Group x="181" y="283" width="88" height="18" name="ring3_strip" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <Variant mode="AMBIENT" target="alpha" value="90" />
                     <PartDraw x="0" y="0" width="88" height="18">
                         <RoundRectangle x="0" y="0" width="88" height="18" cornerRadiusX="6" cornerRadiusY="6">
                             <Fill color="#eb0b0e0c" />

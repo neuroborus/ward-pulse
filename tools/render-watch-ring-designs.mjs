@@ -59,6 +59,7 @@ const CELL = {
 
 /** The baseline caps the face at three bands, so the strip stack is three rows deep. */
 const MAX_RINGS = 3
+const STRIP_AMBIENT_ALPHA = 90
 
 /** The one family accent worn by two entries — a plan ring and a budget ring share it. */
 const ANTHROPIC = '#E8915A'
@@ -467,7 +468,7 @@ function upperCells({ size, ambient, clearedCells = [] }) {
     .join('')
 }
 
-function providerBars({ layers, showPlan, showCredits, size }) {
+function providerBars({ layers, showPlan, showCredits, size, ambient }) {
   const ordered = showPlan ? sortByRemaining(layers) : layers.slice(0, 1)
   const rows = ordered
     .map((layer) => ({
@@ -497,6 +498,11 @@ function providerBars({ layers, showPlan, showCredits, size }) {
   rows.forEach((row, index) => {
     const { layer, text } = row
     const y = (topRow + index * STRIP.pitch) * k
+    // Match the face's enclosing strip Group so the whole row dims together.
+    if (ambient) {
+      out += `
+    <g opacity="${STRIP_AMBIENT_ALPHA / 255}">`
+    }
     out += `
     <rect x="${(STRIP.x * k).toFixed(1)}" y="${y.toFixed(1)}"
       width="${(STRIP.width * k).toFixed(1)}" height="${(STRIP.height * k).toFixed(1)}"
@@ -519,6 +525,10 @@ function providerBars({ layers, showPlan, showCredits, size }) {
       width="${(STRIP.accentWidth * k).toFixed(1)}"
       height="${(STRIP.accentHeight * k).toFixed(1)}"
       rx="${((STRIP.accentWidth / 2) * k).toFixed(1)}" fill="${layer.split.color}" />`
+    }
+    if (ambient) {
+      out += `
+    </g>`
     }
   })
   return out
@@ -604,14 +614,13 @@ function faceSvg({
     <text x="${cx}" y="${timeY.toFixed(1)}" text-anchor="middle"
       font-family="${FONT}, sans-serif" font-size="${timeSize.toFixed(1)}"
       font-weight="700" fill="${LABEL}">10:08</text>`
-  if (!ambient) {
-    content += providerBars({
-      layers: stripLayers,
-      showPlan,
-      showCredits,
-      size,
-    })
-  }
+  content += providerBars({
+    layers: stripLayers,
+    showPlan,
+    showCredits,
+    size,
+    ambient,
+  })
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="${esc(name)}">
