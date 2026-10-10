@@ -2385,6 +2385,9 @@ each band's ring type still registers with its band, the nine textures unchanged
 in ambient the occluder and the recess both stay and every value dims — the complication in a
   filled cell, and the weather showing through an empty one; the filled cell's well still hides
   the chrome under it, so no cell ever shows two readings at once
+in ambient each legend strip dims with its whole row rather than switching off, so the credits
+  and the money — which appear nowhere else on the face — survive; the variant sits on the row's
+  enclosing group, the only place that reaches an accent painted from the ranged-value colours
 just check-designs passes, and the boards are compared against a device capture by hand —
   check-designs only proves the art matches its own generator, never that it matches the face
 ```

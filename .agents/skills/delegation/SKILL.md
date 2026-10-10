@@ -26,18 +26,35 @@ Plan with `plan-authoring`, execute with `plan-execution`. `polishing` finalizes
 existing change set **without committing**, which is what AGENTS.md wants when the owner has
 not asked for a commit.
 
-**Who runs which check is settled in `.agents/skills/finalization/agent-runner.md`**, the
-finalization gate the runner loads at `FINALIZE`. It carries the division between what a step
-proves inside its sandbox and what the owner runs on the host, with the reasons and the dates.
-Read it before scoping a task's gates; do not restate it here and do not re-derive it per task.
-A task's own gates section overrides it for that step.
+**Who runs which check is settled in `.agents/skills/finalization/agent-runner.md`.** It
+carries the division between what a step proves inside its sandbox and what the owner runs on
+the host, with the reasons and the dates. Read it before scoping a task's gates; do not restate
+it here and do not re-derive it per task.
 
-One thing this repository has learned the hard way, and it belongs here rather than there:
+That file is reached by reference, not by configuration. The runner's `finalization` setting
+accepts only `auto`, `none`, or a path ending in `/SKILL.md`, so it stays at `auto` and the step
+loads `.agents/skills/finalization/SKILL.md`. **A task's gates section is what carries the
+division to the step**, and it is authoritative for that step — so every runner task names the
+required checks explicitly, says which ones the owner runs afterwards, and points at
+`agent-runner.md` for the reasoning.
+
+Two things this repository has learned the hard way, and they belong here rather than there:
 
 - **Trusted-check configuration is frozen at run start.** Editing
   `LOCAL_ARTIFACTS/agent-runner.json` while a run exists leaves that run unable to resume *and*
   unable to cancel — the protected-input guard refuses both. Prepare the selection before
   starting, never during.
+- **A backend upgrade mid-run strands the run, and every run started after it from the same
+  MCP session.** The runner records an immutable provider-policy receipt per role at the first
+  probe and refuses a later probe that disagrees (`ERR_PROVIDER_POLICY_CHANGED`). Codex
+  auto-updates on an hourly schedule; on 2026-10-10 it swapped 0.162.0 for 0.162.1 in the
+  second the run was created, which killed the reviewer at launch and then failed every
+  dispatch, because the long-lived MCP server kept resolving the old binary while the shell
+  resolved the new one. The symptom is a detached continuation that exits before durable
+  acknowledgement, with no rollout session written. Neither run could be recovered; both were
+  cancelled. The way through is to drive the pipeline from the CLI — `agent-run run <pipeline>
+  --project … --task …` — where both probes see one binary, which also puts the real error on
+  stderr instead of leaving it to be dug out of `state.json`.
 
 Aliases live in the runner-root catalog or in the project's own
 `LOCAL_ARTIFACTS/agent-runner.json`; a project selection replaces the root selection, so list

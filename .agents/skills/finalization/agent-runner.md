@@ -1,9 +1,14 @@
 # Finalization for Agent Runner — WardPulse
 
-This is the finalization gate the runner loads at its `FINALIZE` state. It is not a skill and
-takes no frontmatter: nothing selects it automatically, and the runner reaches it only because
-`LOCAL_ARTIFACTS/agent-runner.json` names this path under `finalization` for `plan-execution`
-and `polishing`.
+This is the check division an Agent Runner step works under. It is not a skill and takes no
+frontmatter, so nothing selects it automatically; it is reached only by reference. A runner
+task's gates section names it, and `.agents/skills/delegation/SKILL.md` points the coordinator
+here before scoping those gates.
+
+It cannot be the runner's `finalization` setting. That setting takes `auto`, `none`, or a path
+ending in `/SKILL.md` and nothing else, so `LOCAL_ARTIFACTS/agent-runner.json` leaves it at
+`auto` and the step loads `SKILL.md` beside this file. This file supplies what that one leaves
+to the operator's judgement, by way of the task.
 
 > `SKILL.md` beside this file stays the contract for work done by hand on the host, and must
 > not be edited to suit the runner. Where this file is silent, that one applies.
