@@ -143,7 +143,8 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 - Prefer live arcs for selected layers, optional `creditsGlance` on the **matching provider**
   strip when present, large time. Never LLM `TOK` on the face.
 - Support tap-to-open into the Wear OS app where possible.
-- Keep ambient mode readable (dim arcs, strips off).
+- Keep ambient mode readable: dim the arcs, and dim the strips rather than switching them off —
+  a strip's credits and budget money are carried nowhere else on the face.
 
 ## Phone-To-Watch Flow
 

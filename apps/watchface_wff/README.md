@@ -7,7 +7,8 @@ remaining arcs (up to three ring slots; melt clockwise from 12), large time hero
 watermark, and sunk family strips (`%` / `% · credits` on the matching provider). Ring and
 strip data come from Wear OS `RANGED_VALUE` complication providers. Missing rings stay empty
 instead of inventing filler. Tapping the face or a WardPulse complication opens the Wear OS
-app; ambient keeps muted arcs, large time, and a quieter mark (strips off).
+app; ambient keeps muted arcs, large time, a quieter mark, and the strips dimmed rather than
+switched off, so the credits and budget money they alone carry survive it.
 
 ## Commands
 

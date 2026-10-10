@@ -23,7 +23,9 @@ paints instead of 40 under a clip, and the melt grows to the remainder it always
 cell-layout correction **2026-10-09** (the three cells leave the straight row for an arc
 concentric with the face, shrink to 42 units, and a cell showing nothing takes a graded rim so
 that empty reads as empty); occupied-cell revision **2026-10-10** (a cell showing anything
-wears a hairline, so a ring means occupied and a recess means free) — accepted visual target
+wears a hairline, so a ring means occupied and a recess means free); ambient-legend revision
+**2026-10-10** (the legend strips dim at alpha 90 instead of switching off, so ambient keeps
+the credits and the budget money that live nowhere else on the face) — accepted visual target
 for Wear OS and Watch Face Format until the next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
 wireframes, large remaining-% heroes, or bordered strip cards.
@@ -742,9 +744,15 @@ called this band the "upper aperture"; it is the same band.
 
     **The value dims.** A complication in a filled cell, or the weather reading showing through
     an empty one, dims with the bands in the proportion the face already uses — ring type goes
-    `alpha="115"` to `63` as the arcs go 255 to 140. It dims rather than switching off because a
-    cell is the only thing on the face carrying its own value: a strip restates what its band
-    already shows, so ambient can drop it, while dropping a cell loses the reading outright.
+    `alpha="115"` to `63` as the arcs go 255 to 140. It dims rather than switching off because
+    dropping it would lose the reading outright, and nothing else on the face carries it. The
+    legend strips were the counter-example when this rule was first written, dropped on the
+    reasoning that a strip restates its band; since **2026-10-10** they dim too, because that
+    reasoning covered their percent and nothing else they print. They dim one step further, to
+    90, and not because they cost more to light — a legend row and an occupied cell are the
+    same lit area to within a few pixels. A cell is a token read at a glance and the legend is
+    three lines of running text, so the step puts the legend second in the reading order rather
+    than second in brightness for its own sake (Ambient).
 
     **The occluder stays, and it has to.** The opaque well a filled cell draws inside its own
     slot (rule 10) is not chrome; it is the one thing standing between the complication and the
@@ -760,10 +768,20 @@ called this band the "upper aperture"; it is the same band.
     composites to about `12, 15, 13`, so switching it off in ambient would make that patch
     *brighter*, which is the reverse of what switching anything off in ambient is for. The
     graded well is darker still across the middle and only lifts at its rim, so the same holds
-    for it. The lift carries no ambient variant and renders identically in both modes, so that
-    arithmetic holds there as well. The strips are no counter-example: a strip's well goes
-    because the whole strip goes, and a row that is not drawn should not leave an empty socket
-    behind. A cell is drawn in both modes, filled or not.
+    for it. That was an inference when this rule was written and is now a reading: measured
+    2026-10-10 at an equal radius from the lift's centre, a cell's well sits at `4, 6, 5` in
+    ambient against a lift of `8, 10, 9`, and at `11, 14, 12` against `19, 24, 22` in active
+    mode — filled and empty alike, four levels down in ambient and eight to ten in active, with
+    the sign never turning. Nor could it turn: the system dims the assembled frame by close to
+    one factor, the well going 13 to 5 and the lift 22 to 9, and multiplying both sides of a
+    ratio cannot invert it.
+
+    The strips are no counter-example either, and since **2026-10-10** they are not even a
+    contrast: a row dims with its well rather than going, and a strip's well darkens the lift
+    exactly as a cell's does — at alpha 140 it reads `6, 8, 7` against a lift held at
+    `8, 11, 10` on the same radius. With the row switched off it read the lift itself,
+    `8, 10, 9`, because nothing was drawn there at all. A cell is drawn in both modes, filled
+    or not.
 
     **The ring dims, because a ring is the one part of a cell that lights.** Everything above
     turns on a well being a darkening, and the hairline of rule 10 is the opposite: it adds
@@ -1175,22 +1193,104 @@ whatever is drawn.
 
 ## Ambient
 
-Muted remaining arcs (when plan rings exist) and large centered time. Strips off for ambient.
-Ring type dims with the band it is punched into (alpha 140, same as the arcs) — it is part of
-the ring, not chrome to switch off. `round-ambient-budget.svg` shows that it survives, not at
-what level: review art mutes an ambient arc to one gray, while the face keeps the family color
-and dims it, so the two cannot agree on a number.
+Muted remaining arcs (when plan rings exist) and large centered time. Ring type dims with the
+band it is punched into (alpha 140, same as the arcs) — it is part of the ring, not chrome to
+switch off. `round-ambient-budget.svg` shows that it survives, not at what level: review art
+mutes an ambient arc to one gray, while the face keeps the family color and dims it, so the two
+cannot agree on a number.
+
+**The legend strips dim rather than switch off (revision 2026-10-10).** Until this revision
+they went to `alpha="0"` and ambient carried no legend at all, on the reasoning that *a strip
+repeats its band*. That holds for a percent and for nothing else a strip prints: the credits in
+`75% · 62.5K` and the money in `$12.34/100` appear nowhere else on the face, and ambient
+dropped them with no other carrier. The division this section draws for the cells says the
+opposite — what is the only carrier of its own value cannot go — so the two rules contradicted
+each other, and the strips lost by seniority rather than on the merits. The worst of it was the
+lone credits row of Upper cells, rule 3: with no plan ring the face draws exactly one
+meaningful line, and ambient took it, leaving a clock, two recesses and nothing of WardPulse.
+
+**The whole row dims, not its parts.** The tempting shape was to keep the well lit as it is,
+dim only what shines, and leave the plain percent rows dark. Both halves of that are refused,
+one by the platform and one by the stack.
+
+Measured on `emulator-5554`: moving `Variant mode="AMBIENT" target="alpha"` off the row's
+`Group` and onto the individual `PartDraw` elements leaves the family accent at full strength.
+Peaks in the accent column and the label column:
+
+| Variant sits on | accent | label |
+|---|---:|---:|
+| nothing — the row is off | 11 | 23 |
+| the `Group`, alpha 60 / 90 / 140 | **30 / 40 / 58** | 32 / 44 / 62 |
+| a `PartDraw`, the same three | **98 / 98 / 98** | 31 / 41 / 61 |
+
+The accent does not move across three levels, while the label tracks each one. **An ambient
+alpha variant on a `PartDraw` does not reach a `WeightedStroke` whose colours come from
+`[COMPLICATION.RANGED_VALUE_COLORS]`; on the enclosing `Group` it does.** The markup validates
+either way, so only a reading catches it. Split by role, the coloured accents would be the
+brightest thing in the stack — the same trap rule 12 avoids for a cell's ring, reached from the
+other side.
+
+Dimming only the rows that carry something unique is possible and still wrong. Format version 2
+has `subText(,,)` and `textLength()` (`arithmeticExpressionType.xsd`, lines 58–59), so a face
+can branch on what `TEXT` holds. But with three rings, where only the bottom row carries
+credits, ambient would light one row at `y=325` and leave two dark gaps above it. The stack is
+anchored to its bottom row precisely so that it never opens a gap (Upper cells, rule 3), and
+selective survival puts that gap back. The zero-ring case needs no special handling either: a
+lone credits row dims like any other row.
+
+**The level is 90, where the rest of the face uses 140.** 140 is the arcs' own proportion, worn
+by the bands, by the ring type and by a cell's hairline, and taking it here would put one
+number on the whole face. Label peaks against the surround:
+
+| | label peak | surround |
+|---|---:|---:|
+| off | 9–10 | 7–9 |
+| alpha 60 | 31 | 7–9 |
+| **alpha 90** | **41–43** | 7–9 |
+| alpha 140 | 58–61 | 7–9 |
+| active mode | 232–247 | 18–21 |
+
+At 90 a label is five times its surround — read without effort, and plainly quieter than the
+arcs.
+
+**The reason is reading order, and it is not lit area.** The first draft of this revision said
+the legend at 140 would outweigh the arcs by lit area; measured 2026-10-10 on an ambient
+capture, that is wrong by two orders of magnitude. Counted as pixels whose brightest channel
+clears **20** — above the ambient background at 7–9 and above a well at 6–8, so only ink is
+counted — with the light each carries over that line:
+
+| In ambient, threshold 20 | lit pixels | light over threshold |
+|---|---:|---:|
+| the three arcs (radius 130–206) | 46,460 | 2,117,059 |
+| the legend at alpha 90 | 708 | 9,083 |
+| the legend at alpha 140 would be | 708 | ~14,129 |
+| one occupied cell, glyphs and ring | 222 | 4,165 |
+
+The threshold has to be named, because a small count is sensitive to it: at 11 the same capture
+gives the legend 977 pixels against the arcs' 47,995, a third more on the small side and three
+per cent more on the large one. The **ratios** are not sensitive, and they are what the argument
+rests on — the legend is 1.5 % of the arcs' lit area at threshold 20 and 2.0 % at 11, and under
+1 % of their light either way. So neither power nor burn-in can be what chooses between 90 and
+140. Nor does size separate a legend row from a cell: a row averages 236 lit pixels against an
+occupied cell's 222 at threshold 20, and 326 against 298 at 11 — the same element twice over on
+either count. Both levels are legible and both are cheap.
+
+What 90 buys is the order a wearer reads the face in. Three cells are three tokens, each a word
+or a number, taken in at a glance; the legend is three lines of running text, and at the cells'
+own level it reads as a paragraph competing with the time for first place. A step down puts it
+behind them without putting it out of reach — still five times its surround. So the face
+carries two ambient proportions instead of one, and the cost is named rather than hidden: the
+reason is what should be read first, not what costs the most to light.
 
 In the upper cells the wells stay and the values dim (revision **2026-10-09**). The dimming
-follows the division this section already draws: what restates something else on the face can
-go, and what is the only carrier of its own value cannot. A strip repeats its band, so ambient
-drops it; a complication in a cell repeats nothing, and neither does the weather chrome showing
-through an empty one, so both dim instead. The wells go the other way from the strips' for two
-reasons. A filled cell's well is the only thing hiding the weather chrome beneath it, so it has
-to survive ambient or two readings land in the same 42 units. And a well darkens the lift rather
-than lighting it, so switching one off would raise ambient luminance instead of lowering it.
-The dimmed level is to be measured when the generator changes, in the proportion the face
-already uses for the ring type — see Upper cells, rule 12.
+follows the same division: what restates something else on the face can go, and what is the
+only carrier of its own value cannot. A complication in a cell repeats nothing, and neither
+does the weather chrome showing through an empty one, so both dim. The wells go the other way
+for two reasons. A filled cell's well is the only thing hiding the weather chrome beneath it,
+so it has to survive ambient or two readings land in the same 42 units. And a well darkens the
+lift rather than lighting it, so switching one off would raise ambient luminance instead of
+lowering it. The dimmed level is to be measured when the generator changes, in the proportion
+the face already uses for the ring type — see Upper cells, rule 12.
 
 ## Review variants
 
@@ -1228,7 +1328,7 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
 | Surface | Role |
 |---------|------|
 | Wear OS app Glance | **Not** this face language — locked text legend (`WEAR_GLANCE_DESIGN.md`, 2026-07-26) |
-| WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs plus sunk `RANGED_VALUE` strips (`%` / `% · credits` / `$12.34/100` for budgets) in `watchface.xml`. Every strip TEXT is the full label (WFF `length(TITLE)` Conditions are unreliable). Inner strip accents use `[COMPLICATION.RANGED_VALUE_COLORS]` (family ColorRamp); far markers use static palette colours selected by strip `TITLE` (Split band, rule 4). Keep progress/track spans below 360° (scale onto 359.9°) — a closed circle collapses to a ROUND tip. Remaining melt is clockwise from 12: Transform `startAngle` to `(1 - value/max) * 359.9` with fixed `endAngle` 359.9. A `BoundingArc` clips its slot's content to the arc band and halves its stroke (measured 2026-10-09, Ring geometry), so a slot that must draw both a band and a strip takes a full-canvas `BoundingBox` instead. A scene holds **at most eight** `ComplicationSlot` elements in every format version — the validator rejects a ninth, and `sceneElement.xsd:45` says `maxOccurs="8"` — and this face has used all eight since 2026-07-25, so a new slot has to come out of that budget (Split band, rule 7; Upper cells, rule 2). Three of them are customizable upper cells and belong to the wearer, edited in the system watch-face editor rather than by the WardPulse phone app (Upper cells, rule 5). The temperature and UV index a fresh install shows are not complications at all: they are scene chrome reading the built-in `WEATHER.*` source, declared ahead of the first slot, so a filled cell's opaque `#ff0b0e0c` well covers them while the strips keep their translucent `#eb0b0e0c` (Upper cells, rules 10 and 11). |
+| WFF watch face | Same language with large time hero; concentric `RANGED_VALUE` arcs plus sunk `RANGED_VALUE` strips (`%` / `% · credits` / `$12.34/100` for budgets) in `watchface.xml`. Every strip TEXT is the full label (WFF `length(TITLE)` Conditions are unreliable). Inner strip accents use `[COMPLICATION.RANGED_VALUE_COLORS]` (family ColorRamp); far markers use static palette colours selected by strip `TITLE` (Split band, rule 4). Keep progress/track spans below 360° (scale onto 359.9°) — a closed circle collapses to a ROUND tip. Remaining melt is clockwise from 12: Transform `startAngle` to `(1 - value/max) * 359.9` with fixed `endAngle` 359.9. A `BoundingArc` clips its slot's content to the arc band and halves its stroke (measured 2026-10-09, Ring geometry), so a slot that must draw both a band and a strip takes a full-canvas `BoundingBox` instead. An ambient alpha `Variant` reaches a `WeightedStroke` coloured from `[COMPLICATION.RANGED_VALUE_COLORS]` only from the enclosing `Group`, never from the `PartDraw` that holds it (measured 2026-10-10, Ambient), which is why a legend row dims whole rather than by part. A scene holds **at most eight** `ComplicationSlot` elements in every format version — the validator rejects a ninth, and `sceneElement.xsd:45` says `maxOccurs="8"` — and this face has used all eight since 2026-07-25, so a new slot has to come out of that budget (Split band, rule 7; Upper cells, rule 2). Three of them are customizable upper cells and belong to the wearer, edited in the system watch-face editor rather than by the WardPulse phone app (Upper cells, rule 5). The temperature and UV index a fresh install shows are not complications at all: they are scene chrome reading the built-in `WEATHER.*` source, declared ahead of the first slot, so a filled cell's opaque `#ff0b0e0c` well covers them while the strips keep their translucent `#eb0b0e0c` (Upper cells, rules 10 and 11). |
 | Phone Watchface tab | Slot selection + preview of next payload rings (not Settings). Rows are grouped since 2026-08-16: a heading per kind of connection, a sub-heading per connection, the same outline the Widget tab uses |
 
 ## Non-goals
