@@ -2236,8 +2236,10 @@ this entry is what the design commits the remaining passes to.
 Unrelated to the cells, and found while reading the system face picker on 2026-10-09: the
 picker advertises the face with `drawable/preview.png`, unchanged since `2c5aec3`, which draws
 the side-by-side `RING 1` / `RING 2` wireframe — the first non-goal in the design baseline. No
-generator owns that asset, so no check compares it to the face. Recorded under *The preview in
-the face picker* in `docs/product/WATCH_RING_DESIGN.md`.
+generator owned that asset at the time. It is now generated from the Primary baseline with the
+face review previews by `tools/render-watch-ring-designs.mjs`. Recorded under *Previews are
+generated — and the picker's showed the first non-goal* in
+`docs/product/WATCH_RING_DESIGN.md`.
 
 Rationale: the face says a great deal about AI spend and nothing a watch is ordinarily expected
 to say. The band above the clock has been reserved for a weather glance since the 2026-07-25

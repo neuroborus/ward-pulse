@@ -616,10 +616,11 @@ export ANDROID_SERIAL="$WEAR_SERIAL"
 just run-watchface
 ```
 
-The preview image is a sanitized emulator capture. After visual changes, replace it with a
-fresh interactive-mode capture from the canonical round Wear AVD. The shipped one is stale and
-advertises a retired layout — see *The preview in the face picker* in
-`docs/product/WATCH_RING_DESIGN.md`.
+The preview image is generated from the Primary baseline by
+`node tools/render-watch-ring-designs.mjs`. After visual changes, use a fresh interactive-mode
+capture from the canonical round Wear AVD to verify the face and picker; do not produce the
+asset from that capture. See *Previews are generated — and the picker's showed the first
+non-goal* in `docs/product/WATCH_RING_DESIGN.md`.
 
 ### The package ships no code, and the system owns its complication slots
 

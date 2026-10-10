@@ -1297,12 +1297,11 @@ the face already uses for the ring type — see Upper cells, rule 12.
 
 ## Review variants
 
-Regenerate with `node tools/render-watch-ring-designs.mjs`, then optional PNG previews:
+`node tools/render-watch-ring-designs.mjs` regenerates the boards, their seven owned PNG
+previews, and the face-picker preview from the WFF copy of the Primary baseline. To open the
+primary review preview after generation:
 
 ```sh
-convert -background none -density 144 \
-  apps/wear_android/design/round-3-plan-credits.svg \
-  apps/wear_android/design/preview-3-plan-credits.png
 xdg-open apps/wear_android/design/preview-3-plan-credits.png
 ```
 

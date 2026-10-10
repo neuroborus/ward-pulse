@@ -9,10 +9,6 @@ Primary preview: `preview-3-plan-credits.png`.
 
 ```sh
 node tools/render-watch-ring-designs.mjs
-
-convert -background none -density 144 \
-  apps/wear_android/design/round-3-plan-credits.svg \
-  apps/wear_android/design/preview-3-plan-credits.png
 xdg-open apps/wear_android/design/preview-3-plan-credits.png
 ```
 

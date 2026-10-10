@@ -3,17 +3,18 @@
  * SVG review exports for the locked watch-ring baseline
  * (`docs/product/WATCH_RING_DESIGN.md`).
  *
- * Usage: node tools/render-watch-ring-designs.mjs
+ * Usage: node tools/render-watch-ring-designs.mjs [--check]
  */
 
 import { execFileSync } from 'node:child_process'
-import { mkdir } from 'node:fs/promises'
+import { access, mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { emit } from './design-output.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+const checking = process.argv.includes('--check')
 
 const SURFACE = '#101412'
 const TRACK = '#2E3632'
@@ -645,8 +646,10 @@ function faceSvg({
 
 const wearDir = join(root, 'apps/wear_android/design')
 const wffDir = join(root, 'apps/watchface_wff/design')
-await mkdir(wearDir, { recursive: true })
-await mkdir(wffDir, { recursive: true })
+if (!checking) {
+  await mkdir(wearDir, { recursive: true })
+  await mkdir(wffDir, { recursive: true })
+}
 
 const three = [CATALOG.codex, CATALOG.claude, CATALOG.cursor]
 const two = [CATALOG.codex, CATALOG.claude]
@@ -805,6 +808,42 @@ const wffFiles = new Set([
   'round-ambient-budget.svg',
 ])
 
+const previews = [
+  ['round-1-plan-credits.svg', 'preview-1-plan-credits.png', 144],
+  ['round-1-plan.svg', 'preview-1-plan.png', 144],
+  ['round-2-plan-credits.svg', 'preview-2-plan-credits.png', 144],
+  ['round-3-plan-budget.svg', 'preview-3-plan-budget.png', 144],
+  ['round-3-plan-credits.svg', 'preview-3-plan-credits.png', 144],
+  ['round-ambient-3.svg', 'preview-ambient-3.png', 144],
+  ['round-credits-only.svg', 'preview-credits-only.png', 144],
+]
+
+function rasterize(svg, png, density) {
+  execFileSync('convert', [
+    '-background',
+    'none',
+    '-density',
+    String(density),
+    '-strip',
+    svg,
+    `png32:${png}`,
+  ])
+}
+
+async function writePreviews() {
+  await access(FONT_FILE).catch(() => {
+    throw new Error(`${FONT_FILE} is missing; previews would use a substituted font`)
+  })
+  for (const [svg, png, density] of previews) {
+    rasterize(join(wearDir, svg), join(wearDir, png), density)
+  }
+  rasterize(
+    join(wffDir, 'round-3-plan-credits.svg'),
+    join(root, 'apps/watchface_wff/src/main/res/drawable/preview.png'),
+    96,
+  )
+}
+
 assertNearExhaustedArcs()
 
 for (const variant of variants) {
@@ -821,4 +860,9 @@ for (const variant of variants) {
   if (wffFiles.has(variant.file)) {
     await emit(join(wffDir, variant.file), svg, 'render-designs')
   }
+}
+
+if (!checking) {
+  await writePreviews()
+  console.log(`wrote ${previews.length} review previews and the face-picker preview`)
 }
