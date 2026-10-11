@@ -62,6 +62,26 @@ every alias the pipeline needs. Trusted commands execute in the project director
 the runner's environment. `local.properties` in each Android module removes the `ANDROID_HOME`
 dependency for Gradle.
 
+## When a delegate cannot run the step
+
+A denied sandbox does not promote the work to the coordinator. It changes **which delegate**
+does it: the step moves to a subagent running on the host, with the same task document and the
+same zero-findings bar. The coordinator's hands stay off the bytes either way. Doing it yourself
+because the runner stopped is the one failure this contract exists to prevent.
+
+Walls this repository has hit:
+
+- **`spawnSync python3` is denied (`EPERM`)**, so `just render-designs` can never finish inside
+  a runner step — `tools/render-watch-ring-designs.mjs` shells out to python3 and Pillow in
+  `assertLabelsFit`. Trusted checks execute in a different environment where python3 works,
+  which is why `just check-designs` passes as a gate while the generator behind it cannot be
+  run as work.
+- **Sockets are denied**, so Gradle never starts: `just check-wear`, `just check-watchface`.
+- **No network**, so a recipe that fetches needs a pinned artifact or it is the owner's.
+
+A gate that cannot start is reported through the environment-blocker path. Work that cannot run
+is re-delegated.
+
 ## Design goes through a subagent
 
 Spawn with `subagent_type: "fork"` so the agent inherits this session's context instead of
@@ -78,10 +98,30 @@ evidence.
 Report to the owner what checked out as well as what did not. A finding list with no account
 of what was verified tells them nothing about how hard anyone looked.
 
+## Do not stop
+
+The owner hands over a **region of work**, not one task, and expects to come back after a day
+or two to finished work. Standing instruction, 2026-10-11. So:
+
+- Finishing one stream is not the end of the turn. Pick up the next open item and keep going.
+- A delegate running in the background is not a reason to idle — scope the next stream, take
+  the measurements the next delegate will need, run the owner's host checks.
+- Do not stop to ask what to do next while anything surfaced is still open. Decide, act, and
+  report the decision. Stop only when the region is actually finished, when a choice is
+  genuinely the owner's to make and nothing else can proceed without it, or when continuing
+  would need a credential or a device the session does not have.
+- Keep a list of what is open — in `LOCAL_ARTIFACTS/` — so a long session always has a next
+  move. The list is working state, never a technical-debt register in the repository.
+
 ## What the coordinator may touch
 
-Measurements, captures, scans, reading files, running `just` checks, and writing local notes
-under `LOCAL_ARTIFACTS/`. Restoring a tree a delegate left dirty. Staging and committing once
-the owner has asked for a commit.
+Measurements, captures, scans, reading files, running read-only `just` checks, and writing local
+notes under `LOCAL_ARTIFACTS/`. Restoring a tree a delegate left dirty. Staging and committing
+once the owner has asked for a commit.
 
 Not: production code, generated output, locked design documents, or review art.
+
+**Running a generator is work, not measurement**, even when the only intent is to prove it
+reproduces what a delegate committed. Verification that would rewrite a tracked file belongs in
+a throwaway clone outside the worktree, or back with the delegate. The coordinator never writes
+a committed byte.
