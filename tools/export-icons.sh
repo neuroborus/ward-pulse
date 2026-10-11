@@ -72,6 +72,47 @@ write_png_if_pixels_changed \
   apps/phone_flutter/android/app/src/main/res/drawable/wardpulse_mono.png \
   convert brand/icons/previews/wardpulse-mono.png -resize 192x192
 
+# Face placement preview: the quiet watermark on the face it ships with. Composed from two
+# generated parts -- the face's own picker asset and the faded mono drawable written above -- at
+# the box watchface.xml gives the watermark. The box is read from that file rather than repeated
+# here, so the preview cannot drift from the placement it documents (docs/DESIGN_ASSETS.md).
+face_preview=apps/watchface_wff/src/main/res/drawable/preview.png
+if [[ ! -f "$face_preview" ]]; then
+  echo "export-icons: $face_preview is missing; run just render-designs first" >&2
+  exit 1
+fi
+
+watermark_box="$(
+  python3 <<'PY'
+import xml.etree.ElementTree as ET
+
+group = ET.parse('apps/watchface_wff/src/main/res/raw/watchface.xml').getroot().find(
+    ".//Group[@name='wardpulse']"
+)
+# Two parts share that group: the interactive mark, and a smaller one only ambient reveals.
+# This preview is the active treatment, so take the part that is visible with no variant.
+part = next(p for p in group.findall('PartImage') if p.get('alpha') != '0')
+print(part.get('x'), part.get('y'), part.get('width'), part.get('height'),
+      f"{int(part.get('alpha')) / 255:.6f}")
+PY
+)"
+read -r wm_x wm_y wm_width wm_height wm_alpha <<<"$watermark_box"
+
+compose_face_placement_preview() {
+  local output="$1"
+  local mark
+  mark="$(mktemp --suffix=.png)"
+  convert apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png \
+    -resize "${wm_width}x${wm_height}" \
+    -alpha set -channel A -evaluate multiply "$wm_alpha" +channel "$mark"
+  convert "$face_preview" "$mark" -geometry "+${wm_x}+${wm_y}" \
+    -compose over -composite -strip "$output"
+  rm -f "$mark"
+}
+
+write_png_if_pixels_changed brand/watchface/preview-face-active-quiet.png \
+  compose_face_placement_preview
+
 for dens in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
   name="${dens%:*}"
   px="${dens#*:}"

@@ -1399,7 +1399,7 @@ It reaches no further than that. `apps/wear_android/design/` also holds the Glan
 their `preview-glance-legend-*.png` renders, which belong to
 `docs/product/WEAR_GLANCE_DESIGN.md`, and the face placement preview
 `brand/watchface/preview-face-active-quiet.png` is called canonical by
-`docs/DESIGN_ASSETS.md:126` and lives under separate brand ownership. Those are their own
+`docs/DESIGN_ASSETS.md:131` and lives under separate brand ownership. Those are their own
 documents' to rule on, and root `AGENTS.md` keeps component guidance beside its owner. Sharing
 a directory with a face board confers nothing here.
 

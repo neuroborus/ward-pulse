@@ -84,8 +84,10 @@ Used on Wear / WFF rings and on phone charts / plan bars / provider section acce
 
 Review exports: `tools/render-watch-ring-designs.mjs` → `round-*.svg`
 (matching-provider strip may append remaining purchased credits, never LLM `TOK`;
-remaining arcs melt clockwise from 12). Primary preview:
-`apps/wear_android/design/preview-3-plan-credits.png`.
+remaining arcs melt clockwise from 12). The same generator rasterizes the seven
+`apps/wear_android/design/preview-*.png` review renders from those boards, and the face-picker
+asset `apps/watchface_wff/src/main/res/drawable/preview.png` from the Primary one. Primary
+preview: `apps/wear_android/design/preview-3-plan-credits.png`.
 
 Wear **app** Glance legend (**baseline locked 2026-07-26**, not the face):
 `tools/render-wear-glance-designs.mjs` → `glance-legend-*.svg` /
@@ -115,7 +117,10 @@ Quiet branding on WFF — not a second hero. Locked with the concentric face bas
 
 - **No framing ring** — straight `WARDPULSE` wordmark above the pulse + eye.
 - **Placement** — between time and sunk strips; upper aperture stays free for weather.
-- **Size / mute** — about 72×72 on the 450 canvas; PartImage `alpha≈95` (~37%).
+- **Size / mute** — a 66×66 box at (192, 227) on the 450 canvas; PartImage `alpha="95"` (37%).
+  The asset carries bottom padding, so the ink stops at y 268 and the clear run down to the
+  strip stack at y 283 is the dissolve's room. Ambient swaps the mark for a smaller, dimmer
+  one: 54×54 at (198, 233), alpha 70.
 - **Bottom dissolve** — content-relative fade toward the strip stack
   (`tools/fade-watermark-png.py` during `just export-icons`), so the pulse softens into
   the metrics instead of competing with them.
@@ -123,7 +128,41 @@ Quiet branding on WFF — not a second hero. Locked with the concentric face bas
 - **Phone home widget** reuses the same faded mono PNG (`wardpulse_mono`), tinted for
   day/night olive chrome, quiet overlay top-end (does not reserve a header band).
 
-Canonical preview: `brand/watchface/preview-face-active-quiet.png`.
+Canonical preview: `brand/watchface/preview-face-active-quiet.png`, generated.
+
+**Preview revision 2026-10-11 — the placement preview is generated, not captured.** That image
+had been written once, on 2026-07-25, and never again. Looked at on 2026-10-11 it showed a face
+the product had left behind: no upper cells, which the face locked on 2026-10-09, and a legend
+stack from before the current treatment. So this section was making a placement claim —
+*between time and sunk strips* — against a canvas that no longer had the thing above it.
+
+Its signature says it came from a render of the real face: the watermark is in it, and no review
+board draws one. A fresh capture was therefore available and was weighed against generating the
+picture. **Generating wins, and the reason is reproducibility.** A capture carries whatever the
+device held at that moment — on `emulator-5554` the same day, the system picker's own render
+showed one set of cell values and the running face another, with two empty wells because weather
+was unavailable there. An asset whose content depends on which surface was photographed, and
+when, is not canonical. And a capture is a step somebody has to remember, which is the defect
+this revision exists to end, not a way to end it.
+
+It is now composed by `just export-icons` from two parts that are themselves generated: the
+face-picker asset `apps/watchface_wff/src/main/res/drawable/preview.png` and the faded mono
+drawable beside it. The box comes from `watchface.xml`, **read from that file at render time
+rather than copied here**, so the preview cannot disagree with the face about where the mark
+sits — when the face moves it, the preview moves with it, and the numbers in the bullet above
+are checked against the same source. The canvas is the face's own 450 units, down from the
+previous 675, so every coordinate in this section measures 1:1 against the picture.
+
+What this buys and what it costs: the picture is reproducible and tied to the face's own
+numbers, and it reconstructs the placement instead of witnessing it. WFF's own compositing —
+how the mark actually blends on the watch — is not proved here and is not what this section
+cites the preview for; that is a device capture, by hand (`docs/ANDROID_TOOLCHAIN.md`).
+Because the composite reads the picker asset, a face change means `just render-designs` before
+`just export-icons`.
+
+One condition on it: the picker asset does not currently draw the watermark the face draws. If
+that is ever corrected, this composite becomes a duplicate of it, and the right move is for this
+document to cite the face's own asset and stop keeping a brand copy at all.
 
 ## Source And Runtime Files
 
@@ -138,6 +177,7 @@ Canonical preview: `brand/watchface/preview-face-active-quiet.png`.
 | Phone adaptive foreground | `drawable-*/ic_launcher_foreground.png` |
 | WFF runtime mono (faded PNG) | `apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png` |
 | Phone widget mono (same faded PNG) | `apps/phone_flutter/android/app/src/main/res/drawable/wardpulse_mono.png` |
+| WFF face-picker preview | `apps/watchface_wff/src/main/res/drawable/preview.png` |
 | WFF ring type, one per ring and period | `apps/watchface_wff/src/main/res/drawable-nodpi/ring{1,2,3}_type_{day,week,month}.png` |
 
 Prefer regenerating exports with `just export-icons` rather than editing PNGs by hand. The mono
@@ -147,9 +187,11 @@ Commit runtime exports when an application build consumes them.
 The Flutter app-bar copies are bundled WardPulse branding. Moving them into the APK does not
 place them under Apache-2.0 or grant downstream use of the WardPulse mark.
 
-The last row is the exception: the ring type is not a brand export but the face's own type,
-baked by `tools/render-watchface.mjs` (`just render-watchface`) alongside the XML that names it.
-Regenerate it there.
+The last two rows are the exception: neither is a brand export. The face-picker preview is the
+face's own shipped image, drawn from the Primary board by `tools/render-watch-ring-designs.mjs`
+(`just render-designs`) and named by `apps/watchface_wff/src/main/res/xml/watch_face_info.xml`;
+the ring type is the face's own type, baked by `tools/render-watchface.mjs`
+(`just render-watchface`) alongside the XML that names it. Regenerate each there.
 
 ImageMagick is required; Inkscape is preferred for mono SVG→PNG when available.
 `tools/fade-watermark-png.py` needs Pillow (`pip`/`apt` package `python3-pil`).
@@ -168,11 +210,16 @@ npm ci
 
 ## Export
 
-Regenerate SVGs, previews, launcher PNGs, and the faded watch-face mono drawable:
+Regenerate SVGs, previews, launcher PNGs, the faded watch-face mono drawable, and the face
+placement preview:
 
 ```sh
+just render-designs   # only after a face change — writes the picker asset
 just export-icons
 ```
+
+The order matters in that one case: the placement preview is composed on top of the picker
+asset, so a face change has to reach that asset before the brand export reads it.
 
 Do **not** run `just export-design brand/icons/wardpulse.fig …` until the `.fig` is resynced
 to the metal+ring mark — an old `.fig` would overwrite the canonical SVG.
