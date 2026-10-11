@@ -1746,6 +1746,15 @@ Large (6-slot) prefs unlocked; launcher hugs complete rows/columns (1–6 by hei
 credits→label drop by width); Claude windows stay expanded on the phone widget;
 exhausted pools render as `0% left`.
 
+Read on a launcher for the first time on **2026-10-11**, on the canonical phone AVD: the locked
+composition held on every rule a home screen can show — the hug and the credits drop by width,
+two-line labels, tightest-first order, day and night chrome sampled exact against
+`colors_widget.xml`, the tap target, and the empty state. Placing the widget and changing the
+Widget tab's selection updated the surface without a reinstall, which is the last acceptance
+line below. The `STALE` overlay was not reached, because the payload was fresh. Recorded with
+its measurements under *Verified on a device 2026-10-11* in
+`docs/product/PHONE_WIDGET_DESIGN.md`.
+
 Rationale: glance configuration is a first-class product surface, not a Settings footnote.
 Watchface and Widget each get a primary tab between Dashboard and Providers. The phone
 launcher also needs the same glanceable “pulse” as Wear/WFF, but a round watch composition

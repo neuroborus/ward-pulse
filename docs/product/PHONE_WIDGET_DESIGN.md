@@ -42,7 +42,9 @@ Configuration lives on the phone **Widget** tab and is **independent** of Watchf
    usage / on-demand are the credit pool), budgets, and missing/unlimited balances.
 6. **Omit** unavailable metrics (no percent). Exhausted plan/purchased meters (`usedPercent >= 100`)
    stay on the phone widget as **`0% left`** so sibling pools remain visible. Watch/WFF still omit
-   exhausted layers.
+   exhausted layers. The Widget tab states the omission rather than hiding it: a metric with no
+   percentage lists as unselectable under its own reason — *This allowance has no percentage to
+   show*, seen on `Purchased credits` 2026-10-11 — so the rule is legible to whoever is choosing.
 7. **No credentials**, account ids, or raw provider payloads on the widget or in widget logs.
 
 ## Size caps (locked)
@@ -114,6 +116,54 @@ limit for that period, so an unconfigured install defaults to plan windows.
 - Empty: short “No metrics” line (no filler rows).
 - Stale: compact uppercase “STALE” overlay top-start when the last dashboard is stale.
 - Tap opens the phone app (Dashboard).
+
+**Verified on a device 2026-10-11 — the baseline holds.** Locked since 2026-07-27 and revised
+three times, this composition had never been read off a launcher. It was, on the canonical phone
+AVD `wardpulse_phone_play_api36` at `fad6bb9`, paired live with the round Wear AVD so the payload
+was the one the watch was drawing. Nothing measured contradicted a rule above.
+
+Five selected metrics, placed from the picker — whose entry declares **3 × 3** and whose preview
+hugs its three sample rows with no empty olive band beneath them:
+
+```text
+40% left    Claude / 5-hour session     ← tightest remaining first
+68% left    Cursor / Other Models
+72% left    Claude / Weekly plan
+92% left    Codex  / Weekly plan
+100% left   Cursor Models               ← second label line empty, rows stay even
+```
+
+**Hug and drop order**, taken from the view hierarchy rather than from a screenshot:
+
+| Span | Launcher cell | Olive card | Credits column |
+|------|---------------|------------|----------------|
+| as placed | 699 × 903 px | 544 × 489 px | dropped |
+| widened | 946 × 903 px | 791 × 489 px | **shown** |
+
+The card hugged 544 px inside a 699 px cell and omitted credits; widening the span to 946 px
+brought them back as `62.5K credits`, end-aligned on the Codex `Weekly plan` row, with the four
+rows carrying none still reserving the column and keeping their labels centred. Compact is metric
+rule 5 and agrees with the face strip and the Glance row — the Dashboard spells the same balance
+`62,479.3 credits` (`PHONE_DASHBOARD_DESIGN.md`, Balances), because compaction belongs to a
+glance and that screen is not one.
+
+**Chrome sampled from the live card:**
+
+| Theme | Sampled | Declared |
+|-------|---------|----------|
+| light | `#F2F4F1` | `ward_pulse_widget_surface` in `values/colors_widget.xml` |
+| night | `#101412` | the same name in `values-night` |
+
+Exact both times. Switching the system theme swapped surface, text, accents and watermark
+together and left the composition alone.
+
+Also confirmed: accent bars in the product palette (Claude orange, Cursor Other Models teal,
+Cursor Models periwinkle, Codex green); the watermark top-end with no header band reserved; a tap
+opening `app.wardpulse/.MainActivity`; and the empty state hugging one `No metrics` line with no
+filler rows, its watermark overlapping that line exactly as `widget-empty.svg` draws it.
+
+**Not reached: the `STALE` overlay.** The payload on the device was fresh, so nothing was observed
+of it and nothing here claims otherwise. One AVD, one build, one launcher.
 
 ## Non-goals
 
