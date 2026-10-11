@@ -64,6 +64,44 @@ separate from monetary budgets because their units and reset rules differ.
   for credits-only faces (no plan rings). LLM token totals stay on phone history charts —
   never as face `TOK` labels.
 
+### The credits channel carries only credits (2026-10-11)
+
+The two bullets above are in tension and the code resolved them the wrong way. The contract
+carries `tokens` or `credits`; the watch channel is specified in credits and every baseline that
+owns one of its surfaces refuses token counts by name (`WATCH_RING_DESIGN.md`, Palette and
+Non-goals; `WEAR_GLANCE_DESIGN.md`, Composition; `PHONE_WIDGET_DESIGN.md`). Between the two sat
+`purchasedRemainingForRing` in `GlanceModels.kt`, which matched a purchased allowance on source,
+label and nothing else, and rendered whatever unit arrived. A balance reported in tokens would
+have reached the Glance row as `… tokens`, and the face strip and the complication as a bare
+number read as credits.
+
+**The unit is now part of the match**, in that one lookup, which is the only path behind all
+three surfaces. A purchased balance in any other unit is treated as absent — a state all three
+already draw: the Glance omits the suffix, the strip and the complication show the percentage
+alone. The phone has filtered on the same unit since `credit_request_runway.dart`, which is why
+its home widget can hardcode the word `credits`; this is the watch side of a guard the phone
+already had.
+
+Nothing in the repository constructs `QuantityUnit::Tokens` — every adapter reports credits,
+verified 2026-10-11 — so **the enum is deliberately not narrowed**. Three reasons. The first
+bullet of this section says a provider may report purchased tokens, and deleting the variant
+would delete that decision on the strength of adapters that happen not to exist yet.
+`WATCH_RING_DESIGN.md` reserves token totals for phone history charts, a surface the product
+intends rather than forbids. And `schemas/watch_dashboard_summary.schema.json` reaches the
+snapshot's `quantity` by `$ref`, so narrowing the enum would narrow the **versioned** watch
+payload too — `schemaVersion` 9, which `WatchSummaryStore` enforces with a hard `require` — a
+breaking change to a shared contract in exchange for deleting a variant that now costs nothing.
+
+Nor is it rejected on arrival. `QUANTITY_UNITS` in `WatchSummaryStore` still admits both,
+because the alternative is failing the whole payload over one field — the same trade this
+document settles for timestamps above, and the watch would show a stale summary instead of a
+current one minus a credits suffix.
+
+The guard is the purchased-credits channel only. A **plan** window reporting a bare remainder
+keeps whatever unit it carries on the plan-windows page (`apps/wear_android/README.md`): that is
+a detail screen rather than a glanceable legend, it names no credits, and no baseline forbids a
+unit there.
+
 ## Capability-adaptive presentation
 
 The dashboard renders only the metrics that the currently connected providers can report. The

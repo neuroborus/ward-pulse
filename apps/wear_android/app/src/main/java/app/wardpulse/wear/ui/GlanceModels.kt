@@ -167,6 +167,29 @@ internal fun purchasedCreditsCompact(
     ringId: String,
 ): String? = purchasedRemainingForRing(summary, ringId)?.let { compactQuantityValue(it.value) }
 
+/**
+ * The unit this channel carries. The shared contract allows `tokens` as well
+ * (`schemas/dashboard_snapshot.schema.json`), and a balance in tokens is a
+ * legitimate thing for a provider to report — it just has no place on a watch:
+ * the face strip, the complication and the Glance row are the *credits* channel
+ * (`PROVIDER_NOTES.md`, Consumption display), and every document that owns one
+ * of them refuses token counts by name. The phone has filtered on this unit
+ * since `credit_request_runway.dart`, which is why its widget can hardcode the
+ * word `credits`; this is the watch side of the same guard.
+ */
+private const val CREDITS_UNIT = "credits"
+
+/**
+ * The one lookup behind every purchased balance the watch shows — the Glance
+ * row, the face strip and the complication — so the unit is checked once here
+ * rather than at three call sites that could drift apart.
+ *
+ * A balance in any other unit is treated as absent, which is a state all three
+ * surfaces already draw: the Glance omits the suffix
+ * (`WEAR_GLANCE_DESIGN.md`, acceptance), and the strip and complication show
+ * the percentage alone. Rendering it instead would either put a token count on
+ * a surface whose baseline forbids one, or label it `credits` and be wrong.
+ */
 internal fun purchasedRemainingForRing(
     summary: WatchDashboardSummary,
     ringId: String,
@@ -180,7 +203,7 @@ internal fun purchasedRemainingForRing(
         .firstOrNull { allowance ->
             allowance.source == "purchased" &&
                 !allowance.unlimited &&
-                allowance.remaining != null &&
+                allowance.remaining?.unit == CREDITS_UNIT &&
                 allowance.label.startsWith(prefix)
         }
         ?.remaining

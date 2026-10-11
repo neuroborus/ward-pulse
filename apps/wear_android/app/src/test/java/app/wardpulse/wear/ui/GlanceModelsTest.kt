@@ -342,27 +342,49 @@ class GlanceModelsTest {
         assertEquals("8% left · 12.5 credits", codexSubtitleForCredits("12.50"))
     }
 
+    @Test
+    fun purchasedBalance_inAnyUnitButCreditsIsNotShown() {
+        // The contract allows `tokens`, the watch does not carry them: the strip,
+        // the complication and this row are the credits channel, and each of
+        // their baselines refuses token counts by name (`PROVIDER_NOTES.md`,
+        // Consumption display, 2026-10-11).
+        val tokens = codexSummaryForBalance("62479.294375", unit = "tokens")
+        assertEquals("8% left", glanceLegendRows(tokens).single().subtitle)
+        // The strip and the complication read the same lookup, so they drop it too.
+        assertNull(purchasedCreditsCompact(tokens, "allowance.codex.week"))
+        assertNull(purchasedCreditsSuffix(tokens, "allowance.codex.week"))
+
+        // The same balance in credits is still shown, so this omits rather than breaks.
+        val credits = codexSummaryForBalance("62479.294375", unit = "credits")
+        assertEquals("8% left · 62.5K credits", glanceLegendRows(credits).single().subtitle)
+        assertEquals("62.5K", purchasedCreditsCompact(credits, "allowance.codex.week"))
+    }
+
     private fun codexSubtitleForCredits(credits: String): String =
-        glanceLegendRows(
-            baseSummary(
-                rings =
-                    listOf(
-                        RingSummary("allowance.codex.week", "Weekly plan", 92.0, PulseStatus.OK),
+        glanceLegendRows(codexSummaryForBalance(credits, unit = "credits")).single().subtitle
+
+    private fun codexSummaryForBalance(
+        value: String,
+        unit: String,
+    ): WatchDashboardSummary =
+        baseSummary(
+            rings =
+                listOf(
+                    RingSummary("allowance.codex.week", "Weekly plan", 92.0, PulseStatus.OK),
+                ),
+            allowances =
+                listOf(
+                    AllowanceSummary(
+                        source = "purchased",
+                        label = "Codex · Credits",
+                        usedPercent = null,
+                        remaining = Quantity(value, unit),
+                        unlimited = false,
+                        resetsAt = null,
+                        status = PulseStatus.OK,
                     ),
-                allowances =
-                    listOf(
-                        AllowanceSummary(
-                            source = "purchased",
-                            label = "Codex · Credits",
-                            usedPercent = null,
-                            remaining = Quantity(credits, "credits"),
-                            unlimited = false,
-                            resetsAt = null,
-                            status = PulseStatus.OK,
-                        ),
-                    ),
-            ),
-        ).single().subtitle
+                ),
+        )
 
     private fun cursorPair(innerUsed: Double = 18.0, outerUsed: Double = 59.0) = RingSummary(
         "allowance.cursor.cursor-plan-models",

@@ -94,6 +94,23 @@ renders the same balance uncompacted, which it ruled on 2026-10-11
 (`PHONE_DASHBOARD_DESIGN.md`, Balances) — compaction belongs to a glance, and that screen is
 not one.
 
+**Revision 2026-10-11 — the suffix is credits or it is nothing:** *Revision 2026-10-11 — credit
+balances are compact* assumed the balance it compacts is denominated in credits. The shared
+contract does not guarantee that — `schemas/dashboard_snapshot.schema.json` allows `tokens` as
+well — and the row printed whatever unit arrived, so a token balance would have read
+`8% left · 62.5K tokens`, against this document's own *never LLM `TOK`* in Composition. No
+adapter reports one today; nothing stopped one.
+
+A purchased balance in any unit but `credits` is now treated as **absent**, and this row already
+draws that: it omits the suffix, exactly as acceptance has always required when a balance is
+unavailable. Showing the number without its word was refused — `62.5K` beside a credits-shaped
+row says credits, and would be wrong rather than merely forbidden.
+
+The guard sits in `purchasedRemainingForRing`, the one lookup behind this row, the face strip
+and the complication, so the three cannot drift apart. Why the contract keeps `tokens` instead
+of losing the variant, and why the payload is not rejected on arrival, is `PROVIDER_NOTES.md`,
+*The credits channel carries only credits*. This document rules only on the row.
+
 Do not reintroduce a face clone (large concentric stacks, sunk strips, watermark, or
 time-as-hero), stacked icon-above-label refresh, or conflating cadence cooldown with
 `!OK` / `Rate limited`.
@@ -160,7 +177,8 @@ Rules:
 - The credit balance is **compact**, the face strip's own form, with the unit word after it:
   `62.5K credits`, `1K credits`, `320 credits`, `0 credits`. A provider's trailing decimals
   never reach the row, and the number never differs from the one the face shows for the same
-  band (revision 2026-10-11 above).
+  band (revision 2026-10-11 above). A balance the provider denominates in anything but credits
+  is not shown at all — the suffix is omitted as for an unavailable one, never relabelled.
 - Rows are laid out on a **54-unit pitch** with nothing added between them: the pitch already
   covers the mini arcs and both lines.
 - The block keeps **12 units clear of the Alerts pill**. Three rows is the ceiling, one per
@@ -276,6 +294,7 @@ paired subtitle = "82% · 41% left · 320 credits" (omit credits suffix when una
 54-unit row pitch; 12-unit Alerts clearance; round 384 / notround 360 width and clipping verified 2026-10-01
 per-provider credits with explicit credits label (no footer sum)
 credit balance compact, as the face strip renders it: 62.5K credits / 1K credits / 320 credits / 0 credits
+a purchased balance in any unit but credits is omitted, never shown bare or relabelled
 OK / !OK inside dual-arrow refresh glyph; same label font size
 optional muted problem detail below the plate (never on the ring)
 cadence cooldown = gray OK + disabled (no detail)
