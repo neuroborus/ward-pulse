@@ -2368,12 +2368,73 @@ Measured during the design (recorded with its numbers in the design baseline):
   202/203 empty. Selecting a cell opens the chooser, and **what it offers for a slot carrying
   `EMPTY` is now known on this AVD**: eighteen entries counting `Empty` — ten stock Wear
   providers, one that ships only with the emulator image, and all six of WardPulse's own,
-  which is the number its manifest declares. Putting `Battery`
-  in the middle cell drew `100` as text inside the hairline with no arc — Upper cells rule 8,
-  witnessed for the first time — and the cell was set back to `Empty` afterwards. One AVD and
-  one Wear build; nothing here claims other devices. Recorded under *Editing correction
-  2026-10-11* in `docs/product/WATCH_RING_DESIGN.md`, Upper cells, rule 5, with the rule 8
-  reading under rule 8.
+  which is the number its manifest declares. Putting `Battery` in the middle cell drew `100` as
+  text inside the hairline with no arc, and the cell was set back to `Empty` afterwards. That
+  was first recorded here as a witness for Upper cells rule 8; it is not one. The runtime bound
+  the slot as `type=3`, `SHORT_TEXT`, so the face drew text because it was handed text. It
+  witnesses rule 7 instead, and the retraction, with what a ranged value in a cell would take,
+  is under rule 8. One AVD and one Wear build; nothing here claims other devices. Recorded
+  under *Editing correction 2026-10-11* in `docs/product/WATCH_RING_DESIGN.md`, Upper cells,
+  rule 5.
+
+  **Acceptance read back on the device, 2026-10-11.** With the face from the editability fix
+  installed, the lines of this phase that need a watch were taken on `emulator-5554`. One screen
+  pixel is 1.17 design units at 384, so anything inside ±0.6 units is inside a pixel.
+
+  The face declares eight slots — `101, 102, 105, 106, 109, 201, 202, 203` — and
+  `just validate-watchface` passes at format version 2. Measured from the capture, along the
+  horizontal centre line with edges taken at half-maximum:
+
+  | Band | Width | Centre, from the face axis |
+  |---|---:|---:|
+  | outer | 19.92 u | 191.60 u |
+  | middle | 19.92 u | 168.16 u |
+  | inner | 19.92 u | 143.55 u |
+
+  against the locked 20.2 and the declared 192 / 168 / 144 — the reading this phase asks for
+  *on the device rather than derived*. The left cell's hairline measures **41.0 units across on
+  both axes**, centred at 172.3, 131.2 against the declared 173, 132 and a `ringDiameter` of 41.
+  The legend strips' colour chips centre at **291.2 / 312.3 / 333.4**, which is the declared
+  `y=283 / 304 / 325` plus the 18-unit line box's half — every row inside 0.8 units. And the
+  measured inner band puts its inner edge at 133.59 from the face centre against a cell's
+  outermost point at 127.80, a **clearance of 5.79 units** where rule 1 derives 6.00.
+
+  **The melt spans the true remainder.** Sampling the capture along each band's measured
+  centre circle in tenth-degree steps — a pixel counting as lit when its saturation passes 35
+  and its brightest channel passes 80 — the inner band, the tightest, whose strip reads 35%,
+  is lit in one unbroken span from **234.3° to 359.8°**: **125.50°**, against a true remainder
+  of `0.35 × 359.9` = 125.97° and a computed start of `(1 − 0.35) × 359.9` = 233.94°. The start
+  is 0.36° late and the span 0.47° short, which at that radius is about one pixel of arc.
+  Before the `BoundingArc` came off, the entry above records the visible arc falling about
+  0.7° short **at each end**, near 1.4° in all; it is 0.47° in all now, and what remains is the
+  sampling grid rather than the face. That is the device confirmation of a fix which until now
+  had only the restatement behind it.
+
+  Only the inner band gives a clean reading, and the reason is worth stating so nobody reads
+  the others as drift. The same test puts the outer band at 68.5% and the middle at 74.8%
+  against strips reading 75% and `100% · 70%`, because at those radii it also catches the
+  ring-type texture and the dark Spark half of a split band. Those two figures are the method's
+  limit, not the face's, and are not recorded as readings.
+
+  Three behaviours were exercised rather than measured. A tap on a filled cell opened that
+  cell's own provider — `Battery` in the middle cell opened the watch Settings app, never
+  WardPulse — which is the acceptance line, now seen on the shipped face rather than on the
+  2026-10-09 spike. A tap on a cell that renders empty does **nothing**: it does not fall
+  through to the band slot beneath it or to the watermark's `Launch`. And in ambient, with two
+  cells filled, both stayed and dimmed whole — text and hairline together — while the empty
+  cell's recess stayed and no cell showed two readings at once, which is that acceptance line as
+  far as it goes without a weather source on the device.
+
+  **The nine ring-type textures are unchanged**, which settles the repository half of that
+  acceptance line: `git diff --stat` across `30402f4..1171626` over
+  `apps/watchface_wff/src/main/res/drawable-nodpi/` is empty, and the last commit to touch them
+  is `82053af fix(watchface): bake the ring type into four dimmed sweeps`, before the upper-cell
+  work began. The device half does not follow from that and was not taken: the payload on the
+  AVD carries no budget ring, so no period type was being drawn and nothing was observed.
+
+  The boards were compared against the same capture by hand, which `just check-designs` cannot
+  do; the six band edges agree exactly, and the reading is in `docs/product/WATCH_RING_DESIGN.md`
+  under *Review variants*.
 
 Scope when the implementation runs:
 
@@ -2410,8 +2471,9 @@ Acceptance:
 the face declares exactly eight complication slots and the validator passes
 three cells render above the clock, customizable; the left one ships bound to DAY_OF_WEEK and
   the other two ship EMPTY over the face's own temperature and UV chrome
-the three cells sit on the arc, not in a row: the middle one rides 13.39 units above the outer
-  two, and all three measure 6.00 units clear of the inner band on the device
+the three cells sit on the arc, not in a row: the middle one rides 14 units above the outer two
+  — the arc derives 13.39, and WFF rejects a fractional coordinate, so the integer boxes put it
+  at 14 — and all three measure 6.00 units clear of the inner band on the device
 a filled cell's opaque well covers the chrome beneath it with no tint carried up from it, and
   emptying that cell brings the reading back
 the face shows the graded well, not a zero or an empty string, when weather is unavailable

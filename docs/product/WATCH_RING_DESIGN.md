@@ -359,6 +359,14 @@ called this band the "upper aperture"; it is the same band.
    | Between neighbouring cells | 11.48 |
    | Middle cell above the outer two | 13.39 |
 
+   **These are the arc's figures, and the face draws the integer rounding of them.** The box
+   origins in the table above are integers because WFF rejects a fractional coordinate, so the
+   centres land at `y = 132 / 118 / 132` and the middle cell rides **14** units above the outer
+   two rather than 13.39. Measured on `emulator-5554` on 2026-10-11, the clearance to the inner
+   band reads **5.79** against the 6.00 derived here — inside a quarter of a unit, and inside a
+   screen pixel at 384. Hold the face to what the grid can draw; the derivation is where the
+   numbers come from, not what to measure against.
+
    **The equal clearance is the whole point, and it is equal by construction rather than by
    fitting.** A constant radius means a constant distance to a band that is itself a circle, so
    there is no number to tune and nothing to drift when the arc moves. Everything after it —
@@ -637,18 +645,43 @@ called this band the "upper aperture"; it is the same band.
    family colours over near-black, reads as a sticker on the glass. `LONG_TEXT` is sized for a
    slot several times this one and has no reading at four glyphs (rule 6).
 
-   **Confirmed on a device 2026-10-11 — a `RANGED_VALUE` in a cell draws text and no arc.**
-   This rule had been declared since 2026-10-09 and never witnessed, because until the same day
-   no editor could be reached to put a provider in a cell at all (rule 5, Editing correction).
-   On `emulator-5554`, `Battery · Wear OS` — a `RANGED_VALUE` provider — was selected into the
-   middle cell through the system editor. The face drew **`100` as text inside the hairline
-   ring, with no arc of its own**, which is this rule as written: the ramp goes unused and the
-   second arc language never appears. In the same frame the right cell stayed a graded recess
-   with no ring, which is rule 10. The cell was then set back to `Empty` and the slot confirmed
-   at `slot=17 type=2 provider=null`, so the device was left as it was found.
+   **Correction 2026-10-11 — what a device confirmed was the `SHORT_TEXT` path, not this one.**
+   An entry written here earlier that day claimed a `RANGED_VALUE` had been witnessed drawing as
+   text. It had not. On `emulator-5554`, `Battery · Wear OS` was put into the middle cell
+   through the system editor — reachable at all only since rule 5's Editing correction — and the
+   face drew **`100` as text inside the hairline ring**. That rendering is real, and it is a
+   witness: of rule 7's `SHORT_TEXT`. The runtime had bound the slot as short text,
+   `slot=17 type=3 provider=…BatteryProviderService`, and `type=3` is `SHORT_TEXT`. The face
+   drew text because it was handed text, and nothing here exercised a ranged value. In the same
+   frame the right cell stayed a graded recess with no ring, which is rule 10. The cell was then
+   set back to `Empty` and the slot confirmed at `slot=17 type=2 provider=null`, so the device
+   was left as it was found.
 
-   Two parts of this rule are still only declared. `MONOCHROMATIC_IMAGE` was not reached, and
-   nothing on that AVD is known to supply one. The chooser was walked in overlapping steps
+   **The face does not choose the type; the system does.** A cell offers
+   `SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY`, and every provider tried that offers
+   short text was bound as short text — `Battery · Wear OS` and `WardPulse ring 1`
+   (`TodayComplicationDataSourceService`), both at `type=3`. A `RANGED_VALUE` binding can
+   therefore only come from a provider that offers nothing else.
+
+   **One was reached, and it had nothing to say.** The Wear manifest declares `RANGED_VALUE`
+   alone for exactly two sources, `RingSplitComplicationDataSourceService` and
+   `StripSplitComplicationDataSourceService` — the chooser's `WardPulse · outer half 1` and
+   `outer half 2`. Selecting the second into the right cell bound
+   `slot=18 type=5 provider=…StripSplitComplicationDataSourceService`, and `type=5` is
+   `RANGED_VALUE`. The cell drew the **empty treatment** — graded well, lit rim, no hairline, no
+   text — which is right rather than a defect: `SplitBandComplicationDataSourceService` returns
+   `null` unless the stored summary carries a split band at that index, and the payload on that
+   device had one pair at index 0 and nothing at index 1. A complication with no data is `EMPTY`,
+   and rule 10 draws `EMPTY` as free.
+
+   So the binding is reachable and the drawing is not. **A `RANGED_VALUE` carrying data has
+   never been put in a cell on that AVD and cannot be**, because the only two providers that
+   force the binding are ours and both decline the request. Witnessing it needs a provider that
+   offers `RANGED_VALUE` without `SHORT_TEXT` and returns data for an arbitrary slot; none is
+   installed there. Until one is, *drawn as text, never as an arc* stands as a declaration.
+
+   `MONOCHROMATIC_IMAGE` was not reached either, and nothing on that AVD is known to supply
+   one. The chooser was walked in overlapping steps
    until the list stopped growing: **eighteen entries counting `Empty`** — ten stock providers
    under *Wear OS* (date, time, day, battery, step count, notifications, sunrise and sunset,
    world clock), one `Placeholder Heart Rate` under *Emulator complication providers*, and six
@@ -660,7 +693,9 @@ called this band the "upper aperture"; it is the same band.
    readings checking each other. What each stock entry supports was not established, so the
    21-unit tinted draw has no device reading behind it and witnessing it needs a provider that
    supplies the type. And the sentence above about a provider that sends no `TEXT` stands
-   unmeasured as it says: `Battery` sends `TEXT`, and `100` is what it sent.
+   unmeasured as it says: `Battery` sends `TEXT`, and `100` is what it sent. The split-band
+   source does not measure it either — it returns no complication at all rather than a ranged
+   value with the text missing, and those are different things.
 
    One entry in that list is not a watch's. `Placeholder Heart Rate` comes from *Emulator
    complication providers*, a package that ships with the AVD image and not with a device, so a
@@ -1558,6 +1593,14 @@ What the gate cannot do, it does not claim: `just check-designs` compares the bo
 their own generator and nothing else (`justfile:103`), so a preview generated from a board is
 proved to match that board, never to match the face. The face is what a device capture proves,
 by hand, as the acceptance for this phase already asks.
+
+**That comparison was made on 2026-10-11, for the first time.** A 384-pixel capture of the face
+on `emulator-5554` and `round-3-plan-credits.svg` rendered to the same 384, both reduced to grey
+and scanned along the horizontal centre line: the band edges in the left half are
+`19, 37, 40, 58, 60, 78` **in both**, identical at all six. Inside them the edges part where the
+content differs, which is data and not geometry — the device was showing its own payload and its
+own cells. So the boards and the face agree on where the bands are, measured rather than
+asserted, and the agreement is one the gate above could not have produced.
 
 A preview draws only what the face draws, from the face's own declared sources, and never an
 invented complication set. In the cells that means the weather chrome of Upper cells, rule 11,
