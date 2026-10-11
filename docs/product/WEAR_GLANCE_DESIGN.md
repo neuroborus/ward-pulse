@@ -56,6 +56,42 @@ nothing else, and no PNG is byte-compared at all — `tools/design-output.mjs` r
 generated preview is proved to match its board, never to match the Glance screen on a watch.
 That stays a device capture's job.
 
+**Revision 2026-10-11 — credit balances are compact:** a Glance row renders a purchased credit
+balance in the face's own compact form and appends the unit word — `62.5K credits`, `320
+credits`, `1K credits`, `0 credits`. Until this revision it printed the provider's own number
+with nothing done to it but trailing zeros trimmed, which is no help when the tail is not zeros.
+Seen on `emulator-5554` the same day, third row:
+
+```text
+Codex · Weekly plan
+75% left · 62479.294375 credits
+```
+
+The face strip, one swipe away, drew the same balance from the same payload as `62.5K`.
+
+Nothing here was ever ruled. This document showed only examples — `8% left · 320 credits`,
+`82% · 41% left · 320 credits` — and every one is a short integer somebody chose by hand, so no
+board, no preview and no run of `just check-designs` could have shown it. It took a real payload
+on a real screen.
+
+**The rule is the face's, and the reason is not width.** Those six decimal places are the
+provider's arithmetic, not information anyone acts on; dropping them costs the wearer nothing at
+any width. What the extra width does buy is the word `credits`, which the face strip has no room
+for and this row keeps. More precision is declined on purpose: the same balance appears on
+two screens one swipe apart, and a Glance that disagreed with the face about a number would make
+the wearer decide which to believe. So the number is the strip's own and the unit word is the
+Glance's own.
+
+It also makes the subtitle bounded, which is what keeps the 2026-10-01 fit check honest. That
+check measured three rows and found no clipping — with `320 credits` in them, a length nobody
+had guaranteed. Compacted, the longest a paired subtitle can reach is
+`100% · 100% left · 999.9T credits`, for any balance below a quadrillion credits; the old form
+grew with whatever a provider sent.
+
+The plan windows page draws the same `Quantity` in its no-share fallback and follows the same
+rule (`apps/wear_android/README.md`). Out of reach of this document: the **phone** dashboard
+still renders the uncompacted form from its own `Quantity.label`. That is the phone's to rule on.
+
 Do not reintroduce a face clone (large concentric stacks, sunk strips, watermark, or
 time-as-hero), stacked icon-above-label refresh, or conflating cadence cooldown with
 `!OK` / `Rate limited`.
@@ -119,6 +155,10 @@ Rules:
   first, with one `left` applying to both remaining percentages. Append purchased credits
   once when available: `82% · 41% left · 320 credits`. Per provider only — not a footer sum,
   not face `creditsGlance`, never LLM `TOK`.
+- The credit balance is **compact**, the face strip's own form, with the unit word after it:
+  `62.5K credits`, `1K credits`, `320 credits`, `0 credits`. A provider's trailing decimals
+  never reach the row, and the number never differs from the one the face shows for the same
+  band (revision 2026-10-11 above).
 - Rows are laid out on a **54-unit pitch** with nothing added between them: the pitch already
   covers the mini arcs and both lines.
 - The block keeps **12 units clear of the Alerts pill**. Three rows is the ceiling, one per
@@ -213,7 +253,7 @@ xdg-open apps/wear_android/design/preview-glance-legend-3.png
 | `glance-legend-3.svg` | **Primary** — three providers, `OK` refresh enabled, Alerts disabled |
 | `glance-legend-1.svg` | Single provider with credits |
 | `glance-legend-pair.svg` | One Cursor pair — one row, two coloured arcs, inner-first percentages and credits once |
-| `glance-legend-full.svg` | Three rows — the ceiling: three bands, currently two paired; three-row and paired-row geometry verified on-device 2026-10-01 |
+| `glance-legend-full.svg` | Three rows — the ceiling: three bands, currently two paired; three-row and paired-row geometry verified on-device 2026-10-01. Its paired row carries a large balance (`62.5K credits`) so the longest subtitle the rules allow is on a board |
 | `glance-legend-budget.svg` | Plan rows (with credits) + a connection budget row (family color, no credits) |
 | `glance-legend-stale.svg` | `!OK` + detail `Stale`, refresh enabled, Alerts active |
 | `glance-legend-cadence.svg` | Healthy `OK` but refresh **disabled** (cadence cooldown; no detail) |
@@ -233,6 +273,7 @@ paired title = family + " plan"; Cursor plan and Codex plan exactly
 paired subtitle = "82% · 41% left · 320 credits" (omit credits suffix when unavailable)
 54-unit row pitch; 12-unit Alerts clearance; round 384 / notround 360 width and clipping verified 2026-10-01
 per-provider credits with explicit credits label (no footer sum)
+credit balance compact, as the face strip renders it: 62.5K credits / 1K credits / 320 credits / 0 credits
 OK / !OK inside dual-arrow refresh glyph; same label font size
 optional muted problem detail below the plate (never on the ring)
 cadence cooldown = gray OK + disabled (no detail)

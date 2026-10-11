@@ -69,7 +69,8 @@ Rules:
   unknown. A reset already behind counts as none, because the provider has not caught up with
   its own clock (Cursor aggregates about hourly), and printing a moment that has passed would
   say the window is late rather than that the number is.
-- **A window with no share shows its remainder** (`1716 credits left`) — a plan whose ceiling
+- **A window with no share shows its remainder** (`1.7K credits left`, compact as everywhere
+  else on the watch — `WEAR_GLANCE_DESIGN.md`, revision 2026-10-11) — a plan whose ceiling
   the provider does not publish, Cursor's among them, still knows how much is left, and a
   remainder at zero counts as exhausted like any full percentage.
 - **An unlimited window says so** (`Unlimited`), and one that can say neither a share nor a

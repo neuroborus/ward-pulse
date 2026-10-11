@@ -140,24 +140,32 @@ private fun glanceSubtitle(
     return "$left · $credits"
 }
 
-/** Purchased credits for a ring family (`320 credits`), or null. Shared with the face. */
+/**
+ * A balance as every text surface of the watch renders it: compact, so the Glance,
+ * the plan windows page and the face strips cannot disagree about one number the
+ * wearer sees a swipe apart (`WEAR_GLANCE_DESIGN.md`, revision 2026-10-11).
+ *
+ * A value the provider did not send as a number keeps its own text with the float
+ * noise trimmed: inventing a rounding for something unparsed would say more than
+ * the payload does.
+ */
+internal fun compactQuantityValue(value: String): String =
+    value.toDoubleOrNull()?.let { compactCreditCount(it) } ?: formatQuantityValue(value)
+
+/** The same number with its unit word, which only the wider surfaces have room for. */
+internal fun Quantity.compactLabel(): String = "${compactQuantityValue(value)} $unit"
+
+/** Purchased credits for a Glance row (`62.5K credits`), or null. */
 internal fun purchasedCreditsSuffix(
     summary: WatchDashboardSummary,
     ringId: String,
-): String? {
-    val remaining = purchasedRemainingForRing(summary, ringId) ?: return null
-    return "${formatQuantityValue(remaining.value)} ${remaining.unit}"
-}
+): String? = purchasedRemainingForRing(summary, ringId)?.compactLabel()
 
-/** Compact face strip credits (`320`, `1.2K`) — same family rule as Glance. */
+/** The same balance without the unit word, for a face strip that has no room for it. */
 internal fun purchasedCreditsCompact(
     summary: WatchDashboardSummary,
     ringId: String,
-): String? {
-    val remaining = purchasedRemainingForRing(summary, ringId) ?: return null
-    val value = remaining.value.toDoubleOrNull() ?: return formatQuantityValue(remaining.value)
-    return compactCreditCount(value)
-}
+): String? = purchasedRemainingForRing(summary, ringId)?.let { compactQuantityValue(it.value) }
 
 internal fun purchasedRemainingForRing(
     summary: WatchDashboardSummary,

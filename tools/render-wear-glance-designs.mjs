@@ -462,15 +462,19 @@ const variants = [
     rows: [
       { family: FAMILY.claude, metric: 'Opus weekly', used: 0.94, credits: '387' },
       {
+        // The ceiling board carries the largest balance a row can show, in the
+        // compact form the app renders it in, so the longest subtitle the rules
+        // allow is on a board rather than only on a watch
+        // (`WEAR_GLANCE_DESIGN.md`, revision 2026-10-11).
         family: FAMILY.cursorOwn,
         metric: 'Cursor Models',
         used: 0.0,
-        credits: '1716',
+        credits: '62.5K',
         split: {
           family: FAMILY.cursor,
           metric: 'Other Models',
           used: 0.25,
-          credits: '1716',
+          credits: '62.5K',
         },
       },
       {

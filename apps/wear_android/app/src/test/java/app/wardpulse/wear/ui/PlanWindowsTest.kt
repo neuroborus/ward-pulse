@@ -124,8 +124,26 @@ class PlanWindowsTest {
         )
 
         // A plan with no published limit knows what is left without knowing the
-        // share it makes up; the Usage screen says the same.
-        assertEquals("1716 credits left", rows.single().detail)
+        // share it makes up. The balance is compact, as it is on the Glance and
+        // the face (`WEAR_GLANCE_DESIGN.md`, revision 2026-10-11).
+        assertEquals("1.7K credits left", rows.single().detail)
+    }
+
+    @Test
+    fun detail_compactsAProviderFloatRemainder() {
+        val rows = planWindowRows(
+            summaryOf(
+                allowance("Cursor · Plan usage", used = null, resetsAt = null).copy(
+                    remaining = Quantity(value = "62479.294375", unit = "credits"),
+                ),
+            ),
+            now = now,
+            zone = utc,
+        )
+
+        // Six decimal places are the provider's arithmetic, not something a
+        // wearer acts on, and the face shows this balance as `62.5K`.
+        assertEquals("62.5K credits left", rows.single().detail)
     }
 
     @Test

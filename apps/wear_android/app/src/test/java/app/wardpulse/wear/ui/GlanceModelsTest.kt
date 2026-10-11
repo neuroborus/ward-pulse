@@ -329,6 +329,41 @@ class GlanceModelsTest {
         assertEquals(RingFamily.CLAUDE, rows.single().colorArgb)
     }
 
+    @Test
+    fun legendRows_creditBalanceIsCompact() {
+        // The face strip draws this balance from the same payload as `62.5K`; a
+        // Glance that disagreed would make the wearer pick a screen to believe
+        // (`WEAR_GLANCE_DESIGN.md`, revision 2026-10-11).
+        assertEquals("8% left · 62.5K credits", codexSubtitleForCredits("62479.294375"))
+        assertEquals("8% left · 1K credits", codexSubtitleForCredits("1000"))
+        assertEquals("8% left · 320 credits", codexSubtitleForCredits("320"))
+        assertEquals("8% left · 0 credits", codexSubtitleForCredits("0"))
+        // Trailing-zero noise was already trimmed and still is.
+        assertEquals("8% left · 12.5 credits", codexSubtitleForCredits("12.50"))
+    }
+
+    private fun codexSubtitleForCredits(credits: String): String =
+        glanceLegendRows(
+            baseSummary(
+                rings =
+                    listOf(
+                        RingSummary("allowance.codex.week", "Weekly plan", 92.0, PulseStatus.OK),
+                    ),
+                allowances =
+                    listOf(
+                        AllowanceSummary(
+                            source = "purchased",
+                            label = "Codex · Credits",
+                            usedPercent = null,
+                            remaining = Quantity(credits, "credits"),
+                            unlimited = false,
+                            resetsAt = null,
+                            status = PulseStatus.OK,
+                        ),
+                    ),
+            ),
+        ).single().subtitle
+
     private fun cursorPair(innerUsed: Double = 18.0, outerUsed: Double = 59.0) = RingSummary(
         "allowance.cursor.cursor-plan-models",
         "Cursor Models",

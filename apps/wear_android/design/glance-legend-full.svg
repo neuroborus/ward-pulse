@@ -38,59 +38,59 @@
     <text x="225" y="101.0" text-anchor="middle"
       font-family="Noto Sans, sans-serif" font-size="13"
       font-weight="700" fill="#65D78A">OK</text>
-    <circle cx="94" cy="191" r="17" fill="none" stroke="#2E3632"
+    <circle cx="91.5" cy="191" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
-    <circle cx="94" cy="191" r="17" fill="none" stroke="#E8915A"
+    <circle cx="91.5" cy="191" r="17" fill="none" stroke="#E8915A"
       stroke-width="5" stroke-linecap="round"
       stroke-dasharray="1.41 106.81"
       stroke-dashoffset="-102.91"
-      transform="rotate(-90 94 191)" />
-    <text x="128" y="189.5"
+      transform="rotate(-90 91.5 191)" />
+    <text x="125.5" y="189.5"
       font-family="Noto Sans, sans-serif" font-size="16"
       font-weight="700" fill="#F4FBF8">Claude · Opus weekly</text>
-    <text x="128" y="209.0"
+    <text x="125.5" y="209.0"
       font-family="Noto Sans, sans-serif" font-size="14"
       font-weight="700" fill="#8A968F">6% left · 387 credits</text>
-    <circle cx="94" cy="245" r="17" fill="none" stroke="#2E3632"
+    <circle cx="91.5" cy="245" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
-    <circle cx="94" cy="245" r="17" fill="none" stroke="#65D78A"
+    <circle cx="91.5" cy="245" r="17" fill="none" stroke="#65D78A"
       stroke-width="5" stroke-linecap="round"
       stroke-dasharray="82.59 106.81"
       stroke-dashoffset="-21.73"
-      transform="rotate(-90 94 245)" />
-    <circle cx="145" cy="245" r="17" fill="none" stroke="#2E3632"
+      transform="rotate(-90 91.5 245)" />
+    <circle cx="142.5" cy="245" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
-    <circle cx="145" cy="245" r="17" fill="none" stroke="#186020"
+    <circle cx="142.5" cy="245" r="17" fill="none" stroke="#186020"
       stroke-width="5" stroke-linecap="round"
       stroke-dasharray="38.79 106.81"
       stroke-dashoffset="-65.52"
-      transform="rotate(-90 145 245)" />
-    <text x="179" y="243.5"
+      transform="rotate(-90 142.5 245)" />
+    <text x="176.5" y="243.5"
       font-family="Noto Sans, sans-serif" font-size="16"
       font-weight="700" fill="#F4FBF8">Codex plan</text>
-    <text x="179" y="263.0"
+    <text x="176.5" y="263.0"
       font-family="Noto Sans, sans-serif" font-size="14"
       font-weight="700" fill="#8A968F">82% · 41% left · 320 credits</text>
-    <circle cx="94" cy="299" r="17" fill="none" stroke="#2E3632"
+    <circle cx="91.5" cy="299" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
-    <circle cx="94" cy="299" r="17" fill="none" stroke="#7E93B8"
+    <circle cx="91.5" cy="299" r="17" fill="none" stroke="#7E93B8"
       stroke-width="5" stroke-linecap="round"
       stroke-dasharray="101.71 106.81"
       stroke-dashoffset="-2.61"
-      transform="rotate(-90 94 299)" />
-    <circle cx="145" cy="299" r="17" fill="none" stroke="#2E3632"
+      transform="rotate(-90 91.5 299)" />
+    <circle cx="142.5" cy="299" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
-    <circle cx="145" cy="299" r="17" fill="none" stroke="#67E8D4"
+    <circle cx="142.5" cy="299" r="17" fill="none" stroke="#67E8D4"
       stroke-width="5" stroke-linecap="round"
       stroke-dasharray="75.11 106.81"
       stroke-dashoffset="-29.20"
-      transform="rotate(-90 145 299)" />
-    <text x="179" y="297.5"
+      transform="rotate(-90 142.5 299)" />
+    <text x="176.5" y="297.5"
       font-family="Noto Sans, sans-serif" font-size="16"
       font-weight="700" fill="#F4FBF8">Cursor plan</text>
-    <text x="179" y="317.0"
+    <text x="176.5" y="317.0"
       font-family="Noto Sans, sans-serif" font-size="14"
-      font-weight="700" fill="#8A968F">100% · 75% left · 1716 credits</text>
+      font-weight="700" fill="#8A968F">100% · 75% left · 62.5K credits</text>
     <rect x="161.0" y="372" width="128.0"
       height="36" rx="18" fill="#171B18" stroke="#2A302C"
       stroke-width="1"

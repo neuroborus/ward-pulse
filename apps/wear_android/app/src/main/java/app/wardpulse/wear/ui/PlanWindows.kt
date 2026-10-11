@@ -104,7 +104,7 @@ private fun detailOf(
     val left = when {
         allowance.unlimited -> "Unlimited"
         allowance.usedPercent != null -> "${formatPercentRemainingLabel(allowance.usedPercent)} left"
-        allowance.remaining != null -> "${allowance.remaining.label} left"
+        allowance.remaining != null -> "${allowance.remaining.compactLabel()} left"
         else -> null
     }
     val back = allowance.returnsAt(now)?.let { backLabel(it, now, zone) }
