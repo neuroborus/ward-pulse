@@ -3,13 +3,15 @@
 **Status rules locked 2026-08-13** — how the phone Dashboard says that something is wrong, and
 at which level it says it.
 
+**Balance rules locked 2026-10-11** — how it renders a quantity a provider reported.
+
 This document locks **rules, not a composition.** The face, Glance and widget baselines each own
 a generated review board because their layout is fixed; the Dashboard is a list whose length is
 the user's, so a reference picture would rot faster than it could be drawn. What is locked here
 is when a mark appears, what each level of the screen may say, and where the numbers come from.
 
-Implementation must follow this document. It does not yet: one badge widget renders at every
-level, at one size, which is the defect these rules exist to end.
+Implementation must follow this document. The status marks do not yet: one badge widget renders
+at every level, at one size, which is the defect those rules exist to end.
 
 Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 16 owns the *order* of the same rows; this
 document owns their status marks). Palette and family colors: `docs/DESIGN_ASSETS.md`.
@@ -55,6 +57,41 @@ The Dashboard nests three scopes, and each has a different job:
    visible is noise.
 7. **Glyphs stay distinct per status** — rate limit, key, clock, warning, error. The vocabulary
    is not the problem and does not need replacing; repeating one entry of it down the screen is.
+
+## Balances
+
+**Locked 2026-10-11.** A purchased allowance card drew its balance as
+`62479.294375 credits` — read off a real payload on 2026-10-11, where the same balance reached
+the watch as well. `Quantity.label` trimmed trailing zeros and passed everything else through,
+which is no help when the tail is not zeros.
+
+1. **A balance is shown in full, to at most one decimal place.** `62479.3 credits`,
+   `1000 credits`, `320 credits`, `12.5 credits`, `0 credits`. Everything past the first decimal
+   is the provider's own arithmetic, and nobody acts on `.294375`. One decimal is already this
+   product's precision for a counted thing: remaining percentages stop there, and so does the
+   compact form the glanceable surfaces use.
+2. **The Dashboard does not compact, and that is what the screen is for.** The face strip, the
+   Wear Glance row and the phone home widget all render this balance as `62.5K`
+   (`WATCH_RING_DESIGN.md`; `WEAR_GLANCE_DESIGN.md`, revision 2026-10-11). Compaction is a
+   property of a **glance**, not of the number: a 42-unit strip, a row read with the wrist up,
+   a widget passed over on the way somewhere else — each buys legibility with precision, and
+   each is a peer of the others, so two of them disagreeing would be a contradiction. The
+   Dashboard is the screen a person opens to read the figure. `62.5K` is plainly an
+   abbreviation of `62479.3` and nobody holding both reads two balances; what they would not
+   accept is the abbreviation being the only place the figure can be had.
+3. **No digit grouping.** `62479.3`, never `62,479.3`. A separator is locale-dependent and this
+   product has no locale story — `apps/phone_flutter/pubspec.yaml` carries no `intl` and `lib/`
+   has no `NumberFormat` — so a comma here would be a US convention invented inside one widget.
+   If long digit strings become hard to read, that is one product-wide decision covering money,
+   token counts and chart axes together, not a balance rule.
+4. **The rule lives in the display form, not in the widget.** `Quantity.label` is the one
+   display form of a reported quantity and this screen is its only caller, so a second
+   formatter beside it would be a second rule waiting to disagree. A value that is not a number
+   keeps its own text: inventing a rounding for something unparsed would say more than the
+   payload does.
+5. **The watch is never handed this form.** `watch_sync_service.dart` puts the provider's own
+   `value` and `unit` into the payload, and each watch surface compacts for itself. A balance
+   rounded twice would round differently.
 
 ## Out of scope
 

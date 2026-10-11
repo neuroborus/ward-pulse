@@ -90,7 +90,9 @@ grew with whatever a provider sent.
 
 The plan windows page draws the same `Quantity` in its no-share fallback and follows the same
 rule (`apps/wear_android/README.md`). Out of reach of this document: the **phone** dashboard
-still renders the uncompacted form from its own `Quantity.label`. That is the phone's to rule on.
+renders the same balance uncompacted, which it ruled on 2026-10-11
+(`PHONE_DASHBOARD_DESIGN.md`, Balances) — compaction belongs to a glance, and that screen is
+not one.
 
 Do not reintroduce a face clone (large concentric stacks, sunk strips, watermark, or
 time-as-hero), stacked icon-above-label refresh, or conflating cadence cooldown with

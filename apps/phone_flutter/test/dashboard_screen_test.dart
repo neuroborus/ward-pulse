@@ -9,7 +9,13 @@ import 'package:ward_pulse_phone/dashboard/dashboard_screen.dart';
 import 'package:ward_pulse_phone/dashboard/status_pill.dart';
 
 void main() {
-  test('trims trailing zeros from quantity labels', () {
+  test('shows a balance in full, to at most one decimal place', () {
+    // The Dashboard does not compact: `62.5K` is what a glance shows
+    // (`PHONE_DASHBOARD_DESIGN.md`, Balances).
+    expect(
+      const Quantity(value: '62479.294375', unit: 'credits').label,
+      '62479.3 credits',
+    );
     expect(
       const Quantity(value: '500.0000000000', unit: 'credits').label,
       '500 credits',
@@ -18,8 +24,19 @@ void main() {
       const Quantity(value: '12.50', unit: 'credits').label,
       '12.5 credits',
     );
+    expect(formatQuantityValue('62479.294375'), '62479.3');
+    expect(formatQuantityValue('1000'), '1000');
+    expect(formatQuantityValue('320'), '320');
+    expect(formatQuantityValue('0'), '0');
+    expect(formatQuantityValue('12.50'), '12.5');
     expect(formatQuantityValue('12.5'), '12.5');
     expect(formatQuantityValue('100'), '100');
+    // A balance that rounds away its own decimal loses it rather than
+    // carrying a `.0`.
+    expect(formatQuantityValue('0.04'), '0');
+    expect(formatQuantityValue('999.96'), '1000');
+    // Text that is not a number keeps itself.
+    expect(formatQuantityValue('n/a.'), 'n/a.');
   });
 
   test('the app bar counts sections, not the problems inside them', () {

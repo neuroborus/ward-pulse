@@ -504,20 +504,34 @@ class Quantity {
 
   Map<String, dynamic> toJson() => {'value': value, 'unit': unit};
 
-  /// Display form — strip provider float noise like `500.0000000000`.
+  /// The one display form of a reported quantity
+  /// (`PHONE_DASHBOARD_DESIGN.md`, Balances).
   String get label => '${formatQuantityValue(value)} $unit';
 }
 
-/// `500.0000000000` → `500`, `12.50` → `12.5`.
+/// A balance in full, to at most one decimal place: `500.0000000000` → `500`,
+/// `12.50` → `12.5`, `62479.294375` → `62479.3`.
+///
+/// Everything past the first decimal is the provider's own arithmetic and
+/// nobody acts on it. The Dashboard does not compact — that is what a glance
+/// does, and this is the screen the figure is read on
+/// (`PHONE_DASHBOARD_DESIGN.md`, Balances).
+///
+/// Text without a decimal point is passed through exactly as it arrived, so a
+/// balance longer than a double can hold is never silently reshaped, and text
+/// that is not a number keeps itself: inventing a rounding for something
+/// unparsed would say more than the payload does.
 String formatQuantityValue(String value) {
   if (!value.contains('.')) {
     return value;
   }
-  final trimmed = value.replaceFirst(RegExp(r'0+$'), '');
-  if (trimmed.endsWith('.')) {
-    return trimmed.substring(0, trimmed.length - 1);
+  final parsed = double.tryParse(value);
+  if (parsed == null) {
+    return value;
   }
-  return trimmed;
+  final rounded = (parsed * 10).round() / 10;
+  final places = rounded.truncateToDouble() == rounded ? 0 : 1;
+  return rounded.toStringAsFixed(places);
 }
 
 class BudgetState {
