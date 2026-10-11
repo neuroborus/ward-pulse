@@ -37,7 +37,12 @@ three baseline boards that had none are no longer unwitnessed); preview-surface 
 never seen; the one direct measurement shows it rendering the face live, so the ownership
 rule is restated as resting on the asset being shipped, not on which surface displays it);
 watermark revision **2026-10-11** (the shipped portrait carries the quiet mark
-the face draws, and the brand copy of that picture is retired) — accepted visual target for
+the face draws, and the brand copy of that picture is retired); cell-editing correction
+**2026-10-11** (the three cells were unreachable on the watch because
+`watch_face_info.xml` never declared `Editable`, which defaults to false and withholds the
+system's Edit button; with it declared, the editor was read opening on the three cells and
+nothing else, and a `RANGED_VALUE` provider in a cell was seen drawing text with no arc for
+the first time) — accepted visual target for
 Wear OS and Watch Face Format until the next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
 wireframes, large remaining-% heroes, or bordered strip cards.
@@ -503,6 +508,61 @@ called this band the "upper aperture"; it is the same band.
    (rule 11). A fresh install therefore reads as a finished watch without spending a cell to
    look like one, and the wearer who wants all three keeps all three.
 
+   **Editing correction 2026-10-11 — the system edits the cells only if the package asks it
+   to, and this one never did.** Everything above about *who* edits a cell was right and is
+   unchanged: the package ships no code, a Google process draws the face, and the chooser is a
+   system activity. What was missing is the declaration that asks the system to offer its
+   editor at all. `watch_face_info.xml` declared one element, `Preview`. The metadata file also
+   carries **`Editable`, which defaults to `false`**, and that flag is what shows or hides the
+   Edit button in the favorites list; the documented condition for setting it is a setting or
+   at least one non-fixed complication, which this face has met since 2026-10-09 with three.
+   So from the day the cells were locked until today, rule 5 described a path a wearer could
+   not walk.
+
+   **Before**, measured on `emulator-5554`, 2026-10-11, three readings that agree.
+   `dumpsys wear_service` reported `Editable Resource Only WatchFace=false` for the active
+   face, alongside `activeWatchFaceComponent=WatchFaceId[app.wardpulse.watchface,null]` and
+   `Resource Only WatchFace=true`. In the system picker, WardPulse centred, a UI dump offered
+   only `Activate WardPulse` and `Move watch face left`; scrolled one face along in the same
+   session, the neighbour offered `Edit watch face` as well — so the editor exists on that
+   build and was withheld from ours, not absent. Launching the chooser directly
+   (`ProviderChooserActivity`, `ACTION_CHOOSE_PROVIDER`, complication id 202) failed with
+   `Failed to find watch face info`, for both the face package and the runtime package as the
+   component.
+
+   **After**, same AVD and same session, with `<Editable value="true" />` declared and the
+   package rebuilt and installed. `dumpsys wear_service` reports
+   `Editable Resource Only WatchFace=`**`true`**, everything else in that block unchanged. The
+   picker offers `Edit watch face` for WardPulse at bounds `[140,310][244,374]` — the bounds
+   the control face carried when ours carried nothing. The button opens
+   `com.google.android.clockwork.sysui.experiences.watchfaceeditor.WatchFaceEditorActivity`,
+   drawn over the face with a selection box on each upper cell, and it exposes **exactly three
+   targets and nothing else**: `Day of the week` at `[130,95][166,131]`, `Add complication` at
+   `[174,83][210,119]`, `Add complication` at `[218,95][254,131]`. That is this face's own
+   declaration read back — slot 201 holding its `DAY_OF_WEEK` default, 202 and 203 empty — and
+   it is the first evidence that the eight-slot scene exposes its three customizable slots and
+   only those. Selecting a cell opens `ProviderChooserActivity`, on a list of providers that
+   begins `Empty`, `Battery · Wear OS`, `Date` — its full extent is under rule 8. The editor
+   log names the slots in a numbering of the system's own, not the face's:
+   `slotId=16 … DayOfWeekProviderService type=3`,
+   `slotId=17 providerComponent=null type=2`, `slotId=18 providerComponent=null type=2`. One
+   holds the day-of-week default and two are empty, so 16, 17 and 18 are this face's 201, 202
+   and 203; how the system arrives at those numbers was not established and is not assumed
+   here.
+
+   The declaration also ships: the compiled APK's `res/xml/watch_face_info.xml` reads
+   `E: Editable / A: value=true` under `aapt2 dump xmltree`.
+
+   **One AVD, one Wear build.** `emulator-5554`, the canonical round Wear OS image. Nothing
+   here is a claim about other devices or other system versions; it is what this one does.
+
+   **The validator cannot catch this class of mistake**, which is worth knowing before trusting
+   a green run here. `tools/validate-watchface/validate.sh` passes exactly one file to the
+   official validator, `res/raw/watchface.xml`, and the schema bundle inside that jar
+   (`docs.zip`, versions 1 to 5) contains no schema for `WatchFaceInfo` at all. A misspelled or
+   invented element in the metadata file compiles into the APK and passes every gate in this
+   repository in silence.
+
 6. **A cell holds about four glyphs.** 42 design units is 36 px at 384 — an icon, or a short
    label such as `72%`, `$12`, `2h`, `UV 7`. This is why the budget label stays on a strip: the
    locked worst case `$999.99/999` is a strip-width number and has no reading at cell scale.
@@ -576,6 +636,36 @@ called this band the "upper aperture"; it is the same band.
    tint for it — a foreign colour image in a 42-unit circle, on a face whose whole palette is
    family colours over near-black, reads as a sticker on the glass. `LONG_TEXT` is sized for a
    slot several times this one and has no reading at four glyphs (rule 6).
+
+   **Confirmed on a device 2026-10-11 — a `RANGED_VALUE` in a cell draws text and no arc.**
+   This rule had been declared since 2026-10-09 and never witnessed, because until the same day
+   no editor could be reached to put a provider in a cell at all (rule 5, Editing correction).
+   On `emulator-5554`, `Battery · Wear OS` — a `RANGED_VALUE` provider — was selected into the
+   middle cell through the system editor. The face drew **`100` as text inside the hairline
+   ring, with no arc of its own**, which is this rule as written: the ramp goes unused and the
+   second arc language never appears. In the same frame the right cell stayed a graded recess
+   with no ring, which is rule 10. The cell was then set back to `Empty` and the slot confirmed
+   at `slot=17 type=2 provider=null`, so the device was left as it was found.
+
+   Two parts of this rule are still only declared. `MONOCHROMATIC_IMAGE` was not reached, and
+   nothing on that AVD is known to supply one. The chooser was walked in overlapping steps
+   until the list stopped growing: **eighteen entries counting `Empty`** — ten stock providers
+   under *Wear OS* (date, time, day, battery, step count, notifications, sunrise and sunset,
+   world clock), one `Placeholder Heart Rate` under *Emulator complication providers*, and six
+   under *WardPulse*. **None of ours can supply an icon**, and that is checkable here rather
+   than on a device: `apps/wear_android/app/src/main/AndroidManifest.xml` declares
+   `SUPPORTED_TYPES` on all six WardPulse data sources — `RANGED_VALUE,SHORT_TEXT` for Today,
+   Week and Ring3, `RANGED_VALUE` for RingSplit and StripSplit, `SHORT_TEXT` for Status — and
+   `MONOCHROMATIC_IMAGE` appears in none of them. Six declared and six offered is also the two
+   readings checking each other. What each stock entry supports was not established, so the
+   21-unit tinted draw has no device reading behind it and witnessing it needs a provider that
+   supplies the type. And the sentence above about a provider that sends no `TEXT` stands
+   unmeasured as it says: `Battery` sends `TEXT`, and `100` is what it sent.
+
+   One entry in that list is not a watch's. `Placeholder Heart Rate` comes from *Emulator
+   complication providers*, a package that ships with the AVD image and not with a device, so a
+   reader comparing this list against a real watch will come up one short. That is a property
+   of the emulator, not of the face.
 
 9. **A tap reaches the cell, not the band under it.** Folding makes each band slot claim the
    whole canvas, so all three bands lie under the cells. Measured 2026-10-09 on

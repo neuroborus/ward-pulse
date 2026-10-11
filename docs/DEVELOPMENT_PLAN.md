@@ -2349,7 +2349,31 @@ Measured during the design (recorded with its numbers in the design baseline):
   a system activity in `com.google.android.wearable.sysui`. A WFF face has nowhere to run an
   editor, so it cannot own slot configuration, and neither can the phone app. Readings in
   `docs/ANDROID_TOOLCHAIN.md`, *Watch Face Format*. What the chooser offers for a slot carrying
-  `EMPTY` was not reached on the AVD and is unverified.
+  `EMPTY` was not reached on the AVD and stayed unverified until 2026-10-11.
+
+  Found **2026-10-11**, and it is why that last sentence stayed unverified for so long: the
+  chooser could not be reached at all. Ownership being the format's does not make the editor
+  reachable — the package still has to ask for it, through `Editable` in
+  `watch_face_info.xml`, which defaults to false and withholds the Edit button from the
+  favorites list. This face declared only `Preview`, so from the day the cells shipped no
+  wearer could configure one. Measured on `emulator-5554`: `dumpsys wear_service` reported
+  `Editable Resource Only WatchFace=false`, the picker offered WardPulse no edit affordance
+  while the neighbouring face had one, and a direct chooser launch failed with
+  `Failed to find watch face info`.
+
+  Declared and read back the same day, on the same AVD. `dumpsys wear_service` now reports
+  `Editable Resource Only WatchFace=true`; the picker offers `Edit watch face`; the editor
+  opens on the three upper cells and exposes those three targets and nothing else — `Day of
+  the week`, `Add complication`, `Add complication` — which is slot 201 with its default and
+  202/203 empty. Selecting a cell opens the chooser, and **what it offers for a slot carrying
+  `EMPTY` is now known on this AVD**: eighteen entries counting `Empty` — ten stock Wear
+  providers, one that ships only with the emulator image, and all six of WardPulse's own,
+  which is the number its manifest declares. Putting `Battery`
+  in the middle cell drew `100` as text inside the hairline with no arc — Upper cells rule 8,
+  witnessed for the first time — and the cell was set back to `Empty` afterwards. One AVD and
+  one Wear build; nothing here claims other devices. Recorded under *Editing correction
+  2026-10-11* in `docs/product/WATCH_RING_DESIGN.md`, Upper cells, rule 5, with the rule 8
+  reading under rule 8.
 
 Scope when the implementation runs:
 
