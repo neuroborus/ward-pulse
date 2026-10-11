@@ -13,7 +13,7 @@ to the operator's judgement, by way of the task.
 > `SKILL.md` beside this file stays the contract for work done by hand on the host, and must
 > not be edited to suit the runner. Where this file is silent, that one applies.
 >
-> Last updated: 2026-10-10.
+> Last updated: 2026-10-11.
 
 ## 1. Scope Review
 
@@ -76,15 +76,30 @@ downloaded.
   there at all. That is an inability to run, not a failing test.
 - Every device check: `adb`, emulators, inspecting a screen or the watch face.
 
-**`just check-docs` is disputed, and the dispute is recorded rather than settled.** This file
-placed it in the sandbox column on 2026-10-02. On 2026-10-10 a worker declared it
-`unsupported: ["network"]` and the run stopped on the environment blocker. Neither side has been
-proven: inspection that day found the build to be local — `npm run docs:build` runs a Vite build
-against an installed `node_modules`, and the site sources carry no remote fonts or CDN
-references — but nothing demonstrated the build completing with the network actually denied, and
-the worker's report is a declaration of what it believes it needs rather than an observed
-failure. Until someone runs it offline and reports the outcome, treat it as the step's to
-attempt and the owner's to confirm, and do not quietly move it to either column.
+**`just check-docs` reaches no further than the checkout, as far as anyone has been able to
+show.** This file placed it in the sandbox column on 2026-10-02. On 2026-10-10 a worker declared
+it `unsupported: ["network"]` and the run stopped on the environment blocker — a declaration of
+what it believed it needed, not an observed failure. Inspection that day found the build to be
+local: `npm run docs:build` runs a Vite build against an installed `node_modules`, and the site
+sources carry no remote fonts or CDN references.
+
+Measured on the host on 2026-10-11, with `docs/site/dist` removed first so the build could not
+be served by its own output. The recipe completed, exit 0, 47 files generated, with every proxy
+variable pointed at a dead port and npm forced offline:
+
+```
+HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 ALL_PROXY=socks5://127.0.0.1:9 \
+  npm_config_offline=true npm_config_registry=http://127.0.0.1:9 just check-docs
+```
+
+What that does not prove: a proxy variable is a convention a library may ignore, so this is not
+socket-level denial. Neither `unshare -rn` nor `strace` was available on that host to produce
+one — unprivileged user namespaces are refused and `strace` is not installed — so nobody has yet
+watched the build with the network actually cut.
+
+Treat it as the step's to attempt. A worker that cannot complete it should report the failure it
+observed rather than declare the need in advance, because the one measurement anyone has points
+the other way. It stays the owner's to confirm.
 
 **The owner's work is never a precondition of the step's commit.** A step that waits for it
 cannot produce complete terminal evidence, and the run fails — this happened on 2026-10-01
