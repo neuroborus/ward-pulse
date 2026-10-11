@@ -15,7 +15,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
-import { emit } from './design-output.mjs'
+import { FONT_FILE, emit, renderPreviews } from './design-output.mjs'
 
 const runFile = promisify(execFile)
 
@@ -31,8 +31,10 @@ const DISABLED = '#5A635C'
 /** Quieter than MUTED — problem detail under the refresh plate. */
 const DETAIL = '#5C655E'
 const FONT = 'Noto Sans'
-const FONT_FILE = '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf'
 const SIZE = 450
+
+/** The density that takes a 450-unit board to the 675 the previews are read at. */
+const PREVIEW_DENSITY = 144
 
 // A budget row belongs to one connection and takes that connection's family
 // color, so `cursorPlatform` repeats the Cursor teal on purpose. A Cursor plan's
@@ -555,3 +557,16 @@ for (const variant of variants) {
   const svg = await glanceSvg(variant)
   await emit(join(wearDir, variant.file), svg, 'render-designs')
 }
+
+/**
+ * Every board has exactly one preview, named after it. Deriving the list from
+ * the boards rather than keeping a second one beside them means a new variant
+ * cannot ship without the picture the baseline will be read against.
+ */
+await renderPreviews(
+  variants.map(({ file }) => ({
+    svg: join(wearDir, file),
+    png: join(wearDir, `preview-${file.replace(/\.svg$/, '.png')}`),
+    density: PREVIEW_DENSITY,
+  })),
+)

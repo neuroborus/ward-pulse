@@ -7,11 +7,11 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { access, mkdir } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { emit } from './design-output.mjs'
+import { FONT_FILE, emit, renderPreviews } from './design-output.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const checking = process.argv.includes('--check')
@@ -66,9 +66,8 @@ const STRIP_AMBIENT_ALPHA = 90
 const ANTHROPIC = '#E8915A'
 const CODEX_SPARK = '#186020'
 
-/** SIL OFL-1.1. Bold for watch-scale labels. */
+/** SIL OFL-1.1. Bold for watch-scale labels; the file itself is `FONT_FILE`. */
 const FONT = 'Noto Sans'
-const FONT_FILE = '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf'
 
 /** The canvas the face was measured on; every absolute number below is in its units. */
 const FACE = 450
@@ -816,32 +815,21 @@ const previews = [
   ['round-3-plan-credits.svg', 'preview-3-plan-credits.png', 144],
   ['round-ambient-3.svg', 'preview-ambient-3.png', 144],
   ['round-credits-only.svg', 'preview-credits-only.png', 144],
-]
+].map(([svg, png, density]) => ({
+  svg: join(wearDir, svg),
+  png: join(wearDir, png),
+  density,
+}))
 
-function rasterize(svg, png, density) {
-  execFileSync('convert', [
-    '-background',
-    'none',
-    '-density',
-    String(density),
-    '-strip',
-    svg,
-    `png32:${png}`,
-  ])
-}
-
-async function writePreviews() {
-  await access(FONT_FILE).catch(() => {
-    throw new Error(`${FONT_FILE} is missing; previews would use a substituted font`)
-  })
-  for (const [svg, png, density] of previews) {
-    rasterize(join(wearDir, svg), join(wearDir, png), density)
-  }
-  rasterize(
-    join(wffDir, 'round-3-plan-credits.svg'),
-    join(root, 'apps/watchface_wff/src/main/res/drawable/preview.png'),
-    96,
-  )
+/**
+ * `watch_face_info.xml` declares this file as the face's `Preview` and the build
+ * needs it, so it is rasterized at the face's own 450 rather than the 675 a
+ * review board is read at.
+ */
+const pickerPreview = {
+  svg: join(wffDir, 'round-3-plan-credits.svg'),
+  png: join(root, 'apps/watchface_wff/src/main/res/drawable/preview.png'),
+  density: 96,
 }
 
 assertNearExhaustedArcs()
@@ -862,7 +850,4 @@ for (const variant of variants) {
   }
 }
 
-if (!checking) {
-  await writePreviews()
-  console.log(`wrote ${previews.length} review previews and the face-picker preview`)
-}
+await renderPreviews([...previews, pickerPreview])

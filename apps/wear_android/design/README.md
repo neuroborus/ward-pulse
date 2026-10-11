@@ -27,13 +27,10 @@ independent of enabled/disabled (cadence cooldown stays `OK` + gray). Primary pr
 
 ```sh
 node tools/render-wear-glance-designs.mjs
-
-convert -background none -density 144 \
-  apps/wear_android/design/glance-legend-3.svg \
-  apps/wear_android/design/preview-glance-legend-3.png
 xdg-open apps/wear_android/design/preview-glance-legend-3.png
 ```
 
 Variants: `glance-legend-3`, `glance-legend-1`, `glance-legend-pair`,
-`glance-legend-budget`, `glance-legend-stale`, `glance-legend-cadence`,
-`glance-legend-rate-limit`, `glance-legend-empty`, `glance-legend-exhausted`.
+`glance-legend-full`, `glance-legend-budget`, `glance-legend-stale`,
+`glance-legend-cadence`, `glance-legend-rate-limit`, `glance-legend-empty`,
+`glance-legend-exhausted`.

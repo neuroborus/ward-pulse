@@ -31,6 +31,31 @@ screen-shape-specific behavior; it does not render a fixed-size canvas. WFF is d
 fixed 450-unit canvas and inscribed circle make a separate round-versus-square fit check
 unnecessary.
 
+**Revision 2026-10-11 — previews are generated:** the ten `preview-glance-legend-*.png` this
+document cites are written by `tools/render-wear-glance-designs.mjs` from their own boards, in
+the run that writes those boards. Until this revision they were not. The generator wrote SVG
+only, and the PNGs came from a `convert -background none -density 144 …` line printed here and
+in `apps/wear_android/design/README.md` for a person to run — and two of the ten had been left
+behind. Measured 2026-10-11 against a fresh render of their own boards at identical 675×675,
+`preview-glance-legend-full.png` differed by 37,529 pixels and `preview-glance-legend-pair.png`
+by 18,253, out of 455,625; the other eight matched exactly, so this is content, not metadata.
+Both showed the layout the two 2026-09-16 revisions above retired: one row per pool, one arc
+each. The `pair` board exists to show a pair, and its preview showed three unpaired rows.
+
+A preview nothing regenerates will lie. It keeps the screen it was made from while the screen
+moves on, and it is read as current either way, because a reviewer reads review art instead of
+booting a watch. Ownership therefore belongs to the generator, not to a command someone has to
+remember to run. `WATCH_RING_DESIGN.md` locked the same rule for the face on 2026-10-10 and
+said its authority reached no further than the previews that document owns; this revision
+adopts the rule for the Glance previews on this document's own authority. Acceptance below
+already read `review art: render-wear-glance-designs.mjs → preview-glance-legend-*.png`; as of
+this revision that line describes the tree rather than an intention.
+
+What it does not buy: `just check-designs` compares the boards against their own generator and
+nothing else, and no PNG is byte-compared at all — `tools/design-output.mjs` records why. A
+generated preview is proved to match its board, never to match the Glance screen on a watch.
+That stays a device capture's job.
+
 Do not reintroduce a face clone (large concentric stacks, sunk strips, watermark, or
 time-as-hero), stacked icon-above-label refresh, or conflating cadence cooldown with
 `!OK` / `Rate limited`.
@@ -180,10 +205,6 @@ into Alerts chrome or general Wear buttons. Surface / track / label match face r
 
 ```sh
 node tools/render-wear-glance-designs.mjs
-
-convert -background none -density 144 \
-  apps/wear_android/design/glance-legend-3.svg \
-  apps/wear_android/design/preview-glance-legend-3.png
 xdg-open apps/wear_android/design/preview-glance-legend-3.png
 ```
 
