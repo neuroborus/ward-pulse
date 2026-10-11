@@ -65,8 +65,8 @@ The Dashboard nests three scopes, and each has a different job:
 the watch as well. `Quantity.label` trimmed trailing zeros and passed everything else through,
 which is no help when the tail is not zeros.
 
-1. **A balance is shown in full, to at most one decimal place.** `62479.3 credits`,
-   `1000 credits`, `320 credits`, `12.5 credits`, `0 credits`. Everything past the first decimal
+1. **A balance is shown in full, to at most one decimal place.** `62,479.3 credits`,
+   `1,000 credits`, `320 credits`, `12.5 credits`, `0 credits`. Everything past the first decimal
    is the provider's own arithmetic, and nobody acts on `.294375`. One decimal is already this
    product's precision for a counted thing: remaining percentages stop there, and so does the
    compact form the glanceable surfaces use.
@@ -77,13 +77,33 @@ which is no help when the tail is not zeros.
    a widget passed over on the way somewhere else — each buys legibility with precision, and
    each is a peer of the others, so two of them disagreeing would be a contradiction. The
    Dashboard is the screen a person opens to read the figure. `62.5K` is plainly an
-   abbreviation of `62479.3` and nobody holding both reads two balances; what they would not
+   abbreviation of `62,479.3` and nobody holding both reads two balances; what they would not
    accept is the abbreviation being the only place the figure can be had.
-3. **No digit grouping.** `62479.3`, never `62,479.3`. A separator is locale-dependent and this
-   product has no locale story — `apps/phone_flutter/pubspec.yaml` carries no `intl` and `lib/`
-   has no `NumberFormat` — so a comma here would be a US convention invented inside one widget.
-   If long digit strings become hard to read, that is one product-wide decision covering money,
-   token counts and chart axes together, not a balance rule.
+3. **A long number is grouped every third digit.** `62,479.3 credits`, and `19,213,690,951
+   tokens` on the card below it. The separator goes in the integer part only, and a value that
+   is not a number keeps its own text ungrouped.
+
+   **Grouping correction 2026-10-11.** This rule was locked earlier the same day as *no digit
+   grouping*, on the argument that a separator is locale-dependent, that the product carries no
+   `intl` and no `NumberFormat`, and that a comma here "would be a US convention invented inside
+   one widget". The first half is true and still is. **The conclusion was false**, and the
+   Dashboard disproved it on the device: a `62479.3 credits` balance was read directly above a
+   `19,213,690,951 tokens` count, a thumb's width apart on one screen. `formatCount` in
+   `dashboard_models.dart` has been hand-rolling that grouping all along, ten lines from the
+   function this rule governs, for four call sites — requests and tokens on a provider row, and
+   the two in the usage-history footer. Grouping was never waiting on a product-wide decision;
+   it was already the convention, and the balance was the exception. The locale objection cannot
+   separate the two either, since it applies with equal force to the count already on the screen.
+
+   What settles it is rule 2: the Dashboard is the screen a person opens to read the figure.
+   Grouping is what makes a long figure readable, so leaving the balance ungrouped made the one
+   card that exists to be read the hardest number on the screen to read.
+
+   One implementation serves both, for the reason rule 4 gives: `_groupDigits` is shared by
+   `formatQuantityValue` and `formatCount`, so a balance and the count beside it cannot drift
+   apart. It separates the **text** rather than a parsed number, so a balance longer than a
+   double can hold is separated without being reshaped, and it carries the sign through rather
+   than counting it — grouping a negative formerly wrote a separator straight after the minus.
 4. **The rule lives in the display form, not in the widget.** `Quantity.label` is the one
    display form of a reported quantity and this screen is its only caller, so a second
    formatter beside it would be a second rule waiting to disagree. A value that is not a number

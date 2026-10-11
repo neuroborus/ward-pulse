@@ -509,21 +509,23 @@ class Quantity {
   String get label => '${formatQuantityValue(value)} $unit';
 }
 
-/// A balance in full, to at most one decimal place: `500.0000000000` → `500`,
-/// `12.50` → `12.5`, `62479.294375` → `62479.3`.
+/// A balance in full, grouped, to at most one decimal place:
+/// `500.0000000000` → `500`, `12.50` → `12.5`, `62479.294375` → `62,479.3`.
 ///
 /// Everything past the first decimal is the provider's own arithmetic and
 /// nobody acts on it. The Dashboard does not compact — that is what a glance
-/// does, and this is the screen the figure is read on
+/// does, and this is the screen the figure is read on — so the digits that
+/// survive are grouped, the way this screen has always written a long count
 /// (`PHONE_DASHBOARD_DESIGN.md`, Balances).
 ///
-/// Text without a decimal point is passed through exactly as it arrived, so a
-/// balance longer than a double can hold is never silently reshaped, and text
-/// that is not a number keeps itself: inventing a rounding for something
-/// unparsed would say more than the payload does.
+/// A whole number keeps every digit it arrived with: grouping is applied to the
+/// text, never to a parsed number, so a balance longer than a double can hold
+/// is separated but never reshaped. Text that is not a number keeps itself,
+/// ungrouped — inventing a rounding, or a separator, for something unparsed
+/// would say more than the payload does.
 String formatQuantityValue(String value) {
   if (!value.contains('.')) {
-    return value;
+    return _wholeNumber.hasMatch(value) ? _groupDigits(value) : value;
   }
   final parsed = double.tryParse(value);
   if (parsed == null) {
@@ -531,7 +533,41 @@ String formatQuantityValue(String value) {
   }
   final rounded = (parsed * 10).round() / 10;
   final places = rounded.truncateToDouble() == rounded ? 0 : 1;
-  return rounded.toStringAsFixed(places);
+  return _groupDigits(rounded.toStringAsFixed(places));
+}
+
+final RegExp _wholeNumber = RegExp(r'^-?\d+$');
+
+/// Separates the integer part every third digit: `19213690951` →
+/// `19,213,690,951`, `-1234.5` → `-1,234.5`.
+///
+/// The one grouping in the app, shared by [formatQuantityValue] and
+/// [formatCount], so a balance and a count beside it on the same screen cannot
+/// disagree about how a long number is written. It works on the text: the sign
+/// and everything from the decimal point on are carried through untouched, and
+/// no digit is parsed, so precision a double could not hold survives.
+String _groupDigits(String value) {
+  final negative = value.startsWith('-');
+  final body = negative ? value.substring(1) : value;
+  final point = body.indexOf('.');
+  final whole = point == -1 ? body : body.substring(0, point);
+  final fraction = point == -1 ? '' : body.substring(point);
+
+  final buffer = StringBuffer();
+  if (negative) {
+    buffer.write('-');
+  }
+  for (var index = 0; index < whole.length; index += 1) {
+    final remaining = whole.length - index;
+    buffer.write(whole[index]);
+
+    if (remaining > 1 && remaining % 3 == 1) {
+      buffer.write(',');
+    }
+  }
+  buffer.write(fraction);
+
+  return buffer.toString();
 }
 
 class BudgetState {
@@ -775,24 +811,14 @@ String formatUtc(DateTime value) {
   return '$date UTC';
 }
 
+/// A reported count, grouped exactly as a balance is — one rule, one
+/// implementation (`_groupDigits`).
 String formatCount(int? value) {
   if (value == null) {
     return 'Unknown';
   }
 
-  final digits = value.toString();
-  final buffer = StringBuffer();
-
-  for (var index = 0; index < digits.length; index += 1) {
-    final remaining = digits.length - index;
-    buffer.write(digits[index]);
-
-    if (remaining > 1 && remaining % 3 == 1) {
-      buffer.write(',');
-    }
-  }
-
-  return buffer.toString();
+  return _groupDigits(value.toString());
 }
 
 ProviderStatus _statusFromJson(Object? value) {

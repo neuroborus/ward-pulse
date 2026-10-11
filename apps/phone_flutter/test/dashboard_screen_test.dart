@@ -9,12 +9,12 @@ import 'package:ward_pulse_phone/dashboard/dashboard_screen.dart';
 import 'package:ward_pulse_phone/dashboard/status_pill.dart';
 
 void main() {
-  test('shows a balance in full, to at most one decimal place', () {
+  test('shows a balance in full, grouped, to at most one decimal place', () {
     // The Dashboard does not compact: `62.5K` is what a glance shows
     // (`PHONE_DASHBOARD_DESIGN.md`, Balances).
     expect(
       const Quantity(value: '62479.294375', unit: 'credits').label,
-      '62479.3 credits',
+      '62,479.3 credits',
     );
     expect(
       const Quantity(value: '500.0000000000', unit: 'credits').label,
@@ -24,8 +24,8 @@ void main() {
       const Quantity(value: '12.50', unit: 'credits').label,
       '12.5 credits',
     );
-    expect(formatQuantityValue('62479.294375'), '62479.3');
-    expect(formatQuantityValue('1000'), '1000');
+    expect(formatQuantityValue('62479.294375'), '62,479.3');
+    expect(formatQuantityValue('1000'), '1,000');
     expect(formatQuantityValue('320'), '320');
     expect(formatQuantityValue('0'), '0');
     expect(formatQuantityValue('12.50'), '12.5');
@@ -34,9 +34,37 @@ void main() {
     // A balance that rounds away its own decimal loses it rather than
     // carrying a `.0`.
     expect(formatQuantityValue('0.04'), '0');
-    expect(formatQuantityValue('999.96'), '1000');
-    // Text that is not a number keeps itself.
+    expect(formatQuantityValue('999.96'), '1,000');
+    // Text that is not a number keeps itself, and keeps it ungrouped.
     expect(formatQuantityValue('n/a.'), 'n/a.');
+    expect(formatQuantityValue('unknown'), 'unknown');
+    // A whole balance is separated, never reshaped: every digit of a value no
+    // double could hold survives.
+    expect(
+      formatQuantityValue('123456789012345678901'),
+      '123,456,789,012,345,678,901',
+    );
+  });
+
+  test('a balance and a count are grouped by one rule', () {
+    // The card above the Usage history reads a balance, the card below reads a
+    // count; one screen, one way of writing a long number
+    // (`PHONE_DASHBOARD_DESIGN.md`, Balances, grouping correction 2026-10-11).
+    expect(formatCount(19213690951), '19,213,690,951');
+    expect(formatCount(0), '0');
+    expect(formatCount(7), '7');
+    expect(formatCount(100), '100');
+    expect(formatCount(1000), '1,000');
+    expect(formatCount(999999), '999,999');
+    expect(formatCount(1000000), '1,000,000');
+    expect(formatCount(null), 'Unknown');
+    // The sign is carried, not counted: grouping a negative once wrote a
+    // separator straight after the minus.
+    expect(formatCount(-1234), '-1,234');
+    expect(formatCount(-123456), '-123,456');
+    expect(formatQuantityValue('-1234.56'), '-1,234.6');
+    // The two formatters agree on the same digits.
+    expect(formatCount(62479), formatQuantityValue('62479'));
   });
 
   test('the app bar counts sections, not the problems inside them', () {
