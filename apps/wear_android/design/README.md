@@ -12,9 +12,12 @@ node tools/render-watch-ring-designs.mjs
 xdg-open apps/wear_android/design/preview-3-plan-credits.png
 ```
 
-Variants: `round-3-plan-credits`, `round-3-plan-split`, `round-3-plan-budget`,
-`round-2-plan-credits`, `round-1-plan`, `round-1-plan-credits`, `round-credits-only`,
-`round-ambient-3`.
+Variants: `round-3-plan-credits`, `round-3-plan-split`, `round-3-plan-two-pairs`,
+`round-3-plan-untouched`, `round-3-plan-near-exhausted`, `round-3-plan-budget`,
+`round-3-budget-periods`, `round-3-plan-cell-cleared`, `round-2-plan-credits`,
+`round-1-plan`, `round-1-plan-credits`, `round-credits-only`, `round-ambient-3`,
+`round-ambient-budget`. Each has a `preview-*.png` beside it, written by the same run; what
+each one is for is in the Review variants table of the baseline.
 
 ## App Glance legend (locked)
 

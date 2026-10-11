@@ -28,8 +28,17 @@ wears a hairline, so a ring means occupied and a recess means free); ambient-leg
 the credits and the budget money that live nowhere else on the face); preview-ownership
 revision **2026-10-10** (the picker image and the face review previews this document cites
 are generated from their boards instead of carried by hand, so no preview keeps a face the
-product has left behind) — accepted visual target for Wear OS and Watch Face Format until the
-next explicit design revision.
+product has left behind); cell-ring correction **2026-10-11** (the hairline is inscribed in the
+well, radius 20.0 to 21.0, not inset a quarter of a unit as four places said; the geometry is
+unchanged and only its description moved); preview-coverage revision **2026-10-11** (every
+review board has a preview, derived from the board list rather than kept beside it, so the
+three baseline boards that had none are no longer unwitnessed); preview-surface correction
+**2026-10-11** (that the picker displays the declared asset was inferred from the metadata,
+never seen; the one direct measurement shows it rendering the face live, so the ownership
+rule is restated as resting on the asset being shipped, not on which surface displays it);
+watermark revision **2026-10-11** (the shipped portrait carries the quiet mark
+the face draws, and the brand copy of that picture is retired) — accepted visual target for
+Wear OS and Watch Face Format until the next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
 wireframes, large remaining-% heroes, or bordered strip cards.
 
@@ -608,11 +617,35 @@ called this band the "upper aperture"; it is the same band.
     | nothing at all | graded, below | no | scene chrome |
 
     **The ring is what says a cell is occupied (revision 2026-10-10).** A stroke of 1 on a path
-    of 41 — radius 20.25 to 20.75, a quarter of a unit inside the well's edge at 21 — in the
+    of 41 — radius 20.0 to 21.0, inscribed in a well whose own edge is at 21 — in the
     face's own text colour at `0xaa`, `#aaf4fbf8`. It goes on whatever the cell is showing,
     the wearer's complication and the face's own weather reading alike, and never on an empty
     one. That is the whole of the language: **a ring means occupied, a recess means free**, and
     a cell is never both.
+
+    **Geometry correction 2026-10-11 — the ring is inscribed, not inset.** Until today this
+    paragraph read *radius 20.25 to 20.75, a quarter of a unit inside the well's edge at 21*,
+    and three other places said the same: Non-goals, and the `CELL` comment in each of the two
+    generators. All four were wrong the same way. A stroke is centred on its path, so one of
+    thickness 1 on a path of diameter 41 runs from radius **20.0 to 21.0**; 20.25 to 20.75 is
+    the span of a **half**-unit stroke. That the stroke is centred rather than inset is this
+    document's own reading, not an assumption — Ring geometry measured `width=384 thickness=20`
+    painting 182.5 to 202.2, the whole nominal centred on `width/2`, for an arc drawn outside a
+    `BoundingArc`, which is what a cell's hairline is.
+
+    **Nothing moves.** The markup is unchanged and the face draws what it has drawn since
+    2026-10-10; this is a correction of the description, not a revision of the geometry, and the
+    three captured widths that chose the shipped value are untouched. What goes with the wrong
+    numbers is the reason they carried: there is no quarter-unit of well left clear outside the
+    ring, because the ring's outer edge *is* the well's edge.
+
+    The property that reasoning was reaching for survives, and it is the sharper one: the ring
+    is **inscribed**. Its outer edge and the well's coincide at 21, so no part of the stroke
+    falls outside the well onto the lift, and the two meet the lift on one antialiased curve
+    rather than leaving a sliver of well showing beyond the line. The ring is drawn over the
+    well and after it — `cellWellFlat`, then `cellRing` — so what it covers is the well's own
+    outermost half-unit, which on a flat well costs nothing: the lit rim belongs to the graded
+    treatment of an **empty** cell, and an empty cell wears no ring.
 
     It was added because a filled cell had no edge at all. The occluder is `#ff0b0e0c` on a
     lift measured at `19, 24, 22` — a step of eight to eleven levels, which reads as depth
@@ -1297,8 +1330,8 @@ the face already uses for the ring type — see Upper cells, rule 12.
 
 ## Review variants
 
-`node tools/render-watch-ring-designs.mjs` regenerates the boards, their seven owned PNG
-previews, and the face-picker preview from the WFF copy of the Primary baseline. To open the
+`node tools/render-watch-ring-designs.mjs` regenerates the boards, **one PNG preview per board**,
+and the face-picker preview from the WFF copy of the Primary baseline. To open the
 primary review preview after generation:
 
 ```sh
@@ -1322,6 +1355,16 @@ xdg-open apps/wear_android/design/preview-3-plan-credits.png
 | `round-ambient-3.svg` | Ambient, three muted rings |
 | `round-ambient-budget.svg` | Ambient with type — the band dims and takes its type with it |
 
+**Preview coverage revision 2026-10-11 — every board in that table has a preview beside it**,
+named `preview-<board>.png` for `round-<board>.svg`, and the generator derives that list from
+the boards rather than keeping a second one next to them. Seven of the fourteen had no preview
+at all until today, three of them rows this table labels *baseline* — Split band, Ring type and
+Empty cell — so a reader sent to a baseline board had nothing to open, and `design/README.md`
+named `round-3-plan-split` among the variants while no such preview existed. A hand-kept list is
+a second thing to remember, which is the failure the preview-ownership revision above is about,
+one level up: a preview that is never written cannot lie, but the rule it demonstrates goes
+unwitnessed.
+
 Wear: `apps/wear_android/design/`. WFF copies: `apps/watchface_wff/design/`.  
 OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `arcData`).
 
@@ -1342,9 +1385,10 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
   **2026-10-10**: this refuses chrome that frames content which is already legible without it,
   and a filled cell was not — an opaque well on the lift is a step of eight to eleven levels,
   which reads as depth under a recess but leaves a filled cell edgeless, so only its glyphs
-  registered. The ring is a one-unit line in the face's own text colour, run a quarter of a
-  unit inside the well's own edge, carrying no fill, no shadow and no colour of its own, and it
-  is what makes *occupied* and *free* distinct at a glance.
+  registered. The ring is a one-unit line in the face's own text colour, inscribed in the well
+  so that its outer edge meets the well's own at 21 (corrected **2026-10-11**; Upper cells,
+  rule 10), carrying no fill, no shadow and no colour of its own, and it is what makes
+  *occupied* and *free* distinct at a glance.
 - Time-based rotation of which metric is “on top” in the first iteration.
 - Brand/marketing chrome, floating badges, or dense face captions.
 - LLM token counts (`TOK`) on the face — those belong on phone history charts, not strips.
@@ -1397,17 +1441,21 @@ baseline cites is held to the baseline.
 
 It reaches no further than that. `apps/wear_android/design/` also holds the Glance boards and
 their `preview-glance-legend-*.png` renders, which belong to
-`docs/product/WEAR_GLANCE_DESIGN.md`, and the face placement preview
-`brand/watchface/preview-face-active-quiet.png` is called canonical by
-`docs/DESIGN_ASSETS.md:131` and lives under separate brand ownership. Those are their own
-documents' to rule on, and root `AGENTS.md` keeps component guidance beside its owner. Sharing
-a directory with a face board confers nothing here.
+`docs/product/WEAR_GLANCE_DESIGN.md`, and a face placement preview lived under separate brand
+ownership in `brand/watchface/`. Those were their own documents' to rule on, and root
+`AGENTS.md` keeps component guidance beside its owner. Sharing a directory with a face board
+confers nothing here. Both have since ruled: the Glance baseline adopted the rule on
+**2026-10-11**, and `docs/DESIGN_ASSETS.md` generated its placement preview the same day and
+then retired it, once the watermark revision below made this document's own portrait the same
+picture.
 
 No preview carries a byte comparison, and that is a decision rather than a gap.
-`tools/design-output.mjs:12-15` already refuses one for generated images: "SVG is compared byte
-for byte because it is text the generator wrote. PNG previews are not compared here:
-ImageMagick stamps metadata that changes between runs, so equal images differ as bytes." What
-stands in its place is that every one of them is rewritten from its generator on every render;
+`tools/design-output.mjs:18-22` already refuses one for generated images, and says what replaces
+it: "SVG is compared byte for byte because it is text the generator wrote. PNG previews are not
+compared here: ImageMagick stamps metadata that changes between runs, so equal images differ as
+bytes. What stands in place of a byte gate is `renderPreviews` below — every preview is
+rewritten from its board on every render, so none of them can keep art the design has left
+behind." That rewriting is what stands in its place here too;
 the shipped asset is held twice over, because `watch_face_info.xml` names it by resource and a
 missing one stops the build. The tree already holds two working ways to keep such a file from
 churning in the diff: `tools/export-icons.sh:8` renders to a candidate and runs
@@ -1435,6 +1483,93 @@ weather being available to that device. A preview may show the available state �
 the face renders — but no rule here may be read as requiring a fresh install to produce it. A
 preview that flatters the face by showing what it does not do is the same failure as the
 wireframe it replaces, one generation later.
+
+**Surface correction 2026-10-11 — what displays this asset is not settled, and the rule does
+not rest on it.** The finding above opens *the picker renders
+`apps/watchface_wff/src/main/res/xml/watch_face_info.xml`, which points at `@drawable/preview`*,
+and then describes what that file draws. Read again, that is a **chain of inference** and not a
+sighting: picker, to metadata, to declared file, to the file's own content. The subject of
+*draws two hollow rings* is `preview.png`, and the detail around it — the `WARDPULSE` heading,
+the `OPENAI · OK` line — describes the image. Nothing in that paragraph, in the Phase 20 entry
+of `docs/DEVELOPMENT_PLAN.md`, or in the commits of that day records anyone looking at the
+picker and seeing `RING 1`.
+
+The one direct measurement of the picker is **2026-10-11**, on `emulator-5554`, and it shows a
+live render of the face rather than the asset:
+
+| | picker, measured 2026-10-11 | the shipped asset that day |
+|---|---|---|
+| watermark | present | absent |
+| upper cells | `Fri` `25` `3` | `Tue` `18°` `UV 7` |
+| strips | `8` `39` `72` | `8% · 500` `39%` `53%` |
+| arc colours, outer to inner | green, orange, teal | blue, orange, green |
+| time | 10:08 | 10:08 |
+
+The watermark settles that row on its own: the asset was rasterized from a review board, and no
+board draws the mark. The cell values read as preview complication data, and 10:08 is the
+preview reference time.
+
+**So this is not two behaviours on two dates.** The simpler account fits every fact on record:
+the picker may always have rendered live, and the 2026-10-09 conclusion *about the picker* was
+inferred from the metadata chain, while the staleness of the **file** — which was real, and
+which the find got right — was read off the file itself. No change needs explaining, so none is
+offered here.
+
+What **is** established, measured 2026-10-11, is the other half of the chain: the asset ships.
+The installed package was pulled off `emulator-5554` and unpacked, and its
+`res/drawable/preview.png` is byte-identical to the file in the tree — same sha256, same 64,316
+bytes, 450×450, `compare -metric AE` of 0 — with `wardpulse_mono.png` and the nine ring-type
+textures shipped beside it. So the generator's output is what reaches the device, which is the
+part of the 2026-10-10 work that can be confirmed on hardware rather than in the repository.
+
+That is the whole of what is known, and the rule is written to that boundary and no further.
+Known: the asset was stale and drew the first non-goal; the format requires a `Preview` and
+`watch_face_info.xml` declares this file; the build needs it; it ships intact to the device; and
+the picker, measured once, renders the face live. Not known: whether any surface displays the
+file, and whether the picker ever did. **The ownership rule above never depended on either.** A
+shipped image that no generator rewrites will lie wherever it is shown, and an asset that ships
+on every device is one that must never be stale.
+
+The dated find above stays as written. The correction is to what was concluded about the picker
+from it, not to the find — and the distinction is the same one this section exists to defend: a
+documented inference hardening into a remembered observation is how a preview hardens into a
+remembered face.
+
+**Watermark revision 2026-10-11 — the face's portrait carries the mark the face carries.** The
+shipped asset omitted the quiet `WARDPULSE` watermark that Composition locks between the time
+and the strips and that `watchface.xml` draws at every launch. It omitted it because it is
+rasterized from a review board and review boards are mark-free. That is right for a board and
+wrong for this file. A board is read by a reviewer checking ring geometry; this asset is the
+face's own portrait, declared as its `Preview`, and a portrait that drops a locked element of
+the face shows a wearer a face they will not get.
+
+So the asset is **composed** rather than only rasterized: the Primary board at 450, then the
+faded mono drawable `apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png` at the box
+`watchface.xml` gives the mark — 66×66 at (192, 227), alpha 95 — read out of that file at
+render time rather than copied into the generator, so the portrait cannot disagree with the face
+about where the mark sits. The ambient mark is not drawn: this is the active portrait, and the
+smaller 54×54 at alpha 70 only appears under an ambient variant (Upper cells, rule 12, and
+`docs/DESIGN_ASSETS.md`).
+
+**The review boards stay mark-free, and that is not an inconsistency.** They are review art for
+the ring language; the mark is brand-owned and not covered by Apache-2.0
+(`docs/DESIGN_ASSETS.md`); and the non-goal against brand chrome keeps it out of art whose job
+is to let a reviewer read the band it sits over. The portrait is the one place the face is being
+*shown* rather than *reviewed*, and it is the only one of these images the package ships.
+
+Nothing new enters the package by this. `wardpulse_mono.png` was already shipping beside the
+portrait in the same APK — both were read out of the installed package on 2026-10-11 — so the
+composite puts a drawable the face already carries into the picture of the face that carries it.
+It changes what the shipped portrait shows, not what the shipped package contains, and it grants
+nothing: a composite is not a licence.
+
+One asset is retired by this, which `docs/DESIGN_ASSETS.md` had already written as the
+condition for it: `brand/watchface/preview-face-active-quiet.png` was composed from the same two
+parts in the same box, so with the mark on the portrait the two are the same picture, and a
+second canonical copy of one image is worse than none. It is gone, and that document now cites
+the face's own asset. The ordering between the two generators reverses with it: `just export-icons`
+no longer reads the picker asset, and `just render-designs` now reads the faded mono drawable,
+so a change to the **mark** reaches the portrait through `just export-icons` first.
 
 ## Future direction (not locked baseline)
 

@@ -329,8 +329,11 @@ const CELL = {
   iconSize: 21,
   /**
    * The hairline that says a cell is holding something. A stroke of 1 centred
-   * on a path of 41 lies between radius 20.25 and 20.75, a quarter of a unit
-   * inside the well's own edge at 21, so the rim stays clear of it.
+   * on a path of 41 runs from radius 20.0 to 21.0, so it is inscribed in the
+   * well whose own edge is at 21: the ring covers the well's outermost half
+   * unit and no part of it falls outside onto the lift. Corrected 2026-10-11 —
+   * this read "20.25 to 20.75, a quarter of a unit inside", which is the span
+   * of a half-unit stroke; the geometry never moved.
    */
   ringDiameter: 41,
   ringThickness: 1,

@@ -52,14 +52,14 @@
     <text x="173.2" y="131.6" text-anchor="middle" dominant-baseline="central"
       font-family="Noto Sans, sans-serif" font-size="14.0"
       font-weight="700" fill="#F4FBF8" fill-opacity="1">Tue</text>
-    <circle cx="225.0" cy="118.2" r="21.0" fill="#0B0E0C" />
+    <circle cx="225.0" cy="118.2" r="21.0" fill="#0B0E0C" fill-opacity="0.92" />
     <circle cx="225.0" cy="118.2" r="20.5" fill="none"
       stroke="#F4FBF8" stroke-width="1.00"
       stroke-opacity="0.67" />
     <text x="225.0" y="118.2" text-anchor="middle" dominant-baseline="central"
       font-family="Noto Sans, sans-serif" font-size="14.0"
       font-weight="700" fill="#F4FBF8" fill-opacity="1">18°</text>
-    <circle cx="276.8" cy="131.6" r="21.0" fill="#0B0E0C" />
+    <circle cx="276.8" cy="131.6" r="21.0" fill="#0B0E0C" fill-opacity="0.92" />
     <circle cx="276.8" cy="131.6" r="20.5" fill="none"
       stroke="#F4FBF8" stroke-width="1.00"
       stroke-opacity="0.67" />

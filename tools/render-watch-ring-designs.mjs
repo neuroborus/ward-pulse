@@ -7,6 +7,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -42,19 +43,29 @@ const CELL = {
   fontSize: 14,
   /**
    * The hairline a cell wears while it holds something: a stroke of 1 on a path
-   * of 41, a quarter unit inside the well's edge. An empty cell wears none, so
-   * a ring means occupied and a recess means free.
+   * of 41, so radius 20.0 to 21.0 — inscribed in the well, its outer edge on
+   * the well's own. An empty cell wears none, so a ring means occupied and a
+   * recess means free.
    */
   ringDiameter: 41,
   ringThickness: 1,
   /** `0xaa` of the face's text colour, and the arcs' own ambient proportion. */
   ringAlpha: 0xaa / 255,
   ringAmbientAlpha: 140,
-  /** The shipped default: a day-of-week complication, then the face's own weather. */
+  /**
+   * The shipped default: a day-of-week complication, then the face's own weather.
+   *
+   * The two kinds of filled cell do not share a well. A complication draws an
+   * opaque occluder inside its own slot, because it has to cover whatever chrome
+   * the scene put under it; a weather reading is that chrome, and takes the
+   * strips' own translucent well. The face carries both colours
+   * (`WATCH_RING_DESIGN.md`, Upper cells, rule 10), so the board carries them
+   * too — a preview draws what the face draws.
+   */
   readings: [
-    { angle: -29, text: 'Tue' },
-    { angle: 0, text: '18°' },
-    { angle: 29, text: 'UV 7' },
+    { angle: -29, text: 'Tue', wellOpacity: 1 },
+    { angle: 0, text: '18°', wellOpacity: 0xeb / 255 },
+    { angle: 29, text: 'UV 7', wellOpacity: 0xeb / 255 },
   ],
 }
 
@@ -448,16 +459,18 @@ function upperCells({ size, ambient, clearedCells = [] }) {
   // part from 255 to 140 in ambient, so the board's opacity is that product.
   const ringOpacity = (CELL.ringAlpha * (ambient ? CELL.ringAmbientAlpha / 255 : 1)).toFixed(2)
   return CELL.readings
-    .map(({ angle, text }, index) => {
+    .map(({ angle, text, wellOpacity }, index) => {
       const radians = (angle * Math.PI) / 180
       const cx = (FACE / 2 + CELL.radius * Math.sin(radians)) * k
       const cy = (FACE / 2 - CELL.radius * Math.cos(radians)) * k
-      const disc = (fill) => `
-    <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${fill}" />`
+      const disc = (fill, opacity = 1) => `
+    <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${fill}"${
+        opacity === 1 ? '' : ` fill-opacity="${opacity.toFixed(2)}"`
+      } />`
       if (clearedCells.includes(index)) {
         return disc('url(#cellRecess)')
       }
-      return `${disc(WELL)}
+      return `${disc(WELL, wellOpacity)}
     <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${ringRadius.toFixed(1)}" fill="none"
       stroke="${LABEL}" stroke-width="${ringWidth.toFixed(2)}"
       stroke-opacity="${ringOpacity}" />
@@ -807,29 +820,72 @@ const wffFiles = new Set([
   'round-ambient-budget.svg',
 ])
 
-const previews = [
-  ['round-1-plan-credits.svg', 'preview-1-plan-credits.png', 144],
-  ['round-1-plan.svg', 'preview-1-plan.png', 144],
-  ['round-2-plan-credits.svg', 'preview-2-plan-credits.png', 144],
-  ['round-3-plan-budget.svg', 'preview-3-plan-budget.png', 144],
-  ['round-3-plan-credits.svg', 'preview-3-plan-credits.png', 144],
-  ['round-ambient-3.svg', 'preview-ambient-3.png', 144],
-  ['round-credits-only.svg', 'preview-credits-only.png', 144],
-].map(([svg, png, density]) => ({
-  svg: join(wearDir, svg),
-  png: join(wearDir, png),
-  density,
+/**
+ * Where the face puts the watermark, read out of the shipped face rather than
+ * repeated here. The portrait composes the mark at this box, so the two cannot
+ * drift: move it in `render-watchface.mjs` and the picture follows on the next
+ * render.
+ *
+ * The group holds two images — the interactive mark, and a smaller one only an
+ * ambient variant reveals — and the portrait is the active treatment, so this
+ * takes the one that is visible with no variant. A shape this read does not
+ * recognise throws rather than guessing a box.
+ */
+function watermarkBox() {
+  const xml = readFileSync(join(root, 'apps/watchface_wff/src/main/res/raw/watchface.xml'), 'utf8')
+  const group = xml.match(/<Group\b[^>]*name="wardpulse"[^>]*>([\s\S]*?)<\/Group>/)
+  if (!group) throw new Error('watchface.xml has no group named "wardpulse"')
+  const part = [...group[1].matchAll(/<PartImage\b([^>]*)>/g)]
+    .map((match) => Object.fromEntries(
+      [...match[1].matchAll(/(\w+)="([^"]*)"/g)].map(([, key, value]) => [key, value]),
+    ))
+    .find((attrs) => attrs.alpha !== '0')
+  if (!part) throw new Error('watchface.xml draws no visible watermark PartImage')
+  return {
+    x: Number(part.x),
+    y: Number(part.y),
+    width: Number(part.width),
+    height: Number(part.height),
+    alpha: Number(part.alpha) / 255,
+  }
+}
+
+/** The density that takes a 450-unit board to the 675 a review preview is read at. */
+const PREVIEW_DENSITY = 144
+
+/**
+ * Every board has exactly one preview, named after it. Deriving the list from
+ * the boards rather than keeping a second one beside them means a new variant
+ * cannot ship without the picture the baseline will be read against — three of
+ * the rows Review variants labels *baseline* had no preview at all until the
+ * coverage revision of 2026-10-11.
+ */
+const previews = variants.map(({ file }) => ({
+  svg: join(wearDir, file),
+  png: join(wearDir, `preview-${file.replace(/^round-/, '').replace(/\.svg$/, '.png')}`),
+  density: PREVIEW_DENSITY,
 }))
 
 /**
  * `watch_face_info.xml` declares this file as the face's `Preview` and the build
  * needs it, so it is rasterized at the face's own 450 rather than the 675 a
  * review board is read at.
+ *
+ * It is the one preview that is composed rather than only rasterized. A review
+ * board is mark-free, and this file is not a board: it is the face's portrait,
+ * and the face draws the quiet watermark. The box comes out of `watchface.xml`
+ * at render time rather than being repeated here, so the portrait cannot
+ * disagree with the face about where the mark sits (`WATCH_RING_DESIGN.md`,
+ * watermark revision 2026-10-11; `docs/DESIGN_ASSETS.md` owns the mark).
  */
 const pickerPreview = {
   svg: join(wffDir, 'round-3-plan-credits.svg'),
   png: join(root, 'apps/watchface_wff/src/main/res/drawable/preview.png'),
   density: 96,
+  overlay: {
+    image: join(root, 'apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png'),
+    ...watermarkBox(),
+  },
 }
 
 assertNearExhaustedArcs()

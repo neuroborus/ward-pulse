@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { rmSync } from 'node:fs'
 import { access, readFile, writeFile } from 'node:fs/promises'
 
 const checking = process.argv.includes('--check')
@@ -59,7 +60,17 @@ export async function emit(path, contents, recipe) {
  * change does not churn the diff.
  *
  * The font check guards every caller at once: a substituted font silently
- * changes committed art, and the boards name one font.
+ * changes committed art, and the boards name one font. An overlay image is
+ * guarded in the same place and for the same reason: missing it does not fail
+ * the render in any legible way, it changes what ships, and ImageMagick's own
+ * "unable to open image" names neither the generator that wanted the file nor
+ * the recipe that writes it.
+ *
+ * A preview may name an `overlay` — an image, a box and an alpha — and then it
+ * is composed rather than only rasterized. Only one does: the face's shipped
+ * portrait, which carries the watermark the face draws while the review boards
+ * it is rendered beside stay mark-free. The box belongs to the caller, which
+ * reads it from the face rather than declaring it.
  */
 export async function renderPreviews(previews) {
   if (checking) return
@@ -68,7 +79,14 @@ export async function renderPreviews(previews) {
     throw new Error(`${FONT_FILE} is missing; previews would use a substituted font`)
   })
 
-  for (const { svg, png, density } of previews) {
+  for (const { overlay } of previews) {
+    if (!overlay) continue
+    await access(overlay.image).catch(() => {
+      throw new Error(`${overlay.image} is missing; run just export-icons first`)
+    })
+  }
+
+  for (const { svg, png, density, overlay } of previews) {
     execFileSync('convert', [
       '-background',
       'none',
@@ -78,6 +96,47 @@ export async function renderPreviews(previews) {
       svg,
       `png32:${png}`,
     ])
+    if (overlay) composeOverlay(png, overlay)
     console.log(`wrote ${png}`)
+  }
+}
+
+/**
+ * Lay a second image over a rendered preview at the box the caller gives.
+ *
+ * The mark is resized and faded in one pass into a temporary file, then
+ * composed, because `-evaluate multiply` on the alpha channel has to see the
+ * mark alone: run against the page it would fade the preview under it too.
+ */
+function composeOverlay(png, { image, x, y, width, height, alpha }) {
+  const mark = `${png.replace(/\.png$/, '')}.overlay.tmp.png`
+  try {
+    execFileSync('convert', [
+      image,
+      '-resize',
+      `${width}x${height}`,
+      '-alpha',
+      'set',
+      '-channel',
+      'A',
+      '-evaluate',
+      'multiply',
+      alpha.toFixed(6),
+      '+channel',
+      mark,
+    ])
+    execFileSync('convert', [
+      png,
+      mark,
+      '-geometry',
+      `+${x}+${y}`,
+      '-compose',
+      'over',
+      '-composite',
+      '-strip',
+      `png32:${png}`,
+    ])
+  } finally {
+    rmSync(mark, { force: true })
   }
 }

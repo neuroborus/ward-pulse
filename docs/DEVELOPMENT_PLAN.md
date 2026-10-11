@@ -2234,12 +2234,33 @@ and the review-art generators and the Wear complication sources are still untouc
 this entry is what the design commits the remaining passes to.
 
 Unrelated to the cells, and found while reading the system face picker on 2026-10-09: the
-picker advertises the face with `drawable/preview.png`, unchanged since `2c5aec3`, which draws
-the side-by-side `RING 1` / `RING 2` wireframe — the first non-goal in the design baseline. No
-generator owned that asset at the time. It is now generated from the Primary baseline with the
-face review previews by `tools/render-watch-ring-designs.mjs`. Recorded under *Previews are
-generated — and the picker's showed the first non-goal* in
+picker was advertising the face with `drawable/preview.png`, unchanged since `2c5aec3`, which
+draws the side-by-side `RING 1` / `RING 2` wireframe — the first non-goal in the design
+baseline. No generator owned that asset at the time. It is now generated from the Primary
+baseline with the face review previews by `tools/render-watch-ring-designs.mjs`. Recorded under
+*Previews are generated — and the picker's showed the first non-goal* in
 `docs/product/WATCH_RING_DESIGN.md`.
+
+That the picker advertises the face *with that file* was inferred from the metadata chain —
+picker, to `watch_face_info.xml`, to the declared drawable — and never seen. The staleness of
+the file was read off the file and is not in doubt; the conclusion about the picker was not.
+Measured on `emulator-5554` on **2026-10-11**, the only direct reading of the picker shows it
+rendering the face live, watermark and preview complication data, with nothing of the shipped
+file in it. The find stands as written; the baseline carries the correction under *Surface
+correction 2026-10-11*. Generating the asset never rested on that inference, and the same
+session confirmed the half that matters: the installed package was pulled off the device and its
+`res/drawable/preview.png` is byte-identical to the tree, so the generator's output ships
+intact. An image the package ships and no generator rewrites will lie wherever it is shown.
+
+An audit of that work on **2026-10-11** found no violation of its own specification and five
+gaps it had not covered, all pre-existing. Closed in the same pass: every review board now has a
+preview, derived from the board list rather than a second list beside it — seven had none, three
+of them rows the baseline labels *baseline*; the cell hairline's geometry is described as what
+it draws, inscribed in the well at radius 20.0 to 21.0 rather than inset a quarter of a unit,
+which four places had claimed and none of which moved a pixel; the review boards carry the
+face's two well alphas instead of painting all three cells opaque; and the shipped portrait now
+composes the quiet watermark the face draws, which retires the brand copy of that same picture
+(`docs/DESIGN_ASSETS.md`).
 
 Rationale: the face says a great deal about AI spend and nothing a watch is ordinarily expected
 to say. The band above the clock has been reserved for a weather glance since the 2026-07-25

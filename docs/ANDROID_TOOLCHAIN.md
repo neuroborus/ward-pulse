@@ -617,10 +617,28 @@ just run-watchface
 ```
 
 The preview image is generated from the Primary baseline by
-`node tools/render-watch-ring-designs.mjs`. After visual changes, use a fresh interactive-mode
-capture from the canonical round Wear AVD to verify the face and picker; do not produce the
-asset from that capture. See *Previews are generated — and the picker's showed the first
-non-goal* in `docs/product/WATCH_RING_DESIGN.md`.
+`node tools/render-watch-ring-designs.mjs`, with the quiet watermark composed in at the box
+`watchface.xml` gives it. After visual changes, use a fresh interactive-mode capture from the
+canonical round Wear AVD to verify the face; do not produce the asset from that capture.
+
+Do not use the picker to verify that asset. Whether any surface displays it is not settled: the
+2026-10-09 claim that the picker shows it was inferred from `watch_face_info.xml` rather than
+seen, and the one direct reading — `emulator-5554`, 2026-10-11 — shows the picker rendering the
+face live, watermark and preview complication data, with nothing of the file in it. What **is**
+settled is that it ships. To check that, pull the installed package and compare the drawable
+against the tree:
+
+```sh
+adb -s "$WEAR_SERIAL" shell pm path app.wardpulse.watchface
+adb -s "$WEAR_SERIAL" pull <the apk path> /tmp/wf.apk
+unzip -o /tmp/wf.apk res/drawable/preview.png -d /tmp/wf
+compare -metric AE /tmp/wf/res/drawable/preview.png \
+  apps/watchface_wff/src/main/res/drawable/preview.png null:
+```
+
+`0` means the generator's output reached the device intact; that was the reading on 2026-10-11.
+See *Previews are generated — and the picker's showed the first non-goal* and *Surface
+correction 2026-10-11* in `docs/product/WATCH_RING_DESIGN.md`.
 
 ### The package ships no code, and the system owns its complication slots
 
