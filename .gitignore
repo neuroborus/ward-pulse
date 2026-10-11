@@ -67,3 +67,6 @@ bindings/**/generated/*
 
 # Local toolchain copies for sandboxed gate runs; never committed.
 .toolchains/
+
+# Agent worktrees (isolated checkouts created by Claude Code)
+.claude/worktrees/
