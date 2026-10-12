@@ -352,6 +352,11 @@ const CELL = {
  * string on the cell's axis and drags the digits left by half the mark's
  * advance, measured at 2 units for the degree sign, so the box moves back by
  * that much and the digits land centred whatever their count.
+ *
+ * It belongs to the degree sign and to nothing else: apply it only where the
+ * template beside it actually draws that mark. Between 2026-10-09 and
+ * 2026-10-12 the face carried this shift while templating the bare expression,
+ * so it was correcting for a mark it never drew.
  */
 const CELL_MARK_SHIFT = 2
 
@@ -366,11 +371,23 @@ const CELLS = [
  * weather from a built-in source in an expression, so the default costs no
  * complication slot; a filled cell's opaque well simply covers it. Nothing is
  * declared under the left cell, so its recess is bare whenever it is cleared.
+ *
+ * Both expressions yield a bare number, so the template is what makes the
+ * reading legible — `51` alone says neither degrees nor anything else. The
+ * temperature takes the degree sign and no scale: the value already arrives in
+ * the unit the wearer's own device chose, and the box ellipsises rather than
+ * clips, so a glyph that repeats their setting would spend headroom no
+ * measurement here can bound — the font is the device's
+ * (`WATCH_RING_DESIGN.md`, Upper cells, revision 2026-10-12).
+ *
+ * Only the temperature shifts. Its degree sign is a mark *on* the number, so
+ * the number is the content and rule 7 centres that; `UV` is the reading's
+ * name, so the whole string is the content and centring it is already right.
  */
 const CELL_CHROME = [
-  { expression: null, shift: 0 },
-  { expression: '[WEATHER.TEMPERATURE]', shift: CELL_MARK_SHIFT },
-  { expression: '[WEATHER.UV_INDEX]', shift: 0 },
+  { template: null, expression: null, shift: 0 },
+  { template: '%s°', expression: '[WEATHER.TEMPERATURE]', shift: CELL_MARK_SHIFT },
+  { template: 'UV %s', expression: '[WEATHER.UV_INDEX]', shift: 0 },
 ]
 
 /** Closed vocabulary shared with WatchComplicationText.splitPoolToken. */
@@ -459,13 +476,19 @@ function cellComment() {
              (docs/product/WATCH_RING_DESIGN.md, Upper cells, revision 2026-10-09) -->`
 }
 
-/** A cell's text, in the face's own label voice — the provider gets no say. */
-function cellText(parameter, shift, pad) {
+/**
+ * A cell's text, in the face's own label voice — the provider gets no say.
+ *
+ * `template` is the WFF template the parameter lands in. It is `%s` for a
+ * complication, whose text arrives ready to read, and carries the mark or the
+ * name for a weather reading, which arrives as a bare number (`CELL_CHROME`).
+ */
+function cellText(template, parameter, shift, pad) {
   return `${pad}<PartText x="${CELL.textX + shift}" y="${CELL.textY}" width="${CELL.textWidth}" height="18" alpha="255">
 ${pad}    <Variant mode="AMBIENT" target="alpha" value="140" />
 ${pad}    <Text align="CENTER" ellipsis="TRUE">
 ${pad}        <Font family="SYNC_TO_DEVICE" size="${CELL.fontSize}" weight="BOLD" color="${COLOR.text}">
-${pad}            <Template>%s
+${pad}            <Template>${template}
 ${pad}                <Parameter expression="${parameter}" />
 ${pad}            </Template>
 ${pad}        </Font>
@@ -537,7 +560,7 @@ ${pad}</PartDraw>`
  * cell that is plainly empty.
  */
 function cellChrome({ x, y, label }, index) {
-  const { expression, shift } = CELL_CHROME[index]
+  const { template, expression, shift } = CELL_CHROME[index]
   const pad = ' '.repeat(12)
   const body = expression
     ? `            <Condition>
@@ -548,7 +571,7 @@ function cellChrome({ x, y, label }, index) {
                     <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}Reading">
 ${cellWellFlat(COLOR.strip, ' '.repeat(24))}
 ${cellRing(' '.repeat(24))}
-${cellText(expression, shift, ' '.repeat(24))}
+${cellText(template, expression, shift, ' '.repeat(24))}
                     </Group>
                 </Compare>
                 <Default>
@@ -583,7 +606,7 @@ function cellSlot({ slotId, x, y, label, provider: systemProvider, type }) {
 ${cellRing(pad)}`
   const body = (parameter) => `            <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}">
 ${well}
-${cellText(parameter, 0, pad)}
+${cellText('%s', parameter, 0, pad)}
             </Group>`
   // 21 in 42 leaves 10.5 a side and the grid is integral, so the icon sits half
   // a unit in from centre — the same rounding, in the same direction, that

@@ -42,7 +42,10 @@ the face draws, and the brand copy of that picture is retired); cell-editing cor
 `watch_face_info.xml` never declared `Editable`, which defaults to false and withholds the
 system's Edit button; with it declared, the editor was read opening on the three cells and
 nothing else, and a `RANGED_VALUE` provider in a cell was seen drawing text with no arc for
-the first time) — accepted visual target for
+the first time); weather-reading revision **2026-10-12** (the two weather cells carry their
+marks — `51°` and `UV 7` — where they had templated the bare expression since the cells
+shipped; the temperature takes the degree sign and no scale, because the value already
+arrives in the unit the wearer's device chose) — accepted visual target for
 Wear OS and Watch Face Format until the next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
 wireframes, large remaining-% heroes, or bordered strip cards.
@@ -621,6 +624,11 @@ called this band the "upper aperture"; it is the same band.
    digit group's midpoint is always half the mark's width, whatever the digits are. `5°`, `18°`
    and `-12°` all land the same way.
 
+   The shift belongs to a mark the template actually draws. From 2026-10-09 until the
+   weather-reading revision of **2026-10-12** the temperature's box carried it while templating
+   the bare expression, so it corrected for a degree sign that was never on the screen. A
+   leading name is not a trailing mark and takes no shift at all — see rule 11.
+
 8. **The other accepted types, and the two that are refused.** `MONOCHROMATIC_IMAGE` is the one
    type whose whole content is an icon. It is drawn at 21 units in the 42-unit cell and
    tinted `#fff4fbf8`, the same colour as the text, so an icon reads as face text rather than as
@@ -898,6 +906,75 @@ called this band the "upper aperture"; it is the same band.
     graded well of rule 10, because a cell reading `0` or nothing at all is worse than a cell
     that is plainly empty — and that branch has not run against real data either. This revision
     fixes the rules; the readings they will show are measured when the generator changes.
+
+    **Reading revision 2026-10-12 — a weather cell says what it is showing.** The generator
+    changed, so the paragraph above is answered. A real reading was seen on `emulator-5554`:
+    the cells read **`51`** and **`0`**, and the owner could not tell what either was — a
+    number with no unit, and a number with no subject.
+
+    **The unit follows the wearer, and the face neither converts nor chooses.** That AVD is
+    `en-US` by `ro.product.locale`, and `51` is Fahrenheit, about 10.6 °C. A metric device
+    delivers the metric number from the same expression. The format also carries
+    `WEATHER.TEMPERATURE_UNIT`, enumerated beside `WEATHER.TEMPERATURE` in the official
+    validator's own schemas in every version its jar ships, so the scale is available as a
+    glyph if it is ever wanted. The open question in the paragraph above is closed: the unit
+    does follow the wearer's setting.
+
+    **The face drew the marks nowhere, and the design had shown them all along.** From
+    2026-10-09 until this revision both cells templated the bare expression, `%s`, while the
+    Primary baseline board, the shipped picker preview and rule 7's own worked example all drew
+    `18°` and `UV 7`. This is the face catching up with its own document; only the scale below
+    is a new decision.
+
+    **The temperature takes the degree sign and no scale.** `51°`, not `51°F`. Three reasons,
+    in increasing weight. The board, the preview and rule 7 are unanimous on the bare mark, and
+    making the face disagree with three artefacts to say something none of them says is the
+    wrong direction of travel. The scale is the wearer's own setting, so printing it back tells
+    them what they chose — the ambiguity reported was *is this degrees or what*, which the mark
+    answers completely. And the width cannot be bounded here: the font is `SYNC_TO_DEVICE`, the
+    device's own, so no measurement in this repository can say how wide a glyph is, while the
+    line box ellipsises rather than clips. A silent `51°…` is worse than a missing letter.
+
+    The cost is accepted rather than argued away: a wearer who does not know their own device's
+    setting, or who reads someone else's watch, sees a number that could be either scale.
+    `WEATHER.TEMPERATURE_UNIT` is what closes that if the cost is ever judged the wrong way
+    round.
+
+    **The UV index takes its name in front — `UV 7`**, the board's form, because a bare `0` is
+    a number with no subject at all and the cell is the only place the subject could go.
+
+    **Only the temperature shifts, and that is the rule rather than an inconsistency.** Rule 7
+    moves the line box by half a trailing mark's advance so the *digits* land on the cell axis.
+    A degree sign is a mark on the number, so the number is the content and the shift applies.
+    `UV` is the reading's name, not a mark on its number, so the whole string is the content and
+    centring it is already right — the UV box keeps `x=2` and takes no shift.
+
+    **The shift was there without its mark.** `CELL_MARK_SHIFT` put the temperature's box at
+    `x=4` from the day the cells shipped, correcting for a degree sign the template never drew,
+    so the bare digits sat about 1.5 units right of the axis — inside a screen pixel at 384, and
+    not what anyone noticed. Drawing the mark makes the existing shift correct; it is unchanged
+    at 2 because the mark is the degree sign rule 7 measured.
+
+    **Observable for the first time, and still unsettled.** With the mark drawn, the shift has
+    an effect something can be measured against, and `Mon` · `51°` · `UV 0` was read on
+    `emulator-5554`. Ink centres against their cells' axes: the `51` digits at −2.3 units, the
+    whole `51°` string at +1.2, and `UV 0` — centred whole, taking no shift — at **−1.0**. That
+    last is the control, so about a unit of every figure here is the method rather than the
+    layout: an ink box is not an advance box and a threshold eats antialiased edges. The digits
+    sit roughly 1.3 units further left than the control explains, which is **not** evidence the
+    shift is too small: `1` carries wide side bearings, so the ink of `51` sits left inside its
+    own advance box wherever that box is. A symmetric pair — `88°` — would separate the two, and
+    the weather is not ours to choose. Rule 7 states the intent; this reading neither witnesses
+    it nor doubts it.
+
+    **Widths, and the one that is not settled.** Rule 6 measured `18°` at 18 units of ink and
+    `UV 7` at 27, against the 37-unit line box. A third digit or a leading minus is comfortably
+    inside that, so `101°` and `-10°` are not a concern. **`UV 11` is**: it adds a digit to the
+    widest label the rule ever measured, and those measurements were taken in the 48-unit cell
+    with a font that is not the device's. It is the one string here whose fit is estimated
+    rather than known, and the estimate leaves only a few units. If it ellipsises, `UV 1…` is
+    the failure to look for, and dropping the space to `UV11` is the cheapest answer — the
+    2026-10-09 spike rendered `UV0` legibly at 384, so the spaceless form has precedent.
 
 12. **Ambient: the wells stay, the values dim.** Three things make up a cell across its two
     states — a filled one has a value over an occluder, an empty one has a recess and whatever

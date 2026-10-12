@@ -86,7 +86,7 @@
                             <Variant mode="AMBIENT" target="alpha" value="140" />
                             <Text align="CENTER" ellipsis="TRUE">
                                 <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                    <Template>%s
+                                    <Template>%s°
                                         <Parameter expression="[WEATHER.TEMPERATURE]" />
                                     </Template>
                                 </Font>
@@ -141,7 +141,7 @@
                             <Variant mode="AMBIENT" target="alpha" value="140" />
                             <Text align="CENTER" ellipsis="TRUE">
                                 <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                    <Template>%s
+                                    <Template>UV %s
                                         <Parameter expression="[WEATHER.UV_INDEX]" />
                                     </Template>
                                 </Font>

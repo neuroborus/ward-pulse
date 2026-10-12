@@ -2453,6 +2453,16 @@ Measured during the design (recorded with its numbers in the design baseline):
   do; the six band edges agree exactly, and the reading is in `docs/product/WATCH_RING_DESIGN.md`
   under *Review variants*.
 
+  **The weather cells said nothing, 2026-10-12.** Once a real reading reached the AVD the two
+  chrome cells read `51` and `0` — a number with no unit and a number with no subject — because
+  both templated the bare expression from the day the cells shipped, while the board, the
+  shipped preview and the typography rule all drew `18°` and `UV 7`. They now carry `%s°` and
+  `UV %s`. The acceptance line *the temperature's digits sit on the cell axis, not its string*
+  becomes true for the first time: the box had carried the degree mark's offset since the start
+  while drawing no mark, so it was correcting for something absent. Recorded with the reasoning,
+  and with the one width that is estimated rather than measured, under *Reading revision
+  2026-10-12* in `docs/product/WATCH_RING_DESIGN.md`, Upper cells, rule 11.
+
 Scope when the implementation runs:
 
 - `tools/render-watchface.mjs` — three cell slots of 42 units on new ids, centred on the arc of
