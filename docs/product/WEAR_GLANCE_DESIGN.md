@@ -111,6 +111,56 @@ and the complication, so the three cannot drift apart. Why the contract keeps `t
 of losing the variant, and why the payload is not rejected on arrival, is `PROVIDER_NOTES.md`,
 *The credits channel carries only credits*. This document rules only on the row.
 
+**Verified 2026-10-11 — the composition holds on a device.** The 2026-10-01 entry measured this
+screen's layout and nothing had ever checked what its rows *say*. Read on `emulator-5554` with
+the live payload the phone was pushing, three bands selected:
+
+```text
+      (↻ OK)            gray, no detail line
+
+ (●)  Claude · Weekly
+      65% left
+
+ (●)(●)  Cursor plan
+      100% · 68% left
+
+ (●)  Codex · Weekly plan
+      87% left · 62.5K credits
+
+      [ Alerts: 0 ]
+```
+
+Every composition rule the screen can show, it showed. The bands are the face's three in the
+face's order — its strips read `65%`, `100% · 68%`, `87% · 62.5K` in the same minute. The pair
+keeps its band position and spends one row, inner pool left and outer right, one `left` covering
+both percentages, primary line `Cursor plan` exactly. Claude is collapsed to a single ring and
+the short label says which window won, `Claude · Weekly`. Credits appear once, compact, with the
+unit word, on the one row whose family reports a balance. The `Alerts: 0` pill is present and
+disabled. Every mini arc opens its usage gap at 12.
+
+One clause the order rule needs: **it is the payload's order, not the instant's.** A few minutes
+earlier the two screens disagreed, the face still drawing an older summary; they matched as soon
+as both held the same one. A reader comparing them mid-sync is comparing two payloads.
+
+**The pulse and the control were seen apart, which is the whole of that rule.** Under *Refresh
+status control* their independence is a table; on the device it was two readings hours apart on
+the same screen. With the phone syncing, the glyph read a **gray `OK` with no detail line** —
+healthy, manual sync not yet allowed, the cadence-cooldown row of that table. Before the phone
+was syncing, the same glyph read **`!OK` with the detail `Stale`**. Neither is a degradation of
+the other, which is what the non-goal against conflating cadence cooldown with `!OK` /
+`Rate limited` defends.
+
+**The cap correction was confirmed by eye and not measured.** The Cursor row's inner pool sits at
+100% remaining — the case the correction exists for — and on a 5× crop of the capture its ring is
+open at 12: the stated failure, a nearly full row reading as a closed ring, does not happen. No
+angle was taken. Isolating the arc by colour kept catching the neighbouring pool and the track,
+and the figures that came out were impossible and were discarded rather than reported. The
+8.4°-per-cap arithmetic above stands on its own derivation, not on this reading.
+
+What this does not cover: the geometry, which the 2026-10-01 entry owns and this one does not
+restate; the empty and exhausted states; and any rate-limited or alerting payload. One AVD, one
+build, one payload.
+
 Do not reintroduce a face clone (large concentric stacks, sunk strips, watermark, or
 time-as-hero), stacked icon-above-label refresh, or conflating cadence cooldown with
 `!OK` / `Rate limited`.

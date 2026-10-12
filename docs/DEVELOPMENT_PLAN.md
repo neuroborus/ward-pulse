@@ -1607,6 +1607,12 @@ The second kind is the weak one, and it showed: on 2026-08-17 the Glance had dri
 review art by a row gap nobody's gate compares. The board set now carries the four-row ceiling
 (`glance-legend-full.svg`) so the crowded case is reviewable at all.
 
+That weak kind got its first systematic reading on **2026-10-11**: the Glance's composition
+rules — band order against the face, paired-row shape and naming, the compact credit balance,
+and the refresh pulse in both its cadence-cooldown and `Stale` states — were read off
+`emulator-5554` against a live payload and held. Recorded under *Verified 2026-10-11* in
+`docs/product/WEAR_GLANCE_DESIGN.md`, which keeps the measurements.
+
 Rationale: watch space is limited and must never show `Unknown` filler. Plan/allowance data
 across connected providers is percentage-first, so Wear and WFF standardize on concentric
 percent rings. This is not “always show every provider”: the user picks up to three metrics;
