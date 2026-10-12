@@ -10,8 +10,9 @@ a generated review board because their layout is fixed; the Dashboard is a list 
 the user's, so a reference picture would rot faster than it could be drawn. What is locked here
 is when a mark appears, what each level of the screen may say, and where the numbers come from.
 
-Implementation must follow this document. The status marks do not yet: one badge widget renders
-at every level, at one size, which is the defect those rules exist to end.
+Implementation must follow this document, and for the status marks it does — checked rule by
+rule against the code and read on a device on 2026-10-11, recorded under *Implemented* after
+the rules.
 
 Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 16 owns the *order* of the same rows; this
 document owns their status marks). Palette and family colors: `docs/DESIGN_ASSETS.md`.
@@ -57,6 +58,59 @@ The Dashboard nests three scopes, and each has a different job:
    visible is noise.
 7. **Glyphs stay distinct per status** — rate limit, key, clock, warning, error. The vocabulary
    is not the problem and does not need replacing; repeating one entry of it down the screen is.
+
+**Implemented 2026-10-11 — the rules are in the code.** Until today this document told its
+reader the marks were unbuilt: *one badge widget renders at every level, at one size*. That was
+true when the rules were locked on 2026-08-13; the sentence outlived the defect it described.
+Each rule, and the guard or function that enforces it:
+
+| Rule | Where it is enforced |
+|---|---|
+| 1, silent on `Ok` | the allowance card's `if (allowance.status != ProviderStatus.ok)` guard; the family header's `if (section.flagged > 0)`; `_AppBarProblems`, which builds nothing unless `problems.first` matches and otherwise returns `SizedBox.shrink()` |
+| 2, what a rollup counts | the `flagged` fold building each section — an account's unhealthy cards, or one for an unhealthy account that produced none — with `worstProviderStatus` taken over accounts and allowances together |
+| 3, a rollup differs in form | two widgets, not one: the leaf renders `StatusPill`, a glyph; the family header and the app bar render `Badge` carrying a count |
+| 4, family color stays identity | the header's accent `Container` takes `providerFamilyColor`, and the status badge sits beside it in the same row |
+| 5, one severity scale | `providerStatusColor` for the glyph, `providerStatusChipColors` for the filled counts, ranked by `providerStatusSeverity`; no call site enumerates statuses |
+| 6, the top mark is a way in | the app-bar badge is an `InkResponse` calling `_revealProblem`, which selects the Dashboard tab and then scrolls to `dashboardProblems(…).first`, read off the same order the screen renders with |
+| 7, distinct glyphs | `_statusIcon` in `status_pill.dart`, one icon per status |
+
+Four tests in `dashboard_screen_test.dart` hold it: *aggregate spend card shows money and
+nothing to measure it* (a card with nothing to mark carries no pill), *shows allowances from
+every connected provider* (healthy families render no `Badge` at all), *shows Cursor Models and
+Other Models plan pools* (the healthy pool carries no pill, the rate-limited one carries its
+own glyph, and the header carries the count `1`), and *a family joining reranks, and the badge
+follows the cards* (what the app-bar mark scrolls to follows the rendered order).
+
+One thing a grep will find and misread: `_statusIcon` still maps `ok` to a check. Nothing on
+the Dashboard draws it — the card's guard is what keeps it off the screen — and it exists for
+the Settings diagnostics rows that Out of scope below exempts.
+
+**Seen on a device, both halves.** Read on the canonical phone AVD
+`wardpulse_phone_play_api36` on 2026-10-11. First with a healthy payload: no mark on any
+allowance card, no badge in any family header, nothing in the app bar — rule 1's norm half,
+which is the half that is easy to get wrong by drawing something.
+
+An hour later a Claude window crossed its own threshold unprompted, and the rest of the rule
+set was visible in one frame. The app bar carried an amber badge reading `1` beside the refresh
+action. The Claude family header carried an amber `1` beside its orange accent bar, which went
+on naming the family — rule 4. Under it, the `5-hour session` card at `13% left` carried an
+amber warning **triangle**: rule 3, the leaf stating a fact with a glyph while the two levels
+above it carry counts. `Weekly plan` at 67% beside it was bare, as was Codex `Weekly plan` at
+92%, so rule 1's exception and its norm were legible against each other at once. The Codex
+header carried no badge at all, nothing under it being flagged — rule 2. And the counts agreed
+down the nesting: one unhealthy card, `1` on its family header, `1` in the app bar.
+
+Rule 6 needed a gesture, so it got one. From the **Widget** tab, tapping the app-bar badge
+switched to the Dashboard and brought the Claude section to the top of the viewport with its
+flagged card directly beneath — a way in, not a copy.
+
+Rule 5 showed itself in the colours: the glyph is amber **ink** and both badges are amber
+**fills**, which is `providerStatusColor` and `providerStatusChipColors` travelling together as
+the rule requires.
+
+One AVD, one build. The tests above stand behind the cases a reader cannot stage on demand —
+every status in the glyph vocabulary, every shape of count — rather than behind the rules as a
+whole.
 
 ## Balances
 
