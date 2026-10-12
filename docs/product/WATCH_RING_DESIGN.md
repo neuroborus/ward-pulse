@@ -1574,25 +1574,30 @@ confers nothing here. Both have since ruled: the Glance baseline adopted the rul
 then retired it, once the watermark revision below made this document's own portrait the same
 picture.
 
-No preview carries a byte comparison, and that is a decision rather than a gap.
-`tools/design-output.mjs:18-22` already refuses one for generated images, and says what replaces
-it: "SVG is compared byte for byte because it is text the generator wrote. PNG previews are not
-compared here: ImageMagick stamps metadata that changes between runs, so equal images differ as
-bytes. What stands in place of a byte gate is `renderPreviews` below — every preview is
+No preview carries a byte comparison, and that is a decision rather than a gap. The header on
+`emit` in `tools/design-output.mjs` already refuses one for generated images, and says what
+replaces it: "SVG is compared byte for byte because it is text the generator wrote. PNG previews
+are not compared here: ImageMagick stamps metadata that changes between runs, so equal images
+differ as bytes. What stands in place of a byte gate is `renderPreviews` below — every preview is
 rewritten from its board on every render, so none of them can keep art the design has left
 behind." That rewriting is what stands in its place here too;
 the shipped asset is held twice over, because `watch_face_info.xml` names it by resource and a
 missing one stops the build. The tree already holds two working ways to keep such a file from
-churning in the diff: `tools/export-icons.sh:8` renders to a candidate and runs
-`compare -metric AE`, replacing the committed PNG only when the pixels differ — that is how
-`apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png`, a watch face drawable, is
-written — and `tools/render-watchface.mjs:674` passes `-strip` so the render timestamp never
-reaches the bytes. Either settles the churn. Neither is mandated here.
+churning in the diff: `write_png_if_pixels_changed` in `tools/export-icons.sh` renders to a
+candidate and runs `compare -metric AE`, replacing the committed PNG only when the pixels
+differ — that is how `apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png`, a watch face
+drawable, is written — and `rasterize` in `tools/render-watchface.mjs` passes `-strip` so the
+render timestamp never reaches the bytes. Either settles the churn. Neither is mandated here.
+Those three name functions rather than lines deliberately: the last of them was cited as
+`render-watchface.mjs:674` on **2026-10-10** and pointed at the wrong sentence by the next day,
+when an unrelated comment three hundred lines above it grew. The `sceneElement.xsd:45` cited
+elsewhere here is the exception that holds: that file ships inside the pinned validator jar, so
+no commit in this repository can move it.
 
 What the gate cannot do, it does not claim: `just check-designs` compares the boards against
-their own generator and nothing else (`justfile:103`), so a preview generated from a board is
-proved to match that board, never to match the face. The face is what a device capture proves,
-by hand, as the acceptance for this phase already asks.
+their own generator and nothing else (the `check-designs` recipe in the `justfile`), so a
+preview generated from a board is proved to match that board, never to match the face. The
+face is what a device capture proves, by hand, as the acceptance for this phase already asks.
 
 **That comparison was made on 2026-10-11, for the first time.** A 384-pixel capture of the face
 on `emulator-5554` and `round-3-plan-credits.svg` rendered to the same 384, both reduced to grey
