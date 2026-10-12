@@ -133,6 +133,13 @@ hugs its three sample rows with no empty olive band beneath them:
 100% left   Cursor Models               ← second label line empty, rows stay even
 ```
 
+**That order held under a live change.** Later the same session a Claude window crossed its own
+threshold unprompted, with nothing staged and the phone untouched, and the placed widget
+followed by itself: the top row became `13% left · Claude / 5-hour session` and the list
+re-sorted to `13 / 67 / 68 / 92 / 100`. No reinstall, no re-placement, no visit to the Widget
+tab. Tightest first is a rule the surface keeps as the numbers move, not an arrangement that
+happened to be true at the moment it was first read.
+
 **Hug and drop order**, taken from the view hierarchy rather than from a screenshot:
 
 | Span | Launcher cell | Olive card | Credits column |
