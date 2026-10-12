@@ -223,7 +223,26 @@ Official references:
 ## Codex subscription reporting
 
 Status: implemented as an experimental on-device integration on 2026-07-19; Android end-to-end
-acceptance is pending.
+acceptance taken **2026-10-12** on the canonical emulator pair, `wardpulse_phone_play_api36` and
+`wardpulse_wear_round_api36_1`.
+
+What was seen: a live Codex connection feeding the phone Dashboard — the `Weekly plan` window,
+the purchased credit balance, and a 31-bucket `Usage history`, which is exactly the *Latest 31
+daily buckets* the capability table below promises — while the same payload reached the home
+widget and the watch face's third band and strip, and a provider-side change propagated to all
+of them with nothing touched. That is the read path end to end across the Android stack, so the
+line is no longer pending.
+
+Two things it does not cover, and neither is a reason to hold this line open. The device-code
+sign-in was already established rather than re-exercised in that session, so the authentication
+path has its own evidence from 2026-07-19 and not this reading. And both ends were emulators;
+shipped watch and phone hardware remain untested, which is Phase 8's *real device smoke tests*
+rather than this integration's.
+
+Phase 7's acceptance line in `docs/DEVELOPMENT_PLAN.md` asks for more than this one does — it
+bundles signing in from the Providers connection catalog with verifying the live phone and watch
+UI. The second half is what 2026-10-12 covers; the first is why that phase still reads as
+pending.
 
 The OpenAI Platform Admin API does not represent personal Codex subscription limits. WardPulse
 therefore treats Codex as a separate provider. The phone reproduces only the narrow authentication

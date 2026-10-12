@@ -1373,7 +1373,10 @@ and verify the live phone/watch UI
 
 ### Phase 8 — MVP hardening
 
-Status: in progress as of 2026-07-19; Phase 7 live acceptance remains pending.
+Status: in progress as of 2026-07-19. What holds it open is now the release signing key and
+device testing, not the written deliverables — those closed between 2026-07-19 and 2026-10-12
+and the list below was reviewed against the tree on the second date. Phase 7 live acceptance
+remains pending and still needs real provider credentials.
 
 Completed slice:
 
@@ -1383,20 +1386,22 @@ Completed slice:
 - OpenAI authentication, permission, rate-limit, availability, and response failures surface as fixed safe messages;
 - status icons expose concise tooltips, and credential entry can reveal only the current unsaved key on demand.
 
-Deliverables:
+Closed since this phase opened, verified against the tree on **2026-10-12**: data deletion, which
+is per-connection disconnect erasing the credential from secure storage; the privacy policy, the
+legal disclaimer the Settings screen carries, the Apache-2.0 source scope in `LICENSE`, the brand
+boundary `docs/DESIGN_ASSETS.md` draws around `brand/`, and the paid-first distribution notes in
+section 18 above. Stale data indicators are the Completed slice.
 
-- error states;
-- empty states;
-- offline states;
-- stale data indicators;
-- data deletion;
-- privacy policy draft;
-- legal disclaimer;
-- source license scope review;
-- trademark/brand asset notice review;
-- paid Google Play distribution notes;
-- Play Store internal testing build;
-- real device smoke tests.
+Deliverables that remain:
+
+- error states, empty states, offline states — partly covered by the Completed slice above, not
+  yet reviewed as a whole;
+- **Play Store internal testing build.** `apps/phone_flutter/android/app/build.gradle` still
+  signs the release build with the debug keys, under its own `TODO` to add a signing config, and
+  the repository holds no keystore and no `key.properties`. This is the owner's to create: a
+  signing key is generated once and must never enter the repository. Until it exists nothing can
+  be published, and the two acceptance lines below about the AAB cannot be met.
+- real device smoke tests — every verification so far has been on emulators.
 
 Acceptance:
 

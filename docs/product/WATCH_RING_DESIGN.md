@@ -60,8 +60,10 @@ Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and si
 **Revision 2026-09-16 — Codex/Spark pair:** Codex plan windows collapse per limit,
 then the main limit and Spark may share one band. The main limit is inside/left;
 Spark is outside/right in `#186020`. Geometry and typography are unchanged. Both
-pairs and far markers, Glance clipping and visual fit are **deferred until live-data
-verification**; this revision records no new device measurements.
+pairs and far markers, Glance clipping and visual fit were **deferred until live-data
+verification**; this revision records no new device measurements. The far marker's half
+of that debt was paid on **2026-10-12** — see *Marker equivalence confirmed* under Split
+band. The Codex/Spark pair itself, Glance clipping and visual fit are still outstanding.
 
 ## Goal
 
@@ -1188,8 +1190,9 @@ ring slot, and the numbers that work are **centre lines at `outer − 5` and `ou
 the third, since a pair can land on any of them. In the markup that is `width="394"` and
 `width="374"` for the outermost: **twice the centre line**, not twice the outer edge as the
 whole-band rule above would suggest. Getting that translation wrong is what the first two
-probes did, and it fails silently — the halves land on top of each other and read as one band. Measured on the round AVD at 384 on the
-outermost: the halves paint 182.5–192.25 and 192.25–202.25, **9.75 units each** (8.3 px),
+probes did, and it fails silently — the halves land on top of each other and read as one band.
+Measured on the round AVD at 384 on the outermost: the halves paint 182.5–192.25 and
+192.25–202.25, **9.75 units each** (8.3 px),
 meeting with no gap and no overlap, identical in all four diagonal breaks. All three bands were
 measured the same way when the split shipped (2026-08-16), moving one pair from band to band:
 centres **187.0 / 197.1**, **163.2 / 173.4** and **139.4 / 149.0** against the 187/197, 163/173
@@ -1345,12 +1348,25 @@ ids (Upper cells, rule 2). The stack geometry above is unchanged — the same 88
 same 21-unit pitch from `y=283` — but which slot paints which row is now fixed rather than
 following the payload index, which is why the stack anchors to its bottom row.
 
-The historical **2026-08-16** reading remains: the shared marker landed at x 265–268 of the
-181–269 strip, on the paired row only. This is evidence for the previous rendering, not a new
-measurement after the move. Marker equivalence on the updated face is **deferred until live-data
-verification**. Keep the geometry constants and review art unchanged pending that check. Any new measurement must record its date and the actual device;
-for the planned check this is `wardpulse_wear_round_api36_1`, a round API-36 emulator, not shipped
-watch hardware.
+The historical **2026-08-16** reading is the "before": the shared marker landed at x 265–268 of
+the 181–269 strip, on the paired row only. That is evidence for the previous rendering, taken
+before the slots moved.
+
+**Marker equivalence confirmed 2026-10-12.** The check this paragraph deferred to live data has
+been made, on the device it named — `wardpulse_wear_round_api36_1`, a round API-36 emulator, not
+shipped watch hardware. With a real paired band on the middle strip (`100% · 68%`), the two pool
+markers measured:
+
+| Marker | Measured | Strip box |
+|---|---|---|
+| near, inner pool | x 179.3 … 184.0 | left edge 181 |
+| far, outer pool | x **264.8 … 269.5** | right edge 269 |
+
+The far marker sits where the 2026-08-16 reading put it, so moving the strips into their bands'
+slots did not move it. The deferral is retired and the geometry constants and review art stand
+as they are. The figures are the coloured chip's ink read off a 384-pixel capture, where one
+pixel is 1.17 design units, so nothing finer than that is claimed — the near marker straddling
+the box edge is inside that tolerance, not a measured overhang.
 
 `tools/render-watch-ring-designs.mjs` carries the same measured values, so review art shows
 what the watch shows. Before that revision the generator drew the nominal 26, roughly 2.3x
