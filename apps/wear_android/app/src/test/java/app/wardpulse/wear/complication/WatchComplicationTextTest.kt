@@ -12,6 +12,7 @@ import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.RingSurfaceOrder
 import app.wardpulse.wear.model.WatchDataMode
 import app.wardpulse.wear.ui.RingFamily
+import java.time.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -19,6 +20,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WatchComplicationTextTest {
+    private val statusNow = Instant.parse("2026-06-27T18:42:00Z")
+
     @Test
     fun nativeRangedBuilderAcceptsZeroAndRetainsTheFamilyRamp() {
         val built = rangedComplicationBuilder(
@@ -424,14 +427,14 @@ class WatchComplicationTextTest {
                 isStale = false,
             )
 
-        assertEquals("OPENAI · OK", WatchComplicationText.status(summary))
+        assertEquals("OPENAI · OK", WatchComplicationText.status(summary, statusNow))
     }
 
     @Test
     fun marksStaleData() {
         assertEquals(
             "MOCK · STALE",
-            WatchComplicationText.status(PreviewWatchDashboardSummary.value),
+            WatchComplicationText.status(PreviewWatchDashboardSummary.value, statusNow),
         )
     }
 
@@ -455,7 +458,7 @@ class WatchComplicationTextTest {
                 isStale = false,
             )
 
-        assertEquals("MOCK · OK", WatchComplicationText.status(summary))
+        assertEquals("MOCK · OK", WatchComplicationText.status(summary, statusNow))
     }
 
     @Test
@@ -474,9 +477,55 @@ class WatchComplicationTextTest {
                 isStale = false,
             )
 
-        assertEquals("CODEX · LIMIT", WatchComplicationText.status(summary))
+        assertEquals("CODEX · LIMIT", WatchComplicationText.status(summary, statusNow))
         assertEquals("LIMIT", WatchComplicationText.shortStatus(PulseStatus.RATE_LIMITED))
     }
+
+    @Test
+    fun statusAgesAtTheExistingTwoHourBoundary() {
+        val summary = liveStatusSummary()
+        assertEquals(
+            "OPENAI · OK",
+            WatchComplicationText.status(summary, statusNow.plusSeconds(7199)),
+        )
+        assertEquals(
+            "OPENAI · STALE",
+            WatchComplicationText.status(summary, statusNow.plusSeconds(7200)),
+        )
+    }
+
+    @Test
+    fun invalidTimestampMakesStatusStale() {
+        assertEquals(
+            "OPENAI · STALE",
+            WatchComplicationText.status(
+                liveStatusSummary().copy(generatedAt = "invalid"),
+                statusNow,
+            ),
+        )
+    }
+
+    @Test
+    fun explicitStaleFlagWinsEvenForAFutureTimestamp() {
+        assertEquals(
+            "OPENAI · STALE",
+            WatchComplicationText.status(
+                liveStatusSummary().copy(
+                    generatedAt = statusNow.plusSeconds(3600).toString(),
+                    isStale = true,
+                ),
+                statusNow,
+            ),
+        )
+    }
+
+    private fun liveStatusSummary() = PreviewWatchDashboardSummary.value.copy(
+        dataMode = WatchDataMode.LIVE,
+        generatedAt = statusNow.toString(),
+        overallStatus = PulseStatus.OK,
+        providers = listOf(ProviderSummary("openai", PulseStatus.OK, null)),
+        isStale = false,
+    )
 
     @Test
     fun readsThePeriodTokenOffBudgetRingIdsOnly() {

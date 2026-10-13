@@ -2,12 +2,52 @@
 
 **Status: locked 2026-07-27** (revised **2026-07-28** — hug rows/columns, label-center /
 credits-end, picker preview sample, day/night olive chrome; revised **2026-08-02** —
-two-line label carrying the provider family). Review art:
+two-line label carrying the provider family; revised **2026-10-13** — stale badge clearance
+and reliable Dashboard navigation). Review art:
 `apps/phone_flutter/design/` (`widget-small.svg` / `widget-medium.svg` / `widget-dark.svg`).
 
 **Revision 2026-09-16 — Codex windows:** Codex and Spark remain per-window metrics on
 the widget, with existing selections preserved. Their Watchface collapse/pairing does not
 change widget behavior or geometry.
+
+**Revision 2026-10-13 — stale clearance and widget navigation.** On the canonical phone
+AVD `wardpulse_phone_play_api36`, launcher widget instance **2** showed genuine retained
+failed-refresh data. `STALE` occupied **[93,562][188,601]**, intersecting the first
+percentage at **[122,581][306,624]** and its accent. A warm widget tap from Settings also
+returned to **Settings**, rather than Dashboard. These are observed defects; the fresh-only
+2026-10-11 acceptance below did not cover either state.
+
+The approved correction reserves space above the rows **only while stale**: the current
+**11sp bold** badge line, including font padding, plus **2dp**. Runtime measures that line
+with the current display/font metrics and uses the **same pixel inset** for row padding and
+complete-row fitting. Fresh geometry and launcher-owned spans/options remain unchanged.
+If resolved metrics exist but no complete row fits, show **`Resize widget`**; an empty or
+unavailable payload still says **`No metrics`**. The watermark remains top-end. A widget tap
+carries an explicit Dashboard action with a separate native/Dart readiness handshake, so
+cold and warm delivery select Dashboard without adding a provider-refresh action. An explicit
+widget tap first cancels active in-app forms and pushed routes with normal Cancel/back
+semantics; ordinary app opens and watch-requested refresh preserve those routes.
+
+**Device acceptance 2026-10-13.** The final Android x64 APK on this canonical phone kept
+widget instance **2** in **[67,546][1013,1449]**, a 903px-high launcher frame. Genuine retained
+failed-refresh data at normal font scale in light mode had a **39px** badge ending at
+`y=601`; the first label began at `y=606`,
+leaving **5px** clearance with a **44px** content inset. After a real app refresh at system
+font scale **1.5** in dark mode, the badge measured **58px**, ending at `y=620`; the first
+label began at `y=625`, again **5px** clear, with a **63px** inset. Both fresh and stale
+placement were checked. These measurements establish badge clearance in this tall frame;
+the fixed 12sp columns still ellipsize some labels and percentages at scale 1.5, as before.
+
+An actual narrower frame **[67,546][519,1449]** removed label and credits columns while
+retaining percentages. Its stale first percentage began at `y=606`, **5px** below the badge.
+The original **four-column × three-row** placement was then restored to its exact bounds.
+Warm taps from Settings and an open Budget dialog visibly opened Dashboard, canceling the
+dialog. A settled background process was confirmed dead before the cold widget tap started
+a different process; loading completed with three providers and data updated at **17:35:48**.
+Host format/analyze and all **391** Flutter tests passed, including the navigation regressions;
+the native widget harness passed **28** assertions. The existing 31dp body-row estimate
+remains unchanged. Very short hosts, the `Resize widget` fallback on a launcher and text
+scales above 1.5 remain separate device-fit checks; no hardware-device coverage is claimed.
 
 Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 14). Asset ownership: `docs/DESIGN_ASSETS.md`.
 Do **not** copy [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md) layouts onto the phone launcher.
@@ -41,8 +81,9 @@ Configuration lives on the phone **Widget** tab and is **independent** of Watchf
    footer sum, not `creditsGlance`, never LLM `TOK`. Skip on purchased-meter rows (Extra
    usage / on-demand are the credit pool), budgets, and missing/unlimited balances.
 6. **Omit** unavailable metrics (no percent). Exhausted plan/purchased meters (`usedPercent >= 100`)
-   stay on the phone widget as **`0% left`** so sibling pools remain visible. Watch/WFF still omit
-   exhausted layers. The Widget tab states the omission rather than hiding it: a metric with no
+   stay on the phone widget as **`0% left`** so sibling pools remain visible. Watch/WFF likewise
+   retain known selected exhausted metrics under their 2026-10-13 revision. The Widget tab
+   states unavailability rather than hiding it: a metric with no
    percentage lists as unselectable under its own reason — *This allowance has no percentage to
    show*, seen on `Purchased credits` 2026-10-11 — so the rule is legible to whoever is choosing.
 7. **No credentials**, account ids, or raw provider payloads on the widget or in widget logs.
@@ -94,8 +135,9 @@ limit for that period, so an unconfigured install defaults to plan windows.
 - **Columns** — `% left` · centered label · credits (end-aligned). Width hide order:
   credits first, then label; missing credits still reserve the credits column when that
   column is shown (label stays centered).
-- **Label is two lines** (revised **2026-08-02**) — family on top, pool below, never
-  truncated. The provider must be readable on the launcher, where nothing else names it:
+- **Label is two lines** (revised **2026-08-02**) — family on top, pool below. The provider
+  must be readable at the baseline text scale; larger scales can ellipsize the fixed-width
+  columns, as measured at 1.5 in the 2026-10-13 acceptance above. Nothing else names it:
   colour alone cannot tell one `Weekly plan` from another. The column keeps its fixed
   width, so the cost is height, not width: rows are `ROW_CONTENT_DP` 31 instead of 17 and
   the card hugs taller. Every row reserves both lines (`android:lines="2"`), so a label
@@ -112,9 +154,12 @@ limit for that period, so an unconfigured install defaults to plan windows.
   rows / columns fit. Newly placed widgets use `targetCellHeight≈3`; **remove and re-add**
   after metric-count changes if the launcher keeps a stale tall span.
 - **Watermark** — same faded mono as the watch face, ~36dp overlay top-end (does not
-  reserve a header band). No dedicated header.
+  reserve a header band). Fresh widgets have no dedicated header.
 - Empty: short “No metrics” line (no filler rows).
-- Stale: compact uppercase “STALE” overlay top-start when the last dashboard is stale.
+- Too short for a complete resolved metric: “Resize widget”, with no clipped metric rows.
+- Stale: compact uppercase “STALE” top-start when the last dashboard is stale. Reserve its
+  measured padded line plus 2dp above content and subtract that same space when fitting rows;
+  remove the inset when fresh.
 - Tap opens the phone app (Dashboard).
 
 **Verified on a device 2026-10-11 — the baseline holds.** Locked since 2026-07-27 and revised
@@ -198,4 +243,6 @@ node tools/render-phone-widget-designs.mjs
 | `widget-dark.svg` | dark mid preview (same composition) |
 | `widget-small.svg` | short (2 rows); default place size ≈ 2×2 |
 | `widget-empty.svg` | empty selection |
-| `widget-stale.svg` | stale header chrome |
+| `widget-stale.svg` / `widget-stale-dark.svg` | stale-only badge clearance in day/night chrome |
+| `widget-stale-narrow.svg` | stale badge with only the complete percentage column |
+| `widget-stale-short.svg` | known metrics cannot fit a complete row; `Resize widget` |

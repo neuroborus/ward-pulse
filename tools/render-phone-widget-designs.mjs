@@ -22,7 +22,6 @@ const designDir = join(root, 'apps/phone_flutter/design')
 const resDir = join(root, 'apps/phone_flutter/android/app/src/main/res')
 
 const FONT = 'Noto Sans, sans-serif'
-const STALE = '#C46A3A'
 
 /** Family accents, matching `RingFamily` on the phone. */
 const FAMILY = {
@@ -62,6 +61,7 @@ async function loadTheme(variant) {
     surface: read('surface'),
     onSurface: read('on_surface'),
     muted: read('muted'),
+    stale: read('stale'),
     outlineColor: outline.color,
     outlineOpacity: outline.opacity,
   }
@@ -139,24 +139,26 @@ ${body}
 
 function metricsBoard({ theme, label, geometry, rows, staleBadge = false }) {
   const { padX, top, pitch, width } = geometry
-  const height = top + rows.length * pitch + 10
+  // Review-scale illustration; runtime measures its current 11sp badge line plus 2dp.
+  const staleInset = staleBadge ? 17 : 0
+  const height = top + staleInset + rows.length * pitch + 10
   const body = [
     watermark({
       x: width - 50,
-      y: staleBadge ? height - 24 : 12,
+      y: 12,
       color: theme.muted,
       opacity: 0.4,
     }),
     staleBadge
       ? `  <text x="${
-          width - padX
-        }" y="22" font-family="${FONT}" font-size="11" font-weight="700" letter-spacing="1" fill="${STALE}" text-anchor="end">STALE</text>`
+          padX
+        }" y="22" font-family="${FONT}" font-size="11" font-weight="700" letter-spacing="1" fill="${theme.stale}" text-anchor="start">STALE</text>`
       : null,
     ...rows.map((entry, index) =>
       row({
         theme,
         geometry,
-        y: top + index * pitch,
+        y: top + staleInset + index * pitch,
         entry,
       }),
     ),
@@ -252,6 +254,45 @@ const variants = [
         geometry: geometryFor(240, 11),
         rows: MEDIUM_ROWS.slice(0, 2).map((entry) => ({ ...entry, credits: null })),
         staleBadge: true,
+      }),
+  },
+  {
+    file: 'widget-stale-dark.svg',
+    svg: () =>
+      metricsBoard({
+        theme: dark,
+        label: 'Phone widget · stale · dark',
+        geometry: geometryFor(240, 11),
+        rows: MEDIUM_ROWS.slice(0, 2).map((entry) => ({ ...entry, credits: null })),
+        staleBadge: true,
+      }),
+  },
+  {
+    file: 'widget-stale-narrow.svg',
+    svg: () =>
+      metricsBoard({
+        theme: light,
+        label: 'Phone widget · stale · percent column only',
+        geometry: geometryFor(125, 11),
+        rows: MEDIUM_ROWS.slice(0, 2).map((entry) => ({
+          ...entry, family: null, pool: '', credits: null,
+        })),
+        staleBadge: true,
+      }),
+  },
+  {
+    file: 'widget-stale-short.svg',
+    svg: () =>
+      board({
+        theme: light,
+        label: 'Phone widget · stale · no complete metric row fits',
+        width: 130,
+        height: 56,
+        body: [
+          watermark({ x: 80, y: 12, color: light.muted, opacity: 0.4 }),
+          `  <text x="14" y="22" font-family="${FONT}" font-size="11" font-weight="700" letter-spacing="1" fill="${light.stale}">STALE</text>`,
+          `  <text x="14" y="44" font-family="${FONT}" font-size="13" fill="${light.muted}">Resize widget</text>`,
+        ].join('\n'),
       }),
   },
   {

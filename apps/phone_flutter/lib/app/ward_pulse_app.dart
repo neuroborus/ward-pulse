@@ -29,6 +29,7 @@ import '../sync/recovery_watchlist.dart';
 import '../sync/watch_sync_service.dart';
 import '../watchface/watchface_screen.dart';
 import '../widget/phone_widget_preferences.dart';
+import '../widget/phone_widget_navigation.dart';
 import '../widget/phone_widget_sync.dart';
 import '../widget/widget_screen.dart';
 import 'surface_order.dart';
@@ -40,6 +41,8 @@ class WardPulseApp extends StatelessWidget {
     required this.repository,
     this.watchSyncService = const MethodChannelWatchSyncService(),
     this.phoneWidgetSyncService = const DisabledPhoneWidgetSyncService(),
+    this.phoneWidgetNavigationService =
+        const MethodChannelPhoneWidgetNavigationService(),
     this.credentialStore = const EmptyProviderCredentialStore(),
     this.codexAccountService = const EmptyCodexAccountService(),
     this.claudeAccountService = const EmptyClaudeAccountService(),
@@ -61,6 +64,7 @@ class WardPulseApp extends StatelessWidget {
   final DashboardRepository repository;
   final WatchSyncService watchSyncService;
   final PhoneWidgetSyncService phoneWidgetSyncService;
+  final PhoneWidgetNavigationService phoneWidgetNavigationService;
   final ProviderCredentialStore credentialStore;
   final CodexAccountService codexAccountService;
   final ClaudeAccountService claudeAccountService;
@@ -88,6 +92,7 @@ class WardPulseApp extends StatelessWidget {
         repository: repository,
         watchSyncService: watchSyncService,
         phoneWidgetSyncService: phoneWidgetSyncService,
+        phoneWidgetNavigationService: phoneWidgetNavigationService,
         credentialStore: credentialStore,
         codexAccountService: codexAccountService,
         claudeAccountService: claudeAccountService,
@@ -114,6 +119,7 @@ class DashboardHost extends StatefulWidget {
     required this.repository,
     required this.watchSyncService,
     required this.phoneWidgetSyncService,
+    required this.phoneWidgetNavigationService,
     required this.credentialStore,
     required this.codexAccountService,
     required this.claudeAccountService,
@@ -134,6 +140,7 @@ class DashboardHost extends StatefulWidget {
   final DashboardRepository repository;
   final WatchSyncService watchSyncService;
   final PhoneWidgetSyncService phoneWidgetSyncService;
+  final PhoneWidgetNavigationService phoneWidgetNavigationService;
   final ProviderCredentialStore credentialStore;
   final CodexAccountService codexAccountService;
   final ClaudeAccountService claudeAccountService;
@@ -180,6 +187,7 @@ class _DashboardHostState extends State<DashboardHost> {
   bool _mockDataEnabled = false;
   bool _recoveryNotificationsEnabled = true;
   int _selectedIndex = 0;
+  bool _widgetNavigationPending = false;
   ({String provider, int token})? _reveal;
   StreamSubscription<void>? _syncTicks;
   var _autoSyncInFlight = false;
@@ -195,6 +203,24 @@ class _DashboardHostState extends State<DashboardHost> {
       unawaited(_onScheduledSync());
     });
     widget.watchSyncService.bindWatchRefreshListener(_onWatchRefreshRequested);
+    widget.phoneWidgetNavigationService.bind(_openDashboardFromWidget);
+  }
+
+  void _openDashboardFromWidget() {
+    if (!mounted || _widgetNavigationPending) return;
+    _widgetNavigationPending = true;
+    // Ready delivery can arrive during the first build or a Navigator transition.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _widgetNavigationPending = false;
+      if (!mounted) return;
+      // Cancel the route before disposing the tab that owns its unsaved form.
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      setState(() {
+        _selectedIndex = _dashboardIndex;
+      });
+    });
+    // An idle native message has no build of its own to drive that callback.
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   /// Later of snapshot time and the last accepted Wear refresh tap.
@@ -233,6 +259,7 @@ class _DashboardHostState extends State<DashboardHost> {
   @override
   void dispose() {
     widget.watchSyncService.unbindWatchRefreshListener();
+    widget.phoneWidgetNavigationService.unbind();
     unawaited(_syncTicks?.cancel());
     unawaited(widget.syncScheduler.cancel());
     super.dispose();

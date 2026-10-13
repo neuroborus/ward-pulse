@@ -161,6 +161,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final shownRefreshMinutes = PollCadence.clampMinutes(
       _dragRefreshMinutes ?? widget.refreshInterval.minutes,
     );
+    final backgroundRefreshMinutes =
+        PollCadence.headlessInterval(
+          Duration(minutes: shownRefreshMinutes),
+        ).inMinutes;
     final refreshStopIndex = PollCadence.refreshIntervalStopIndex(
       shownRefreshMinutes,
     );
@@ -181,8 +185,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: const Text('Refresh interval'),
                   subtitle: Text(
                     'Every $shownRefreshMinutes minutes while WardPulse is open · '
-                    'at least every ${PollCadence.headlessMinRefreshMinutes} minutes '
-                    'in the background (Android limit) · some providers publish '
+                    'about every $backgroundRefreshMinutes minutes '
+                    'in the background (Android may delay updates) · some providers publish '
                     'new data less often',
                   ),
                 ),

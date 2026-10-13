@@ -1418,6 +1418,26 @@ home-widget rows stale through `HomeWidgetPhoneWidgetSyncService.markExistingRow
 retaining their values and requesting a redraw. Empty/cleared widgets are left alone. This
 failed-poll marker does not introduce an age-based freshness window.
 
+A further bounded emulator UI audit on **2026-10-13** checked the reviewed phone and Wear
+builds. A separate `app.wardpulse.audit` package used an independent UID and synthetic inputs;
+no real credentials were imported. At 320×640 dp, font scale 1.5 and a visible keyboard, the
+pasted-credential dialog scrolled Value and Label into view and kept Cancel and Save above the
+keyboard, without overflow. A zero budget stayed in the dialog with validation; `25.50`
+survived save/reopen, and cancelling an edit to `12` retained `25.50`. Canonical cold startup
+after process death restored the three existing plan connections, and an offline refresh
+retained their data as stale. Wear showed live and failed-refresh stale Glance states and all
+five reported Plan windows rows. A watch-requested refresh also received a genuine phone
+acknowledgement in that day's transport smoke.
+
+Joint host gates passed 391 Flutter tests, 64 native cache assertions and 28 native widget
+assertions, plus phone analysis and formatting; Wear passed 76 JVM tests with no skips, lint
+and APK assembly, and 10 isolated-preferences device checks. Status complication age handling
+and factual empty Alerts copy have JVM coverage and verified installed service wiring; the
+aged status complication screen transition was not exercised. This is bounded emulator
+acceptance, not a review of every error state, fresh authentication for all six connection
+types, shipped hardware or release/internal testing acceptance. The Phase 21 user guide
+remains open.
+
 Closed since this phase opened, verified against the tree on **2026-10-12**: data deletion, which
 is per-connection disconnect erasing the credential from secure storage; the privacy policy, the
 legal disclaimer the Settings screen carries, the Apache-2.0 source scope in `LICENSE`, the brand
@@ -1835,6 +1855,19 @@ nothing touched. The `STALE` overlay was not reached, because the payload was fr
 with its measurements under *Verified on a device 2026-10-11* in
 `docs/product/PHONE_WIDGET_DESIGN.md`.
 
+The final-APK widget follow-up on **2026-10-13** reached the failed-refresh state: retained
+rows carried a `STALE` badge with five physical pixels clear before the first metric row in
+normal-font light mode and font-scale-1.5 dark mode after redraw. Narrowing the launcher frame
+from `[67,546][1013,1449]` to `[67,546][519,1449]` exercised percent-only mode: labels and
+credits hid as designed, with `STALE` ending at y=601 and the first percentage starting at
+y=606. The original frame was restored. Widget taps from Settings and an open Budget dialog
+opened Dashboard and cancelled the modal; after a genuine process kill, a cold tap passed
+through loading to the three existing plan connections. The native fitter still estimates
+each row at 31 dp. Very short widget heights and very large font scales remain separate
+acceptance cases. The zero-row resize prompt versus an empty selection has JVM coverage;
+its screen output was not exercised in this audit. These observations do not extend the
+widget's failed-refresh marker into an age-based freshness rule.
+
 Rationale: glance configuration is a first-class product surface, not a Settings footnote.
 Watchface and Widget each get a primary tab between Dashboard and Providers. The phone
 launcher also needs the same glanceable “pulse” as Wear/WFF, but a round watch composition
@@ -1878,8 +1911,8 @@ Deliverables:
 - **remaining** language for percent metrics (same meaning as watch rings); family colors from
   the shared palette in `WATCH_RING_DESIGN.md`, with a budget row taking its connection's family
   color;
-- update after provider sync / scheduled refresh without opening the full app; stale state
-  is explicit when the last successful dashboard is too old;
+- update after provider sync / scheduled refresh without opening the full app; cached data
+  retained after a failed refresh is marked stale, with no widget age-based freshness window;
 - tap opens the phone app (Dashboard);
 - no credentials, account ids, or raw provider payloads on the widget surface or in widget
   logs;
@@ -1898,7 +1931,7 @@ PHONE_WIDGET_DESIGN.md baseline locked with review art for small/medium
 widget shows configured available metrics (exhausted as 0% left); hugs complete rows/columns
 remaining-% / family colors match the product palette
 tap opens the phone app; no credential UI on the widget
-stale data is labeled after the freshness window
+failed refresh retains existing widget data and marks it stale; no age-based window is defined
 adding/removing the widget and changing prefs updates the surface without a full reinstall
 ```
 
@@ -2628,6 +2661,55 @@ a fourth cell, or a cell below the clock
 a complication slot spent on weather — weather is the face's own chrome and costs no slot
 a small arc inside a cell; a ranged value in a cell reads as text, so the face keeps one
   arc language
+```
+
+---
+
+### Phase 21 — user-facing Vocs guide
+
+Status: open requirement recorded on 2026-10-13; the user guide has not been written.
+
+The existing Vocs site publishes development, architecture, provider-reference and design
+documentation. Its landing page starts with the development plan, toolchain and documentation
+workflow. Add a separate user guide for people using the installed applications, with a clear
+entry from the landing page and navigation. Keep contributor setup and technical references
+available in their existing sections.
+
+Guide scope:
+
+- Getting started: available installation route, supported phone/watch prerequisites, first
+  launch and local-first data/credential expectations, with links to the privacy policy.
+- Providers: prerequisites and the actual UI steps for each supported connection method;
+  connecting, reconnecting and disconnecting; distinctions between API keys and account login.
+- Dashboard: usage and remaining balances, credits, alerts and history; unknown values, real
+  zero/exhaustion, last successful update time and stale cached data.
+- Watch and home widget: pairing and surface setup, selecting watch rings/complications and
+  configuring widget metrics, with the current platform limitations made explicit.
+- Sync: manual and automatic refresh, background delivery, offline/restart recovery and how
+  stale data differs from a successful fresh poll.
+- Troubleshooting: safe steps for missing data, rejected credentials, provider failures/rate
+  limits, delayed phone-to-watch delivery and widget updates; never request secrets or raw
+  provider payloads in diagnostic instructions.
+
+Keep authoritative guide content under `docs/product/` and expose it through thin Vocs pages.
+Use user-facing language and current screen/control names; link to existing references where
+useful instead of duplicating the contributor documentation. Examples and screenshots must
+use synthetic or redacted data. This requirement does not close the remaining live-provider,
+release or hardware acceptance work.
+
+Acceptance:
+
+```text
+the landing page and sidebar expose a discoverable user-guide entry
+a first-time user can connect a supported provider, interpret the dashboard and set up the
+  available watch/widget surfaces without repository or developer-toolchain instructions
+connection prerequisites, current UI steps and recovery instructions are checked against the
+  accepted application build, with unsupported/unavailable paths clearly identified
+unknown, zero/exhausted and stale values are explained with sanitized examples; offline and
+  background sync behavior agrees with the implemented persistence and delivery semantics
+guide pages reuse authoritative Markdown, keep technical references separate, and contain no
+  credentials, private account data or sensitive provider payloads
+just check-docs passes, including the repository source-citation gate and Vocs build
 ```
 
 ---

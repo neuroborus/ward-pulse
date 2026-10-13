@@ -6,10 +6,14 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.os.Bundle
+import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetPlugin
+import kotlin.math.roundToInt
 
 /**
  * Home-screen remaining summary. Payload keys are written from Flutter via
@@ -47,24 +51,32 @@ class WardPulseAppWidget : AppWidgetProvider() {
         appWidgetId: Int,
         data: SharedPreferences,
     ) {
-        val maxRows = maxCompleteRows(appWidgetManager, appWidgetId)
+        val staleInsetPx = staleInsetPx(context, data.getString("stale", "0") == "1")
+        val maxRows =
+            PhoneWidgetLayout.completeRows(
+                availableHeightDp(appWidgetManager, appWidgetId),
+                context.resources.displayMetrics.density,
+                staleInsetPx,
+            )
         val columns = columnMode(appWidgetManager, appWidgetId)
         appWidgetManager.updateAppWidget(
             appWidgetId,
-            buildViews(context, appWidgetId, data, maxRows, columns),
+            buildViews(context, appWidgetId, data, maxRows, columns, staleInsetPx),
         )
     }
 
-    private fun maxCompleteRows(
-        appWidgetManager: AppWidgetManager,
-        appWidgetId: Int,
-    ): Int {
-        val available = availableHeightDp(appWidgetManager, appWidgetId)
-        var rows = 0
-        while (rows < MAX_ROW_COUNT && heightNeededDp(rows + 1) <= available) {
-            rows += 1
+    /** Match the badge's 11sp bold line, including font padding, at the current font scale. */
+    private fun staleInsetPx(context: Context, stale: Boolean): Int {
+        if (!stale) return 0
+        val display = context.resources.displayMetrics
+        val paint = Paint().apply {
+            typeface = Typeface.DEFAULT_BOLD
+            textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 11f, display)
         }
-        return rows.coerceAtLeast(1)
+        val font = paint.fontMetricsInt
+        val gapPx =
+            TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 2f, display).roundToInt()
+        return font.bottom - font.top + gapPx
     }
 
     private fun columnMode(
@@ -115,25 +127,16 @@ class WardPulseAppWidget : AppWidgetProvider() {
             else -> fallback
         }
 
-    /** Matches [R.layout.ward_pulse_app_widget]: 6+6 pad, ~17dp row, 5dp gaps. */
-    private fun heightNeededDp(rows: Int): Int {
-        if (rows <= 0) {
-            return 0
-        }
-        return CHROME_PAD_V_DP +
-            ROW_CONTENT_DP +
-            (rows - 1) * (ROW_CONTENT_DP + ROW_GAP_DP) +
-            FIT_SLACK_DP
-    }
-
     private fun buildViews(
         context: Context,
         appWidgetId: Int,
         data: SharedPreferences,
         maxRows: Int,
         columns: ColumnMode,
+        staleInsetPx: Int,
     ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.ward_pulse_app_widget)
+        views.setViewPadding(R.id.widget_rows, 0, staleInsetPx, 0, 0)
 
         val stale = data.getString("stale", "0") == "1"
         views.setViewVisibility(
@@ -143,8 +146,21 @@ class WardPulseAppWidget : AppWidgetProvider() {
 
         val storedCount = data.getInt("row_count", 0).coerceIn(0, MAX_ROW_COUNT)
         val rowCount = storedCount.coerceAtMost(maxRows)
-        val empty = data.getString("empty", if (storedCount == 0) "1" else "0") == "1" ||
-            rowCount == 0
+        val emptyState =
+            PhoneWidgetLayout.emptyState(
+                storedCount,
+                data.getString("empty", if (storedCount == 0) "1" else "0") == "1",
+                rowCount,
+            )
+        val empty = emptyState != PhoneWidgetLayout.EmptyState.NONE
+        views.setTextViewText(
+            R.id.widget_empty,
+            context.getString(
+                if (emptyState == PhoneWidgetLayout.EmptyState.RESIZE)
+                    R.string.ward_pulse_widget_resize
+                else R.string.ward_pulse_widget_empty,
+            ),
+        )
         views.setViewVisibility(
             R.id.widget_empty,
             if (empty) View.VISIBLE else View.GONE,
@@ -230,6 +246,7 @@ class WardPulseAppWidget : AppWidgetProvider() {
 
         val launchIntent =
             Intent(context, MainActivity::class.java).apply {
+                action = DashboardLaunchRequest.ACTION
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
         val pending =
@@ -250,12 +267,10 @@ class WardPulseAppWidget : AppWidgetProvider() {
     }
 
     private companion object {
-        const val MAX_ROW_COUNT = 6
+        const val MAX_ROW_COUNT = PhoneWidgetLayout.MAX_ROWS
         const val DEFAULT_HEIGHT_DP = 110
         const val DEFAULT_WIDTH_DP = 180
 
-        /** Card paddingTop + paddingBottom. */
-        const val CHROME_PAD_V_DP = 12
         /** Card paddingStart + paddingEnd. */
         const val CHROME_PAD_H_DP = 20
         /** Accent bar + percent marginStart. */
@@ -264,8 +279,6 @@ class WardPulseAppWidget : AppWidgetProvider() {
         const val LABEL_COL_DP = 100
         const val CREDITS_COL_DP = 88
         const val COL_GAP_DP = 6
-        const val ROW_CONTENT_DP = 31
-        const val ROW_GAP_DP = 5
         const val FIT_SLACK_DP = 6
 
         /** % left only. */

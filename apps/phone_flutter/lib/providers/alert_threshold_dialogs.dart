@@ -99,10 +99,12 @@ class ConnectionBudgetDialog extends StatefulWidget {
 }
 
 class _ConnectionBudgetDialogState extends State<ConnectionBudgetDialog> {
-  late var _draft = widget.budget;
+  final _formKey = GlobalKey<FormState>();
   late final _limits = {
     for (final period in _BudgetPeriod.values)
-      period: TextEditingController(text: _amountText(period.limitOf(_draft))),
+      period: TextEditingController(
+        text: _amountText(period.limitOf(widget.budget)),
+      ),
   };
 
   @override
@@ -115,28 +117,47 @@ class _ConnectionBudgetDialogState extends State<ConnectionBudgetDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return _ConnectionDialog(
-      title: 'Budget · ${widget.connectionTitle}',
-      intro:
-          'Your own ceiling on this connection’s spend — providers report the '
-          'spend, never the limit. Empty means no limit.',
-      onSave: () => Navigator.of(context).pop(_draft),
-      editors: [
-        for (final period in _BudgetPeriod.values)
-          TextField(
-            controller: _limits[period],
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              labelText: period.label,
-              border: const OutlineInputBorder(),
-              isDense: true,
+    return Form(
+      key: _formKey,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      child: _ConnectionDialog(
+        title: 'Budget · ${widget.connectionTitle}',
+        intro:
+            'Your own ceiling on this connection’s spend — providers report the '
+            'spend, never the limit. Empty means no limit.',
+        onSave: _save,
+        editors: [
+          for (final period in _BudgetPeriod.values)
+            TextFormField(
+              controller: _limits[period],
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: InputDecoration(
+                labelText: period.label,
+                border: const OutlineInputBorder(),
+                isDense: true,
+                errorMaxLines: 2,
+              ),
+              validator: (text) => _parseBudgetAmount(text ?? '').error,
             ),
-            // No setState: the controllers own the text this build reads.
-            onChanged:
-                (text) => _draft = period.withLimit(_draft, _minorUnits(text)),
-          ),
-      ],
+        ],
+      ),
     );
+  }
+
+  void _save() {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    var budget = widget.budget;
+    for (final period in _BudgetPeriod.values) {
+      budget = period.withLimit(
+        budget,
+        _parseBudgetAmount(_limits[period]!.text).minorUnits,
+      );
+    }
+    Navigator.of(context).pop(budget);
   }
 }
 
@@ -194,14 +215,36 @@ enum _BudgetPeriod {
 
 /// Minor units are the storage unit; the field takes major units.
 String _amountText(int? minorUnits) =>
-    minorUnits == null ? '' : (minorUnits / 100).toStringAsFixed(2);
+    minorUnits == null
+        ? ''
+        : '${minorUnits ~/ 100}.${(minorUnits % 100).toString().padLeft(2, '0')}';
 
-int? _minorUnits(String text) {
-  final value = double.tryParse(text.trim().replaceAll(',', '.'));
-  if (value == null || value <= 0) {
-    return null;
+final _decimalAmount = RegExp(r'^(?:[0-9]+(?:\.[0-9]{0,2})?|\.[0-9]{1,2})$');
+// Money crosses the Rust boundary as signed 64-bit minor units.
+final _maximumBudgetMinorUnits = BigInt.parse('9223372036854775807');
+
+({int? minorUnits, String? error}) _parseBudgetAmount(String text) {
+  final amount = text.trim().replaceAll(',', '.');
+  if (amount.isEmpty) {
+    return (minorUnits: null, error: null);
   }
-  return (value * 100).round();
+  if (!_decimalAmount.hasMatch(amount)) {
+    return (
+      minorUnits: null,
+      error: 'Enter a positive amount with up to 2 decimal places',
+    );
+  }
+  final parts = amount.split('.');
+  final whole = BigInt.parse(parts.first.isEmpty ? '0' : parts.first);
+  final fraction = parts.length == 1 ? '00' : parts.last.padRight(2, '0');
+  final minorUnits = whole * BigInt.from(100) + BigInt.parse(fraction);
+  if (minorUnits < BigInt.one) {
+    return (minorUnits: null, error: 'Enter at least 0.01');
+  }
+  if (minorUnits > _maximumBudgetMinorUnits) {
+    return (minorUnits: null, error: 'Amount is too large');
+  }
+  return (minorUnits: minorUnits.toInt(), error: null);
 }
 
 /// Shell both dialogs use: intro copy, spaced editors, Cancel/Save.

@@ -46,7 +46,7 @@ private enum class HomePage {
     PlanWindows,
 }
 
-private data class SummaryRow(
+internal data class SummaryRow(
     val title: String,
     val detail: String,
     val status: PulseStatus? = null,
@@ -114,14 +114,14 @@ private fun WatchDashboardSummary.planRows(): List<SummaryRow> =
         .map { SummaryRow(it.title, it.detail, it.status) }
         .ifEmpty { listOf(SummaryRow("No plan windows", "Sync from the phone")) }
 
-private fun WatchDashboardSummary.alertRows(): List<SummaryRow> =
+internal fun WatchDashboardSummary.alertRows(): List<SummaryRow> =
     alerts.map {
         SummaryRow(
             it.severity.replaceFirstChar(Char::uppercase),
             it.message,
             it.severity.toStatus(),
         )
-    }.ifEmpty { listOf(SummaryRow("No active alerts", "All providers look normal")) }
+    }.ifEmpty { listOf(SummaryRow("No active alerts", "No alerts in the latest summary")) }
 
 @Composable
 private fun HomeScreen(

@@ -73,6 +73,7 @@ class _CredentialDialogState extends State<CredentialDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Text(widget.title),
+      scrollable: true,
       content: Form(
         key: _formKey,
         child: Column(

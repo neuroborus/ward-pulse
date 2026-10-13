@@ -675,13 +675,11 @@ no API that writes another package's slot configuration, and the configuration d
 to our package in the first place. `ComplicationDataSourceUpdateRequester` only asks our own
 provider services to refresh the data they already supply.
 
-**Not verified.** That the system chooser offers a *none* or *empty* entry for a slot whose
-`supportedTypes` include `EMPTY`. A long press reached the face picker on this AVD — its
-controls read `Activate WardPulse` and `Move watch face left` — but the per-slot chooser was not
-reached, so the wearer's ability to clear a cell follows from the declaration rather than from a
-reading. The schema is no help either: in `complicationSlotElement.xsd` lines 53–57 declare
-`slotId`, `supportedTypes`, `displayName`, `isCustomizable` and `blendMode` as bare types with
-no annotation, so it says nothing about behaviour.
+**Observed on 2026-10-13.** The system chooser for the central upper cell was reached on the
+canonical Wear AVD. Its UI hierarchy showed enabled, clickable `Empty` and `Battery, Wear OS`
+buttons at `[20,123][364,227]` and `[20,235][364,339]`, respectively. This verifies that the
+chooser offers an empty entry for that cell. No selection was made: actually clearing the
+cell and rendering a custom Status complication remain unverified.
 
 ## Routine Verification
 

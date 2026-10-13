@@ -31,7 +31,10 @@ test-phone:
 test-phone-cache:
     tools/test-phone-cache/run.sh
 
-check-phone: test-phone-cache
+test-phone-widget:
+    tools/test-phone-widget/run.sh
+
+check-phone: test-phone-cache test-phone-widget
     cd apps/phone_flutter && dart format --output=none --set-exit-if-changed lib test
     cd bindings/dart && dart format --output=none --set-exit-if-changed lib
     just lint-phone

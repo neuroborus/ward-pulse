@@ -27,6 +27,7 @@ import app.wardpulse.wear.ui.formatPercentAmount
 import app.wardpulse.wear.ui.formatPercentLabel
 import app.wardpulse.wear.ui.formatBudgetStripLabel
 import app.wardpulse.wear.ui.purchasedCreditsCompact
+import java.time.Instant
 import java.util.Locale
 
 abstract class ShortTextComplicationDataSourceService :
@@ -533,7 +534,7 @@ object WatchComplicationText {
     fun percentAmount(percent: Float?): String =
         formatPercentAmount(percent?.toDouble()) ?: "—"
 
-    fun status(summary: WatchDashboardSummary): String {
+    fun status(summary: WatchDashboardSummary, now: Instant = Instant.now()): String {
         val source = when {
             // Mock outranks the provider names, matching the Glance detail order
             // (`WEAR_GLANCE_DESIGN.md`): the demo impersonates real families, so
@@ -545,7 +546,7 @@ object WatchComplicationText {
             else -> "${summary.providers.size} PRV"
         }
         val pulse = when {
-            summary.isStale -> PulseStatus.STALE
+            summary.isStaleAt(now) -> PulseStatus.STALE
             summary.providers.size == 1 -> summary.providers.single().status
             else -> summary.overallStatus
         }

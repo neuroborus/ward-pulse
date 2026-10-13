@@ -22,10 +22,9 @@ data class PlanWindowRow(
 /**
  * Plan windows, the ones waited on first.
  *
- * The Glance answers how much is left; this list answers when a window comes
- * back, which is why it keeps the exhausted ones the Glance omits and the
- * untouched ones nobody is waiting for: it is also the inventory of what the
- * watch knows, and a list that changed shape with every poll would leave "not
+ * The Glance keeps selected exhausted metrics; this list adds reset times and
+ * the full window inventory, including untouched ones nobody is waiting for.
+ * A list that changed shape with every poll would leave "not
  * spent" indistinguishable from "not reported".
  */
 fun planWindowRows(

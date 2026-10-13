@@ -78,7 +78,10 @@ Entry: `lib/main.dart` → `lib/app/ward_pulse_app.dart`. Tests: flat `test/`
 - `lib/watchface/` — Watchface tab; `lib/widget/` — home-widget payload and preferences;
   `lib/charts/` — history chart and budget bar.
 - Android host code: `android/app/src/main/kotlin/app/wardpulse/` (`MainActivity`,
-  `WardPulseAppWidget`, `WatchRefreshListenerService`).
+  `WardPulseAppWidget`, `WatchRefreshListenerService`); native widget helpers are under
+  `android/app/src/main/java/app/wardpulse/` (`PhoneWidgetLayout`, `DashboardLaunchRequest`).
+  Their JVM harness lives in `tools/test-phone-widget/`; `just test-phone-widget` runs it and
+  is included in `just check-phone`.
 
 ### Wear (`apps/wear_android/`)
 

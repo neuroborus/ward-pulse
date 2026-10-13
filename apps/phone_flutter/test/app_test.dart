@@ -1141,8 +1141,7 @@ void main() {
     );
     expect(
       find.textContaining(
-        'at least every ${PollCadence.headlessMinRefreshMinutes} minutes '
-        'in the background (Android limit)',
+        'about every 15 minutes in the background (Android may delay updates)',
       ),
       findsOneWidget,
     );
@@ -1165,6 +1164,50 @@ void main() {
     expect(
       PollCadence.refreshIntervalStops,
       contains(preferences.value.minutes),
+    );
+    expect(
+      find.textContaining('about every 20 minutes in the background'),
+      findsOneWidget,
+    );
+
+    final sixtyIndex = PollCadence.refreshIntervalStopIndex(60).toDouble();
+    tester.widget<Slider>(slider).onChanged!(sixtyIndex);
+    await tester.pump();
+    expect(preferences.value.minutes, 20);
+    expect(
+      find.textContaining('Every 60 minutes while WardPulse is open'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('about every 60 minutes in the background'),
+      findsOneWidget,
+    );
+    tester.widget<Slider>(slider).onChangeEnd!(sixtyIndex);
+    await tester.pumpAndSettle();
+    expect(preferences.value.minutes, 60);
+    expect(
+      find.textContaining('about every 60 minutes in the background'),
+      findsOneWidget,
+    );
+
+    final fiveIndex = PollCadence.refreshIntervalStopIndex(5).toDouble();
+    tester.widget<Slider>(slider).onChanged!(fiveIndex);
+    await tester.pump();
+    expect(preferences.value.minutes, 60);
+    expect(
+      find.textContaining('Every 5 minutes while WardPulse is open'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('about every 15 minutes in the background'),
+      findsOneWidget,
+    );
+    tester.widget<Slider>(slider).onChangeEnd!(fiveIndex);
+    await tester.pumpAndSettle();
+    expect(preferences.value.minutes, 5);
+    expect(
+      find.textContaining('about every 15 minutes in the background'),
+      findsOneWidget,
     );
   });
 

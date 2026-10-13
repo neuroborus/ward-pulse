@@ -52,8 +52,8 @@ it come back* — and that is why it exists rather than repeating the Glance:
 
 Rules:
 
-- **Every plan window, spent or not.** Exhausted ones are the point: the Glance omits them, and
-  a window at zero has exactly one useful question left. Untouched ones stay too — the list is
+- **Every plan window, spent or not.** Glance retains selected known exhausted metrics; this
+  page adds reset times and the full window inventory. Untouched ones stay too — the list is
   also the inventory of what the watch knows, and hiding them would change its shape from poll
   to poll, leaving "not spent" indistinguishable from "not reported".
 - **Purchased meters never appear** (`source: purchased` — Extra usage, on-demand, purchased

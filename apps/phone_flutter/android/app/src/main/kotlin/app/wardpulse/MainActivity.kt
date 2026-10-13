@@ -9,6 +9,8 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private var watchRefreshChannel: MethodChannel? = null
     private var pendingWatchRefresh = false
+    private var navigationChannel: MethodChannel? = null
+    private val dashboardLaunch = DashboardLaunchRequest()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -32,6 +34,21 @@ class MainActivity : FlutterActivity() {
 
         // Cold start: stash only. Dart calls watchRefreshChannelReady after binding.
         markPendingWatchRefresh(intent)
+        navigationChannel =
+            MethodChannel(flutterEngine.dartExecutor.binaryMessenger, NAVIGATION_CHANNEL_NAME)
+                .also { channel ->
+                    channel.setMethodCallHandler { call, result ->
+                        when (call.method) {
+                            NAVIGATION_READY_METHOD -> {
+                                dashboardLaunch.markReady()
+                                flushPendingDashboardLaunch()
+                                result.success(null)
+                            }
+                            else -> result.notImplemented()
+                        }
+                    }
+                }
+        markPendingDashboardLaunch(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -40,6 +57,30 @@ class MainActivity : FlutterActivity() {
         // Warm start: Dart handler is already bound.
         if (markPendingWatchRefresh(intent)) {
             flushPendingWatchRefresh()
+        }
+        if (markPendingDashboardLaunch(intent)) {
+            flushPendingDashboardLaunch()
+        }
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        navigationChannel?.setMethodCallHandler(null)
+        navigationChannel = null
+        dashboardLaunch.reset()
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
+
+    private fun markPendingDashboardLaunch(intent: Intent?): Boolean {
+        if (!dashboardLaunch.record(intent?.action)) return false
+        // Consume before dispatch so activity recreation cannot replay this intent.
+        intent?.action = null
+        return true
+    }
+
+    private fun flushPendingDashboardLaunch() {
+        val channel = navigationChannel ?: return
+        if (dashboardLaunch.takeReadyRequest()) {
+            channel.invokeMethod(OPEN_DASHBOARD_METHOD, null)
         }
     }
 
@@ -68,5 +109,8 @@ class MainActivity : FlutterActivity() {
         const val WATCH_REFRESH_CHANNEL_NAME = "app.wardpulse/watch_refresh"
         const val WATCH_REFRESH_METHOD = "watchRefreshRequested"
         const val WATCH_REFRESH_READY_METHOD = "watchRefreshChannelReady"
+        const val NAVIGATION_CHANNEL_NAME = "app.wardpulse/app_navigation"
+        const val NAVIGATION_READY_METHOD = "navigationChannelReady"
+        const val OPEN_DASHBOARD_METHOD = "openDashboard"
     }
 }
