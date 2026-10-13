@@ -33,6 +33,7 @@ DashboardSnapshot applyUserAlertSettings(
       watchSummary: snapshot.watchSummary,
       syncIssue: snapshot.syncIssue,
       syncDetails: snapshot.syncDetails,
+      connectionVersions: snapshot.connectionVersions,
     );
   }
 
@@ -41,7 +42,7 @@ DashboardSnapshot applyUserAlertSettings(
   );
   // Phone-only sync metadata is not part of the Rust snapshot contract.
   if (snapshot.syncIssue == null && snapshot.syncDetails == null) {
-    return applied;
+    return applied.withConnectionVersions(snapshot.connectionVersions);
   }
   return DashboardSnapshot(
     generatedAt: applied.generatedAt,
@@ -54,5 +55,6 @@ DashboardSnapshot applyUserAlertSettings(
     watchSummary: applied.watchSummary,
     syncIssue: snapshot.syncIssue,
     syncDetails: snapshot.syncDetails,
+    connectionVersions: snapshot.connectionVersions,
   );
 }

@@ -1373,34 +1373,50 @@ and verify the live phone/watch UI
 
 ### Phase 8 — MVP hardening
 
-Status: in progress as of 2026-07-19. The release signing key and real-device testing remain
-open, together with the remaining error/offline acceptance review and headless partial-failure
-recovery described below. The completed in-process recovery slice is distinct from a persistent
-provider cache, which is not implemented. Phase 7 live acceptance remains pending and still
-needs real provider credentials.
+Status: in progress as of 2026-10-13. Release signing, real-device testing and the remaining
+error/offline acceptance review remain open. Persistent per-connection recovery is implemented
+and covered by host regressions and final-APK emulator acceptance below. Phase 7 live
+acceptance remains a separate provider-integration gate.
 
 Completed slice:
 
-- each live connection repository keeps its own last successful snapshot in memory after a
-  refresh failure, merging that stale connection with the other connections' current data;
-- cached dashboard, provider, and watch-summary state is marked stale;
-- the dashboard labels previous data explicitly; retained connections preserve their original
-  successful-sync time, while a mixed snapshot uses its newest connection's generation time;
-- OpenAI authentication, permission, rate-limit, availability, and response failures surface as fixed safe messages;
-- status icons expose concise tooltips, and credential entry can reveal only the current unsaved key on demand.
+- each live connection keeps its own normalized last successful snapshot in phone-private
+  storage, allowing fresh foreground and headless repositories to merge fresh A with stale B;
+- an all-provider failure can recover all available connected caches, while a first failure
+  without cached data keeps the existing empty/error behavior;
+- recovered dashboard, provider and watch-summary states are marked stale, with original
+  successful-sync timestamps; a mixed snapshot uses the newest connection's generation time;
+- older responses cannot replace or publish over newer connection data;
+- OpenAI authentication, permission, rate-limit, availability and response failures surface as
+  fixed safe messages; status icons expose concise tooltips, and credential entry can reveal
+  only the current unsaved key on demand.
 
-This recovery belongs to the long-lived in-process repository: successful refreshes replace
-only their connection's cache, missing credentials clear it, and credential changes invalidate
-the stack. Superseded in-flight loads cannot refill or replace the cache or borrow a newer
-load's cached data. Phone, automatic, and watch-requested refreshes retain live recovery caches;
-mock refresh still regenerates its demo. This cache is not persisted across process or
-WorkManager-isolate lifetimes, so headless partial-failure recovery remains an acceptance gap.
+`ConnectionSnapshotCache` persists only the owning connection's canonical normalized data.
+Credential generation, OAuth token revision and snapshot invalidation epoch are separate:
+normal token refresh retains same-account snapshots, while reconnect/delete and identity
+mismatch refuse obsolete data. Snapshot corruption and mock-mode changes leave credentials
+intact. Publication validates all connection leases together; local load revisions also reject
+superseded UI and preference callbacks. Phone, automatic and watch-requested refreshes retain
+live recovery data; mock refresh still regenerates its demo and never fills the live cache.
+The native transaction/lease service supports concurrent Flutter engines in the application's
+single Android process and process restart, not concurrently separate OS processes.
 
-When a headless poll cannot produce a snapshot, `providerSyncOnce` attempts to mark the existing
-home-widget rows stale through `HomeWidgetPhoneWidgetSyncService.markExistingRowsStale`. It
-changes only the stale flag and requests a redraw; usage values stay in place. With no rows,
-or an already empty widget, it writes nothing. This is a failed-poll
-marker, not an age-based freshness window or a persistent dashboard cache.
+Emulator acceptance on **2026-10-13** used the final Android x64 APK and three real plan
+connections: Codex, Claude and Cursor. An actual periodic WorkManager task started a fresh
+background process and Flutter engine with the launcher resumed, ran production polling,
+updated all three persisted success times and delivered a watch summary. After that process
+was killed, a fresh normal phone process with no active network restored the same three
+snapshots as stale. A second offline read and an ignored all-unavailable entrypoint preserved
+the post-worker payload hashes and original success times. The normal final APK was restored
+with install-r; live polling and Wear receipt recovered, with connectivity and the canonical
+watch face restored. This closes emulator acceptance for persistent restart/background
+recovery, without claiming real-device hardware coverage or live acceptance for all six
+connection types.
+
+If no snapshot can be produced, `providerSyncOnce` independently attempts to mark existing
+home-widget rows stale through `HomeWidgetPhoneWidgetSyncService.markExistingRowsStale`,
+retaining their values and requesting a redraw. Empty/cleared widgets are left alone. This
+failed-poll marker does not introduce an age-based freshness window.
 
 Closed since this phase opened, verified against the tree on **2026-10-12**: data deletion, which
 is per-connection disconnect erasing the credential from secure storage; the privacy policy, the
@@ -1620,6 +1636,27 @@ no tokens, cookies, or raw payloads appear in logs
 
 ### Phase 13 — configurable watch rings
 
+**Selected-zero follow-up, design, injected-watch and live phone-to-watch acceptance
+verified 2026-10-13.** The owner's screenshots at 11:36 and 11:38 showed Claude 5h at `0% left`
+on the phone while WFF and Glance selected Weekly `23% left`. The watch now keeps the
+tightest known selected percentage including zero, with deterministic window ties, an empty
+grey track and only exhausted `0%` tokens in the existing dark-theme pale error red
+`#FFB4AB`. Selected zero still consumes one of the three band slots and one Glance row.
+Known exhausted halves retain a configured pair; unavailable halves remain absent. Budget
+money labels, credits, family accents and user-configured alert rules are unchanged.
+`WATCH_RING_DESIGN.md` and `WEAR_GLANCE_DESIGN.md` own the complete current contract and
+the distinction between unknown, exhausted zero and a positive fraction rounded to a zero label.
+The canonical round API-36 AVD at 384×384 verified Claude 5h zero, either/both paired pools
+at zero, two split ordinals, all-zero rows/tracks, ambient and unchanged budget money labels
+under injected captured data; all ten Wear device tests passed. A genuine refresh from an
+intermediate phone APK built from the frozen zero-policy runtime updated the real Dashboard
+at `12:38:04` with Claude 5h `0%` / Weekly `23%` and Codex `94%`. The received schema-9
+summary (`generatedAt=2026-10-13T10:38:04.000Z`, Claude `label=5h`, `usedPercent=100`)
+and both watch captures matched without injected preferences after the live sync. This
+passes live zero-policy acceptance. The final persistent-cache APK and cold-worker recovery
+are verified separately in the [Phase 8 completed slice](#phase-8--mvp-hardening).
+No notround or hardware zero check is claimed.
+
 Status: complete as of 2026-08-17. Every acceptance line below has something holding it, and
 the walk that established this named which:
 
@@ -1675,8 +1712,9 @@ Deliverables:
   clock hand; remaining ends at 12);
 - **sort by remaining**: the tightest remaining plan limit is innermost / nearest center;
   equal plan percents break ties by credit request-runway (internal credits-per-request
-  constants; UI still shows credits only). Exhausted metrics (`usedPercent >= 100` or
-  rate-limited empty) are omitted rather than drawn as empty/dead rings;
+  constants; UI still shows credits only). Since the 2026-10-13 selected-zero revision,
+  exhausted known metrics (`usedPercent >= 100`) retain empty grey tracks and their rows;
+  unavailable percentages remain omitted;
 - the phone **Watchface** tab selects up to three ring slots (not Settings); metrics from
   unconnected providers stay visible but disabled with the same `?` help as the dashboard;
   purchased allowances are excluded from the ring catalog (phone cards only; alerts only when
@@ -1706,7 +1744,11 @@ WEAR_GLANCE_DESIGN.md baseline locked 2026-07-26 (legend rows, OK/!OK refresh, A
 review SVGs/PNGs match those baselines (face: preview-3-plan-credits; Glance: preview-glance-legend-3)
 watchface.xml and its ring-type drawables are generated (render-watchface.mjs; check-watchface fails on XML drift)
 the watch payload validates against its schema (version 9 since the split band) and sanitized fixtures stay current
-watch surfaces show only configured, available, non-exhausted rings
+watch surfaces show configured known rings, including exhausted zero; unavailable metrics are omitted
+Claude 5h at 0% versus Weekly at 23% selects 5h; equal known windows use established deterministic priority
+selected zero has no coloured remaining arc and only its 0% token is pale error red
+known paired halves retain their identities/tracks at one or both zero; all-selected-zero retains rows
+tiny positive values rounding to 0% remain positive and ordinary; zero creates no new alert or refresh state
 arc length = remaining; melt clockwise from 12; inner/center = tightest remaining
 a budget ring's band repeats its period as cut-out type (`D` / `7D` / `M`); plan rings carry none
 credits per provider family on face strips (`% · credits`) from allowances, like Glance;
@@ -1729,7 +1771,7 @@ schema version 4 + sanitized watch fixture; schema v5 tokenGlance → v6 credits
 phone Watchface tab owns ring-slot prefs + payload preview; Settings is systemic only
 Watch ring visual baseline locked (WATCH_RING_DESIGN.md + render-watch-ring-designs.mjs)
 Wear Glance legend baseline locked 2026-07-26 (WEAR_GLANCE_DESIGN.md + glance-legend-* review art)
-Phone payload sorts tightest-remaining first (center/inner on face) and omits exhausted layers
+Initial phone payload omitted exhausted layers; superseded by the selected-zero follow-up of 2026-10-13
 Wear Compose UsageRings: remaining arcs + sunk family strips (time stays on system/WFF)
 WFF v2 concentric remaining arcs (WeightedStroke + ColorRamp) + sunk `%` / credits strips
 Strip TEXT carries the full label (`100% · 500`); accents via RANGED_VALUE ColorRamp
@@ -1975,8 +2017,9 @@ lifetime, since nothing on the face expires by itself; and one dot cannot carry 
 when two plans recover together. The weather is no precedent for the first of those — WFF
 reads weather from a built-in source, while a recovery marker carries WardPulse data, and a
 complication slot is the only way that reaches the face.
-Until those are answered the face already says it in its own language — an exhausted ring is
-omitted, so a recovered one reappears at 100% on the next sync. A marker lands only with a
+Until those are answered the face already says it in its own language — since the 2026-10-13
+selected-zero revision, an exhausted selected ring keeps its grey track and 0% label; recovery
+restores its coloured arc on the next sync. A marker lands only with a
 WATCH_RING_DESIGN.md revision and a schema field to carry it.
 ```
 
@@ -2109,9 +2152,10 @@ them repeated its rows, and Last sync answered a question the Glance already ans
 `Stale`. Today and Week showed a currency total no design asks the watch for: the Glance carries
 per-provider credits and a budget row, and a money ceiling belongs on the face's budget strip.
 
-**The second page answers what the Glance does not: when a window comes back.** That is also the
-only place exhausted windows belong: the Glance omits them by design, so a plan at zero — the one
-state a user is actively waiting to leave — had nowhere to be read. The list keeps every plan
+**The second page answers when a window comes back.** Originally, Glance omitted exhausted
+windows and this was their only watch surface. The selected-zero revision of **2026-10-13**
+supersedes that omission: Glance keeps a selected known exhausted window at `0% left`, while
+this page still supplies its reset time and the full window inventory. The list keeps every plan
 window, spent or untouched, because it doubles as the inventory of what the watch knows; a list
 that changed shape with every poll would leave "not spent" indistinguishable from "not reported".
 
@@ -2160,6 +2204,12 @@ retiring the payload fields this phase orphaned (today, week, projectedTotal) �
 ```
 
 ### Phase 18 — Codex Spark as the second half of a band
+
+**Selected-zero revision 2026-10-13.** A configured pair retains both known pool identities,
+half-tracks and percentage tokens when one or both reach zero. Exhaustion no longer turns a
+known pair into a lone pool or removes both; actual unavailability still does. This changes
+the selected-zero acceptance of Phase 13, preserving this phase's fixed inside/outside pool
+order and one-band/one-row packing.
 
 Status: completed as of 2026-10-04.
 
@@ -2271,6 +2321,12 @@ the mono wordmark remains reserved for watermark use and is not duplicated besid
 ---
 
 ### Phase 20 — three upper cells on the watch face
+
+**Selected-zero revision 2026-10-13.** The retained-zero ring and legend treatment changes
+no upper-cell geometry. The current `WATCH_RING_DESIGN.md` revisions own the complete cells
+at integer origins `(152,114)`, `(204,100)`, `(256,114)`, the three-unit downward move, full
+temperature labels and shortest radial border fades. The acceptance below follows those
+current revisions; new exhausted-state review art must use the same geometry.
 
 Status: design locked 2026-10-09 in `docs/product/WATCH_RING_DESIGN.md` (upper-cell revision,
 with the melt-length and cell-layout corrections of the same day), and the first implementation
@@ -2529,8 +2585,8 @@ the face declares exactly eight complication slots and the validator passes
 three cells render above the clock, customizable; the left one ships bound to DAY_OF_WEEK and
   the other two ship EMPTY over the face's own temperature and UV chrome
 the three cells sit on the arc, not in a row: the middle one rides 14 units above the outer two
-  — the arc derives 13.39, and WFF rejects a fractional coordinate, so the integer boxes put it
-  at 14 — and all three measure 6.00 units clear of the inner band on the device
+  at integer origins 152,114 / 204,100 / 256,114; the row is three units below the former concentric layout
+  derived inner-band gaps are 8.8577 units at left/right and 8.8000 at middle, not new device measurements
 a filled cell's opaque well covers the chrome beneath it with no tint carried up from it, and
   emptying that cell brings the reading back
 the face shows the graded well, not a zero or an empty string, when weather is unavailable
@@ -2540,7 +2596,7 @@ a tap on a cell opens that cell's own provider, never the WardPulse app
 an empty cell shows a recessed well — no mark, glyph, or wordmark — carrying only the weather
   reading where the face declares one under it; a cell showing nothing at all takes the graded
   rim, so a filled cell and an empty one are told apart without reading their contents
-the temperature's digits sit on the cell axis, not its string: the degree mark hangs off centre
+the complete temperature label (including °C/°F) is centred in the 37-unit box with no numeric-only shift
 the three legend strips render from their own bands' slots at y=283 / 304 / 325
 with one and two rings the strip stack fills from its bottom row and leaves no gap mid-stack
 the tightest remaining is the topmost occupied strip row at one, two, and three rings

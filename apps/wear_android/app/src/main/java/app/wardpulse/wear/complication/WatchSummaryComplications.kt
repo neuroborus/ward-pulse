@@ -103,7 +103,7 @@ abstract class SplitBandComplicationDataSourceService(private val splitIndex: In
         }
 }
 
-/** Missing/exhausted splits clear stale data; ordinal selection never skips an exhausted split. */
+/** Missing/invalid splits clear stale data; exhausted halves retain their tracks. */
 internal fun outerHalfComplicationData(
     rings: List<RingSummary>,
     splitIndex: Int,
@@ -114,7 +114,7 @@ internal fun outerHalfComplicationData(
     val half = rings[payloadIndex].split ?: return NoDataComplicationData()
     val outerSlot = RingSurfaceOrder.outerSlotForPayloadIndex(rings.size, payloadIndex)
         ?: return NoDataComplicationData()
-    if (WatchComplicationText.remainingPercent(half.usedPercent) <= 0f) {
+    if (!half.usedPercent.isFinite() || half.usedPercent < 0.0) {
         return NoDataComplicationData()
     }
     return build(half, outerSlot)
@@ -149,10 +149,10 @@ internal fun ringComplicationData(
         RingSurfaceOrder.payloadIndexForOuterSlot(rings.size, ringIndex)
             ?: return NoDataComplicationData()
     val ring = rings[dataIndex]
-    val remaining = WatchComplicationText.remainingPercent(ring.usedPercent)
-    if (remaining <= 0f) {
+    if (!ring.usedPercent.isFinite() || ring.usedPercent < 0.0) {
         return NoDataComplicationData()
     }
+    val remaining = WatchComplicationText.remainingPercent(ring.usedPercent)
     return build(ring, remaining, WatchComplicationText.ringTitleToken(ring))
 }
 
@@ -290,26 +290,10 @@ private object ComplicationBuilders {
         colorArgb: Int = RingFamily.FALLBACK,
         contentDescription: String? = null,
         text: String? = null,
-    ): ComplicationData {
-        val value = percent.coerceIn(0f, 100f)
-        val amount = WatchComplicationText.percentAmount(value)
-        val label = text?.takeIf { it.isNotBlank() } ?: amount
-        val description =
-            contentDescription?.let { "$it $amount%" }
-                ?: title.takeIf { it.isNotEmpty() }?.let { "$amount% · $it" }
-                ?: WatchComplicationText.percentLabel(value)
-        return RangedValueComplicationData.Builder(
-            value = value,
-            min = 0f,
-            max = 100f,
-            contentDescription = PlainComplicationText.Builder(description).build(),
-        ).setText(PlainComplicationText.Builder(label).build())
-            .setTitle(PlainComplicationText.Builder(title).build())
-            // Drives WFF WeightedStroke via [COMPLICATION.RANGED_VALUE_COLORS].
-            .setColorRamp(ColorRamp(intArrayOf(colorArgb), /* interpolated = */ false))
+    ): ComplicationData =
+        rangedComplicationBuilder(percent, title, colorArgb, contentDescription, text)
             .setTapAction(tapAction(context))
             .build()
-    }
 
     private fun tapAction(context: Context): PendingIntent =
         PendingIntent.getActivity(
@@ -318,6 +302,30 @@ private object ComplicationBuilders {
             Intent(context, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+}
+
+/** AndroidX ranged data construction, separated from Android tap-action setup. */
+internal fun rangedComplicationBuilder(
+    percent: Float,
+    title: String,
+    colorArgb: Int = RingFamily.FALLBACK,
+    contentDescription: String? = null,
+    text: String? = null,
+): RangedValueComplicationData.Builder {
+    val value = percent.coerceIn(0f, 100f)
+    val amount = WatchComplicationText.percentAmount(value)
+    val label = text?.takeIf { it.isNotBlank() } ?: amount
+    val description = contentDescription?.let { "$it $amount%" }
+        ?: title.takeIf { it.isNotEmpty() }?.let { "$amount% · $it" }
+        ?: WatchComplicationText.percentLabel(value)
+    return RangedValueComplicationData.Builder(
+        value = value,
+        min = 0f,
+        max = 100f,
+        contentDescription = PlainComplicationText.Builder(description).build(),
+    ).setText(PlainComplicationText.Builder(label).build())
+        .setTitle(PlainComplicationText.Builder(title).build())
+        .setColorRamp(ColorRamp(intArrayOf(colorArgb), /* interpolated = */ false))
 }
 
 /**
@@ -378,6 +386,10 @@ object WatchComplicationText {
      * `tools/render-watchface.mjs`.
      */
     const val SPLIT_TOKEN = "split"
+    const val ZERO_TOKEN = "zero"
+    const val ZERO_INNER_TOKEN = "zero-inner"
+    const val ZERO_OUTER_TOKEN = "zero-outer"
+    const val ZERO_BOTH_TOKEN = "zero-both"
 
     /**
      * Closed outer-pool vocabulary. A new pool color needs a matching static
@@ -390,10 +402,10 @@ object WatchComplicationText {
             else -> null
         }
 
-    /** No marker for an ordinary band, an exhausted half, or an unknown pool. */
+    /** Known outer-pool identity stays visible even when its track is empty. */
     fun stripTitleToken(ring: RingSummary): String? {
         val half = ring.split ?: return null
-        if (remainingPercent(ring.usedPercent) <= 0f || remainingPercent(half.usedPercent) <= 0f) {
+        if (!half.usedPercent.isFinite() || half.usedPercent < 0.0) {
             return null
         }
         return splitPoolToken(half.id)
@@ -424,11 +436,22 @@ object WatchComplicationText {
      * which matches each one whole.
      */
     fun ringTitleToken(ring: RingSummary): String {
-        if (ring.split == null) {
-            return ringPeriodToken(ring.id).orEmpty()
+        val split = ring.split?.takeIf { it.usedPercent.isFinite() && it.usedPercent >= 0.0 }
+        if (split == null) {
+            return ringPeriodToken(ring.id)
+                ?: if (ring.usedPercent >= 100.0) ZERO_TOKEN else ""
         }
-        val pool = stripTitleToken(ring) ?: return SPLIT_TOKEN
-        return "$SPLIT_TOKEN$TOKEN_SEPARATOR$pool"
+        val pool = stripTitleToken(ring)
+        val base = if (pool == null) SPLIT_TOKEN else "$SPLIT_TOKEN$TOKEN_SEPARATOR$pool"
+        val innerZero = ring.usedPercent >= 100.0
+        val outerZero = split.usedPercent >= 100.0
+        val zero = when {
+            innerZero && outerZero -> ZERO_BOTH_TOKEN
+            innerZero -> ZERO_INNER_TOKEN
+            outerZero -> ZERO_OUTER_TOKEN
+            else -> null
+        }
+        return if (zero == null) base else "$base$TOKEN_SEPARATOR$zero"
     }
 
     /**
@@ -463,16 +486,17 @@ object WatchComplicationText {
         }
         val ring = summary.rings.getOrNull(index)
         if (ring != null) {
-            val remaining = remainingPercent(ring.usedPercent)
-            if (remaining <= 0f) {
+            if (!ring.usedPercent.isFinite() || ring.usedPercent < 0.0) {
                 return null
             }
+            val remaining = remainingPercent(ring.usedPercent)
             formatBudgetStripLabel(ring.spent, ring.limit)?.let { return it }
             val percent = percentAmount(remaining)
             // A split band spends the well on its second percent instead of
             // credits (`WATCH_RING_DESIGN.md`, Split band, rules 4 and 5).
-            val half = ring.split?.let { remainingPercent(it.usedPercent) }
-            if (half != null && half > 0f) {
+            val half = ring.split?.takeIf { it.usedPercent.isFinite() && it.usedPercent >= 0.0 }
+                ?.let { remainingPercent(it.usedPercent) }
+            if (half != null) {
                 return "$percent% · ${percentAmount(half)}%"
             }
             val credits = purchasedCreditsCompact(summary, ring.id)

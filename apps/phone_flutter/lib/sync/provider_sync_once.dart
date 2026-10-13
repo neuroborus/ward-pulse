@@ -14,6 +14,8 @@ import 'recovery_wake.dart';
 import 'recovery_watchlist.dart';
 import 'watch_sync_service.dart';
 
+Future<bool> _alwaysCurrent() async => true;
+
 typedef ProviderSyncWorkLoader = Future<ProviderSyncWork> Function();
 typedef ProviderSyncFailureLogger =
     void Function(String step, Object error, StackTrace stackTrace);
@@ -24,11 +26,13 @@ final class ProviderSyncWork {
     required this.syncWatch,
     required this.syncWidget,
     required this.syncRecoveries,
+    this.isCurrent = _alwaysCurrent,
   });
 
   final Future<void> Function() syncWatch;
   final Future<void> Function() syncWidget;
   final Future<void> Function() syncRecoveries;
+  final Future<bool> Function() isCurrent;
 }
 
 /// One provider sync + watch push with no UI (headless WorkManager tick).
@@ -52,11 +56,17 @@ Future<void> providerSyncOnce({
     return;
   }
 
-  await _attemptProviderSyncStep('watch', work.syncWatch, logFailure);
-  await _attemptProviderSyncStep('widget', work.syncWidget, logFailure);
+  await _attemptProviderSyncStep('watch', () async {
+    if (await work.isCurrent()) await work.syncWatch();
+  }, logFailure);
+  await _attemptProviderSyncStep('widget', () async {
+    if (await work.isCurrent()) await work.syncWidget();
+  }, logFailure);
   // Bookkeeping last: reader-visible surfaces are pushed first, but neither
   // surface can prevent the recovery state from advancing.
-  await _attemptProviderSyncStep('recovery', work.syncRecoveries, logFailure);
+  await _attemptProviderSyncStep('recovery', () async {
+    if (await work.isCurrent()) await work.syncRecoveries();
+  }, logFailure);
 }
 
 Future<ProviderSyncWork> _loadProviderSyncWork() async {
@@ -71,7 +81,10 @@ Future<ProviderSyncWork> _loadProviderSyncWork() async {
     alertThresholds,
   );
 
+  if (!await live.repository.isSnapshotCurrent(snapshot))
+    throw StateError('Connection changed during refresh.');
   return ProviderSyncWork(
+    isCurrent: () => live.repository.isSnapshotCurrent(snapshot),
     syncWatch:
         () => const MethodChannelWatchSyncService().sync(
           snapshot,

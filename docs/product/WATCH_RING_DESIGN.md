@@ -51,7 +51,10 @@ the complete reading is centred, replacing the degree-only numeric correction); 
 revision **2026-10-13** (the occupied-cell border widens inward to 1.5 units and dissolves
 towards the nearest band); cell-position / radial-direction revision **2026-10-13** (the
 three complete cells move three units lower and the fade follows the true shortest radial
-path to the band, derived from each cell's integer centre) — accepted visual target for
+path to the band, derived from each cell's integer centre); selected-zero revision
+**2026-10-13** (known exhausted selected metrics retain their grey tracks and legend rows,
+with only exhausted `0%` tokens in the existing pale error red; paired pools retain both
+identities) — accepted visual target for
 Wear OS and Watch Face Format until the next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
 wireframes, large remaining-% heroes, or bordered strip cards.
@@ -62,6 +65,45 @@ Canonical review generator: `tools/render-watch-ring-designs.mjs`
 Canonical face generator: `tools/render-watchface.mjs` — it writes the shipped `watchface.xml`
 and the ring-type drawables beside it.  
 Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and sibling variants).
+
+**Selected-zero revision 2026-10-13 — exhaustion stays visible.** The owner's screenshots
+`Screenshot_20261013_113638.png` and `Screenshot_20261013_113830.png` showed the phone's
+Claude **5-hour session at 0% left** and **Weekly plan at 23% left**, while the face's Claude
+strip read **23%** and Glance named **`Claude · Weekly`**. The former non-exhausted preference
+hid the exhausted window. The owner explicitly superseded that rule: select the tightest
+known window including zero, keep its empty grey track and `0%` legend on both watch surfaces.
+The revision also keeps a configured pair when one or both known pools reach zero. These
+screenshots establish the reported discrepancy; the revised runtime was subsequently
+checked with injected watch data and a genuine phone-to-watch refresh, as recorded below.
+Equal known Claude percentages keep the existing `5h` → `Weekly` → `Opus weekly` →
+`Sonnet weekly` priority; an unknown window cannot displace a known zero.
+
+**Injected-device verification 2026-10-13.** On `wardpulse_wear_round_api36_1`,
+`emulator-5554`, **384×384**, the captured Claude data (`5h used=100`, `Weekly used=77`)
+selected **`Claude · 5h` / `0%`** on Glance and an empty inner grey track with red `0%` on WFF;
+the inner-band region contained no orange arc pixels. Cursor inner-zero, outer-zero and
+both-zero cases retained tracks, family markers and only the actual zero percentage tokens
+red. Two pairs kept both split ordinals and family identities. Three selected exhausted
+bands retained **four pool tracks**, three legend rows and their ambient dimmed treatment.
+An exhausted budget retained its `7D` texture and white `$100.00/100`; Glance's existing zero
+percentage token was red. At `used=99.96`, WFF showed ordinary white `0%` with no red ink;
+this does not establish visibility of a subpixel positive arc. The installed XML matched
+the source byte for byte and all **10** canonical Wear device tests passed. The captured
+Claude zero case was rechecked after installing the final Wear APK. These broader variant
+checks used injected watch data; they do not establish notround or hardware zero behaviour.
+
+**Live phone-to-watch verification 2026-10-13.** An intermediate Android x64 phone APK
+built from the frozen zero-policy runtime refreshed the real Dashboard at **12:38:04**:
+Claude **5h 0% / Weekly 23%** and Codex **94%**. The Wear store changed from the earlier
+`12:34:44` summary's `Weekly used=77` to schema **9**,
+`generatedAt=2026-10-13T10:38:04.000Z`, Claude **`label=5h`, `usedPercent=100`**.
+The phone logged `Watch summary queued` at `12:38:05.235`; Wear logged receipt at
+`12:38:01.879`. The device clocks differ by approximately 3.36 seconds, so those wall-clock
+times do not establish transit latency. `live-zero-face.png` and `live-zero-glance.png`
+showed the matching grey Claude track / red `0%` and Codex `94%`, with no injected
+preferences between the live sync and the captures. This passes live zero-policy acceptance
+on the canonical round AVD. Final persistent-cache APK and cold-worker verification remain
+separate and pending; this pass does not establish those behaviours.
 
 **Revision 2026-09-16 — Codex/Spark pair:** Codex plan windows collapse per limit,
 then the main limit and Spark may share one band. The main limit is inside/left;
@@ -95,14 +137,15 @@ pair's, whose second value is the other pool's percent (see Split band).
    is still true and stays on the phone dashboard cards — it is the aggregate *percentage* that
    has no owner and no meaning.
    Claude subscription plan windows are an exception at **selection** time: the phone exposes one
-   Claude plan slot and resolves it to the tightest remaining window (window name lives on Glance,
+   Claude plan slot and resolves it to the tightest **known** remaining window, including zero
+   (window name lives on Glance,
    not on face strips).
    The two Cursor pools or the main Codex and Spark limits may share one band at
    **drawing** time, split lengthwise (see Split band). Each pair stays one slot.
 2. **Arc = remaining** — the colored sweep is `(100 - usedPercent)`. As the limit is consumed, the
    arc shrinks (do not grow a separate “used” fill). Melt is **clockwise from 12**: usage opens a
    gap at 12 o’clock and advances like a clock hand; remaining stays anchored ending at 12.
-3. **Center / inner = tightest remaining** — among selected, available, non-exhausted metrics,
+3. **Center / inner = tightest remaining** — among selected metrics with a known percentage,
    sort by plan remaining ascending (equivalently highest `usedPercent` first). When plan
    percents tie, secondary sort uses estimated remaining **request-equivalents** from that
    provider’s purchased credits (`credits /` internal credits-per-request constants — sort only,
@@ -111,9 +154,22 @@ pair's, whose second value is the other pool's percent (see Split band).
    are looser. The strip stack anchors to its bottom row, so with fewer than three rings the
    tightest strip is the topmost **occupied** row rather than the top of the well area (see
    Upper cells, rule 3).
-4. **Omit exhausted** — `usedPercent >= 100` (or empty/unavailable) does not render.
+4. **Keep selected exhaustion; omit unknown or unavailable.** A known `usedPercent >= 100`
+   means **0% remaining**, not missing data. Keep the selected band and its legend row, with
+   the existing grey track `#2E3632` and **no coloured remaining arc**. The exhausted `0%`
+   token takes **`#FFB4AB`**, the existing phone dark theme's error role, computed on the host
+   from its Material color utilities configuration on 2026-10-13. This is a token choice,
+   not a device pixel measurement. Only that percentage token is red: titles, separators,
+   credits (including `0 credits`) and family accents retain their own colours. Local budget
+   strips keep `$spent/limit`; a zero remainder keeps the track without adding a percentage
+   or changing the strip width. Missing/null, non-finite or negative usage percentages remain
+   unavailable and are omitted,
+   never fabricated as zero. A **positive** remainder that rounds to a `0%` label still has
+   a positive arc and ordinary label colour; exhaustion is decided from the value, not text.
+   No alert, refresh state or threshold is inferred from this colour treatment.
 5. **Max three** — phone **Watchface** tab chooses slots (`watchRingSlotCount = 3`); payload carries
-   only the resolved surface order after omit + sort. Plan/budget percent metrics only. A split
+   only the resolved surface order after omitting unavailable metrics and sorting; known zero
+   still consumes its selected slot. Plan/budget percent metrics only. A split
    pair counts as **one** against the cap on both sides: it draws one band, and the Watchface tab
    charges either configured pair one slot: two pairs and one ordinary ring fit three slots.
 6. **A budget ring is offered where spend is reported, and enabled once a limit is set** — the
@@ -257,9 +313,9 @@ on its own value.
    either alone is an ordinary, undivided ring. A pair costs one of the three slots, which is the
    whole point: a plan with two pools does not cost two.
    Codex windows collapse independently to `allowance.codex.plan` and
-   `allowance.codex.spark`, choosing the tightest non-exhausted window per limit;
+   `allowance.codex.spark`, choosing the tightest known window per limit, including zero;
    ties prefer primary. Empty limits offer no ring, unavailable limits remain disabled,
-   and fully exhausted limits are omitted from the face. The picker keeps `Codex plan`
+   and fully exhausted selected limits remain visible. The picker keeps `Codex plan`
    and `Codex · Spark` stable; the winning window remains in the subtitle and payload.
    Old per-window Watchface selections migrate before deduplication and the band budget;
    widget selections remain per-window. Spark window labels are `Spark 5h` / `Spark Weekly`.
@@ -277,7 +333,8 @@ on its own value.
    stays the rule for every other strip: two of the same colour would say a thing twice, which is
    the defect this language exists to avoid. Each strip's `TITLE` carries a closed outer-pool
    token: `cursor-other` selects static `#67E8D4`, and `spark` selects static `#186020`.
-   An empty or unknown token paints no far marker. The inner accent keeps `[COMPLICATION.RANGED_VALUE_COLORS]`; the
+   An empty or unknown family token paints no far marker. Known zero does not remove a marker.
+   The inner accent keeps `[COMPLICATION.RANGED_VALUE_COLORS]`; the
    outer accent does not borrow its colour. A new outer pool requires a matching token in Wear
    and the face generator. The far marker keeps its 3x14 geometry inside the strip's own slot,
    replacing the shared marker slot introduced on **2026-08-16**.
@@ -292,12 +349,14 @@ on its own value.
 5. **A split strip carries no credits.** The well is measured for one worst-case label, and two
    percentages spend that width. Nothing is lost: Glance already lists purchased credits per
    provider, and that is where a reader looks for a number rather than a warning.
-6. **An exhausted half collapses the pair.** Layer rule 4 omits an exhausted metric, and a pair
-   is no exception: when one pool reaches `usedPercent >= 100`, the band goes back to being a single
-   ring of the surviving pool, in that pool's colour, with one marker and one percentage on its
-   strip. Cursor's external pool runs out routinely, so this is the common state, not the corner
-   case — a half-empty split band would spend the scarcest space on a number that is already
-   zero.
+6. **Known zero keeps the pair (revision 2026-10-13).** Both known pools retain their fixed
+   inner/outer positions and full grey half-tracks. A zero half paints no coloured arc and its
+   `0%` token is pale red; the positive half keeps its colour and ordinary percentage. With
+   both exhausted, retain both tracks, both family markers and **`0% · 0%`** with only the two
+   percentage tokens red. The pair still costs one band and one Glance row. An unavailable
+   half remains absent; the known survivor can render as an ordinary pool, and two unavailable
+   halves render nothing. Unknown and exhausted therefore remain distinct. This supersedes
+   the former exhausted-half collapse rule.
 7. **One payload entry, two complications — two shared slots for outer halves.** A
    `RANGED_VALUE` complication carries one value, so two melts need two complications however the
    payload is shaped. A WFF scene holds at most eight `ComplicationSlot` elements (`maxOccurs="8"`,
@@ -309,8 +368,9 @@ on its own value.
 
    `RingSplitComplicationDataSourceService` selects split ordinal 0 in slot 106;
    `StripSplitComplicationDataSourceService` selects ordinal 1 in slot 109. Ordinals follow the
-   payload's split entries, not all its rings. A missing or exhausted selected outer half yields
-   `NoData`; an exhausted entry does not shift the next ordinal. Each slot's `BoundingArc`
+   payload's split entries, not all its rings. A missing selected outer half yields
+   `NoData`; a known exhausted half carries real zero data and does not shift the next ordinal.
+   Each slot's `BoundingArc`
    reaches all three bands. Its `TITLE` names the band index **counted from the outside**, mapped
    from the payload index by `RingSurfaceOrder`, and a string comparison selects the radius.
    At most two bands can split; a third outer half has no slot.
@@ -492,17 +552,25 @@ called this band the "upper aperture"; it is the same band.
 
    The collision is resolved by a combined closed vocabulary, with each branch comparing against
    the full set of combinations joined by `||` — WFF has no prefix test, so a token is matched
-   whole or not at all. The set is short, because only a split band carries a pool token and a
-   budget ring is never shared, so no period token ever gains a suffix:
+   whole or not at all. A budget ring is never shared, so no period token gains a zero suffix.
+   The selected-zero revision adds one ordinary plan token and three optional paired suffixes:
 
    | `TITLE` | Band | Strip |
    |---|---|---|
    | *(empty)* | a plan ring's full band | no far marker |
+   | `zero` | a plan ring's grey track, no coloured arc | pale-red `0%`; no far marker |
    | `D` / `7D` / `M` | a budget ring's band, with its type | no far marker |
-   | `split` | the inner half only | no far marker — pool unknown or exhausted |
+   | `split` | the inner half only | no far marker — outer family token absent |
    | `split:cursor-other` | the inner half only | the Cursor pool's marker |
    | `split:spark` | the inner half only | the Spark pool's marker |
    | `credits` | **no band at all** | the lone credits row (rule 3) |
+
+   Each paired base (`split`, `split:cursor-other`, `split:spark`) accepts no suffix or exactly
+   one of **`:zero-inner`**, **`:zero-outer`**, **`:zero-both`**: twelve closed spellings in all.
+   Every spelling preserves the band's half geometry and its base family-marker selection.
+   The zero suffix selects only the exhausted percentage token(s) for pale red. Full `TEXT`
+   still carries the complete label, with separators and credits retaining normal colour;
+   budget periods and the credits-only token are unchanged.
 
    **The combined branch has now executed.** Until the generator changed, live data sent a plain
    `split` and this was recorded here as unverified through several revisions. It is not any
@@ -1140,7 +1208,7 @@ called this band the "upper aperture"; it is the same band.
 
 14. **The recovery marker is not part of this design.** It remains the open question recorded in
     `docs/DEVELOPMENT_PLAN.md` Phase 15, and the face keeps saying it in its own language: an
-    exhausted ring is omitted, so a recovered one reappears. Giving the cells to the wearer does
+    exhausted selected ring stays at zero, so recovery restores its coloured arc. Giving the cells to the wearer does
     not reserve one for it.
 
 ## Ring geometry (revised 2026-08-02)
@@ -1660,6 +1728,16 @@ xdg-open apps/wear_android/design/preview-3-plan-credits.png
 | `round-3-plan-two-pairs.svg` | Three bands with Cursor and Codex/Spark pairs, fixed inner/outer order and two far markers |
 | `round-3-plan-untouched.svg` | A pool nobody has spent: its half closes, while the pool beside it keeps its gap |
 | `round-3-plan-near-exhausted.svg` | Near-exhaustion regression — `2%`, `69%`, and `94%` remain, and the 2% ring still has a visible mark |
+| `round-1-plan-exhausted.svg` | Selected Claude 5h at zero: grey track and pale-red `0%` |
+| `round-3-plan-exhausted-claude.svg` | Claude zero remains beside the Cursor pair and Codex; three selected bands |
+| `round-plan-pair-inner-zero.svg` / `round-plan-pair-outer-zero.svg` | Fixed paired identities with either known half at zero |
+| `round-plan-pair-both-zero.svg` | Both known halves retain grey tracks, family markers and two red percentage tokens |
+| `round-3-plan-all-zero.svg` / `round-3-plan-two-pairs-zero.svg` | Full selected-zero cases, including two paired bands |
+| `round-ambient-all-zero.svg` | Zero tracks and legend values retained in ambient review treatment |
+| `round-plan-positive-rounds-zero.svg` | Positive arc geometry with an ordinary `0%` label; subpixel visibility is not asserted |
+| `round-plan-zero-credits.svg` | Red zero percentage beside neutral `0` credits |
+| `round-plan-unavailable-inner-zero-outer.svg` | Invalid inner usage omitted; the known zero outer survivor keeps its own family identity |
+| `round-budget-exhausted.svg` | Grey exhausted budget track, with its existing money label unchanged |
 | `round-3-plan-budget.svg` | Two plan rings + a budget ring reading `$71.30/250`; only its band carries type |
 | `round-3-budget-periods.svg` | **Ring type baseline** — one connection's three budget periods, told apart by `7D` / `M` / `D` alone |
 | `round-2-plan-credits.svg` | Two providers |

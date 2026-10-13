@@ -60,6 +60,7 @@ const COLOR = {
   track: '#ff2e3632',
   strip: '#eb0b0e0c',
   text: '#fff4fbf8',
+  exhaustedPercent: '#ffffb4ab',
   /**
    * The occluder a filled cell draws inside its own slot, and the middle of an
    * empty cell's recess. Opaque where the strip well is not: it has to cover
@@ -139,6 +140,8 @@ const OUTER_HALVES = [
 
 /** The token a band's own slot sends when it draws only its inner half. */
 const SPLIT_TOKEN = 'split'
+const ZERO_TOKEN = 'zero'
+const ZERO_STATES = ['zero-inner', 'zero-outer', 'zero-both']
 
 /**
  * The token that lone strip sends when there is no ring at all — a credits
@@ -402,11 +405,15 @@ function titleEquals(...tokens) {
   return tokens.map((token) => `[COMPLICATION.TITLE] == "${token}"`).join(' || ')
 }
 
-/** Every spelling of `split`: bare, or carrying one of the pool tokens. */
-const SPLIT_TITLES = [
+/** Every selected pair keeps its identity when one or both halves exhaust. */
+const SPLIT_BASE_TITLES = [
   SPLIT_TOKEN,
   ...SPLIT_POOLS.map(({ token }) => `${SPLIT_TOKEN}${TOKEN_SEPARATOR}${token}`),
 ]
+const SPLIT_TITLES = SPLIT_BASE_TITLES.flatMap((base) => [
+  base,
+  ...ZERO_STATES.map((state) => `${base}${TOKEN_SEPARATOR}${state}`),
+])
 
 /** Every slot names a service in the Wear app; nothing else may fill them. */
 function provider(service) {
@@ -902,6 +909,9 @@ function assertNearExhaustedArcs() {
     if (
       !markup.includes(`<= ${geometry.twoCapCutoff.toFixed(6)}`) ||
       !markup.includes('<Compare expression="isNearEmpty">') ||
+      !markup.includes('<Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>') ||
+      !markup.includes('<Compare expression="hasRemaining">') ||
+      markup.indexOf(`color="${COLOR.track}"`) >= markup.indexOf('<Compare expression="hasRemaining">') ||
       !markup.includes(`value="${rawStart}"`) ||
       !markup.includes(`* ${SWEEP.end} + ${geometry.cap}`) ||
       caps.join(',') !== 'ROUND,ROUND,BUTT,ROUND'
@@ -934,6 +944,12 @@ ${pad}        endAngle="${SWEEP.end}">
 ${pad}        <Stroke color="${COLOR.track}" thickness="${thickness}" cap="ROUND" />
 ${pad}    </Arc>
 ${pad}</PartDraw>
+${pad}<Condition>
+${pad}    <Expressions>
+${pad}        <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+${pad}    </Expressions>
+${pad}    <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+${pad}    <Compare expression="hasRemaining">
 ${pad}<Condition>
 ${pad}    <Expressions>
 ${pad}        <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
@@ -1003,6 +1019,8 @@ ${pad}                    cap="ROUND" />
 ${pad}            </Arc>
 ${pad}        </PartDraw>
 ${pad}    </Default>
+${pad}</Condition>
+${pad}    </Compare>
 ${pad}</Condition>`
 }
 
@@ -1029,7 +1047,7 @@ function ringSlot({ slotId, diameter, service }, index) {
                 <Condition>
                     <Expressions>
                         <Expression name="hasBand">
-                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && !(${titleEquals(CREDITS_TOKEN)})]]>
+                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 0 && !(${titleEquals(CREDITS_TOKEN)})]]>
                         </Expression>
                     </Expressions>
                     <Compare expression="hasBand">
@@ -1192,7 +1210,7 @@ function wordmark() {
  */
 function stripRow(ringIndex, pad) {
   const y = stripRowY(ringIndex)
-  const { x, width, height, radius, textInset, textWidth, fontSize } = STRIP
+  const { x, width, height, radius } = STRIP
   return `${pad}<Group x="${x}" y="${y}" width="${width}" height="${height}" name="ring${ringIndex + 1}_strip" alpha="255">
 ${pad}    <Variant mode="AMBIENT" target="alpha" value="90" />
 ${pad}    <PartDraw x="0" y="0" width="${width}" height="${height}">
@@ -1214,16 +1232,53 @@ ${pad}                cap="BUTT" />
 ${pad}        </Arc>
 ${pad}    </PartDraw>
 ${splitMarker(pad + ' '.repeat(4))}
-${pad}    <PartText x="${textInset}" y="0" width="${textWidth}" height="${height}">
-${pad}        <Text align="CENTER" ellipsis="TRUE">
-${pad}            <Font family="SYNC_TO_DEVICE" size="${fontSize}" weight="BOLD" color="${COLOR.text}">
-${pad}                <Template>%s
-${pad}                    <Parameter expression="[COMPLICATION.TEXT]" />
-${pad}                </Template>
-${pad}            </Font>
-${pad}        </Text>
-${pad}    </PartText>
+${stripText(pad + ' '.repeat(4))}
 ${pad}</Group>`
+}
+
+/** Mixed Font runs centre together; only exact exhausted percent tokens tint. */
+function stripText(pad) {
+  const { height, textInset, textWidth, fontSize } = STRIP
+  const text = '[COMPLICATION.TEXT]'
+  const length = `textLength(${text})`
+  const part = (runs, innerPad) => `${innerPad}<PartText x="${textInset}" y="0" width="${textWidth}" height="${height}">
+${innerPad}    <Text align="CENTER" ellipsis="TRUE">
+${runs.map(([expression, exhausted]) => `${innerPad}        <Font family="SYNC_TO_DEVICE" size="${fontSize}" weight="BOLD" color="${exhausted ? COLOR.exhaustedPercent : COLOR.text}">
+${innerPad}            <Template>%s
+${innerPad}                <Parameter expression="${expression}" />
+${innerPad}            </Template>
+${innerPad}        </Font>`).join('\n')}
+${innerPad}    </Text>
+${innerPad}</PartText>`
+  const zeroTitles = (state) => SPLIT_BASE_TITLES.map((base) => `${base}${TOKEN_SEPARATOR}${state}`)
+  const states = [
+    {
+      name: 'zeroInner',
+      tokens: [ZERO_TOKEN, ...zeroTitles('zero-inner')],
+      runs: [[`subText(${text}, 0, 2)`, true], [`subText(${text}, 2, ${length})`, false]],
+    },
+    {
+      name: 'zeroOuter',
+      tokens: zeroTitles('zero-outer'),
+      runs: [[`subText(${text}, 0, ${length} - 2)`, false], [`subText(${text}, ${length} - 2, ${length})`, true]],
+    },
+    {
+      name: 'zeroBoth',
+      tokens: zeroTitles('zero-both'),
+      runs: [[`subText(${text}, 0, 2)`, true], [`subText(${text}, 2, ${length} - 2)`, false], [`subText(${text}, ${length} - 2, ${length})`, true]],
+    },
+  ]
+  return `${pad}<Condition>
+${pad}    <Expressions>
+${states.map(({ name, tokens }) => `${pad}        <Expression name="${name}"><![CDATA[${titleEquals(...tokens)}]]></Expression>`).join('\n')}
+${pad}    </Expressions>
+${states.map(({ name, runs }) => `${pad}    <Compare expression="${name}">
+${part(runs, pad + ' '.repeat(8))}
+${pad}    </Compare>`).join('\n')}
+${pad}    <Default>
+${part([[text, false]], pad + ' '.repeat(8))}
+${pad}    </Default>
+${pad}</Condition>`
 }
 
 /**
@@ -1238,7 +1293,7 @@ function splitMarker(pad) {
   const expressions = SPLIT_POOLS.map(
     ({ token }, index) =>
       `${pad}        <Expression name="isPool${index}"><![CDATA[${titleEquals(
-        `${SPLIT_TOKEN}${TOKEN_SEPARATOR}${token}`,
+        ...[`${SPLIT_TOKEN}${TOKEN_SEPARATOR}${token}`, ...ZERO_STATES.map((state) => `${SPLIT_TOKEN}${TOKEN_SEPARATOR}${token}${TOKEN_SEPARATOR}${state}`)],
       )}]]></Expression>`,
   ).join('\n')
   const branches = SPLIT_POOLS.map(

@@ -216,7 +216,7 @@ private fun JSONObject.toRingSummary(): RingSummary {
     val id = getString("id")
     require(id.isNotEmpty())
     val usedPercent = getDouble("usedPercent")
-    require(usedPercent >= 0.0)
+    require(usedPercent.isFinite() && usedPercent >= 0.0)
     return RingSummary(
         id = id,
         label = getString("label").also { require(it.isNotEmpty()) },
@@ -230,7 +230,7 @@ private fun JSONObject.toRingSummary(): RingSummary {
 
 private fun JSONObject.toRingHalf(): RingHalf {
     val usedPercent = getDouble("usedPercent")
-    require(usedPercent >= 0.0)
+    require(usedPercent.isFinite() && usedPercent >= 0.0)
     return RingHalf(
         id = getString("id").also { require(it.isNotEmpty()) },
         label = getString("label").also { require(it.isNotEmpty()) },

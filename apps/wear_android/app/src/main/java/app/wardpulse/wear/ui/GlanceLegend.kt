@@ -40,8 +40,11 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -269,13 +272,7 @@ private fun GlanceEmptyCopy(
     summary: WatchDashboardSummary,
     titleStyle: TextStyle,
 ) {
-    val lines = when {
-        summary.providers.isEmpty() && summary.rings.isEmpty() ->
-            listOf("Connect a provider", "on your phone")
-        summary.rings.isEmpty() ->
-            listOf("Choose percent rings", "in the phone app")
-        else -> listOf("No remaining capacity")
-    }
+    val lines = glanceEmptyLines(summary)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         lines.forEach { line ->
             Text(
@@ -287,6 +284,15 @@ private fun GlanceEmptyCopy(
         }
     }
 }
+
+internal fun glanceEmptyLines(summary: WatchDashboardSummary): List<String> =
+    when {
+        summary.providers.isEmpty() && summary.rings.isEmpty() ->
+            listOf("Connect a provider", "on your phone")
+        summary.rings.isEmpty() ->
+            listOf("Choose percent rings", "in the phone app")
+        else -> listOf("Ring data unavailable")
+    }
 
 @Composable
 private fun GlanceLegendRow(
@@ -323,7 +329,7 @@ private fun GlanceLegendRow(
                 overflow = TextOverflow.Clip,
             )
             Text(
-                row.subtitle,
+                glanceSubtitleText(row),
                 style = metrics.subtitle,
                 color = LabelMuted,
                 maxLines = 1,
@@ -333,6 +339,15 @@ private fun GlanceLegendRow(
         }
     }
 }
+
+/** Only genuinely exhausted percent tokens take the existing phone error color. */
+internal fun glanceSubtitleText(row: GlanceLegendRowModel): AnnotatedString =
+    buildAnnotatedString {
+        append(row.subtitle)
+        row.exhaustedPercentRanges.forEach { range ->
+            addStyle(SpanStyle(color = Color(0xFFFFB4AB)), range.first, range.last + 1)
+        }
+    }
 
 @Composable
 private fun MiniRemainingArc(

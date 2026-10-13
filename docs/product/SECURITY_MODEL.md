@@ -11,13 +11,45 @@ WardPulse is local-first. The MVP must not introduce a custom cloud path for pro
   that captures the `WorkosCursorSessionToken` cookie (optional Advanced paste remains for
   recovery). This is not OAuth.
 - Phone-held API keys, Codex/Claude OAuth tokens, and Cursor plan session tokens are stored with
-  platform-secure storage, keyed per connection so one provider's credential never overwrites
-  another's.
+  platform-secure storage under immutable per-connection generation/revision keys. Legacy
+  fixed-key installs migrate without requiring another login.
 - Saved credentials are never displayed in full. Credential entry may reveal only the current unsaved value after an explicit user action.
 - Optional user-defined labels for API-key connections are plain phone-local display metadata. They are stored beside the credential reference, never concatenated into the secret value, and never sent to Wear OS.
 - Credentials are never sent to a WardPulse cloud service in the MVP.
 - Wear OS surfaces receive dashboard summaries, not provider credentials.
 - Android encrypted credential data is excluded from backup because its key is device-bound.
+
+## Connection Storage And Recovery
+
+`ConnectionCacheEngine` keeps lifecycle metadata and canonical normalized connection snapshots
+in private Android SharedPreferences. This store contains no credentials, authorization
+headers, prompts or raw reports. It includes non-secret identity digests and exact encrypted
+storage key references; neither digests nor private account data are logged. Android app backup
+is disabled for both credential and snapshot data.
+
+Credential changes commit a generation barrier and discard the matching cache before awaiting
+secure-storage writes/deletes. Immutable key references keep abandoned older SDK operations
+from clobbering a newer login. Cancelled reconnect restores the prior immutable credential
+under a fresh generation; first-time cancellation stays unconnected. Pending/unknown operations
+fail closed. Explicit reconnect can recover them without selecting an uncertain candidate.
+Migration backups are eligible only for the exact migrated slot, generation and token revision,
+with a matching securely read identity; ordinary OAuth refresh, replacement and deletion retire
+them. Snapshot corruption never changes the active credential pointer.
+
+Secure-storage operations share a native lease queue across engines. OAuth network work has
+separate ephemeral exclusion, so an explicit disconnect can commit while a fetch is pending.
+A failed old-token request cannot remove a newer token revision or login. Exact retired-key
+cleanup references persist until deletion is acknowledged; Claude's old pasted-token cleanup
+uses this queue without rotating the active OAuth connection. Detached SDK write candidates
+remain unselectable and are conservatively excluded from cleanup until process restart.
+
+Snapshots retain their original success times. Cold recovery checks credential presence and
+identity, rejects malformed/foreign/mock records, and does not manufacture unknown accounts or
+zero usage. Snapshot I/O failure permits a fresh live result; credential barrier failure reports
+failure before secret mutation. All connection leases are validated together immediately before
+foreground/headless publication. This protects concurrent Flutter engines in one Android
+process and restart; it does not promise cross-process locking or atomic network delivery
+against a later disconnect.
 
 ## Codex Account
 

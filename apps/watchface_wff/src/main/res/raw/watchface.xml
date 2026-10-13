@@ -238,7 +238,7 @@
                 <Condition>
                     <Expressions>
                         <Expression name="hasBand">
-                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && !([COMPLICATION.TITLE] == "credits")]]>
+                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 0 && !([COMPLICATION.TITLE] == "credits")]]>
                         </Expression>
                     </Expressions>
                     <Compare expression="hasBand">
@@ -246,7 +246,7 @@
                              comes from the slot that serves every band. -->
                         <Condition>
                             <Expressions>
-                                <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:spark"]]></Expression>
+                                <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
                             </Expressions>
                             <Compare expression="isSplit">
                                 <Group x="0" y="0" width="450" height="450" name="ring1Half">
@@ -261,6 +261,12 @@
                                             <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                        </Expressions>
+                                        <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                        <Compare expression="hasRemaining">
                                     <Condition>
                                         <Expressions>
                                             <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
@@ -331,6 +337,8 @@
                                             </PartDraw>
                                         </Default>
                                     </Condition>
+                                        </Compare>
+                                    </Condition>
                                 </Group>
                             </Compare>
                             <Default>
@@ -346,6 +354,12 @@
                                             <Stroke color="#ff2e3632" thickness="20" cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                        </Expressions>
+                                        <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                        <Compare expression="hasRemaining">
                                     <Condition>
                                         <Expressions>
                                             <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
@@ -416,6 +430,8 @@
                                             </PartDraw>
                                         </Default>
                                     </Condition>
+                                        </Compare>
+                                    </Condition>
                             <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
                             <Condition>
                                 <Expressions>
@@ -471,8 +487,8 @@
                     </PartDraw>
                     <Condition>
                         <Expressions>
-                            <Expression name="isPool0"><![CDATA[[COMPLICATION.TITLE] == "split:cursor-other"]]></Expression>
-                            <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "split:spark"]]></Expression>
+                            <Expression name="isPool0"><![CDATA[[COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both"]]></Expression>
+                            <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
                         </Expressions>
                         <Compare expression="isPool0">
                             <PartDraw x="0" y="0" width="88" height="18">
@@ -501,15 +517,77 @@
                             </PartDraw>
                         </Compare>
                     </Condition>
-                    <PartText x="6" y="0" width="78" height="18">
-                        <Text align="CENTER" ellipsis="TRUE">
-                            <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                <Template>%s
-                                    <Parameter expression="[COMPLICATION.TEXT]" />
-                                </Template>
-                            </Font>
-                        </Text>
-                    </PartText>
+                    <Condition>
+                        <Expressions>
+                            <Expression name="zeroInner"><![CDATA[[COMPLICATION.TITLE] == "zero" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-inner"]]></Expression>
+                            <Expression name="zeroOuter"><![CDATA[[COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-outer"]]></Expression>
+                            <Expression name="zeroBoth"><![CDATA[[COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
+                        </Expressions>
+                        <Compare expression="zeroInner">
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, 2)" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 2, textLength([COMPLICATION.TEXT]))" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Compare expression="zeroOuter">
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, textLength([COMPLICATION.TEXT]) - 2)" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], textLength([COMPLICATION.TEXT]) - 2, textLength([COMPLICATION.TEXT]))" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Compare expression="zeroBoth">
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, 2)" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 2, textLength([COMPLICATION.TEXT]) - 2)" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], textLength([COMPLICATION.TEXT]) - 2, textLength([COMPLICATION.TEXT]))" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Default>
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Default>
+                    </Condition>
                 </Group>
             </Complication>
             <Complication type="EMPTY" />
@@ -536,7 +614,7 @@
                 <Condition>
                     <Expressions>
                         <Expression name="hasBand">
-                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && !([COMPLICATION.TITLE] == "credits")]]>
+                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 0 && !([COMPLICATION.TITLE] == "credits")]]>
                         </Expression>
                     </Expressions>
                     <Compare expression="hasBand">
@@ -544,7 +622,7 @@
                              comes from the slot that serves every band. -->
                         <Condition>
                             <Expressions>
-                                <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:spark"]]></Expression>
+                                <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
                             </Expressions>
                             <Compare expression="isSplit">
                                 <Group x="0" y="0" width="450" height="450" name="ring2Half">
@@ -559,6 +637,12 @@
                                             <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                        </Expressions>
+                                        <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                        <Compare expression="hasRemaining">
                                     <Condition>
                                         <Expressions>
                                             <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
@@ -629,6 +713,8 @@
                                             </PartDraw>
                                         </Default>
                                     </Condition>
+                                        </Compare>
+                                    </Condition>
                                 </Group>
                             </Compare>
                             <Default>
@@ -644,6 +730,12 @@
                                             <Stroke color="#ff2e3632" thickness="20" cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                        </Expressions>
+                                        <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                        <Compare expression="hasRemaining">
                                     <Condition>
                                         <Expressions>
                                             <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
@@ -714,6 +806,8 @@
                                             </PartDraw>
                                         </Default>
                                     </Condition>
+                                        </Compare>
+                                    </Condition>
                             <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
                             <Condition>
                                 <Expressions>
@@ -769,8 +863,8 @@
                     </PartDraw>
                     <Condition>
                         <Expressions>
-                            <Expression name="isPool0"><![CDATA[[COMPLICATION.TITLE] == "split:cursor-other"]]></Expression>
-                            <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "split:spark"]]></Expression>
+                            <Expression name="isPool0"><![CDATA[[COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both"]]></Expression>
+                            <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
                         </Expressions>
                         <Compare expression="isPool0">
                             <PartDraw x="0" y="0" width="88" height="18">
@@ -799,15 +893,77 @@
                             </PartDraw>
                         </Compare>
                     </Condition>
-                    <PartText x="6" y="0" width="78" height="18">
-                        <Text align="CENTER" ellipsis="TRUE">
-                            <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                <Template>%s
-                                    <Parameter expression="[COMPLICATION.TEXT]" />
-                                </Template>
-                            </Font>
-                        </Text>
-                    </PartText>
+                    <Condition>
+                        <Expressions>
+                            <Expression name="zeroInner"><![CDATA[[COMPLICATION.TITLE] == "zero" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-inner"]]></Expression>
+                            <Expression name="zeroOuter"><![CDATA[[COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-outer"]]></Expression>
+                            <Expression name="zeroBoth"><![CDATA[[COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
+                        </Expressions>
+                        <Compare expression="zeroInner">
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, 2)" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 2, textLength([COMPLICATION.TEXT]))" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Compare expression="zeroOuter">
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, textLength([COMPLICATION.TEXT]) - 2)" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], textLength([COMPLICATION.TEXT]) - 2, textLength([COMPLICATION.TEXT]))" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Compare expression="zeroBoth">
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, 2)" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 2, textLength([COMPLICATION.TEXT]) - 2)" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], textLength([COMPLICATION.TEXT]) - 2, textLength([COMPLICATION.TEXT]))" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Default>
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Default>
+                    </Condition>
                 </Group>
             </Complication>
             <Complication type="EMPTY" />
@@ -834,7 +990,7 @@
                 <Condition>
                     <Expressions>
                         <Expression name="hasBand">
-                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && !([COMPLICATION.TITLE] == "credits")]]>
+                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 0 && !([COMPLICATION.TITLE] == "credits")]]>
                         </Expression>
                     </Expressions>
                     <Compare expression="hasBand">
@@ -842,7 +998,7 @@
                              comes from the slot that serves every band. -->
                         <Condition>
                             <Expressions>
-                                <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:spark"]]></Expression>
+                                <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
                             </Expressions>
                             <Compare expression="isSplit">
                                 <Group x="0" y="0" width="450" height="450" name="ring3Half">
@@ -857,6 +1013,12 @@
                                             <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                        </Expressions>
+                                        <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                        <Compare expression="hasRemaining">
                                     <Condition>
                                         <Expressions>
                                             <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
@@ -927,6 +1089,8 @@
                                             </PartDraw>
                                         </Default>
                                     </Condition>
+                                        </Compare>
+                                    </Condition>
                                 </Group>
                             </Compare>
                             <Default>
@@ -942,6 +1106,12 @@
                                             <Stroke color="#ff2e3632" thickness="20" cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                        </Expressions>
+                                        <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                        <Compare expression="hasRemaining">
                                     <Condition>
                                         <Expressions>
                                             <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
@@ -1012,6 +1182,8 @@
                                             </PartDraw>
                                         </Default>
                                     </Condition>
+                                        </Compare>
+                                    </Condition>
                             <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
                             <Condition>
                                 <Expressions>
@@ -1067,8 +1239,8 @@
                     </PartDraw>
                     <Condition>
                         <Expressions>
-                            <Expression name="isPool0"><![CDATA[[COMPLICATION.TITLE] == "split:cursor-other"]]></Expression>
-                            <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "split:spark"]]></Expression>
+                            <Expression name="isPool0"><![CDATA[[COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both"]]></Expression>
+                            <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
                         </Expressions>
                         <Compare expression="isPool0">
                             <PartDraw x="0" y="0" width="88" height="18">
@@ -1097,15 +1269,77 @@
                             </PartDraw>
                         </Compare>
                     </Condition>
-                    <PartText x="6" y="0" width="78" height="18">
-                        <Text align="CENTER" ellipsis="TRUE">
-                            <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                <Template>%s
-                                    <Parameter expression="[COMPLICATION.TEXT]" />
-                                </Template>
-                            </Font>
-                        </Text>
-                    </PartText>
+                    <Condition>
+                        <Expressions>
+                            <Expression name="zeroInner"><![CDATA[[COMPLICATION.TITLE] == "zero" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-inner"]]></Expression>
+                            <Expression name="zeroOuter"><![CDATA[[COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-outer"]]></Expression>
+                            <Expression name="zeroBoth"><![CDATA[[COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
+                        </Expressions>
+                        <Compare expression="zeroInner">
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, 2)" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 2, textLength([COMPLICATION.TEXT]))" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Compare expression="zeroOuter">
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, textLength([COMPLICATION.TEXT]) - 2)" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], textLength([COMPLICATION.TEXT]) - 2, textLength([COMPLICATION.TEXT]))" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Compare expression="zeroBoth">
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, 2)" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 2, textLength([COMPLICATION.TEXT]) - 2)" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], textLength([COMPLICATION.TEXT]) - 2, textLength([COMPLICATION.TEXT]))" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Default>
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Default>
+                    </Condition>
                 </Group>
             </Complication>
             <Complication type="EMPTY" />
@@ -1154,6 +1388,12 @@
                                     <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
                                 </Arc>
                             </PartDraw>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                </Expressions>
+                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                <Compare expression="hasRemaining">
                             <Condition>
                                 <Expressions>
                                     <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
@@ -1224,6 +1464,8 @@
                                     </PartDraw>
                                 </Default>
                             </Condition>
+                                </Compare>
+                            </Condition>
                         </Group>
                     </Compare>
                     <Compare expression="isBand1">
@@ -1239,6 +1481,12 @@
                                     <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
                                 </Arc>
                             </PartDraw>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                </Expressions>
+                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                <Compare expression="hasRemaining">
                             <Condition>
                                 <Expressions>
                                     <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
@@ -1309,6 +1557,8 @@
                                     </PartDraw>
                                 </Default>
                             </Condition>
+                                </Compare>
+                            </Condition>
                         </Group>
                     </Compare>
                     <Compare expression="isBand2">
@@ -1324,6 +1574,12 @@
                                     <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
                                 </Arc>
                             </PartDraw>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                </Expressions>
+                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                <Compare expression="hasRemaining">
                             <Condition>
                                 <Expressions>
                                     <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
@@ -1393,6 +1649,8 @@
                                         </Arc>
                                     </PartDraw>
                                 </Default>
+                            </Condition>
+                                </Compare>
                             </Condition>
                         </Group>
                     </Compare>
@@ -1446,6 +1704,12 @@
                             </PartDraw>
                             <Condition>
                                 <Expressions>
+                                    <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                </Expressions>
+                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                <Compare expression="hasRemaining">
+                            <Condition>
+                                <Expressions>
                                     <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
                                     <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008058]]></Expression>
                                 </Expressions>
@@ -1514,6 +1778,8 @@
                                     </PartDraw>
                                 </Default>
                             </Condition>
+                                </Compare>
+                            </Condition>
                         </Group>
                     </Compare>
                     <Compare expression="isBand1">
@@ -1529,6 +1795,12 @@
                                     <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
                                 </Arc>
                             </PartDraw>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                </Expressions>
+                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                <Compare expression="hasRemaining">
                             <Condition>
                                 <Expressions>
                                     <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
@@ -1599,6 +1871,8 @@
                                     </PartDraw>
                                 </Default>
                             </Condition>
+                                </Compare>
+                            </Condition>
                         </Group>
                     </Compare>
                     <Compare expression="isBand2">
@@ -1614,6 +1888,12 @@
                                     <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
                                 </Arc>
                             </PartDraw>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                </Expressions>
+                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                <Compare expression="hasRemaining">
                             <Condition>
                                 <Expressions>
                                     <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
@@ -1683,6 +1963,8 @@
                                         </Arc>
                                     </PartDraw>
                                 </Default>
+                            </Condition>
+                                </Compare>
                             </Condition>
                         </Group>
                     </Compare>

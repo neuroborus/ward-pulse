@@ -161,6 +161,8 @@ class _DashboardHostState extends State<DashboardHost> {
   static const _providersIndex = 3;
   static const _settingsIndex = 4;
 
+  var _loadRevision = 0;
+  var _surfaceRevision = 0;
   late Future<DashboardSnapshot> _snapshot = _loadSnapshot();
   DashboardSnapshot? _currentSnapshot;
 
@@ -357,26 +359,41 @@ class _DashboardHostState extends State<DashboardHost> {
     try {
       final value = update(_alertThresholds);
       final snapshot = _currentSnapshot;
+      final loadRevision = _loadRevision;
+      final surfaceRevision = _surfaceRevision;
       // Evaluate before persisting so a core/FFI failure does not leave the
       // store ahead of in-memory prefs / dashboard alerts.
       final withAlerts =
           snapshot == null ? null : widget.applyAlertSettings(snapshot, value);
       await widget.alertThresholdStore.write(value);
+      var owned = withAlerts == null;
+      if (withAlerts != null) {
+        try {
+          owned = await widget.repository.isSnapshotCurrent(withAlerts);
+        } catch (_) {
+          /* Preferences are saved; unavailable ownership cannot replace dashboard data. */
+        }
+      }
+      final publish =
+          mounted &&
+          owned &&
+          loadRevision == _loadRevision &&
+          surfaceRevision == _surfaceRevision;
       if (mounted) {
         setState(() {
           _alertThresholds = value;
-          if (withAlerts != null) {
+          if (publish && withAlerts != null) {
             _currentSnapshot = withAlerts;
             _snapshot = Future.value(withAlerts);
           }
         });
       } else {
         _alertThresholds = value;
-        if (withAlerts != null) {
+        if (publish && withAlerts != null) {
           _currentSnapshot = withAlerts;
         }
       }
-      if (withAlerts != null) {
+      if (publish && withAlerts != null) {
         unawaited(_syncWatch(withAlerts));
       }
     } finally {
@@ -385,6 +402,7 @@ class _DashboardHostState extends State<DashboardHost> {
   }
 
   Future<DashboardSnapshot> _loadSnapshot() async {
+    final revision = ++_loadRevision;
     await _readRefreshInterval();
     await _readRingPreferences();
     await _readWidgetPreferences();
@@ -399,20 +417,36 @@ class _DashboardHostState extends State<DashboardHost> {
       await widget.repository.load(),
       _alertThresholds,
     );
+    final current = await widget.repository.isSnapshotCurrent(snapshot);
+    if (!mounted || revision != _loadRevision || !current) {
+      throw const DashboardLoadException(
+        details: 'Connection changed during refresh.',
+      );
+    }
     _currentSnapshot = snapshot;
-    unawaited(
-      syncPlanRecoveries(
+    unawaited(_syncRecoveries(snapshot));
+    unawaited(_syncWatch(snapshot));
+    unawaited(_syncPhoneWidget(snapshot));
+    return snapshot;
+  }
+
+  Future<void> _syncRecoveries(DashboardSnapshot snapshot) async {
+    try {
+      final revision = _surfaceRevision;
+      if (!await widget.repository.isSnapshotCurrent(snapshot) ||
+          revision != _surfaceRevision)
+        return;
+      await syncPlanRecoveries(
         snapshot,
         widget.recoveryWatchlistStore,
         widget.recoveryNotifier,
         widget.recoveryWake,
         mockData: _mockDataEnabled,
         notifications: _recoveryNotificationsEnabled,
-      ),
-    );
-    unawaited(_syncWatch(snapshot));
-    unawaited(_syncPhoneWidget(snapshot));
-    return snapshot;
+      );
+    } catch (_) {
+      // Recovery bookkeeping cannot publish retired data or block the dashboard.
+    }
   }
 
   Future<void> _scheduleAutoSync(Duration interval) async {
@@ -425,6 +459,7 @@ class _DashboardHostState extends State<DashboardHost> {
       return;
     }
     _autoSyncInFlight = true;
+    final revision = ++_loadRevision;
     try {
       // Do not invalidate: load() already refetches, and clearing caches would
       // drop stale-with-issue recovery on a failed automatic tick.
@@ -432,6 +467,8 @@ class _DashboardHostState extends State<DashboardHost> {
         await widget.repository.load(),
         _alertThresholds,
       );
+      final current = await widget.repository.isSnapshotCurrent(snapshot);
+      if (!mounted || revision != _loadRevision || !current) return;
       _currentSnapshot = snapshot;
       if (mounted) {
         setState(() {
@@ -448,6 +485,9 @@ class _DashboardHostState extends State<DashboardHost> {
   }
 
   Future<void> _updateMockDataEnabled(bool value) async {
+    _loadRevision++;
+    _surfaceRevision++;
+    await widget.repository.clearPersistentSnapshots();
     await widget.debugDataPreferenceStore.writeMockDataEnabled(value);
     if (!mounted) {
       return;
@@ -468,19 +508,27 @@ class _DashboardHostState extends State<DashboardHost> {
   }
 
   Future<void> _syncPhoneWidget(DashboardSnapshot snapshot) async {
+    final revision = _surfaceRevision;
     try {
+      if (!await widget.repository.isSnapshotCurrent(snapshot) ||
+          revision != _surfaceRevision)
+        return;
       await widget.phoneWidgetSyncService.sync(snapshot, _widgetPreferences);
     } catch (error) {
       // Launcher widget updates must not block the phone dashboard.
       developer.log(
-        'dashboard refresh could not update the widget: $error',
+        'Dashboard refresh could not update the widget.',
         name: phoneWidgetLogName,
       );
     }
   }
 
-  Future<void> _queueWatchSummary(DashboardSnapshot snapshot) {
-    return widget.watchSyncService.sync(
+  Future<void> _queueWatchSummary(DashboardSnapshot snapshot) async {
+    final revision = _surfaceRevision;
+    if (!await widget.repository.isSnapshotCurrent(snapshot) ||
+        revision != _surfaceRevision)
+      return;
+    await widget.watchSyncService.sync(
       snapshot,
       _ringPreferences,
       manualRefreshAnchorAt: _manualRefreshAnchorAt(snapshot),
@@ -542,6 +590,8 @@ class _DashboardHostState extends State<DashboardHost> {
   }
 
   void _onCredentialsChanged() {
+    _loadRevision++;
+    _surfaceRevision++;
     widget.repository.invalidate();
     _reload();
   }

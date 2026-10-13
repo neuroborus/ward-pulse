@@ -13,7 +13,7 @@
     </radialGradient>
   </defs>
   <rect width="450" height="450" fill="url(#lift)"/>
-  
+
     <circle cx="225" cy="225" r="143.91" fill="none" stroke="#2E3632"
       stroke-width="20.205000000000002" />
     <circle cx="225" cy="225" r="143.91" fill="none" stroke="#65D78A"
@@ -35,7 +35,7 @@
       stroke-dasharray="618.77 1205.62"
       stroke-dashoffset="-576.74"
       transform="rotate(-90 225 225)" />
-  
+
     <circle cx="173.0" cy="135.0" r="21.0" fill="#0B0E0C" />
 
     <defs>

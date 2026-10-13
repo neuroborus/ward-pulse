@@ -94,6 +94,7 @@ class DashboardSnapshot {
     required this.watchSummary,
     this.syncIssue,
     this.syncDetails,
+    this.connectionVersions = const {},
   });
 
   final DateTime generatedAt;
@@ -106,6 +107,9 @@ class DashboardSnapshot {
   final WatchSummary watchSummary;
   final DashboardSyncIssue? syncIssue;
   final String? syncDetails;
+
+  /// Phone-only lifecycle provenance; never serialized into shared contracts.
+  final Map<String, Map<String, String>> connectionVersions;
 
   String? get syncTooltip {
     final issue = syncIssue;
@@ -189,6 +193,7 @@ class DashboardSnapshot {
       watchSummary: watchSummary._withStatus(ProviderStatus.stale),
       syncIssue: syncIssue,
       syncDetails: syncDetails,
+      connectionVersions: connectionVersions,
     );
   }
 
@@ -204,8 +209,28 @@ class DashboardSnapshot {
       watchSummary: watchSummary,
       syncIssue: issue,
       syncDetails: details,
+      connectionVersions: connectionVersions,
     );
   }
+
+  DashboardSnapshot withConnectionVersions(
+    Map<String, Map<String, String>> versions,
+  ) => DashboardSnapshot(
+    generatedAt: generatedAt,
+    overallStatus: overallStatus,
+    accounts: accounts,
+    todayTotal: todayTotal,
+    weekTotal: weekTotal,
+    monthTotal: monthTotal,
+    alerts: alerts,
+    watchSummary: watchSummary,
+    syncIssue: syncIssue,
+    syncDetails: syncDetails,
+    connectionVersions: Map.unmodifiable({
+      for (final entry in versions.entries)
+        entry.key: Map<String, String>.unmodifiable(entry.value),
+    }),
+  );
 }
 
 class ProviderSnapshot {

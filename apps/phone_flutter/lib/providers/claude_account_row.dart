@@ -118,9 +118,14 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow> {
       if (connected == true && mounted) {
         // Drop any pre-OAuth pasted access token for this connection.
         try {
-          await widget.credentialStore.deleteSecret(
-            ProviderConnections.claudePlan,
-          );
+          final store = widget.credentialStore;
+          if (store is LegacyProviderCredentialCleanup) {
+            await (store as LegacyProviderCredentialCleanup).deleteLegacySecret(
+              ProviderConnections.claudePlan,
+            );
+          } else {
+            await store.deleteSecret(ProviderConnections.claudePlan);
+          }
         } catch (_) {
           // Session is already saved; orphaned paste is non-fatal.
         }

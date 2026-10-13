@@ -166,7 +166,7 @@ const CATALOG = {
     id: 'codex',
     used: 0.18,
     color: '#65D78A',
-    split: { used: 0.59, color: CODEX_SPARK },
+    split: { id: 'codex-spark', used: 0.59, color: CODEX_SPARK },
   },
   claude: {
     id: 'claude',
@@ -184,14 +184,15 @@ const CATALOG = {
   /**
    * The same plan with both pools alive: one band split lengthwise, own models
    * inside. The fixture's external pool is exhausted (`apiPercentUsed` 100),
-   * which collapses the pair, so this one value is chosen — far enough from 47
-   * to read as a second pool rather than a rounding of the first.
+   * which now retains the pair with a grey zero half. This positive value is
+   * chosen far enough from 47 to read as a second pool rather than its rounding;
+   * the exhausted-half boards below cover the fixture's zero state separately.
    */
   cursorPair: {
     id: 'cursor',
     used: 0.47,
     color: '#7E93B8',
-    split: { used: 0.38, color: '#67E8D4' },
+    split: { id: 'cursor-other', used: 0.38, color: '#67E8D4' },
   },
   // The live case that raised the full-ring question: an own pool nobody has
   // touched yet beside an external one already spending.
@@ -199,7 +200,7 @@ const CATALOG = {
     id: 'cursor',
     used: 0,
     color: '#7E93B8',
-    split: { used: 0.25, color: '#67E8D4' },
+    split: { id: 'cursor-other', used: 0.25, color: '#67E8D4' },
   },
   // One connection's three budget periods; percents and money match Wear's
   // PreviewWatchDashboardSummary, so the boards and the preview face show one story.
@@ -355,6 +356,11 @@ function assertNearExhaustedArcs() {
 
 function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
   const valueColor = ambient ? '#8A968F' : color
+  if (remaining <= 0) {
+    return `
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
+      stroke-width="${thickness}" />`
+  }
   if (remaining >= 1) {
     // Nothing spent: a closed ring, because the cap inset below would leave a
     // seam at 12 on a band that has spent nothing to open one
@@ -417,19 +423,19 @@ function barLabel(layer, { showPlan, showCredits }) {
   if (showPlan) {
     if (layer.budget) {
       parts.push(layer.budget)
-    } else if (layer.used < 1) {
-      parts.push(`${Math.round((1 - layer.used) * 100)}%`)
+    } else {
+      parts.push(`${Math.round(Math.max(0, 1 - layer.used) * 100)}%`)
     }
   }
   // A split strip spends the well on its second percent, so credits never join it
   // (`WATCH_RING_DESIGN.md`, Split band, rules 4 and 5).
   if (layer.split) {
-    parts.push(`${Math.round((1 - layer.split.used) * 100)}%`)
+    parts.push(`${Math.round(Math.max(0, 1 - layer.split.used) * 100)}%`)
     return parts.join(' · ')
   }
   // Credits glue onto the matching provider strip only (review art uses Codex credits).
-  if (showCredits && layer.id === 'codex') {
-    parts.push(CREDITS_GLANCE)
+  if (showCredits && (layer.id === 'codex' || layer.providerId === 'codex')) {
+    parts.push(layer.credits ?? CREDITS_GLANCE)
   }
   return parts.join(' · ')
 }
@@ -438,6 +444,18 @@ function sortByRemaining(layers) {
   return [...layers].sort((a, b) =>
     Math.max(b.used, b.split?.used ?? b.used) - Math.max(a.used, a.split?.used ?? a.used),
   )
+}
+
+/** Only actual exhaustion colours a percentage; rounded positive zero stays ordinary. */
+function zeroLabelMarkup(text, layer) {
+  return text.split(' · ').map((part, index) => {
+    const exhausted = index === 0
+      ? layer.used >= 1 && !layer.budget
+      : index === 1 && layer.split?.used >= 1
+    return exhausted && part.startsWith('0%')
+      ? `<tspan fill="#FFB4AB">0%</tspan>${esc(part.slice(2))}`
+      : esc(part)
+  }).join(' · ')
 }
 
 /**
@@ -561,7 +579,7 @@ function providerBars({ layers, showPlan, showCredits, size, ambient }) {
     <text x="${textX.toFixed(1)}" y="${(y + (STRIP.height / 2) * k).toFixed(1)}"
       text-anchor="middle" dominant-baseline="central"
       font-family="${FONT}, sans-serif" font-size="${(STRIP.fontSize * k).toFixed(1)}"
-      font-weight="700" fill="${LABEL}">${esc(text)}</text>`
+      font-weight="700" fill="${LABEL}">${zeroLabelMarkup(text, layer)}</text>`
     if (layer.split) {
       // The far end names the second pool; its colour can only come from a slot
       // of its own on the face, which is why the fourth strip slot went here.
@@ -601,7 +619,16 @@ function faceSvg({
   // while the stroke and the type punched into it take `band`, so a cap set for the full
   // width cannot overflow the thinned stroke.
   const band = ambient ? thickness * 0.75 : thickness
-  const planLayers = sortByRemaining(layers.filter((layer) => layer.used < 1))
+  const hasPercent = (value) => Number.isFinite(value) && value >= 0
+  const knownLayers = layers.flatMap((layer) => {
+    if (!hasPercent(layer.used)) {
+      return hasPercent(layer.split?.used)
+        ? [{ ...layer.split, providerId: layer.providerId ?? layer.id, credits: layer.credits, split: null }]
+        : []
+    }
+    return [{ ...layer, split: hasPercent(layer.split?.used) ? layer.split : null }]
+  })
+  const planLayers = sortByRemaining(knownLayers)
   const stripLayers = showPlan ? planLayers : layers.slice(0, 1)
 
   let ringMarkup = ''
@@ -686,7 +713,7 @@ function faceSvg({
   ${ringMarkup}
   ${content}
 </svg>
-`
+`.replace(/^[ \t]+$/gm, '')
 }
 
 const wearDir = join(root, 'apps/wear_android/design')
@@ -699,6 +726,12 @@ if (!checking) {
 const three = [CATALOG.codex, CATALOG.claude, CATALOG.cursor]
 const two = [CATALOG.codex, CATALOG.claude]
 const one = [CATALOG.codex]
+const exhaustedClaude = { ...CATALOG.claude, used: 1 }
+const liveCodex = { ...CATALOG.codex, used: 0.04, credits: '62.5K' }
+const liveCursor = { ...CATALOG.cursorPairUntouched, split: { id: 'cursor-other', used: 0.32, color: '#67E8D4' } }
+const cursorInnerZero = { ...liveCursor, used: 1 }
+const cursorOuterZero = { ...liveCursor, split: { ...liveCursor.split, used: 1 } }
+const cursorBothZero = { ...cursorInnerZero, split: { ...liveCursor.split, used: 1 } }
 const nearExhausted = [
   { ...CATALOG.codex, used: 0.98 },
   { ...CATALOG.claude, used: 0.31 },
@@ -833,9 +866,35 @@ const variants = [
     showPlan: true,
     showCredits: false,
   },
+  ...[
+    { file: 'round-1-plan-exhausted.svg', name: 'Selected Claude 5h at zero', layers: [exhaustedClaude] },
+    { file: 'round-3-plan-exhausted-claude.svg', name: 'Claude zero with Cursor pair and Codex', layers: [exhaustedClaude, liveCursor, liveCodex] },
+    { file: 'round-plan-pair-inner-zero.svg', name: 'Selected pair with inner pool zero', layers: [cursorInnerZero, liveCodex] },
+    { file: 'round-plan-pair-outer-zero.svg', name: 'Selected pair with outer pool zero', layers: [cursorOuterZero, liveCodex] },
+    { file: 'round-plan-pair-both-zero.svg', name: 'Selected pair with both pools zero', layers: [cursorBothZero, liveCodex] },
+    { file: 'round-3-plan-all-zero.svg', name: 'All three selected bands at zero', layers: [exhaustedClaude, cursorBothZero, { ...liveCodex, used: 1 }] },
+    { file: 'round-ambient-all-zero.svg', name: 'Ambient selected bands at zero', layers: [exhaustedClaude, cursorBothZero, { ...liveCodex, used: 1 }], ambient: true },
+    { file: 'round-plan-positive-rounds-zero.svg', name: 'Positive fraction rounds to ordinary zero label', layers: [{ ...CATALOG.claude, used: 0.999 }] },
+    { file: 'round-plan-zero-credits.svg', name: 'Exhausted percent with neutral zero credits', layers: [{ ...CATALOG.codex, used: 1, credits: '0' }] },
+    { file: 'round-plan-unavailable-inner-zero-outer.svg', name: 'Unavailable inner pool with known exhausted outer survivor', layers: [{ ...cursorOuterZero, used: -1 }] },
+    { file: 'round-3-plan-two-pairs-zero.svg', name: 'Three selected bands with two exhausted pairs', layers: [exhaustedClaude, cursorBothZero, { ...CATALOG.codexPair, used: 1, split: { ...CATALOG.codexPair.split, used: 1 } }] },
+    { file: 'round-budget-exhausted.svg', name: 'Exhausted budget keeps its money label', layers: [{ ...CATALOG.anthropicBudgetMonth, used: 1, budget: '$100.00/100' }] },
+  ].map((variant) => ({ ...variant, showPlan: true, showCredits: true })),
 ]
 
 const wffFiles = new Set([
+  'round-1-plan-exhausted.svg',
+  'round-3-plan-exhausted-claude.svg',
+  'round-plan-pair-inner-zero.svg',
+  'round-plan-pair-outer-zero.svg',
+  'round-plan-pair-both-zero.svg',
+  'round-3-plan-all-zero.svg',
+  'round-ambient-all-zero.svg',
+  'round-plan-positive-rounds-zero.svg',
+  'round-plan-zero-credits.svg',
+  'round-plan-unavailable-inner-zero-outer.svg',
+  'round-3-plan-two-pairs-zero.svg',
+  'round-budget-exhausted.svg',
   'round-3-plan-credits.svg',
   // A split band is a face-only channel, so its board belongs beside the face too.
   'round-3-plan-split.svg',

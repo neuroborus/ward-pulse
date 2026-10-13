@@ -1,3 +1,8 @@
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+import '../providers/connection_lifecycle.dart';
+import '../providers/provider_connection.dart';
+import 'connection_snapshot_cache.dart';
 import '../providers/claude_account_service.dart';
 import '../providers/claude_account_store.dart';
 import '../providers/codex_account_service.dart';
@@ -22,23 +27,61 @@ final class PhoneLiveBindings {
   final ClaudeAccountService claudeAccountService;
   final DashboardRepository repository;
 
-  factory PhoneLiveBindings.create() {
-    final credentialStore = SecureProviderCredentialStore();
-    final codexAccountService = MobileCodexAccountService(
-      store: SecureCodexAccountStore(),
+  factory PhoneLiveBindings.create({
+    FlutterSecureStorage? secureStorage,
+    ConnectionCachePlatform? cachePlatform,
+  }) {
+    final platform =
+        cachePlatform ?? const MethodChannelConnectionCachePlatform();
+    final credentialStore = SecureProviderCredentialStore(
+      storage: secureStorage,
+      platform: platform,
     );
-    final claudeAccountService = MobileClaudeAccountService(
-      store: SecureClaudeAccountStore(),
+    final codexStore = SecureCodexAccountStore(
+      storage: secureStorage,
+      platform: platform,
     );
+    final claudeStore = SecureClaudeAccountStore(
+      storage: secureStorage,
+      platform: platform,
+    );
+    final caches = <String, ConnectionSnapshotCache>{};
+    for (final id in [
+      ProviderConnections.codexPlan,
+      ProviderConnections.openAiPlatform,
+      ProviderConnections.claudePlan,
+      ProviderConnections.anthropicPlatform,
+      ProviderConnections.cursorPlan,
+      ProviderConnections.cursorPlatform,
+    ]) {
+      caches[id.storageKey] = ConnectionSnapshotCache(
+        connection: id.storageKey,
+        platform: platform,
+        readCredentialVersion: () async {
+          if (id == ProviderConnections.codexPlan)
+            return (await codexStore.readVersioned())?.version;
+          if (id == ProviderConnections.claudePlan)
+            return (await claudeStore.readVersioned())?.version;
+          return credentialStore.readVersion(id);
+        },
+      );
+    }
+    final codexAccountService = MobileCodexAccountService(store: codexStore);
+    final claudeAccountService = MobileClaudeAccountService(store: claudeStore);
     final openAiAndCodex = codexDashboardRepository(
       accountService: codexAccountService,
-      fallback: openAiDashboardRepository(credentialStore: credentialStore),
+      cache: caches[ProviderConnections.codexPlan.storageKey],
+      fallback: openAiDashboardRepository(
+        credentialStore: credentialStore,
+        cache: caches[ProviderConnections.openAiPlatform.storageKey],
+      ),
     );
     return PhoneLiveBindings(
       credentialStore: credentialStore,
       codexAccountService: codexAccountService,
       claudeAccountService: claudeAccountService,
       repository: buildLiveProviderStack(
+        caches: caches,
         credentialStore: credentialStore,
         claudeAccountService: claudeAccountService,
         openAiAndCodex: openAiAndCodex,

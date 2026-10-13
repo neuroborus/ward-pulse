@@ -10,6 +10,53 @@ import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test(
+    'headless validates ownership immediately before each surface',
+    () async {
+      final attempts = <String>[];
+      var current = true;
+      await providerSyncOnce(
+        load:
+            () async => ProviderSyncWork(
+              isCurrent: () async => current,
+              syncWatch: () async {
+                attempts.add('watch');
+                current = false;
+              },
+              syncWidget: () async {
+                attempts.add('widget');
+              },
+              syncRecoveries: () async {
+                attempts.add('recovery');
+              },
+            ),
+      );
+      expect(attempts, ['watch']);
+    },
+  );
+  test(
+    'retired headless snapshot cannot reach any surface or recovery',
+    () async {
+      final attempts = <String>[];
+      await providerSyncOnce(
+        load:
+            () async => ProviderSyncWork(
+              isCurrent: () async => false,
+              syncWatch: () async {
+                attempts.add('watch');
+              },
+              syncWidget: () async {
+                attempts.add('widget');
+              },
+              syncRecoveries: () async {
+                attempts.add('recovery');
+              },
+            ),
+      );
+      expect(attempts, isEmpty);
+    },
+  );
+
   test('missing watch plugin does not skip widget or recovery work', () async {
     final attempts = <String>[];
     final failures = <_RecordedFailure>[];

@@ -200,7 +200,7 @@ void main() {
     );
   });
 
-  test('surface order puts tightest remaining first and drops exhausted', () {
+  test('surface order keeps exhausted first among known selected rings', () {
     const rings = [
       WatchRingMetric(
         id: 'a',
@@ -222,7 +222,26 @@ void main() {
       ),
     ];
 
-    expect(orderWatchRingsForSurface(rings).map((ring) => ring.id), ['c', 'a']);
+    expect(orderWatchRingsForSurface(rings).map((ring) => ring.id), [
+      'b',
+      'c',
+      'a',
+    ]);
+  });
+
+  test('missing and nonfinite metrics cannot become zero rings', () {
+    final rings = [
+      for (final value in [null, double.nan, double.infinity, -1.0, 100.0])
+        WatchRingMetric(
+          id: 'allowance.claude.$value',
+          label: 'Claude',
+          usedPercent: value,
+          status: ProviderStatus.ok,
+        ),
+    ];
+    final kept = orderWatchRingsForSurface(rings);
+    expect(kept, hasLength(1));
+    expect(kept.single.remainingPercent, 0);
   });
 
   test('equal plan percent prefers lower credit request runway', () {
@@ -365,75 +384,104 @@ void main() {
         window('spark-secondary', 40),
       ]);
       expect(rings.map((r) => r.usedPercent), [100, 40]);
-      expect(orderWatchRingsForSurface(rings).single.id, codexSparkRingId);
+      expect(orderWatchRingsForSurface(rings).map((ring) => ring.id), [
+        codexPlanRingId,
+        codexSparkRingId,
+      ]);
     });
 
-    test(
-      'missing or exhausted halves resolve to an ordinary surviving ring',
-      () {
-        for (final (mainUsed, sparkUsed, expected) in [
-          (null, 40.0, codexSparkRingId),
-          (100.0, 40.0, codexSparkRingId),
-          (40.0, null, codexPlanRingId),
-          (40.0, 100.0, codexPlanRingId),
-        ]) {
-          final source = _cursorPairAndCodexSnapshot();
-          final codex =
-              source.accounts.firstWhere((a) => a.provider == 'codex').toJson()
-                ..['allowances'] = [
-                  window('codex-primary', mainUsed).toJson(),
-                  window('spark-primary', sparkUsed).toJson(),
-                ];
-          final dashboard = DashboardSnapshot.fromJson(
-            source.toJson()..['accounts'] = [codex],
-          );
-          final bands = pairWatchRings(
-            orderWatchRingsForSurface(
-              resolveWatchRings(
-                dashboard,
-                const WatchRingPreferences(
-                  selectedIds: [codexPlanRingId, codexSparkRingId],
-                ),
+    test('missing halves resolve to an ordinary surviving ring', () {
+      for (final (mainUsed, sparkUsed, expected) in [
+        (null, 40.0, codexSparkRingId),
+        (40.0, null, codexPlanRingId),
+      ]) {
+        final source = _cursorPairAndCodexSnapshot();
+        final codex =
+            source.accounts.firstWhere((a) => a.provider == 'codex').toJson()
+              ..['allowances'] = [
+                window('codex-primary', mainUsed).toJson(),
+                window('spark-primary', sparkUsed).toJson(),
+              ];
+        final dashboard = DashboardSnapshot.fromJson(
+          source.toJson()..['accounts'] = [codex],
+        );
+        final bands = pairWatchRings(
+          orderWatchRingsForSurface(
+            resolveWatchRings(
+              dashboard,
+              const WatchRingPreferences(
+                selectedIds: [codexPlanRingId, codexSparkRingId],
               ),
             ),
-          );
-          expect(bands.single.$1.id, expected);
-          expect(bands.single.$2, isNull);
-        }
-      },
-    );
+          ),
+        );
+        expect(bands.single.$1.id, expected);
+        expect(bands.single.$2, isNull);
+      }
+    });
 
-    test(
-      'active windows win and ties prefer primary regardless of input order',
-      () {
-        for (final reversed in [false, true]) {
-          final windows = [
-            window('spark-secondary', 50),
-            window('spark-primary', 50),
-          ];
-          expect(
-            collapseCodexPlanRings(
-              reversed ? windows.reversed : windows,
-            ).single.label,
-            'Spark 5h',
-          );
-        }
-        expect(
-          collapseCodexPlanRings([
-            window('spark-primary', 25),
-            window('spark-secondary', 100),
-          ]).single.usedPercent,
-          25,
+    test('known zero halves keep their paired identities and slot', () {
+      for (final (mainUsed, sparkUsed) in [
+        (100.0, 40.0),
+        (40.0, 100.0),
+        (100.0, 100.0),
+      ]) {
+        final source = _cursorPairAndCodexSnapshot();
+        final codex =
+            source.accounts.firstWhere((a) => a.provider == 'codex').toJson()
+              ..['allowances'] = [
+                window('codex-primary', mainUsed).toJson(),
+                window('spark-primary', sparkUsed).toJson(),
+              ];
+        final dashboard = DashboardSnapshot.fromJson(
+          source.toJson()..['accounts'] = [codex],
         );
-        expect(
-          collapseCodexPlanRings([
-            window('spark-primary', 100),
-            window('spark-secondary', 25),
-          ]).single.label,
-          'Spark Weekly',
+        final bands = pairWatchRings(
+          orderWatchRingsForSurface(
+            resolveWatchRings(
+              dashboard,
+              const WatchRingPreferences(
+                selectedIds: [codexPlanRingId, codexSparkRingId],
+              ),
+            ),
+          ),
         );
-      },
-    );
+        expect(bands, hasLength(1));
+        expect(bands.single.$1.id, codexPlanRingId);
+        expect(bands.single.$1.usedPercent, mainUsed);
+        expect(bands.single.$2!.id, codexSparkRingId);
+        expect(bands.single.$2!.usedPercent, sparkUsed);
+      }
+    });
+
+    test('tightest windows include exhaustion and ties prefer primary', () {
+      for (final reversed in [false, true]) {
+        final windows = [
+          window('spark-secondary', 50),
+          window('spark-primary', 50),
+        ];
+        expect(
+          collapseCodexPlanRings(
+            reversed ? windows.reversed : windows,
+          ).single.label,
+          'Spark 5h',
+        );
+      }
+      expect(
+        collapseCodexPlanRings([
+          window('spark-primary', 25),
+          window('spark-secondary', 100),
+        ]).single.usedPercent,
+        100,
+      );
+      expect(
+        collapseCodexPlanRings([
+          window('spark-primary', 100),
+          window('spark-secondary', 25),
+        ]).single.label,
+        'Spark 5h',
+      );
+    });
   });
 
   test(
@@ -556,6 +604,35 @@ void main() {
       expect(collapsed.usedPercent, 70);
     });
 
+    test('exhausted 5h stays ahead of usable weekly until recovery', () {
+      final blocked = _claudeCodexSnapshot(
+        fiveHourUsed: 100,
+        sevenDayUsed: 77,
+        codexUsed: 10,
+      );
+      final selected = orderWatchRingsForSurface(
+        resolveWatchRings(
+          blocked,
+          const WatchRingPreferences(
+            selectedIds: [codexPlanRingId, claudePlanRingId],
+          ),
+        ),
+      );
+      expect(selected.first.id, claudePlanRingId);
+      expect(selected.first.label, '5h');
+      expect(selected.first.remainingPercent, 0);
+      final recovered = _claudeCodexSnapshot(
+        fiveHourUsed: 45,
+        sevenDayUsed: 77,
+        codexUsed: 10,
+      );
+      final next = watchRingCatalog(
+        recovered,
+      ).firstWhere((ring) => ring.id == claudePlanRingId);
+      expect(next.label, 'Weekly');
+      expect(next.remainingPercent, 23);
+    });
+
     test('tie-break prefers 5h over weekly', () {
       final dash = _claudeCodexSnapshot(
         fiveHourUsed: 55,
@@ -571,7 +648,7 @@ void main() {
       expect(collapsed.usedPercent, 55);
     });
 
-    test('prefers non-exhausted window over exhausted tighter weekly', () {
+    test('keeps an exhausted weekly window as the tightest restriction', () {
       final dash = _claudeCodexSnapshot(
         fiveHourUsed: 40,
         sevenDayUsed: 100,
@@ -582,8 +659,8 @@ void main() {
             dash.accounts.firstWhere((a) => a.provider == 'claude').allowances,
           )!;
 
-      expect(collapsed.label, '5h');
-      expect(collapsed.usedPercent, 40);
+      expect(collapsed.label, 'Weekly');
+      expect(collapsed.usedPercent, 100);
     });
 
     test('migrates legacy Claude window ids to one plan slot', () {
@@ -792,9 +869,9 @@ void main() {
       resolveWatchRings(withCursor, const WatchRingPreferences()),
       snapshot: withCursor,
     );
-    // Exhausted Other Models (100% used) is omitted from the face.
-    // Purchased on-demand is never a ring candidate.
+    // Exhausted Other Models remains selected; purchased on-demand is not a ring.
     expect(surface.map((ring) => ring.id), [
+      'allowance.cursor.cursor-plan-other',
       'allowance.cursor.cursor-plan-models',
     ]);
   });

@@ -13,6 +13,7 @@ import 'claude_dashboard_repository.dart';
 import 'dashboard_load.dart';
 import 'dashboard_repository.dart';
 import 'merging_connection_repository.dart';
+import 'connection_snapshot_cache.dart';
 
 /// Chains every credential-backed connection in front of [openAiAndCodex].
 ///
@@ -22,6 +23,7 @@ DashboardRepository buildLiveProviderStack({
   required ProviderCredentialStore credentialStore,
   required ClaudeAccountService claudeAccountService,
   required DashboardRepository openAiAndCodex,
+  Map<String, ConnectionSnapshotCache> caches = const {},
   ProviderSyncLogger logger = const DeveloperProviderSyncLogger(),
   DateTime Function()? clock,
 }) {
@@ -31,11 +33,13 @@ DashboardRepository buildLiveProviderStack({
   final cursorPlatformClient = CursorPlatformClient(clock: now);
 
   DashboardRepository connect({
+    required String connection,
     required DashboardRepository fallback,
     required ReportNormalizer normalizeReport,
     required ConnectionReportLoader loadReport,
   }) {
     return MergingConnectionRepository(
+      cache: caches[connection],
       fallback: fallback,
       logger: logger,
       mapError: (error) => mapReportingError(error, logger),
@@ -68,6 +72,7 @@ DashboardRepository buildLiveProviderStack({
   }
 
   final anthropic = connect(
+    connection: ProviderConnections.anthropicPlatform.storageKey,
     fallback: openAiAndCodex,
     normalizeReport: normalizeAnthropicReportJson,
     loadReport: () async {
@@ -99,11 +104,13 @@ DashboardRepository buildLiveProviderStack({
 
   final claude = claudeDashboardRepository(
     accountService: claudeAccountService,
+    cache: caches[ProviderConnections.claudePlan.storageKey],
     fallback: anthropic,
     logger: logger,
   );
 
   final cursorTeam = connect(
+    connection: ProviderConnections.cursorPlatform.storageKey,
     fallback: claude,
     normalizeReport: normalizeCursorPlatformReportJson,
     loadReport: () async {
@@ -126,6 +133,7 @@ DashboardRepository buildLiveProviderStack({
   );
 
   return connect(
+    connection: ProviderConnections.cursorPlan.storageKey,
     fallback: cursorTeam,
     normalizeReport: normalizeCursorPlanReportJson,
     loadReport: planReport(

@@ -8,6 +8,7 @@ import 'cursor_webview_cookies.dart';
 import 'provider_connection.dart';
 import 'provider_connection_row.dart';
 import 'provider_credential_store.dart';
+import 'connection_lifecycle.dart';
 
 /// Opens Cursor dashboard sign-in and returns a session token, or null.
 typedef CursorPlanSignIn = Future<String?> Function(BuildContext context);
@@ -118,7 +119,15 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
     setState(() {
       _isConnecting = true;
     });
+    final store = widget.credentialStore;
+    final managed =
+        store is ReconnectProviderCredentialStore
+            ? store as ReconnectProviderCredentialStore
+            : null;
+    CredentialVersion? ticket;
+    var saved = false;
     try {
+      ticket = await managed?.beginReconnect(ProviderConnections.cursorPlan);
       final signIn = widget.signIn ?? CursorPlanSignInScreen.open;
       final token = await signIn(context);
       if (!mounted) {
@@ -129,10 +138,16 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
       if (normalized == null) {
         return;
       }
-      await widget.credentialStore.writeSecret(
+      if (managed == null) {
+        await store.writeSecret(ProviderConnections.cursorPlan, normalized);
+      } else if (!await managed.completeReconnect(
         ProviderConnections.cursorPlan,
         normalized,
-      );
+        ticket!,
+      )) {
+        throw StateError('Cursor sign-in superseded.');
+      }
+      saved = true;
       if (!mounted) {
         return;
       }
@@ -145,6 +160,16 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
         _showMessage('Could not complete Cursor sign-in');
       }
     } finally {
+      if (!saved && ticket != null) {
+        try {
+          await managed!.cancelReconnect(
+            ProviderConnections.cursorPlan,
+            ticket,
+          );
+        } catch (_) {
+          /* Pending credentials remain unavailable. */
+        }
+      }
       if (mounted) {
         setState(() {
           _isConnecting = false;

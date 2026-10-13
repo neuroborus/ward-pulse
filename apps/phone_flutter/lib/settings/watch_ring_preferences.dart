@@ -101,7 +101,11 @@ final class WatchRingMetric {
   /// When set, the Settings row is disabled and the reason is shown as help.
   final String? unavailableReason;
 
-  bool get isAvailable => usedPercent != null && unavailableReason == null;
+  bool get isAvailable =>
+      usedPercent != null &&
+      usedPercent!.isFinite &&
+      usedPercent! >= 0 &&
+      unavailableReason == null;
 
   String? get _planTitle => switch (id) {
     claudePlanRingId => 'Claude plan',
@@ -256,8 +260,8 @@ List<String> migrateWatchRingSelectedIds(
 
 /// Collapses Claude plan windows into one ring (tightest remaining).
 ///
-/// Prefers non-exhausted windows so surface omit-exhausted does not hide a
-/// usable shorter window behind a fully used weekly.
+/// Exhausted windows remain eligible: a blocked window cannot be bypassed by
+/// showing a less-used window from the same plan.
 WatchRingMetric? collapseClaudePlanRing(Iterable<AllowanceState> allowances) {
   return _collapsePlanRing(
     allowances,
@@ -301,7 +305,14 @@ WatchRingMetric? _collapsePlanRing(
   ];
   if (windows.isEmpty) return null;
   final withPercent =
-      windows.where((window) => window.usedPercent != null).toList();
+      windows
+          .where(
+            (window) =>
+                window.usedPercent != null &&
+                window.usedPercent!.isFinite &&
+                window.usedPercent! >= 0,
+          )
+          .toList();
   if (withPercent.isEmpty) {
     return WatchRingMetric(
       id: id,
@@ -311,11 +322,8 @@ WatchRingMetric? _collapsePlanRing(
       unavailableReason: 'This allowance has no percentage to show.',
     );
   }
-  final active =
-      withPercent.where((window) => window.usedPercent! < 100).toList();
-  final pool = active.isNotEmpty ? active : withPercent;
-  pool.sort((a, b) => _comparePlanWindows(a, b, windowIds));
-  final winner = pool.first;
+  withPercent.sort((a, b) => _comparePlanWindows(a, b, windowIds));
+  final winner = withPercent.first;
   return WatchRingMetric(
     id: id,
     label: labelFor?.call(winner) ?? winner.label,
@@ -494,7 +502,7 @@ List<(WatchRingMetric, WatchRingMetric?)> pairWatchRings(
   return bands;
 }
 
-/// Display order for Wear/WFF/Glance: omit exhausted layers, tightest remaining first.
+/// Display order for Wear/WFF/Glance: known layers, tightest remaining first.
 ///
 /// Payload index 0 = critical limit. Face maps that to the **innermost** ring and the
 /// strip nearest the center; Glance keeps the same order top-first.
@@ -506,13 +514,13 @@ List<WatchRingMetric> orderWatchRingsForSurface(
   DashboardSnapshot? snapshot,
   int maxSlots = watchRingSlotCount,
 }) {
-  final active = [
+  final available = [
     for (final ring in rings)
-      if ((ring.usedPercent ?? 0) < 100) ring,
+      if (ring.isAvailable) ring,
   ];
   final runways = <String, double?>{};
   if (snapshot != null) {
-    for (final ring in active) {
+    for (final ring in available) {
       final provider = providerFromRingId(ring.id);
       if (provider == null) {
         continue;
@@ -523,7 +531,7 @@ List<WatchRingMetric> orderWatchRingsForSurface(
       );
     }
   }
-  active.sort((a, b) {
+  available.sort((a, b) {
     final usedCmp = (b.usedPercent ?? 0).compareTo(a.usedPercent ?? 0);
     if (usedCmp != 0) {
       return usedCmp;
@@ -546,9 +554,11 @@ List<WatchRingMetric> orderWatchRingsForSurface(
   // By band, not by ring: a pair is two rings and one slot, so counting rings
   // here dropped one of its pools and the band arrived undivided.
   final kept =
-      _withinSlotBudget([for (final ring in active) ring.id], maxSlots).toSet();
+      _withinSlotBudget([
+        for (final ring in available) ring.id,
+      ], maxSlots).toSet();
   return [
-    for (final ring in active)
+    for (final ring in available)
       if (kept.contains(ring.id)) ring,
   ];
 }

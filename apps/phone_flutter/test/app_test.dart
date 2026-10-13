@@ -333,6 +333,108 @@ void main() {
     }
   });
 
+  for (final trigger in ['refresh', 'scheduled']) {
+    testWidgets(
+      '$trigger rechecks revision after delayed ownership validation',
+      (tester) async {
+        final live = DashboardSnapshot.fromJsonString(
+          File(
+            '../../fixtures/snapshots/dashboard_today.json',
+          ).readAsStringSync(),
+        );
+        final repository = _PublicationRepository(live);
+        final watch = _FakeWatchSyncService();
+        final scheduler = _ManualProviderSyncScheduler();
+        addTearDown(scheduler.dispose);
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            watchSyncService: watch,
+            syncScheduler: scheduler,
+          ),
+        );
+        await tester.pumpAndSettle();
+        repository.delayNextValidation = true;
+        if (trigger == 'refresh') {
+          await tester.tap(find.byTooltip('Refresh'));
+        } else {
+          scheduler.tick();
+        }
+        await tester.pump();
+        await tester.pump();
+        expect(repository.validationStarted, isTrue);
+        repository.snapshot = DashboardSnapshot.empty();
+        await tester.tap(find.byTooltip('Refresh'));
+        await tester.pumpAndSettle();
+        expect(watch.syncedSnapshots.last.accounts, isEmpty);
+        repository.validation.complete(true);
+        await tester.pumpAndSettle();
+        expect(watch.syncedSnapshots.last.accounts, isEmpty);
+        expect(find.text('Connect a provider'), findsWidgets);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+  testWidgets('delayed alert write cannot reinstate a removed account', (
+    tester,
+  ) async {
+    final live = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final repository = _PublicationRepository(live);
+    final scheduler = _ManualProviderSyncScheduler();
+    addTearDown(scheduler.dispose);
+    final store = _DelayedAlertThresholdStore();
+    final watch = _FakeWatchSyncService();
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: repository,
+        syncScheduler: scheduler,
+        watchSyncService: watch,
+        alertThresholdStore: store,
+        applyAlertSettings: (current, _) => current,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Platform reporting'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    final button = find.descendant(
+      of: find.ancestor(
+        of: find.text('Platform reporting'),
+        matching: find.byType(ListTile),
+      ),
+      matching: find.byTooltip('Budget limits'),
+    );
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, '25');
+    await tester.tap(find.text('Save'));
+    await tester.pump();
+    expect(store.started, isTrue);
+    repository.snapshot = DashboardSnapshot.empty();
+    scheduler.tick();
+    await tester.pump();
+    await tester.pump();
+    store.release.complete();
+    await tester.pumpAndSettle();
+    expect(watch.syncedSnapshots.last.accounts, isEmpty);
+    await tester.tap(find.text('Dashboard'));
+    await tester.pumpAndSettle();
+    expect(find.text('Connect a provider'), findsWidgets);
+    expect(
+      store.value
+          .forConnection(ProviderConnections.openAiPlatform)
+          .budget
+          .today,
+      2500,
+    );
+  });
+
   testWidgets('a reload keeps the dashboard on screen', (tester) async {
     final snapshot = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
@@ -1542,4 +1644,37 @@ class _ManualProviderSyncScheduler implements ProviderSyncScheduler {
   void tick() => _ticks.add(null);
 
   Future<void> dispose() => _ticks.close();
+}
+
+class _PublicationRepository extends DashboardRepository {
+  _PublicationRepository(this.snapshot);
+  DashboardSnapshot snapshot;
+  bool delayNextValidation = false;
+  bool validationStarted = false;
+  final validation = Completer<bool>();
+  @override
+  Future<DashboardSnapshot> load() async => snapshot;
+  @override
+  Future<bool> isSnapshotCurrent(DashboardSnapshot snapshot) async {
+    if (delayNextValidation) {
+      delayNextValidation = false;
+      validationStarted = true;
+      return validation.future;
+    }
+    return true;
+  }
+}
+
+class _DelayedAlertThresholdStore implements AlertThresholdPreferenceStore {
+  final release = Completer<void>();
+  bool started = false;
+  AlertThresholdPreferences value = const AlertThresholdPreferences();
+  @override
+  Future<AlertThresholdPreferences> read() async => value;
+  @override
+  Future<void> write(AlertThresholdPreferences next) async {
+    started = true;
+    await release.future;
+    value = next;
+  }
 }

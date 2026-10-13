@@ -95,7 +95,7 @@ class GlanceModelsTest {
     }
 
     @Test
-    fun legendRows_omitExhaustedAndPrefixFamily() {
+    fun legendRows_keepExhaustedHalvesAndPrefixFamily() {
         val rows =
             glanceLegendRows(
                 baseSummary(
@@ -107,7 +107,7 @@ class GlanceModelsTest {
                                 92.0,
                                 PulseStatus.OK,
                             ),
-                            // One band, two pools: the exhausted one drops out alone.
+                            // One band, two pools: a zero half remains visible.
                             RingSummary(
                                 "allowance.cursor.cursor-plan-models",
                                 "Cursor Models",
@@ -145,10 +145,10 @@ class GlanceModelsTest {
         assertEquals(3, rows.size)
         assertEquals("Codex · Weekly plan", rows[0].title)
         assertEquals("8% left · 320 credits", rows[0].subtitle)
-        // The pool name already opens with its family — do not name it twice.
-        assertEquals("Cursor Models", rows[1].title)
-        assertEquals("24% left", rows[1].subtitle)
-        assertNull(rows[1].secondaryArc)
+        assertEquals("Cursor plan", rows[1].title)
+        assertEquals("24% · 0% left", rows[1].subtitle)
+        assertEquals(0f, requireNotNull(rows[1].secondaryArc).remainingFraction)
+        assertEquals(listOf(6 until 8), rows[1].exhaustedPercentRanges)
         assertEquals("Budget · Today", rows[2].title)
         assertEquals("60% left", rows[2].subtitle)
     }
@@ -191,8 +191,10 @@ class GlanceModelsTest {
         val switched = codex.copy(split = codex.split!!.copy(label = "Spark Weekly"))
         assertEquals("Codex plan", glanceLegendRows(baseSummary(rings = listOf(switched))).single().title)
         val remainingSpark = glanceLegendRows(baseSummary(rings = listOf(codex.copy(usedPercent = 100.0)))).single()
-        assertEquals("Codex · Spark 5h", remainingSpark.title)
-        assertNull(remainingSpark.secondaryArc)
+        assertEquals("Codex plan", remainingSpark.title)
+        assertEquals("0% · 41% left", remainingSpark.subtitle)
+        assertEquals(0f, remainingSpark.remainingFraction)
+        assertEquals(0.41f, requireNotNull(remainingSpark.secondaryArc).remainingFraction, 0.0001f)
     }
 
     @Test
@@ -212,34 +214,79 @@ class GlanceModelsTest {
     }
 
     @Test
-    fun legendRows_exhaustedHalfLeavesAnOrdinaryPoolRow() {
+    fun legendRows_exhaustedHalfKeepsBothPoolsAndOnlyItsPercentTinted() {
         for ((innerUsed, outerUsed) in listOf(100.0 to 59.0, 18.0 to 100.0)) {
             val pair = cursorPair(innerUsed, outerUsed)
-            val survivor = if (innerUsed >= 100.0) {
-                val outer = requireNotNull(pair.split)
-                RingSummary(outer.id, outer.label, outer.usedPercent, outer.status)
-            } else {
-                pair.copy(split = null)
-            }
             val allowances = listOf(cursorCredits())
             val actual = glanceLegendRows(baseSummary(rings = listOf(pair), allowances = allowances))
-            val ordinary = glanceLegendRows(baseSummary(rings = listOf(survivor), allowances = allowances))
-            assertEquals(ordinary, actual)
-            assertNull(actual.single().secondaryArc)
+            assertEquals("Cursor plan", actual.single().title)
+            assertEquals(RingFamily.CURSOR_OWN, actual.single().colorArgb)
+            assertEquals(RingFamily.CURSOR, requireNotNull(actual.single().secondaryArc).colorArgb)
             assertEquals(
-                if (innerUsed >= 100.0) "Cursor · Other Models" else "Cursor Models",
-                actual.single().title,
+                if (innerUsed >= 100.0) "0% · 41% left · 320 credits" else "82% · 0% left · 320 credits",
+                actual.single().subtitle,
             )
             assertEquals(
-                if (innerUsed >= 100.0) "41% left · 320 credits" else "82% left · 320 credits",
-                actual.single().subtitle,
+                if (innerUsed >= 100.0) listOf(0 until 2) else listOf(6 until 8),
+                actual.single().exhaustedPercentRanges,
             )
         }
     }
 
     @Test
-    fun legendRows_exhaustedPairDisappears() {
-        assertTrue(glanceLegendRows(baseSummary(rings = listOf(cursorPair(100.0, 120.0)))).isEmpty())
+    fun legendRows_exhaustedPairKeepsTwoTracksAndTwoPercentTokens() {
+        val row = glanceLegendRows(baseSummary(rings = listOf(cursorPair(100.0, 120.0)))).single()
+        assertEquals("0% · 0% left", row.subtitle)
+        assertEquals(0f, row.remainingFraction)
+        assertEquals(0f, requireNotNull(row.secondaryArc).remainingFraction)
+        assertEquals(listOf(0 until 2, 5 until 7), row.exhaustedPercentRanges)
+    }
+
+    @Test
+    fun legendRows_roundingToZeroDoesNotMarkPositiveCapacityExhausted() {
+        val row = glanceLegendRows(baseSummary(rings = listOf(cursorPair(99.96, 100.0)))).single()
+        assertEquals("0% · 0% left", row.subtitle)
+        assertTrue(row.remainingFraction > 0f)
+        assertEquals(listOf(5 until 7), row.exhaustedPercentRanges)
+        val styled = glanceSubtitleText(row)
+        assertEquals(row.subtitle, styled.text)
+        assertEquals(1, styled.spanStyles.size)
+        assertEquals(5, styled.spanStyles.single().start)
+        assertEquals(7, styled.spanStyles.single().end)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFFFB4AB), styled.spanStyles.single().item.color)
+    }
+
+    @Test
+    fun legendRows_invalidValuesAreNotInventedZeroes() {
+        for (used in listOf(Double.NaN, Double.POSITIVE_INFINITY, -1.0)) {
+            val row = cursorPair(used, 100.0).copy(split = null)
+            assertTrue(glanceLegendRows(baseSummary(rings = listOf(row))).isEmpty())
+        }
+    }
+
+    @Test
+    fun invalidOnlyDataDoesNotClaimThatKnownCapacityIsExhausted() {
+        val unavailable = baseSummary(rings = listOf(cursorPair(Double.NaN, Double.NaN)))
+        assertTrue(glanceLegendRows(unavailable).isEmpty())
+        assertEquals(listOf("Ring data unavailable"), glanceEmptyLines(unavailable))
+        val selectedEmpty = unavailable.copy(
+            rings = emptyList(),
+            providers = listOf(app.wardpulse.wear.model.ProviderSummary("claude", PulseStatus.OK, null)),
+        )
+        assertEquals(listOf("Choose percent rings", "in the phone app"), glanceEmptyLines(selectedEmpty))
+        assertEquals(listOf("Connect a provider", "on your phone"), glanceEmptyLines(selectedEmpty.copy(providers = emptyList())))
+    }
+
+    @Test
+    fun legendRows_zeroPurchasedCreditsNeverReceivePercentTint() {
+        val allowance = cursorCredits().copy(remaining = Quantity("0", "credits"))
+        val row = glanceLegendRows(baseSummary(
+            rings = listOf(cursorPair(100.0, 100.0)), allowances = listOf(allowance),
+        )).single()
+        assertEquals("0% · 0% left · 0 credits", row.subtitle)
+        val styled = glanceSubtitleText(row)
+        assertEquals(listOf("0%", "0%"), styled.spanStyles.map { styled.text.substring(it.start, it.end) })
+        assertTrue(styled.spanStyles.all { it.end <= "0% · 0%".length })
     }
 
     /** A pair is one row at the band's position supplied by the phone. */

@@ -13,6 +13,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.json.JSONObject
 
 @RunWith(AndroidJUnit4::class)
 class WatchSummaryStoreTest {
@@ -59,6 +60,33 @@ class WatchSummaryStoreTest {
         assertEquals(1, rings.size)
         assertEquals("allowance.cursor.cursor-plan-other", rings.first().split?.id)
         assertEquals(62.0, rings.first().split?.usedPercent)
+    }
+
+    @Test
+    fun rejectsNonfiniteCoercedRingValuesWhileKeepingKnownExhaustion() {
+        val encoded = testContext.assets.open("watch_dashboard_summary_paired.json")
+            .bufferedReader()
+            .use { it.readText() }
+        val exhausted = JSONObject(encoded).apply {
+            getJSONArray("rings").getJSONObject(0).apply {
+                put("usedPercent", 100.0)
+                getJSONObject("split").put("usedPercent", 100.0)
+            }
+        }.toString()
+        assertTrue(store.saveEncoded(exhausted))
+
+        for (outer in listOf(false, true)) {
+            for (invalid in listOf("Infinity", "NaN", "1e400")) {
+                val malformed = JSONObject(exhausted).apply {
+                    val ring = getJSONArray("rings").getJSONObject(0)
+                    val target = if (outer) ring.getJSONObject("split") else ring
+                    target.put("usedPercent", invalid)
+                }.toString()
+                assertFalse(store.saveEncoded(malformed))
+                assertEquals(100.0, store.load()?.rings?.single()?.usedPercent)
+                assertEquals(100.0, store.load()?.rings?.single()?.split?.usedPercent)
+            }
+        }
     }
 
     @Test

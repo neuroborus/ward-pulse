@@ -35,7 +35,8 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   the span), vertical+horizontal resize (default ~3 cells), day/night chrome, overlay face
   watermark (no header band), expands Claude windows, keeps exhausted plan pools as
   `0% left`, and appends per-provider purchased credits end-aligned (label centered).
-  Watchface still collapses Claude / omits exhausted. Do not keep
+  Watchface still collapses Claude, choosing the tightest known window including zero;
+  exhausted selected watch metrics remain visible after the 2026-10-13 revision. Do not keep
   those controls in Settings.
 - **Providers** owns the full connection catalog (Connected / Not connected), credentials /
   auth, and **all user-configured** alert thresholds (plan/purchased per connection;
@@ -53,12 +54,17 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
 
 - **App Glance (home page)** follows `docs/product/WEAR_GLANCE_DESIGN.md` (**locked 2026-07-26**):
   text legend (not a face clone) — mini remaining arcs, tightest-first, per-provider credits.
-  **2026-09-16 revision:** one row per band, at most three rows. An active pair has two
-  coloured arcs and inner-first percentages, title = family + ` plan` (`Cursor plan`),
+  **2026-09-16 revision:** one row per band, at most three rows. A known pair has two
+  mini-tracks with coloured arcs for positive values and inner-first percentages,
+  title = family + ` plan` (`Cursor plan`),
   subtitle = `82% · 41% left · 320 credits` (credits once, omitted when unavailable).
-  One exhausted half leaves an ordinary pool row; both exhausted remove it. Keep typography,
-  54-unit row pitch and 12-unit Alerts clearance. Legend-well width, clipping and visual
-  verification are deferred until live-data verification; record no new measured numbers.
+  **2026-10-13 selected-zero revision:** known exhausted halves retain the pair, both grey
+  tracks and both percentages; only true exhausted `0%` tokens use `#FFB4AB`. Titles,
+  separators, credits and family identity stay unchanged; a tiny positive fraction rounded
+  to `0%` stays ordinary. Unknown/unavailable (including non-finite or negative usage) remains
+  absent; selected entries with no known percentage say `Ring data unavailable`. Keep typography, 54-unit row
+  pitch and 12-unit Alerts clearance. Paired-row fit/clipping was verified under injected load
+  on round/notround devices on 2026-10-01; a live Codex/Spark payload remains unverified.
   Refresh: `OK`/`!OK` inside dual-arrow glyph; cadence = gray `OK`+disabled; provider limit =
   gray `!OK`+`Rate limited`+disabled; `Stale` = orange `!OK`+enabled. `Alerts: N` when `N > 0`.
   Phone owns allowance (`manualRefreshAllowed` / `manualRefreshAvailableAt` on schema v7)
@@ -76,10 +82,14 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   only via user thresholds on Providers.
   Future multi-profile / hatch notes there are planning-only until a later phase.
 - Claude plan windows (`5h` / weekly / Opus / Sonnet) collapse to one watch ring on the phone
-  (`allowance.claude.plan`); Glance shows the active window label. Phone dashboard still lists all.
+  (`allowance.claude.plan`); Glance names the selected tightest known window, including zero.
+  Phone dashboard still lists all.
 - Prefer concentric percent layers from schema v4+ on the **face** (up to three selected metrics);
-  never invent `Unknown` filler. Unselected, unavailable, or exhausted (`>= 100%`)
-  layers do not render.
+  never invent `Unknown` filler. Unselected or unavailable layers do not render. Selected
+  known exhausted (`>= 100%`) layers keep grey tracks and legend rows, including a known pair
+  with one or both halves at zero. Only exhausted `0%` numeric tokens use the existing
+  phone dark-theme error role `#FFB4AB`; budget money labels, credits and family markers stay
+  unchanged. Exhaustion styling does not infer alerts, thresholds or refresh state.
 - Face strips show compact remaining credits per provider family from `allowances` (`% · 500`),
   same matching rule as Glance; accents use the family ColorRamp. `creditsGlance` is for
   credits-only faces when there are no plan rings.
@@ -110,8 +120,9 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   and 5, so raising the version buys nothing. This face has used all eight since 2026-07-25
   (since the **2026-09-16** revision: three bands, two outer-half slots, three strips).
   Slots 106/109 serve split ordinals 0/1 in payload order; both receive an outside-counted
-  band index through `RingSurfaceOrder` in TITLE. A missing or exhausted selected half yields
-  `NoData`, without shifting the next ordinal. Keep both service names and updater entries.
+  band index through `RingSurfaceOrder` in TITLE. A missing selected half yields `NoData`;
+  a known exhausted selected half carries real zero, retaining pair identity and ordinal.
+  Keep both service names and updater entries.
   An old face loses the far marker with one pair; with two, the first keeps both arcs without
   its marker, while the second loses its outer arc and slot 109 may mark another row. Updating
   the face fixes the layout. Count before designing anything that needs a new slot — the validator
@@ -124,19 +135,21 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   to a ROUND tip. Remaining melts **clockwise from 12**: Transform `startAngle`
   with `(1 - value/max) * 359.9` and fixed `endAngle` 359.9. Prefer simple
   Transform arithmetic over `clamp()`.
-  `BoundingArc` clips ring-slot content to the arc band — sunk `%` / credits strips must use
-  separate `BoundingBox` `RANGED_VALUE` slots of **equal width**, stacked inside the clear
-  aperture. Every strip TEXT = full label (`46%` or `100% · 500`); accents use
-  `[COMPLICATION.RANGED_VALUE_COLORS]` for the inner pool. Strip TITLE carries a closed
-  outer-pool token: `cursor-other` selects a static `#67E8D4` far marker inside that strip
-  (3x14, same geometry); empty/unknown tokens draw no marker. Extend Wear
-  `splitPoolToken` and the WFF generator together for a new pool colour. Historical marker
-  measurements are not reconfirmed by this move: equivalence is deferred until live-data
-  verification. New measurements need a date and actual device; the planned target is the
+  Since 2026-10-09, full-canvas `BoundingBox` band slots draw both the true 20-unit band and
+  their own sunk strip; no separate strip slots are added. Keep strip wells **equal width**
+  and inside the clear aperture. Every strip TEXT = full label (`46%` or `100% · 500`);
+  accents use `[COMPLICATION.RANGED_VALUE_COLORS]` for the inner pool. Combined TITLE bases
+  `split`, `split:cursor-other`, `split:spark` keep the outer marker's family identity;
+  known zero suffixes must preserve marker selection. Cursor's marker is static `#67E8D4`,
+  Spark's `#186020`, both 3x14. Marker equivalence was measured 2026-10-12; a live Codex/Spark
+  payload remains a separate unverified condition. New measurements need a date and actual device; the planned target is the
   round API-36 `wardpulse_wear_round_api36_1` emulator, not shipped watch hardware.
   Avoid `length(TITLE)` Conditions — they are unreliable on WFF. Draw strips after `DigitalClock` so the clock does not cover them.
-- A ring slot's TITLE carries `split` for a paired band's inner half, otherwise the budget
-  period (`D` / `7D` / `M`, empty for unpaired plan rings). For a budget ring the
+- A ring slot's TITLE carries an empty token for an ordinary positive plan, `zero` for an
+  exhausted ordinary plan, or one paired base (`split`, `split:cursor-other`, `split:spark`)
+  optionally suffixed with `:zero-inner`, `:zero-outer`, `:zero-both` (twelve closed paired
+  spellings). Match the full closed vocabulary, not loose prefix tests. Budget period tokens
+  (`D` / `7D` / `M`) remain unchanged. For a budget ring the
   face repeats it around that band as background-colour cut-out type, branching on
   `[COMPLICATION.TITLE]` equality to pick one baked image per ring and period. The type runs in
   four sweeps with a bare break on each diagonal, aligned across rings; within a sweep tokens are

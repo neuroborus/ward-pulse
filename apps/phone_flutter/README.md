@@ -30,3 +30,27 @@ Build the native libraries and run the app:
 ```sh
 just run-phone
 ```
+
+## Persistent Connection Recovery
+
+`PhoneLiveBindings` wires all six live connections to `ConnectionSnapshotCache` and the
+headless-safe native `ConnectionCacheEngine` channel. Only canonical normalized snapshots
+are cached; provider credentials stay in platform-secure storage. Fresh repositories after
+restart can merge current data with stale failed connections without changing their original
+success times. Mock data never enters this store.
+
+Credential generation, OAuth revision and cache epoch are separate. Reconnect/disconnect
+barriers and conditional writes prevent old requests from restoring removed accounts. The
+native service coordinates concurrent Flutter engines in the application's single Android
+process, including WorkManager; separate OS processes are unsupported. Foreground and
+headless callers validate ownership before publication.
+
+`just check-phone` includes `just test-phone-cache`, which runs the production Java transaction
+engine's adversarial tests with the existing Android JDK (`javac` and `java`). Flutter tests also
+exercise the real engine through a test-only JVM bridge with fake encrypted storage and HTTP
+responses. No live credentials, emulator state or provider network are used by these tests.
+
+Final-APK emulator acceptance on 2026-10-13 covered three real plan connections (Codex,
+Claude and Cursor), a production periodic WorkManager task in a fresh background process,
+offline cold-start recovery with unchanged cached data/success times, and restored live
+phone-to-watch delivery. Hardware and whole-phase release acceptance remain separate gates.

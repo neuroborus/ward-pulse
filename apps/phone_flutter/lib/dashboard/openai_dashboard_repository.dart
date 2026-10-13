@@ -10,12 +10,14 @@ import '../sync/report_period.dart';
 import 'dashboard_load.dart';
 import 'dashboard_repository.dart';
 import 'merging_connection_repository.dart';
+import 'connection_snapshot_cache.dart';
 
 /// Loads OpenAI Platform Admin reporting and merges it into [fallback].
 DashboardRepository openAiDashboardRepository({
   required ProviderCredentialStore credentialStore,
   OpenAiReportingClient? client,
   DashboardRepository? fallback,
+  ConnectionSnapshotCache? cache,
   ProviderSyncLogger logger = const DeveloperProviderSyncLogger(),
   ReportNormalizer normalizeReport = normalizeOpenAiReportJson,
   DateTime Function()? clock,
@@ -24,6 +26,7 @@ DashboardRepository openAiDashboardRepository({
   final now = clock ?? DateTime.now;
 
   return MergingConnectionRepository(
+    cache: cache,
     fallback: fallback ?? const NoProvidersDashboardRepository(),
     logger: logger,
     normalizeReport: normalizeReport,

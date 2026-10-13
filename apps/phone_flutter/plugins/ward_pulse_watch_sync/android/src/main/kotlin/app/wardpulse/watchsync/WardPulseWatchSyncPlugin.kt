@@ -14,11 +14,13 @@ import io.flutter.plugin.common.MethodChannel
 class WardPulseWatchSyncPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private lateinit var applicationContext: Context
     private lateinit var channel: MethodChannel
+    private var connectionCache: ConnectionCacheChannel? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         applicationContext = binding.applicationContext
         channel = MethodChannel(binding.binaryMessenger, CHANNEL_NAME)
         channel.setMethodCallHandler(this)
+        connectionCache = ConnectionCacheChannel(applicationContext, binding.binaryMessenger)
     }
 
     override fun onMethodCall(
@@ -50,6 +52,8 @@ class WardPulseWatchSyncPlugin : FlutterPlugin, MethodChannel.MethodCallHandler 
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
+        connectionCache?.detach()
+        connectionCache = null
     }
 
     private fun queueWatchSummary(

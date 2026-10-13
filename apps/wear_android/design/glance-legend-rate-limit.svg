@@ -12,14 +12,14 @@
   </defs>
   <g clip-path="url(#roundClip)">
     <rect width="450" height="450" fill="url(#lift)"/>
-    
+
     <text x="225" y="48" text-anchor="middle"
       font-family="Noto Sans, sans-serif" font-size="16"
       font-weight="700" fill="#8A968F">9:06</text>
-    
+
     <circle cx="225" cy="96" r="34" fill="#121512"
       stroke="#2E3632" stroke-width="1" />
-    
+
     <path d="M 208.8 82.4 A 21.15 21.15 0 0 1 242.0 83.4"
       fill="none" stroke="#5A635C" stroke-width="2.2" stroke-linecap="butt"
       opacity="0.7" />
@@ -27,7 +27,7 @@
       L 239.1 85.9
       L 245.3 81.4 Z"
       fill="#5A635C" opacity="0.7" />
-    
+
     <path d="M 241.2 109.6 A 21.15 21.15 0 0 1 208.0 108.6"
       fill="none" stroke="#5A635C" stroke-width="2.2" stroke-linecap="butt"
       opacity="0.7" />

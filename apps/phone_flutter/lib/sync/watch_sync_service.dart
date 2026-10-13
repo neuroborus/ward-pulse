@@ -106,10 +106,7 @@ class WatchDashboardSummaryPayload {
           {
             'id': ring.id,
             'label': _ringLabel(ring),
-            // Round for glanceable surfaces — avoid float noise like 24.800000000000004.
-            'usedPercent': double.parse(
-              (ring.usedPercent ?? 0).toStringAsFixed(1),
-            ),
+            'usedPercent': _watchUsedPercent(ring.usedPercent!),
             'status': ring.status.wireName,
             // Budget strips read money, so it travels as structure — the
             // currency code included, or Wear would have to assume one.
@@ -175,9 +172,15 @@ Map<String, Object?> _splitToJson(WatchRingMetric ring) {
   return {
     'id': ring.id,
     'label': _ringLabel(ring),
-    'usedPercent': double.parse((ring.usedPercent ?? 0).toStringAsFixed(1)),
+    'usedPercent': _watchUsedPercent(ring.usedPercent!),
     'status': ring.status.wireName,
   };
+}
+
+/// Trim ordinary float noise without rounding a positive remainder to zero.
+double _watchUsedPercent(double used) {
+  final rounded = double.parse(used.toStringAsFixed(1));
+  return used < 100 && rounded >= 100 ? used : rounded;
 }
 
 String _ringLabel(WatchRingMetric ring) {

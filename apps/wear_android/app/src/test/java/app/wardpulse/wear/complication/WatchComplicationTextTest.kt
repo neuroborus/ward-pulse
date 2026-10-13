@@ -19,6 +19,85 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WatchComplicationTextTest {
+    @Test
+    fun nativeRangedBuilderAcceptsZeroAndRetainsTheFamilyRamp() {
+        val built = rangedComplicationBuilder(
+            percent = 0f, title = "zero", colorArgb = RingFamily.CLAUDE,
+            contentDescription = "Claude 5h", text = "0% · 500",
+        ).build()
+        assertEquals(0f, built.value)
+        assertEquals(0f, built.min)
+        assertEquals(100f, built.max)
+        assertEquals(RingFamily.CLAUDE, requireNotNull(built.colorRamp).colors.single())
+        assertTrue(built.text != null && built.title != null)
+    }
+
+    @Test
+    fun zeroHalvesPublishZeroRangedValuesAtTheirExistingOrdinal() {
+        val zero = cursorPair.copy(usedPercent = 100.0, split = cursorPair.split!!.copy(usedPercent = 100.0))
+        var innerCalled = false
+        val inner = ringComplicationData(listOf(zero), 0) { _, remaining, title ->
+            innerCalled = true
+            assertEquals(0f, remaining)
+            assertEquals("split:cursor-other:zero-both", title)
+            rangedComplicationBuilder(remaining, title, RingFamily.CURSOR_OWN, text = "0% · 0%").build()
+        }
+        assertTrue(innerCalled)
+        assertTrue(inner is androidx.wear.watchface.complications.data.RangedValueComplicationData)
+        var outerCalled = false
+        outerHalfComplicationData(listOf(zero, codexPair), 0) { half, outside ->
+            outerCalled = true
+            assertEquals(1, outside)
+            assertEquals(0f, WatchComplicationText.remainingPercent(half.usedPercent))
+            NoDataComplicationData()
+        }
+        assertTrue(outerCalled)
+    }
+
+    @Test
+    fun exactZeroTitlesPreservePoolsAndDoNotTreatRoundedPositiveAsEmpty() {
+        for ((inner, outer, suffix) in listOf(
+            Triple(100.0, 40.0, "zero-inner"),
+            Triple(40.0, 100.0, "zero-outer"),
+            Triple(100.0, 100.0, "zero-both"),
+        )) {
+            val pair = cursorPair.copy(usedPercent = inner, split = cursorPair.split!!.copy(usedPercent = outer))
+            assertEquals("split:cursor-other:$suffix", WatchComplicationText.ringTitleToken(pair))
+            assertEquals("cursor-other", WatchComplicationText.stripTitleToken(pair))
+        }
+        assertEquals("", WatchComplicationText.ringTitleToken(cursorPair.copy(usedPercent = 99.96, split = null)))
+        assertEquals("zero", WatchComplicationText.ringTitleToken(cursorPair.copy(usedPercent = 100.0, split = null)))
+    }
+
+    @Test
+    fun invalidOuterPercentCannotPublishAPairedZeroTitleForASingleLabel() {
+        for (invalid in listOf(Double.NaN, Double.POSITIVE_INFINITY, -1.0)) {
+            for ((used, title, label) in listOf(Triple(38.0, "", "62%"), Triple(100.0, "zero", "0%"))) {
+                val ring = cursorPair.copy(usedPercent = used, split = cursorPair.split!!.copy(usedPercent = invalid))
+                val summary = PreviewWatchDashboardSummary.value.copy(rings = listOf(ring), allowances = emptyList())
+                assertEquals(title, WatchComplicationText.ringTitleToken(ring))
+                assertNull(WatchComplicationText.stripTitleToken(ring))
+                assertEquals(label, WatchComplicationText.stripLabel(summary, 0))
+            }
+        }
+    }
+
+    @Test
+    fun zeroStripKeepsPurchasedCreditsAndBudgetMoneyLabels() {
+        val zero = RingSummary("allowance.claude.plan", "5h", 100.0, PulseStatus.OK)
+        for (credit in listOf("500", "0")) {
+            val summary = PreviewWatchDashboardSummary.value.copy(
+                rings = listOf(zero),
+                allowances = listOf(AllowanceSummary("purchased", "Claude · Extra usage", null, Quantity(credit, "credits"), false, null, PulseStatus.OK)),
+            )
+            assertEquals("0% · $credit", WatchComplicationText.stripLabel(summary, 0))
+        }
+        val budget = PreviewWatchDashboardSummary.value.copy(
+            rings = PreviewWatchDashboardSummary.value.rings.map { it.copy(usedPercent = 100.0) },
+        )
+        assertEquals("\$71.30/250", WatchComplicationText.stripLabel(budget, 0))
+        assertEquals("7D", WatchComplicationText.ringTitleToken(budget.rings.first()))
+    }
     /** Face arc slots, outermost first — the order `RingSurfaceOrder` mirrors. */
     private val RINGS_SLOT_ORDER = listOf(0, 1, 2)
 
@@ -72,9 +151,9 @@ class WatchComplicationTextTest {
     }
 
     @Test
-    fun absentOrExhaustedSplitsReturnNoDataWithoutBuildingAnArc() {
+    fun absentOrInvalidSplitsReturnNoDataWithoutBuildingAnArc() {
         val single = cursorPair.copy(split = null)
-        val exhausted = cursorPair.copy(split = cursorPair.split!!.copy(usedPercent = 100.0))
+        val invalid = cursorPair.copy(split = cursorPair.split!!.copy(usedPercent = Double.NaN))
         val first = RingSplitComplicationDataSourceService.SPLIT_INDEX
         val second = StripSplitComplicationDataSourceService.SPLIT_INDEX
         val cases =
@@ -84,13 +163,13 @@ class WatchComplicationTextTest {
                 listOf(single) to first,
                 listOf(single) to second,
                 listOf(cursorPair) to second,
-                listOf(exhausted, cursorPair) to first,
-                listOf(cursorPair, exhausted) to second,
+                listOf(invalid, cursorPair) to first,
+                listOf(cursorPair, invalid) to second,
             )
         for ((rings, ordinal) in cases) {
             val result =
                 outerHalfComplicationData(rings, ordinal) { _, _ ->
-                    error("Missing or exhausted split must clear the arc")
+                    error("Missing or invalid split must clear the arc")
                 }
             assertTrue(result is NoDataComplicationData)
         }
@@ -138,7 +217,7 @@ class WatchComplicationTextTest {
     }
 
     @Test
-    fun stripTitleUsesOnlyTheKnownActiveOuterPool() {
+    fun stripTitlePreservesKnownOuterIdentityAtZero() {
         assertEquals(
             "cursor-other",
             WatchComplicationText.splitPoolToken("allowance.cursor.cursor-plan-other"),
@@ -147,8 +226,8 @@ class WatchComplicationTextTest {
         assertEquals("spark", WatchComplicationText.stripTitleToken(codexPair))
         assertNull(WatchComplicationText.splitPoolToken("allowance.codex.plan"))
         assertNull(WatchComplicationText.stripTitleToken(codexPair.copy(split = null)))
-        assertNull(WatchComplicationText.stripTitleToken(codexPair.copy(usedPercent = 100.0)))
-        assertNull(WatchComplicationText.stripTitleToken(
+        assertEquals("spark", WatchComplicationText.stripTitleToken(codexPair.copy(usedPercent = 100.0)))
+        assertEquals("spark", WatchComplicationText.stripTitleToken(
             codexPair.copy(split = codexPair.split!!.copy(usedPercent = 100.0)),
         ))
         assertNull(WatchComplicationText.splitPoolToken("allowance.cursor.cursor-plan-models"))
@@ -156,15 +235,15 @@ class WatchComplicationTextTest {
         assertNull(WatchComplicationText.splitPoolToken(""))
         assertEquals("cursor-other", WatchComplicationText.stripTitleToken(cursorPair))
         assertNull(WatchComplicationText.stripTitleToken(cursorPair.copy(split = null)))
-        assertNull(WatchComplicationText.stripTitleToken(cursorPair.copy(usedPercent = 100.0)))
-        assertNull(
+        assertEquals("cursor-other", WatchComplicationText.stripTitleToken(cursorPair.copy(usedPercent = 100.0)))
+        assertEquals("cursor-other",
             WatchComplicationText.stripTitleToken(
                 cursorPair.copy(split = cursorPair.split!!.copy(usedPercent = 100.0)),
             ),
         )
         assertNull(
             WatchComplicationText.stripTitleToken(
-                cursorPair.copy(split = cursorPair.split!!.copy(id = "allowance.test.outer")),
+                cursorPair.copy(split = cursorPair.split.copy(id = "allowance.test.outer")),
             ),
         )
     }
@@ -446,9 +525,9 @@ class WatchComplicationTextTest {
                 ),
             ),
         )
-        // An exhausted half marks nothing either, but the band is still shared.
+        // An exhausted half keeps its family marker and explicit zero token.
         assertEquals(
-            WatchComplicationText.SPLIT_TOKEN,
+            "split:cursor-other:zero-outer",
             WatchComplicationText.ringTitleToken(
                 pool.copy(
                     split =

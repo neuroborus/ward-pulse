@@ -11,6 +11,11 @@ abstract class DashboardRepository {
   Future<DashboardSnapshot> load();
 
   void invalidate() {}
+  Future<void> clearPersistentSnapshots() async {
+    invalidate();
+  }
+
+  Future<bool> isSnapshotCurrent(DashboardSnapshot snapshot) async => true;
 }
 
 final class DashboardLoadException implements Exception {
@@ -102,6 +107,15 @@ final class DebugDashboardRepository extends DashboardRepository {
     return useMock ? _mock.load() : _live.load();
   }
 
+  @override
+  Future<void> clearPersistentSnapshots() async {
+    await _live.clearPersistentSnapshots();
+    _mock.invalidate();
+  }
+
+  @override
+  Future<bool> isSnapshotCurrent(DashboardSnapshot snapshot) =>
+      _live.isSnapshotCurrent(snapshot);
   @override
   void invalidate() {
     _live.invalidate();

@@ -5,6 +5,38 @@
 watch-face baseline in [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md): this screen is a
 **text legend** for face ring colors, not a face clone.
 
+**Selected-zero revision 2026-10-13.** The owner's two screenshots taken at 11:36 and 11:38
+showed Claude's 5-hour window at **0% left** on the phone while the watch chose **Weekly,
+23% left**. Select the tightest known window including zero and retain exhausted selected
+rows. A zero pool keeps its grey mini-track with no coloured remaining arc; only its `0%`
+token takes **`#FFB4AB`**, the existing phone dark theme's error role computed on the host.
+This is a colour-token decision, not a measured device colour. Both known halves of a pair
+remain in their fixed order when one or both reach zero. Missing/unknown values still stay
+absent; non-finite or negative usage is unavailable too. The original screenshots record the
+discrepancy. Subsequent injected-device and live phone-to-watch checks are recorded below.
+
+**Injected-device verification 2026-10-13.** The canonical round API-36 AVD,
+`wardpulse_wear_round_api36_1`, `emulator-5554`, **384×384**, selected `Claude · 5h` at
+**`0% left`** from captured normalized `5h used=100` / `Weekly used=77` data. The zero pool's
+mini-track was grey and only its percentage token was red. Inner-zero, outer-zero and
+both-zero Cursor cases retained both known tracks and family identity; two pairs retained
+their ordinals, and all three selected exhausted bands retained **three rows**. The existing
+budget percentage also used a red zero token, while the face's money label stayed white.
+All **10** canonical Wear device tests passed; the captured Claude zero case was rechecked
+after installing the final Wear APK. These broader variant checks used injected data on
+this round AVD; notround and hardware zero states are not claimed.
+
+**Live phone-to-watch verification 2026-10-13.** The intermediate phone APK built from
+the frozen zero-policy runtime refreshed the real Dashboard at **12:38:04**, showing Claude
+**5h 0% / Weekly 23%** and Codex **94%**. Its schema-9 summary, generated at
+`2026-10-13T10:38:04.000Z`, reached Wear with Claude `label=5h`, `usedPercent=100`.
+`live-zero-glance.png` showed **`Claude · 5h` / red `0% left`** with a grey mini-track and
+Codex **`94% left`**, matching the fresh Dashboard; the face matched too. No preferences
+were injected between the phone's live sync and these captures. The locked face baseline
+records the queue/receipt times and their device-clock offset. Live zero-policy acceptance
+passes on the canonical round AVD; final persistent-cache APK and cold-worker verification
+remain separate and pending.
+
 **Revision 2026-09-16 — paired bands:** one Glance row per band, with two mini arcs
 and two remaining percentages for an active pair. Typography, row pitch and Alerts clearance
 are unchanged; the 2026-10-01 revision below verifies the paired-row fit on both screen shapes.
@@ -173,7 +205,7 @@ Primary preview: `apps/wear_android/design/preview-glance-legend-3.png`.
 ## Goal
 
 Name each selected band with its provider/family, show remaining % and optional
-per-provider purchased credits, and keep one mini arc per active pool beside its row so the
+per-provider purchased credits, and keep one mini-track per known pool beside its row so the
 user can map face colors to providers.
 
 ## Composition
@@ -203,27 +235,34 @@ Rules:
   matching the face. A pair keeps its band position and uses **one row**. Its two mini arcs
   and percentages always put the inner pool first (left), outer pool second (right),
   independently of which percentage is tighter.
-- Mini arc = **remaining** (`100 - usedPercent`), family color from the face palette;
+- Mini arc = **remaining** (`100 - usedPercent`), family color from the face palette and the
   same clockwise-from-12 melt as the watch face (usage gap opens at 12). Its round caps reach
   half a stroke past each end — on a 17-unit arc that is 8.4° per cap, more than a 4%-used row
   has to show — so the sweep is drawn short by one cap at each end and the caps fill it back in.
   Without that a nearly full row reads as a closed ring (`WATCH_RING_DESIGN.md`, Ring geometry,
   where the same correction is measured on the face).
+  At known exhaustion, keep only the existing grey track `#2E3632`, with no coloured arc.
+  Positive fractions that round to `0%` remain positive arcs and keep ordinary label colour.
 - Primary line for a pair: **family name + ` plan`**, exactly `Cursor plan` for Cursor and
   `Codex plan` for Codex/Spark.
   The phone uses the same rule for its band label; the payload carries pool labels, not a
   separate band name. For an ordinary row: family/provider + metric label. Codex keeps
   `Weekly plan`; Cursor Pro+/Ultra
-  plan pools use `Cursor Models` / `Other Models` (exhausted pools stay off the face).
+  plan pools use `Cursor Models` / `Other Models` (known exhausted pools remain visible).
   Codex main and Spark windows collapse independently; an unpaired Spark row names
   its winning window (`Codex · Spark 5h` / `Codex · Spark Weekly`).
   Claude’s subscription plan windows (`5h`, `Weekly`, optional Opus/Sonnet weekly) collapse to
-  **one** ring on the phone; Glance shows which window is active via the short label
-  (`Claude · 5h` / `Claude · Weekly`).
+  **one** ring on the phone, choosing the tightest known window including zero; Glance names
+  that window (`Claude · 5h` / `Claude · Weekly`). Equal known percentages retain the existing
+  priority: `5h`, `Weekly`, `Opus weekly`, `Sonnet weekly`. Unknown windows cannot beat a known zero.
 - Secondary line: ordinary rows keep `N% left`. A pair shows `82% · 41% left`, inner pool
   first, with one `left` applying to both remaining percentages. Append purchased credits
   once when available: `82% · 41% left · 320 credits`. Per provider only — not a footer sum,
   not face `creditsGlance`, never LLM `TOK`.
+- At actual exhaustion, colour **only the `0%` token** pale red. Keep `left`, separators,
+  credits (including `0 credits`), the row title and every positive percentage in their
+  normal colours. `0% · 41% left` highlights only its first token; `0% · 0% left` highlights
+  both. This does not create an alert, alter refresh state or infer a user threshold.
 - The credit balance is **compact**, the face strip's own form, with the unit word after it:
   `62.5K credits`, `1K credits`, `320 credits`, `0 credits`. A provider's trailing decimals
   never reach the row, and the number never differs from the one the face shows for the same
@@ -234,12 +273,14 @@ Rules:
 - The block keeps **12 units clear of the Alerts pill**. Three rows is the ceiling, one per
   band, regardless of how many bands are paired. The 2026-10-01 round/notround measurement
   verifies the three-row fit, available width and absence of clipping on both screen shapes.
-- Empty / exhausted: short copy centered between refresh and Alerts; no placeholder rings.
+- Empty selection or unavailable data: short copy centered between refresh and Alerts;
+  no fabricated placeholder rings. Selected known zero is a row, not an empty state.
 
 | Empty state | Copy |
 |-------------|------|
 | No rings selected | `Choose percent rings` / `in the phone app` |
-| All selected metrics exhausted | `No remaining capacity` |
+| Selected ring entries, but no known usable percentages | `Ring data unavailable` |
+| All selected known metrics exhausted | Keep every selected row, grey tracks and pale-red `0%` tokens |
 
 ## Refresh status control
 
@@ -301,10 +342,12 @@ Same strokes as the face (`WATCH_RING_DESIGN.md`) for metric mini-arcs:
 
 A local budget row takes the family color of the connection it belongs to; the period lives in
 the row label, not in a color of its own. **Cursor pools or Codex main/Spark limits share one row**,
-each with its own coloured mini arc and remaining fraction. The pair reaches the watch as one
+each with its own grey mini-track, positive remaining arc and remaining fraction. The pair reaches the watch as one
 payload entry with its second pool inside (`WATCH_RING_DESIGN.md`, Split band). When either
-pool is exhausted, the survivor becomes an ordinary row with its pool label, one arc and one
-percentage; when both are exhausted the row disappears. Purchased credits appear once per
+pool is exhausted, retain both known pools, their fixed mini-track positions and both
+percentage tokens; the positive half keeps its coloured arc. When both are exhausted the
+row remains with two grey tracks and `0% · 0% left`. An unavailable half is absent and its
+known survivor becomes an ordinary pool row; two unavailable halves yield no row. Purchased credits appear once per
 row — a split face strip gives its width to the second percentage instead.
 
 Refresh `OK` reuses Codex green as status affordance on this control only — do not spread that
@@ -329,7 +372,14 @@ xdg-open apps/wear_android/design/preview-glance-legend-3.png
 | `glance-legend-cadence.svg` | Healthy `OK` but refresh **disabled** (cadence cooldown; no detail) |
 | `glance-legend-rate-limit.svg` | `!OK` + detail `Rate limited`, refresh **disabled** (provider) |
 | `glance-legend-empty.svg` | No rings selected; centered copy; `OK` refresh |
-| `glance-legend-exhausted.svg` | All selected metrics exhausted; centered copy; Alerts active |
+| `glance-legend-exhausted.svg` | All selected metrics exhausted; retained rows with grey tracks and pale-red zero percentages |
+| `glance-legend-claude-zero.svg` / `glance-legend-3-claude-zero.svg` | Claude 5h zero alone and in the three-band ceiling |
+| `glance-legend-pair-inner-zero.svg` / `glance-legend-pair-outer-zero.svg` / `glance-legend-pair-both-zero.svg` | Fixed paired identities with either or both known pools exhausted |
+| `glance-legend-two-pairs-zero.svg` | Three rows including two exhausted pairs |
+| `glance-legend-positive-rounds-zero.svg` | Positive arc geometry with ordinary `0%`; subpixel visibility is not asserted |
+| `glance-legend-zero-credits.svg` | Red `0%`, neutral `0 credits` |
+| `glance-legend-unavailable.svg` | Selected entries have no known percentage; `Ring data unavailable` |
+| `glance-legend-unavailable-inner-zero-outer.svg` | Invalid inner value omitted; zero outer survivor keeps its own family label |
 
 Wear only: `apps/wear_android/design/`. OpenPencil `.fig` inventory optional.
 
@@ -352,9 +402,11 @@ provider rate limit = gray !OK + Rate limited + disabled
 phone owns allowance via summary manualRefreshAllowed / manualRefreshAvailableAt
 Stale = orange !OK + Stale + enabled
 Alerts: N pill; active when N > 0; disabled at 0
-empty / exhausted centered copy between refresh and Alerts
+empty selection / unavailable data centered copy between refresh and Alerts
 ordinary metric labels unchanged (Codex Weekly plan; Cursor Models / Other Models)
-one exhausted half restores an ordinary row; both exhausted remove the row
+selected known zero stays a grey mini-track and a row with pale-red 0% only
+one or both exhausted known halves keep paired tracks, fixed identities and both percentages
+unknown/unavailable is absent, never fabricated as zero; tiny positive fractions stay ordinary
 review art: render-wear-glance-designs.mjs → preview-glance-legend-*.png
 primary preview: preview-glance-legend-3.png
 ```

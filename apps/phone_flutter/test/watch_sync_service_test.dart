@@ -66,7 +66,7 @@ void main() {
   });
 
   for (final sparkUsed in [59.0, 100.0]) {
-    test('ships two pairs or a surviving Codex half at Spark $sparkUsed', () {
+    test('ships paired Codex exhaustion at Spark $sparkUsed', () {
       final source = DashboardSnapshot.fromJsonString(
         File(
           '../../fixtures/snapshots/dashboard_today.json',
@@ -132,30 +132,29 @@ void main() {
       expect(payload['schemaVersion'], 9);
       final rings = payload['rings'] as List;
       expect(rings.map((r) => r['id']), [
-        cursorOwnPoolId,
         codexPlanRingId,
+        cursorOwnPoolId,
         claudePlanRingId,
       ]);
-      expect(rings.first['split']['id'], cursorOtherPoolId);
-      final codex = rings[1];
+      expect(rings[1]['split']['id'], cursorOtherPoolId);
+      final codex = rings.first;
       expect(codex['label'], 'Weekly plan');
       expect(codex['usedPercent'], 18);
-      if (sparkUsed < 100) {
-        expect(codex['split']['id'], codexSparkRingId);
-        expect(codex['split']['label'], 'Spark 5h');
-        expect(codex['split']['usedPercent'], 59);
-        expect(
-          watchRingPayloadSubtitle(
-            dashboard,
-            const WatchRingPreferences(
-              selectedIds: [codexPlanRingId, codexSparkRingId],
-            ),
+      expect(codex['split']['id'], codexSparkRingId);
+      expect(
+        codex['split']['label'],
+        sparkUsed < 100 ? 'Spark Weekly' : 'Spark 5h',
+      );
+      expect(codex['split']['usedPercent'], 100);
+      expect(
+        watchRingPayloadSubtitle(
+          dashboard,
+          const WatchRingPreferences(
+            selectedIds: [codexPlanRingId, codexSparkRingId],
           ),
-          'Codex plan 41% left',
-        );
-      } else {
-        expect(codex['split'], isNull);
-      }
+        ),
+        'Codex plan 0% left',
+      );
       final credits = (payload['allowances'] as List).where(
         (a) => a['source'] == 'purchased',
       );
@@ -163,6 +162,43 @@ void main() {
       expect(credits.single['remaining'], {'value': '320', 'unit': 'credits'});
     });
   }
+
+  test('preserves zero and a tiny positive remainder in paired payloads', () {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    for (final (inner, outer) in [
+      (100.0, 99.96),
+      (99.96, 100.0),
+      (100.0, 100.0),
+    ]) {
+      final account =
+          source.accounts.single.toJson()
+            ..['accountId'] = 'cursor-local'
+            ..['provider'] = 'cursor'
+            ..['connection'] = 'cursor.plan'
+            ..['allowances'] = [
+              _cursorPool('cursor-plan-models', 'Cursor Models', inner),
+              _cursorPool('cursor-plan-other', 'Other Models', outer),
+            ];
+      final dashboard = DashboardSnapshot.fromJson(
+        source.toJson()..['accounts'] = [account],
+      );
+      final payload = jsonDecode(
+        WatchDashboardSummaryPayload.fromSnapshot(
+          dashboard,
+          const WatchRingPreferences(
+            selectedIds: [cursorOwnPoolId, cursorOtherPoolId],
+          ),
+        ).encode(),
+      );
+      expect(payload['schemaVersion'], 9);
+      expect(payload['rings'], hasLength(1));
+      final ring = payload['rings'].single;
+      expect(ring['usedPercent'], inner);
+      expect(ring['split']['usedPercent'], outer);
+    }
+  });
 
   test('ships a lone Cursor pool whole and packs both pools into one ring', () {
     final json =

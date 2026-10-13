@@ -1,6 +1,6 @@
 # WardPulse Privacy Policy
 
-Effective date: October 5, 2026
+Effective date: October 13, 2026
 
 WardPulse is a local-first Android application. It does not operate application servers and
 does not send analytics or usage telemetry to the WardPulse developer.
@@ -14,6 +14,20 @@ without the device-bound key that protects them.
 
 Provider responses are processed locally on the phone, including by WardPulse's on-device Rust
 core. Raw provider responses are not sent to a WardPulse service or to Wear OS.
+
+WardPulse also stores each connection's last successfully normalized usage/spending snapshot
+in private phone storage, so app restart or background polling can retain earlier data when a
+provider is unavailable. These records keep the original successful-sync times and are shown
+as stale after a failed refresh. They contain no credentials, prompts or raw provider responses.
+Connection removal/replacement clears the obsolete snapshot before it can be reused. Account
+identity digests and encrypted-storage key references are local lifecycle metadata and are not
+sent to the developer or Wear OS.
+
+Disconnect removes the selected encrypted credential and queues exact-key cleanup for any
+retired or interrupted writes. If platform storage is unavailable, cleanup can be retried later;
+retired references cannot reconnect the account. Cancelling a reconnect preserves an existing
+valid connection. Existing installed credentials migrate locally, with a guarded backup retained
+only for the matching migrated credential until refresh, replacement or removal.
 
 ## Provider Connections
 

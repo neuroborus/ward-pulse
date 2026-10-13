@@ -94,6 +94,11 @@ function esc(text) {
 
 function miniArc({ cx, cy, r, thickness, remaining, color }) {
   const circ = 2 * Math.PI * r
+  if (remaining <= 0) {
+    return `
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
+      stroke-width="${thickness}" />`
+  }
   const left = Math.max(0.02, Math.min(remaining, 0.999))
   const paint = circ * left
   const used = circ * (1 - left)
@@ -190,14 +195,15 @@ async function refreshStatusControl({
  * Sort bands by their tighter half, keeping the inner pool first within a row.
  */
 function sortByRemaining(rows) {
+  const hasPercent = (value) => Number.isFinite(value) && value >= 0
   return [...rows]
     .flatMap((row) => {
-      if (row.used >= 1) {
-        return row.split && row.split.used < 1
+      if (!hasPercent(row.used)) {
+        return hasPercent(row.split?.used)
           ? [{ ...row.split, credits: row.credits ?? row.split.credits }]
           : []
       }
-      return [row.split?.used >= 1 ? { ...row, split: null } : row]
+      return [{ ...row, split: hasPercent(row.split?.used) ? row.split : null }]
     })
     .sort((a, b) =>
       Math.max(b.used, b.split?.used ?? b.used) - Math.max(a.used, a.split?.used ?? a.used),
@@ -205,14 +211,24 @@ function sortByRemaining(rows) {
 }
 
 function rowSubLine(row) {
-  const pct = Math.round((1 - row.used) * 100)
+  const pct = Math.round(Math.max(0, 1 - row.used) * 100)
   const left = row.split
-    ? `${pct}% · ${Math.round((1 - row.split.used) * 100)}% left`
+    ? `${pct}% · ${Math.round(Math.max(0, 1 - row.split.used) * 100)}% left`
     : `${pct}% left`
   if (row.credits == null || row.credits === '') {
     return left
   }
   return `${left} · ${row.credits} credits`
+}
+
+/** Keep only true exhausted percentage tokens red; separators and credits stay ordinary. */
+function zeroLabelMarkup(text, row) {
+  return text.split(' · ').map((part, index) => {
+    const exhausted = index === 0 ? row.used >= 1 : index === 1 && row.split?.used >= 1
+    return exhausted && part.startsWith('0%')
+      ? `<tspan fill="#FFB4AB">0%</tspan>${esc(part.slice(2))}`
+      : esc(part)
+  }).join(' · ')
 }
 
 async function glanceSvg({
@@ -370,7 +386,7 @@ async function glanceSvg({
       font-weight="700" fill="${LABEL}">${esc(title)}</text>
     <text x="${contentLeft}" y="${subBaseline.toFixed(1)}"
       font-family="${FONT}, sans-serif" font-size="${subSize}"
-      font-weight="700" fill="${MUTED}">${esc(sub)}</text>`
+      font-weight="700" fill="${MUTED}">${zeroLabelMarkup(sub, row)}</text>`
       y += rowH
     }
   }
@@ -403,7 +419,7 @@ async function glanceSvg({
   <circle cx="${cx}" cy="${cx}" r="${(SIZE / 2 - 1).toFixed(1)}" fill="none"
     stroke="#1A201C" stroke-width="2" />
 </svg>
-`
+`.replace(/^[ \t]+$/gm, '')
 }
 
 const wearDir = join(root, 'apps/wear_android/design')
@@ -415,6 +431,15 @@ const three = [
   // Matches fixtures/providers/cursor/usage_summary.json autoPercentUsed.
   { family: FAMILY.cursorOwn, metric: 'Cursor Models', used: 0.47 },
 ]
+const exhaustedClaude = { family: FAMILY.claude, metric: '5h', used: 1 }
+const liveCodex = { family: FAMILY.codex, metric: 'Weekly plan', used: 0.04, credits: '62.5K' }
+const liveCursor = {
+  family: FAMILY.cursorOwn, metric: 'Cursor Models', used: 0,
+  split: { family: FAMILY.cursor, metric: 'Other Models', used: 0.32 },
+}
+const cursorInnerZero = { ...liveCursor, used: 1 }
+const cursorOuterZero = { ...liveCursor, split: { ...liveCursor.split, used: 1 } }
+const cursorBothZero = { ...cursorInnerZero, split: { ...liveCursor.split, used: 1 } }
 
 const variants = [
   {
@@ -548,13 +573,25 @@ const variants = [
   },
   {
     file: 'glance-legend-exhausted.svg',
-    name: 'Glance · legend · exhausted · OK refresh',
+    name: 'Glance · all selected metrics exhausted · retained rows',
     ok: true,
     refreshEnabled: true,
-    rows: [],
-    emptyMessage: 'No remaining capacity',
-    alerts: 1,
+    rows: [exhaustedClaude, cursorBothZero, { ...liveCodex, used: 1 }],
+    emptyMessage: null,
+    alerts: 0,
   },
+  ...[
+    { file: 'glance-legend-claude-zero.svg', name: 'Claude 5h at zero', rows: [exhaustedClaude] },
+    { file: 'glance-legend-3-claude-zero.svg', name: 'Claude zero with Cursor pair and Codex', rows: [exhaustedClaude, liveCursor, liveCodex] },
+    { file: 'glance-legend-pair-inner-zero.svg', name: 'Pair inner pool zero', rows: [cursorInnerZero, liveCodex] },
+    { file: 'glance-legend-pair-outer-zero.svg', name: 'Pair outer pool zero', rows: [cursorOuterZero, liveCodex] },
+    { file: 'glance-legend-pair-both-zero.svg', name: 'Pair both pools zero', rows: [cursorBothZero, liveCodex] },
+    { file: 'glance-legend-positive-rounds-zero.svg', name: 'Positive fraction rounds to ordinary zero label', rows: [{ ...exhaustedClaude, used: 0.999 }] },
+    { file: 'glance-legend-zero-credits.svg', name: 'Exhausted percent with neutral zero credits', rows: [{ ...liveCodex, used: 1, credits: '0' }] },
+    { file: 'glance-legend-unavailable.svg', name: 'Selected entries have no known percentage', rows: [], emptyMessage: 'Ring data unavailable' },
+    { file: 'glance-legend-unavailable-inner-zero-outer.svg', name: 'Unavailable inner pool with exhausted outer survivor', rows: [{ ...cursorOuterZero, used: -1 }] },
+    { file: 'glance-legend-two-pairs-zero.svg', name: 'Three bands with two exhausted pairs', rows: [exhaustedClaude, cursorBothZero, { ...liveCodex, used: 1, split: { family: FAMILY.codexSpark, metric: 'Spark Weekly', used: 1 } }] },
+  ].map((variant) => ({ ...variant, ok: true, refreshEnabled: true, alerts: 0 })),
 ]
 
 for (const variant of variants) {
