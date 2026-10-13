@@ -9,7 +9,7 @@ description: Post-change finalization checklist for WardPulse (Rust core, Flutte
 >
 > Run this after implementation or documentation work to keep the monorepo coherent.
 >
-> Last Updated: 2026-08-01
+> Last Updated: 2026-10-13
 
 ## 1. Scope Review
 
@@ -38,6 +38,10 @@ description: Post-change finalization checklist for WardPulse (Rust core, Flutte
 - [ ] Wear OS and watch face surfaces do not gain credential entry or credential storage responsibilities.
 
 ## 4. Tests And Checks
+
+Apply [test-authoring](../test-authoring/SKILL.md) when authoring or changing tests and during
+finalization review: verify necessity, determinism and measured cost. Every required gate
+below remains mandatory.
 
 Most of this section reaches for the network or a device, so an isolated agent cannot finish it
 alone. That does not excuse a box: name every check you could not run and hand it to the

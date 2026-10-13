@@ -48,6 +48,10 @@ to the operator's judgement, by way of the task.
 
 ## 4. Checks: who runs what
 
+Apply [test-authoring](../test-authoring/SKILL.md) during test authoring and finalization review
+for necessity, determinism and measured cost. It does not replace required checks or change
+the host/Runner division below.
+
 The task's own gates section is authoritative for a given step. In its absence, this division
 applies, and it is the reason this file exists.
 
@@ -104,8 +108,9 @@ the other way. It stays the owner's to confirm.
 
 **The owner's work is never a precondition of the step's commit.** A step that waits for it
 cannot produce complete terminal evidence, and the run fails — this happened on 2026-10-01
-(finding `R101`, `ERR_INVALID_PLAN_EXECUTION_OUTPUT`). Prove readiness with a regression, not a
-screenshot, and let the owner verify afterwards.
+(finding `R101`, `ERR_INVALID_PLAN_EXECUTION_OUTPUT`). Prove readiness with affected existing
+checks or necessary regression evidence under `test-authoring`; add tests only when justified,
+and let the owner verify afterwards.
 
 A gate that cannot start for an environment reason is reported through the runner's
 environment-blocker path. Never weaken a test, an assertion, a gate, a skill or validation
