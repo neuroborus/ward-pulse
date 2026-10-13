@@ -5,26 +5,40 @@ description: WardPulse delegation contract — who does the work and who checks 
 
 # Delegation — WardPulse
 
-The coordinating session does not write production code and does not author design. It
-delegates, then verifies. This is the owner's standing instruction, restated 2026-10-10.
+Neither the coordinating session nor a standalone subagent implements code outside Agent
+Runner. Design is delegated to a subagent; the coordinator verifies the result independently.
+This is the owner's standing instruction, clarified 2026-10-13.
 
 ## Who does what
 
 | Work | Owner | Coordinator's job |
 | --- | --- | --- |
 | Design: locked baselines, visual language, mocks, review art | A subagent | Verify to zero findings |
-| Code: generators, Kotlin, Dart, Rust, schemas, tests | Agent Runner | Verify to zero findings |
+| Code: source, tests, schemas, build/tool scripts, generator source | Agent Runner execution and independent review steps | Verify to zero findings |
+| Documentation and workflow prose | A delegated subagent | Review the scoped prose change |
 | Measurement, device capture, reading sources, running checks | Coordinator | — |
 | Deciding what to build | Owner | Put the choice in front of them |
 
-A mock is design. Patching a generator to produce a picture is still patching a generator —
-it goes to a subagent, not to the coordinator's own hands.
+A mock, visual asset or locked design baseline is design. Any code needed to realize it,
+including a generator change, goes through Agent Runner. An implementation patch or runnable
+helper remains code even when placed in Markdown or `LOCAL_ARTIFACTS/`.
 
 ## Code goes through the runner
 
-Plan with `plan-authoring`, execute with `plan-execution`. `polishing` finalizes and stages an
-existing change set **without committing**, which is what AGENTS.md wants when the owner has
-not asked for a commit.
+Use `plan-authoring` followed by `plan-execution` by default. Code must be authored by an actual
+Agent Runner code-producing execution step and pass the pipeline's independent review steps;
+an approved plan or an author's self-review is not execution or independent review. Outside
+Runner, supply requirements, measurements, findings and acceptance criteria, not a prewritten
+implementation patch for Runner merely to apply. Subagents may coordinate, operate, read and
+review Runner work, but may not implement it independently.
+
+Choose supported pipelines and worker steps by their current capabilities, not just their
+names. `polishing` finalizes and stages an existing change set without committing; do not
+assume it replaces implementation from scratch. Commit permission is separate and requires
+the owner's explicit request. Verify the execution route's commit behaviour before starting;
+do not invent a no-commit mode. When the owner has not requested a commit and no supported
+noncommitting route fits the task, report that conflict and continue independent authorized
+work rather than implement by hand.
 
 **Who runs which check is settled in `.agents/skills/finalization/agent-runner.md`.** It
 carries the division between what a step proves inside its sandbox and what the owner runs on
@@ -64,10 +78,11 @@ dependency for Gradle.
 
 ## When a delegate cannot run the step
 
-A denied sandbox does not promote the work to the coordinator. It changes **which delegate**
-does it: the step moves to a subagent running on the host, with the same task document and the
-same zero-findings bar. The coordinator's hands stay off the bytes either way. Doing it yourself
-because the runner stopped is the one failure this contract exists to prevent.
+Blocked code stays with Agent Runner. Sandbox, network or tool denial, a small change, speed,
+or an automatic-commit conflict never permits implementation by the coordinator or a standalone
+subagent. Recover through a supported Runner route, including the documented CLI when
+appropriate, without changing frozen run configuration. Report any remaining incompatibility
+and continue independent authorized work.
 
 Walls this repository has hit:
 
@@ -79,21 +94,22 @@ Walls this repository has hit:
 - **Sockets are denied**, so Gradle never starts: `just check-wear`, `just check-watchface`.
 - **No network**, so a recipe that fetches needs a pinned artifact or it is the owner's.
 
-A gate that cannot start is reported through the environment-blocker path. Work that cannot run
-is re-delegated.
+A gate that cannot start is reported through the environment-blocker path. Necessary host
+checks and captures may run outside Runner; that permission does not transfer code authorship.
 
 ## Design goes through a subagent
 
-Spawn with `subagent_type: "fork"` so the agent inherits this session's context instead of
+Spawn with `fork_turns: "all"` so the agent inherits this session's context instead of
 re-exploring the repository. Hand it the measurements; do not make it re-derive them.
 
 ## The zero-findings bar
 
-A task is done only when a **full pass by the coordinator turns up not a single finding**. Any
-finding goes back to the same agent — `SendMessage`, so it keeps its context — and the loop
-repeats. Verify independently: recompute the arithmetic, re-measure on the device, check every
-cross-reference and every claim against the actual source. An agent's own report is not
-evidence.
+A task is done only when a **full independent pass by the coordinator turns up not a single
+finding**. Return code findings to Runner for fixes through its execution/review workflow;
+return design findings to the same design subagent so it keeps its context. After the last
+fix, repeat the whole final pass, not only the previously failing part. Verify independently:
+recompute the arithmetic, re-measure on the device, check every cross-reference and every claim
+against the actual source. An author's own report is not independent evidence.
 
 Report to the owner what checked out as well as what did not. A finding list with no account
 of what was verified tells them nothing about how hard anyone looked.
@@ -115,13 +131,15 @@ or two to finished work. Standing instruction, 2026-10-11. So:
 
 ## What the coordinator may touch
 
-Measurements, captures, scans, reading files, running read-only `just` checks, and writing local
-notes under `LOCAL_ARTIFACTS/`. Restoring a tree a delegate left dirty. Staging and committing
-once the owner has asked for a commit.
+Measurements, captures, scans, reading files, running existing operational commands and checks,
+and writing local notes under `LOCAL_ARTIFACTS/`. Creating or changing an implementation,
+helper or test script is code, not an operational command. Staging reviewed, scoped changes is
+permitted under finalization; committing requires the owner's explicit request.
 
 Not: production code, generated output, locked design documents, or review art.
 
-**Running a generator is work, not measurement**, even when the only intent is to prove it
-reproduces what a delegate committed. Verification that would rewrite a tracked file belongs in
-a throwaway clone outside the worktree, or back with the delegate. The coordinator never writes
-a committed byte.
+Read-only generator drift checks are permitted. Verification may run unchanged generators in a
+throwaway clone without rewriting canonical tracked files. Runtime exports in the canonical
+worktree belong to the owning Runner execution; a design subagent may regenerate design
+review/mock art with unchanged tools. Generator source edits remain Runner-only. The coordinator
+never authors a committed code or design byte.

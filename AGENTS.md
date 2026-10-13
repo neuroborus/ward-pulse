@@ -16,6 +16,7 @@
 - Keep Rust domain logic deterministic and independent from Flutter, Android, Google Play APIs, secure storage, and platform transport.
 - Keep platform shells responsible for UI, transport, storage, background scheduling, and phone-to-watch propagation.
 - Prefer small, focused changes.
+- Follow [delegation](.agents/skills/delegation/SKILL.md): code is authored only by Agent Runner execution with independent review, followed by the coordinator's full zero-findings pass. Neither the coordinator nor a standalone subagent may implement a fallback outside Runner.
 - Do not generate full Flutter or Gradle projects unless the current task explicitly requires it.
 - Do not create a git commit unless the user explicitly asks to commit. Finalization stages relevant files and drafts a message; it does not commit.
 - Do not commit secrets, provider credentials, authorization headers, raw prompts, or sensitive raw provider payloads.

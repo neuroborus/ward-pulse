@@ -10,10 +10,11 @@ ending in `/SKILL.md` and nothing else, so `LOCAL_ARTIFACTS/agent-runner.json` l
 `auto` and the step loads `SKILL.md` beside this file. This file supplies what that one leaves
 to the operator's judgement, by way of the task.
 
-> `SKILL.md` beside this file stays the contract for work done by hand on the host, and must
-> not be edited to suit the runner. Where this file is silent, that one applies.
+> `SKILL.md` beside this file stays the contract for host finalization within the delegation
+> boundaries; it does not authorize code implementation outside Agent Runner and must not be
+> edited to suit the runner. Where this file is silent, that one applies.
 >
-> Last updated: 2026-10-11.
+> Last updated: 2026-10-13.
 
 ## 1. Scope Review
 
@@ -124,8 +125,9 @@ infrastructure to make a check pass, and never report a check that did not run.
 
 ## 6. Commit
 
-A plan-execution step commits its own work when the pipeline authorizes it; a polishing step
-stages and stops. Either way:
+A plan-execution step commits its own work only when the owner explicitly requested a commit
+and the pipeline supports it; a polishing step stages an existing change set and stops. Check
+that the selected route respects the owner's commit permission before execution. Either way:
 
 - The message is a single Conventional Commits subject line: `type(scope): imperative summary`,
   about 72 characters or fewer, matching the scopes already in `git log`.
