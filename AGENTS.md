@@ -18,7 +18,7 @@
 - Prefer small, focused changes.
 - Follow [delegation](.agents/skills/delegation/SKILL.md): code is authored only by Agent Runner execution with independent review, followed by the coordinator's full zero-findings pass. Neither the coordinator nor a standalone subagent may implement a fallback outside Runner.
 - Do not generate full Flutter or Gradle projects unless the current task explicitly requires it.
-- Do not create a git commit unless the user explicitly asks to commit. Finalization stages relevant files and drafts a message; it does not commit.
+- Standing owner authorization (2026-10-13): Agent Runner execution may commit within the approved task scope by default after the pipeline's required reviews and checks; a task-specific no-commit instruction overrides this. Coordinator finalization and polishing remain stage-only. Manual commits outside Runner still require an explicit owner request. This permission does not authorize push, amend/history rewrite, or inclusion of unrelated files.
 - Do not commit secrets, provider credentials, authorization headers, raw prompts, or sensitive raw provider payloads.
 - Do not treat WardPulse brand assets as covered by Apache-2.0 unless a file explicitly says so.
 - Keep OpenPencil `.fig` sources with their owner and regenerate runtime exports instead of editing them by hand.

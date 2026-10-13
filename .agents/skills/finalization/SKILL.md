@@ -115,17 +115,21 @@ the app runs; only the device is.
 
 ## 7. Staging And Commit Boundary
 
-**Finalization never creates a git commit.**
+Coordinator finalization and polishing are stage-only. Runner execution is the exception:
+standing owner authorization dated 2026-10-13 permits commits within the approved task scope
+after the pipeline's required reviews and checks, unless the task explicitly forbids commits.
+See the sibling `agent-runner.md` for the Runner execution boundary.
 
 When the user asks to finalize, finish checks, then stage only the files that belong to
 this change set (`git add` the relevant paths). Stop there.
 
-- Do **not** run `git commit`, `git commit --amend`, or any equivalent.
-- Do **not** treat "finalize", "finalization", "handoff", or "stage" as permission to commit.
-- Create a commit only when the user explicitly asks to commit (for example "commit",
-  "create a commit", "закоммить").
-- Draft the commit message for the staged set; leave the actual commit to the user or to a
-  later explicit request.
+- Do **not** run a manual `git commit`, `git commit --amend`, or any equivalent during
+  coordinator finalization or polishing.
+- Manual commits outside Runner require an explicit owner request; never amend or rewrite
+  history.
+- "Finalize", "finalization", "handoff", and "stage" do not grant manual commit permission.
+- Draft the message for stage-only finalization; leave a manual commit to the owner or a later
+  explicit request. Polishing still stages and stops.
 
 ## 8. Commit Message Draft
 
@@ -187,7 +191,7 @@ When a body is genuinely required, keep it on one line:
 ```text
 chore(docs): plan adaptive provider UI, polling, and watch rings
 
-Record the dual plan/platform model and phases 9–13, set the global refresh floor to 5–60 minutes, and make finalization stage-only with an explicit no-commit rule.
+Record the dual plan/platform model and phases 9–13, set the global refresh floor to 5–60 minutes, and make coordinator finalization stage-only with an explicit no-manual-commit rule.
 ```
 
 ## 9. Handoff Summary
@@ -199,7 +203,10 @@ When finalization completes, report:
 2. Commands run and pass/fail status.
 3. Important files changed.
 4. Remaining risks or intentionally deferred work.
-5. Git staging status after staging: what is staged, what remains unstaged or untracked.
-6. Idiomatic draft commit message for the staged set, using section 8.
+5. Actual staging and commit state: what is staged, what remains unstaged or untracked, and
+   whether an authorized Runner commit exists.
+6. Idiomatic draft message for a staged set, or the actual subject and hash for an authorized
+   Runner commit, using section 8.
 
-Remind the user that the changes are staged only and that no commit was created.
+For stage-only finalization, state that no commit was created. For Runner execution, identify
+the scoped commit it produced.

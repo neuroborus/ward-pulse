@@ -34,10 +34,11 @@ review Runner work, but may not implement it independently.
 
 Choose supported pipelines and worker steps by their current capabilities, not just their
 names. `polishing` finalizes and stages an existing change set without committing; do not
-assume it replaces implementation from scratch. Commit permission is separate and requires
-the owner's explicit request. Verify the execution route's commit behaviour before starting;
-do not invent a no-commit mode. When the owner has not requested a commit and no supported
-noncommitting route fits the task, report that conflict and continue independent authorized
+assume it replaces implementation from scratch. Standing owner authorization dated 2026-10-13
+permits Runner execution to commit within the approved task scope after its required reviews
+and checks, unless a task-specific instruction forbids it. Verify the execution route's commit
+behaviour before starting; do not invent a no-commit mode. If the task forbids commits and no
+supported noncommitting route fits, report that conflict and continue independent authorized
 work rather than implement by hand.
 
 **Who runs which check is settled in `.agents/skills/finalization/agent-runner.md`.** It
@@ -134,7 +135,7 @@ or two to finished work. Standing instruction, 2026-10-11. So:
 Measurements, captures, scans, reading files, running existing operational commands and checks,
 and writing local notes under `LOCAL_ARTIFACTS/`. Creating or changing an implementation,
 helper or test script is code, not an operational command. Staging reviewed, scoped changes is
-permitted under finalization; committing requires the owner's explicit request.
+permitted under finalization; manual coordinator commits require the owner's explicit request.
 
 Not: production code, generated output, locked design documents, or review art.
 

@@ -130,9 +130,11 @@ infrastructure to make a check pass, and never report a check that did not run.
 
 ## 6. Commit
 
-A plan-execution step commits its own work only when the owner explicitly requested a commit
-and the pipeline supports it; a polishing step stages an existing change set and stops. Check
-that the selected route respects the owner's commit permission before execution. Either way:
+Standing owner authorization dated 2026-10-13 permits Runner execution to commit within the
+approved task scope by default after the pipeline's required reviews and checks. A task-specific
+no-commit instruction overrides it. Polishing stages an existing change set and stops. Verify
+that the selected route respects the current instruction before execution. This is local commit
+permission, not push, amend/history rewrite, or unrelated-file authority. Either way:
 
 - The message is a single Conventional Commits subject line: `type(scope): imperative summary`,
   about 72 characters or fewer, matching the scopes already in `git log`.
