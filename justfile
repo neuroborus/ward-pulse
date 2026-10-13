@@ -135,4 +135,19 @@ run-watchface:
     cd apps/watchface_wff && ./gradlew --no-daemon installDebug
     adb -s "$ANDROID_SERIAL" shell am broadcast -a com.google.android.wearable.app.DEBUG_SURFACE --es operation set-watchface --es watchFaceId app.wardpulse.watchface
 
+# Publishable artefacts, one per Play listing: `app.wardpulse` carries the phone
+# and the Wear app, `app.wardpulse.watchface` is its own. Each refuses to build
+# without the release key instead of handing back a debug-signed bundle that
+# looks shippable — the key is the owner's to create, and the sequence is in
+# docs/product/RELEASE_CHECKLIST.md under Signing. The requirement is enforced in
+# each build.gradle.kts, not here, so a new entry point cannot forget it.
+bundle-phone: build-android-rust
+    cd apps/phone_flutter && ORG_GRADLE_PROJECT_wardpulseRequireReleaseKey=1 flutter build appbundle --release
+
+bundle-wear:
+    cd apps/wear_android && ORG_GRADLE_PROJECT_wardpulseRequireReleaseKey=1 ./gradlew --no-daemon bundleRelease
+
+bundle-watchface:
+    cd apps/watchface_wff && ORG_GRADLE_PROJECT_wardpulseRequireReleaseKey=1 ./gradlew --no-daemon bundleRelease
+
 test-all: check-core check-phone check-wear check-watchface check-designs check-docs

@@ -1396,11 +1396,15 @@ Deliverables that remain:
 
 - error states, empty states, offline states — partly covered by the Completed slice above, not
   yet reviewed as a whole;
-- **Play Store internal testing build.** `apps/phone_flutter/android/app/build.gradle` still
-  signs the release build with the debug keys, under its own `TODO` to add a signing config, and
-  the repository holds no keystore and no `key.properties`. This is the owner's to create: a
-  signing key is generated once and must never enter the repository. Until it exists nothing can
-  be published, and the two acceptance lines below about the AAB cannot be met.
+- **Play Store internal testing build — the key, and only the key.** As of **2026-10-13** all
+  three packages carry a release signing configuration that reads an ignored `key.properties`
+  from the repository root, and `just bundle-phone`, `just bundle-wear` and
+  `just bundle-watchface` produce the artefacts. Each one **fails** when the key is absent rather
+  than falling back to the debug key, so a bundle that builds is a bundle that is signed; a plain
+  `assembleRelease` still works for local use and warns that it is not publishable. What remains
+  is the key itself, which is the owner's: it is generated once, lives outside this repository,
+  and losing it ends the listing. The sequence is in `docs/product/RELEASE_CHECKLIST.md` under
+  Signing. Until it exists the two acceptance lines below about the AAB cannot be met.
 - real device smoke tests — every verification so far has been on emulators.
 
 Acceptance:
