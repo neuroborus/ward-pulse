@@ -1373,18 +1373,34 @@ and verify the live phone/watch UI
 
 ### Phase 8 — MVP hardening
 
-Status: in progress as of 2026-07-19. What holds it open is now the release signing key and
-device testing, not the written deliverables — those closed between 2026-07-19 and 2026-10-12
-and the list below was reviewed against the tree on the second date. Phase 7 live acceptance
-remains pending and still needs real provider credentials.
+Status: in progress as of 2026-07-19. The release signing key and real-device testing remain
+open, together with the remaining error/offline acceptance review and headless partial-failure
+recovery described below. The completed in-process recovery slice is distinct from a persistent
+provider cache, which is not implemented. Phase 7 live acceptance remains pending and still
+needs real provider credentials.
 
 Completed slice:
 
-- the phone keeps the last successful live snapshot after a refresh failure;
+- each live connection repository keeps its own last successful snapshot in memory after a
+  refresh failure, merging that stale connection with the other connections' current data;
 - cached dashboard, provider, and watch-summary state is marked stale;
-- the dashboard labels previous data explicitly while preserving its original timestamp;
+- the dashboard labels previous data explicitly; retained connections preserve their original
+  successful-sync time, while a mixed snapshot uses its newest connection's generation time;
 - OpenAI authentication, permission, rate-limit, availability, and response failures surface as fixed safe messages;
 - status icons expose concise tooltips, and credential entry can reveal only the current unsaved key on demand.
+
+This recovery belongs to the long-lived in-process repository: successful refreshes replace
+only their connection's cache, missing credentials clear it, and credential changes invalidate
+the stack. Superseded in-flight loads cannot refill or replace the cache or borrow a newer
+load's cached data. Phone, automatic, and watch-requested refreshes retain live recovery caches;
+mock refresh still regenerates its demo. This cache is not persisted across process or
+WorkManager-isolate lifetimes, so headless partial-failure recovery remains an acceptance gap.
+
+When a headless poll cannot produce a snapshot, `providerSyncOnce` attempts to mark the existing
+home-widget rows stale through `HomeWidgetPhoneWidgetSyncService.markExistingRowsStale`. It
+changes only the stale flag and requests a redraw; usage values stay in place. With no rows,
+or an already empty widget, it writes nothing. This is a failed-poll
+marker, not an age-based freshness window or a persistent dashboard cache.
 
 Closed since this phase opened, verified against the tree on **2026-10-12**: data deletion, which
 is per-connection disconnect erasing the credential from secure storage; the privacy policy, the
@@ -1396,15 +1412,20 @@ Deliverables that remain:
 
 - error states, empty states, offline states — partly covered by the Completed slice above, not
   yet reviewed as a whole;
-- **Play Store internal testing build — the key, and only the key.** As of **2026-10-13** all
+- **Play Store internal testing build — the local upload key remains.** As of **2026-10-13** all
   three packages carry a release signing configuration that reads an ignored `key.properties`
   from the repository root, and `just bundle-phone`, `just bundle-wear` and
   `just bundle-watchface` produce the artefacts. Each one **fails** when the key is absent rather
   than falling back to the debug key, so a bundle that builds is a bundle that is signed; a plain
   `assembleRelease` still works for local use and warns that it is not publishable. What remains
-  is the key itself, which is the owner's: it is generated once, lives outside this repository,
-  and losing it ends the listing. The sequence is in `docs/product/RELEASE_CHECKLIST.md` under
-  Signing. Until it exists the two acceptance lines below about the AAB cannot be met.
+  is the owner's local upload key, stored outside this repository. With Play App Signing it
+  signs AAB uploads; Google holds the app signing key used for APKs delivered to devices. A
+  lost upload key can be reset through Play Console without ending the listing, as described
+  in [Play App Signing](https://support.google.com/googleplay/android-developer/answer/9842756?hl=en).
+  The setup and the distinction from a self-managed distribution key are in
+  `docs/product/RELEASE_CHECKLIST.md` under Signing. Until the local key exists the AAB cannot
+  be built through the publishable path; installing an internal testing release also requires
+  the owner to upload and configure that release in Play Console.
 - real device smoke tests — every verification so far has been on emulators.
 
 Acceptance:

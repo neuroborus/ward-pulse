@@ -96,6 +96,36 @@ final class HomeWidgetPhoneWidgetSyncService implements PhoneWidgetSyncService {
 
   static const _maxRows = phoneWidgetSlotCount;
 
+  /// Marks retained launcher rows after a failed poll, without inventing data.
+  ///
+  /// Only the status flag changes; an empty or cleared payload stays empty.
+  static Future<void> markExistingRowsStale() async {
+    final count =
+        await HomeWidget.getWidgetData<int>('row_count', defaultValue: 0) ?? 0;
+    if (count <= 0) {
+      return;
+    }
+    final empty = await HomeWidget.getWidgetData<String>(
+      'empty',
+      defaultValue: '0',
+    );
+    if (empty == '1') {
+      return;
+    }
+    final saved = await HomeWidget.saveWidgetData<String>('stale', '1');
+    if (saved != true) {
+      throw StateError('Could not save widget stale status.');
+    }
+    final updated = await HomeWidget.updateWidget(
+      name: phoneWidgetProviderName,
+      androidName: phoneWidgetProviderName,
+      qualifiedAndroidName: phoneWidgetQualifiedAndroidName,
+    );
+    if (updated != true) {
+      throw StateError('Could not redraw the stale widget.');
+    }
+  }
+
   @override
   Future<void> sync(
     DashboardSnapshot snapshot,

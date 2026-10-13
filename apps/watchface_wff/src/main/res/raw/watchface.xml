@@ -40,10 +40,11 @@
             </Ellipse>
         </PartDraw>
         <!-- What lies under the cells, declared ahead of every slot so a filled
-             cell's own opaque well covers it: 152,111  204,97  256,111 at 42 units, centres on a
-             circle of radius 106.8 about the face centre. The middle and right cells
+             cell's own opaque well covers it: 152,114  204,100  256,114 at 42 units, centres on a
+             curved row translated three units below its original concentric layout.
+             The middle and right cells
              carry the default weather, which costs no complication slot. -->
-        <Group x="152" y="111" width="42" height="42" name="cell1Chrome">
+        <Group x="152" y="114" width="42" height="42" name="cell1Chrome">
             <PartDraw x="0" y="0" width="42" height="42">
                 <Ellipse x="0" y="0" width="42" height="42">
                     <Fill color="#ff0b0e0c">
@@ -58,7 +59,7 @@
             </PartDraw>
         </Group>
 
-        <Group x="204" y="97" width="42" height="42" name="cell2Chrome">
+        <Group x="204" y="100" width="42" height="42" name="cell2Chrome">
             <Condition>
                 <Expressions>
                     <Expression name="hasWeather"><![CDATA[[WEATHER.IS_AVAILABLE]]]></Expression>
@@ -75,23 +76,63 @@
                             <Arc
                                 centerX="21"
                                 centerY="21"
-                                width="41"
-                                height="41"
+                                width="40.5"
+                                height="40.5"
                                 startAngle="0"
                                 endAngle="359.9">
-                                <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                                <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                    <LinearGradient
+                                        startX="21"
+                                        startY="41.25"
+                                        endX="21"
+                                        endY="0.75"
+                                        colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                        positions="0 0.5 0.625 0.75 0.875 1" />
+                                </Stroke>
                             </Arc>
                         </PartDraw>
-                        <PartText x="4" y="12" width="37" height="18" alpha="255">
-                            <Variant mode="AMBIENT" target="alpha" value="140" />
-                            <Text align="CENTER" ellipsis="TRUE">
-                                <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                    <Template>%s°
-                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>
+                        <Condition>
+                            <Expressions>
+                                <Expression name="isCelsius"><![CDATA[[WEATHER.TEMPERATURE_UNIT] == 1]]></Expression>
+                                <Expression name="isFahrenheit"><![CDATA[[WEATHER.TEMPERATURE_UNIT] == 2]]></Expression>
+                            </Expressions>
+                            <Compare expression="isCelsius">
+                                <PartText x="2" y="12" width="37" height="18" alpha="255">
+                                    <Variant mode="AMBIENT" target="alpha" value="140" />
+                                    <Text align="CENTER" ellipsis="TRUE">
+                                        <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                            <Template>%s°C
+                                                <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                            </Template>
+                                        </Font>
+                                    </Text>
+                                </PartText>
+                            </Compare>
+                            <Compare expression="isFahrenheit">
+                                <PartText x="2" y="12" width="37" height="18" alpha="255">
+                                    <Variant mode="AMBIENT" target="alpha" value="140" />
+                                    <Text align="CENTER" ellipsis="TRUE">
+                                        <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                            <Template>%s°F
+                                                <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                            </Template>
+                                        </Font>
+                                    </Text>
+                                </PartText>
+                            </Compare>
+                            <Default>
+                                <PartText x="2" y="12" width="37" height="18" alpha="255">
+                                    <Variant mode="AMBIENT" target="alpha" value="140" />
+                                    <Text align="CENTER" ellipsis="TRUE">
+                                        <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                            <Template>%s°
+                                                <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                            </Template>
+                                        </Font>
+                                    </Text>
+                                </PartText>
+                            </Default>
+                        </Condition>
                     </Group>
                 </Compare>
                 <Default>
@@ -113,7 +154,7 @@
             </Condition>
         </Group>
 
-        <Group x="256" y="111" width="42" height="42" name="cell3Chrome">
+        <Group x="256" y="114" width="42" height="42" name="cell3Chrome">
             <Condition>
                 <Expressions>
                     <Expression name="hasWeather"><![CDATA[[WEATHER.IS_AVAILABLE]]]></Expression>
@@ -130,11 +171,19 @@
                             <Arc
                                 centerX="21"
                                 centerY="21"
-                                width="41"
-                                height="41"
+                                width="40.5"
+                                height="40.5"
                                 startAngle="0"
                                 endAngle="359.9">
-                                <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                                <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                    <LinearGradient
+                                        startX="10.869379"
+                                        startY="38.533768"
+                                        endX="31.130621"
+                                        endY="3.466232"
+                                        colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                        positions="0 0.5 0.625 0.75 0.875 1" />
+                                </Stroke>
                             </Arc>
                         </PartDraw>
                         <PartText x="2" y="12" width="37" height="18" alpha="255">
@@ -1697,7 +1746,7 @@
              (docs/product/WATCH_RING_DESIGN.md, Upper cells, revision 2026-10-09) -->
         <ComplicationSlot
             x="152"
-            y="111"
+            y="114"
             width="42"
             height="42"
             slotId="201"
@@ -1720,11 +1769,19 @@
                         <Arc
                             centerX="21"
                             centerY="21"
-                            width="41"
-                            height="41"
+                            width="40.5"
+                            height="40.5"
                             startAngle="0"
                             endAngle="359.9">
-                            <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                <LinearGradient
+                                    startX="31.130621"
+                                    startY="38.533768"
+                                    endX="10.869379"
+                                    endY="3.466232"
+                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                    positions="0 0.5 0.625 0.75 0.875 1" />
+                            </Stroke>
                         </Arc>
                     </PartDraw>
                     <PartText x="2" y="12" width="37" height="18" alpha="255">
@@ -1751,11 +1808,19 @@
                         <Arc
                             centerX="21"
                             centerY="21"
-                            width="41"
-                            height="41"
+                            width="40.5"
+                            height="40.5"
                             startAngle="0"
                             endAngle="359.9">
-                            <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                <LinearGradient
+                                    startX="31.130621"
+                                    startY="38.533768"
+                                    endX="10.869379"
+                                    endY="3.466232"
+                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                    positions="0 0.5 0.625 0.75 0.875 1" />
+                            </Stroke>
                         </Arc>
                     </PartDraw>
                     <PartText x="2" y="12" width="37" height="18" alpha="255">
@@ -1782,11 +1847,19 @@
                         <Arc
                             centerX="21"
                             centerY="21"
-                            width="41"
-                            height="41"
+                            width="40.5"
+                            height="40.5"
                             startAngle="0"
                             endAngle="359.9">
-                            <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                <LinearGradient
+                                    startX="31.130621"
+                                    startY="38.533768"
+                                    endX="10.869379"
+                                    endY="3.466232"
+                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                    positions="0 0.5 0.625 0.75 0.875 1" />
+                            </Stroke>
                         </Arc>
                     </PartDraw>
                 <Group x="10" y="10" width="21" height="21" name="cell1Tint" tintColor="#fff4fbf8">
@@ -1802,7 +1875,7 @@
 
         <ComplicationSlot
             x="204"
-            y="97"
+            y="100"
             width="42"
             height="42"
             slotId="202"
@@ -1825,11 +1898,19 @@
                         <Arc
                             centerX="21"
                             centerY="21"
-                            width="41"
-                            height="41"
+                            width="40.5"
+                            height="40.5"
                             startAngle="0"
                             endAngle="359.9">
-                            <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                <LinearGradient
+                                    startX="21"
+                                    startY="41.25"
+                                    endX="21"
+                                    endY="0.75"
+                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                    positions="0 0.5 0.625 0.75 0.875 1" />
+                            </Stroke>
                         </Arc>
                     </PartDraw>
                     <PartText x="2" y="12" width="37" height="18" alpha="255">
@@ -1856,11 +1937,19 @@
                         <Arc
                             centerX="21"
                             centerY="21"
-                            width="41"
-                            height="41"
+                            width="40.5"
+                            height="40.5"
                             startAngle="0"
                             endAngle="359.9">
-                            <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                <LinearGradient
+                                    startX="21"
+                                    startY="41.25"
+                                    endX="21"
+                                    endY="0.75"
+                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                    positions="0 0.5 0.625 0.75 0.875 1" />
+                            </Stroke>
                         </Arc>
                     </PartDraw>
                     <PartText x="2" y="12" width="37" height="18" alpha="255">
@@ -1887,11 +1976,19 @@
                         <Arc
                             centerX="21"
                             centerY="21"
-                            width="41"
-                            height="41"
+                            width="40.5"
+                            height="40.5"
                             startAngle="0"
                             endAngle="359.9">
-                            <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                <LinearGradient
+                                    startX="21"
+                                    startY="41.25"
+                                    endX="21"
+                                    endY="0.75"
+                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                    positions="0 0.5 0.625 0.75 0.875 1" />
+                            </Stroke>
                         </Arc>
                     </PartDraw>
                 <Group x="10" y="10" width="21" height="21" name="cell2Tint" tintColor="#fff4fbf8">
@@ -1907,7 +2004,7 @@
 
         <ComplicationSlot
             x="256"
-            y="111"
+            y="114"
             width="42"
             height="42"
             slotId="203"
@@ -1930,11 +2027,19 @@
                         <Arc
                             centerX="21"
                             centerY="21"
-                            width="41"
-                            height="41"
+                            width="40.5"
+                            height="40.5"
                             startAngle="0"
                             endAngle="359.9">
-                            <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                <LinearGradient
+                                    startX="10.869379"
+                                    startY="38.533768"
+                                    endX="31.130621"
+                                    endY="3.466232"
+                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                    positions="0 0.5 0.625 0.75 0.875 1" />
+                            </Stroke>
                         </Arc>
                     </PartDraw>
                     <PartText x="2" y="12" width="37" height="18" alpha="255">
@@ -1961,11 +2066,19 @@
                         <Arc
                             centerX="21"
                             centerY="21"
-                            width="41"
-                            height="41"
+                            width="40.5"
+                            height="40.5"
                             startAngle="0"
                             endAngle="359.9">
-                            <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                <LinearGradient
+                                    startX="10.869379"
+                                    startY="38.533768"
+                                    endX="31.130621"
+                                    endY="3.466232"
+                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                    positions="0 0.5 0.625 0.75 0.875 1" />
+                            </Stroke>
                         </Arc>
                     </PartDraw>
                     <PartText x="2" y="12" width="37" height="18" alpha="255">
@@ -1992,11 +2105,19 @@
                         <Arc
                             centerX="21"
                             centerY="21"
-                            width="41"
-                            height="41"
+                            width="40.5"
+                            height="40.5"
                             startAngle="0"
                             endAngle="359.9">
-                            <Stroke thickness="1" color="#aaf4fbf8" cap="BUTT" />
+                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                <LinearGradient
+                                    startX="10.869379"
+                                    startY="38.533768"
+                                    endX="31.130621"
+                                    endY="3.466232"
+                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                    positions="0 0.5 0.625 0.75 0.875 1" />
+                            </Stroke>
                         </Arc>
                     </PartDraw>
                 <Group x="10" y="10" width="21" height="21" name="cell3Tint" tintColor="#fff4fbf8">

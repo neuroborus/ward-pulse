@@ -41,11 +41,17 @@ the face draws, and the brand copy of that picture is retired); cell-editing cor
 **2026-10-11** (the three cells were unreachable on the watch because
 `watch_face_info.xml` never declared `Editable`, which defaults to false and withholds the
 system's Edit button; with it declared, the editor was read opening on the three cells and
-nothing else, and a `RANGED_VALUE` provider in a cell was seen drawing text with no arc for
-the first time); weather-reading revision **2026-10-12** (the two weather cells carry their
+nothing else, and the `SHORT_TEXT` Battery provider was seen drawing text in a cell;
+`RANGED_VALUE` rendering with data remains unverified); weather-reading revision **2026-10-12** (the two weather cells carry their
 marks — `51°` and `UV 7` — where they had templated the bare expression since the cells
 shipped; the temperature takes the degree sign and no scale, because the value already
-arrives in the unit the wearer's device chose) — accepted visual target for
+arrives in the unit the wearer's device chose); temperature-scale revision **2026-10-13**
+(the owner chose an explicit scale, `51°F` or `18°C`, taken from the device's weather unit;
+the complete reading is centred, replacing the degree-only numeric correction); cell-border
+revision **2026-10-13** (the occupied-cell border widens inward to 1.5 units and dissolves
+towards the nearest band); cell-position / radial-direction revision **2026-10-13** (the
+three complete cells move three units lower and the fade follows the true shortest radial
+path to the band, derived from each cell's integer centre) — accepted visual target for
 Wear OS and Watch Face Format until the next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
 wireframes, large remaining-% heroes, or bordered strip cards.
@@ -60,10 +66,14 @@ Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and si
 **Revision 2026-09-16 — Codex/Spark pair:** Codex plan windows collapse per limit,
 then the main limit and Spark may share one band. The main limit is inside/left;
 Spark is outside/right in `#186020`. Geometry and typography are unchanged. Both
-pairs and far markers, Glance clipping and visual fit were **deferred until live-data
-verification**; this revision records no new device measurements. The far marker's half
-of that debt was paid on **2026-10-12** — see *Marker equivalence confirmed* under Split
-band. The Codex/Spark pair itself, Glance clipping and visual fit are still outstanding.
+pairs and far markers, Glance clipping and visual fit were initially **deferred until live-data
+verification**; that revision recorded no new device measurements. Injected-load checks on
+**2026-10-01** verified Glance paired-row fit and clipping on round and notround screens
+(`WEAR_GLANCE_DESIGN.md`), and Phase 18 acceptance on **2026-10-04** covered fixed half order,
+lone-pool recovery and the one-row pair (`DEVELOPMENT_PLAN.md`). The far marker's remaining
+equivalence check was completed on **2026-10-12** — see *Marker equivalence confirmed* under
+Split band. These checks do not establish a live Codex/Spark payload; that live-data condition
+remains unverified.
 
 ## Goal
 
@@ -166,7 +176,7 @@ theme `outlineVariant` at runtime).
 ```text
   ┌──── remaining arcs (0–3 slots; hard max three) ──────────────┐
   │                                                              │
-  │                       ( 18° )                                │
+  │                       ( 18°C )                               │
   │             ( Tue )              ( UV 7 )                    │  ← three cells, on an arc
   │                                                              │
   │                       10:08                                  │  ← large time (hero)
@@ -183,8 +193,9 @@ Rules:
 
 - **Time is the hero** — optically centered; not a large remaining %.
 - **Upper cells** — three customizable complication cells in the band the baseline reserved for
-  a weather glance until **2026-10-09**. They sit on an arc concentric with the face, so the
-  middle one rides higher than the outer two and all three keep the same gap to the inner band.
+  a weather glance until **2026-10-09**. They retain a curved row, with the middle one higher
+  than the outer two; since **2026-10-13** the whole row sits three units lower than the
+  original concentric layout. Their borders fade along the shortest radial path to the band.
   The wearer chooses what each one holds. A fresh install shows the day of the week, the
   temperature and the UV index, but only the day is a complication: the two weather readings are
   the face's own chrome, so all three cells stay free for the wearer. A cell showing nothing is
@@ -344,41 +355,40 @@ aperture** for the circular region inside the innermost band that the strip well
 within, and that meaning is load-bearing in the strip-width rule. The earlier composition
 called this band the "upper aperture"; it is the same band.
 
-1. **Three cells of 42 units on an arc concentric with the face, not in a row.** Their centres
-   lie on a circle of radius **106.8** around the face centre `225, 225`, at **−29°, 0, +29°**
-   from vertical. The middle cell is the highest, because it is the one on the vertical axis.
+1. **Three cells of 42 units in a curved row, lowered together on 2026-10-13.** The owner
+   asked for a small downward move after the border revision. All three complete cells —
+   wells, borders, text and complication slots — move **three units down**, about **2.56 px**
+   on the 384-pixel screen. Horizontal origins, size, type and the clock remain unchanged.
+   The integer coordinates below are the same in the WFF and review generators:
 
    | Cell | Centre | Box origin, integer | Radius from face centre |
    |---|---|---|---:|
-   | left | 173.22, 131.59 | `152, 111` | 106.80 |
-   | middle | 225.00, 118.20 | `204, 97` | 106.80 |
-   | right | 276.78, 131.59 | `256, 111` | 106.80 |
+   | left | 173, 135 | `152, 114` | 103.9423 |
+   | middle | 225, 121 | `204, 100` | 104.0000 |
+   | right | 277, 135 | `256, 114` | 103.9423 |
 
-   The clearances this buys, against the clear aperture of **133.8** (the innermost band's
+   The derived clearances, against the clear aperture of **133.8** (the innermost band's
    outer edge at 154, less the 20.2 the band renders inward) and the `TimeText` box at `y=160`:
 
    | | Value |
    |---|---:|
-   | Cell to inner band, all three | **6.00** |
-   | Lowest cell to the clock | 7.41 |
-   | Between neighbouring cells | 11.48 |
-   | Middle cell above the outer two | 13.39 |
+   | Left/right cell to inner band | **8.8577** |
+   | Middle cell to inner band | **8.8000** |
+   | Lowest cell to the clock box | **4.00** |
+   | Between neighbouring cells | 11.8516 |
+   | Middle cell above the outer two | 14.00 |
 
-   **These are the arc's figures, and the face draws the integer rounding of them.** The box
-   origins in the table above are integers because WFF rejects a fractional coordinate, so the
-   centres land at `y = 132 / 118 / 132` and the middle cell rides **14** units above the outer
-   two rather than 13.39. Measured on `emulator-5554` on 2026-10-11, the clearance to the inner
-   band reads **5.79** against the 6.00 derived here — inside a quarter of a unit, and inside a
-   screen pixel at 384. Hold the face to what the grid can draw; the derivation is where the
-   numbers come from, not what to measure against.
+   **The former concentricity is historical.** The 2026-10-09 layout was derived from a
+   circle of radius **106.8** around `225, 225`, at **−29°, 0, +29°** from vertical. Its ideal
+   centres were `173.22, 131.59` / `225, 118.20` / `276.78, 131.59`, rounded by WFF to
+   `173, 132` / `225, 118` / `277, 132`. A constant nominal radius gave a derived **6.00**
+   gap to the band; the measured gap on `emulator-5554` on **2026-10-11** was **5.79**.
+   That reading belongs to the former placement. Translating the row preserves its curve,
+   horizontal spacing and 14-unit rise, while giving up exact concentricity with the bands.
+   The current clearance table is calculated from the integer centres, not presented as a
+   new device measurement.
 
-   **The equal clearance is the whole point, and it is equal by construction rather than by
-   fitting.** A constant radius means a constant distance to a band that is itself a circle, so
-   there is no number to tune and nothing to drift when the arc moves. Everything after it —
-   the diameter of 42, the angle of 29° — is what makes the other two clearances positive at
-   that radius.
-
-   **What the straight row got wrong.** Until this revision the cells were 48 units at
+   **What the straight row got wrong.** Until the 2026-10-09 cell-layout revision the cells were 48 units at
    `y=134`, on `x=169 / 225 / 281`. A straight row under a circular boundary cannot hold an
    even gap:
 
@@ -393,15 +403,16 @@ called this band the "upper aperture"; it is the same band.
    wedge of empty space between them and the band, narrowing towards the outer two — the row
    looked uneven because it was, and the measurement came after the owner said so, not before.
 
-   The square `BoundingBox` around a cell is a separate shape and it does cross the inner band —
-   its far corner reaches **135.37** — but nothing is painted out there. The well is an ellipse
-   inscribed in that box, reaching **127.8** at its far edge, and the text sits in a line box
-   inset inside the ellipse (rule 7), whose own far corner reaches **123.71**. A bounding box is
-   where taps land (rule 9), not where the cell draws.
-
-   The coordinates above are derived from this document's own locked geometry; the layout has
-   been rendered on the round AVD and approved from those captures, not measured off them glyph
-   by glyph.
+   The square `BoundingBox` remains distinct from what is painted. At the lowered integer
+   placement its furthest corner reaches **132.8533**, now inside the 133.8 aperture. The
+   well's furthest edge is **125.0**, and the inset text box's furthest corner is **121.8277**.
+   These are derived bounds. A bounding box is where taps land (rule 9); the cell still draws
+   its well and border inside the 42-unit circle. The lowered placement was verified on
+   **2026-10-13** on `wardpulse_wear_round_api36_1`, `emulator-5554`, **384×384**, after the
+   final finite XML was installed. All three cells retained their contents and clearance;
+   the integer origins moved by three design units. The captured text moved about two screen
+   pixels; glyph differences and antialiasing make that a separate observation from the
+   declared **2.56 px** translation.
 
 2. **The three cells cost the three strip slots, and each strip folds into its own ring's
    slot.** The eight-slot cap is now established twice over: a ninth `ComplicationSlot` is
@@ -613,23 +624,19 @@ called this band the "upper aperture"; it is the same band.
    would land exactly, but it has not been rendered, so it is recorded as where the number comes
    from rather than as a recommendation.
 
-   **A trailing mark is not part of the number, and the box moves so the digits are centred.**
-   Centring the whole string puts the *string* on the cell's axis and the digits to the left of
-   it: measured 2026-10-09, `18°` sat with its string centre at 224.5 against a cell centre of
-   225, while its **digits** sat at **222.5** — 2.5 units left. The degree sign drags them.
-   The temperature's line box therefore shifts right by **2** (`x=4`), after which the digits
-   measured **224.5**, half a unit out and below what the method can resolve.
+   **The complete reading is centred, including its scale (revision 2026-10-13).** The
+   temperature now reads `18°C` or `51°F`, so the scale is part of the label. Its whole string
+   uses the same `x=2`, 37-unit box as `UV 7`, with no horizontal correction. This leaves the
+   same clearance on both sides without assuming an advance for the device's own font.
 
-   The rule generalises and should be read as the rule, not as a constant for `18°`: the shift
-   is **half the advance of the trailing mark**, and it does not depend on how many digits
-   precede it. A box centres the whole string, so the gap between the string's midpoint and the
-   digit group's midpoint is always half the mark's width, whatever the digits are. `5°`, `18°`
-   and `-12°` all land the same way.
-
-   The shift belongs to a mark the template actually draws. From 2026-10-09 until the
-   weather-reading revision of **2026-10-12** the temperature's box carried it while templating
-   the bare expression, so it corrected for a degree sign that was never on the screen. A
-   leading name is not a trailing mark and takes no shift at all — see rule 11.
+   **The former correction centred the digits of a degree-only reading.** Measured
+   2026-10-09, `18°` sat with its string centre at 224.5 against a cell centre of 225, while its
+   digits sat at 222.5. Moving the box right by 2 (`x=4`), half the degree sign's advance,
+   brought the digits to 224.5. Adding a scale letter invalidates that measured two-unit
+   correction, and increasing it would take clearance from the right side. The new revision
+   therefore replaces numeric-only centring with complete-label centring, rather than guessing
+   a new offset. From 2026-10-09 until 2026-10-12 the former shift was present even though the
+   template drew a bare number; the historical readings in rule 11 record that mismatch.
 
 8. **The other accepted types, and the two that are refused.** `MONOCHROMATIC_IMAGE` is the one
    type whose whole content is an icon. It is drawn at 21 units in the 42-unit cell and
@@ -751,12 +758,85 @@ called this band the "upper aperture"; it is the same band.
     | our weather reading | flat `#eb0b0e0c` | yes | scene chrome |
     | nothing at all | graded, below | no | scene chrome |
 
-    **The ring is what says a cell is occupied (revision 2026-10-10).** A stroke of 1 on a path
-    of 41 — radius 20.0 to 21.0, inscribed in a well whose own edge is at 21 — in the
-    face's own text colour at `0xaa`, `#aaf4fbf8`. It goes on whatever the cell is showing,
+    **The ring is what says a cell is occupied (revision 2026-10-10; border revised 2026-10-13).**
+    A stroke of **1.5** on a path of **40.5** — radius **19.5 to 21.0**, inscribed in a well
+    whose own edge is at 21 — in the face's own text colour. Its inward half keeps alpha
+    `0xaa`, `#aaf4fbf8`; its outward half dissolves as described below. It goes on whatever the cell is showing,
     the wearer's complication and the face's own weather reading alike, and never on an empty
     one. That is the whole of the language: **a ring means occupied, a recess means free**, and
     a cell is never both.
+
+    **Directional border revision 2026-10-13 — fade along the shortest path to the band.**
+    The owner chose the same soft dissolve the watermark uses towards the legend, then asked
+    that it follow the shortest path to the adjacent band after the initial fixed directions
+    looked asymmetric. The original **10:30 / 12:00 / 1:30** treatment is superseded. The
+    current direction is derived from the actual cell centre `C` and face centre `F=(225,225)`:
+    `u=(C-F)/|C-F|`. The nearest point on the circular boundary of radius 133.8 is `F+133.8u`,
+    and the cell's nearest outer border point is `C+21u`. The directions are therefore
+    **329.9816° / 0° / 30.0184°**, about **11:00 / 12:00 / 1:00**, with exactly mirrored side
+    vectors. These angles are calculated, not tuned by eye. They do not move with a band's
+    remainder or arc end. The border grows inward from 1 to 1.5 units; reducing
+    its path diameter from 41 to 40.5 preserves the outer radius of 21 and the existing
+    clearance. This is declared geometry, not a new device measurement.
+
+    The native WFF version-2 `Stroke` uses a `LinearGradient` from `C-20.25u` to `C+20.25u`,
+    the opposite and band-facing points of its centreline. WFF and review art use the same
+    integer cell positions and normalized radial vectors. Alpha stays at **170** across the inward half;
+    five stops approximate a smoothstep on the outward half, ending at **10**, the watermark's
+    six-percent floor rounded to the eight-bit alpha grid. The positions are
+    `0 0.5 0.625 0.75 0.875 1`, with alphas `170 170 145 90 35 10`. RGB stays the face's own
+    text colour throughout. Review SVGs carry the same coordinates and stop alphas; ambient
+    still multiplies the whole border by **140/255**. The official validator accepted this
+    gradient and the fractional arc dimensions in format version 2 on the host on
+    2026-10-13.
+
+    **Final radial verification 2026-10-13.** The installed APK's embedded XML matched the
+    final generated source byte for byte. On `wardpulse_wear_round_api36_1`, `emulator-5554`,
+    **384×384**, the lowered cells showed `Tue` · `49°F` · `UV 0`, with all three main arcs and
+    legend strips present. All **11** generated border axes were independently checked as
+    parallel to their face-to-cell rays, with mirrored side axes. Captured peak RGB readings
+    in the outward direction cones were:
+
+    | Cell / derived direction | Outward | Opposed contour |
+    | --- | --- | --- |
+    | Left / 329.9816° | `23, 28, 26` | `167, 172, 169` |
+    | Middle / 0° | `20, 24, 22` | `167, 172, 169` |
+    | Right / 30.0184° | `21, 25, 22` | `167, 172, 169` |
+
+    These pixel readings show the outward dissolve and retained opposite contour; they do
+    not measure alpha. The ambient capture retained all three occupied cells, values, arcs
+    and strips dimmed, at the lowered positions with the same radial fade directions. The
+    device was returned to interactive mode.
+
+    **Finite geometry is checked before export.** The native `cellRing` and review
+    `upperCells` generators reject non-finite geometry or a non-positive radius, stroke,
+    size or distance from the face centre, and reject non-finite gradient coordinates before
+    writing the target. Isolated host probes on 2026-10-13 covered a wrong face-centre
+    expression, zero distance, infinite or NaN radius and coordinate overflow; all failed
+    before a target write. Valid geometry passed, and adding the guards left the generated
+    XML and art bytes unchanged. A separate host probe confirmed that the official **1.7.0**
+    validator accepted format-version-2 XML with `LinearGradient.endX="NaN"`; schema validation
+    alone therefore does not establish finite shader geometry.
+
+    **Initial device verification 2026-10-13, before the lowered placement and radial correction.**
+    After `just check-watchface`, the built APK was installed
+    and selected on `wardpulse_wear_round_api36_1`, `emulator-5554`, **384×384**. The interactive
+    capture showed `Tue` · `50°F` · `UV 0`, the widened lower contours and the three distinct
+    outward fades. Directional border peak RGB readings changed as follows:
+
+    | Cell / direction | Before | After |
+    | --- | --- | --- |
+    | Left / 10:30 | `112, 117, 114` | `23, 28, 25` |
+    | Middle / 12:00 | `119, 124, 121` | `21, 24, 22` |
+    | Right / 1:30 | `112, 117, 114` | `21, 25, 22` |
+
+    The opposed contours remained visible; antialiasing affects these pixel readings, so they
+    do not measure the gradient's alpha. Those readings witness the initial fixed directions,
+    not the later radial correction. The main arcs and all three legend strips remained
+    present. An ambient capture retained the values, strips and arcs dimmed, with the same
+    three fading directions. The device was returned to interactive mode with phone pairing
+    still connected. This verifies the installed WFF rendering, without extending the
+    historical provider-type checks in rule 8.
 
     **Geometry correction 2026-10-11 — the ring is inscribed, not inset.** Until today this
     paragraph read *radius 20.25 to 20.75, a quarter of a unit inside the well's edge at 21*,
@@ -768,9 +848,9 @@ called this band the "upper aperture"; it is the same band.
     painting 182.5 to 202.2, the whole nominal centred on `width/2`, for an arc drawn outside a
     `BoundingArc`, which is what a cell's hairline is.
 
-    **Nothing moves.** The markup is unchanged and the face draws what it has drawn since
-    2026-10-10; this is a correction of the description, not a revision of the geometry, and the
-    three captured widths that chose the shipped value are untouched. What goes with the wrong
+    **Nothing moved in the 2026-10-11 correction.** Its markup was unchanged: it corrected
+    the description rather than revising the geometry. The 2026-10-13 border revision above
+    later widened the stroke inward. What went with the wrong
     numbers is the reason they carried: there is no quarter-unit of well left clear outside the
     ring, because the ring's outer edge *is* the well's edge.
 
@@ -779,7 +859,7 @@ called this band the "upper aperture"; it is the same band.
     falls outside the well onto the lift, and the two meet the lift on one antialiased curve
     rather than leaving a sliver of well showing beyond the line. The ring is drawn over the
     well and after it — `cellWellFlat`, then `cellRing` — so what it covers is the well's own
-    outermost half-unit, which on a flat well costs nothing: the lit rim belongs to the graded
+    outermost stroke, which on a flat well costs nothing: the lit rim belongs to the graded
     treatment of an **empty** cell, and an empty cell wears no ring.
 
     It was added because a filled cell had no edge at all. The occluder is `#ff0b0e0c` on a
@@ -788,7 +868,8 @@ called this band the "upper aperture"; it is the same band.
     registered and the cell itself went unseen. Three widths were rendered and compared on the
     AVD: 1 unit at 40 % of the text colour, the same at 67 %, and 2 units at full strength. The
     first does not read at a glance; the last competes with the text it encloses and with the
-    bands behind it. The middle one is the shipped value. Giving the weather cell the same ring
+    bands behind it. The middle one was the shipped value until the 2026-10-13 inward widening
+    and directional fade above. Giving the weather cell the same ring
     is a decision, not a carry-over: without it the face would have three kinds of cell instead
     of two, and the wearer would have to learn which of two dark discs was theirs to fill.
 
@@ -838,15 +919,16 @@ called this band the "upper aperture"; it is the same band.
     the lift under a well down by eight to eleven levels per channel, and a step that size needs
     no shadow behind it.
 
-    **The arc of rule 1 evened the lift too, which was not the point of it.** The lift is a
+    **The 2026-10-09 arc layout evened the lift too, which was not the point of it.** The lift is a
     radial gradient about `225, 216`, a different centre from the one the cells are arranged
     around, so a cell's distance to it is not its distance to the face centre. The straight row
     stood at 82 for the middle cell and 99.3 for the outer two, reading `20, 26, 23` against
-    `19, 24, 22`. On the arc the three sit at **97.80, 99.02 and 99.02**, and all three read
+    `19, 24, 22`. On that former arc the three sat at **97.80, 99.02 and 99.02**, and all three read
     **`19, 24, 22`** — measured at screen pixels `192, 101`, `236, 112` and `148, 112`, with the
     face active, confirmed by a control of `24, 32, 28` at the screen centre, the gradient's
-    first stop. So the three wells now composite to one colour, which the straight row never
-    managed. It is a consequence of the constant radius, not a thing that was designed for.
+    first stop. So those three wells composited to one colour, which the straight row never
+    managed. That is a consequence of the former concentric layout, not a new measurement
+    of the three-unit lower placement introduced on 2026-10-13.
 
     The well is **scene chrome drawn behind the slot**, not slot content. Measured 2026-10-09:
     markup placed inside `<Complication type="EMPTY">` does not render. With the slot's type
@@ -917,10 +999,11 @@ called this band the "upper aperture"; it is the same band.
     **The unit follows the wearer, and the face neither converts nor chooses.** That AVD is
     `en-US` by `ro.product.locale`, and `51` is Fahrenheit, about 10.6 °C. A metric device
     delivers the metric number from the same expression. The format also carries
-    `WEATHER.TEMPERATURE_UNIT`, enumerated beside `WEATHER.TEMPERATURE` in the official
-    validator's own schemas in every version its jar ships, so the scale is available as a
-    glyph if it is ever wanted. The open question in the paragraph above is closed: the unit
-    does follow the wearer's setting.
+    `WEATHER.TEMPERATURE_UNIT`, an integer enum: **1 is Celsius and 2 is Fahrenheit**, available
+    in format version 2. The face selects `C` or `F` from that enum instead of printing the
+    integer or inferring a scale from locale. The value already follows the wearer's unit, so
+    no conversion is applied. These meanings are specified in the official
+    [Android data-source reference](https://developer.android.com/reference/wear-os/wff/common/attributes/source-type).
 
     **The face drew the marks nowhere, and the design had shown them all along.** From
     2026-10-09 until this revision both cells templated the bare expression, `%s`, while the
@@ -928,34 +1011,47 @@ called this band the "upper aperture"; it is the same band.
     `18°` and `UV 7`. This is the face catching up with its own document; only the scale below
     is a new decision.
 
-    **The temperature takes the degree sign and no scale.** `51°`, not `51°F`. Three reasons,
-    in increasing weight. The board, the preview and rule 7 are unanimous on the bare mark, and
-    making the face disagree with three artefacts to say something none of them says is the
-    wrong direction of travel. The scale is the wearer's own setting, so printing it back tells
-    them what they chose — the ambiguity reported was *is this degrees or what*, which the mark
-    answers completely. And the width cannot be bounded here: the font is `SYNC_TO_DEVICE`, the
-    device's own, so no measurement in this repository can say how wide a glyph is, while the
-    line box ellipsises rather than clips. A silent `51°…` is worse than a missing letter.
+    **Temperature-scale revision 2026-10-13 — the owner chose `51°F`.** The degree-only form
+    adopted on 2026-10-12 left the scale ambiguous. The owner explicitly selected an added
+    scale after a measurement on `emulator-5554`: `51°` occupied about **19.9 units** of ink in
+    the 37-unit box, while the existing `UV 0` occupied **28.1**. The added `F` was estimated
+    to bring `51°F` to about 27 units; that is an estimate, not a measurement of the new
+    reading. The face now draws `%s°C` for unit 1 and `%s°F` for unit 2. An unsupported unit
+    falls back to `%s°`, keeping the degree sign without guessing a scale. Missing weather
+    still draws the empty recess rather than a label.
 
-    The cost is accepted rather than argued away: a wearer who does not know their own device's
-    setting, or who reads someone else's watch, sees a number that could be either scale.
-    `WEATHER.TEMPERATURE_UNIT` is what closes that if the cost is ever judged the wrong way
-    round.
+    The primary board and its generated previews show `18°C`, the weather-available Celsius
+    example. The scale follows the weather source rather than the preview. Verified after
+    installation on **2026-10-13**, before the three-unit lowering, on
+    `wardpulse_wear_round_api36_1`, `emulator-5554`,
+    **384×384**: the live reading was **`50°F`**, fully visible. Its bright ink bounds were
+    `(180, 97)` to `(203, 105)` pixels, a width of **26.95 design units** inside the 37-unit
+    box; its midpoint was **191.5 px** against the cell's axis at **192 px**. Only this current
+    Fahrenheit reading was measured. Celsius, negative temperatures, three-digit temperatures
+    and `UV 11` remain unmeasured on the device.
+
+    **Lowered-position verification 2026-10-13.** The final installed face showed **`49°F`**
+    on the same round AVD at **384×384**. Its bright ink bounds were `(180, 99)` to `(203, 107)`
+    pixels, again **26.95 design units** wide in the 37-unit box, with midpoint **191.5 px**
+    against the cell's axis at **192 px**. The prior `50°F` bounds above belong to the earlier
+    placement. These two readings confirm those two Fahrenheit labels only; Celsius, negative
+    or three-digit temperatures and `UV 11` remain device checks.
 
     **The UV index takes its name in front — `UV 7`**, the board's form, because a bare `0` is
     a number with no subject at all and the cell is the only place the subject could go.
 
-    **Only the temperature shifts, and that is the rule rather than an inconsistency.** Rule 7
-    moves the line box by half a trailing mark's advance so the *digits* land on the cell axis.
-    A degree sign is a mark on the number, so the number is the content and the shift applies.
-    `UV` is the reading's name, not a mark on its number, so the whole string is the content and
-    centring it is already right — the UV box keeps `x=2` and takes no shift.
+    **Both weather readings now centre the complete label.** Rule 7's 2026-10-13 revision
+    gives the temperature the same unshifted `x=2` box as the UV reading. The former offset
+    measured half a degree sign, not half a degree sign plus a scale letter, and retaining it
+    would not preserve numeric centring. Centre the complete label instead, preserving room
+    on both sides; the obsolete correction is removed from the generator.
 
     **The shift was there without its mark.** `CELL_MARK_SHIFT` put the temperature's box at
     `x=4` from the day the cells shipped, correcting for a degree sign the template never drew,
     so the bare digits sat about 1.5 units right of the axis — inside a screen pixel at 384, and
-    not what anyone noticed. Drawing the mark makes the existing shift correct; it is unchanged
-    at 2 because the mark is the degree sign rule 7 measured.
+    not what anyone noticed. Drawing the mark on 2026-10-12 made that existing two-unit shift
+    correct for the degree-only reading. The 2026-10-13 revision retires it for the suffixed
+    label, as described above.
 
     **Observable for the first time, and still unsettled.** With the mark drawn, the shift has
     an effect something can be measured against, and `Mon` · `51°` · `UV 0` was read on
@@ -966,17 +1062,18 @@ called this band the "upper aperture"; it is the same band.
     sit roughly 1.3 units further left than the control explains, which is **not** evidence the
     shift is too small: `1` carries wide side bearings, so the ink of `51` sits left inside its
     own advance box wherever that box is. A symmetric pair — `88°` — would separate the two, and
-    the weather is not ours to choose. Rule 7 states the intent; this reading neither witnesses
-    it nor doubts it.
+    the weather is not ours to choose. This is evidence for the former degree-only rule;
+    it does not measure the complete-label centring introduced on 2026-10-13.
 
-    **Widths, and the one that is not settled.** Rule 6 measured `18°` at 18 units of ink and
-    `UV 7` at 27, against the 37-unit line box. A third digit or a leading minus is comfortably
-    inside that, so `101°` and `-10°` are not a concern. **`UV 11` is**: it adds a digit to the
-    widest label the rule ever measured, and those measurements were taken in the 48-unit cell
-    with a font that is not the device's. It is the one string here whose fit is estimated
-    rather than known, and the estimate leaves only a few units. If it ellipsises, `UV 1…` is
-    the failure to look for, and dropping the space to `UV11` is the cheapest answer — the
-    2026-10-09 spike rendered `UV0` legibly at 384, so the spaceless form has precedent.
+    **Widths remain device-dependent.** Measured on the host on 2026-10-13 with the review
+    font, Noto Sans Bold at size 14, advances were `18°C` **30.94**, `51°F` **29.70**,
+    `-10°F` **34.22**, and `-12°C` **35.45** units, all inside the 37-unit box. `101°F` was
+    **37.72**, just beyond it, and `UV 11` was **39.34**. These are host-font advances, not
+    device ink measurements: the face uses `SYNC_TO_DEVICE`, so those host advances prove
+    neither a live overflow nor a live fit. The separate device readings above confirm only
+    `50°F` before lowering and `49°F` after it. Keep size 14 and the existing ellipsis; the suffixed
+    three-digit case and `UV 11` remain device checks. If either ellipsises, record the actual
+    string and device before changing its type size or spacing.
 
 12. **Ambient: the wells stay, the values dim.** Three things make up a cell across its two
     states — a filled one has a value over an occluder, an empty one has a recess and whatever
@@ -1024,7 +1121,7 @@ called this band the "upper aperture"; it is the same band.
     or not.
 
     **The ring dims, because a ring is the one part of a cell that lights.** Everything above
-    turns on a well being a darkening, and the hairline of rule 10 is the opposite: it adds
+    turns on a well being a darkening, and the border of rule 10 is the opposite: it adds
     light where there was none. Leaving it at full strength would make the brightest thing on
     an ambient face the outline of a cell rather than anything a cell is saying, in the one
     mode where lit pixels are kept few. So it goes with the value it encloses, in the arcs' own
@@ -1493,7 +1590,7 @@ selective survival puts that gap back. The zero-ring case needs no special handl
 lone credits row dims like any other row.
 
 **The level is 90, where the rest of the face uses 140.** 140 is the arcs' own proportion, worn
-by the bands, by the ring type and by a cell's hairline, and taking it here would put one
+by the bands, by the ring type and by a cell's border, and taking it here would put one
 number on the whole face. Label peaks against the surround:
 
 | | label peak | surround |
@@ -1598,14 +1695,16 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
 
 - Side-by-side `RING 1` / `RING 2` wireframe complications as the target language.
 - Large remaining % as the hero in the middle of the face, in place of the time.
-- High-contrast bordered strip “cards” or ring-cast drop shadows as strip chrome. The hairline
+- High-contrast bordered strip “cards” or ring-cast drop shadows as strip chrome. The border
   an occupied upper cell wears (Upper cells, rule 10) is the one exception, written in on
   **2026-10-10**: this refuses chrome that frames content which is already legible without it,
   and a filled cell was not — an opaque well on the lift is a step of eight to eleven levels,
   which reads as depth under a recess but leaves a filled cell edgeless, so only its glyphs
-  registered. The ring is a one-unit line in the face's own text colour, inscribed in the well
-  so that its outer edge meets the well's own at 21 (corrected **2026-10-11**; Upper cells,
-  rule 10), carrying no fill, no shadow and no colour of its own, and it is what makes
+  registered. Since **2026-10-13** the ring is a 1.5-unit line in the face's own text colour,
+  dissolving along the shortest radial path to the nearest band, about 11:00, noon and 1:00.
+  It remains inscribed, its outer
+  edge meeting the well's own at 21 (geometry corrected **2026-10-11**; Upper cells, rule 10),
+  carrying no fill, no shadow and no colour of its own, and it is what makes
   *occupied* and *free* distinct at a glance.
 - Time-based rotation of which metric is “on top” in the first iteration.
 - Brand/marketing chrome, floating badges, or dense face captions.
@@ -1639,7 +1738,7 @@ picker asset, and the face review previews it cites.
 For the shipped asset that means `apps/watchface_wff/src/main/res/drawable/preview.png`, named
 by `watch_face_info.xml`, is generated from `round-3-plan-credits.svg`, the **Primary baseline**
 of Review variants, which is already 450×450 in its own viewBox and already draws the face's
-language: three concentric bands, three upper cells behind their hairlines, the time hero, and
+language: three concentric bands, three upper cells behind their occupied borders, the time hero, and
 the three legend strips. A generator owns the rasterization and rewrites the file whenever the
 face art is rendered. Which generator that is belongs to implementation; that there is one does
 not. The defect above was never the picture alone — it was that nothing regenerated it.
@@ -1682,7 +1781,7 @@ differ — that is how `apps/watchface_wff/src/main/res/drawable/wardpulse_mono.
 drawable, is written — and `rasterize` in `tools/render-watchface.mjs` passes `-strip` so the
 render timestamp never reaches the bytes. Either settles the churn. Neither is mandated here.
 Those three name functions rather than lines deliberately: the last of them was cited as
-`render-watchface.mjs:674` on **2026-10-10** and pointed at the wrong sentence by the next day,
+line 674 of `render-watchface.mjs` on **2026-10-10** and pointed at the wrong sentence by the next day,
 when an unrelated comment three hundred lines above it grew. The `sceneElement.xsd:45` cited
 elsewhere here is the exception that holds: that file ships inside the pinned validator jar, so
 no commit in this repository can move it.
@@ -1707,7 +1806,7 @@ complication where a slot is bound — the `Tue` on the primary board is a `DAY_
 on the left cell, which rule 11 leaves with no chrome declared beneath it, not weather. It takes
 no marketing chrome, no badge, no caption, and no reading a wearer could not get.
 
-The board's `18°` and `UV 7` are therefore the weather-available state, not a universal one.
+The board's `18°C` and `UV 7` are therefore the weather-available state, not a universal one.
 Measured on `emulator-5554`, **2026-10-10**, on a fresh install from this baseline: the left
 cell drew `Sat` with its hairline, and the middle and right cells drew empty graded wells, no
 weather being available to that device. A preview may show the available state — it is a state

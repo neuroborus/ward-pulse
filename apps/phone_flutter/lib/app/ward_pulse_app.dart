@@ -211,7 +211,6 @@ class _DashboardHostState extends State<DashboardHost> {
     final snapshot = _currentSnapshot;
     if (snapshot == null) {
       // Load in flight / failed — reload; a later empty snapshot clears Wear.
-      widget.repository.invalidate();
       _reload();
       return;
     }
@@ -226,7 +225,6 @@ class _DashboardHostState extends State<DashboardHost> {
     _wearRefreshAnchorAt = DateTime.now().toUtc();
     // Push disabled chrome immediately; the reload will push again with fresh data.
     unawaited(_syncWatch(snapshot));
-    widget.repository.invalidate();
     _reload();
   }
 

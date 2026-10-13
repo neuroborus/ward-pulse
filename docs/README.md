@@ -46,3 +46,5 @@ Use this index before adding new work:
 - Link new documents from this index before relying on them in implementation.
 - Add a thin page under `site/src/pages/` and update `site/vocs.config.ts` when a document should appear in the Vocs site.
 - Run `just check-docs` after changing durable docs, Vocs pages, or navigation.
+- Cite source files by named symbols or recipes instead of line numbers; the checkout-only
+  gate is `just check-doc-citations` (see [DOCUMENTATION.md](DOCUMENTATION.md)).

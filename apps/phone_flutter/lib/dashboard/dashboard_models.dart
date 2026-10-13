@@ -290,6 +290,7 @@ class ProviderSnapshot {
     return ProviderSnapshot(
       accountId: accountId,
       provider: provider,
+      connection: connection,
       status: value,
       today: today,
       week: week,

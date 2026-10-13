@@ -74,7 +74,7 @@ const COLOR = {
    */
   cellRim: '#ff242a27',
   /**
-   * The hairline a cell draws while it is showing something. The face's own
+   * The border a cell draws while it is showing something. The face's own
    * text colour at `0xaa`, so the ring is the same light as the reading it
    * encloses and never a colour of its own. At 40% it does not read at a
    * glance; at full strength it competes with the text inside it and with the
@@ -301,12 +301,10 @@ function stripRowY(ringIndex) {
 const CREDITS_RING_INDEX = 0
 
 /**
- * The three cells above the clock, on a circle concentric with the face rather
- * than in a row: a constant radius against a band that is itself a circle keeps
- * the clearance equal by construction, with nothing left to tune. Origins are
- * the integers `WATCH_RING_DESIGN.md` rule 1 locks — WFF rejects a fractional
- * coordinate outright — and the middle cell is the highest because it is the
- * one on the vertical axis.
+ * The three cells above the clock retain the original curved row. Since
+ * 2026-10-13 the whole row sits three units lower, so it is no longer exactly
+ * concentric with the face. Origins are the integers `WATCH_RING_DESIGN.md`
+ * rule 1 locks; the middle cell remains fourteen units above the outer two.
  */
 const CELL = {
   size: 42,
@@ -328,15 +326,12 @@ const CELL = {
    */
   iconSize: 21,
   /**
-   * The hairline that says a cell is holding something. A stroke of 1 centred
-   * on a path of 41 runs from radius 20.0 to 21.0, so it is inscribed in the
-   * well whose own edge is at 21: the ring covers the well's outermost half
-   * unit and no part of it falls outside onto the lift. Corrected 2026-10-11 —
-   * this read "20.25 to 20.75, a quarter of a unit inside", which is the span
-   * of a half-unit stroke; the geometry never moved.
+   * The border that says a cell is holding something. Since 2026-10-13 a
+   * stroke of 1.5 on a path of 40.5 runs from radius 19.5 to 21.0. Widening
+   * inward keeps it inscribed in the well and leaves the band clearance alone.
    */
-  ringDiameter: 41,
-  ringThickness: 1,
+  ringDiameter: 40.5,
+  ringThickness: 1.5,
   /**
    * The ring dims in ambient with everything else a cell carries. Rule 12 keeps
    * the well because a well darkens, and switching a darkening off would raise
@@ -347,23 +342,20 @@ const CELL = {
   ringAmbientAlpha: 140,
 }
 
-/**
- * A trailing mark is not part of the number. Centring the whole string puts the
- * string on the cell's axis and drags the digits left by half the mark's
- * advance, measured at 2 units for the degree sign, so the box moves back by
- * that much and the digits land centred whatever their count.
- *
- * It belongs to the degree sign and to nothing else: apply it only where the
- * template beside it actually draws that mark. Between 2026-10-09 and
- * 2026-10-12 the face carried this shift while templating the bare expression,
- * so it was correcting for a mark it never drew.
- */
-const CELL_MARK_SHIFT = 2
-
 const CELLS = [
-  { slotId: 201, x: 152, y: 111, label: 'cell1', provider: 'DAY_OF_WEEK', type: 'SHORT_TEXT' },
-  { slotId: 202, x: 204, y: 97, label: 'cell2', provider: 'EMPTY', type: 'EMPTY' },
-  { slotId: 203, x: 256, y: 111, label: 'cell3', provider: 'EMPTY', type: 'EMPTY' },
+  { slotId: 201, x: 152, y: 114, label: 'cell1', provider: 'DAY_OF_WEEK', type: 'SHORT_TEXT' },
+  { slotId: 202, x: 204, y: 100, label: 'cell2', provider: 'EMPTY', type: 'EMPTY' },
+  { slotId: 203, x: 256, y: 114, label: 'cell3', provider: 'EMPTY', type: 'EMPTY' },
+]
+
+/** Smoothstep on the outward half, with the watermark's six-percent floor. */
+const CELL_RING_FADE = [
+  { position: 0, alpha: 0xaa },
+  { position: 0.5, alpha: 0xaa },
+  { position: 0.625, alpha: 0x91 },
+  { position: 0.75, alpha: 0x5a },
+  { position: 0.875, alpha: 0x23 },
+  { position: 1, alpha: 0x0a },
 ]
 
 /**
@@ -374,20 +366,20 @@ const CELLS = [
  *
  * Both expressions yield a bare number, so the template is what makes the
  * reading legible — `51` alone says neither degrees nor anything else. The
- * temperature takes the degree sign and no scale: the value already arrives in
- * the unit the wearer's own device chose, and the box ellipsises rather than
- * clips, so a glyph that repeats their setting would spend headroom no
- * measurement here can bound — the font is the device's
- * (`WATCH_RING_DESIGN.md`, Upper cells, revision 2026-10-12).
+ * temperature takes its device-provided scale: TEMPERATURE_UNIT is an integer
+ * enum, 1 for Celsius and 2 for Fahrenheit, so a condition selects the glyph.
+ * An unsupported value keeps just the degree sign instead of guessing a scale
+ * (`WATCH_RING_DESIGN.md`, Upper cells, revision 2026-10-13).
  *
- * Only the temperature shifts. Its degree sign is a mark *on* the number, so
- * the number is the content and rule 7 centres that; `UV` is the reading's
- * name, so the whole string is the content and centring it is already right.
+ * Centre the complete reading, including its scale, just as the UV name is
+ * centred with its number. The former two-unit degree-only correction would
+ * not centre the digits once another glyph is added, and shifting by the
+ * complete suffix would spend the cell's right-hand clearance.
  */
 const CELL_CHROME = [
-  { template: null, expression: null, shift: 0 },
-  { template: '%s°', expression: '[WEATHER.TEMPERATURE]', shift: CELL_MARK_SHIFT },
-  { template: 'UV %s', expression: '[WEATHER.UV_INDEX]', shift: 0 },
+  { template: null, expression: null },
+  { template: '%s°', expression: '[WEATHER.TEMPERATURE]', unit: '[WEATHER.TEMPERATURE_UNIT]' },
+  { template: 'UV %s', expression: '[WEATHER.UV_INDEX]' },
 ]
 
 /** Closed vocabulary shared with WatchComplicationText.splitPoolToken. */
@@ -466,7 +458,8 @@ function cellChromeComment() {
   const rows = CELLS.map(({ x, y }) => `${x},${y}`).join('  ')
   return `        <!-- What lies under the cells, declared ahead of every slot so a filled
              cell's own opaque well covers it: ${rows} at ${CELL.size} units, centres on a
-             circle of radius 106.8 about the face centre. The middle and right cells
+             curved row translated three units below its original concentric layout.
+             The middle and right cells
              carry the default weather, which costs no complication slot. -->`
 }
 
@@ -483,8 +476,8 @@ function cellComment() {
  * complication, whose text arrives ready to read, and carries the mark or the
  * name for a weather reading, which arrives as a bare number (`CELL_CHROME`).
  */
-function cellText(template, parameter, shift, pad) {
-  return `${pad}<PartText x="${CELL.textX + shift}" y="${CELL.textY}" width="${CELL.textWidth}" height="18" alpha="255">
+function cellText(template, parameter, pad) {
+  return `${pad}<PartText x="${CELL.textX}" y="${CELL.textY}" width="${CELL.textWidth}" height="18" alpha="255">
 ${pad}    <Variant mode="AMBIENT" target="alpha" value="140" />
 ${pad}    <Text align="CENTER" ellipsis="TRUE">
 ${pad}        <Font family="SYNC_TO_DEVICE" size="${CELL.fontSize}" weight="BOLD" color="${COLOR.text}">
@@ -494,6 +487,28 @@ ${pad}            </Template>
 ${pad}        </Font>
 ${pad}    </Text>
 ${pad}</PartText>`
+}
+
+/** Select the scale from the weather source, whose unit is an integer enum. */
+function cellReadingText({ template, expression, unit }, pad) {
+  if (!unit) {
+    return cellText(template, expression, pad)
+  }
+  return `${pad}<Condition>
+${pad}    <Expressions>
+${pad}        <Expression name="isCelsius"><![CDATA[${unit} == 1]]></Expression>
+${pad}        <Expression name="isFahrenheit"><![CDATA[${unit} == 2]]></Expression>
+${pad}    </Expressions>
+${pad}    <Compare expression="isCelsius">
+${cellText('%s°C', expression, `${pad}        `)}
+${pad}    </Compare>
+${pad}    <Compare expression="isFahrenheit">
+${cellText('%s°F', expression, `${pad}        `)}
+${pad}    </Compare>
+${pad}    <Default>
+${cellText(template, expression, `${pad}        `)}
+${pad}    </Default>
+${pad}</Condition>`
 }
 
 /** The flat recess a cell shows while our own reading sits on it. */
@@ -506,15 +521,37 @@ ${pad}</PartDraw>`
 }
 
 /**
- * The hairline a cell wears while it is showing something, whether that is the
+ * The border a cell wears while it is showing something, whether that is the
  * wearer's complication or the face's own weather reading. Without it a filled
  * cell is a dark disc on a dark field and only the glyphs read, so the cell
  * itself goes unseen. An empty cell does not wear one: its recess already says
  * what it is, and the two together make the language exact — ring means
- * occupied, recess means free.
+ * occupied, recess means free. Its outward half dissolves along the radial
+ * vector from the face centre through the cell's actual integer centre: the
+ * shortest path to the nearest band's circular boundary, independent of its
+ * current value or end angle.
  */
-function cellRing(pad) {
+function cellRing({ x, y }, pad) {
   const centre = CELL.size / 2
+  const radius = CELL.ringDiameter / 2
+  const vx = x + centre - FACE.center
+  const vy = y + centre - FACE.center
+  const distance = Math.hypot(vx, vy)
+  if ([centre, radius, CELL.ringThickness, distance].some((value) => !Number.isFinite(value) || value <= 0)) {
+    throw new Error('Cell border geometry requires finite positive size, radius, stroke and distance from the face centre')
+  }
+  const dx = (radius * vx) / distance
+  const dy = (radius * vy) / distance
+  const coordinate = (value) => {
+    if (!Number.isFinite(value)) {
+      throw new Error('Cell border gradient coordinates must be finite')
+    }
+    return Number(value.toFixed(6))
+  }
+  const colors = CELL_RING_FADE
+    .map(({ alpha }) => `#${alpha.toString(16).padStart(2, '0')}${COLOR.cellRing.slice(3)}`)
+    .join(' ')
+  const positions = CELL_RING_FADE.map(({ position }) => position).join(' ')
   return `${pad}<PartDraw x="0" y="0" width="${CELL.size}" height="${CELL.size}" alpha="255">
 ${pad}    <Variant mode="AMBIENT" target="alpha" value="${CELL.ringAmbientAlpha}" />
 ${pad}    <Arc
@@ -524,7 +561,15 @@ ${pad}        width="${CELL.ringDiameter}"
 ${pad}        height="${CELL.ringDiameter}"
 ${pad}        startAngle="${SWEEP.start}"
 ${pad}        endAngle="${SWEEP.end}">
-${pad}        <Stroke thickness="${CELL.ringThickness}" color="${COLOR.cellRing}" cap="BUTT" />
+${pad}        <Stroke thickness="${CELL.ringThickness}" color="${COLOR.text}" cap="BUTT">
+${pad}            <LinearGradient
+${pad}                startX="${coordinate(centre - dx)}"
+${pad}                startY="${coordinate(centre - dy)}"
+${pad}                endX="${coordinate(centre + dx)}"
+${pad}                endY="${coordinate(centre + dy)}"
+${pad}                colors="${colors}"
+${pad}                positions="${positions}" />
+${pad}        </Stroke>
 ${pad}    </Arc>
 ${pad}</PartDraw>`
 }
@@ -560,7 +605,8 @@ ${pad}</PartDraw>`
  * cell that is plainly empty.
  */
 function cellChrome({ x, y, label }, index) {
-  const { template, expression, shift } = CELL_CHROME[index]
+  const chrome = CELL_CHROME[index]
+  const { expression } = chrome
   const pad = ' '.repeat(12)
   const body = expression
     ? `            <Condition>
@@ -570,8 +616,8 @@ function cellChrome({ x, y, label }, index) {
                 <Compare expression="hasWeather">
                     <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}Reading">
 ${cellWellFlat(COLOR.strip, ' '.repeat(24))}
-${cellRing(' '.repeat(24))}
-${cellText(template, expression, shift, ' '.repeat(24))}
+${cellRing({ x, y }, ' '.repeat(24))}
+${cellReadingText(chrome, ' '.repeat(24))}
                     </Group>
                 </Compare>
                 <Default>
@@ -603,10 +649,10 @@ ${body}
 function cellSlot({ slotId, x, y, label, provider: systemProvider, type }) {
   const pad = ' '.repeat(20)
   const well = `${cellWellFlat(COLOR.cellWell, pad)}
-${cellRing(pad)}`
+${cellRing({ x, y }, pad)}`
   const body = (parameter) => `            <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}">
 ${well}
-${cellText('%s', parameter, 0, pad)}
+${cellText('%s', parameter, pad)}
             </Group>`
   // 21 in 42 leaves 10.5 a side and the grid is integral, so the icon sits half
   // a unit in from centre — the same rounding, in the same direction, that

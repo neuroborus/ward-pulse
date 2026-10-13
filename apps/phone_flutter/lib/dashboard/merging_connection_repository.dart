@@ -13,7 +13,7 @@ typedef ConnectionReportLoader = Future<String?> Function();
 ///
 /// Missing credentials pass through to the fallback. Fetch and normalization
 /// failures are mapped by `mapError`, which also records the sync event, and
-/// keep other providers visible when the fallback still has live accounts.
+/// retain this connection's previous data alongside fresh fallback accounts.
 final class MergingConnectionRepository extends DashboardRepository {
   MergingConnectionRepository({
     required DashboardRepository fallback,
@@ -36,18 +36,23 @@ final class MergingConnectionRepository extends DashboardRepository {
   final ProviderSyncLogger _logger;
   final DashboardSnapshotMerger _mergeSnapshots;
 
-  DashboardSnapshot? _lastSuccessfulSnapshot;
+  DashboardSnapshot? _lastSuccessfulConnectionSnapshot;
+  var _cacheRevision = 0;
 
   @override
   Future<DashboardSnapshot> load() async {
+    final revision = ++_cacheRevision;
     final fallback = CapturedDashboardLoad.capture(_fallback.load);
     final String? report;
     try {
       report = await _loadReport();
     } catch (error) {
-      return _recover(fallback, _mapError(error));
+      return _recover(fallback, _mapError(error), revision);
     }
     if (report == null) {
+      if (revision == _cacheRevision) {
+        _lastSuccessfulConnectionSnapshot = null;
+      }
       return (await fallback).value;
     }
 
@@ -58,6 +63,7 @@ final class MergingConnectionRepository extends DashboardRepository {
       return _recover(
         fallback,
         _mapError(StateError('Normalize failed: ${loadFailureDetails(error)}')),
+        revision,
       );
     }
 
@@ -70,7 +76,12 @@ final class MergingConnectionRepository extends DashboardRepository {
         _mapError(
           StateError('Dashboard parse failed: ${loadFailureDetails(error)}'),
         ),
+        revision,
       );
+    }
+    // A credential change or newer load may supersede this in-flight request.
+    if (revision == _cacheRevision) {
+      _lastSuccessfulConnectionSnapshot = connectionSnapshot;
     }
 
     final DashboardSnapshot other;
@@ -79,14 +90,15 @@ final class MergingConnectionRepository extends DashboardRepository {
     } on DashboardLoadException catch (error) {
       _logger.record(ProviderSyncEvent.succeeded);
       if (error.issue == DashboardSyncIssue.noProviders) {
-        return _remember(connectionSnapshot);
+        return connectionSnapshot;
       }
-      return _remember(
-        connectionSnapshot,
-      ).withSyncIssue(error.issue, details: error.details);
+      return connectionSnapshot.withSyncIssue(
+        error.issue,
+        details: error.details,
+      );
     } catch (error) {
       _logger.record(ProviderSyncEvent.succeeded);
-      return _remember(connectionSnapshot).withSyncIssue(
+      return connectionSnapshot.withSyncIssue(
         DashboardSyncIssue.dashboardUnavailable,
         details: loadFailureDetails(error),
       );
@@ -94,7 +106,7 @@ final class MergingConnectionRepository extends DashboardRepository {
 
     if (!hasLiveAccount(other)) {
       _logger.record(ProviderSyncEvent.succeeded);
-      return _remember(connectionSnapshot);
+      return connectionSnapshot;
     }
 
     try {
@@ -102,15 +114,14 @@ final class MergingConnectionRepository extends DashboardRepository {
         _mergeSnapshots([other.toJsonString(), normalized]),
       );
       _logger.record(ProviderSyncEvent.succeeded);
-      final remembered = _remember(merged);
       final issue = other.syncIssue;
       return issue == null
-          ? remembered
-          : remembered.withSyncIssue(issue, details: other.syncDetails);
+          ? merged
+          : merged.withSyncIssue(issue, details: other.syncDetails);
     } catch (error) {
       final details = loadFailureDetails(error);
       _logger.record(ProviderSyncEvent.invalidResponse, details: details);
-      return _remember(connectionSnapshot).withSyncIssue(
+      return connectionSnapshot.withSyncIssue(
         DashboardSyncIssue.dashboardUnavailable,
         details: details,
       );
@@ -119,35 +130,52 @@ final class MergingConnectionRepository extends DashboardRepository {
 
   @override
   void invalidate() {
-    _lastSuccessfulSnapshot = null;
+    _cacheRevision++;
+    _lastSuccessfulConnectionSnapshot = null;
     _fallback.invalidate();
   }
 
   Future<DashboardSnapshot> _recover(
     Future<CapturedDashboardLoad> fallback,
     DashboardLoadException failure,
+    int revision,
   ) async {
+    DashboardSnapshot? other;
     try {
-      final snapshot = (await fallback).value;
-      if (hasLiveAccount(snapshot)) {
-        return snapshot.withSyncIssue(failure.issue, details: failure.details);
-      }
+      other = (await fallback).value;
     } catch (_) {
       // Prefer the connection-specific issue when nothing else is live.
     }
-    final cached = _lastSuccessfulSnapshot;
-    if (cached != null) {
-      _logger.record(ProviderSyncEvent.usingCachedSnapshot);
-      return cached.withStaleStatus(
-        syncIssue: failure.issue,
-        syncDetails: failure.details,
-      );
+    final cached =
+        revision == _cacheRevision ? _lastSuccessfulConnectionSnapshot : null;
+    final hasFallback = other != null && hasLiveAccount(other);
+    if (cached == null) {
+      if (hasFallback) {
+        return other.withSyncIssue(failure.issue, details: failure.details);
+      }
+      throw failure;
     }
-    throw failure;
-  }
 
-  DashboardSnapshot _remember(DashboardSnapshot snapshot) {
-    _lastSuccessfulSnapshot = snapshot;
-    return snapshot;
+    final stale = cached.withStaleStatus(
+      syncIssue: failure.issue,
+      syncDetails: failure.details,
+    );
+    if (hasFallback) {
+      try {
+        final merged = DashboardSnapshot.fromJsonString(
+          _mergeSnapshots([other.toJsonString(), stale.toJsonString()]),
+        );
+        _logger.record(ProviderSyncEvent.usingCachedSnapshot);
+        return merged.withSyncIssue(failure.issue, details: failure.details);
+      } catch (error) {
+        _logger.record(
+          ProviderSyncEvent.invalidResponse,
+          details: loadFailureDetails(error),
+        );
+        return other.withSyncIssue(failure.issue, details: failure.details);
+      }
+    }
+    _logger.record(ProviderSyncEvent.usingCachedSnapshot);
+    return stale;
   }
 }

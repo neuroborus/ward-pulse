@@ -2,18 +2,85 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_payload.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_sync.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   // Mock accounts hold no metric slots, so default prefs would write nothing.
   final snapshot = _asConnection(
     DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
     ),
   );
+
+  test(
+    'stale marker preserves every retained row and redraws Android provider',
+    () async {
+      final data = <String, Object?>{
+        'row_count': 1,
+        'empty': '0',
+        'stale': '0',
+        'row_0_percent': '46% left',
+        'row_0_label': 'Claude plan',
+        'row_0_credits': '320 credits',
+        'row_0_color': 'ff91c4b1',
+      };
+      final original = Map<String, Object?>.from(data);
+      final calls = <MethodCall>[];
+      _bindWidgetStorage(data, calls: calls);
+      await HomeWidgetPhoneWidgetSyncService.markExistingRowsStale();
+      expect(data, {...original, 'stale': '1'});
+      final redraw = calls.singleWhere((call) => call.method == 'updateWidget');
+      expect(
+        (redraw.arguments as Map)['qualifiedAndroidName'],
+        phoneWidgetQualifiedAndroidName,
+      );
+    },
+  );
+
+  for (final data in <Map<String, Object?>>[
+    {},
+    {'row_count': 0, 'empty': '1', 'stale': '0'},
+    {'row_count': 1, 'empty': '1', 'stale': '0'},
+  ]) {
+    test(
+      'stale marker leaves initial or cleared payload $data unchanged',
+      () async {
+        final stored = Map<String, Object?>.from(data);
+        final calls = <MethodCall>[];
+        _bindWidgetStorage(stored, calls: calls);
+        await HomeWidgetPhoneWidgetSyncService.markExistingRowsStale();
+        expect(stored, data);
+        expect(calls.where((call) => call.method != 'getWidgetData'), isEmpty);
+      },
+    );
+  }
+
+  for (final failedMethod in ['saveWidgetData', 'updateWidget']) {
+    test('stale marker reports a failed $failedMethod result', () async {
+      final data = <String, Object?>{
+        'row_count': 1,
+        'empty': '0',
+        'stale': '0',
+      };
+      final calls = <MethodCall>[];
+      _bindWidgetStorage(data, calls: calls, failedMethod: failedMethod);
+      await expectLater(
+        HomeWidgetPhoneWidgetSyncService.markExistingRowsStale(),
+        throwsStateError,
+      );
+      if (failedMethod == 'saveWidgetData') {
+        expect(data['stale'], '0');
+        expect(calls.where((call) => call.method == 'updateWidget'), isEmpty);
+      } else {
+        expect(data['stale'], '1');
+      }
+    });
+  }
 
   test('overlapping syncs keep only the newer payload', () async {
     final written = <PhoneWidgetPayload>[];
@@ -109,6 +176,35 @@ void main() {
       expect(attempts, 2);
     },
   );
+}
+
+void _bindWidgetStorage(
+  Map<String, Object?> data, {
+  required List<MethodCall> calls,
+  String? failedMethod,
+}) {
+  const channel = MethodChannel('home_widget');
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  messenger.setMockMethodCallHandler(channel, (call) async {
+    calls.add(call);
+    final args = Map<String, Object?>.from(call.arguments as Map);
+    if (call.method == failedMethod) {
+      return false;
+    }
+    switch (call.method) {
+      case 'getWidgetData':
+        return data[args['id']] ?? args['defaultValue'];
+      case 'saveWidgetData':
+        data[args['id']! as String] = args['data'];
+        return true;
+      case 'updateWidget':
+        return true;
+      default:
+        throw MissingPluginException();
+    }
+  });
+  addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
 }
 
 /// Mock fixture as a real connection: mock accounts hold no metric slots.

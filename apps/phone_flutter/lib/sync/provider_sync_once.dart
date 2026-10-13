@@ -38,6 +38,8 @@ final class ProviderSyncWork {
 Future<void> providerSyncOnce({
   ProviderSyncWorkLoader load = _loadProviderSyncWork,
   ProviderSyncFailureLogger logFailure = _logProviderSyncFailure,
+  Future<void> Function() markWidgetStale =
+      HomeWidgetPhoneWidgetSyncService.markExistingRowsStale,
 }) async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -46,6 +48,7 @@ Future<void> providerSyncOnce({
     work = await load();
   } catch (error, stackTrace) {
     logFailure('setup', error, stackTrace);
+    await _attemptProviderSyncStep('widget', markWidgetStale, logFailure);
     return;
   }
 
@@ -104,10 +107,5 @@ Future<void> _attemptProviderSyncStep(
 }
 
 void _logProviderSyncFailure(String step, Object error, StackTrace stackTrace) {
-  developer.log(
-    'Headless sync $step failed.',
-    name: 'WardPulse.ProviderSync',
-    error: error,
-    stackTrace: stackTrace,
-  );
+  developer.log('Headless sync $step failed.', name: 'WardPulse.ProviderSync');
 }

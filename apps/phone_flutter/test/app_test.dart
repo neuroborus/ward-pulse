@@ -9,6 +9,7 @@ import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/plan_recoveries.dart';
 import 'package:ward_pulse_phone/dashboard/provider_status_color.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
+import 'package:ward_pulse_phone/dashboard/merging_connection_repository.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
@@ -18,6 +19,7 @@ import 'package:ward_pulse_phone/settings/refresh_interval_preferences.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
 import 'package:ward_pulse_phone/sync/poll_cadence.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_scheduler.dart';
+import 'package:ward_pulse_phone/sync/provider_sync_logger.dart';
 import 'package:ward_pulse_phone/settings/recovery_notification_preferences.dart';
 import 'package:ward_pulse_phone/sync/recovery_notifications.dart';
 import 'package:ward_pulse_phone/sync/recovery_watchlist.dart';
@@ -166,6 +168,58 @@ void main() {
     expect(loads, 2);
     expect(watchSyncService.syncedSnapshots.length, greaterThanOrEqualTo(2));
   });
+
+  testWidgets(
+    'Wear refresh failure retains the warm live connection as stale',
+    (tester) async {
+      final snapshot = _asConnection(
+        DashboardSnapshot.fromJsonString(
+          File(
+            '../../fixtures/snapshots/dashboard_today.json',
+          ).readAsStringSync(),
+        ),
+      );
+      var failReport = false;
+      final repository = MergingConnectionRepository(
+        fallback: const NoProvidersDashboardRepository(),
+        loadReport: () async {
+          if (failReport) {
+            throw StateError('Network unavailable');
+          }
+          return 'report';
+        },
+        normalizeReport: (_) => snapshot.toJsonString(),
+        mapError: (_) => const DashboardLoadException(),
+        logger: const NullProviderSyncLogger(),
+      );
+      final watch = _FakeWatchSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(repository: repository, watchSyncService: watch),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        watch.syncedSnapshots.last.accounts.single.accountId,
+        'anthropic-platform',
+      );
+
+      failReport = true;
+      watch.refreshHandler!();
+      await tester.pumpAndSettle();
+
+      final retained = watch.syncedSnapshots.last;
+      expect(retained.overallStatus, ProviderStatus.stale);
+      expect(retained.syncIssue, DashboardSyncIssue.dashboardUnavailable);
+      expect(retained.generatedAt, snapshot.generatedAt);
+      expect(retained.accounts.single.accountId, 'anthropic-platform');
+      expect(retained.accounts.single.status, ProviderStatus.stale);
+      expect(
+        retained.accounts.single.today.toJson(),
+        snapshot.accounts.single.today.toJson(),
+      );
+      expect(find.text('Usage dashboard'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('queues a development watch sync', (tester) async {
     final snapshot = DashboardSnapshot.fromJsonString(

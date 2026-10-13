@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
+import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/sync/headless_provider_sync.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_once.dart';
@@ -90,6 +91,7 @@ void main() {
       sync:
           () => providerSyncOnce(
             load: () async => throw StateError('credentials unavailable'),
+            markWidgetStale: () async {},
             logFailure: (step, error, stackTrace) {
               failures.add((step: step, error: error, stackTrace: stackTrace));
             },
@@ -102,6 +104,73 @@ void main() {
     expect(failures.single.error, isA<StateError>());
     expect(failures.single.stackTrace.toString(), isNotEmpty);
   });
+
+  test(
+    'provider load failure marks retained widget rows stale and redraws',
+    () async {
+      final data = <String, Object?>{
+        'row_count': 1,
+        'empty': '0',
+        'stale': '0',
+        'row_0_percent': '46% left',
+        'row_0_label': 'Claude plan',
+      };
+      final original = Map<String, Object?>.from(data);
+      var redraws = 0;
+      const channel = MethodChannel('home_widget');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        final args = Map<String, Object?>.from(call.arguments as Map);
+        switch (call.method) {
+          case 'getWidgetData':
+            return data[args['id']] ?? args['defaultValue'];
+          case 'saveWidgetData':
+            data[args['id']! as String] = args['data'];
+            return true;
+          case 'updateWidget':
+            redraws += 1;
+            return true;
+          default:
+            throw MissingPluginException();
+        }
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final failures = <String>[];
+      final succeeded = await runHeadlessProviderTask(
+        HeadlessProviderSync.taskName,
+        sync:
+            () => providerSyncOnce(
+              load: () async => throw const DashboardLoadException(),
+              logFailure: (step, _, _) => failures.add(step),
+            ),
+      );
+
+      expect(succeeded, isTrue);
+      expect(failures, ['setup']);
+      expect(data, {...original, 'stale': '1'});
+      expect(redraws, 1);
+    },
+  );
+
+  test(
+    'stale widget delivery failure is logged independently from setup',
+    () async {
+      final failures = <String>[];
+      final succeeded = await runHeadlessProviderTask(
+        HeadlessProviderSync.taskName,
+        sync:
+            () => providerSyncOnce(
+              load: () async => throw const DashboardLoadException(),
+              markWidgetStale:
+                  () async => throw StateError('Widget unavailable'),
+              logFailure: (step, _, _) => failures.add(step),
+            ),
+      );
+      expect(succeeded, isTrue);
+      expect(failures, ['setup', 'widget']);
+    },
+  );
 }
 
 typedef _RecordedFailure = ({String step, Object error, StackTrace stackTrace});

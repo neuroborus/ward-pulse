@@ -37,9 +37,13 @@ This checklist is a gate, not a schedule.
 
 ## Signing
 
-One key signs all three packages. The phone and the Wear app share `app.wardpulse`, so Play
-refuses to install one over the other unless their signatures match, and the watch face ships
-beside them under `app.wardpulse.watchface`.
+Local release builds read one keystore for all three packages. With Play App Signing, this is
+the **upload key**: it signs the AAB submitted to Play, while Google signs the APKs delivered to
+devices with the **app signing key**. The phone and Wear app share `app.wardpulse` and must keep
+one app signing identity. The watch face is a separate listing under `app.wardpulse.watchface`;
+reusing its upload key does not establish which app signing key Play uses for that listing.
+Verify the Play app signing certificates when checking the distribution identity. See
+[Play App Signing: key types and ownership](https://support.google.com/googleplay/android-developer/answer/9842756?hl=en).
 
 - `key.properties` exists at the repository root and names a keystore stored **outside** the
   repository.
@@ -64,7 +68,8 @@ keytool -genkeypair -v \
   is a suggestion, not a requirement.
 - `-alias` — names the key inside the keystore, and must match `keyAlias` below.
 - `-keyalg RSA -keysize 2048` — what Play accepts for upload keys.
-- `-validity` — days. 10000 is about 27 years: a key has to outlive the listing it signs.
+- `-validity` — certificate validity in days. 10000 is about 27 years, giving the upload
+  certificate a long lifetime.
 
 `keytool` then asks for a keystore password, a key password, and the identity fields it writes
 into the certificate.
@@ -74,10 +79,16 @@ absolute path, plus `storePassword`, `keyAlias` and `keyPassword` holding what `
 asked for. Nothing in this repository carries example values, and none should be added: a
 plausible-looking password in a tracked file is the mistake this arrangement exists to prevent.
 
-**Losing this key ends the listing.** Google Play identifies an app by its signature, so a lost
-or rotated key means the existing listing can never be updated again — only republished under a
-new identity, losing its installs and reviews. Back the keystore up somewhere separate from the
-machine that builds, and keep the passwords with it.
+Back the local keystore up somewhere separate from the machine that builds, and keep the
+passwords with it. **Losing an upload key does not end a Play App Signing listing:** the owner
+can create a replacement and request an upload-key reset in Play Console, preserving the app
+signing identity and existing installs. See
+[Request an upload key reset](https://support.google.com/googleplay/android-developer/answer/9842756?hl=en).
+
+For distribution outside Play with a self-managed app signing key, losing that key can prevent
+future updates to existing installations. Keep that distribution key distinct from the upload
+key in the release records; the reset process above applies to Play uploads, not to a lost
+self-managed signing identity.
 
 ## Artefacts
 

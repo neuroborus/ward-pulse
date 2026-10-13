@@ -36,25 +36,64 @@
       stroke-dashoffset="-576.74"
       transform="rotate(-90 225 225)" />
   
-    <circle cx="173.2" cy="131.6" r="21.0" fill="#0B0E0C" />
-    <circle cx="173.2" cy="131.6" r="20.5" fill="none"
-      stroke="#F4FBF8" stroke-width="1.00"
-      stroke-opacity="0.67" />
-    <text x="173.2" y="131.6" text-anchor="middle" dominant-baseline="central"
+    <circle cx="173.0" cy="135.0" r="21.0" fill="#0B0E0C" />
+
+    <defs>
+      <linearGradient id="cellRing0" gradientUnits="userSpaceOnUse"
+        x1="183.130621" y1="152.533768"
+        x2="162.869379" y2="117.466232">
+        <stop offset="0" stop-color="#F4FBF8" stop-opacity="0.6666666666666666" />
+        <stop offset="0.5" stop-color="#F4FBF8" stop-opacity="0.6666666666666666" />
+        <stop offset="0.625" stop-color="#F4FBF8" stop-opacity="0.5686274509803921" />
+        <stop offset="0.75" stop-color="#F4FBF8" stop-opacity="0.35294117647058826" />
+        <stop offset="0.875" stop-color="#F4FBF8" stop-opacity="0.13725490196078433" />
+        <stop offset="1" stop-color="#F4FBF8" stop-opacity="0.0392156862745098" />
+      </linearGradient>
+    </defs>
+    <circle cx="173.0" cy="135.0" r="20.25" fill="none"
+      stroke="url(#cellRing0)" stroke-width="1.50"
+      stroke-opacity="1" />
+    <text x="173.0" y="135.0" text-anchor="middle" dominant-baseline="central"
       font-family="Noto Sans, sans-serif" font-size="14.0"
       font-weight="700" fill="#F4FBF8" fill-opacity="1">Tue</text>
-    <circle cx="225.0" cy="118.2" r="21.0" fill="#0B0E0C" fill-opacity="0.92" />
-    <circle cx="225.0" cy="118.2" r="20.5" fill="none"
-      stroke="#F4FBF8" stroke-width="1.00"
-      stroke-opacity="0.67" />
-    <text x="225.0" y="118.2" text-anchor="middle" dominant-baseline="central"
+    <circle cx="225.0" cy="121.0" r="21.0" fill="#0B0E0C" fill-opacity="0.92" />
+
+    <defs>
+      <linearGradient id="cellRing1" gradientUnits="userSpaceOnUse"
+        x1="225" y1="141.25"
+        x2="225" y2="100.75">
+        <stop offset="0" stop-color="#F4FBF8" stop-opacity="0.6666666666666666" />
+        <stop offset="0.5" stop-color="#F4FBF8" stop-opacity="0.6666666666666666" />
+        <stop offset="0.625" stop-color="#F4FBF8" stop-opacity="0.5686274509803921" />
+        <stop offset="0.75" stop-color="#F4FBF8" stop-opacity="0.35294117647058826" />
+        <stop offset="0.875" stop-color="#F4FBF8" stop-opacity="0.13725490196078433" />
+        <stop offset="1" stop-color="#F4FBF8" stop-opacity="0.0392156862745098" />
+      </linearGradient>
+    </defs>
+    <circle cx="225.0" cy="121.0" r="20.25" fill="none"
+      stroke="url(#cellRing1)" stroke-width="1.50"
+      stroke-opacity="1" />
+    <text x="225.0" y="121.0" text-anchor="middle" dominant-baseline="central"
       font-family="Noto Sans, sans-serif" font-size="14.0"
-      font-weight="700" fill="#F4FBF8" fill-opacity="1">18°</text>
-    <circle cx="276.8" cy="131.6" r="21.0" fill="#0B0E0C" fill-opacity="0.92" />
-    <circle cx="276.8" cy="131.6" r="20.5" fill="none"
-      stroke="#F4FBF8" stroke-width="1.00"
-      stroke-opacity="0.67" />
-    <text x="276.8" y="131.6" text-anchor="middle" dominant-baseline="central"
+      font-weight="700" fill="#F4FBF8" fill-opacity="1">18°C</text>
+    <circle cx="277.0" cy="135.0" r="21.0" fill="#0B0E0C" fill-opacity="0.92" />
+
+    <defs>
+      <linearGradient id="cellRing2" gradientUnits="userSpaceOnUse"
+        x1="266.869379" y1="152.533768"
+        x2="287.130621" y2="117.466232">
+        <stop offset="0" stop-color="#F4FBF8" stop-opacity="0.6666666666666666" />
+        <stop offset="0.5" stop-color="#F4FBF8" stop-opacity="0.6666666666666666" />
+        <stop offset="0.625" stop-color="#F4FBF8" stop-opacity="0.5686274509803921" />
+        <stop offset="0.75" stop-color="#F4FBF8" stop-opacity="0.35294117647058826" />
+        <stop offset="0.875" stop-color="#F4FBF8" stop-opacity="0.13725490196078433" />
+        <stop offset="1" stop-color="#F4FBF8" stop-opacity="0.0392156862745098" />
+      </linearGradient>
+    </defs>
+    <circle cx="277.0" cy="135.0" r="20.25" fill="none"
+      stroke="url(#cellRing2)" stroke-width="1.50"
+      stroke-opacity="1" />
+    <text x="277.0" y="135.0" text-anchor="middle" dominant-baseline="central"
       font-family="Noto Sans, sans-serif" font-size="14.0"
       font-weight="700" fill="#F4FBF8" fill-opacity="1">UV 7</text>
     <text x="225" y="228.4" text-anchor="middle"

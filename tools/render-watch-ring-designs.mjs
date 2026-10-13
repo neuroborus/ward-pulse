@@ -39,18 +39,15 @@ const CELL_RIM = '#242A27'
  */
 const CELL = {
   size: 42,
-  radius: 106.8,
   fontSize: 14,
   /**
-   * The hairline a cell wears while it holds something: a stroke of 1 on a path
-   * of 41, so radius 20.0 to 21.0 — inscribed in the well, its outer edge on
-   * the well's own. An empty cell wears none, so a ring means occupied and a
-   * recess means free.
+   * The occupied-cell border widens inward: a stroke of 1.5 on a path of 40.5
+   * spans radius 19.5 to 21.0, preserving the well's edge and band clearance.
+   * An empty cell wears none, so a ring means occupied and a recess means free.
    */
-  ringDiameter: 41,
-  ringThickness: 1,
+  ringDiameter: 40.5,
+  ringThickness: 1.5,
   /** `0xaa` of the face's text colour, and the arcs' own ambient proportion. */
-  ringAlpha: 0xaa / 255,
   ringAmbientAlpha: 140,
   /**
    * The shipped default: a day-of-week complication, then the face's own weather.
@@ -63,11 +60,21 @@ const CELL = {
    * too — a preview draws what the face draws.
    */
   readings: [
-    { angle: -29, text: 'Tue', wellOpacity: 1 },
-    { angle: 0, text: '18°', wellOpacity: 0xeb / 255 },
-    { angle: 29, text: 'UV 7', wellOpacity: 0xeb / 255 },
+    { x: 152, y: 114, text: 'Tue', wellOpacity: 1 },
+    { x: 204, y: 100, text: '18°C', wellOpacity: 0xeb / 255 },
+    { x: 256, y: 114, text: 'UV 7', wellOpacity: 0xeb / 255 },
   ],
 }
+
+/** The WFF border's smoothstep stops, including the watermark's six-percent floor. */
+const CELL_RING_FADE = [
+  { position: 0, alpha: 0xaa },
+  { position: 0.5, alpha: 0xaa },
+  { position: 0.625, alpha: 0x91 },
+  { position: 0.75, alpha: 0x5a },
+  { position: 0.875, alpha: 0x23 },
+  { position: 1, alpha: 0x0a },
+]
 
 /** The baseline caps the face at three bands, so the strip stack is three rows deep. */
 const MAX_RINGS = 3
@@ -436,8 +443,8 @@ function sortByRemaining(layers) {
 /**
  * The three cells above the clock, as a fresh install shows them: the left one
  * bound to the day of the week, the other two left empty over the face's own
- * weather chrome. Centres on a circle concentric with the face, so the gap to
- * the innermost band is the same for all three by construction
+ * weather chrome. The same integer origins as WFF keep both the translated
+ * curved row and its radial fade directions identical to the installed face
  * (`WATCH_RING_DESIGN.md`, Upper cells, rules 1 and 11).
  *
  * Most boards show the shipped default, which is the state a wearer meets first.
@@ -455,14 +462,14 @@ function upperCells({ size, ambient, clearedCells = [] }) {
   const textOpacity = ambient ? 0.55 : 1
   const ringRadius = (CELL.ringDiameter / 2) * k
   const ringWidth = CELL.ringThickness * k
-  // The face draws the ring in its text colour at `0xaa` and takes the whole
-  // part from 255 to 140 in ambient, so the board's opacity is that product.
-  const ringOpacity = (CELL.ringAlpha * (ambient ? CELL.ringAmbientAlpha / 255 : 1)).toFixed(2)
+  // Gradient stops carry the original `0xaa`; ambient dims the whole part.
+  const ringOpacity = ambient ? CELL.ringAmbientAlpha / 255 : 1
   return CELL.readings
-    .map(({ angle, text, wellOpacity }, index) => {
-      const radians = (angle * Math.PI) / 180
-      const cx = (FACE / 2 + CELL.radius * Math.sin(radians)) * k
-      const cy = (FACE / 2 - CELL.radius * Math.cos(radians)) * k
+    .map(({ x, y, text, wellOpacity }, index) => {
+      const cellX = x + CELL.size / 2
+      const cellY = y + CELL.size / 2
+      const cx = cellX * k
+      const cy = cellY * k
       const disc = (fill, opacity = 1) => `
     <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${fill}"${
         opacity === 1 ? '' : ` fill-opacity="${opacity.toFixed(2)}"`
@@ -470,9 +477,35 @@ function upperCells({ size, ambient, clearedCells = [] }) {
       if (clearedCells.includes(index)) {
         return disc('url(#cellRecess)')
       }
+      const vx = cellX - FACE / 2
+      const vy = cellY - FACE / 2
+      const distance = Math.hypot(vx, vy)
+      if ([r, ringRadius, ringWidth, distance].some((value) => !Number.isFinite(value) || value <= 0)) {
+        throw new Error('Cell border geometry requires finite positive size, radius, stroke and distance from the face centre')
+      }
+      const dx = (ringRadius * vx) / distance
+      const dy = (ringRadius * vy) / distance
+      // Match the rounded circle centre, so the darkest point lies on its axis.
+      const gradientX = Number(cx.toFixed(1))
+      const gradientY = Number(cy.toFixed(1))
+      const coordinate = (value) => {
+        if (!Number.isFinite(value)) {
+          throw new Error('Cell border gradient coordinates must be finite')
+        }
+        return Number(value.toFixed(6))
+      }
+      const gradient = `
+    <defs>
+      <linearGradient id="cellRing${index}" gradientUnits="userSpaceOnUse"
+        x1="${coordinate(gradientX - dx)}" y1="${coordinate(gradientY - dy)}"
+        x2="${coordinate(gradientX + dx)}" y2="${coordinate(gradientY + dy)}">
+${CELL_RING_FADE.map(({ position, alpha }) => `        <stop offset="${position}" stop-color="${LABEL}" stop-opacity="${alpha / 255}" />`).join('\n')}
+      </linearGradient>
+    </defs>`
       return `${disc(WELL, wellOpacity)}
-    <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${ringRadius.toFixed(1)}" fill="none"
-      stroke="${LABEL}" stroke-width="${ringWidth.toFixed(2)}"
+${gradient}
+    <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${ringRadius.toFixed(2)}" fill="none"
+      stroke="url(#cellRing${index})" stroke-width="${ringWidth.toFixed(2)}"
       stroke-opacity="${ringOpacity}" />
     <text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" text-anchor="middle" dominant-baseline="central"
       font-family="${FONT}, sans-serif" font-size="${(CELL.fontSize * k).toFixed(1)}"

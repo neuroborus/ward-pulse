@@ -32,6 +32,10 @@ Use this skill before changing durable project knowledge.
 - Update `docs/site/vocs.config.ts` when an exposed document is added, removed, or renamed.
 - Keep root docs concise; move detailed requirements into `docs/`.
 - Keep root `AGENTS.md` aligned with `.agents/skills/*` when workflow checks or ownership boundaries change.
+- Cite checkout files by named symbols, functions, or recipes; use section anchors for docs,
+  not line-number suffixes. `just check-docs` runs `just check-doc-citations` before the Vocs
+  build. The standalone gate needs only Python 3 and the checkout; its scope and exclusions
+  are documented in `docs/DOCUMENTATION.md`. Run `just test-doc-citations` after checker edits.
 - Keep Apache-2.0 source licensing and WardPulse brand rights separate.
 - Keep schemas aligned with Rust models when a contract becomes stable.
 - Prefer closed JSON contracts with explicit nullable fields and `additionalProperties: false`.

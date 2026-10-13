@@ -49,7 +49,13 @@ validate-fixtures:
 docs-dev:
     npm run docs:dev
 
-check-docs:
+test-doc-citations:
+    python3 tools/test-doc-citations.py
+
+check-doc-citations:
+    python3 tools/check-doc-citations.py
+
+check-docs: check-doc-citations
     npm run docs:build
 
 export-design source output format="svg" scale="1":
@@ -150,4 +156,4 @@ bundle-wear:
 bundle-watchface:
     cd apps/watchface_wff && ORG_GRADLE_PROJECT_wardpulseRequireReleaseKey=1 ./gradlew --no-daemon bundleRelease
 
-test-all: check-core check-phone check-wear check-watchface check-designs check-docs
+test-all: check-core check-phone check-wear check-watchface check-designs test-doc-citations check-docs

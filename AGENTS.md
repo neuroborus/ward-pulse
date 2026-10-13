@@ -238,6 +238,11 @@ After durable documentation, Vocs page, or navigation changes, run:
 just check-docs
 ```
 
+This runs the source-citation gate before the Vocs build. Use `just check-doc-citations`
+(or `python3 tools/check-doc-citations.py`) for the checkout-only gate without Node or network.
+Cite repository files by named symbols or recipes, or documentation section anchors, rather
+than line numbers. Parser and discovery regressions run with `just test-doc-citations`.
+
 ### When a check cannot run where you are
 
 Every check above stays required. What changes, in a sandbox with no network or no device, is
@@ -248,10 +253,10 @@ in silence, and never report one as passing that you did not execute.
 | --- | --- |
 | The network | `just check-docs` (npm), `just check-watchface` and `just check-wear` (Gradle), `just validate-watchface` (fetches the validator JAR), `cargo` against a cold registry cache |
 | A device or emulator | `just test-install-phone`, `just test-wear-device`, `just test-phone-watch-sync`, and the emulator check in the `finalization` skill |
-| Nothing but the checkout | `just validate-fixtures`, `just check-designs`, `node tools/render-watchface.mjs --check`, the skill validator |
+| Nothing but the checkout | `just check-doc-citations`, `just test-doc-citations`, `just validate-fixtures`, `just check-designs`, `node tools/render-watchface.mjs --check`, the skill validator |
 
-The last row is what an isolated agent can still prove on its own, and it covers generator
-drift, schemas and review art. The rest is reported, not assumed: the change is unfinished until
+The last row is what an isolated agent can still prove on its own, and it covers source
+citations, generator drift, schemas and review art. The rest is reported, not assumed: the change is unfinished until
 someone with the network and the device has run them. The same test applies to any check not
 listed — does it reach past the checkout?
 

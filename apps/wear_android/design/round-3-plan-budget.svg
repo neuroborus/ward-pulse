@@ -39,25 +39,64 @@
       font-weight="700" fill="#0A0D0B" fill-opacity="0.45"
       text-anchor="middle"><text x="225" y="41.0" transform="rotate(54.44 225 225)">7D</text><text x="225" y="41.0" transform="rotate(63.33 225 225)">7D</text><text x="225" y="41.0" transform="rotate(72.22 225 225)">7D</text><text x="225" y="41.0" transform="rotate(81.11 225 225)">7D</text><text x="225" y="41.0" transform="rotate(90.00 225 225)">7D</text><text x="225" y="41.0" transform="rotate(98.89 225 225)">7D</text><text x="225" y="41.0" transform="rotate(107.78 225 225)">7D</text><text x="225" y="41.0" transform="rotate(116.67 225 225)">7D</text><text x="225" y="41.0" transform="rotate(125.56 225 225)">7D</text><text x="225" y="41.0" transform="rotate(144.44 225 225)">7D</text><text x="225" y="41.0" transform="rotate(153.33 225 225)">7D</text><text x="225" y="41.0" transform="rotate(162.22 225 225)">7D</text><text x="225" y="41.0" transform="rotate(171.11 225 225)">7D</text><text x="225" y="41.0" transform="rotate(180.00 225 225)">7D</text><text x="225" y="41.0" transform="rotate(188.89 225 225)">7D</text><text x="225" y="41.0" transform="rotate(197.78 225 225)">7D</text><text x="225" y="41.0" transform="rotate(206.67 225 225)">7D</text><text x="225" y="41.0" transform="rotate(215.56 225 225)">7D</text><text x="225" y="41.0" transform="rotate(234.44 225 225)">7D</text><text x="225" y="41.0" transform="rotate(243.33 225 225)">7D</text><text x="225" y="41.0" transform="rotate(252.22 225 225)">7D</text><text x="225" y="41.0" transform="rotate(261.11 225 225)">7D</text><text x="225" y="41.0" transform="rotate(270.00 225 225)">7D</text><text x="225" y="41.0" transform="rotate(278.89 225 225)">7D</text><text x="225" y="41.0" transform="rotate(287.78 225 225)">7D</text><text x="225" y="41.0" transform="rotate(296.67 225 225)">7D</text><text x="225" y="41.0" transform="rotate(305.56 225 225)">7D</text><text x="225" y="41.0" transform="rotate(324.44 225 225)">7D</text><text x="225" y="41.0" transform="rotate(333.33 225 225)">7D</text><text x="225" y="41.0" transform="rotate(342.22 225 225)">7D</text><text x="225" y="41.0" transform="rotate(351.11 225 225)">7D</text><text x="225" y="41.0" transform="rotate(360.00 225 225)">7D</text><text x="225" y="41.0" transform="rotate(368.89 225 225)">7D</text><text x="225" y="41.0" transform="rotate(377.78 225 225)">7D</text><text x="225" y="41.0" transform="rotate(386.67 225 225)">7D</text><text x="225" y="41.0" transform="rotate(395.56 225 225)">7D</text></g>
   
-    <circle cx="173.2" cy="131.6" r="21.0" fill="#0B0E0C" />
-    <circle cx="173.2" cy="131.6" r="20.5" fill="none"
-      stroke="#F4FBF8" stroke-width="1.00"
-      stroke-opacity="0.67" />
-    <text x="173.2" y="131.6" text-anchor="middle" dominant-baseline="central"
+    <circle cx="173.0" cy="135.0" r="21.0" fill="#0B0E0C" />
+
+    <defs>
+      <linearGradient id="cellRing0" gradientUnits="userSpaceOnUse"
+        x1="183.130621" y1="152.533768"
+        x2="162.869379" y2="117.466232">
+        <stop offset="0" stop-color="#F4FBF8" stop-opacity="0.6666666666666666" />
+        <stop offset="0.5" stop-color="#F4FBF8" stop-opacity="0.6666666666666666" />
+        <stop offset="0.625" stop-color="#F4FBF8" stop-opacity="0.5686274509803921" />
+        <stop offset="0.75" stop-color="#F4FBF8" stop-opacity="0.35294117647058826" />
+        <stop offset="0.875" stop-color="#F4FBF8" stop-opacity="0.13725490196078433" />
+        <stop offset="1" stop-color="#F4FBF8" stop-opacity="0.0392156862745098" />
+      </linearGradient>
+    </defs>
+    <circle cx="173.0" cy="135.0" r="20.25" fill="none"
+      stroke="url(#cellRing0)" stroke-width="1.50"
+      stroke-opacity="1" />
+    <text x="173.0" y="135.0" text-anchor="middle" dominant-baseline="central"
       font-family="Noto Sans, sans-serif" font-size="14.0"
       font-weight="700" fill="#F4FBF8" fill-opacity="1">Tue</text>
-    <circle cx="225.0" cy="118.2" r="21.0" fill="#0B0E0C" fill-opacity="0.92" />
-    <circle cx="225.0" cy="118.2" r="20.5" fill="none"
-      stroke="#F4FBF8" stroke-width="1.00"
-      stroke-opacity="0.67" />
-    <text x="225.0" y="118.2" text-anchor="middle" dominant-baseline="central"
+    <circle cx="225.0" cy="121.0" r="21.0" fill="#0B0E0C" fill-opacity="0.92" />
+
+    <defs>
+      <linearGradient id="cellRing1" gradientUnits="userSpaceOnUse"
+        x1="225" y1="141.25"
+        x2="225" y2="100.75">
+        <stop offset="0" stop-color="#F4FBF8" stop-opacity="0.6666666666666666" />
+        <stop offset="0.5" stop-color="#F4FBF8" stop-opacity="0.6666666666666666" />
+        <stop offset="0.625" stop-color="#F4FBF8" stop-opacity="0.5686274509803921" />
+        <stop offset="0.75" stop-color="#F4FBF8" stop-opacity="0.35294117647058826" />
+        <stop offset="0.875" stop-color="#F4FBF8" stop-opacity="0.13725490196078433" />
+        <stop offset="1" stop-color="#F4FBF8" stop-opacity="0.0392156862745098" />
+      </linearGradient>
+    </defs>
+    <circle cx="225.0" cy="121.0" r="20.25" fill="none"
+      stroke="url(#cellRing1)" stroke-width="1.50"
+      stroke-opacity="1" />
+    <text x="225.0" y="121.0" text-anchor="middle" dominant-baseline="central"
       font-family="Noto Sans, sans-serif" font-size="14.0"
-      font-weight="700" fill="#F4FBF8" fill-opacity="1">18°</text>
-    <circle cx="276.8" cy="131.6" r="21.0" fill="#0B0E0C" fill-opacity="0.92" />
-    <circle cx="276.8" cy="131.6" r="20.5" fill="none"
-      stroke="#F4FBF8" stroke-width="1.00"
-      stroke-opacity="0.67" />
-    <text x="276.8" y="131.6" text-anchor="middle" dominant-baseline="central"
+      font-weight="700" fill="#F4FBF8" fill-opacity="1">18°C</text>
+    <circle cx="277.0" cy="135.0" r="21.0" fill="#0B0E0C" fill-opacity="0.92" />
+
+    <defs>
+      <linearGradient id="cellRing2" gradientUnits="userSpaceOnUse"
+        x1="266.869379" y1="152.533768"
+        x2="287.130621" y2="117.466232">
+        <stop offset="0" stop-color="#F4FBF8" stop-opacity="0.6666666666666666" />
+        <stop offset="0.5" stop-color="#F4FBF8" stop-opacity="0.6666666666666666" />
+        <stop offset="0.625" stop-color="#F4FBF8" stop-opacity="0.5686274509803921" />
+        <stop offset="0.75" stop-color="#F4FBF8" stop-opacity="0.35294117647058826" />
+        <stop offset="0.875" stop-color="#F4FBF8" stop-opacity="0.13725490196078433" />
+        <stop offset="1" stop-color="#F4FBF8" stop-opacity="0.0392156862745098" />
+      </linearGradient>
+    </defs>
+    <circle cx="277.0" cy="135.0" r="20.25" fill="none"
+      stroke="url(#cellRing2)" stroke-width="1.50"
+      stroke-opacity="1" />
+    <text x="277.0" y="135.0" text-anchor="middle" dominant-baseline="central"
       font-family="Noto Sans, sans-serif" font-size="14.0"
       font-weight="700" fill="#F4FBF8" fill-opacity="1">UV 7</text>
     <text x="225" y="228.4" text-anchor="middle"
