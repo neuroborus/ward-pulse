@@ -336,10 +336,11 @@ refresh tokens in secure storage. Refresh is serialized like Codex. Reporting ca
 `GET /api/oauth/usage` with `anthropic-beta: oauth-2025-04-20` and a Claude Code user agent, then
 normalizes `five_hour`, `seven_day`, optional per-model weekly windows, and `extra_usage` into
 `AllowanceState`. Phone dashboard cards still list every window. Watch/Glance rings collapse
-Claude **plan** windows into one slot (`allowance.claude.plan`): the tightest remaining
-non-exhausted window wins; Glance label is the short token (`5h`, `Weekly`, `Opus weekly`,
-`Sonnet weekly`). Purchased `extra_usage` is not in that collapse pool and is **not** a watch
-ring candidate — it stays on phone dashboard cards. It may surface as a warning/error alert
+Claude **plan** windows into one slot (`allowance.claude.plan`): the tightest known remaining
+window wins, including an exhausted window; unknown windows cannot displace a known zero.
+Glance label is the short token (`5h`, `Weekly`, `Opus weekly`, `Sonnet weekly`). Purchased
+`extra_usage` is not in that collapse pool and is **not** a watch ring candidate — it stays on
+phone dashboard cards. It may surface as a warning/error alert
 **only when the user configures a threshold** for that meter on Providers — never from a
 hard-coded utilization cutoff alone.
 
@@ -359,7 +360,8 @@ meters into allowances. When the payload includes `autoPercentUsed` / `apiPercen
 shows **Cursor Models** and **Other Models** as separate plan bars (same as the Cursor usage UI)
 on the phone and as selectable watch rings. Purchased on-demand usage is phone-only (and may
 alert **only** with a user-configured threshold on Providers); it is not a ring. Older combined-only payloads keep a single Plan
-usage bar. Exhausted pools (`usedPercent >= 100`) are omitted from the face like other rings.
+usage bar. Selected known exhausted pools remain on the watch as 0% left with empty grey
+tracks; unknown or unavailable pools are not fabricated as zero.
 Do not claim Admin-API hourly aggregation on this experimental row. Never log the cookie or
 raw response bodies.
 

@@ -9,7 +9,7 @@ description: Post-change finalization checklist for WardPulse (Rust core, Flutte
 >
 > Run this after implementation or documentation work to keep the monorepo coherent.
 >
-> Last Updated: 2026-10-13
+> Last Updated: 2026-10-14
 
 ## 1. Scope Review
 
@@ -110,7 +110,8 @@ the app runs; only the device is.
 - [ ] The Vocs page and `docs/site/vocs.config.ts` navigation are updated for documentation exposed on the site.
 - [ ] Vocs pages import authoritative Markdown instead of duplicating it.
 - [ ] `README.md` still describes the current repository shape and commands.
-- [ ] Product, provider, release, or security docs are updated when behavior or boundaries changed.
+- [ ] Apply [docs-gate](../docs-gate/SKILL.md#keep-documentation-current) to reconcile affected
+      documentation in this change set, or justify no documentation impact in the handoff.
 - [ ] Placeholder TODOs are acceptable only for intentionally deferred platform generation work.
 
 ## 7. Staging And Commit Boundary

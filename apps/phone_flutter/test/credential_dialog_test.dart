@@ -74,6 +74,73 @@ void main() {
     expect(outcome.change?.updateLabelOnly, isFalse);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'guided credential starts without keyboard and stays reachable with it',
+    (tester) async {
+      const guidance =
+          'Prepare a sample credential.\n\n'
+          '1. Open the example account page.\n'
+          '2. Locate the synthetic secret.\n'
+          '3. Copy the synthetic value.\n'
+          '4. Paste it below.';
+      final outcome = await _openCredential(
+        tester,
+        guidance: guidance,
+        autofocus: false,
+        allowLabel: false,
+        initialViewInsets: const FakeViewPadding(),
+      );
+      final guidanceText = find.text(guidance);
+      final value = find.byType(TextFormField);
+
+      expect(
+        guidanceText.hitTestable(at: const Alignment(0, -0.9)),
+        findsOneWidget,
+      );
+      expect(tester.testTextInput.isVisible, isFalse);
+      expect(
+        tester
+            .widget<EditableText>(find.byType(EditableText))
+            .focusNode
+            .hasFocus,
+        isFalse,
+      );
+
+      await tester.ensureVisible(value);
+      await tester.pumpAndSettle();
+      expect(value.hitTestable(), findsOneWidget);
+      await tester.tap(value);
+      await tester.pumpAndSettle();
+      expect(tester.testTextInput.isVisible, isTrue);
+      expect(
+        tester
+            .widget<EditableText>(find.byType(EditableText))
+            .focusNode
+            .hasFocus,
+        isTrue,
+      );
+
+      tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      for (final target in [find.text('Enter a value'), value]) {
+        await tester.ensureVisible(target);
+        await tester.pumpAndSettle();
+        expect(target.hitTestable(), findsOneWidget);
+        expect(tester.getRect(target).bottom, lessThanOrEqualTo(_keyboardTop));
+        _expectActionsAboveKeyboard(tester);
+      }
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(outcome.completed, isTrue);
+      expect(outcome.change, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 void _expectActionsAboveKeyboard(WidgetTester tester) {
@@ -84,10 +151,16 @@ void _expectActionsAboveKeyboard(WidgetTester tester) {
   }
 }
 
-Future<_CredentialOutcome> _openCredential(WidgetTester tester) async {
+Future<_CredentialOutcome> _openCredential(
+  WidgetTester tester, {
+  String? guidance,
+  bool autofocus = true,
+  bool allowLabel = true,
+  FakeViewPadding initialViewInsets = const FakeViewPadding(bottom: 280),
+}) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = const Size(320, 640);
-  tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+  tester.view.viewInsets = initialViewInsets;
   addTearDown(tester.view.resetDevicePixelRatio);
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetViewInsets);
@@ -111,11 +184,13 @@ Future<_CredentialOutcome> _openCredential(WidgetTester tester) async {
                   outcome.change = await showDialog<CredentialChange>(
                     context: context,
                     builder:
-                        (_) => const CredentialDialog(
+                        (_) => CredentialDialog(
                           title: 'Anthropic · Organization reporting',
                           hint: 'API key',
-                          allowLabel: true,
+                          allowLabel: allowLabel,
                           hasCredential: false,
+                          guidance: guidance,
+                          autofocus: autofocus,
                         ),
                   );
                   outcome.completed = true;

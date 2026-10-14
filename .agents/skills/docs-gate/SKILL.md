@@ -17,6 +17,7 @@ Use this skill before changing durable project knowledge.
 - `docs/DESIGN_ASSETS.md`: OpenPencil ownership and runtime export workflow.
 - `docs/site/`: Vocs configuration, navigation, and thin presentation pages.
 - `docs/DEVELOPMENT_PLAN.md`: full product and implementation plan.
+- `docs/product/user-guide/`: authoritative guidance for people using the installed applications.
 - `docs/product/ANDROID_GOALS.md`: Android MVP goals and non-goals.
 - `docs/product/PROVIDER_NOTES.md`: provider integration assumptions and open questions.
 - `docs/product/SECURITY_MODEL.md`: local-first credential, logging, and diagnostics rules.
@@ -42,6 +43,25 @@ Use this skill before changing durable project knowledge.
 - Keep fixtures sanitized: no secrets, raw prompts, authorization headers, or sensitive raw provider payloads.
 - Update security docs when credential handling, logging, diagnostics, or provider payload handling changes.
 - Update provider notes when adding a new provider, endpoint assumption, capability descriptor, or rate-limit rule.
+
+## Keep documentation current
+
+Review documentation against actual changes to behaviour, UI and connection flows,
+limitations, commands and workflows. Update the affected authoritative documents in the
+same change set; do not finish finalization with known stale documentation in scope.
+
+- Update `docs/product/user-guide/` when user instructions change, and its thin Vocs imports
+  and navigation when needed.
+- Keep `docs/DEVELOPMENT_PLAN.md` current on scope, status, open work and actually verified
+  acceptance; leave unverified checks pending.
+- Update affected contributor/component READMEs, `AGENTS.md` and local skills when their
+  instructions or ownership are affected, rather than changing unrelated documentation.
+- If no documentation is affected, give a short reason in the handoff instead of making
+  unnecessary edits.
+
+This review preserves the [Runner check division](../finalization/agent-runner.md#4-checks-who-runs-what):
+documentation must accurately leave unverified host/device acceptance pending, without
+making the owner's checks a new precondition of the step's commit.
 
 ## Review Questions
 

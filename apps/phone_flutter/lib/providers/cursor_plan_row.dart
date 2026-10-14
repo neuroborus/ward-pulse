@@ -198,6 +198,18 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
             hint: cursorSessionCookieName,
             allowLabel: false,
             hasCredential: _hasAccount ?? false,
+            autofocus: false,
+            guidance:
+                'Use a desktop browser to get the session cookie for the Cursor account you want to connect.\n\n'
+                '1. In Chrome or Edge, open cursor.com/dashboard and sign in to the same account you use in Cursor.\n'
+                '2. Right-click the page and choose Inspect.\n'
+                '3. Open Application → Storage → Cookies, then select the Cursor site (https://cursor.com).\n'
+                '4. Find WorkosCursorSessionToken. You can enter that name in the Filter box.\n'
+                '5. Copy only its Value, not the cookie name or the whole Cookie header.\n'
+                '6. Paste the value below and tap Save.\n\n'
+                'Can’t find it? Check that you’re signed in, reload the dashboard, and select the Cursor site under Cookies.\n\n'
+                'This is a private session credential. WardPulse stores it encrypted on this phone for an experimental connection to read plan usage. Do not share it.\n\n'
+                'Prefer signing in here? Tap Cancel, then tap Cursor plan.',
           ),
     );
     if (change == null) {

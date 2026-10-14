@@ -209,7 +209,11 @@ void main() {
     expect(find.text('Cursor plan · Paste token'), findsOneWidget);
     const pasted =
         'user_01TEST::eyJhbGciOiJSUzI1NiJ9.payload.signature_padding==';
-    await tester.enterText(find.byType(TextFormField).first, pasted);
+    final value = find.byType(TextFormField).first;
+    await tester.ensureVisible(value);
+    await tester.pumpAndSettle();
+    await tester.tap(value);
+    await tester.enterText(value, pasted);
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 

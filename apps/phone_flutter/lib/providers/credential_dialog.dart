@@ -11,6 +11,8 @@ class CredentialDialog extends StatefulWidget {
     required this.hint,
     required this.allowLabel,
     this.initialLabel,
+    this.guidance,
+    this.autofocus = true,
   });
 
   final bool hasCredential;
@@ -18,6 +20,8 @@ class CredentialDialog extends StatefulWidget {
   final String hint;
   final bool allowLabel;
   final String? initialLabel;
+  final String? guidance;
+  final bool autofocus;
 
   @override
   State<CredentialDialog> createState() => _CredentialDialogState();
@@ -81,14 +85,15 @@ class _CredentialDialogState extends State<CredentialDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              widget.allowLabel
-                  ? 'This key is encrypted on this phone and sent only to the provider.'
-                  : 'This token is encrypted on this phone. Experimental compatibility connection.',
+              widget.guidance ??
+                  (widget.allowLabel
+                      ? 'This key is encrypted on this phone and sent only to the provider.'
+                      : 'This token is encrypted on this phone. Experimental compatibility connection.'),
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _controller,
-              autofocus: true,
+              autofocus: widget.autofocus,
               obscureText: _obscureKey,
               autocorrect: false,
               enableSuggestions: false,

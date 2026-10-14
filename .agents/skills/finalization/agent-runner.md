@@ -14,7 +14,7 @@ to the operator's judgement, by way of the task.
 > boundaries; it does not authorize code implementation outside Agent Runner and must not be
 > edited to suit the runner. Where this file is silent, that one applies.
 >
-> Last updated: 2026-10-13.
+> Last updated: 2026-10-14.
 
 ## 1. Scope Review
 
@@ -123,8 +123,8 @@ infrastructure to make a check pass, and never report a check that did not run.
       exposed on the site.
 - [ ] Vocs pages import authoritative Markdown instead of duplicating it.
 - [ ] `README.md` still describes the current repository shape and commands.
-- [ ] Product, provider, release or security docs are updated when behaviour or boundaries
-      changed.
+- [ ] Apply [docs-gate](../docs-gate/SKILL.md#keep-documentation-current) to reconcile affected
+      documentation in this change set, or justify no documentation impact in the handoff.
 - [ ] A locked baseline in `docs/product/` changed only through a dated revision that records
       the measurement, the device and the decision.
 

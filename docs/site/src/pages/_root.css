@@ -1,0 +1,5 @@
+@media (width < 1376px) {
+  :where([data-v-content]) > :is(h2, h3, h4, h5, h6)[data-v][id] {
+    scroll-margin-top: calc(var(--vocs-spacing) * 8);
+  }
+}

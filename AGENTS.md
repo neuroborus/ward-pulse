@@ -42,7 +42,7 @@ ownership or layout changes. `justfile` at the root is the command index (`just 
 | Fixtures | `fixtures/` | Sanitized provider payloads + cross-language golden snapshots |
 | Tools | `tools/` | Review-art generators, icon export, Rust-for-Android build, validators |
 | Brand assets | `brand/` | WardPulse identity sources and locked previews (ownership: `docs/DESIGN_ASSETS.md`) |
-| Docs | `docs/` | Durable documentation; `docs/product/` holds locked design baselines |
+| Docs | `docs/` | Durable documentation; `docs/product/user-guide/` owns user guidance and `docs/product/` holds locked design baselines |
 | Skills | `.agents/skills/` | Repo workflow skills (`.claude/skills` is a symlink to it) |
 | Local scratch | `LOCAL_ARTIFACTS/` | Gitignored working notes and plans; never committed |
 

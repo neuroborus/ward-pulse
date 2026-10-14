@@ -1435,8 +1435,8 @@ and APK assembly, and 10 isolated-preferences device checks. Status complication
 and factual empty Alerts copy have JVM coverage and verified installed service wiring; the
 aged status complication screen transition was not exercised. This is bounded emulator
 acceptance, not a review of every error state, fresh authentication for all six connection
-types, shipped hardware or release/internal testing acceptance. The Phase 21 user guide
-remains open.
+types, shipped hardware or release/internal testing acceptance. The user-guide documentation
+slice was completed in Phase 21 on 2026-10-14.
 
 Closed since this phase opened, verified against the tree on **2026-10-12**: data deletion, which
 is per-connection disconnect erasing the credential from secure storage; the privacy policy, the
@@ -2667,13 +2667,25 @@ a small arc inside a cell; a ranged value in a cell reads as text, so the face k
 
 ### Phase 21 — user-facing Vocs guide
 
-Status: open requirement recorded on 2026-10-13; the user guide has not been written.
+Status: completed on 2026-10-14 for the user-guide documentation slice.
 
-The existing Vocs site publishes development, architecture, provider-reference and design
-documentation. Its landing page starts with the development plan, toolchain and documentation
-workflow. Add a separate user guide for people using the installed applications, with a clear
-entry from the landing page and navigation. Keep contributor setup and technical references
-available in their existing sections.
+The Vocs site now keeps development, architecture, provider-reference and design documentation
+in their existing sections while presenting a separate guide for people using the installed
+applications. The landing page links to Getting started and the sidebar lists all eight task
+pages ahead of the Project section.
+
+The Cursor token-help prerequisite was accepted on 2026-10-14 in normal and narrow
+320×640/font-1.5 emulator layouts, including keyboard and Cancel-retention checks. Its
+scoped host phone gate passed 392 Flutter tests, 64 native cache assertions and
+28 native widget assertions, plus formatting and analysis. The eight guide drafts
+passed separate source review and a complete repeat prose review with zero findings.
+The integrated source-citation gate checked 79 Markdown/MDX source files, and the Vocs
+build produced 63 routes. Completion covers the user guide only; live credentials and
+remaining provider authentication, physical phone/Wear hardware, release and
+internal-testing acceptance remain open. On 2026-10-14 independent and coordinator full
+reviews reached ZERO; browser checks covered all eight guide routes at 1280/390px, all
+Source notes at 390px, and nine direct anchor opens plus six TOC clicks across
+390/1280/1440px with target titles fully visible.
 
 Guide scope:
 

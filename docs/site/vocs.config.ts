@@ -6,6 +6,19 @@ export default defineConfig({
   sidebar: [
     { text: 'Overview', link: '/' },
     {
+      text: 'User guide',
+      items: [
+        { text: 'Getting started', link: '/guide/getting-started' },
+        { text: 'Providers', link: '/guide/providers' },
+        { text: 'Dashboard', link: '/guide/dashboard' },
+        { text: 'Watch and watch face', link: '/guide/watch' },
+        { text: 'Home widget', link: '/guide/widget' },
+        { text: 'Sync and notifications', link: '/guide/sync' },
+        { text: 'Settings and privacy', link: '/guide/settings' },
+        { text: 'Troubleshooting', link: '/guide/troubleshooting' },
+      ],
+    },
+    {
       text: 'Project',
       items: [
         { text: 'Documentation workflow', link: '/project/documentation' },

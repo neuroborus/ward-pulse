@@ -91,8 +91,8 @@ against a later disconnect.
   from `cursor.com`, stores it in platform-secure storage, and wipes the WebView cookie jar
   (clear + verify, also on disconnect and before each new sign-in). If a wipe cannot confirm the
   session cookie is gone, Sign in refuses to proceed and disconnect warns the user. Settings help
-  explains the flow; Advanced paste accepts the same cookie value without DevTools on another
-  device.
+  explains the flow; Advanced paste explains how to copy the same cookie value from desktop
+  Chrome or Edge DevTools.
 - This is a dashboard session compatibility login, not a published Cursor OAuth grant. Do not
   label it OAuth in UI or docs.
 - The phone sends authenticated read-only requests only to `GET /api/usage-summary` with that

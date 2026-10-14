@@ -2,6 +2,17 @@
 
 This directory is the documentation gate for the project. Root files should stay operational and short; durable product and architecture decisions live here.
 
+## User Guide
+
+- [Getting started](product/user-guide/GETTING_STARTED.md)
+- [Connect providers](product/user-guide/PROVIDERS.md)
+- [Read the Dashboard](product/user-guide/DASHBOARD.md)
+- [Watch and watch face](product/user-guide/WATCH.md)
+- [Home widget](product/user-guide/WIDGET.md)
+- [Sync and notifications](product/user-guide/SYNC.md)
+- [Settings and privacy](product/user-guide/SETTINGS.md)
+- [Troubleshooting](product/user-guide/TROUBLESHOOTING.md)
+
 ## Start Here
 
 - [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) is the full product and implementation plan.
@@ -11,7 +22,7 @@ This directory is the documentation gate for the project. Root files should stay
   (melt/strip-accent revision **2026-07-27**): Wear / WFF concentric remaining rings, clockwise
   melt from 12, sunk ColorRamp strips, provider colors.
 - [product/PHONE_WIDGET_DESIGN.md](product/PHONE_WIDGET_DESIGN.md) — **locked 2026-07-27**:
-  phone home-widget rows, size caps (small 2 / medium 4), App Widget surface.
+  phone home-widget rows that fit the resized widget, up to six selected metrics, App Widget surface.
 - [product/WEAR_GLANCE_DESIGN.md](product/WEAR_GLANCE_DESIGN.md) — **baseline locked 2026-07-26**: Wear app Glance text legend (OK/!OK refresh, cadence vs rate-limit, Alerts pill); not a face clone.
 - [product/PHONE_DASHBOARD_DESIGN.md](product/PHONE_DASHBOARD_DESIGN.md) — **status rules locked
   2026-08-13**: when a status mark appears on the phone Dashboard and how a rollup differs from a
