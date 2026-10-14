@@ -43,6 +43,7 @@ ownership or layout changes. `justfile` at the root is the command index (`just 
 | Tools | `tools/` | Review-art generators, icon export, Rust-for-Android build, validators |
 | Brand assets | `brand/` | WardPulse identity sources and locked previews (ownership: `docs/DESIGN_ASSETS.md`) |
 | Docs | `docs/` | Durable documentation; `docs/product/user-guide/` owns user guidance and `docs/product/` holds locked design baselines |
+| UI screenshots | `docs/assets/` | Public PNGs; `docs/assets/README.md` owns the screenshot index and freshness rules |
 | Skills | `.agents/skills/` | Repo workflow skills (`.claude/skills` is a symlink to it) |
 | Local scratch | `LOCAL_ARTIFACTS/` | Gitignored working notes and plans; never committed |
 
@@ -267,9 +268,11 @@ listed — does it reach past the checkout?
 ## Documentation
 
 - Start from `docs/README.md` for durable project documentation.
-- Keep root `README.md` short and operational.
+- Keep root `README.md` short and product-first, with an early screenshot gallery and user-guide
+  entry; put the contributor link at the end and keep developer commands beside their owners.
 - Keep product, provider, security, and release guidance in `docs/product/`.
-- Keep component-specific guidance beside its owner and expose it through thin pages in `docs/site/`.
+- Keep component guidance beside its owner. Expose only user guidance and relevant privacy/help
+  through thin Vocs pages; keep engineering references in the repository and its docs index.
 - Update `docs/site/vocs.config.ts` when site navigation changes.
 - Update local skills in `.agents/skills/` when repository workflow or ownership boundaries change.
 - `.claude/skills` is a symlink to `.agents/skills/` so Claude Code discovers the same set. Edit

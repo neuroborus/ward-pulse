@@ -18,7 +18,8 @@ xdg-open brand/icons/wardpulse.svg
 xdg-open brand/icons/previews/wardpulse-mono-on-dark.png
 ```
 
-The Design Assets page is also available through the local documentation site:
+Read this Design Assets reference in the repository. The local site previews user
+documentation; start that preview with:
 
 ```sh
 just docs-dev

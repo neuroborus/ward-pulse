@@ -11,7 +11,7 @@ the prerequisites for each row.
 
 If a connection is saved but a meter says **Unknown**, **Balance unavailable** or is absent,
 check what that account exposes in the provider's own dashboard. Some providers do not report
-every balance, reset time, model breakdown or history. A missing capability is not a zero.
+every balance, reset time, model breakdown or history. A missing value is not a zero.
 
 ## Loading or an error screen
 
@@ -33,14 +33,14 @@ reporting key. Do not paste a secret into an unrelated row or a help request.
 
 ## Previous data, offline or rate limited
 
-**Showing previous data** and **STALE** identify retained data after failed refresh. Restore
+**Showing previous data** and **STALE** identify earlier data kept after failed refresh. Restore
 network access and refresh on the phone. Earlier successful values and their timestamps can
 survive restart, but a connection with no successful report has no data to recover.
 
 If a provider reports a rate limit, wait for any supplied availability/reset time or try later.
 Repeated refresh taps cannot remove a provider limit. A successful report may still contain
-unchanged values, especially for aggregated reporting such as Cursor Team Admin API.
-See [Sync](/guide/sync) for cadence and cache behaviour.
+unchanged values, especially for reporting such as Cursor Team Admin API.
+See [Sync](/guide/sync) for cadence and stored data.
 
 ## Watch summary is missing or old
 
@@ -51,8 +51,8 @@ See [Sync](/guide/sync) for cadence and cache behaviour.
 4. Check the phone's **Watchface** selection and **Next watch payload** if usage rings are missing.
 
 Wear also marks summaries stale after two hours without a newer summary. A phone summary preview
-is not receipt confirmation. If the face's upper cells need adjustment, use the system watch-face
-editor; those cells are not the phone's ring picker. See [Watch](/guide/watch).
+does not confirm receipt on the watch. If the face's upper cells need adjustment, use the system
+watch-face editor; those cells are not the phone's ring picker. See [Watch](/guide/watch).
 Do not clear credentials or reset pairing as the first response to a delayed summary.
 
 ## Widget is empty, clipped or old
@@ -61,7 +61,7 @@ Do not clear credentials or reset pairing as the first response to a delayed sum
   can be a valid empty selection.
 - If you see **Resize widget**, increase its height. For missing labels/credits, increase width;
   smaller sizes deliberately show fewer complete columns or rows.
-- Open and refresh WardPulse on the phone. A **STALE** widget can retain earlier rows after a
+- Open and refresh WardPulse on the phone. A **STALE** widget can keep earlier rows after a
   failed report; the background interval is approximate and Android may delay it.
 
 Widget choices are separate from Watchface. See [Home widget](/guide/widget).
@@ -79,20 +79,6 @@ Useful information includes the WardPulse build/version, phone/watch OS, affecte
 visible status and update time, whether the phone has fresh data, and the steps you tried.
 If sharing a screenshot, hide account labels and private usage figures as well as credentials.
 
-Never share an API key, dashboard cookie, authorization code, account identifier, prompt or raw
-provider payload. Do not send unreviewed sensitive logs. WardPulse has no diagnostic-export
-button in the current normal Settings screen; visible status information is enough to begin.
-
-## Source notes
-
-Phone sources are under `apps/phone_flutter/lib/`. First-use/error UI, in `app` and
-`dashboard`: `ward_pulse_app.dart` (`_LoadingView`, `_ErrorView`) and
-`dashboard_screen.dart` (`ConnectProviderPrompt`, `_SyncHeader`). Settings, in
-`settings`: `settings_screen.dart` (`SettingsScreen`, `_setRecoveryNotifications`).
-Connection types, in `providers`: `provider_connection.dart` (`providerConnectionCatalog`).
-Wear age: `WatchDashboardSummary.kt` (`WatchDashboardSummary.isStaleAt`) in the Wear
-app's `app.wardpulse.wear` model package. Widget fit: `PhoneWidgetLayout.java`
-(`PhoneWidgetLayout`) in the phone Android host's `app.wardpulse` Java source tree.
-See provider reference [connection grouping](/product/provider-notes#connection-grouping),
-privacy policy [phone recovery](/product/privacy-policy#data-stored-on-the-phone), and
-security reference [logging rules](/product/security-model#logging-rules).
+Never share an API key, dashboard cookie, authorization code, account identifier, prompt or
+full provider response. Do not send sensitive logs. The visible status and the steps you tried
+are enough to begin a help request.

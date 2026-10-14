@@ -9,15 +9,17 @@ Use this skill before changing durable project knowledge.
 
 ## Placement
 
-- Root `README.md`: short project orientation, repository shape, command entry point.
+- Root `README.md`: short product introduction, early screenshot gallery and user-guide entry;
+  a contributor link at the end, with developer commands kept beside their owners.
 - Root `AGENTS.md`: short working agreements for agents and humans.
 - Root `LICENSE`, `TRADEMARKS.md`, and `THIRD_PARTY_NOTICES.md`: Apache-2.0 source license, brand usage, and attribution gate.
 - `docs/README.md`: index and gate for project documentation.
 - `docs/DOCUMENTATION.md`: documentation ownership, Vocs tooling, and contributor workflow.
 - `docs/DESIGN_ASSETS.md`: OpenPencil ownership and runtime export workflow.
-- `docs/site/`: Vocs configuration, navigation, and thin presentation pages.
+- `docs/site/`: public user-documentation Vocs configuration, navigation and thin presentation pages.
 - `docs/DEVELOPMENT_PLAN.md`: full product and implementation plan.
 - `docs/product/user-guide/`: authoritative guidance for people using the installed applications.
+- `docs/assets/`: public UI PNGs; `docs/assets/README.md` indexes screenshots and their freshness.
 - `docs/product/ANDROID_GOALS.md`: Android MVP goals and non-goals.
 - `docs/product/PROVIDER_NOTES.md`: provider integration assumptions and open questions.
 - `docs/product/SECURITY_MODEL.md`: local-first credential, logging, and diagnostics rules.
@@ -51,7 +53,8 @@ limitations, commands and workflows. Update the affected authoritative documents
 same change set; do not finish finalization with known stale documentation in scope.
 
 - Update `docs/product/user-guide/` when user instructions change, and its thin Vocs imports
-  and navigation when needed.
+  and navigation when needed. Apply [user-docs](../user-docs/SKILL.md) to public guidance,
+  the landing/README and screenshots; engineering references remain in the repository.
 - Keep `docs/DEVELOPMENT_PLAN.md` current on scope, status, open work and actually verified
   acceptance; leave unverified checks pending.
 - Update affected contributor/component READMEs, `AGENTS.md` and local skills when their

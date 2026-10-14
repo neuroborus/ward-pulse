@@ -2667,12 +2667,13 @@ a small arc inside a cell; a ranged value in a cell reads as text, so the face k
 
 ### Phase 21 — user-facing Vocs guide
 
-Status: completed on 2026-10-14 for the user-guide documentation slice.
+Status: completed on 2026-10-14 for the user-guide documentation, user-only publication
+and theme-matched gallery.
 
-The Vocs site now keeps development, architecture, provider-reference and design documentation
-in their existing sections while presenting a separate guide for people using the installed
-applications. The landing page links to Getting started and the sidebar lists all eight task
-pages ahead of the Project section.
+The initial publication kept development, architecture, provider-reference and design
+documentation in their existing sections alongside a guide for installed-app users. Its
+landing linked to Getting started and its sidebar listed eight task pages ahead of Project.
+That mixed presentation is historical and is superseded by the user-only revision below.
 
 The Cursor token-help prerequisite was accepted on 2026-10-14 in normal and narrow
 320×640/font-1.5 emulator layouts, including keyboard and Cancel-retention checks. Its
@@ -2680,12 +2681,61 @@ scoped host phone gate passed 392 Flutter tests, 64 native cache assertions and
 28 native widget assertions, plus formatting and analysis. The eight guide drafts
 passed separate source review and a complete repeat prose review with zero findings.
 The integrated source-citation gate checked 79 Markdown/MDX source files, and the Vocs
-build produced 63 routes. Completion covers the user guide only; live credentials and
+build produced 63 generated files. That initial completion covered the user guide only; live credentials and
 remaining provider authentication, physical phone/Wear hardware, release and
 internal-testing acceptance remain open. On 2026-10-14 independent and coordinator full
-reviews reached ZERO; browser checks covered all eight guide routes at 1280/390px, all
+reviews reached ZERO; initial-publication browser checks covered all eight guide routes at 1280/390px, all
 Source notes at 390px, and nine direct anchor opens plus six TOC clicks across
 390/1280/1440px with target titles fully visible.
+
+Current user-only revision — **2026-10-14**:
+
+The public site contains ten authored pages: the overview, eight task guides and privacy
+policy, without developer Source notes, internal sidebars or direct engineering-reference
+routes. Eighteen technical presentation adapters were removed; their original documents
+remain with their repository owners. Root README and the landing begin with a product
+introduction and up to three showcase screenshots per platform; Android phone and Wear OS
+are one platform, with three selected captures total. Guide reuse is optional. The
+user-docs skill governs public prose and screenshot freshness.
+
+Three real anonymous UI captures were accepted on 2026-10-14: phone Dashboard at 864×1920,
+Wear Glance and watch face at 500×500 each. The three canonical PNGs, public symlink aliases,
+homepage/README galleries and complete screenshot index are integrated. They are not
+Mock/demo screenshots. The post-repair citation gate checked 63 Markdown/MDX source files,
+and the Vocs build produced 27 generated files; authored public pages were counted
+separately. After the last fix, complete independent and coordinator source/rendered
+reviews reached ZERO. Browser review covered all nine guide/privacy pages at 1280×900
+and 390×844, the homepage at 390px wide and 1440×900, actual menu/search/TOC navigation
+and direct anchors, with readable full-frame gallery previews and original image links
+matching the canonical PNGs. The earlier 79/63 and Source notes evidence above remains
+initial-publication history.
+This revision does not close live-provider authentication, physical hardware, release or
+internal-testing acceptance.
+
+Theme-matched gallery follow-up — **2026-10-14**, completed:
+
+Four canonical PNG variants and their index are integrated for three showcase subjects on
+the single Android+Wear platform. Both real anonymous phone themes are 864×1920, with clean
+status bars captured using OS icon-visibility controls: no notifications were dismissed,
+no Mock/demo data or app-screen retouching was used, and temporary device state was restored.
+Wear and the watch face have a confirmed fixed dark appearance; their unchanged 500×500
+captures are reused in both documentation themes without fabricating a light counterpart.
+The index records themes, Date added and actual capture/verification dates.
+
+Ten Vocs live-change/reload cases covered Light/Dark/System and 1440/1280/390px layouts,
+including actual mobile theme controls. Six README manual/automatic cases at 390/1440px
+included a manual choice opposite the OS theme. Active previews, original-image links and
+keyboard navigation matched the selected theme. All nine guide/privacy pages were reviewed
+at 1280px Light and 390px Dark, including actual search, TOC clicks and direct anchors.
+HTTP checks confirmed ten public routes returned 200, eighteen retired routes returned 404,
+and `/index` returned 308 to the canonical homepage.
+
+Complete independent and coordinator post-last-fix source/rendered reviews reached ZERO.
+On the accepted gallery revision, the required documentation check passed for 63 Markdown/MDX
+source files and 27 generated files, and the final user-docs skill validator passed. Earlier
+publication evidence above describes the initial and pre-theme states. This completed slice
+does not close live-provider authentication, physical hardware, release or internal-testing
+acceptance.
 
 Guide scope:
 
@@ -2703,10 +2753,10 @@ Guide scope:
   limits, delayed phone-to-watch delivery and widget updates; never request secrets or raw
   provider payloads in diagnostic instructions.
 
-Keep authoritative guide content under `docs/product/` and expose it through thin Vocs pages.
-Use user-facing language and current screen/control names; link to existing references where
-useful instead of duplicating the contributor documentation. Examples and screenshots must
-use synthetic or redacted data. This requirement does not close the remaining live-provider,
+Keep authoritative guide content under `docs/product/user-guide/` and expose it through thin
+Vocs pages. Use current screen/control names and user-facing guide, privacy or provider-account
+help links; keep engineering references in their repository owners. Examples and screenshots
+must be approved for public sharing, with anonymous or redacted data. This requirement does not close the remaining live-provider,
 release or hardware acceptance work.
 
 Acceptance:

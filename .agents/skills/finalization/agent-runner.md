@@ -122,7 +122,9 @@ infrastructure to make a check pass, and never report a check that did not run.
 - [ ] The Vocs page and `docs/site/vocs.config.ts` navigation are updated for documentation
       exposed on the site.
 - [ ] Vocs pages import authoritative Markdown instead of duplicating it.
-- [ ] `README.md` still describes the current repository shape and commands.
+- [ ] Root README begins with current product guidance, the approved PNG gallery and a user-guide entry.
+- [ ] Apply [user-docs](../user-docs/SKILL.md) to public pages, routes and screenshots; refresh
+      affected UI PNGs and their index, and keep developer/internal documentation out of the public site.
 - [ ] Apply [docs-gate](../docs-gate/SKILL.md#keep-documentation-current) to reconcile affected
       documentation in this change set, or justify no documentation impact in the handoff.
 - [ ] A locked baseline in `docs/product/` changed only through a dated revision that records

@@ -3,3 +3,87 @@
     scroll-margin-top: calc(var(--vocs-spacing) * 8);
   }
 }
+
+.wardpulse-gallery {
+  display: grid;
+  grid-template-columns: minmax(0, 216px) minmax(0, 200px);
+  align-items: start;
+  gap: 24px;
+  width: min(100%, 440px);
+  margin: 24px auto 0;
+}
+
+.wardpulse-gallery figure {
+  min-width: 0;
+  margin: 0;
+  text-align: center;
+}
+
+.wardpulse-gallery a {
+  display: flex;
+  justify-content: center;
+}
+
+.wardpulse-gallery__phone .wardpulse-gallery__phone-link--dark {
+  display: none;
+}
+
+:root[data-vocs-theme='dark'] .wardpulse-gallery__phone-link--light {
+  display: none;
+}
+
+:root[data-vocs-theme='dark'] .wardpulse-gallery__phone-link--dark {
+  display: flex;
+}
+
+.wardpulse-gallery img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.wardpulse-gallery__phone img {
+  width: 216px;
+}
+
+.wardpulse-gallery__wear {
+  display: grid;
+  gap: 18px;
+}
+
+.wardpulse-gallery__wear img {
+  width: 200px;
+}
+
+.wardpulse-gallery figcaption {
+  margin-top: 8px;
+  font-size: 0.875rem;
+}
+
+.wardpulse-gallery__action {
+  margin-top: 18px;
+  text-align: center;
+}
+
+@media (width < 640px) {
+  .wardpulse-gallery {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    width: min(100%, 360px);
+  }
+
+  .wardpulse-gallery__phone img {
+    width: min(100%, 162px);
+  }
+
+  .wardpulse-gallery__wear {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    width: min(100%, 336px);
+    margin-inline: auto;
+  }
+
+  .wardpulse-gallery__wear img {
+    width: 100%;
+  }
+}

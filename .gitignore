@@ -22,6 +22,7 @@ __pycache__/
 node_modules/
 docs/site/dist/
 docs/site/.vocs/
+/docs/site/src/pages.gen.ts
 
 # Flutter / Dart
 .dart_tool/

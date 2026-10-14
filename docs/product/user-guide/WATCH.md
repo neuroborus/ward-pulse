@@ -1,7 +1,7 @@
 # Watch and watch face
 
-The Wear app shows the phone's derived usage summary. The optional WardPulse face adds
-remaining-capacity rings. The phone owns provider sign-in, budgets and alert rules.
+The Wear app shows a compact usage summary from your phone. The optional WardPulse face
+adds remaining-capacity rings. Connect providers and set budgets or alert rules on the phone.
 
 ## Set up the watch
 
@@ -11,9 +11,9 @@ remaining-capacity rings. The phone owns provider sign-in, budgets and alert rul
 3. Connect a provider on the phone, then refresh **Dashboard**.
 4. Open WardPulse from the watch's app launcher and allow the summary to arrive.
 
-Until its first valid phone summary, Wear shows a setup prompt rather than inventing usage.
-You do not enter keys or sign in to providers on the watch. If the phone has data but the watch
-does not, follow [Troubleshooting](/guide/troubleshooting#watch-summary-is-missing-or-old).
+Until its first valid phone summary, Wear shows a setup prompt. You do not enter keys or
+sign in to providers on the watch. If the phone has data but the watch does not, follow
+[Troubleshooting](/guide/troubleshooting#watch-summary-is-missing-or-old).
 
 ## Read the Wear app
 
@@ -28,7 +28,7 @@ Configure rules on the phone's **Providers** tab; Wear has no rule editor.
 
 The refresh control sends a request to the phone. Cadence and rate-limit states can disable
 it; **Stale** indicates recovery is needed. See [Sync and notifications](/guide/sync).
-Wear can mark an otherwise received summary stale after two hours without a newer summary.
+Wear can mark a received summary stale after two hours without a newer summary.
 
 ## Choose usage rings
 
@@ -41,18 +41,17 @@ Wear can mark an otherwise received summary stale after two hours without a newe
    without using another band. Separately, an unavailable metric explains its missing percentage.
 5. Check **Next watch payload**, then allow the updated summary to reach Wear.
 
-Claude plan windows collapse to the tightest known window, including an exhausted zero. The
-phone Dashboard still lists the individual windows. On Glance, a selected exhausted metric
-remains a grey empty track with a pale-red **0%** token; it is not replaced by a less-used window. Tiny
-positive values rounded to zero retain ordinary styling. Paired known pools retain their identity.
+Claude plan windows use the tightest known window, including an exhausted zero. The phone
+Dashboard still lists the individual windows. On Glance, a selected exhausted metric keeps
+a grey empty track and pale-red **0%** token; it is not replaced by a less-used window.
+Tiny positive values rounded to zero keep ordinary styling.
 
 **Next watch payload** describes what the phone will send; it is not delivery confirmation.
 Ring choices are independent of the phone's [home-widget selection](/guide/widget).
 
 ## Select and customize the face
 
-The WardPulse face is a separate installed package. It uses Watch Face Format version 2 and
-requires **Wear OS 5 or later**. The Wear app and face have different compatibility requirements.
+The WardPulse face is a separate installed package and requires **Wear OS 5 or later**.
 Use the watch's normal face picker to select WardPulse after installing its compatible build.
 
 The three upper complication cells are customized in the **system watch-face editor**. Open
@@ -60,24 +59,5 @@ the watch's edit/customize action for WardPulse and select an upper cell to choo
 complication provider. Exact controls and available providers vary with the watch's system.
 These cells are separate from the usage rings selected in the phone's Watchface tab.
 
-You do not need to manually select WardPulse's internal ring/split data sources. Watch weather
-and other system complications depend on their own available data. Provider refresh on the
-phone does not itself obtain watch weather readings.
-
-## Source notes
-
-Phone sources are under `apps/phone_flutter/lib/`: `watchface_screen.dart`
-(`WatchfaceScreen`) in `watchface`, and `watch_ring_preferences.dart`
-(`watchRingSlotCount`, `watchRingSlotCost`, `collapseClaudePlanRing`) in `settings`.
-Wear sources are in the `app.wardpulse.wear` package: `ui/WardPulseApp.kt`
-(`WardPulseApp`, `EmptyDashboardScreen`, `HomePage`), `ui/GlanceLegend.kt`
-(`GlanceLegendPage`), `ui/GlanceModels.kt` (`glanceRefreshChrome`), and
-`model/WatchDashboardSummary.kt` (`WatchDashboardSummary.isStaleAt`). See face reference
-[layer rules](/product/watch-ring-design#layer-rules) and
-[upper cells](/product/watch-ring-design#upper-cells-revision-2026-10-09), Wear reference
-[composition](/product/wear-glance-design#composition) and
-[refresh control](/product/wear-glance-design#refresh-status-control).
-In the watch-face package `apps/watchface_wff/`, format version is declared in the
-main `AndroidManifest.xml` (`com.google.wear.watchface.format.version`);
-[Android's version table](https://developer.android.com/training/wearables/wff#versioning-wff)
-defines Wear OS 5 as the minimum for version 2.
+Choose usage rings on the phone. Watch weather and other system complications depend on
+their own available data; refreshing provider usage does not itself update watch weather.

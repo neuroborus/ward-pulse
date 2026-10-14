@@ -6,15 +6,14 @@ You can use the phone without either optional surface.
 
 ## Before you start
 
-This guide assumes WardPulse is already installed, or that you have a compatible build supplied
-by the maintainer. If you also use a watch, use matching phone and Wear builds from the same
-distribution. The WardPulse watch
-face is a separate package and requires Wear OS 5 or later.
+Use an already-installed compatible build or one supplied by the maintainer. If you also
+use a watch, use matching phone and Wear builds from the same distribution. The WardPulse
+watch face is a separate package and requires Wear OS 5 or later.
 
 Have an account or reporting credential for at least one supported provider. Connect the
-phone to the internet for sign-in and fresh reporting. Your credentials stay in secure phone
-storage; you do not enter them on the watch. Read the [privacy policy](/product/privacy-policy)
-for what is stored and sent between devices.
+phone to the internet for sign-in and fresh reporting. WardPulse stores credentials encrypted
+on the phone and uses them directly with their provider; you do not enter them on the watch.
+Read the [privacy policy](/product/privacy-policy) for what is stored and sent between devices.
 
 ## Connect your first provider
 
@@ -27,10 +26,11 @@ for what is stored and sent between devices.
 5. Check the displayed balances and status. **Connected** describes the saved connection;
    it does not guarantee that the latest reporting request succeeded.
 
-An unconnected production app does not create sample usage. A provider may also omit a meter
-that your account does not expose. **Unknown** or **Balance unavailable** is different from
-a real zero. If a refresh fails after an earlier success, WardPulse can retain that earlier
-data and mark it stale. See [Dashboard](/guide/dashboard) and [Troubleshooting](/guide/troubleshooting).
+Until a connected provider reports successfully, WardPulse has no usage data to show. A
+provider may also omit a meter that your account does not expose. **Unknown** or **Balance
+unavailable** is different from a real zero. If a refresh fails after an earlier success,
+WardPulse can retain that earlier data and mark it stale. See [Dashboard](/guide/dashboard)
+and [Troubleshooting](/guide/troubleshooting).
 
 ## Find the controls you need
 
@@ -40,22 +40,8 @@ data and mark it stale. See [Dashboard](/guide/dashboard) and [Troubleshooting](
 | Watchface | Choose which known metrics fill the watch's ring slots. |
 | Widget | Choose the phone home widget's independent metric list. |
 | Providers | Connect accounts or keys, reconnect/remove them, and set alert thresholds or budget limits. |
-| Settings | Set refresh cadence and Plan recovery notifications; read sync diagnostics and legal information. |
+| Settings | Set refresh cadence and Plan recovery notifications; read sync information and legal information. |
 
 Next, [set up the watch](/guide/watch), [add a home widget](/guide/widget), or adjust
-[sync and notifications](/guide/sync). WardPulse's local budget limits describe your chosen
-reporting ceiling; they do not stop provider requests or change provider billing.
-
-## Source notes
-
-Phone sources are under `apps/phone_flutter/lib/`: navigation and first use in
-`app` and `dashboard`, connection labels in `providers`, and Settings in `settings`.
-See `ward_pulse_app.dart` (`DashboardHost`), `dashboard_screen.dart`
-(`ConnectProviderPrompt`), `provider_connection.dart` (`providerConnectionCatalog`),
-and `settings_screen.dart` (`SettingsScreen`). See privacy policy
-[phone storage](/product/privacy-policy#data-stored-on-the-phone) and
-[Wear OS transport](/product/privacy-policy#wear-os). In the watch-face package
-`apps/watchface_wff/`, the main `AndroidManifest.xml` declares format version 2
-(`com.google.wear.watchface.format.version`);
-[Android's version table](https://developer.android.com/training/wearables/wff#versioning-wff)
-maps that version to Wear OS 5.
+[sync and notifications](/guide/sync). WardPulse's budget limits help you track spending;
+they do not stop provider requests or change provider billing.

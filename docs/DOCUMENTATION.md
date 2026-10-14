@@ -1,14 +1,18 @@
 # Documentation Workflow
 
-WardPulse uses Vocs to present repository documentation while keeping Markdown files close to
-their owners.
+WardPulse uses Vocs for public user documentation while keeping authoritative Markdown
+close to its owners. Engineering, design, toolchain and contributor references remain in
+the repository, indexed by `docs/README.md`, outside the public user site. Apply
+[user-docs](../.agents/skills/user-docs/SKILL.md) for the public audience and screenshot rules.
 
 ## Ownership
 
 - Shared product and engineering knowledge belongs in `docs/`.
 - Product, provider, security, and release guidance belongs in `docs/product/`.
+- Installed-app user guidance belongs in `docs/product/user-guide/`; public UI PNGs and their
+  index belong in `docs/assets/`.
 - Application, binding, and tool guidance belongs in the nearest `README.md`.
-- `docs/site/` owns only the Vocs configuration, navigation, and presentation adapters.
+- `docs/site/` owns the public user-documentation Vocs configuration, navigation and presentation adapters.
 
 Vocs pages import authoritative Markdown files. Do not copy their content into the site.
 
@@ -83,7 +87,7 @@ intent reliably. Review those references when a file is renamed or removed.
 
 1. Edit the authoritative Markdown file under `docs/` or beside its owning component.
 2. For a new durable document, link it from `docs/README.md`.
-3. Add a thin page under `docs/site/src/pages/` when the document should appear on the site.
+3. Add a thin page under `docs/site/src/pages/` only for public user guidance or relevant privacy/help.
 4. Update `docs/site/vocs.config.ts` when site navigation changes.
 5. Run `just check-docs` and fix unstable source citations or MDX errors; review local links.
 

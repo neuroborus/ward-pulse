@@ -9,9 +9,9 @@ Choose the row for the data you want; connecting one does not automatically conn
 | Anthropic | Claude subscription | Organization reporting |
 | Cursor | Cursor plan | Team Admin API |
 
-Plan connections are experimental compatibility integrations. Reporting rows use privileged
-administrative credentials. Keep tokens, keys and authorization codes private, and enter them
-only into the matching provider's sign-in page or WardPulse's credential field.
+Plan connections are experimental. Reporting rows need administrative credentials. Keep
+tokens, keys and authorization codes private, and enter them only into the matching
+provider's sign-in page or WardPulse's credential field.
 
 ## Codex subscription
 
@@ -43,7 +43,7 @@ expired or the attempt was cancelled, start a new attempt rather than reusing th
 1. Tap **Cursor plan**. If it is already **Connected**, choose **Sign in again** in the account
    dialog to open a replacement dashboard sign-in.
 2. Sign in to the Cursor account you want to connect and follow the provider's prompts.
-3. After the session is captured, return to WardPulse and check Dashboard reporting.
+3. After sign-in completes, return to WardPulse and check Dashboard reporting.
 
 If you already have a dashboard session in a desktop browser, tap the **About Cursor sign-in**
 help icon, then **Advanced paste**. The paste dialog includes cookie instructions.
@@ -89,7 +89,7 @@ the account and credential requirements in its
 4. Check reporting status on Dashboard.
 
 This connection targets Claude Platform organization reporting. A Claude Enterprise Analytics
-key belongs to a different API and is not the credential for this row.
+key belongs to a different service and is not the credential for this row.
 
 ## Cursor Team Admin API
 
@@ -115,28 +115,11 @@ That freshness note applies to the Team Admin API, not the experimental Cursor p
 - To remove a pasted credential, use **Remove**. Cursor's Advanced paste dialog also offers
   Remove when a token is saved. **Cancel** leaves the current connection unchanged.
 
-Disconnect/removal clears the selected local credential and prevents obsolete cached data
+Disconnect/removal clears the selected local credential and prevents obsolete stored data
 from being reused. It does not revoke an API key at the provider; use that provider's key
 management to revoke it when needed. Other connections are independent.
 
 For **Alert thresholds** and **Budget limits**, use the action icons on the connection row.
-They configure WardPulse's local presentation; see [Dashboard](/guide/dashboard). A saved
+They configure how WardPulse tracks your usage; see [Dashboard](/guide/dashboard). A saved
 connection can still be rejected or temporarily unavailable: [Troubleshooting](/guide/troubleshooting)
 explains the next steps without sharing secrets.
-
-## Source notes
-
-Phone connection sources are in `providers` under `apps/phone_flutter/lib/`.
-Catalog: `provider_connection.dart` (`providerConnectionCatalog`). Credential
-editing: `providers_screen.dart` (`ProvidersScreen._editSecret`) and
-`credential_dialog.dart` (`CredentialDialog`). Account flows: `codex_account_row.dart`
-(`_CodexLoginDialog`), `claude_account_row.dart` (`_ClaudeLoginDialog`),
-`cursor_plan_row.dart` (`CursorPlanRow`, `_CursorPlanHelpDialog`), and
-`connected_account_dialog.dart` (`ConnectedAccountDialog`). `cursor_session_token.dart`
-defines `cursorSessionCookieName`.
-
-Further reference: Provider Notes [connection grouping](/product/provider-notes#connection-grouping),
-[OpenAI organization reporting](/product/provider-notes#openai-platform-organization-reporting),
-[Claude subscription](/product/provider-notes#claude-subscription-reporting), and
-[Cursor Team Admin API](/product/provider-notes#cursor-team-admin-api). Local credential handling
-is described in the privacy policy's [phone storage section](/product/privacy-policy#data-stored-on-the-phone).

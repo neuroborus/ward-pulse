@@ -17,7 +17,7 @@ one does not change the other. Claude windows remain separate widget choices, an
 Models/Other Models can be separate rows. Selected exhausted pools stay as **0% left**.
 
 The displayed ordering favours tighter remaining balances. The phone's metric selection is
-shared by placed WardPulse widgets; each instance's available size can fit a different number
+shared by placed WardPulse widgets; each widget's available size can fit a different number
 of rows and columns.
 
 ## Resize for the information you need
@@ -26,35 +26,20 @@ Use the launcher's resize handles. The widget shows complete rows that fit, whic
 than your six selected metrics. As width shrinks, purchased credits and labels can disappear
 while percentages remain. A tall unused area can be reduced with the resize handles.
 
-- **No metrics** means the resolved list is empty or unavailable, including a deliberately
-  empty selection. Check the Widget tab and provider data.
+- **No metrics** means no selected metrics are available, including a deliberately empty
+  selection. Check the Widget tab and provider data.
 - **Resize widget** means metrics exist but no complete row fits. Increase the widget's height.
 - **STALE** means earlier data is being retained after a failed refresh. Refresh the phone
   when network/provider access is available; see [Sync](/guide/sync#offline-failed-refresh-and-restart).
 
-Launcher behaviour and text size affect fit. A narrow widget is not required to show the same
-labels and credits as a wide one. A missing value is not invented as zero to fill a row.
+Launcher behaviour and text size affect fit. A narrow widget can show fewer labels and credits
+than a wide one. A missing value is not invented as zero to fill a row.
 
 ## Open the app from the widget
 
-Tap the widget to open **Dashboard**, whether WardPulse is already running or starts cold.
-If an in-app edit form is open, the tap cancels that form with normal Cancel semantics before
-opening Dashboard. Save an edit first if you want to keep it. The navigation tap does not
-itself request an extra provider refresh.
+Tap the widget to open **Dashboard**, whether WardPulse is already running or opens from
+closed. If an in-app edit form is open, the tap cancels the unfinished edit before opening
+Dashboard. Save an edit first if you want to keep it. Use **Refresh** in the app when needed.
 
 For an old widget, missing rows or delayed updates, use
 [Troubleshooting](/guide/troubleshooting#widget-is-empty-clipped-or-old).
-
-## Source notes
-
-Phone widget sources are in `widget` under `apps/phone_flutter/lib/`.
-Selection: `widget_screen.dart` (`WidgetScreen`) and `phone_widget_preferences.dart`
-(`phoneWidgetSlotCount`, `resolvePhoneWidgetMetrics`, `orderPhoneWidgetMetrics`).
-Payload: `phone_widget_payload.dart` (`buildPhoneWidgetPayload`). The phone Android
-host's `app.wardpulse` package owns `WardPulseAppWidget.kt` (`WardPulseAppWidget`) in
-the Kotlin source tree and `PhoneWidgetLayout.java` (`PhoneWidgetLayout`) in the Java
-source tree. Navigation is in the phone app's `app` directory: `ward_pulse_app.dart`
-(`_openDashboardFromWidget`). See widget reference
-[metric rules](/product/phone-widget-design#metric-rules),
-[size caps](/product/phone-widget-design#size-caps-locked) and
-[composition](/product/phone-widget-design#composition-locked).
