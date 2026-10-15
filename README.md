@@ -24,6 +24,8 @@ Wear OS summary, watch face and home-screen widget.
   </tr>
 </table>
 
+[Read the user guide](https://neuroborus.github.io/ward-pulse/).
+
 ## Start using WardPulse
 
 Sign-in and fresh reporting need internet access. The watch face requires Wear OS 5 or later;

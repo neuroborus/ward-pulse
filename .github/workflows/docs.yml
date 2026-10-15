@@ -12,14 +12,20 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/docs.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+  workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   docs:
     name: Build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -27,4 +33,32 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm run docs:build
+      - run: python3 tools/check-doc-citations.py
+      - run: WARDPULSE_DOCS_BASE_PATH=/ward-pulse npm run docs:build
+      - uses: actions/upload-pages-artifact@v5.0.0
+        if: >-
+          github.ref == 'refs/heads/main' &&
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        with:
+          path: docs/site/dist/public
+
+  deploy:
+    name: Deploy
+    needs: docs
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/configure-pages@v6.0.0
+      - uses: actions/deploy-pages@v5.0.1
+        id: deployment

@@ -53,11 +53,48 @@ just check-docs
 
 Preview a successful build with `npm run docs:preview`.
 
+## Publish through GitHub Pages
+
+The [Docs workflow](../.github/workflows/docs.yml) builds the user site for
+<https://neuroborus.github.io/ward-pulse/> using `WARDPULSE_DOCS_BASE_PATH=/ward-pulse`.
+It retains main-targeted pull-request validation for documentation, component READMEs,
+npm/runtime files and the workflow itself. Automatic publication runs only on pushes to
+`main` that include `docs/**` changes. Updates on other branches or without `docs/**`
+changes do not automatically publish, including changes limited to application code,
+workflow files or root npm files.
+
+The build job uses the pinned Node runtime and runs these commands from the repository root:
+
+```sh
+npm ci
+python3 tools/check-doc-citations.py
+WARDPULSE_DOCS_BASE_PATH=/ward-pulse npm run docs:build
+```
+
+Only push or manual `workflow_dispatch` runs on `refs/heads/main` upload the static
+`docs/site/dist/public` directory and deploy it. Pull requests and manual runs on other refs
+build without publishing. Pages configuration and write permissions belong to the deploy
+job, which depends on the successful build and uses the `github-pages` environment. Its
+`pages` concurrency group serializes deployments without cancelling an active deployment;
+pull-request checks remain outside that group.
+
+Before the first deployment, if Pages is not configured for Actions, an administrator must
+select **Settings → Pages → Build and deployment → Source → GitHub Actions**. Repository
+Actions policy must allow the workflow and its official Pages actions. If the `github-pages`
+environment has branch restrictions or required approvals, allow `main` and satisfy those
+rules. The workflow does not enable Pages or change repository settings.
+
+The manual **Run workflow** control becomes available under **Actions → Docs** only after
+the updated workflow reaches the default branch, `main`. Choose `main` to deploy manually;
+no documentation diff is required. The public site becomes available after a successful
+deployment. Confirm the deployment URL and actual site before reporting publication.
+
 ## Publish a prefixed static site
 
-Unset or empty `WARDPULSE_DOCS_BASE_PATH` keeps the default local `/` build. To serve the
-site under `/wardpulse-docs`, run the default required checks, including `just check-docs`,
-before the final prefix build. From the repository root:
+Unset or empty `WARDPULSE_DOCS_BASE_PATH` keeps the default local `/` build. The only
+supported prefixes are `/ward-pulse` for GitHub Pages and `/wardpulse-docs` for local sharing.
+To serve the site under `/wardpulse-docs`, run the default required checks, including
+`just check-docs`, before the final prefix build. From the repository root:
 
 ```sh
 WARDPULSE_DOCS_BASE_PATH=/wardpulse-docs npm run docs:build

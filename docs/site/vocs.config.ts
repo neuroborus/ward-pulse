@@ -44,9 +44,13 @@ const approvedScreenshot =
 
 const requestedBasePath = process.env.WARDPULSE_DOCS_BASE_PATH
 
-if (requestedBasePath && requestedBasePath !== '/wardpulse-docs')
+if (
+  requestedBasePath &&
+  requestedBasePath !== '/wardpulse-docs' &&
+  requestedBasePath !== '/ward-pulse'
+)
   throw new Error(
-    'WARDPULSE_DOCS_BASE_PATH must be unset, empty, or "/wardpulse-docs".',
+    'WARDPULSE_DOCS_BASE_PATH must be unset, empty, "/wardpulse-docs", or "/ward-pulse".',
   )
 
 const basePath = requestedBasePath || '/'
