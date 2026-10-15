@@ -50,13 +50,12 @@ Green **OK** and amber/orange **!OK** can be tapped to request a phone refresh. 
 **OK** or **!OK** cannot be tapped. Grey **OK** can be a normal wait before the phone permits
 another refresh.
 
-Only one detail is shown. The control can be grey even when **Mock data** or **Stale**
+Only one detail is shown. The control can be grey even when **Stale**
 appears below it, if a refresh wait or rate limit also applies. **OK** does not confirm
 that every provider is current or that a refresh reached the phone.
 
 | Message | Meaning and action |
 | --- | --- |
-| **Mock data** | Example figures rather than live usage. If the phone offers **Settings → Debug → Mock data**, turn it off and refresh. |
 | **Stale** | Earlier data needs a newer report. Check the phone and connectivity; refresh when allowed. |
 | **Rate limited** | A provider is temporarily limiting requests. Wait before trying again. |
 | **Auth required** | Sign-in or a saved key needs attention. Reconnect under **Providers** on the phone. |
