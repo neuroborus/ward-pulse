@@ -13,7 +13,7 @@ Connect more than one account from the same provider and keep their usage separa
 
 ## iOS release
 
-WardPulse on iPhone. A later milestone than multi-account support.
+WardPulse on iPhone.
 
 ## Agent Bridge (MCP)
 
@@ -21,7 +21,3 @@ Receive important messages from your AI agents in WardPulse over MCP. Sending re
 still an open question.
 
 This would require a WardPulse cloud account and access key, even for one-way notifications.
-
-Question marks leave room for unannounced milestones.
-
-What comes next is not revealed yet.

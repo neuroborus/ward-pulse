@@ -3010,14 +3010,18 @@ or release acceptance. The public summary is owned by
   contracts remain future design work; no service, API or commercial plan exists by virtue of
   this roadmap.
 
-The public roadmap shows the four known milestones as separate floating points without
-connecting lines, with multi-account nearer than the dimmer iOS milestone. Many quieter,
-anonymous question-mark points form an irregular background field rather than a few
-individual slots. Their density adapts to the available space, keeping the four known
-milestones clear in front. A background position may be occupied by a real milestone
+The public roadmap shows four known milestones at irregular positions without connecting
+lines. One broad background arrow points down through the centre to suggest overall
+direction, without linking particular milestones. Multi-account is slightly nearer than
+iOS; all four use the same filled marker, with iOS only slightly dimmer. Many quieter,
+anonymous question-mark points form an irregular background field, each paired with a
+recognisable smaller filled marker. Its density adapts to the available space, keeping the
+known milestones clear in front. A background position may be occupied by a real milestone
 through an ordinary documentation update; it is not a named feature, promised release or
-interactive editing control. The background can fade into a separate fog-of-war region
-below Agent Bridge. These decorations add no announced feature, commitment or interaction,
+interactive editing control. Organic cloud-like fog below Agent Bridge implies the
+unannounced future without explanatory labels. This is a decorative field independent of
+the public prose's paragraph count, with soft irregular edges rather than a rectangular
+gradient panel. These decorations add no announced feature, commitment or interaction,
 and must not obscure the known milestones.
 
 This future service does not change the Android product's current local-first provider

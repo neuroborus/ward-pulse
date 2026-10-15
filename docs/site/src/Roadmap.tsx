@@ -12,7 +12,7 @@ const questionMarks = Array.from({ length: 72 }, (_, index) => {
     left: `${3 + (seed % 940) / 10}%`,
     top: `${2 + (mixed % 960) / 10}%`,
     fontSize: `${0.8 + (mixed % 5) / 10}rem`,
-    opacity: 0.16 + (seed % 4) * 0.04,
+    opacity: 0.32 + (seed % 4) * 0.04,
   }
 })
 
@@ -71,6 +71,7 @@ export function Roadmap({ children }: { children: React.ReactNode }) {
     <div className="wardpulse-roadmap" ref={root}>
       <div className="wardpulse-roadmap__content">
         {children}
+        <div className="wardpulse-roadmap__direction" aria-hidden="true" />
         <div className="wardpulse-roadmap__questions" aria-hidden="true">
           {questionMarks.map((style, index) => (
             <span key={index} style={style}>
@@ -78,6 +79,7 @@ export function Roadmap({ children }: { children: React.ReactNode }) {
             </span>
           ))}
         </div>
+        <div className="wardpulse-roadmap__fog" aria-hidden="true" />
       </div>
     </div>
   )
