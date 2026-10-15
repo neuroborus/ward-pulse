@@ -227,6 +227,7 @@ export default defineConfig({
   basePath,
   description:
     'WardPulse is a local-first AI usage dashboard for your phone, watch and watch face.',
+  iconUrl: withBasePath('/favicon.svg'),
   markdown: {
     remarkPlugins: [inlineGuideMarkdown],
     outputRemarkPlugins: [

@@ -1,6 +1,6 @@
 # Roadmap
 
-Planned milestones for WardPulse. No release dates are set.
+Planned milestones for WardPulse.
 
 ## Release 0.1.0
 
@@ -17,7 +17,6 @@ WardPulse on iPhone.
 
 ## Agent Bridge (MCP)
 
-Receive important messages from your AI agents in WardPulse over MCP. Sending replies is
-still an open question.
+Receive important messages from your AI agents in WardPulse over MCP.
 
-This would require a WardPulse cloud account and access key, even for one-way notifications.
+This would require a WardPulse cloud account and access key.
