@@ -15,6 +15,10 @@ Connect more than one account from the same provider and keep their usage separa
 
 WardPulse on iPhone.
 
+## Other providers
+
+Track usage from more AI providers.
+
 ## Agent Bridge (MCP)
 
 Receive important messages from your AI agents in WardPulse over MCP.

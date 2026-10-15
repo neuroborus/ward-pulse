@@ -3003,6 +3003,7 @@ or release acceptance. The public summary is owned by
   model is not multi-account support.
 - **iOS release:** a later iPhone product milestone. This does not start iOS implementation
   or add watchOS to the committed scope.
+- **Other providers:** support for additional AI providers.
 - **Agent Bridge (MCP):** a further-out service through which agents can send important
   messages to WardPulse. Replies are a possibility, not a requirement or committed capability.
   Even one-way notifications need a full hosted backend, including WardPulse accounts, access
@@ -3010,10 +3011,11 @@ or release acceptance. The public summary is owned by
   contracts remain future design work; no service, API or commercial plan exists by virtue of
   this roadmap.
 
-The public roadmap shows four known milestones at irregular positions without connecting
+The public roadmap shows five known milestones at irregular positions without connecting
 lines. One broad background arrow points down through the centre to suggest overall
 direction, without linking particular milestones. Multi-account is slightly nearer than
-iOS; all four use the same filled marker, with iOS only slightly dimmer. Many quieter,
+iOS; all five use the same filled marker. The iOS and Other providers headings, body copy
+and markers share a slightly muted appearance. Many quieter,
 anonymous question-mark points form an irregular background field, each paired with a
 recognisable smaller filled marker. Its density adapts to the available space, keeping the
 known milestones clear in front. A background position may be occupied by a real milestone

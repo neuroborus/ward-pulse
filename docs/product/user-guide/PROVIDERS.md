@@ -53,8 +53,9 @@ expired or the attempt was cancelled, start a new attempt rather than reusing th
 2. Sign in to the Cursor account you want to connect and follow the provider's prompts.
 3. After sign-in completes, return to WardPulse and check Dashboard reporting.
 
-If you already have a dashboard session in a desktop browser, tap the **About Cursor sign-in**
-help icon, then **Advanced paste**. The paste dialog includes cookie instructions.
+If sign-in through WardPulse's built-in browser fails, tap the **About Cursor sign-in**
+help icon, then **Advanced paste**. Follow the desktop cookie instructions below; sign in
+there first if you do not already have a session.
 
 ![Cursor sign-in help with the Advanced paste action in the light theme.](/screenshots/phone-cursor-sign-in-help-light.png)
 

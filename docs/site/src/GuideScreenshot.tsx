@@ -39,7 +39,7 @@ export function GuideScreenshot({
       data-wardpulse-screenshot-theme={theme}
       href={resolvedSrc}
     >
-      <img {...props} src={resolvedSrc} />
+      <img {...props} src={resolvedSrc} loading="lazy" />
       {providerActionsOverlay && providerActionsScreenshot.test(src) ? (
         <svg
           aria-hidden="true"

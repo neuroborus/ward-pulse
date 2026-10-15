@@ -9,10 +9,12 @@ in to your providers independently.
 Tap **Refresh** at the top of WardPulse, or pull down on a list. A refresh attempts to read
 the connected providers; it cannot make their servers publish data sooner.
 
-The Wear Glance refresh control requests a phone refresh. It can be disabled by the phone's
-cadence allowance or by a provider rate limit. **Stale** offers a recovery request; **Rate limited**
-means you should wait rather than repeatedly tap. A watch request needs delivery to the phone
-and a later summary back, so it is not a guaranteed instant update.
+On Wear Glance, an active **OK** or **!OK** control can request a phone refresh. A grey
+control is unavailable, even when **Stale** appears below it. See the [refresh status legend](/guide/watch#refresh-status)
+for colours, messages and actions.
+
+A watch request needs delivery to the phone and a later summary back, so it is not a
+guaranteed instant update.
 
 ## Set automatic cadence
 

@@ -177,6 +177,7 @@
 .wardpulse-roadmap {
   container: roadmap / inline-size;
   --wardpulse-roadmap-paper: var(--vocs-background-color-surface);
+  --wardpulse-roadmap-muted: color-mix(in srgb, var(--vocs-text-color-primary) 82%, var(--wardpulse-roadmap-paper));
 }
 
 /* Native Markdown stays in reading order; automatic rows grow with the actual copy. */
@@ -187,6 +188,7 @@
     auto auto [field] 6rem
     [release] auto [release-copy] auto [release-gap] 5.5rem
     [multi] auto [multi-copy ios] auto [ios-copy] auto [ios-gap] 6.5rem
+    [providers] auto [providers-copy] auto [providers-gap] 8rem
     [bridge] auto [bridge-message] auto [bridge-account] auto [bridge-gap] 3rem [end];
   gap: 0.75rem 0;
   isolation: isolate;
@@ -245,8 +247,12 @@
   margin-top: 2rem;
 }
 
-.wardpulse-roadmap__content > h2:nth-of-type(3)::before {
-  background: color-mix(in srgb, var(--vocs-text-color-primary) 82%, var(--wardpulse-roadmap-paper));
+.wardpulse-roadmap__content > :is(h2:nth-of-type(3), h2:nth-of-type(4), p:nth-of-type(4), p:nth-of-type(5)) {
+  color: var(--wardpulse-roadmap-muted);
+}
+
+.wardpulse-roadmap__content > :is(h2:nth-of-type(3), h2:nth-of-type(4))::before {
+  background: var(--wardpulse-roadmap-muted);
 }
 
 .wardpulse-roadmap__content > p:nth-of-type(4) {
@@ -254,14 +260,22 @@
 }
 
 .wardpulse-roadmap__content > h2:nth-of-type(4) {
-  grid-area: bridge / 50 / span 1 / -1;
+  grid-area: providers / 61 / span 1 / -1;
 }
 
 .wardpulse-roadmap__content > p:nth-of-type(5) {
-  grid-area: bridge-message / 50 / span 1 / -1;
+  grid-area: providers-copy / 61 / span 1 / -1;
+}
+
+.wardpulse-roadmap__content > h2:nth-of-type(5) {
+  grid-area: bridge / 50 / span 1 / -1;
 }
 
 .wardpulse-roadmap__content > p:nth-of-type(6) {
+  grid-area: bridge-message / 50 / span 1 / -1;
+}
+
+.wardpulse-roadmap__content > p:nth-of-type(7) {
   grid-area: bridge-account / 50 / span 1 / -1;
 }
 
@@ -305,7 +319,11 @@
 }
 
 .wardpulse-roadmap__questions--ios-gap {
-  grid-area: ios-gap / 1 / bridge / -1;
+  grid-area: ios-gap / 1 / providers / -1;
+}
+
+.wardpulse-roadmap__questions--providers-gap {
+  grid-area: providers-gap / 1 / bridge / -1;
 }
 
 .wardpulse-roadmap__questions--bridge-gap {
@@ -322,6 +340,10 @@
 
 .wardpulse-roadmap__questions--ios-side {
   grid-area: ios / 1 / ios-gap / 18;
+}
+
+.wardpulse-roadmap__questions--providers-side {
+  grid-area: providers / 1 / providers-gap / 51;
 }
 
 .wardpulse-roadmap__questions--bridge-side {
@@ -354,6 +376,7 @@
     .wardpulse-roadmap__questions--upper,
     .wardpulse-roadmap__questions--release-gap,
     .wardpulse-roadmap__questions--ios-gap,
+    .wardpulse-roadmap__questions--providers-gap,
     .wardpulse-roadmap__questions--bridge-gap
   ) > span {
     visibility: hidden;
@@ -367,7 +390,10 @@
 }
 
 @container roadmap-field (height < 5rem) {
-  .wardpulse-roadmap__questions--ios-gap > span {
+  :is(
+    .wardpulse-roadmap__questions--ios-gap,
+    .wardpulse-roadmap__questions--providers-gap
+  ) > span {
     visibility: hidden;
   }
 }
@@ -377,6 +403,7 @@
     .wardpulse-roadmap__questions--release-side,
     .wardpulse-roadmap__questions--multi-side,
     .wardpulse-roadmap__questions--ios-side,
+    .wardpulse-roadmap__questions--providers-side,
     .wardpulse-roadmap__questions--bridge-side
   ) > span {
     visibility: hidden;
@@ -390,6 +417,7 @@
       [release] auto [release-copy] auto [release-gap] 4.5rem
       [multi] auto [multi-copy] auto [multi-gap] 1.25rem
       [ios] auto [ios-copy] auto [ios-gap] 6rem
+      [providers] auto [providers-copy] auto [providers-gap] 8rem
       [bridge] auto [bridge-message] auto [bridge-account] auto [bridge-gap] 3rem [end];
   }
 
@@ -399,12 +427,12 @@
 
   .wardpulse-roadmap__content > h2:nth-of-type(1),
   .wardpulse-roadmap__content > p:nth-of-type(2) {
-    margin-inline-start: calc(2.25rem + 14%);
+    margin-inline-start: calc(2.25rem + 6%);
   }
 
   .wardpulse-roadmap__content > h2:nth-of-type(2),
   .wardpulse-roadmap__content > p:nth-of-type(3) {
-    margin-inline-start: calc(2.25rem + 23%);
+    margin-inline-start: calc(2.25rem + 12%);
   }
 
   .wardpulse-roadmap__content > h2:nth-of-type(3) {
@@ -417,19 +445,24 @@
   }
 
   .wardpulse-roadmap__content > h2:nth-of-type(4),
-  .wardpulse-roadmap__content > p:nth-of-type(5),
-  .wardpulse-roadmap__content > p:nth-of-type(6) {
+  .wardpulse-roadmap__content > p:nth-of-type(5) {
     margin-inline-start: calc(2.25rem + 8%);
+  }
+
+  .wardpulse-roadmap__content > h2:nth-of-type(5),
+  .wardpulse-roadmap__content > p:nth-of-type(6),
+  .wardpulse-roadmap__content > p:nth-of-type(7) {
+    margin-inline-start: calc(2.25rem + 4%);
   }
 
   .wardpulse-roadmap__questions--release-side {
     grid-area: release-copy / 1 / release-gap / -1;
-    width: calc(1rem + 14%);
+    width: calc(1rem + 6%);
   }
 
   .wardpulse-roadmap__questions--multi-side {
     grid-area: multi-copy / 1 / multi-gap / -1;
-    width: calc(1rem + 23%);
+    width: calc(1rem + 12%);
   }
 
   .wardpulse-roadmap__questions--ios-side {
@@ -437,8 +470,13 @@
     width: 1rem;
   }
 
+  .wardpulse-roadmap__questions--providers-side {
+    grid-area: providers-copy / 1 / providers-gap / -1;
+    width: calc(0.75rem + 8%);
+  }
+
   .wardpulse-roadmap__questions--bridge-side {
     grid-area: bridge-message / 1 / bridge-gap / -1;
-    width: calc(0.75rem + 8%);
+    width: calc(0.75rem + 4%);
   }
 }

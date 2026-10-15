@@ -22,6 +22,7 @@ credits and refresh status.
 ![Wear Glance showing selected capacities in a circular screen.](/screenshots/wear-glance.png)
 
 The selected metric with the lowest remaining percentage appears first.
+The example has a grey **OK** control and disabled **Alerts: 0**.
 
 ### Plan windows
 
@@ -40,9 +41,34 @@ Tap **Alerts: N** on Glance when N is greater than zero to open the active alert
 **No active alerts**. The count describes alerts, not whether every provider freshly synced.
 Configure rules on the phone's **Providers** tab; Wear has no rule editor.
 
-The refresh control sends a request to the phone. Cadence and rate-limit states can disable
-it; **Stale** indicates recovery is needed. See [Sync and notifications](/guide/sync).
+#### Refresh status
+
+**OK** means there is no detail message. **!OK** directs you to the line below; it does not
+always mean an error.
+
+Green **OK** and amber/orange **!OK** can be tapped to request a phone refresh. Grey/dim
+**OK** or **!OK** cannot be tapped. Grey **OK** can be a normal wait before the phone permits
+another refresh.
+
+Only one detail is shown. The control can be grey even when **Mock data** or **Stale**
+appears below it, if a refresh wait or rate limit also applies. **OK** does not confirm
+that every provider is current or that a refresh reached the phone.
+
+| Message | Meaning and action |
+| --- | --- |
+| **Mock data** | Example figures rather than live usage. If the phone offers **Settings → Debug → Mock data**, turn it off and refresh. |
+| **Stale** | Earlier data needs a newer report. Check the phone and connectivity; refresh when allowed. |
+| **Rate limited** | A provider is temporarily limiting requests. Wait before trying again. |
+| **Auth required** | Sign-in or a saved key needs attention. Reconnect under **Providers** on the phone. |
+| **Warning** | The summary reports a warning. Check the phone's Dashboard and active alerts. |
+| **Error** | A reporting attempt failed. Open the phone's Dashboard for details and recovery. |
+| **Unknown** | The summary's status is unavailable. Check reporting on the phone. |
+
+If **Ring data unavailable** replaces the rows, none of the selected rings has displayable
+data. Check the phone's Dashboard and [ring choices](#choose-usage-rings).
+
 Wear can mark a received summary stale after two hours without a newer summary.
+See [Sync and notifications](/guide/sync#refresh-now) for request delivery and refresh timing.
 
 ## Choose usage rings
 

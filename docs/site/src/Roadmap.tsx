@@ -14,6 +14,8 @@ const questionFields = [
   { name: 'multi-side', width: 2, height: 4 },
   { name: 'ios-side', width: 2, height: 4 },
   { name: 'bridge-side', width: 2, height: 4 },
+  { name: 'providers-gap', width: 9, height: 5 },
+  { name: 'providers-side', width: 2, height: 4 },
 ].map(({ name, width, height }, field) => {
   const points: { x: number; y: number }[] = []
   const marks: React.CSSProperties[] = []
