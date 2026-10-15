@@ -14,7 +14,7 @@ to the operator's judgement, by way of the task.
 > boundaries; it does not authorize code implementation outside Agent Runner and must not be
 > edited to suit the runner. Where this file is silent, that one applies.
 >
-> Last updated: 2026-10-14.
+> Last updated: 2026-10-15.
 
 ## 1. Scope Review
 
@@ -63,23 +63,28 @@ applies, and it is the reason this file exists.
 - `git diff --check HEAD`.
 - Rust gates from `AGENTS.md` when `core/` changed.
 
-`just validate-watchface` belongs here too, but only with its artifact granted. The recipe
-fetches the Watch Face Format validator JAR, so the step declares a pinned artifact — the asset
-URL and its `sha256` — and the runner supplies it from cache. The worker reported
-`unsupported: []` for this command on 2026-10-10, meaning nothing about it is ungrantable; an
-earlier run failed it as `insufficient-authority` only because the alias in
-`LOCAL_ARTIFACTS/agent-runner.json` granted `scratch` and `cache` without the artifact.
-
-The toolchain is warm inside the project: the Flutter SDK lives in `.toolchains/flutter` and is
-writable, as are the Gradle, pub and XDG caches. There is no network — nothing may be
-downloaded.
+The local Flutter SDK and warm dependencies can support ordinary checks without downloads.
+Cache access depends on the executor: ordinary Codex workspace-write command attempts use a
+fresh private `XDG_CACHE_HOME`, so prewarming the host cache does not populate it. Do not assume Gradle,
+pub or XDG caches are shared or writable. Report actual command results; an artifact grant or
+`unsupported: []` alone proves neither that a command ran nor that it can finish.
 
 **The owner runs these on the host, after the step:**
 
+- `just validate-watchface`. It needs the checksum-pinned JAR, Java execution and writable
+  temporary storage, plus network access on a cold cache. On 2026-10-15, supplying the valid
+  JAR did not let an ordinary Native attempt complete Java/temp-directory setup. An artifact
+  grant alone is insufficient; assign it to a different executor only after observing that
+  executor complete the actual command. The owner still confirms the required host gates.
 - `just check-wear`, `just check-watchface`. Both start Gradle, and Gradle opens a loopback
   socket for its file-lock listener; the agent sandbox denies sockets, so Gradle does not start
   there at all. That is an inability to run, not a failing test.
 - Every device check: `adb`, emulators, inspecting a screen or the watch face.
+
+For build or validation artifact download, pin or cache changes, apply the conditional
+empty-cache and reuse check in [host finalization](SKILL.md#4-tests-and-checks). Keep the
+ordinary warm checks; they prove a different path. Do not add artifact grants, aliases or
+repository projections merely to move an owner check into an ordinary step.
 
 **`just check-docs` reaches no further than the checkout, as far as anyone has been able to
 show.** This file placed it in the sandbox column on 2026-10-02. On 2026-10-10 a worker declared

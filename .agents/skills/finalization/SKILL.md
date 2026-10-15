@@ -9,7 +9,7 @@ description: Post-change finalization checklist for WardPulse (Rust core, Flutte
 >
 > Run this after implementation or documentation work to keep the monorepo coherent.
 >
-> Last Updated: 2026-10-14
+> Last Updated: 2026-10-15
 
 ## 1. Scope Review
 
@@ -69,11 +69,15 @@ just check-phone
 - [ ] If Android/Wear/WFF Gradle projects are generated, run the relevant Gradle test/build task.
 - [ ] If schemas or fixtures changed, run `just validate-fixtures`: it parses every file and checks each golden fixture against its schema.
 - [ ] If GitHub Actions workflows changed, run `actionlint .github/workflows/*.yml`.
+- [ ] If a local skill changed, run the `quick_validate.py` command from `AGENTS.md` for each affected skill directory.
+- [ ] If build or validation artifact downloads, pins or caches changed, or a CI failure suggests a warm cache is hiding a download failure, run the affected existing check on a network-capable host with a new, empty, task-owned cache. Verify the actual download, checksum and tool completion, then repeat once with that cache to prove reuse. Do not delete or seed shared caches, copy the repository, or add a test framework for this check. Record the command, cache location and outcomes; a warm-cache pass alone does not prove the download works.
 - [ ] If durable docs, Vocs pages, component READMEs, or site navigation changed, run:
 
 ```bash
 just check-docs
 ```
+
+- [ ] For a CI repair, after an already-authorized push, verify that the workflows expected for that event and the affected paths all completed successfully on the exact pushed commit. Pending, failed or canceled runs, and successful runs on an older commit, do not establish success. This is post-push acceptance, not a local precommit gate or permission to push.
 
 ## 5. Emulator Check
 
