@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../app/pull_to_refresh_list.dart';
 import '../dashboard/dashboard_models.dart';
@@ -14,8 +15,8 @@ const _independentProductDisclaimer =
     'endorsed by, or sponsored by OpenAI, Anthropic, Cursor, Google, or any '
     'other provider. Product names are trademarks of their respective owners.';
 
-/// Systemic phone settings: poll cadence, notifications, diagnostics, legal,
-/// and debug toggles.
+/// Systemic phone settings: poll cadence, notifications, diagnostics, help,
+/// legal, and debug toggles.
 /// Not connections, credentials, Watchface/Widget layout, or alert thresholds
 /// (those live on Providers).
 class SettingsScreen extends StatefulWidget {
@@ -152,6 +153,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SnackBar(content: Text('Could not update refresh interval')),
         );
       }
+    }
+  }
+
+  Future<void> _openHelp() async {
+    bool opened;
+    try {
+      opened = await launchUrl(
+        Uri.parse('https://neuroborus.github.io/ward-pulse/'),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {
+      opened = false;
+    }
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the browser')),
+      );
     }
   }
 
@@ -305,6 +323,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 16),
         ],
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.help_outline),
+            title: const Text('Help'),
+            subtitle: const Text('Open the user guide in your browser'),
+            trailing: const Icon(Icons.open_in_new),
+            onTap: _openHelp,
+          ),
+        ),
+        const SizedBox(height: 16),
         const _SettingsSectionHeader(title: 'Legal'),
         const Card(
           child: ListTile(

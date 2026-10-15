@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_app.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
@@ -282,9 +283,15 @@ void main() {
     expect(find.text('Diagnostics'), findsOneWidget);
     expect(find.text('Sync'), findsWidgets);
     expect(find.text('Watch summary'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Help'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.widgetWithText(ListTile, 'Help'), findsOneWidget);
   });
 
-  testWidgets('Settings always shows the independent-product disclaimer', (
+  testWidgets('Settings keeps Help and Legal without snapshot or debug', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -301,6 +308,12 @@ void main() {
     expect(find.text('Debug'), findsNothing);
     expect(find.text('Diagnostics'), findsNothing);
     await tester.scrollUntilVisible(
+      find.text('Help'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.widgetWithText(ListTile, 'Help'), findsOneWidget);
+    await tester.scrollUntilVisible(
       find.text('Legal'),
       300,
       scrollable: find.byType(Scrollable).first,
@@ -315,6 +328,102 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('Settings Help opens the public guide in an external browser', (
+    tester,
+  ) async {
+    const channel = MethodChannel('plugins.flutter.io/url_launcher');
+    final messenger = tester.binding.defaultBinaryMessenger;
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    final calls = <MethodCall>[];
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      return true;
+    });
+
+    await tester.pumpWidget(
+      WardPulseApp(repository: const NoProvidersDashboardRepository()),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Help'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Help'));
+    await tester.pumpAndSettle();
+
+    expect(calls, hasLength(1));
+    expect(calls.single.method, 'launch');
+    expect(
+      calls.single.arguments,
+      allOf(
+        containsPair('url', 'https://neuroborus.github.io/ward-pulse/'),
+        containsPair('useWebView', false),
+        containsPair('useSafariVC', false),
+        containsPair('universalLinksOnly', false),
+        containsPair('headers', isEmpty),
+      ),
+    );
+    expect(find.byType(SnackBar), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final throwsException in [false, true]) {
+    for (final disposeBeforeCompletion in [false, true]) {
+      testWidgets(
+        'Settings Help handles '
+        '${throwsException ? 'a platform exception' : 'a false launch result'}'
+        '${disposeBeforeCompletion ? ' after disposal' : ''}',
+        (tester) async {
+          const channel = MethodChannel('plugins.flutter.io/url_launcher');
+          final messenger = tester.binding.defaultBinaryMessenger;
+          addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+          final completion = Completer<bool>();
+          final calls = <MethodCall>[];
+          messenger.setMockMethodCallHandler(channel, (call) async {
+            calls.add(call);
+            return completion.future;
+          });
+
+          await tester.pumpWidget(
+            WardPulseApp(repository: const NoProvidersDashboardRepository()),
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Settings'));
+          await tester.pumpAndSettle();
+          await tester.scrollUntilVisible(
+            find.text('Help'),
+            300,
+            scrollable: find.byType(Scrollable).first,
+          );
+          await tester.tap(find.text('Help'));
+          await tester.pump();
+          expect(calls, hasLength(1));
+          expect(calls.single.method, 'launch');
+          expect(find.byType(SnackBar), findsNothing);
+
+          if (disposeBeforeCompletion) {
+            await tester.pumpWidget(const SizedBox.shrink());
+          }
+          if (throwsException) {
+            completion.completeError(PlatformException(code: 'launch_failed'));
+          } else {
+            completion.complete(false);
+          }
+          await tester.pumpAndSettle();
+
+          expect(tester.takeException(), isNull);
+          expect(
+            find.text('Could not open the browser'),
+            disposeBeforeCompletion ? findsNothing : findsOneWidget,
+          );
+        },
+      );
+    }
+  }
 
   testWidgets('slot cards say where metrics come from when there are none', (
     tester,

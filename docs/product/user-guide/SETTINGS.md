@@ -11,11 +11,14 @@ home-widget metrics are on **Widget**.
 | Refresh | Refresh interval while open and approximate background cadence. |
 | Notifications | Plan recovery notifications for an exhausted window becoming usable. |
 | Diagnostics | Sync timestamp/status and the next Watch summary, when a summary is available. |
+| Help | User guide in your external browser. |
 | Legal | Independent product information. |
 
 Follow [Sync and notifications](/guide/sync) to set the cadence or notification permission.
 Diagnostics helps you compare the phone's displayed data and watch summary. It does not
 guarantee that the watch has already received an update.
+
+Choose **Settings → Help** to open the user guide in your external browser.
 
 ## Stored data and provider requests
 
