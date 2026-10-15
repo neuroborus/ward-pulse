@@ -2,8 +2,9 @@
 
 This directory is the repository documentation index and gate. Root README introduces the
 product, screenshots and user guide; durable product and engineering knowledge lives here.
-The public Vocs site presents user guidance and privacy/help. Contributor and technical
-references below remain available in the repository without becoming public Vocs pages.
+The public Vocs site presents user guidance, the product roadmap and privacy/help.
+Contributor and technical references below remain available in the repository without
+becoming public Vocs pages.
 
 ## User Guide
 
@@ -16,6 +17,7 @@ references below remain available in the repository without becoming public Vocs
 - [Settings and privacy](product/user-guide/SETTINGS.md)
 - [Troubleshooting](product/user-guide/TROUBLESHOOTING.md)
 - [Report an issue](product/user-guide/REPORT_AN_ISSUE.md)
+- [Roadmap](product/user-guide/ROADMAP.md)
 - [UI screenshot index](assets/README.md)
 
 ## Start Here
@@ -62,7 +64,8 @@ Use this index before adding new work:
 - Add focused documents instead of growing one catch-all file.
 - Link new documents from this index before relying on them in implementation.
 - Add a thin page under `site/src/pages/` and update `site/vocs.config.ts` only for public user
-  guidance and relevant privacy/help; apply [user-docs](../.agents/skills/user-docs/SKILL.md).
+  guidance, the product roadmap and relevant privacy/help; apply
+  [user-docs](../.agents/skills/user-docs/SKILL.md).
 - Run `just check-docs` after changing durable docs, Vocs pages, or navigation.
 - Cite source files by named symbols or recipes instead of line numbers; the checkout-only
   gate is `just check-doc-citations` (see [DOCUMENTATION.md](DOCUMENTATION.md)).

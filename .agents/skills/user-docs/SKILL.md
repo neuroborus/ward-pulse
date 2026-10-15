@@ -24,11 +24,14 @@ execution with independent review. This skill changes no check or commit authori
 - Authoritative task guides live in `docs/product/user-guide/`; the public privacy policy
   remains `docs/product/PRIVACY_POLICY.md`. The landing page and root README begin with a
   short product introduction, approved screenshot gallery and clear guide entry.
-- Public Vocs publishes only user guidance and relevant privacy/help. Do not publish
-  developer source notes, file paths/symbols, architecture, plans, toolchain/workflows,
-  bindings or internal design/reference pages. Remove their public adapters/routes rather
-  than only hiding navigation. Preserve the originals and index them in `docs/README.md`;
-  engineering documentation retains its ordinary repository availability.
+- Public Vocs publishes user guidance, an owner-requested product roadmap and relevant
+  privacy/help. The roadmap describes user benefits and planned milestones without release
+  dates or completed-release claims unless verified; keep tentative features visibly tentative.
+  Do not publish developer source notes, file paths/symbols, architecture, implementation
+  plans, toolchain/workflows, bindings or internal design/reference pages. Remove their
+  public adapters/routes rather than only hiding navigation. Preserve the originals and
+  index them in `docs/README.md`; engineering documentation retains its ordinary repository
+  availability.
 - Provider/browser account instructions needed for connection are allowed, including the
   exact cookie name and browser controls. They are user tasks, not app implementation notes.
 - Direct help requests to the repository's GitHub issues and the single owning

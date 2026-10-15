@@ -150,14 +150,27 @@ function inlineGuideMarkdown(this: MarkdownProcessor) {
 
   return (tree: { children: MarkdownNode[] }, file: MarkdownFile) => {
     const source = typeof file.value === 'string' ? file.value : undefined
+    const isRoadmap = /^import\s+\{ Roadmap \}\s+from\s+['"]\.\.\/Roadmap['"]$/m.test(
+      source ?? '',
+    )
     const guideImport = source?.match(
       /^import\s+([A-Z][A-Za-z0-9_$]*)\s+from\s+['"](\.\.\/\.\.\/\.\.\/\.\.\/product\/user-guide\/[A-Z_]+\.md)['"]$/m,
     )
-    if (!guideImport) return
+    if (!guideImport && !isRoadmap) return
 
     // React keeps the imports and supplies the image override through the component prop.
     if (tree.children.some((node) => node.type === 'mdxjsEsm')) return
 
+    // The root wrapper may already contain expanded Markdown; replace it once for exports/search.
+    if (isRoadmap) {
+      const roadmap = processor.parse(
+        readFileSync(resolve(import.meta.dirname, '../product/user-guide/ROADMAP.md'), 'utf8'),
+      )
+      tree.children.splice(0, tree.children.length, ...roadmap.children)
+      return
+    }
+
+    if (!guideImport) return
     const [, componentName, importPath] = guideImport
     const guide = processor.parse(
       readFileSync(resolve(import.meta.dirname, 'src/pages/guide', importPath), 'utf8'),
@@ -226,6 +239,7 @@ export default defineConfig({
   renderStrategy: 'full-static',
   sidebar: [
     { text: 'Overview', link: '/' },
+    { text: 'Roadmap', link: '/roadmap' },
     {
       text: 'User guide',
       items: [

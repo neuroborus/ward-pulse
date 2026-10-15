@@ -2987,4 +2987,40 @@ architecture proves Rust core can feed both surfaces
 
 ## 24. Current recommended next step
 
-No immediate required work is currently recommended.
+See [Product roadmap beyond the Android MVP](#25-product-roadmap-beyond-the-android-mvp)
+for the planned sequence. These milestones do not establish release readiness or dates.
+
+## 25. Product roadmap beyond the Android MVP
+
+Owner direction recorded on 2026-10-15. These are planned milestones, not shipped features
+or release acceptance. The public summary is owned by
+[Roadmap](product/user-guide/ROADMAP.md).
+
+- **Release 0.1.0:** first public Android phone/Wear OS release, with the home widget and
+  watch face. No release date or distribution route is committed here.
+- **Multi-account:** multiple accounts of the same provider, with separate identities,
+  credentials and usage. This is the nearer follow-up milestone; the current single-connection
+  model is not multi-account support.
+- **iOS release:** a later iPhone product milestone. This does not start iOS implementation
+  or add watchOS to the committed scope.
+- **Agent Bridge (MCP):** a further-out service through which agents can send important
+  messages to WardPulse. Replies are a possibility, not a requirement or committed capability.
+  Even one-way notifications need a full hosted backend, including WardPulse accounts, access
+  keys and subscription management. Its authentication, billing, retention and delivery
+  contracts remain future design work; no service, API or commercial plan exists by virtue of
+  this roadmap.
+
+The public roadmap shows the four known milestones as separate floating points without
+connecting lines, with multi-account nearer than the dimmer iOS milestone. Many quieter,
+anonymous question-mark points form an irregular background field rather than a few
+individual slots. Their density adapts to the available space, keeping the four known
+milestones clear in front. A background position may be occupied by a real milestone
+through an ordinary documentation update; it is not a named feature, promised release or
+interactive editing control. The background can fade into a separate fog-of-war region
+below Agent Bridge. These decorations add no announced feature, commitment or interaction,
+and must not obscure the known milestones.
+
+This future service does not change the Android product's current local-first provider
+credential model. It does not authorize uploading provider credentials or usage data to a
+WardPulse backend. Any later service design must define its own data and security boundaries
+before implementation and update the applicable privacy guidance.

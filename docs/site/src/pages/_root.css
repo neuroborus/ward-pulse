@@ -173,3 +173,222 @@
     width: 100%;
   }
 }
+
+.wardpulse-roadmap {
+  container: roadmap / inline-size;
+  --wardpulse-roadmap-paper: var(--vocs-background-color-surface);
+}
+
+/* Native Markdown stays in reading order; automatic rows grow with the actual copy. */
+.wardpulse-roadmap__content {
+  display: grid;
+  grid-template-columns: repeat(20, minmax(0, 1fr));
+  grid-template-rows: auto auto 5rem auto auto 5rem auto auto auto 9rem auto auto auto 2rem auto 0 auto;
+  gap: 0.75rem 0;
+  isolation: isolate;
+}
+
+.wardpulse-roadmap__content > :is(h1, h2, p) {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  background: var(--wardpulse-roadmap-paper);
+  box-shadow: 0 0 0 0.5rem var(--wardpulse-roadmap-paper);
+}
+
+.wardpulse-roadmap :is(h1, h2)[id] {
+  scroll-margin-top: calc(var(--vocs-spacing-topNav) + 4rem);
+  box-shadow: 0 0 0 1rem var(--wardpulse-roadmap-paper);
+}
+
+.wardpulse-roadmap__content > h1 {
+  grid-area: 1 / 1 / 2 / -1;
+}
+
+.wardpulse-roadmap__content > p:first-of-type {
+  grid-area: 2 / 1 / 3 / -1;
+}
+
+.wardpulse-roadmap__content > h2::before {
+  content: '';
+  position: absolute;
+  top: 0.3em;
+  left: -1.5rem;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background: var(--vocs-text-color-primary);
+  box-shadow: 0 0 0 0.75rem var(--wardpulse-roadmap-paper);
+}
+
+.wardpulse-roadmap__content > h2:nth-of-type(1) {
+  grid-area: 4 / 8 / 5 / 19;
+}
+
+.wardpulse-roadmap__content > p:nth-of-type(2) {
+  grid-area: 5 / 8 / 6 / 19;
+}
+
+.wardpulse-roadmap__content > h2:nth-of-type(2) {
+  grid-area: 7 / 14 / 8 / -1;
+}
+
+.wardpulse-roadmap__content > p:nth-of-type(3) {
+  grid-area: 8 / 14 / 9 / -1;
+}
+
+.wardpulse-roadmap__content > h2:nth-of-type(3) {
+  grid-area: 8 / 5 / 9 / 12;
+  align-self: end;
+  margin-top: 3.5rem;
+  color: var(--vocs-text-color-secondary);
+}
+
+.wardpulse-roadmap__content > h2:nth-of-type(3)::before {
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 2px solid var(--vocs-text-color-secondary);
+  background: var(--wardpulse-roadmap-paper);
+}
+
+.wardpulse-roadmap__content > p:nth-of-type(4) {
+  grid-area: 9 / 5 / 10 / 12;
+}
+
+.wardpulse-roadmap__content > h2:nth-of-type(4) {
+  grid-area: 11 / 14 / 12 / -1;
+}
+
+.wardpulse-roadmap__content > p:nth-of-type(5) {
+  grid-area: 12 / 14 / 13 / -1;
+}
+
+.wardpulse-roadmap__content > p:nth-of-type(6) {
+  grid-area: 13 / 14 / 14 / -1;
+}
+
+.wardpulse-roadmap__content > p:nth-of-type(7) {
+  grid-area: 15 / 1 / 16 / -1;
+}
+
+.wardpulse-roadmap__content > p:nth-of-type(8) {
+  grid-area: 17 / 1 / 18 / -1;
+  display: grid;
+  place-items: center;
+  min-height: 14rem;
+  padding: 5rem 1.5rem 3rem;
+  text-align: center;
+  background: none;
+  box-shadow: none;
+  isolation: isolate;
+}
+
+/* The fog starts in its own row, after both Bridge paragraphs and the explanation. */
+.wardpulse-roadmap__content > p:nth-of-type(8)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 45% 55% 0 0 / 18% 30% 0 0;
+  background:
+    radial-gradient(ellipse at 18% 65%, var(--vocs-background-color-surfaceTint), transparent 65%),
+    radial-gradient(ellipse at 85% 80%, var(--vocs-border-color-primary), transparent 70%),
+    linear-gradient(transparent, var(--vocs-background-color-surfaceMuted));
+  mask-image: linear-gradient(transparent, black 55%);
+  pointer-events: none;
+}
+
+.wardpulse-roadmap__questions {
+  position: relative;
+  z-index: 0;
+  grid-area: 3 / 1 / 14 / -1;
+  min-width: 0;
+  margin-inline: 1rem;
+  pointer-events: none;
+  user-select: none;
+  color: var(--vocs-text-color-secondary);
+  mask-image: linear-gradient(black 85%, transparent);
+}
+
+.wardpulse-roadmap__questions > span {
+  position: absolute;
+  line-height: 1;
+}
+
+.wardpulse-roadmap__questions > span::before {
+  content: '';
+  position: absolute;
+  top: 0.4em;
+  left: -0.4rem;
+  width: 0.15rem;
+  height: 0.15rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+@container roadmap (width < 38em) {
+  .wardpulse-roadmap__content {
+    grid-template-rows: auto auto 3rem auto auto 4rem auto auto 1.5rem auto auto 7rem auto auto auto 2rem auto 0 auto;
+  }
+
+  .wardpulse-roadmap__content > h2:nth-of-type(1) {
+    grid-area: 4 / 4 / 5 / 20;
+  }
+
+  .wardpulse-roadmap__content > p:nth-of-type(2) {
+    grid-area: 5 / 4 / 6 / 20;
+  }
+
+  .wardpulse-roadmap__content > h2:nth-of-type(2) {
+    grid-area: 7 / 6 / 8 / -1;
+  }
+
+  .wardpulse-roadmap__content > p:nth-of-type(3) {
+    grid-area: 8 / 6 / 9 / -1;
+  }
+
+  .wardpulse-roadmap__content > h2:nth-of-type(3) {
+    grid-area: 10 / 3 / 11 / 19;
+    margin-top: 0;
+  }
+
+  .wardpulse-roadmap__content > p:nth-of-type(4) {
+    grid-area: 11 / 3 / 12 / 19;
+  }
+
+  .wardpulse-roadmap__content > h2:nth-of-type(4) {
+    grid-area: 13 / 6 / 14 / -1;
+  }
+
+  .wardpulse-roadmap__content > p:nth-of-type(5) {
+    grid-area: 14 / 6 / 15 / -1;
+  }
+
+  .wardpulse-roadmap__content > p:nth-of-type(6) {
+    grid-area: 15 / 6 / 16 / -1;
+  }
+
+  .wardpulse-roadmap__content > p:nth-of-type(7) {
+    grid-area: 17 / 1 / 18 / -1;
+  }
+
+  .wardpulse-roadmap__content > p:nth-of-type(8) {
+    grid-area: 19 / 1 / 20 / -1;
+  }
+
+  .wardpulse-roadmap__questions {
+    grid-row: 3 / 16;
+  }
+
+  .wardpulse-roadmap__questions > span:nth-child(n + 29) {
+    display: none;
+  }
+}
+
+@container roadmap (width < 19em) {
+  .wardpulse-roadmap__questions > span:nth-child(n + 17) {
+    display: none;
+  }
+}
