@@ -599,9 +599,11 @@ concentric baseline — `docs/product/WATCH_RING_DESIGN.md`):
 | Gradle | 9.6.1 | Checked-in wrapper version |
 
 No additional host package or runtime library is required. `just validate-watchface`
-downloads the official validator 1.7.0 once from immutable GitHub asset `464497818`, checks
-SHA-256 `3a10def0521ab97f41ab1b7e27a35649370af51580603b5bf656604d88f1aa29`, and caches it
-under `${XDG_CACHE_HOME:-$HOME/.cache}/wardpulse/`. Validate, build, and lint locally with:
+downloads the official validator 1.7.0 once from GitHub asset `550531146`, checks
+SHA-256 `28b244289ab748bb2b07017e9f3c06bb76bdf165d6fa55652a5dc64b852c3121`, and caches it
+under `${XDG_CACHE_HOME:-$HOME/.cache}/wardpulse/`.
+Upstream assets can be removed or replaced; the explicit asset/checksum pair pins content
+without guaranteeing availability. Validate, build, and lint locally with:
 
 ```sh
 just validate-watchface
