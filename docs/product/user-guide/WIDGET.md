@@ -12,13 +12,26 @@ credits. It is updated from the phone's reporting and has its own metric choices
 4. Under **Widget metrics → Home screen widget**, select the available metrics you want.
 5. Check **Next widget payload**. Connect a provider under **Providers** if there are no metrics yet.
 
+![Widget selection showing checked metrics and five of six slots used in the light theme.](/screenshots/phone-widget-settings-light.png)
+
+![Widget selection showing checked metrics and five of six slots used in the dark theme.](/screenshots/phone-widget-settings-dark.png)
+
+Select metrics under **Home screen widget**; choices save as you tap.
+
 You can select up to **six** metrics. Widget selection is independent of Watchface; changing
 one does not change the other. Claude windows remain separate widget choices, and Cursor
 Models/Other Models can be separate rows. Selected exhausted pools stay as **0% left**.
+With all six slots used, deselect a metric before adding another.
 
-The displayed ordering favours tighter remaining balances. The phone's metric selection is
+The displayed ordering puts lower remaining percentages first. The phone's metric selection is
 shared by placed WardPulse widgets; each widget's available size can fit a different number
 of rows and columns.
+
+![WardPulse home widget on the Android launcher in the light theme.](/screenshots/phone-home-widget-light.png)
+
+![WardPulse home widget on the Android launcher in the dark theme.](/screenshots/phone-home-widget-dark.png)
+
+The home widget shows the selected rows that fit its current size.
 
 ## Resize for the information you need
 

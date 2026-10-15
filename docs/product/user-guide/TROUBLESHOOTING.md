@@ -17,7 +17,8 @@ every balance, reset time, model breakdown or history. A missing value is not a 
 
 The first load can briefly show a spinner. For a failed load, use the displayed **Retry** action
 after checking the phone's network access. **Providers** remains the place to check credentials.
-If loading or errors continue, note the visible status and the step that failed for the maintainer.
+If loading or errors continue, note the visible status and the step that failed when
+[reporting the issue](#asking-for-help).
 
 ## Credential rejected or access unavailable
 
@@ -75,9 +76,13 @@ its delivery is not an exact reset alarm.
 
 ## Asking for help
 
-Useful information includes the WardPulse build/version, phone/watch OS, affected provider row,
-visible status and update time, whether the phone has fresh data, and the steps you tried.
-If sharing a screenshot, hide account labels and private usage figures as well as credentials.
+Use the [issue format](/guide/report-an-issue), then [open a GitHub issue](https://github.com/neuroborus/ward-pulse/issues/new).
+Sign in to GitHub if prompted. Describe **Actual behaviour**, **Expected behaviour** and
+**Steps to reproduce**; **Notes** is optional.
+
+Useful notes include the WardPulse version, phone/watch OS, affected provider row, visible
+status and update time. If sharing a screenshot, hide account labels and private usage
+figures as well as credentials.
 
 Never share an API key, dashboard cookie, authorization code, account identifier, prompt or
 full provider response. Do not send sensitive logs. The visible status and the steps you tried

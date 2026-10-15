@@ -1,7 +1,84 @@
+/* Match Geist's loaded 70ch column without tying layout width to font metrics. */
+:root {
+  --vocs-spacing-content: calc(46.1826rem + (var(--vocs-spacing-content-px) * 2));
+}
+
 @media (width < 1376px) {
   :where([data-v-content]) > :is(h2, h3, h4, h5, h6)[data-v][id] {
     scroll-margin-top: calc(var(--vocs-spacing) * 8);
   }
+}
+
+:where([data-v-content]) p:has(> .wardpulse-guide-screenshot) {
+  text-align: center;
+}
+
+.wardpulse-guide-screenshot {
+  position: relative;
+  display: block;
+  width: 288px;
+  max-width: calc(100% - 2px);
+  margin-inline: auto;
+  box-shadow: 0 0 0 1px var(--vocs-border-color-primary);
+}
+
+.wardpulse-guide-screenshot[data-wardpulse-screenshot-theme='fixed'] {
+  border-radius: 50%;
+}
+
+.wardpulse-guide-screenshot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.wardpulse-guide-screenshot__overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.wardpulse-guide-screenshot__overlay-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.wardpulse-guide-screenshot__provider-action {
+  position: absolute;
+  box-sizing: border-box;
+  left: calc(var(--wardpulse-provider-action-x) - 6px);
+  top: calc(31.8125% - 6px);
+  width: calc(5.833333% + 12px);
+  height: calc(2.625% + 12px);
+  border: 2px solid #2563EB;
+  border-radius: 8px;
+}
+
+.wardpulse-guide-screenshot__provider-action--budget {
+  --wardpulse-provider-action-x: 50.787037%;
+}
+
+.wardpulse-guide-screenshot__provider-action--alert {
+  --wardpulse-provider-action-x: 62.453704%;
+}
+
+:root:not([data-vocs-theme='dark'])
+  :where([data-v-content])
+  p:has(> .wardpulse-guide-screenshot[data-wardpulse-screenshot-theme='dark']),
+:root[data-vocs-theme='dark']
+  :where([data-v-content])
+  p:has(> .wardpulse-guide-screenshot[data-wardpulse-screenshot-theme='light']) {
+  display: none;
+}
+
+[data-v-last-updated] {
+  color: var(--vocs-text-color-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.4;
 }
 
 .wardpulse-gallery {
@@ -22,6 +99,15 @@
 .wardpulse-gallery a {
   display: flex;
   justify-content: center;
+}
+
+.wardpulse-gallery__phone img,
+.wardpulse-gallery__wear figure > a {
+  box-shadow: 0 0 0 1px var(--vocs-border-color-primary);
+}
+
+.wardpulse-gallery__wear figure > a {
+  border-radius: 50%;
 }
 
 .wardpulse-gallery__phone .wardpulse-gallery__phone-link--dark {
@@ -69,7 +155,7 @@
   .wardpulse-gallery {
     grid-template-columns: minmax(0, 1fr);
     gap: 16px;
-    width: min(100%, 360px);
+    width: min(calc(100% - 2px), 360px);
   }
 
   .wardpulse-gallery__phone img {

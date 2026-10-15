@@ -6,9 +6,7 @@ You can use the phone without either optional surface.
 
 ## Before you start
 
-Use an already-installed compatible build or one supplied by the maintainer. If you also
-use a watch, use matching phone and Wear builds from the same distribution. The WardPulse
-watch face is a separate package and requires Wear OS 5 or later.
+The WardPulse watch face is a separate package and requires **Wear OS 5 or later**.
 
 Have an account or reporting credential for at least one supported provider. Connect the
 phone to the internet for sign-in and fresh reporting. WardPulse stores credentials encrypted
@@ -19,12 +17,18 @@ Read the [privacy policy](/product/privacy-policy) for what is stored and sent b
 
 1. Open WardPulse. A brief loading screen can appear while it reads data.
 2. Open **Providers** in the bottom navigation. An empty Dashboard also offers **Open Providers**.
-3. Choose the connection you need: a personal plan sign-in or organization/team reporting.
+3. Sign in to an existing provider account, or connect an organization/team Admin API key.
    Follow the corresponding [provider instructions](/guide/providers).
 4. Return to **Dashboard**. Use **Refresh** at the top, or pull down on the list, if you need
    another reporting attempt.
 5. Check the displayed balances and status. **Connected** describes the saved connection;
    it does not guarantee that the latest reporting request succeeded.
+
+![Providers connection choices in the light theme.](/screenshots/phone-providers-light.png)
+
+![Providers connection choices in the dark theme.](/screenshots/phone-providers-dark.png)
+
+Connect an existing account or an organization/team Admin API key under **Providers**.
 
 Until a connected provider reports successfully, WardPulse has no usage data to show. A
 provider may also omit a meter that your account does not expose. **Unknown** or **Balance

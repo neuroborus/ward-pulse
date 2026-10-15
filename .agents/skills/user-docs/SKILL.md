@@ -13,7 +13,14 @@ execution with independent review. This skill changes no check or commit authori
 ## Public audience and owners
 
 - Write for someone using the installed Android phone/Wear applications. Lead with the
-  task, visible controls, expected result and useful recovery. Use ordinary language.
+  task, visible controls, expected result and useful recovery. Use concise, concrete language;
+  remove AI boilerplate, stock phrases, repetition and filler.
+- Omit generic installed-build/distribution filler; retain useful compatibility and network
+  prerequisites. Providers connects existing accounts or reporting keys, not subscription
+  tiers chosen in WardPulse. Give browser-specific steps for Chrome, Firefox and Safari
+  when cookie setup needs them, rather than relabelling Chromium instructions.
+- Keep Last updated small and visually quiet, with lower contrast that remains readable.
+  Preserve its accurate date and meaning; do not hide it or make it a prominent banner.
 - Authoritative task guides live in `docs/product/user-guide/`; the public privacy policy
   remains `docs/product/PRIVACY_POLICY.md`. The landing page and root README begin with a
   short product introduction, approved screenshot gallery and clear guide entry.
@@ -24,6 +31,15 @@ execution with independent review. This skill changes no check or commit authori
   engineering documentation retains its ordinary repository availability.
 - Provider/browser account instructions needed for connection are allowed, including the
   exact cookie name and browser controls. They are user tasks, not app implementation notes.
+- Direct help requests to the repository's GitHub issues and the single owning
+  `docs/product/user-guide/REPORT_AN_ISSUE.md` format: Actual behaviour, Expected behaviour
+  and Steps to reproduce are required; Notes is optional. Do not add mandatory fields or
+  duplicate its template elsewhere.
+- Give meaningful guide sections stable permalinks usable by future app links. Preserve
+  existing section IDs when prose changes; coordinate heading changes or explicit IDs with
+  Runner rather than silently breaking hashes. Check direct URLs with headings clear of
+  sticky bars. Record section URLs in existing internal review notes, not developer paths
+  on public pages; app-link implementation is a separate code task.
 
 ## Accuracy and private review evidence
 
@@ -47,22 +63,48 @@ Choose up to THREE showcase screenshots PER platform for the landing/README gall
 Android phone and Wear OS count as ONE platform: its current gallery has three showcase subjects, with
 both phone and watch represented. This is a showcase selection limit, not a global cap
 on the screenshot library or other platforms. Reuse the approved set on the landing page
-and root README; reuse in relevant guides is optional. Place the gallery near the beginning,
-before long explanatory material; use useful captions/alt text.
+and root README. Place the gallery near the beginning, before long explanatory material;
+use useful captions/alt text.
+
+The three-subject limit applies only to the landing/README showcase. Use meaningful task
+screenshots near the related steps or results to break long explanations where a picture
+helps. Include real Providers connection examples, Widget selection/configuration and actual
+home-screen widgets. Choose the smallest useful set; avoid decorative quotas or duplicated
+walls of images. Guide images follow the same theme, clean-status-bar, privacy, size, index
+and freshness rules below.
+
+Prefer clear captions. Useful action highlights are optional editorial overlays authored by
+Runner over clean PNGs: transparent interior, `#2563EB` outline at 2 CSS px, 4 CSS px clearance
+around the confirmed glyph bounds and 8 CSS px corner radius, retained at responsive sizes.
+Do not outline adjacent full touch boxes. If numbering helps, use a 20 CSS px blue circle
+with a 12 CSS px bold white sans-serif digit outside the control bounds. Keep glyphs, text
+and sensitive areas unobscured; never invent controls or make the decoration interactive.
+Captions name the real icons/actions and remain true for clean Markdown exports; do not
+claim marks are baked into the PNG. Preserve clean original-image links and PNG bytes.
+Index a derivative with its source only if an actual separate annotated PNG is produced.
 
 - Store PNGs in `docs/assets/` with meaningful lower-kebab filenames.
 - Phone screenshot height is 1920px with source aspect ratio preserved; record actual width.
-- Watch screenshots are 500×500px. Keep the actual UI readable and undistorted.
+- Watch screenshots are 500×500px PNGs with transparency outside the actual circular screen.
+  Preserve all UI inside the circle; do not crop the face, distort, recolour or fabricate it.
+- Frames use a 1 CSS px neutral outline (`--vocs-border-color-primary`) in both themes:
+  rectangular phone with radius 0, circular Wear with radius 50%. No additional shadow or
+  UI clipping. Desktop target/max width is 288 CSS px for guide previews; landing/README
+  targets are 216 CSS px for phone and 200 CSS px for Wear. Responsive reductions preserve
+  aspect ratio. GitHub uses its supported 1 px neutral table-border fallback, not stripped
+  CSS. Keep these tokens out of public prose.
 - Use content approved for public sharing: no credentials, identifying account information,
   prompts or sensitive provider data. Review visible usage before publication. Record real
   anonymous app captures as such; do not label them Mock/demo. Describe demonstration or
   sanitized content honestly, and do not invent data or unperformed captures.
-- Before a real phone capture, hide extraneous notification icons and unnecessary service
-  icons in the status bar with existing OS controls. Ordinary clock, battery and network
-  indicators may remain. Use visibility-only controls: do not dismiss notifications, erase
-  data or hide valid in-app UI. Do not retouch or fabricate app screens. Restore temporary
-  OS appearance after capture, and review both phone theme variants for private or
-  identifying data before publication.
+- Capture success illustrations in an appropriate real device state, without irrelevant
+  system notifications/service icons, low-battery warnings or transient errors. Use existing
+  OS/device controls; never erase, fake or retouch legitimate app UI. Show a warning when
+  illustrating that documented state; otherwise capture the actual normal state.
+  Before phone captures, hide extraneous status-bar icons with visibility-only OS controls;
+  ordinary clock, battery and network indicators may remain. Do not dismiss notifications
+  or erase data. Restore temporary OS/device state after capture, and review both phone
+  theme variants for private or identifying data before publication.
 - `docs/assets/README.md` must index every screenshot with description and DATE ADDED.
   Record capture/verification dates, dimensions, known app/context, data treatment and
   locations where it is used; include a build version only if actually recorded. Do not add rows
@@ -89,7 +131,7 @@ filenames may remain unchanged; do not invent a light counterpart.
 
 When pictured UI changes, review both theme variants and refresh every affected variant
 plus its metadata. Unperformed capture/verification stays pending. Keep up to three subjects
-per platform in each displayed gallery; paired variants do not add showcase slots or
+per platform in the landing/README gallery; paired variants do not add showcase slots or
 require displaying six screenshots at once.
 
 ## Final review

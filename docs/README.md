@@ -15,6 +15,7 @@ references below remain available in the repository without becoming public Vocs
 - [Sync and notifications](product/user-guide/SYNC.md)
 - [Settings and privacy](product/user-guide/SETTINGS.md)
 - [Troubleshooting](product/user-guide/TROUBLESHOOTING.md)
+- [Report an issue](product/user-guide/REPORT_AN_ISSUE.md)
 - [UI screenshot index](assets/README.md)
 
 ## Start Here

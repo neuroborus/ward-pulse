@@ -2,6 +2,8 @@
 showAskAi: false
 ---
 
+import { docsPath } from '../GuideScreenshot'
+
 # WardPulse [AI usage for your phone, watch and watch face]
 
 See your AI plan capacity, purchased balances and API spend on Android. WardPulse brings
@@ -12,10 +14,10 @@ Wear OS summary, watch face and home-screen widget.
   <figure className="wardpulse-gallery__phone">
     <a
       className="wardpulse-gallery__phone-link--light"
-      href="/screenshots/phone-dashboard-light.png"
+      href={docsPath('/screenshots/phone-dashboard-light.png')}
     >
       <img
-        src="/screenshots/phone-dashboard-light.png"
+        src={docsPath('/screenshots/phone-dashboard-light.png')}
         width="864"
         height="1920"
         alt="WardPulse phone Dashboard showing AI plan capacity and update status in the light theme."
@@ -23,10 +25,10 @@ Wear OS summary, watch face and home-screen widget.
     </a>
     <a
       className="wardpulse-gallery__phone-link--dark"
-      href="/screenshots/phone-dashboard-dark.png"
+      href={docsPath('/screenshots/phone-dashboard-dark.png')}
     >
       <img
-        src="/screenshots/phone-dashboard-dark.png"
+        src={docsPath('/screenshots/phone-dashboard-dark.png')}
         width="864"
         height="1920"
         alt="WardPulse phone Dashboard showing AI plan capacity and update status in the dark theme."
@@ -36,9 +38,9 @@ Wear OS summary, watch face and home-screen widget.
   </figure>
   <div className="wardpulse-gallery__wear">
     <figure>
-      <a href="/screenshots/wear-glance.png">
+      <a href={docsPath('/screenshots/wear-glance.png')}>
         <img
-          src="/screenshots/wear-glance.png"
+          src={docsPath('/screenshots/wear-glance.png')}
           width="500"
           height="500"
           alt="WardPulse Watch Glance showing balances and refresh status."
@@ -47,9 +49,9 @@ Wear OS summary, watch face and home-screen widget.
       <figcaption>Watch Glance</figcaption>
     </figure>
     <figure>
-      <a href="/screenshots/wear-watch-face.png">
+      <a href={docsPath('/screenshots/wear-watch-face.png')}>
         <img
-          src="/screenshots/wear-watch-face.png"
+          src={docsPath('/screenshots/wear-watch-face.png')}
           width="500"
           height="500"
           alt="WardPulse watch face showing usage rings and upper complications."
@@ -61,5 +63,5 @@ Wear OS summary, watch face and home-screen widget.
 </div>
 
 <p className="wardpulse-gallery__action">
-  <a href="/guide/getting-started">Get started with WardPulse →</a>
+  <a href={docsPath('/guide/getting-started')}>Get started with WardPulse →</a>
 </p>

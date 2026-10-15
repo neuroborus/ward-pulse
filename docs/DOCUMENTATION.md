@@ -53,6 +53,27 @@ just check-docs
 
 Preview a successful build with `npm run docs:preview`.
 
+## Publish a prefixed static site
+
+Unset or empty `WARDPULSE_DOCS_BASE_PATH` keeps the default local `/` build. To serve the
+site under `/wardpulse-docs`, run the default required checks, including `just check-docs`,
+before the final prefix build. From the repository root:
+
+```sh
+WARDPULSE_DOCS_BASE_PATH=/wardpulse-docs npm run docs:build
+```
+
+Expose exactly the generated `docs/site/dist/public` directory through the installed
+cloudflared MCP alias `expose_files`, with key `wardpulse-docs`, `url_mode` set to `path`
+and live exposure. Do not expose source or a parent output directory. While this output is
+exposed live, do not overwrite it with a default build or `just check-docs`.
+
+Verify the returned public prefix: open the homepage and guide/privacy routes, use navigation
+and direct anchors, and check matching-theme previews and original images. Check native
+**Skip to content** by keyboard after both direct entry and client navigation. A successful
+local prefix build is not remote publication/browser acceptance; report only what was
+actually verified. This workflow leaves provider, hardware and release acceptance unchanged.
+
 ## Stable Source References
 
 Cite a repository file together with a named symbol, function, or recipe. For documentation,

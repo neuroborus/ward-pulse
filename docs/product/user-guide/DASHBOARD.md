@@ -18,6 +18,12 @@ usage or a history chart.
 **0% left** means the reported capacity is exhausted. A small positive percentage may round
 to 0%; watch displays keep ordinary styling for that rounded value.
 
+![Dashboard plan capacities and update status in the light theme.](/screenshots/phone-dashboard-light.png)
+
+![Dashboard plan capacities and update status in the dark theme.](/screenshots/phone-dashboard-dark.png)
+
+Read each plan's capacity **left** and the reporting status beside it.
+
 Selected exhausted watch metrics remain present with an empty grey track and a pale-red zero
 percentage. They do not disappear or get replaced by a less-used Claude window. The widget
 also keeps exhausted rows as **0% left**. See [Watch](/guide/watch) and [Widget](/guide/widget).
@@ -35,14 +41,46 @@ refresh can therefore return unchanged figures. See [Sync](/guide/sync).
 
 These controls live on **Providers**, not Settings.
 
-1. Open **Providers** and find the connection to configure.
-2. For a reporting connection, tap **Budget limits** and enter limits for the periods you want:
-   **Today**, **Week**, **Month**. Use the connection's reporting currency, for example **25.00**.
-   Amounts must be at least **0.01**, with up to two decimal places. Leave a period empty for
-   no limit; tap **Save**.
-3. Tap **Alert thresholds**. For plan connections, choose an **Alert when** value for **Plan**
-   or **Purchased**. Reporting connections use the configured budget periods.
-4. Choose a **% left** threshold, or **Off** to disable that rule, then tap **Save**.
+Find the connection you want to configure. Its **bell icon** opens **Alert thresholds**;
+reporting connections also have a **piggy-bank icon** for **Budget limits**. A filled
+piggy-bank or ringing bell indicates configured limits or rules, not successful provider sync.
+
+![Providers action icons beside Organization reporting in the light theme.](/screenshots/phone-providers-light.png)
+
+![Providers action icons beside Organization reporting in the dark theme.](/screenshots/phone-providers-dark.png)
+
+**Piggy-bank icon:** Budget limits. **Bell icon:** Alert thresholds.
+
+### Budget limits
+
+1. On a reporting row, tap the **piggy-bank icon** to open **Budget limits**.
+2. Enter limits for **Today**, **Week** or **Month** in the connection's reporting currency,
+   for example **25.00**. Amounts must be at least **0.01**, with up to two decimal places.
+3. Leave a period empty for no limit, then tap **Save**.
+
+![Organization reporting Budget dialog with a Today 25.00 draft in the light theme.](/screenshots/phone-budget-limits-light.png)
+
+![Organization reporting Budget dialog with a Today 25.00 draft in the dark theme.](/screenshots/phone-budget-limits-dark.png)
+
+Unsaved example: **Today 25.00**, with **Week** and **Month** empty. **Cancel** discards the draft.
+
+### Alert thresholds
+
+1. Tap the connection's **bell icon** to open **Alert thresholds**.
+2. For a plan connection, choose an **Alert when** value for **Plan** or **Purchased**.
+   Reporting connections use the budget periods that have limits.
+3. Choose **50**, **30**, **20**, **10** or **0% left**, or **Off** to disable the rule.
+4. Tap **Save**.
+
+For example, **Plan → 20% left** alerts when the reported plan capacity is 20% or less.
+For a reporting connection with a **25.00** Today limit, a **20% left** Today threshold is
+reached at **20.00** spent. These examples depend on usable reporting from that connection.
+
+![Claude subscription Alerts dialog with a Plan 20% left draft in the light theme.](/screenshots/phone-alert-thresholds-light.png)
+
+![Claude subscription Alerts dialog with a Plan 20% left draft in the dark theme.](/screenshots/phone-alert-thresholds-dark.png)
+
+Unsaved example: **Plan 20% left**, **Purchased Off**. **Cancel** keeps the previous rules.
 
 A budget threshold stays unavailable until that period has a limit. Each connection has its
 own rules; another provider's spend does not count against that connection's limit.

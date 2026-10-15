@@ -26,9 +26,8 @@ Wear OS summary, watch face and home-screen widget.
 
 ## Start using WardPulse
 
-Use an already-installed compatible build or one supplied by the maintainer. Sign-in and
-fresh reporting need internet access. The watch face requires Wear OS 5 or later; the phone
-can be used on its own. Plan connections are experimental.
+Sign-in and fresh reporting need internet access. The watch face requires Wear OS 5 or later;
+the phone can be used on its own. Plan connections are experimental.
 
 - [Getting started](docs/product/user-guide/GETTING_STARTED.md)
 - [Connect providers](docs/product/user-guide/PROVIDERS.md)

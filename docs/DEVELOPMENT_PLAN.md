@@ -2668,7 +2668,8 @@ a small arc inside a cell; a ranged value in a cell reads as text, so the face k
 ### Phase 21 — user-facing Vocs guide
 
 Status: completed on 2026-10-14 for the user-guide documentation, user-only publication
-and theme-matched gallery.
+and theme-matched gallery, including the task-illustration and practical setup/issue-reporting
+follow-ups below.
 
 The initial publication kept development, architecture, provider-reference and design
 documentation in their existing sections alongside a guide for installed-app users. Its
@@ -2736,6 +2737,51 @@ source files and 27 generated files, and the final user-docs skill validator pas
 publication evidence above describes the initial and pre-theme states. This completed slice
 does not close live-provider authentication, physical hardware, release or internal-testing
 acceptance.
+
+Task-illustration follow-up — **2026-10-14**, completed:
+
+Real Providers connection examples, Widget selection and launcher results, and useful
+Getting started/Dashboard/Watch illustrations are integrated near their steps with concise
+captions and verified watch-ordering explanations. The indexed set has 19 canonical PNGs:
+16 phone variants at 864×1920 and three circular Wear images at 500×500 RGBA. Guide images
+remain outside the three-subject landing/README cap. Captures are real and anonymous, with
+empty credential fields and no Mock/demo or UI retouching. Wear corners are transparent
+while inside UI is preserved; the [asset index](assets/README.md#screenshot-index) records
+the clean face and restored device state.
+
+Owning Native run `a56aba41-7e97-46ba-8f7c-d9fee874f20e` reached quiescent DONE with independent
+review ZERO, stage-only and no commit. Its frozen prose/assets were preserved throughout.
+Runner and coordinator each freshly passed the three required checks on that accepted
+revision: `just check-docs` (63 Markdown/MDX citation sources and 27 generated files), the
+user-docs skill validator and `git diff --check HEAD`.
+
+Rendered acceptance covered ten public routes in 80 layouts (ten pages × two themes × four
+widths), all 19 original-image clicks with matching theme variants, and eight fresh GitHub
+gallery cases. All 50 earlier heading IDs remain, with three meaningful Watch subsections
+bringing the total to 53; 106 actual deep-link opens at 390/1280px verified visible headings.
+Complete independent and coordinator post-last-fix source/rendered passes reached ZERO,
+including subtle frames, a clean round face and quiet readable Last updated. This work does
+not wire section links into the app or close live-provider authentication, physical hardware,
+release or internal-testing acceptance.
+
+Practical setup and issue-reporting refinement — **2026-10-14**, completed:
+
+Scoped prose removes generic build-distribution filler, explains connections to existing
+accounts or Admin keys, and gives verified Chrome/Firefox/Safari cookie steps. Budget and
+alert examples use four actual light/dark phone captures of unsaved drafts, cancelled with
+original settings verified unchanged. A single owning issue-format page requires Actual
+behaviour, Expected behaviour and Steps to reproduce, with optional Notes, and links to
+GitHub issue creation. The screenshot skill specifies neutral frames and optional editorial
+action outlines while preserving clean originals. The eleventh public page, two contextual
+icon outlines on the Dashboard example and repository navigation are integrated.
+
+Complete independent and coordinator primary source/rendered reviews reached ZERO. Actual
+acceptance covered 11 pages in 88 layouts, 130 direct opens across 65 anchors, 54 native
+permalink links and all 23 original images; all 53 earlier section IDs are preserved. The
+owning Runner's default documentation check, skill validator and whitespace check passed
+before this prose closure. The root and `/wardpulse-docs` static builds were verified locally.
+Earlier accepted evidence and open live-provider, physical hardware, release and
+internal-testing work are unchanged.
 
 Guide scope:
 

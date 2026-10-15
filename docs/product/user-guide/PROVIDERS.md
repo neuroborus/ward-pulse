@@ -1,7 +1,9 @@
 # Connect providers
 
 Open **Providers** on the phone. Each provider family has separate plan and reporting rows.
-Choose the row for the data you want; connecting one does not automatically connect the other.
+Connect an existing account or organization/team Admin API key to read its usage. You do not
+choose or change a subscription tier in WardPulse. Connecting one row does not automatically
+connect the other.
 
 | Family | Plan row | Reporting row |
 | --- | --- | --- |
@@ -12,6 +14,12 @@ Choose the row for the data you want; connecting one does not automatically conn
 Plan connections are experimental. Reporting rows need administrative credentials. Keep
 tokens, keys and authorization codes private, and enter them only into the matching
 provider's sign-in page or WardPulse's credential field.
+
+![Providers showing separate plan and reporting rows in the light theme.](/screenshots/phone-providers-light.png)
+
+![Providers showing separate plan and reporting rows in the dark theme.](/screenshots/phone-providers-dark.png)
+
+Plan logins and organization/team reporting have separate connection rows.
 
 ## Codex subscription
 
@@ -48,19 +56,54 @@ expired or the attempt was cancelled, start a new attempt rather than reusing th
 If you already have a dashboard session in a desktop browser, tap the **About Cursor sign-in**
 help icon, then **Advanced paste**. The paste dialog includes cookie instructions.
 
-1. In desktop Chrome or Edge, open **cursor.com/dashboard** and sign in to the same account.
-2. Right-click the page and choose **Inspect**.
-3. Open **Application → Storage → Cookies** and select the Cursor site.
-4. Find **WorkosCursorSessionToken**. The **Filter** box can find it by name.
-5. Copy only **Value**, not the cookie name or the complete Cookie header.
-6. Paste that value in **Cursor plan · Paste token** and tap **Save**.
+![Cursor sign-in help with the Advanced paste action in the light theme.](/screenshots/phone-cursor-sign-in-help-light.png)
+
+![Cursor sign-in help with the Advanced paste action in the dark theme.](/screenshots/phone-cursor-sign-in-help-dark.png)
+
+**Advanced paste** opens the session-cookie instructions.
+
+Open **cursor.com/dashboard** in your desktop browser and sign in to the same Cursor account.
+Find **WorkosCursorSessionToken** using the instructions for your browser below. Copy only
+its **Value**, without the cookie name, a `name=` prefix or the complete Cookie header.
+
+### Chrome
+
+1. Right-click the dashboard and choose **Inspect**.
+2. Open [**Application → Storage → Cookies**](https://developer.chrome.com/docs/devtools/application/cookies)
+   and select the **cursor.com** site.
+3. Filter for **WorkosCursorSessionToken**, select it and copy **Value** from its preview.
+
+### Firefox
+
+1. Open **Browser Tools → Web Developer Tools**.
+2. Select [**Storage**](https://firefox-source-docs.mozilla.org/devtools-user/storage_inspector/),
+   then **Cookies** and the **cursor.com** domain.
+3. Find **WorkosCursorSessionToken** in the table and copy its **Value**.
+
+### Safari
+
+1. In [**Safari → Settings → Advanced**](https://support.apple.com/en-ca/guide/safari/sfri20948/mac),
+   enable **Show features for web developers** if needed.
+2. Open [**Develop → Show Web Inspector**](https://webkit.org/web-inspector/enabling-web-inspector/).
+3. Select **Storage**, then the Cursor domain under **Cookies**.
+4. Find **WorkosCursorSessionToken**. Double-click its **Value** cell, select and copy the
+   **Value** field without editing it. Copying the whole cookie can include its name and
+   other fields.
+
+### Save the token
+
+Paste the copied value into **Cursor plan · Paste token** and tap **Save**.
+
+![Cursor paste dialog with instructions and an empty saved-token Value field in the light theme.](/screenshots/phone-cursor-paste-token-light.png)
+
+![Cursor paste dialog with instructions and an empty saved-token Value field in the dark theme.](/screenshots/phone-cursor-paste-token-dark.png)
+
+Shown with a saved token: leave **Value** blank to keep it, or paste a replacement and tap **Save**.
 
 If it is missing, confirm you are signed in, reload the dashboard and check the selected site
 under Cookies. To use app sign-in instead, tap **Cancel**, then the **Cursor plan** row; if it
 is already **Connected**, choose **Sign in again**.
 The cookie is a private session credential; WardPulse stores it encrypted on the phone.
-The browser steps follow the official [Chrome](https://developer.chrome.com/docs/devtools/application/cookies)
-and [Edge](https://learn.microsoft.com/en-us/microsoft-edge/devtools/storage/cookies) documentation.
 
 ## OpenAI Platform reporting
 
@@ -87,6 +130,12 @@ the account and credential requirements in its
 2. Tap **Organization reporting** under Anthropic.
 3. Paste it into **Value**, optionally add a **Label**, and tap **Save**.
 4. Check reporting status on Dashboard.
+
+![Anthropic Organization reporting with empty Value and Label fields in the light theme.](/screenshots/phone-reporting-key-light.png)
+
+![Anthropic Organization reporting with empty Value and Label fields in the dark theme.](/screenshots/phone-reporting-key-dark.png)
+
+Enter the organization's Admin API key in **Value**. **Label** is optional.
 
 This connection targets Claude Platform organization reporting. A Claude Enterprise Analytics
 key belongs to a different service and is not the credential for this row.
@@ -119,7 +168,8 @@ Disconnect/removal clears the selected local credential and prevents obsolete st
 from being reused. It does not revoke an API key at the provider; use that provider's key
 management to revoke it when needed. Other connections are independent.
 
-For **Alert thresholds** and **Budget limits**, use the action icons on the connection row.
-They configure how WardPulse tracks your usage; see [Dashboard](/guide/dashboard). A saved
+The **bell icon** opens **Alert thresholds**. Reporting rows also have a **piggy-bank icon**
+for **Budget limits**. They configure how WardPulse tracks your usage; see
+[Dashboard examples](/guide/dashboard#set-budget-limits-and-alert-thresholds). A saved
 connection can still be rejected or temporarily unavailable: [Troubleshooting](/guide/troubleshooting)
 explains the next steps without sharing secrets.
