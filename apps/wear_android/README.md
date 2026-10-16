@@ -109,12 +109,19 @@ Wear OS 5 and other WFF 2 devices without Push receive separate-install/manual-s
 guidance. On Wear OS 4 / API 33 the dashboard remains usable, but the face requires Wear OS 5
 or later. The legacy `app.wardpulse.watchface` package and its settings remain separate.
 
-Owner build, compatibility and device acceptance remain pending. Real round-watch utility
-captures, entry/scroll/clipping measurements and the dated locked-baseline reconciliation
-belong to the separately reviewed follow-up after device acceptance; existing screenshots
-are unchanged. The durable-consent device tests in `WatchFaceConsentStoreTest` are included
-in `just test-wear-device`; they verify synchronous on-disk history, distinct from the
-controller's injected-effect unit tests.
+Local development acceptance on **2026-10-16** covers final debug artifacts, API33/API34/API36
+emulators, real summary delivery, explicit consent and N1-to-N2 customization/selection
+retention. See the [acceptance record](../../docs/product/RELEASE_CHECKLIST.md#watch-face-push-acceptance)
+for exact evidence, observed system/scroll limitations and remaining production signing,
+Play, API35 and hardware gates. The
+[dated baseline](../../docs/product/WEAR_GLANCE_DESIGN.md#revision-2026-10-16--watch-face-utility-entry)
+and [indexed manual-selection capture](../../docs/assets/README.md#watch-face-utility-provenance-and-wear-freshness-2026-10-16)
+are integrated; existing screenshot bytes and Glance geometry are preserved.
+
+The durable-consent device tests in `WatchFaceConsentStoreTest`, included in
+`just test-wear-device`, verify synchronous on-disk history. The retained-navigation UI
+tests use synthetic summary availability; the controller tests use injected effects.
+Actual platform consent/data observations are recorded separately in the acceptance record.
 
 ## Commands
 

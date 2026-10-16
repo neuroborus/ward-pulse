@@ -26,7 +26,9 @@ becoming public Vocs pages.
 - [ANDROID_TOOLCHAIN.md](ANDROID_TOOLCHAIN.md) records the verified Android/Flutter development baseline, SDK package names, AVDs, and setup commands.
 - [Canonical WFF resources](../apps/watchface_wff/README.md#packaging-paths) feed both the
   legacy face and the [bundled Push APK](../apps/wear_android/watchface_push/README.md);
-  [Push acceptance](product/RELEASE_CHECKLIST.md#watch-face-push-acceptance) remains pending.
+  [Push acceptance](product/RELEASE_CHECKLIST.md#watch-face-push-acceptance) records local
+  development artifact/API33/API34/API36 results, observed limitations and remaining
+  production signing, Play, API35 and hardware gates.
 - [DESIGN_ASSETS.md](DESIGN_ASSETS.md) defines OpenPencil source ownership and runtime export workflow.
 - [product/WATCH_RING_DESIGN.md](product/WATCH_RING_DESIGN.md) — **baseline locked 2026-07-25**
   (melt/strip-accent revision **2026-07-27**): Wear / WFF concentric remaining rings, clockwise

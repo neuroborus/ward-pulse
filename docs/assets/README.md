@@ -12,8 +12,9 @@ ratio retained; watch PNGs are 500×500px.
 
 ## Screenshot index
 
-Every screenshot file must have a row with DATE ADDED and a short description. The twenty-three
-screenshots below were captured and added on 2026-10-14.
+Every screenshot file must have a row with DATE ADDED and a short description. The library
+contains 24 screenshots: the original twenty-three were captured and added on 2026-10-14;
+the watch-face utility capture was added on 2026-10-16.
 
 | File | Description | Theme | Date added | Captured | Last verified | Dimensions | App | Used in |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -37,14 +38,15 @@ screenshots below were captured and added on 2026-10-14.
 | [phone-home-widget-dark.png](phone-home-widget-dark.png) | Actual launcher widget with selected metric rows. | Dark | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Dark Widget guide |
 | [phone-watch-settings-light.png](phone-watch-settings-light.png) | Ring choices, three bands with paired Cursor pools. | Light | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Light Watch guide |
 | [phone-watch-settings-dark.png](phone-watch-settings-dark.png) | Ring choices, three bands with paired Cursor pools. | Dark | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Dark Watch guide |
-| [wear-glance.png](wear-glance.png) | Glance capacities ordered by lowest percentage left. | Fixed dark | 2026-10-14 | 2026-10-14 | 2026-10-14 | 500×500 | WardPulse Wear | Both landing/README themes and Watch guide |
-| [wear-plan-windows.png](wear-plan-windows.png) | First reported plan window with available reset time. | Fixed dark | 2026-10-14 | 2026-10-14 | 2026-10-14 | 500×500 | WardPulse Wear | Watch guide in both themes |
-| [wear-watch-face.png](wear-watch-face.png) | Usage bands and upper complications, no unwanted status badge. | Fixed dark | 2026-10-14 | 2026-10-14 | 2026-10-14 | 500×500 | WardPulse watch face | Both landing/README themes and Watch guide |
+| [wear-glance.png](wear-glance.png) | Glance capacities ordered by lowest percentage left. | Fixed dark | 2026-10-14 | 2026-10-14 | 2026-10-16 | 500×500 | WardPulse Wear | Both landing/README themes and Watch guide |
+| [wear-plan-windows.png](wear-plan-windows.png) | First reported plan window with available reset time. | Fixed dark | 2026-10-14 | 2026-10-14 | 2026-10-16 | 500×500 | WardPulse Wear | Watch guide in both themes |
+| [wear-watch-face.png](wear-watch-face.png) | Usage bands and upper complications, no unwanted status badge. | Fixed dark | 2026-10-14 | 2026-10-14 | 2026-10-16 | 500×500 | WardPulse watch face | Both landing/README themes and Watch guide |
+| [wear-watch-face-utility.png](wear-watch-face-utility.png) | Manual-selection guidance after explicitly choosing Don't allow for activation. | Fixed dark | 2026-10-16 | 2026-10-16 | 2026-10-16 | 500×500 | WardPulse Wear | Watch guide in both themes |
 
 These are real anonymous app captures with normalized usage where visible, no identifying
 account information or credentials; they are not Mock/demo. All pictured credential fields
 are empty. The existing Dashboard pair retains its earlier source context (`74cf501`);
-its installed APK version was not recorded at capture. For the new task scenes, recorded
+its installed APK version was not recorded at capture. For the 2026-10-14 task scenes, recorded
 installed metadata is phone 1.0 (code 1, package last update 2026-10-14 00:53:12), Wear 0.1.0
 (code 1, 2026-10-13 17:30:18), and watch face 0.1.0 (code 1, 2026-10-13 12:33:52).
 
@@ -64,6 +66,40 @@ red bottom status badge, then hardware/system settings were restored to their or
 Phone captures were resized from 1080×2400 to 864×1920; Wear captures from 384×384 to 500×500.
 Only pixels outside the actual circular Wear screen were made transparent; inside RGB/UI
 is unchanged after resizing. All Wear RGB comparisons against their resized source are zero.
+
+### Watch-face utility provenance and Wear freshness, 2026-10-16
+
+The utility image is a genuine anonymous UI08 capture on task AVD
+`wardpulse_push_wear_api36_1`, API 36, round **384×384 px / 320 dpi**, after explicitly
+choosing **Don't allow**. It shows manual-selection recovery, not Install/Use/Update or a
+permission overlay. No account names, usage, credentials, irrelevant notification or
+low-battery indicator are visible. It is fixed dark in both guide themes, with the existing
+288 CSS px circular preview and original-image link; it is not a landing/README showcase.
+
+Captured and independently verified on **2026-10-16**, the installed Wear app was
+`app.wardpulse`, version **0.1.0 / code 1**, minimum API 33, target API 36. Its original APK
+SHA256 is `eee43d6319ea5a86fbe8abdade5a9f5a1f6663aa1d2cc661c7db1916e2af6b2a`.
+Raw `api36-ui08-denied-return.png` has SHA256
+`d5f402b2a1d1add7374f620502f4e88a877b0aa008c2f3f0a8d2198b0806ce24`.
+It was uniformly resized to 500×500 and given only the approved `wear-glance.png` circular
+alpha: 196,964 opaque / 53,036 transparent / zero partial-alpha pixels. The alpha matches
+exactly, and opaque-interior RGB differences against the resized raw are zero. No app UI
+was retouched, recoloured or generated.
+
+The captured UI owner, `WardPulseApp.kt`, has SHA256
+`5c630d3ec80039825c28e548f898efb51329403c5ca55e50cee00ec3e64d21e9`, unchanged in reviewed
+runtime Source `abebbbc5`. This binds reuse of the original UI08 capture to final UI Source;
+it is not a recapture of final host `b9db16ab`, the canonical AVD or physical hardware.
+The static public mirror uses the existing relative symlink to this canonical PNG; Owner
+post-DONE publication review must verify regular PNG output bytes, as described in
+[the acceptance procedure](../product/RELEASE_CHECKLIST.md#watch-face-push-acceptance).
+
+The three existing Wear PNGs were reviewed for pictured staleness on **2026-10-16** and
+remain byte-identical, with their original **2026-10-14** capture/addition dates. Final
+canonical scene/drawable equality and actual normal rendering close their Source/scene
+freshness binding. Dynamic usage/weather values are not stale UI, and the utility below
+the pictured Plan windows viewport does not change that viewport. Private canonical QA
+frames contain a system low-battery indicator and are not published.
 
 | File | SHA256 |
 | --- | --- |
@@ -90,6 +126,7 @@ is unchanged after resizing. All Wear RGB comparisons against their resized sour
 | `wear-glance.png` | `ecba002a6a2886fb656a5bf6999932a1053a1a560a03953d2d9ccb9ea7e8a94c` |
 | `wear-plan-windows.png` | `0176b52e80fe7e920ad20e67d72efc4744c5ba6ebf548ae9d5f7bc6b122de1d6` |
 | `wear-watch-face.png` | `9b8499cd1c5a8fd2f201c2caee5b2156b0c5ca68325e53097d0d4397a5b6d8b3` |
+| `wear-watch-face-utility.png` | `dbb3519f4b29e6f2c4ed0f1f9c98d330c1c254ef58072e93410c80efed668e03` |
 
 ## Theme inventory
 

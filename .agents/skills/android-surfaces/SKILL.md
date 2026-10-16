@@ -97,7 +97,9 @@ Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchf
   comes back (rules in `apps/wear_android/README.md`). **Alerts** opens from the Glance pill
   (active list only — no rule editing). A **Watch face** action after all Plan windows rows,
   also below the no-summary sync prompt, opens a separate setup utility route, not another
-  home page. The today, week, usage, providers, and last sync screens were removed in
+  home page. Follow the dated baseline
+  [Revision 2026-10-16 — watch-face utility entry](../../../docs/product/WEAR_GLANCE_DESIGN.md#revision-2026-10-16--watch-face-utility-entry).
+  The today, week, usage, providers, and last sync screens were removed in
   Phase 17; do not bring a currency total back to the watch.
 - Store and render the latest successful watch summary.
 - Make stale data explicit.

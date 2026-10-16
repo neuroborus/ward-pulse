@@ -1,7 +1,7 @@
 import * as React from 'react'
 
 const approvedScreenshot =
-  /^\/screenshots\/(?:phone-(?:alert-thresholds|budget-limits|cursor-(?:paste-token|sign-in-help)|dashboard|home-widget|providers|reporting-key|watch-settings|widget-settings)-(?:light|dark)|wear-(?:glance|plan-windows|watch-face))\.png$/
+  /^\/screenshots\/(?:phone-(?:alert-thresholds|budget-limits|cursor-(?:paste-token|sign-in-help)|dashboard|home-widget|providers|reporting-key|watch-settings|widget-settings)-(?:light|dark)|wear-(?:glance|plan-windows|watch-face|watch-face-utility))\.png$/
 
 const providerActionsScreenshot =
   /^\/screenshots\/phone-providers-(?:light|dark)\.png$/

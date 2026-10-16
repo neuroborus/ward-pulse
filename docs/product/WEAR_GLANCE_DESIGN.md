@@ -202,6 +202,55 @@ Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 13). Asset ownership: `docs/DES
 Canonical review generator: `tools/render-wear-glance-designs.mjs`  
 Primary preview: `apps/wear_android/design/preview-glance-legend-3.png`.
 
+## Revision 2026-10-16 — watch-face utility entry
+
+The Wear app retains two home pages: Glance, then Plan windows. One **Watch face** action
+follows the complete Plan windows list, after its last row, and opens a swipe-back utility
+route. Before the first phone summary, the same entry appears below the sync prompt. The
+utility is not a third home page and adds no controls to Glance or Alerts.
+
+Preserve Glance typography, refresh behavior, row and paired-pool ordering, the 54-unit row
+pitch and 12-unit Alerts clearance. Keep every existing Plan windows row and its ordering.
+This revision changes no face geometry, ring selection, data contract or provider behavior.
+
+Status checks are read-only. Installation does not activate the face. Activation requires
+the explicit **Use watch face** action, with at most one permission request and activation
+attempt; refusal or a consumed opportunity leads to manual selection. Updates are explicit,
+newer-only and preserve face selection and customization without another activation request.
+An unknown occupied slot is never replaced or deleted. **In use** requires a current
+observation; it does not hide an available update. After an update, show **Installed**
+without an immediate active-state query. Summary availability must not reset this route or
+replay an operation.
+
+**Verified 2026-10-16** on canonical `wardpulse_wear_round_api36_1` / `emulator-5554`, API 36,
+round **384×384 px / 320 dpi**. Installed Wear version **0.1.0 / code 1**, minimum API 33,
+target API 36, from reviewed Source `abebbbc5`. Bounds below are actual screen pixels.
+
+| Canonical item | Actual verification |
+| --- | --- |
+| Glance refresh and clock | Refresh `[144,46]–[240,130]`; clock `[0,28]–[384,46]`, unchanged from the pre-feature reference. |
+| Glance rows and Alerts | Provider-title top positions `148`, `194`, `240`; Alerts label `[168,325]–[218,341]`, unchanged. |
+| Complete Plan windows list | All five actual rows retained in order, followed by exactly one utility entry. |
+| Fully scrolled utility entry | Hit region `[20,216]–[364,344]`; label `[44,240]–[221,278]`; fully readable and enabled after further normal scrolling. |
+| Utility copy and action | Top/middle/end scrolling exposes the complete instruction and enabled **Use watch face**. End-position button `[20,240]–[364,344]`, label `[48,274]–[273,310]`. |
+| Preserved selection/data | Existing legacy face and Day/empty upper-slot choices retained; fresh phone summary reached Glance and the live face; ordinary editor returned to live. Canonical consent was not consumed. |
+
+The entry's earlier first-visible bounds, `[44,301]–[340,384]` with label
+`[65,322]–[217,354]`, describe a clipped scroll position, not the fully scrolled entry above.
+At the extreme utility end position, the departing Make heading intersects the fixed clock
+near `y24`; the middle position makes it fully readable. This is viewport-edge clipping,
+not a promise that all copy fits in one frame. The approved
+[manual-selection image](../assets/wear-watch-face-utility.png) avoids that overlap; private
+canonical QA frames with a low-battery indicator are not public illustrations.
+
+The genuine no-summary entry and real summary arrival/replacement were observed separately
+on the task API36 UI08 runtime, `wardpulse_push_wear_api36_1` (**384×384 px / 320 dpi**).
+Final device tests cover synthetic availability/loss and permission-return transitions.
+Canonical data was not cleared to manufacture an empty state; synthetic loss does not prove
+actual Data Layer loss. The utility UI owner is unchanged in the final reviewed Source.
+These emulator observations establish neither API35 nor physical-watch acceptance; see
+[the acceptance record](RELEASE_CHECKLIST.md#watch-face-push-acceptance).
+
 ## Goal
 
 Name each selected band with its provider/family, show remaining % and optional
@@ -417,6 +466,7 @@ primary preview: preview-glance-legend-3.png
 |---------|------|
 | Wear OS app Glance (page 1) | This legend + refresh control + Alerts button |
 | Wear OS app second page | Plan windows and when each comes back (`apps/wear_android/README.md`) |
+| Wear OS app Watch face utility | Swipe-back setup route after all Plan windows rows, also below the no-summary sync prompt; separate from the two home pages |
 | Phone | Owns PollCadence floor for Wear taps; pushes `manualRefreshAllowed` /
   `manualRefreshAvailableAt`; Settings slider drives automatic polling only |
 | WFF / face | [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md) — concentric remaining arcs |

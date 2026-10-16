@@ -97,12 +97,19 @@ version, signing, APK byte, validator, client-package, or Java-runtime changes i
 the relevant inputs; a failed validation publishes no bundle. No APK or token is checked in,
 and no runtime validator or separate download helper is used.
 
-## Pending acceptance
+## Local development acceptance
 
-No Owner build, signing readiness, APK allowlist/provider-target inspection, official
-validation/token binding, cold-cache completion, warm reuse, or actual N-to-N+1 upgrade is
-claimed here. These remain Owner acceptance after the four-commit
-Runner execution finishes and Root reviews it. API 33 startup, supported Push installation,
-API 34/35 separate-install fallback, preserved configuration/selection, and complication
-propagation through both packages also remain pending. Device captures and
-measured baseline reconciliation belong to the required separate follow-up execution.
+Recorded **2026-10-16** for runtime Source `abebbbc5`: debug builds, negative signing
+guards, cold validator download/checksum/tool completion and warm reuse, plus final signed
+APK/allowlist/provider-target inspection and exact validation-token binding passed. Actual
+API36 N1-to-N2 update retained customization and selection with the same development face
+signer; host update alone left face N1 installed. The system briefly used Simple fallback
+before restoring WardPulse. API33/API34 compatibility and both-path live/editor observations
+have their own recorded scope.
+
+See the central [acceptance record](../../../docs/product/RELEASE_CHECKLIST.md#watch-face-push-acceptance)
+for final artifact/device evidence and limitations. Production signing, actual Play
+app-signing/delivery, API35, physical hardware and unobserved platform-failure/capacity
+scenarios remain open. Development signer/token proof does not close them. The dated
+baseline and approved manual-selection PNG are integrated; post-DONE Owner documentation
+build/browser verification follows the procedure in that record.

@@ -66,11 +66,15 @@ Never substitute an APK or token manually. Updating the Wear app does not itself
 the installed face; the utility's explicit **Update watch face** action does that without
 activation. See [watch setup](../../docs/product/user-guide/WATCH.md).
 
-Owner builds, signing readiness, APK/token inspection, compatibility and device acceptance
-remain [pending](../../docs/product/RELEASE_CHECKLIST.md#watch-face-push-acceptance).
-Real utility screenshots, round-watch measurements and the dated baseline reconciliation
-require the separate follow-up execution after device acceptance. Existing face geometry
-and screenshots are unchanged.
+Local development acceptance recorded **2026-10-16** includes final legacy WFF2/XML
+validation, generator drift, lint/debug APK/AAB builds, and actual API34/canonical API36
+legacy live/editor-return-live. Separate Push APK validation/token binding and API36
+N1-to-N2 customization/selection retention also passed; XML validity alone does not prove
+those results. The [acceptance record](../../docs/product/RELEASE_CHECKLIST.md#watch-face-push-acceptance)
+retains the API34 replacement-time headless-renderer exception and N2 transient fallback,
+and keeps production signing, Play delivery, API35 and hardware acceptance separate.
+The dated utility baseline and approved manual-selection capture are integrated; existing
+face geometry and screenshot bytes are unchanged.
 
 ## Ownership
 

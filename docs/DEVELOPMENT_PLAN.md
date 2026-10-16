@@ -720,28 +720,38 @@ Wear build, consuming the canonical WFF resources without replacing the legacy
 `app.wardpulse.watchface` package or its settings. Wear minimum API is now 33; the phone
 minimum is unchanged. Supported Wear OS 6+ devices use capability-guarded Push; API 34/35
 retain separate WFF installation, while API 33 runs the dashboard with face-unsupported
-guidance. No Play listing, production signing readiness or device compatibility is certified.
+guidance. Local development acceptance is recorded below; production signing and Play
+delivery remain separate release gates.
 
 The **Watch face** utility keeps two home pages and the existing Alerts behavior. It offers
 separate explicit install, one-time consent/use and newer-only update actions, with safe
-occupied-slot recovery and durable permission/activation history. The implemented build,
-controller and utility do not close Owner acceptance. See
+occupied-slot guards and durable permission/activation history. See
 [build/signing ownership](ANDROID_TOOLCHAIN.md#watch-face-push-builds) and the
-[pending acceptance matrix](product/RELEASE_CHECKLIST.md#watch-face-push-acceptance).
+[acceptance record](product/RELEASE_CHECKLIST.md#watch-face-push-acceptance).
 
-Owner builds, release refusal, signed-artifact/token inspection, cold/warm validator proof,
-N-to-N+1 upgrades, compatibility and device scenarios remain pending after the four-commit
-execution reaches DONE, terminal approval and settled idle state, and Root completes its
-full independent zero-findings review. Documentation acceptance follows the explicit live
-output handoff. These checks are not initial commit preconditions.
+For runtime Source `abebbbc5`, Runner implementation/independent review and Root Source,
+artifact/device/visual review reached ZERO within local development scope on **2026-10-16**.
+Final debug gates, negative release-signing guards, signed-artifact/token inspection and
+cold/warm validator proof passed. Final device execution passed **16/0/0**, after the
+specific old-target utility RED and final-target **2/2 GREEN**; the current JVM task was
+UP-TO-DATE, with actual **96/0** belonging to UI08. Real API36 installation/consent,
+N1-to-N2 customization/selection retention, API33/API34 compatibility and canonical legacy
+data/editor observations passed with the recorded fallback/renderer/scroll qualifications.
+Unknown occupied-slot recovery and injected loss/errors do not become real-platform proof.
+Production keys, actual Play signing/delivery, physical hardware, API35 and remaining
+unobserved platform cases stay open individually in the acceptance record.
 
-After actual device acceptance, a separate subsequently reviewed Runner execution must
-record **Revision 2026-10-16 — watch-face utility entry**, real round-watch measurements and
-`docs/assets/wear-watch-face-utility.png` (500×500, fixed dark), reconciling the baseline,
-screenshot index, watch guide and Wear README. Preserve Glance geometry and existing
-screenshot bytes. This required follow-up is unnumbered and outside the four-commit run;
-that run finishes without waiting for acceptance or captures. Final task handoff remains
-pending until supported acceptance and reconciliation are complete.
+The documentation reconciliation integrates
+[Revision 2026-10-16 — watch-face utility entry](product/WEAR_GLANCE_DESIGN.md#revision-2026-10-16--watch-face-utility-entry),
+actual canonical measurements and the approved
+[500×500 fixed-dark manual-selection PNG](assets/README.md#watch-face-utility-provenance-and-wear-freshness-2026-10-16)
+with the Watch guide and component guidance. The image retains its original UI08 capture
+identity, bound to the unchanged final UI owner; existing screenshots and Glance geometry
+are preserved. After distinct terminal approval, quiescent DONE and Source/output ownership
+release, Root must perform the full docs build/browser/output review and restore the agreed
+share as specified in the acceptance record. Record the actual result in a separate Owner
+receipt and final handoff, without a second status-only Source commit. Whole-task closure
+requires that Owner ZERO; this status makes no documentation-build acceptance claim.
 
 Original working inputs remain `LOCAL_ARTIFACTS/business-model/WATCH_FACE_PUSH_TASK.md`,
 `LOCAL_ARTIFACTS/business-model/PLAY_RELEASE.md` sections “Автоматическая установка

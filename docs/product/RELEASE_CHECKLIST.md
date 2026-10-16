@@ -37,78 +37,129 @@ This checklist is a gate, not a schedule.
 
 ### Watch Face Push acceptance
 
-**Pending Owner acceptance.** The four-commit implementation execution finishes without
-waiting for these checks. They are Owner work after Runner reaches DONE, terminal
-APPROVED/ACCEPTED and settled idle state without a lease/process, followed by Root's full
-independent zero-findings review. They are outside the Native check inventory and are never
-preconditions for any of the four implementation commits. Record unavailable keys, runtimes
-or devices as pending, never as passes. Fake-manager tests do not replace platform proof.
+**Local development acceptance recorded 2026-10-16** for runtime Source `abebbbc5`, on
+actual emulators API 33, 34 and 36. Runner implementation and independent reviews completed;
+Root's full Source and scoped artifact/device/visual review reached ZERO. The results below
+are the recorded Owner evidence, not fresh checks of this documentation change. Production
+signing, Play delivery and physical-watch acceptance remain separate.
 
-- [ ] Run full `just check-wear` and independent legacy `just check-watchface`, plus affected
-  debug, instrumentation and release builds. Run the durable-consent instrumentation through
-  `just test-wear-device`. Historical legacy acceptance does not verify the new Push package.
-- [ ] In an Owner-controlled setup with signing configuration deliberately absent, prove
-  release refusal: the host publishability guard still rejects missing host release signing,
-  and Push release signing has no debug/host fallback. Reject a reused certificate too.
-- [ ] Using a new task-owned cache, prove cold resolution of the official validator,
-  checksum verification and actual APK validation/tool completion, followed by warm reuse.
-  A previously downloaded JAR or a successful `--help` invocation is not this evidence.
-- [ ] Inspect the actual signed Push APK: designated package, requested versionCode,
-  minimum API 34, WFF 2, `hasCode=false`, no dex, and official APK/manifest allowlists.
-  Verify the certificate is stable across upgrades and differs from the host, including
-  debug; release also differs from configured Push development signing. Inspect actual
-  Play-delivered host identity when accepting Play distribution.
-- [ ] Inspect both face packages' complication/launch targets: they resolve to the existing
-  `app.wardpulse` host. Affected host providers' `SAFE_WATCH_FACES` metadata names only
-  `app.wardpulse.watchface` and `app.wardpulse.watchfacepush.main`, without privileged access.
-- [ ] Verify official validation and the exact APK/token binding inside the built Wear
-  artifact: embedded `assets/default_watchface.apk`, generated `@string/default_wf_token`
-  and `com.google.android.wearable.marketplace.DEFAULT_WATCHFACE_VALIDATION_TOKEN` agree
-  with the validated signed bytes. A failed validation must leave no usable previous pair.
-- [ ] Build `:app:assembleDebug` normally with `-PwardpulsePushVersionCode=N`, then N+1,
-  keeping the same Push package/certificate. Install the newer host and explicitly use
-  **Update watch face**; show an actual face upgrade preserving complications, settings
-  and face selection. Host app updates alone must not be reported as face updates.
+Reviewed final N1 debug artifact identities are host `b9db16ab`, Push `7541bc20` and legacy
+`e7e77b47`; detailed hashes and observations remain in the accepted Root/peer receipts.
+Task runtimes were `wardpulse_push_wear_api36_1` / `emulator-5584`,
+`wardpulse_push_wear_api34` / `emulator-5582` and
+`wardpulse_push_wear_api33` / `emulator-5580`; the canonical runtime is identified below.
+
+- [x] Final Owner `just check-wear` passed in 35 s, including lint and debug/instrumentation
+  APK builds. Its `testDebugUnitTest` task was **UP-TO-DATE**; the actual **96/0** JVM execution
+  belongs to UI08 and unchanged relevant production/core/JVM owners, not a fresh final run.
+- [x] Final independent legacy `just check-watchface` passed in 15 s: official XML
+  validator 1.7.0 accepted WFF 2, generator drift passed, and lint/debug APK/AAB builds passed.
+- [x] The corrected test APK reproduced RED for the specific utility method against the
+  preserved `1570106` host: expected visible **Installed**, one failure. The same test APK
+  against the hash-verified final host passed both new methods **2/2**. This was not a full
+  16-test baseline RED run. Final `just test-wear-device` then passed in 24 s, with the actual
+  connected report **16 tests / 0 failures / 0 errors** (11.01 s).
+- [x] Recorded negative signing checks rejected missing host release signing, missing Push
+  release signing, a release configuration reusing the Push development identity, and an
+  actual host/Push certificate collision. The producer removed the stale APK/token outputs
+  on failure. These refusal checks do not prove positive production signing.
+- [x] A new empty task-owned cache resolved/downloaded the official Push validator, verified
+  its pinned checksum and completed actual APK validation through the ordinary producer
+  graph. The warm repeat passed with that producer UP-TO-DATE. Final artifact review also
+  freshly ran the official APK validator 1.1.0-alpha01 successfully against final Push bytes.
+- [x] Final signed debug Push APK inspection established `app.wardpulse.watchfacepush.main`,
+  versionCode 1, minimum API 34 / target 36, WFF 2, `hasCode=false`, no dex/native code, and
+  the official APK/manifest allowlists. Its development certificate differs from the host's
+  debug certificate and remained stable through the actual N1-to-N2 upgrade.
+- [x] Both face packages' complication/launch targets resolve to `app.wardpulse`.
+  Compiled and merged host `SAFE_WATCH_FACES` lists name only `app.wardpulse.watchface` and
+  `app.wardpulse.watchfacepush.main`, without privileged access. Both scenes/resources match
+  the canonical generated owner; compiled Push/activation permissions were inspected.
+- [x] Final embedded `assets/default_watchface.apk` equals the signed producer and generated
+  APK byte-for-byte. Fresh official validation, generated `@string/default_wf_token`, compiled
+  string and `com.google.android.wearable.marketplace.DEFAULT_WATCHFACE_VALIDATION_TOKEN`
+  agree with those exact bytes. Never publish raw validation tokens or signing secrets.
+- [x] Ordinary `:app:assembleDebug` builds with `-PwardpulsePushVersionCode=1`, then `=2`,
+  produced actual face versions N1/N2 with the same development signer. Installing host N2
+  alone retained face N1; one explicit **Update watch face** installed N2, retained
+  `ActivationAttempted`, Battery customization and selected WardPulse, and requested neither
+  permission nor activation. The system briefly displayed Simple fallback before restoring
+  that selection. Preserved state does not mean there was no transient system fallback.
   See [ordinary commands](../ANDROID_TOOLCHAIN.md#watch-face-push-builds).
-- [ ] Exercise default installation with the Wear app and explicit missing-face installation.
-  Neither may activate the face or request activation permission. Exercise an unknown
-  occupied slot and recovery after capacity becomes available, without mutating that face.
-- [ ] Exercise explicit **Use watch face**, consent grant, denial and dismissal; interrupted
-  or failed activation and recreation must not replay it. After refusal or a consumed
-  opportunity, verify manual-picker guidance and no repeated prompt. A later user-selected
-  face must remain selected. A prior activation record must not establish **In use**.
-- [ ] Exercise read failure / read-only **Check again**, duplicate-action suppression and
-  operation-specific retries. Verify newer-only updates, no legacy replacement/downgrade,
-  **In use** alongside an available update, and **Installed** after install/update without
-  an immediate active-state query following update.
-- [ ] Change summary availability during permission return: arrival, replacement and loss
-  must preserve the utility route and original explicit action. Reach the entry both after
-  the complete Plan windows list and before any summary. Preserve both home pages and Alerts.
-- [ ] Verify API 33 startup with the dashboard usable and the Wear OS 5 requirement message;
-  API 34/35 without Push must offer separate installation/manual selection. Verify supported
-  Wear OS 6+ Push behavior and complications/data propagation through both installation paths,
-  including preserved legacy settings. Name the actual runtimes/devices used.
-- [ ] After DONE and explicit documentation-output ownership handoff, Root stops only
-  `share9090.DubOhm` for Owner `just check-docs`, then restores the same original directory
-  and path-mode share. Preserve that share and original docs output throughout planning
-  and Native execution; no documentation build runs in either phase.
+- [x] On final task API36, installing only the N1 host automatically installed bundled Push
+  N1 without activation; the first utility visit showed **Installed**. Earlier actual UI08
+  **Install watch face** installed a missing own face with free capacity and no activation.
+  This establishes free-capacity installation, not unknown occupied-slot recovery.
+- [x] Final task API36 explicit **Use watch face** opened the real Allow dialog, consumed
+  `ActivationAttempted` and selected WardPulse. Actual phone data rendered; ordinary editor
+  customization from Day to Battery returned to live without a fresh fatal. Earlier UI08
+  denial, Back dismissal and true process-death/relaunch preserved manual guidance without
+  repeated permission. After N2, a later user-selected Perfunctory remained selected through
+  a fresh check, actual app-process death and relaunch.
+- [x] Injected-controller tests cover read failures/read-only **Check again**, duplicate
+  suppression, operation-specific retries, newer-only updates/no legacy replacement or
+  downgrade, **In use** alongside an update and **Installed** after update without an
+  immediate active-state query. They also cover interrupted/failed activation and persisted
+  history that cannot itself prove **In use**. These are fake/instrumented boundaries,
+  distinct from actual SDK operations and observed system dialogs above.
+- [x] Actual task UI08 no-summary entry and real Data Layer arrival/replacement retained the
+  utility route. Final device UI tests exercised synthetic availability/loss and permission
+  return. Canonical scrolling retained all five Plan windows rows before one utility entry,
+  with both home pages and Alerts unchanged. Synthetic loss is not actual Data Layer loss.
+- [x] Final API33 host-only startup, real summary and route passed with the dashboard usable
+  and the Wear OS 5 requirement message; there was no face/permission/activation flow.
+  Final API34 host/legacy upgrades, real Data Layer arrival, separate-install utility and
+  legacy live/editor-return-live passed without reboot or force-stop. No Push package or
+  activation history/permission flow was introduced there.
+- [x] Final canonical `wardpulse_wear_round_api36_1` / `emulator-5554`, actual SDK36,
+  **384×384 round / 320 dpi**, retained selected legacy `wfId15`, empty user style and upper
+  Day/NoData providers. Auto-installed Push N1 stayed inactive; no canonical consent was
+  consumed or data cleared. Natural Refresh/real WardPulseSync delivered fresh data to
+  Glance and the live face; ordinary editor returned to live with empty crash buffers.
+  Host minimum/target were 33/36; both faces 34/36. Canonical phone minimum 24 and package
+  timestamp **2026-10-15 23:52:25** remained unchanged.
+- [ ] Complete positive production-key builds and inspect the release Push certificate,
+  including separation from host and configured Push development signing. Existing release
+  AABs were not reviewed as fresh final outputs.
+- [ ] Verify actual Play app-signing identity and delivery. Local distinct signers and
+  bundle/token binding do not close this publication gate.
+- [ ] Execute API35 separate-install/manual-selection acceptance; other API results do not
+  certify that runtime.
+- [ ] Perform physical-watch acceptance; emulator results do not certify hardware.
+- [ ] Exercise real-platform unknown occupied-slot/capacity recovery without mutating the
+  foreign face, SDK read/mutation faults, interrupted/failed activation and remaining
+  summary-loss/permission-return permutations. Different-client faces and injected errors
+  do not establish these unavailable scenarios.
 
-Required follow-up remains outside the four-commit execution. After actual Owner device
-acceptance, Root performs the separately reviewed canonical round-watch captures and
-measurements: full Plan windows entry reachability, no-summary entry, full-list scrolling,
-utility clipping and permission-return behavior. Capture the real utility as
-`docs/assets/wear-watch-face-utility.png` under the existing 500×500 fixed-dark contract.
+**API34 transition qualification:** during replacement, an already-running headless
+renderer logged a nonfatal `StringIndexOutOfBoundsException`. Attribution to an old/cached
+document is an inference. The fresh final document rendered and returned from the ordinary
+editor without restart or new exceptions; the crash buffer gained no fatal. This is not a
+warning-free or seamless-replacement claim.
 
-A distinct, subsequently reviewed Runner execution must add
-**Revision 2026-10-16 — watch-face utility entry** and actual measurements to
-[the Glance baseline](WEAR_GLANCE_DESIGN.md), reconciling the
-[screenshot index](../assets/README.md), [watch guide](user-guide/WATCH.md),
-[Wear README](../../apps/wear_android/README.md) and relevant
-[development status](../DEVELOPMENT_PLAN.md#watch-face-push-status-2026-10-16).
-Use that run's fresh Native gates and independent reviews, Owner documentation acceptance
-with the agreed output handoff, and Root's full zero-findings review. Preserve Glance
-geometry and unaffected screenshots. No measurement or screenshot is fabricated; leave
-unperformed acceptance visible. The initial four commits are not final task handoff.
+The integrated
+[Revision 2026-10-16 — watch-face utility entry](WEAR_GLANCE_DESIGN.md#revision-2026-10-16--watch-face-utility-entry)
+records canonical measurements and their scroll positions. At the extreme utility end,
+the departing Make heading intersects the fixed clock near `y24`; it is fully readable in
+the middle position. All instructions/actions are reachable across scrolling, not
+simultaneously visible at every offset. The approved 500×500 fixed-dark
+[manual-selection PNG and provenance](../assets/README.md#watch-face-utility-provenance-and-wear-freshness-2026-10-16)
+are integrated with the [Watch guide](user-guide/WATCH.md#select-and-customize-the-face).
+The PNG retains its original UI08/explicit-decline identity, bound to the unchanged final
+UI owner; existing screenshot bytes and Glance geometry are preserved.
+
+**Mandatory post-DONE documentation procedure:** after independent candidate review,
+Native gates, distinct terminal approval, quiescent DONE and explicit Source/output
+ownership release, Root stops only its existing `share9090.DubOhm` share and runs full
+`just check-docs`. Preserve the original docs output/share during Native ownership: no
+docs build, preview or publication runs there. Root reviews Source, all 12 existing user
+pages and plain Markdown exports, old anchors, internal/original links, both themes,
+unchanged galleries and keyboard Skip to content. Verify the new image's original regular
+PNG output bytes (not a served filesystem symlink), deployment prefix, round 288px frame,
+size, alt, caption and original link. Restore the agreed original-directory/path-mode
+share. Record actual results in a separate Owner receipt and final handoff; whole-task
+closure requires Owner ZERO. This procedure does not predict Docs GREEN or require a
+second status-only Source commit. Concrete findings return through supported Runner repair.
 
 ## Signing
 

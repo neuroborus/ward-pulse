@@ -106,36 +106,39 @@ Ring choices are independent of the phone's [home-widget selection](/guide/widge
 
 ## Select and customize the face
 
-The WardPulse face requires **Wear OS 5 or later**. The dashboard app can run on Wear OS 4,
-but the face cannot be installed there.
+The WardPulse face requires **Wear OS 5 or later**. The dashboard app can run on Wear OS 4;
+the face cannot be installed there.
 
-On the watch, swipe to **Plan windows**, scroll past all windows and tap **Watch face**.
-Before the first phone summary, the same entry is below **Sync from phone**. This opens a
-setup screen; swipe back to return to the dashboard.
+Open WardPulse on the watch. From **Glance**, swipe up to **Plan windows**, scroll past the
+windows and tap **Watch face**. Before the first phone summary, the same entry is below
+**Sync from phone**. Swipe back to return to the dashboard.
 
-On supported Wear OS 6+ devices, the face can be installed together with the Wear app. If
-it is missing, tap **Install watch face**. Installation does not change your current face.
-If another face occupies the available slot, WardPulse leaves it alone; use **Check again**
-after a slot is free. **Check again** also retries a failed status check without installing
-or activating anything.
+On supported Wear OS 6+ devices, the face can be installed with the Wear app. If it is
+missing, tap **Install watch face**. Installation does not activate it. If another face
+occupies the available slot, WardPulse leaves it alone. **Check again** refreshes status
+without installing or activating anything.
 
-When offered, tap **Use watch face** to make WardPulse your current face. This replaces
-your current face and may ask for permission once. If you decline or dismiss permission,
-or activation is unavailable or was already attempted, select it manually:
+Tap **Use watch face**, when offered, to replace your current face with WardPulse. It may
+ask for permission once. If you decline, dismiss the request or cannot use that action,
+select WardPulse manually:
 
 > Touch and hold your current watch face, then find WardPulse in the watch-face list.
 
-WardPulse will not switch back after you choose a different face. **In use** means the
-current face was checked; an installation or update alone reports **Installed**.
+![Watch face setup showing manual-selection guidance after declining activation.](/screenshots/wear-watch-face-utility.png)
 
-If **Update watch face** appears, tap it to apply the newer bundled face. Updating the Wear
-app alone does not update an installed face. The face update preserves its settings and
-your current face selection; it does not request activation permission. **Try again** after
-an installation or update error retries only that operation.
+After declining activation, choose WardPulse from the watch-face list.
 
-On Wear OS 5 or other supported watches without bundled installation, install WardPulse
-Watch Face separately, then select it from your watch-face list. The existing separately
-installed face and its settings are preserved.
+WardPulse will not switch back after you choose another face. **In use** reports a checked
+current selection; **Installed** confirms installation, not selection.
+
+If **Update watch face** appears, tap it to update the bundled face. Your face selection and
+customizations are preserved. Updating the Wear app alone does not update the installed
+face. The face update does not request activation permission. **Try again** after an
+installation or update error repeats only that operation.
+
+On Wear OS 5, or another compatible watch without bundled installation, install WardPulse
+Watch Face separately and select it from your watch-face list. The existing separate
+installation and its settings are preserved.
 
 ![WardPulse circular watch face with selected usage bands and upper complications.](/screenshots/wear-watch-face.png)
 

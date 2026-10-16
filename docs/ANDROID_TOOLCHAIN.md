@@ -686,8 +686,11 @@ cell and rendering a custom Status complication remain unverified.
 
 ### Watch Face Push builds
 
-Implementation added on 2026-10-16; Owner build, signing, compatibility and device acceptance
-are pending. This addition does not refresh the historical verification dates above.
+Implementation and local development acceptance recorded **2026-10-16**: final debug
+builds, development signer/artifact binding and API33/API34/API36 emulator observations
+passed within the [recorded scope](product/RELEASE_CHECKLIST.md#watch-face-push-acceptance).
+Production signing, Play delivery, API35 and physical hardware remain separate. This
+addition does not refresh the historical verification dates above.
 The [Push module](../apps/wear_android/watchface_push/README.md) packages the canonical
 `apps/watchface_wff/src/main/res/` as `app.wardpulse.watchfacepush.main`, WFF 2, minimum API 34,
 with no application code. Legacy packaging and its independent workflow remain unchanged.
@@ -746,9 +749,11 @@ Only success publishes the exact validated bytes and matching token under ignore
 APK/resources, version, signing identity and validation inputs invalidate the generated pair;
 failed validation leaves no published pair. No APK or token belongs in source control.
 
-See [pending Owner acceptance](product/RELEASE_CHECKLIST.md#watch-face-push-acceptance)
-for cold/warm validation, signed-artifact inspection, real upgrade and device scenarios.
-The injected-manager tests do not establish platform acceptance.
+See [the acceptance record](product/RELEASE_CHECKLIST.md#watch-face-push-acceptance) for
+completed cold/warm validation, final signed-artifact inspection, real N1-to-N2 upgrade,
+API33/API34/canonical observations and their remaining release/platform boundaries.
+The injected-manager tests do not establish unobserved platform scenarios. That record also
+owns the mandatory post-DONE Owner documentation build/browser and output-handoff procedure.
 
 ## Routine Verification
 
