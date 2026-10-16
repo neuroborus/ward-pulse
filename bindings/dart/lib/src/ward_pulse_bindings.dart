@@ -3,8 +3,10 @@ import 'dart:ffi';
 
 import 'package:ffi/ffi.dart';
 
-typedef _NativeDashboardSnapshotJson = Pointer<Utf8> Function();
-typedef _DartDashboardSnapshotJson = Pointer<Utf8> Function();
+typedef _NativeSnapshotResultJson = Pointer<Utf8> Function();
+typedef _DartSnapshotResultJson = Pointer<Utf8> Function();
+typedef _NativeSeededResultJson = Pointer<Utf8> Function(Uint64);
+typedef _DartSeededResultJson = Pointer<Utf8> Function(int);
 typedef _NativeJsonTransform = Pointer<Utf8> Function(Pointer<Utf8>);
 typedef _DartJsonTransform = Pointer<Utf8> Function(Pointer<Utf8>);
 typedef _NativeStringFree = Void Function(Pointer<Utf8>);
@@ -25,11 +27,14 @@ final class WardPulseBindingsException implements Exception {
 
 final class _WardPulseBindings {
   _WardPulseBindings(DynamicLibrary library)
-    : _dashboardSnapshotJson = library
-          .lookupFunction<
-            _NativeDashboardSnapshotJson,
-            _DartDashboardSnapshotJson
-          >('ward_pulse_dashboard_snapshot_json'),
+    : _dashboardSnapshotResultJson = library
+          .lookupFunction<_NativeSnapshotResultJson, _DartSnapshotResultJson>(
+            'ward_pulse_dashboard_snapshot_result_json',
+          ),
+      _debugDashboardSnapshotResultJson = library
+          .lookupFunction<_NativeSeededResultJson, _DartSeededResultJson>(
+            'ward_pulse_debug_dashboard_snapshot_result_json',
+          ),
       _openAiDashboardSnapshotResultJson = library
           .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
             'ward_pulse_openai_dashboard_snapshot_result_json',
@@ -58,6 +63,18 @@ final class _WardPulseBindings {
           .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
             'ward_pulse_merge_dashboard_snapshots_result_json',
           ),
+      _applyAlertSettingsResultJson = library
+          .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
+            'ward_pulse_apply_alert_settings_result_json',
+          ),
+      _exhaustedWindowsResultJson = library
+          .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
+            'ward_pulse_exhausted_windows_result_json',
+          ),
+      _planRecoveriesResultJson = library
+          .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
+            'ward_pulse_plan_recoveries_result_json',
+          ),
       _stringFree = library.lookupFunction<_NativeStringFree, _DartStringFree>(
         'ward_pulse_string_free',
       );
@@ -66,7 +83,8 @@ final class _WardPulseBindings {
     return _WardPulseBindings(DynamicLibrary.open(_libraryName));
   }
 
-  final _DartDashboardSnapshotJson _dashboardSnapshotJson;
+  final _DartSnapshotResultJson _dashboardSnapshotResultJson;
+  final _DartSeededResultJson _debugDashboardSnapshotResultJson;
   final _DartJsonTransform _openAiDashboardSnapshotResultJson;
   final _DartJsonTransform _codexDashboardSnapshotResultJson;
   final _DartJsonTransform _anthropicDashboardSnapshotResultJson;
@@ -74,19 +92,17 @@ final class _WardPulseBindings {
   final _DartJsonTransform _cursorPlanDashboardSnapshotResultJson;
   final _DartJsonTransform _cursorPlatformDashboardSnapshotResultJson;
   final _DartJsonTransform _mergeDashboardSnapshotsResultJson;
+  final _DartJsonTransform _applyAlertSettingsResultJson;
+  final _DartJsonTransform _exhaustedWindowsResultJson;
+  final _DartJsonTransform _planRecoveriesResultJson;
   final _DartStringFree _stringFree;
 
   String loadDashboardSnapshotJson() {
-    final value = _dashboardSnapshotJson();
-    if (value == nullptr) {
-      throw const WardPulseBindingsException();
-    }
+    return _decodeResultJson(_dashboardSnapshotResultJson());
+  }
 
-    try {
-      return value.toDartString();
-    } finally {
-      _stringFree(value);
-    }
+  String loadDebugDashboardSnapshotJson(int seed) {
+    return _decodeResultJson(_debugDashboardSnapshotResultJson(seed));
   }
 
   String normalizeOpenAiReportJson(String reportJson) {
@@ -129,35 +145,77 @@ final class _WardPulseBindings {
     return _normalizeReportJson(request, _mergeDashboardSnapshotsResultJson);
   }
 
+  String applyAlertSettingsJson(String snapshotJson, String settingsJson) {
+    final request = jsonEncode({
+      'snapshot': jsonDecode(snapshotJson),
+      'settings': jsonDecode(settingsJson),
+    });
+    return _normalizeReportJson(request, _applyAlertSettingsResultJson);
+  }
+
+  /// Plan windows this snapshot reports as spent, to keep until the next poll.
+  String exhaustedWindowsJson(String snapshotJson) {
+    return _normalizeReportJson(
+      snapshotJson,
+      _exhaustedWindowsResultJson,
+      payloadKey: 'windowsJson',
+    );
+  }
+
+  /// Windows from [exhaustedJson] that [snapshotJson] reports usable again.
+  String planRecoveriesJson(String snapshotJson, String exhaustedJson) {
+    final request = jsonEncode({
+      'snapshot': jsonDecode(snapshotJson),
+      'exhausted': jsonDecode(exhaustedJson),
+    });
+    return _normalizeReportJson(
+      request,
+      _planRecoveriesResultJson,
+      payloadKey: 'recoveriesJson',
+    );
+  }
+
   String _normalizeReportJson(
     String reportJson,
-    Pointer<Utf8> Function(Pointer<Utf8>) normalize,
-  ) {
+    Pointer<Utf8> Function(Pointer<Utf8>) normalize, {
+    String payloadKey = 'dashboardJson',
+  }) {
     final request = reportJson.toNativeUtf8();
     try {
-      final value = normalize(request);
-      if (value == nullptr) {
+      return _decodeResultJson(normalize(request), payloadKey: payloadKey);
+    } finally {
+      malloc.free(request);
+    }
+  }
+
+  /// Unwraps the result envelope every entry point returns, then frees it.
+  ///
+  /// [payloadKey] names what the envelope carries: entry points that build a
+  /// dashboard say `dashboardJson`, and the ones that answer a question about
+  /// one name their own answer.
+  String _decodeResultJson(
+    Pointer<Utf8> value, {
+    String payloadKey = 'dashboardJson',
+  }) {
+    if (value == nullptr) {
+      throw const WardPulseBindingsException();
+    }
+
+    try {
+      final result = jsonDecode(value.toDartString());
+      if (result is! Map<String, dynamic>) {
         throw const WardPulseBindingsException();
       }
 
-      try {
-        final result = jsonDecode(value.toDartString());
-        if (result is! Map<String, dynamic>) {
-          throw const WardPulseBindingsException();
-        }
-
-        return switch (result['status']) {
-          'success' when result['dashboardJson'] is String =>
-            result['dashboardJson'] as String,
-          'error' when result['message'] is String =>
-            throw WardPulseBindingsException(result['message'] as String),
-          _ => throw const WardPulseBindingsException(),
-        };
-      } finally {
-        _stringFree(value);
-      }
+      return switch (result['status']) {
+        'success' when result[payloadKey] is String =>
+          result[payloadKey] as String,
+        'error' when result['message'] is String =>
+          throw WardPulseBindingsException(result['message'] as String),
+        _ => throw const WardPulseBindingsException(),
+      };
     } finally {
-      malloc.free(request);
+      _stringFree(value);
     }
   }
 }
@@ -166,6 +224,10 @@ final _bindings = _WardPulseBindings.open();
 
 String loadDashboardSnapshotJson() {
   return _bindings.loadDashboardSnapshotJson();
+}
+
+String loadDebugDashboardSnapshotJson(int seed) {
+  return _bindings.loadDebugDashboardSnapshotJson(seed);
 }
 
 String normalizeOpenAiReportJson(String reportJson) {
@@ -194,4 +256,16 @@ String normalizeCursorPlatformReportJson(String reportJson) {
 
 String mergeDashboardSnapshotsJson(Iterable<String> snapshotsJson) {
   return _bindings.mergeDashboardSnapshotsJson(snapshotsJson);
+}
+
+String applyAlertSettingsJson(String snapshotJson, String settingsJson) {
+  return _bindings.applyAlertSettingsJson(snapshotJson, settingsJson);
+}
+
+String exhaustedWindowsJson(String snapshotJson) {
+  return _bindings.exhaustedWindowsJson(snapshotJson);
+}
+
+String planRecoveriesJson(String snapshotJson, String exhaustedJson) {
+  return _bindings.planRecoveriesJson(snapshotJson, exhaustedJson);
 }

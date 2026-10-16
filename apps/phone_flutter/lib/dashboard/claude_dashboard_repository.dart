@@ -7,17 +7,20 @@ import 'dashboard_models.dart';
 import 'dashboard_load.dart';
 import 'dashboard_repository.dart';
 import 'merging_connection_repository.dart';
+import 'connection_snapshot_cache.dart';
 
 /// Merges the on-device Claude subscription report into [fallback].
 DashboardRepository claudeDashboardRepository({
   required ClaudeAccountService accountService,
   required DashboardRepository fallback,
+  ConnectionSnapshotCache? cache,
   ProviderSyncLogger logger = const DeveloperProviderSyncLogger(),
   ReportNormalizer normalizeReport = normalizeClaudeReportJson,
   DashboardSnapshotMerger mergeSnapshots = mergeDashboardSnapshotsJson,
   ConnectionReportLoader? loadReport,
 }) {
   return MergingConnectionRepository(
+    cache: cache,
     fallback: fallback,
     logger: logger,
     loadReport: loadReport ?? accountService.fetchReport,
@@ -27,7 +30,10 @@ DashboardRepository claudeDashboardRepository({
   );
 }
 
-DashboardLoadException _mapClaudeError(Object error, ProviderSyncLogger logger) {
+DashboardLoadException _mapClaudeError(
+  Object error,
+  ProviderSyncLogger logger,
+) {
   if (error is! ClaudeAccountException) {
     final details = loadFailureDetails(error);
     logger.record(ProviderSyncEvent.invalidResponse, details: details);

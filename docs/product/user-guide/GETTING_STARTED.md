@@ -1,0 +1,51 @@
+# Getting started
+
+WardPulse shows AI plan capacity, purchased balances and API reporting on your Android phone.
+The phone also sends a compact summary to a paired Wear OS watch and updates a home-screen widget.
+You can use the phone without either optional surface.
+
+## Before you start
+
+The WardPulse watch face is a separate package and requires **Wear OS 5 or later**.
+
+Have an account or reporting credential for at least one supported provider. Connect the
+phone to the internet for sign-in and fresh reporting. WardPulse stores credentials encrypted
+on the phone and uses them directly with their provider; you do not enter them on the watch.
+Read the [privacy policy](/product/privacy-policy) for what is stored and sent between devices.
+
+## Connect your first provider
+
+1. Open WardPulse. A brief loading screen can appear while it reads data.
+2. Open **Providers** in the bottom navigation. An empty Dashboard also offers **Open Providers**.
+3. Sign in to an existing provider account, or connect an organization/team Admin API key.
+   Follow the corresponding [provider instructions](/guide/providers).
+4. Return to **Dashboard**. Use **Refresh** at the top, or pull down on the list, if you need
+   another reporting attempt.
+5. Check the displayed balances and status. **Connected** describes the saved connection;
+   it does not guarantee that the latest reporting request succeeded.
+
+![Providers connection choices in the light theme.](/screenshots/phone-providers-light.png)
+
+![Providers connection choices in the dark theme.](/screenshots/phone-providers-dark.png)
+
+Connect an existing account or an organization/team Admin API key under **Providers**.
+
+Until a connected provider reports successfully, WardPulse has no usage data to show. A
+provider may also omit a meter that your account does not expose. **Unknown** or **Balance
+unavailable** is different from a real zero. If a refresh fails after an earlier success,
+WardPulse can retain that earlier data and mark it stale. See [Dashboard](/guide/dashboard)
+and [Troubleshooting](/guide/troubleshooting).
+
+## Find the controls you need
+
+| Tab | What you do there |
+| --- | --- |
+| Dashboard | Read balances, reporting, history where available, and active alerts. |
+| Watchface | Choose which known metrics fill the watch's ring slots. |
+| Widget | Choose the phone home widget's independent metric list. |
+| Providers | Connect accounts or keys, reconnect/remove them, and set alert thresholds or budget limits. |
+| Settings | Set refresh cadence and Plan recovery notifications; read sync information and legal information. |
+
+Next, [set up the watch](/guide/watch), [add a home widget](/guide/widget), or adjust
+[sync and notifications](/guide/sync). WardPulse's budget limits help you track spending;
+they do not stop provider requests or change provider billing.

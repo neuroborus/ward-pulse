@@ -33,7 +33,13 @@ fn mock_dashboard_snapshot() -> Result<DashboardSnapshot, MockUsageFixtureError>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
     use ward_pulse_core::time::DateTimeUtc;
+
+    use ward_pulse_core::model::connection;
+    use ward_pulse_core::{
+        apply_alert_settings, AlertSettings, ConnectionAlertThresholds, PercentThreshold,
+    };
     use ward_pulse_providers::mock::mock_provider_budget_warning_snapshot;
 
     #[test]
@@ -50,9 +56,18 @@ mod tests {
             DateTimeUtc::from("2026-06-27T18:42:00Z"),
             vec![mock_provider_budget_warning_snapshot("mock-local")],
         );
+        let settings = AlertSettings {
+            connections: HashMap::from([(
+                connection::MOCK_PLAN.to_string(),
+                ConnectionAlertThresholds {
+                    today: PercentThreshold { at: Some(80) },
+                    ..ConnectionAlertThresholds::default()
+                },
+            )]),
+        };
 
         assert_snapshot_matches_fixture(
-            snapshot,
+            apply_alert_settings(snapshot, &settings),
             include_str!("../../../fixtures/snapshots/dashboard_alerts.json"),
         );
     }

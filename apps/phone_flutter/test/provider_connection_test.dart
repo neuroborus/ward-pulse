@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/sync/poll_cadence.dart';
@@ -20,6 +22,19 @@ void main() {
     ]);
     expect(catalog[1].listTitle, 'Work org key');
     expect(providerFamilyLabel(ProviderFamily.openai), 'OpenAI');
+  });
+
+  test('storage keys round-trip back to their connection id', () {
+    for (final connection in providerConnectionCatalog()) {
+      expect(
+        ProviderConnectionId.fromStorageKey(connection.id.storageKey),
+        connection.id,
+        reason: connection.id.storageKey,
+      );
+    }
+    // Ring ids may carry a key this phone build does not know yet.
+    expect(ProviderConnectionId.fromStorageKey('mock.plan'), isNull);
+    expect(ProviderConnectionId.fromStorageKey('anthropic'), isNull);
   });
 
   test('plan sign-in rows omit pasted-secret hints', () {
@@ -54,4 +69,38 @@ void main() {
       );
     }
   });
+
+  test('Rust alert rules key off catalog storage keys', () {
+    final catalogKeys =
+        providerConnectionCatalog()
+            .map((connection) => connection.id.storageKey)
+            .toSet();
+
+    // Mock is debug-only data and has no connection row to configure.
+    final rustKeys = _rustConnectionStorageKeys().where(
+      (key) => key != 'mock.plan',
+    );
+
+    expect(catalogKeys, containsAll(rustKeys));
+  });
+}
+
+/// Rust owns the connection keys, so this reads them from its source.
+///
+/// Scoped to the `connection` module so unrelated constants cannot leak in.
+Set<String> _rustConnectionStorageKeys() {
+  final source =
+      File('../../core/ward-pulse-core/src/model/mod.rs').readAsStringSync();
+  final table = RegExp(
+    r'pub mod connection \{.*?\n\}',
+    dotAll: true,
+  ).firstMatch(source);
+  expect(table, isNotNull, reason: 'connection module not found in Rust');
+
+  final keys = {
+    for (final match in RegExp(r'= "([^"]+)";').allMatches(table!.group(0)!))
+      match.group(1)!,
+  };
+  expect(keys, isNotEmpty, reason: 'no storage keys parsed from Rust');
+  return keys;
 }

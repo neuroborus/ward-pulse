@@ -29,22 +29,7 @@ pub(crate) fn credits_from_cents(cents: f64) -> Quantity {
 
 /// Most severe allowance status, or `Unknown` when nothing was reported.
 pub(crate) fn worst_status(allowances: &[AllowanceState]) -> ProviderStatus {
-    allowances
-        .iter()
-        .map(|allowance| allowance.status)
-        .max_by_key(severity)
-        .unwrap_or(ProviderStatus::Unknown)
-}
-
-fn severity(status: &ProviderStatus) -> u8 {
-    match status {
-        ProviderStatus::Error | ProviderStatus::AuthRequired => 5,
-        ProviderStatus::RateLimited => 4,
-        ProviderStatus::Warning => 3,
-        ProviderStatus::Stale => 2,
-        ProviderStatus::Ok => 1,
-        ProviderStatus::Unknown => 0,
-    }
+    ProviderStatus::worst(allowances.iter().map(|allowance| allowance.status))
 }
 
 #[cfg(test)]

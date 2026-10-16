@@ -31,14 +31,17 @@ Use this skill before adding or moving project files.
 - `brand/`: protected product identity, shared OpenPencil sources, and store artwork placeholders.
 - `tools/`: repeatable local automation.
 - `docs/product/`: durable product, provider, security, and release guidance.
-- `docs/site/`: Vocs workspace, navigation, and thin pages that present authoritative Markdown.
+- `docs/product/user-guide/`: authoritative installed-app user guidance.
+- `docs/assets/`: public UI PNGs, indexed with freshness metadata in `docs/assets/README.md`.
+- `docs/site/`: public user-documentation Vocs workspace, navigation and thin presentation pages.
 
 ## Rules
 
 - Do not make Rust depend on Flutter, Android, Google Play APIs, or platform credential storage.
 - Do not make platform apps own shared product math or provider normalization.
 - Do not put long product requirements in root files.
-- Do not duplicate component or durable documentation in Vocs pages; import the owning Markdown file.
+- Import owning public user/privacy Markdown in Vocs instead of duplicating it; keep engineering
+  documentation with its existing repository owners.
 - Keep app-specific OpenPencil sources under their owning app; keep shared identity sources in `brand/icons/`.
 - Do not treat files in `brand/` as Apache-2.0 licensed unless a file explicitly says so.
 - Do not add cross-platform abstractions until they remove real duplication or encode a stable boundary.

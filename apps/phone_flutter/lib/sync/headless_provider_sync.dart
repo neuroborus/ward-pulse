@@ -5,6 +5,9 @@ import 'package:workmanager/workmanager.dart';
 
 import 'poll_cadence.dart';
 import 'provider_sync_once.dart';
+import 'recovery_wake.dart';
+
+typedef ProviderSyncRunner = Future<void> Function();
 
 /// WorkManager-backed sync after Android reclaims the UI isolate.
 ///
@@ -16,7 +19,7 @@ abstract final class HeadlessProviderSync {
   static const taskName = 'providerSync';
 
   static Future<void> ensureInitialized() async {
-    if (!_isAndroidHost) {
+    if (!isAndroidHost) {
       return;
     }
     await Workmanager().initialize(callbackDispatcher);
@@ -24,7 +27,7 @@ abstract final class HeadlessProviderSync {
 
   /// Enqueue or replace the periodic headless sync for [preferred] slider value.
   static Future<void> schedule(Duration preferred) async {
-    if (!_isAndroidHost) {
+    if (!isAndroidHost) {
       return;
     }
     await Workmanager().registerPeriodicTask(
@@ -35,15 +38,18 @@ abstract final class HeadlessProviderSync {
       constraints: Constraints(networkType: NetworkType.connected),
     );
   }
+}
 
-  /// Real Android OS host — not Flutter's simulated [defaultTargetPlatform]
-  /// (tests on Linux report Android as the target but are not Android hosts).
-  static bool get _isAndroidHost {
-    try {
-      return Platform.isAndroid;
-    } catch (_) {
-      return false;
-    }
+/// Real Android OS host — not Flutter's simulated `defaultTargetPlatform`
+/// (tests on Linux report Android as the target but are not Android hosts).
+///
+/// Anything that schedules work asks this first: on a host with no WorkManager,
+/// booking is not a failure to report, it is a thing that does not apply.
+bool get isAndroidHost {
+  try {
+    return Platform.isAndroid;
+  } catch (_) {
+    return false;
   }
 }
 
@@ -52,9 +58,24 @@ void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     // Background isolate — register plugins before secure storage / channels.
     DartPluginRegistrant.ensureInitialized();
-    if (task == HeadlessProviderSync.taskName) {
-      await providerSyncOnce();
-    }
-    return true;
+    // Both names run the same poll: the periodic tick, and the wake booked for
+    // a spent window's reset. A name without a branch here would "succeed"
+    // without doing anything at all.
+    return runHeadlessProviderTask(task);
   });
+}
+
+/// Runs a recognized WardPulse task and keeps its WorkManager result green.
+///
+/// Persistent setup or surface failures are logged inside [providerSyncOnce];
+/// the periodic schedule supplies the next attempt without a retry storm.
+Future<bool> runHeadlessProviderTask(
+  String task, {
+  ProviderSyncRunner sync = providerSyncOnce,
+}) async {
+  if (task == HeadlessProviderSync.taskName ||
+      task == WorkmanagerRecoveryWakeScheduler.taskName) {
+    await sync();
+  }
+  return true;
 }

@@ -4,6 +4,8 @@
 !.env.example
 *.local
 *.log
+LOCAL_ARTIFACTS/
+/prepush.sh
 
 # Rust
 target/
@@ -20,6 +22,7 @@ __pycache__/
 node_modules/
 docs/site/dist/
 docs/site/.vocs/
+/docs/site/src/pages.gen.ts
 
 # Flutter / Dart
 .dart_tool/
@@ -28,6 +31,8 @@ docs/site/.vocs/
 .packages
 build/
 coverage/
+# Library package — consumers resolve deps; app lock lives under apps/phone_flutter/.
+bindings/dart/pubspec.lock
 
 # Android / Gradle
 .gradle/
@@ -60,3 +65,18 @@ Thumbs.db
 # Generated bindings are reproducible. Keep directory placeholders.
 bindings/**/generated/*
 !bindings/**/generated/.gitkeep
+
+# Local toolchain copies for sandboxed gate runs; never committed.
+.toolchains/
+
+# Agent worktrees (isolated checkouts created by Claude Code)
+.claude/worktrees/
+
+# Release signing. `key.properties` names the keystore and its passwords; the
+# keystore itself belongs outside this repository entirely. Flutter's own
+# android/.gitignore covers the phone module only, and the release key is shared
+# with the Wear app and the watch face, so the rule is repeated here for the
+# whole tree. See docs/product/RELEASE_CHECKLIST.md, Signing.
+key.properties
+*.jks
+*.keystore

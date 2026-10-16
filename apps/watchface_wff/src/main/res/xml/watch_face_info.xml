@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <WatchFaceInfo>
     <Preview value="@drawable/preview" />
+    <!-- Defaults to false, which hides the Edit button in the system favorites list and
+         leaves the three customizable upper cells unreachable. This face qualifies on the
+         documented condition — at least one non-fixed complication; it has three
+         (docs/product/WATCH_RING_DESIGN.md, Upper cells, rule 5). -->
+    <Editable value="true" />
 </WatchFaceInfo>

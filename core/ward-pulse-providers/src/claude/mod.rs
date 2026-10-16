@@ -11,7 +11,7 @@ use std::fmt;
 use serde::Deserialize;
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
-    AllowanceSource, AllowanceState, BudgetPeriod, ProviderKind, ProviderSnapshot,
+    connection, AllowanceSource, AllowanceState, BudgetPeriod, ProviderKind, ProviderSnapshot,
 };
 use ward_pulse_core::time::DateTimeUtc;
 
@@ -114,16 +114,24 @@ pub fn claude_provider_snapshot_from_report_json(
     }
 
     if let Some(extra) = report.extra_usage.filter(|value| value.is_enabled) {
+        let used = extra.used_credits.map(credits_from_cents);
+        let limit = extra
+            .monthly_limit
+            .map(|cents| credits_from_cents(cents as f64));
+        let remaining = match (extra.used_credits, extra.monthly_limit) {
+            (Some(used_credits), Some(limit_cents)) => Some(credits_from_cents(
+                (limit_cents as f64 - used_credits).max(0.0),
+            )),
+            _ => None,
+        };
         allowances.push(AllowanceState {
             id: "claude-extra-usage".to_string(),
             source: AllowanceSource::Purchased,
             label: "Extra usage".to_string(),
             used_percent: extra.utilization,
-            used: extra.used_credits.map(credits_from_cents),
-            limit: extra
-                .monthly_limit
-                .map(|cents| credits_from_cents(cents as f64)),
-            remaining: None,
+            used,
+            limit,
+            remaining,
             unlimited: false,
             window_minutes: None,
             resets_at: None,
@@ -141,6 +149,7 @@ pub fn claude_provider_snapshot_from_report_json(
                 .account_id
                 .unwrap_or_else(|| "claude-local".to_string()),
             provider: ProviderKind::Claude,
+            connection: Some(connection::CLAUDE_PLAN.to_string()),
             status,
             today: unknown_budget(BudgetPeriod::Today),
             week: unknown_budget(BudgetPeriod::Week),
@@ -258,6 +267,16 @@ mod tests {
             .allowances
             .iter()
             .any(|item| item.source == AllowanceSource::Purchased));
+        let extra = snapshot
+            .provider_snapshot
+            .allowances
+            .iter()
+            .find(|item| item.id == "claude-extra-usage")
+            .expect("extra usage");
+        assert_eq!(
+            extra.remaining.as_ref().map(|value| value.value.as_str()),
+            Some("380.00")
+        );
     }
 
     #[test]

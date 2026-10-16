@@ -1,84 +1,53 @@
 # WardPulse
 
-WardPulse watches the pulse of your AI tools.
+See your AI plan capacity, purchased balances and API spend on Android. WardPulse brings
+reporting from OpenAI, Anthropic and Cursor into one phone dashboard, with an optional
+Wear OS summary, watch face and home-screen widget.
 
-WardPulse is a local-first usage dashboard for AI tool spend, limits, credits, and activity across providers. The initial product track targets Android phones, Wear OS, and a lightweight Watch Face Format surface.
+<table width="100%">
+  <tr>
+    <td width="50%" rowspan="2" align="center">
+      <a href="docs/assets/phone-dashboard-light.png#gh-light-mode-only"><img src="docs/assets/phone-dashboard-light.png#gh-light-mode-only" width="216" alt="WardPulse phone Dashboard showing AI plan capacity and update status in the light theme."></a>
+      <a href="docs/assets/phone-dashboard-dark.png#gh-dark-mode-only"><img src="docs/assets/phone-dashboard-dark.png#gh-dark-mode-only" width="216" alt="WardPulse phone Dashboard showing AI plan capacity and update status in the dark theme."></a><br>
+      <strong>Phone Dashboard</strong>
+    </td>
+    <td width="50%" align="center">
+      <a href="docs/assets/wear-glance.png"><img src="docs/assets/wear-glance.png" width="200" alt="WardPulse Watch Glance showing balances and refresh status."></a><br>
+      <strong>Watch Glance</strong>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <a href="docs/assets/wear-watch-face.png"><img src="docs/assets/wear-watch-face.png" width="200" alt="WardPulse watch face showing usage rings and upper complications."></a><br>
+      <strong>Watch face</strong>
+    </td>
+  </tr>
+</table>
 
-## Repository Shape
+[Read the user guide](https://neuroborus.github.io/ward-pulse/).
 
-This repository is intentionally organized as one product monorepo with separate runtime surfaces:
+## Start using WardPulse
 
-- `core/` contains the Rust domain model, provider normalization, FFI boundary, and CLI.
-- `apps/phone_flutter/` contains the Flutter phone app shell.
-- `apps/wear_android/` contains the native Kotlin/Compose for Wear OS shell.
-- `apps/watchface_wff/` contains the declarative Watch Face Format package.
-- `schemas/` contains shared JSON schemas for snapshots, accounts, usage buckets, and budgets.
-- `fixtures/` contains sanitized provider fixtures and stable dashboard snapshots.
-- `bindings/` contains platform binding wrappers.
-- `brand/` contains protected product identity, shared OpenPencil sources, and store artwork.
-- `docs/` contains product documentation and the Vocs site workspace.
-- `tools/` contains repeatable local development and validation automation.
+Sign-in and fresh reporting need internet access. The watch face requires Wear OS 5 or later;
+the phone can be used on its own. Plan connections are experimental.
 
-## Current Phase
+- [Getting started](docs/product/user-guide/GETTING_STARTED.md)
+- [Connect providers](docs/product/user-guide/PROVIDERS.md)
+- [Read the Dashboard](docs/product/user-guide/DASHBOARD.md)
+- [Watch and watch face](docs/product/user-guide/WATCH.md)
+- [Home widget](docs/product/user-guide/WIDGET.md)
+- [Sync and notifications](docs/product/user-guide/SYNC.md)
+- [Settings and privacy](docs/product/user-guide/SETTINGS.md)
+- [Troubleshooting](docs/product/user-guide/TROUBLESHOOTING.md)
 
-Phase 7 provider reporting and Phase 8 hardening are in progress. OpenAI Platform organization
-reporting is separate from Codex subscription usage; both are fetched directly by the phone.
-
-## Useful Commands
-
-Install `just` if you want the command shortcuts.
-
-```sh
-just test-core
-just lint-core
-just check-core
-just check-phone
-just snapshot-core
-just validate-fixtures
-just build-android-rust
-just run-phone
-just check-wear
-just validate-watchface
-just check-watchface
-just docs-dev
-just check-docs
-just export-icons
-just build-wear
-just test-wear-device
-just test-phone-watch-sync
-just run-wear
-just build-watchface
-ANDROID_SERIAL="$WEAR_SERIAL" just run-watchface
-```
-
-Direct Rust commands work from `core/`:
-
-```sh
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-cargo run --quiet -p ward-pulse-cli
-```
-
-Fixture validation runs from the repository root:
-
-```sh
-python3 tools/validate-fixtures/validate_json.py
-```
-
-## Documentation
-
-Start with [docs/README.md](docs/README.md). It is the documentation index and project gate. The
-Vocs workflow lives in [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md), the development plan in
-[docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md), and the verified Android/Flutter environment
-in [docs/ANDROID_TOOLCHAIN.md](docs/ANDROID_TOOLCHAIN.md).
-Design asset ownership and OpenPencil exports are documented in
-[docs/DESIGN_ASSETS.md](docs/DESIGN_ASSETS.md).
-
-Repository-wide working agreements for agents and humans live in [AGENTS.md](AGENTS.md).
+WardPulse stores your credentials encrypted on the phone and uses them directly with their
+provider. The watch receives a compact summary without credentials. There is no WardPulse
+application server or developer usage telemetry. Read the [privacy policy](docs/product/PRIVACY_POLICY.md).
 
 ## License
 
-WardPulse source code, docs, schemas, fixtures, and tooling are licensed under the [Apache License 2.0](LICENSE) unless a file explicitly says otherwise.
+WardPulse source code and documentation are licensed under [Apache-2.0](LICENSE) unless
+otherwise stated. The license does not grant rights to the WardPulse name, logo or other
+product branding; see [Trademark rules](TRADEMARKS.md).
 
-The Apache-2.0 license does not grant rights to the WardPulse name, logo, app icon, watch face identity, store listings, or other product branding. Brand and product identity rules live in [TRADEMARKS.md](TRADEMARKS.md) and [brand/README.md](brand/README.md).
+Contributing: see the [project documentation for contributors](docs/README.md).

@@ -33,9 +33,10 @@ abstract final class PollCadence {
   /// Headless / WorkManager cadence: never below the Android 15-minute floor.
   static Duration headlessInterval(Duration preferred) {
     final minutes = preferred.inMinutes;
-    final clamped = minutes < headlessMinRefreshMinutes
-        ? headlessMinRefreshMinutes
-        : clampMinutes(minutes);
+    final clamped =
+        minutes < headlessMinRefreshMinutes
+            ? headlessMinRefreshMinutes
+            : clampMinutes(minutes);
     return Duration(minutes: clamped);
   }
 

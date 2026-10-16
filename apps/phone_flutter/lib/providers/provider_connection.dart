@@ -18,6 +18,20 @@ final class ProviderConnectionId {
 
   String get storageKey => '${provider.name}.${kind.name}';
 
+  /// Inverse of [storageKey]; null when the key names no known connection.
+  static ProviderConnectionId? fromStorageKey(String key) {
+    final parts = key.split('.');
+    if (parts.length != 2) {
+      return null;
+    }
+    final provider = ProviderFamily.values.asNameMap()[parts.first];
+    final kind = ConnectionKind.values.asNameMap()[parts.last];
+    if (provider == null || kind == null) {
+      return null;
+    }
+    return ProviderConnectionId(provider: provider, kind: kind);
+  }
+
   @override
   bool operator ==(Object other) =>
       other is ProviderConnectionId &&
@@ -99,7 +113,7 @@ final class ProviderConnection {
   }
 }
 
-/// Canonical connection catalog shown in Settings.
+/// Canonical connection catalog shown on the Providers tab.
 ///
 /// [platformLabels] holds stored labels keyed by
 /// [ProviderConnectionId.storageKey].
@@ -150,10 +164,37 @@ List<ProviderConnection> providerConnectionCatalog({
   ];
 }
 
+/// The family a snapshot's provider belongs to, or `null` for one this build
+/// does not know.
+///
+/// A subscription and the reporting key beside it are the same family: `codex`
+/// and `openai` are both OpenAI, `claude` and `anthropic` both Anthropic. The
+/// Providers tab shows one card per family, so this is how account data reaches
+/// the card that speaks for it.
+///
+/// The pickers read the same strings one step finer, down to the connection
+/// (`metric_catalog_groups.dart`). A new provider belongs in both.
+ProviderFamily? providerFamilyOf(String provider) {
+  return switch (provider) {
+    'openai' || 'codex' => ProviderFamily.openai,
+    'anthropic' || 'claude' => ProviderFamily.anthropic,
+    'cursor' => ProviderFamily.cursor,
+    _ => null,
+  };
+}
+
 String providerFamilyLabel(ProviderFamily provider) {
   return switch (provider) {
     ProviderFamily.openai => 'OpenAI',
     ProviderFamily.anthropic => 'Anthropic',
     ProviderFamily.cursor => 'Cursor',
+  };
+}
+
+/// Sentence case, to follow a family label (`Anthropic platform`, `Cursor plan`).
+String connectionKindLabel(ConnectionKind kind) {
+  return switch (kind) {
+    ConnectionKind.plan => 'plan',
+    ConnectionKind.platform => 'platform',
   };
 }
