@@ -78,5 +78,7 @@ bindings/**/generated/*
 # with the Wear app and the watch face, so the rule is repeated here for the
 # whole tree. See docs/product/RELEASE_CHECKLIST.md, Signing.
 key.properties
+watchface-push-debug.properties
+watchface-push-release.properties
 *.jks
 *.keystore

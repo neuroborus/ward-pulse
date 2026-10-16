@@ -37,7 +37,8 @@ ownership or layout changes. `justfile` at the root is the command index (`just 
 | Bindings | `bindings/dart/` | `ward_pulse_bindings` package; loads `libward_pulse_ffi.so` via `dart:ffi` (`kotlin`/`swift` siblings are `.gitkeep` placeholders) |
 | Phone shell | `apps/phone_flutter/` | Flutter dashboard, provider connections, settings, watch/widget sync |
 | Wear OS app | `apps/wear_android/` | Compose Glance legend, summary store, complications |
-| Watch face | `apps/watchface_wff/` | Declarative Watch Face Format package |
+| Push face packaging | `apps/wear_android/watchface_push/` | Separately signed APK for the Wear app; consumes canonical WFF resources |
+| Watch face | `apps/watchface_wff/` | Legacy WFF package and canonical resources shared with Push packaging |
 | Schemas | `schemas/` | JSON Schemas for snapshots, accounts, usage buckets, budgets, watch summary |
 | Fixtures | `fixtures/` | Sanitized provider payloads + cross-language golden snapshots |
 | Tools | `tools/` | Review-art generators, icon export, Rust-for-Android build, validators |
