@@ -1,5 +1,6 @@
 package app.wardpulse.wear.ui
 
+import android.os.SystemClock
 import android.view.Choreographer
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -34,7 +35,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -88,7 +88,7 @@ class WardPulseNavigationStateTest {
             watchFaceState = WatchFaceState(WatchFaceStatus.Installed, useAvailable = true)
         }
         assertVisible("Installed")
-        assertAbsent("Checking watch face…")
+        assertAbsent("Checking watch face…", anchor = "Installed")
         reveal("Make WardPulse your watch face.")
         assertAction("Use watch face", enabled = true)
 
@@ -102,15 +102,15 @@ class WardPulseNavigationStateTest {
         for (next in listOf(null, alpha, beta, null, beta)) {
             change { summary = next }
             assertAction("Use watch face", enabled = false)
-            assertAbsent("Sync from phone")
+            assertAbsent("Sync from phone", anchor = "Use watch face", anchorIsAction = true)
             assertCalls("initial.check", "latest.use")
         }
 
         scrollToStart()
         change { watchFaceState = WatchFaceState(WatchFaceStatus.InUse) }
         assertVisible("In use")
-        assertAbsent("Installed")
-        assertAbsent("Use watch face")
+        assertAbsent("Installed", anchor = "In use")
+        assertAbsent("Use watch face", anchor = "In use")
         assertCalls("initial.check", "latest.use")
 
         // Other retained actions must also use the replacement callbacks.
@@ -155,8 +155,8 @@ class WardPulseNavigationStateTest {
         )
         back()
         assertVisible("Watch face")
-        assertAbsent("In use")
-        assertAbsent("Alerts: 1")
+        assertAbsent("In use", anchor = "Watch face", anchorIsAction = true)
+        assertAbsent("Alerts: 1", anchor = "Watch face", anchorIsAction = true)
     }
 
     @Test
@@ -167,10 +167,10 @@ class WardPulseNavigationStateTest {
         change { summary = beta }
         assertVisible("Codex Beta")
         assertVisible("25% left")
-        assertAbsent("Codex Alpha")
+        assertAbsent("Codex Alpha", anchor = "Codex Beta")
         change { summary = null }
         assertVisible("Sync from phone")
-        assertAbsent("Codex Beta")
+        assertAbsent("Codex Beta", anchor = "Sync from phone")
         change { summary = alpha }
         assertVisible("Codex Alpha")
         assertVisible("75% left")
@@ -180,14 +180,14 @@ class WardPulseNavigationStateTest {
         assertVisible("Alpha alert")
         change { summary = beta }
         assertVisible("Beta alert")
-        assertAbsent("Alpha alert")
+        assertAbsent("Alpha alert", anchor = "Beta alert")
         change { summary = null }
         assertVisible("Sync from phone")
-        assertAbsent("Beta alert")
+        assertAbsent("Beta alert", anchor = "Sync from phone")
         change { summary = beta }
         assertVisible("Alerts")
         assertVisible("Beta alert")
-        assertAbsent("Sync from phone")
+        assertAbsent("Sync from phone", anchor = "Beta alert")
 
         back()
         assertVisible("Codex Beta")
@@ -198,7 +198,7 @@ class WardPulseNavigationStateTest {
         assertVisible("Plan windows")
         assertVisible("Codex Alpha")
         assertVisible("75% left")
-        assertAbsent("Alerts: 1")
+        assertAbsent("Alerts: 1", anchor = "Codex Alpha")
         change { summary = null }
         assertVisible("Sync from phone")
         change { summary = beta }
@@ -212,8 +212,8 @@ class WardPulseNavigationStateTest {
         assertCalls("initial.check")
         back()
         assertVisible("Watch face")
-        assertAbsent("In use")
-        assertAbsent("Alerts: 1")
+        assertAbsent("In use", anchor = "Watch face", anchorIsAction = true)
+        assertAbsent("Alerts: 1", anchor = "Watch face", anchorIsAction = true)
         assertTrue(scroll(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD))
         assertVisible("Alerts: 1")
         assertVisible("Codex Beta")
@@ -255,17 +255,31 @@ class WardPulseNavigationStateTest {
 
     private fun awaitUi() {
         instrumentation.waitForIdleSync()
-        val frames = CountDownLatch(1)
-        instrumentation.runOnMainSync {
-            Choreographer.getInstance().postFrameCallback {
-                Choreographer.getInstance().postFrameCallback { frames.countDown() }
-            }
-        }
-        assertTrue("UI frames did not complete", frames.await(5, TimeUnit.SECONDS))
+        repeat(2) { awaitFrame() }
         runBlocking { withTimeout(5_000) { recomposer.awaitIdle() } }
         instrumentation.waitForIdleSync()
-        // Compose publishes accessibility changes asynchronously after applying a frame.
-        automation.waitForIdle(100, 5_000)
+        // Callback-only changes need not emit accessibility events. Assertions below wait
+        // for their own observable state instead of treating event quiet as publication.
+    }
+
+    private fun awaitFrame(timeoutMillis: Long = 5_000) {
+        val frame = CountDownLatch(1)
+        instrumentation.runOnMainSync {
+            Choreographer.getInstance().postFrameCallback { frame.countDown() }
+        }
+        assertTrue("UI frame did not complete", frame.await(timeoutMillis, TimeUnit.MILLISECONDS))
+    }
+
+    private fun awaitAccessibility(message: String, condition: (AccessibilityNodeInfo) -> Boolean) {
+        val deadline = SystemClock.uptimeMillis() + 5_000
+        while (SystemClock.uptimeMillis() < deadline) {
+            val root = appRoot()
+            if (root != null && condition(root)) return
+            val remaining = deadline - SystemClock.uptimeMillis()
+            if (remaining <= 0) break
+            awaitFrame(remaining)
+        }
+        throw AssertionError(message)
     }
 
     private fun back() {
@@ -299,40 +313,50 @@ class WardPulseNavigationStateTest {
     )
 
     private fun assertVisible(text: String) {
-        assertTrue("Expected visible text: $text", hasText(text))
+        awaitAccessibility("Expected visible text: $text") { findText(it, text) != null }
     }
 
-    private fun assertAbsent(text: String) {
-        assertFalse("Unexpected visible text: $text", hasText(text))
+    private fun assertAbsent(text: String, anchor: String, anchorIsAction: Boolean = false) {
+        awaitAccessibility("Expected $anchor without visible text: $text") { root ->
+            val anchored = if (anchorIsAction) {
+                findButton(root, anchor) != null
+            } else {
+                findText(root, anchor) != null
+            }
+            anchored && findText(root, text) == null
+        }
     }
 
     private fun hasText(text: String): Boolean {
         return findText(text) != null
     }
 
-    private fun findText(text: String): AccessibilityNodeInfo? = findNode {
+    private fun findText(text: String): AccessibilityNodeInfo? = appRoot()?.let { findText(it, text) }
+
+    private fun findText(root: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? = findNode(root) {
         it.isVisibleToUser && it.text?.toString()?.lineSequence()?.any { line -> line == text } == true
     }
 
-    private fun button(text: String): AccessibilityNodeInfo {
-        reveal(text)
-        var node = checkNotNull(findText(text)) { "Missing button: $text" }
+    private fun findButton(root: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? {
+        var node = findText(root, text) ?: return null
         while (!node.isClickable && node.className != "android.widget.Button") {
-            node = checkNotNull(node.parent) { "No action for: $text" }
+            node = node.parent?.takeIf { it.refresh() } ?: return null
         }
         return node
     }
 
     private fun assertAction(text: String, enabled: Boolean) {
-        val node = button(text)
-        assertEquals("Enabled state for $text", enabled, node.isEnabled)
+        reveal(text)
+        awaitAccessibility("Expected enabled=$enabled for $text") { root ->
+            findButton(root, text)?.isEnabled == enabled
+        }
     }
 
     private fun click(text: String) {
         reveal(text)
         var node = checkNotNull(findText(text)) { "Missing action: $text" }
         while (!node.actionList.contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK)) {
-            node = checkNotNull(node.parent) { "No click action for: $text" }
+            node = checkNotNull(node.parent?.takeIf { it.refresh() }) { "No click action for: $text" }
         }
         assertTrue("Disabled action: $text", node.isEnabled)
         assertTrue("Click failed: $text", node.performAction(AccessibilityNodeInfo.ACTION_CLICK))
@@ -364,8 +388,15 @@ class WardPulseNavigationStateTest {
         return performed
     }
 
-    private fun findNode(predicate: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
+    private fun appRoot(): AccessibilityNodeInfo? {
         val root = automation.rootInActiveWindow ?: return null
+        return root.takeIf {
+            it.refresh() && it.isVisibleToUser && it.packageName?.toString() == instrumentation.targetContext.packageName
+        }
+    }
+
+    private fun findNode(predicate: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
+        val root = appRoot() ?: return null
         return findNode(root, predicate)
     }
 
@@ -373,6 +404,9 @@ class WardPulseNavigationStateTest {
         node: AccessibilityNodeInfo,
         predicate: (AccessibilityNodeInfo) -> Boolean,
     ): AccessibilityNodeInfo? {
+        // Refresh every node, including descendants/parents, rather than trusting cached
+        // results while Compose's accessibility publication may still be pending.
+        if (!node.refresh()) return null
         if (predicate(node)) return node
         for (index in 0 until node.childCount) {
             val child = node.getChild(index) ?: continue
