@@ -1,14 +1,13 @@
 package app.wardpulse.wear.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -36,10 +35,13 @@ import app.wardpulse.wear.model.PreviewWatchDashboardSummary
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.ui.theme.WardPulseTheme
+import app.wardpulse.wear.watchface.WatchFaceScreen
+import app.wardpulse.wear.watchface.WatchFaceState
 import java.time.Instant
 
 private const val HOME_ROUTE = "home"
 private const val ALERTS_ROUTE = "alerts"
+private const val WATCH_FACE_ROUTE = "watch-face"
 
 private enum class HomePage {
     Glance,
@@ -53,56 +55,62 @@ internal data class SummaryRow(
 )
 
 @Composable
-fun WardPulseApp(summary: WatchDashboardSummary?) {
+fun WardPulseApp(
+    summary: WatchDashboardSummary?,
+    watchFaceState: WatchFaceState,
+    onCheckWatchFace: () -> Unit,
+    onInstallWatchFace: () -> Unit,
+    onUpdateWatchFace: () -> Unit,
+    onUseWatchFace: () -> Unit,
+) {
+    val navController = rememberSwipeDismissableNavController()
+    val pagerState = rememberPagerState(pageCount = { HomePage.entries.size })
     // Straight clock: default curved TimeText warps on round API 34+ shells.
     // Sized to Glance review art (muted, not a face-style hero).
     AppScaffold(timeText = { StraightAppTimeText() }) {
-        if (summary == null) {
-            EmptyDashboardScreen()
-            return@AppScaffold
-        }
-        val navController = rememberSwipeDismissableNavController()
         SwipeDismissableNavHost(
             navController = navController,
             startDestination = HOME_ROUTE,
         ) {
             composable(HOME_ROUTE) {
-                HomeScreen(
-                    summary = summary,
-                    onOpenAlerts = { navController.navigate(ALERTS_ROUTE) },
-                )
+                if (summary == null) {
+                    EmptyDashboardScreen(onOpenWatchFace = { navController.navigate(WATCH_FACE_ROUTE) })
+                } else {
+                    HomeScreen(
+                        summary = summary,
+                        pagerState = pagerState,
+                        onOpenAlerts = { navController.navigate(ALERTS_ROUTE) },
+                        onOpenWatchFace = { navController.navigate(WATCH_FACE_ROUTE) },
+                    )
+                }
             }
             composable(ALERTS_ROUTE) {
-                SummaryScreen(title = "Alerts", rows = summary.alertRows())
+                if (summary == null) {
+                    EmptyDashboardScreen(onOpenWatchFace = { navController.navigate(WATCH_FACE_ROUTE) })
+                } else {
+                    SummaryScreen(title = "Alerts", rows = summary.alertRows())
+                }
+            }
+            composable(WATCH_FACE_ROUTE) {
+                WatchFaceScreen(
+                    state = watchFaceState,
+                    onCheck = onCheckWatchFace,
+                    onInstall = onInstallWatchFace,
+                    onUpdate = onUpdateWatchFace,
+                    onUse = onUseWatchFace,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun EmptyDashboardScreen() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 18.dp, vertical = 28.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text("WardPulse", style = MaterialTheme.typography.titleMedium)
-        Text(
-            "Sync from phone",
-            modifier = Modifier.padding(top = 8.dp),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            "No dashboard data yet",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-    }
+private fun EmptyDashboardScreen(onOpenWatchFace: () -> Unit) {
+    SummaryScreen(
+        title = "WardPulse",
+        rows = listOf(SummaryRow("Sync from phone", "No dashboard data yet")),
+        onOpenWatchFace = onOpenWatchFace,
+    )
 }
 
 /**
@@ -126,10 +134,11 @@ internal fun WatchDashboardSummary.alertRows(): List<SummaryRow> =
 @Composable
 private fun HomeScreen(
     summary: WatchDashboardSummary,
+    pagerState: PagerState,
     onOpenAlerts: () -> Unit,
+    onOpenWatchFace: () -> Unit,
 ) {
     val pages = HomePage.entries
-    val pagerState = rememberPagerState(pageCount = { pages.size })
 
     VerticalPager(
         state = pagerState,
@@ -144,6 +153,7 @@ private fun HomeScreen(
             HomePage.PlanWindows -> SummaryScreen(
                 title = "Plan windows",
                 rows = summary.planRows(),
+                onOpenWatchFace = onOpenWatchFace,
             )
         }
     }
@@ -170,7 +180,11 @@ private fun StraightAppTimeText() {
 }
 
 @Composable
-private fun SummaryScreen(title: String, rows: List<SummaryRow>) {
+private fun SummaryScreen(
+    title: String,
+    rows: List<SummaryRow>,
+    onOpenWatchFace: (() -> Unit)? = null,
+) {
     val state = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
 
@@ -201,6 +215,19 @@ private fun SummaryScreen(title: String, rows: List<SummaryRow>) {
                     )
                 }
             }
+            if (onOpenWatchFace != null) {
+                item {
+                    Card(
+                        onClick = onOpenWatchFace,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .transformedHeight(this, transformationSpec),
+                        transformation = SurfaceTransformation(transformationSpec),
+                    ) {
+                        Text("Watch face")
+                    }
+                }
+            }
         }
     }
 }
@@ -229,6 +256,13 @@ private fun String.toStatus(): PulseStatus = when (this) {
 @Composable
 private fun WardPulsePreview() {
     WardPulseTheme {
-        WardPulseApp(PreviewWatchDashboardSummary.glanceLegend)
+        WardPulseApp(
+            summary = PreviewWatchDashboardSummary.glanceLegend,
+            watchFaceState = WatchFaceState(),
+            onCheckWatchFace = {},
+            onInstallWatchFace = {},
+            onUpdateWatchFace = {},
+            onUseWatchFace = {},
+        )
     }
 }

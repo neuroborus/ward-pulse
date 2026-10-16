@@ -11,6 +11,8 @@ versioned `WatchDashboardSummary` payload and persists only the latest successfu
   Alerts pill.
 - A second page listing plan windows and when each comes back (see **Plan windows** below).
 - Alerts screen, reached from the Glance pill — the active list only, no rule editing.
+- Watch face setup utility, reached after all Plan windows rows or below the no-summary sync
+  prompt. It is a separate swipe-back route; the app still has two home pages.
 - Local storage of the latest watch summary.
 - Wear-specific navigation, rotary input, shape-aware layouts, and stale data states.
 - Wear Data Layer receiver for `/wardpulse/watch-summary`.
@@ -79,6 +81,40 @@ Rules:
 - Time is the device's own clock, and "inside a day" means **today's date**, not the next
   twenty-four hours: `back at HH:MM` for a window rolling today, `back MMM d, HH:mm` for any
   other, so tomorrow evening never reads like tonight.
+
+## Watch face setup
+
+Scroll past the complete Plan windows list and tap **Watch face**. Before the first phone
+summary, the same entry appears below **Sync from phone**. Summary arrival, replacement or
+loss does not reset this route or a pending permission result.
+
+On supported Wear OS 6+ devices, the bundled Push face can be installed with the Wear app.
+If it is missing and a slot is free, **Install watch face** installs it without activating
+it. An unknown occupied slot is left untouched; **Check again** only refreshes status after
+capacity becomes available. A failed status check has the same read-only recovery action.
+
+**Use watch face** is a separate explicit action. It may request activation permission once;
+permission and activation-attempt history is committed before those effects and retained
+across recreation. Denial, dismissal or an unavailable/consumed activation opportunity leads
+to manual-picker guidance. The app never reactivates a face after the user chooses another.
+Only a fresh platform observation can report **In use**.
+
+**Update watch face** appears when the actual bundled version is newer than the installed
+Push face. It updates only that package, preserving configuration and face selection. Even
+an **In use** face can offer an update. Installation/update completion reports **Installed**;
+it does not check current activity immediately after an update. **Try again** repeats only
+the failed installation or update. Busy actions are disabled.
+
+Wear OS 5 and other WFF 2 devices without Push receive separate-install/manual-selection
+guidance. On Wear OS 4 / API 33 the dashboard remains usable, but the face requires Wear OS 5
+or later. The legacy `app.wardpulse.watchface` package and its settings remain separate.
+
+Owner build, compatibility and device acceptance remain pending. Real round-watch utility
+captures, entry/scroll/clipping measurements and the dated locked-baseline reconciliation
+belong to the separately reviewed follow-up after device acceptance; existing screenshots
+are unchanged. The durable-consent device tests in `WatchFaceConsentStoreTest` are included
+in `just test-wear-device`; they verify synchronous on-disk history, distinct from the
+controller's injected-effect unit tests.
 
 ## Commands
 
