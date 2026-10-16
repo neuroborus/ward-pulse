@@ -4,8 +4,9 @@ This resource-only Android application produces `app.wardpulse.watchfacepush.mai
 [Watch Face Push](https://developer.android.com/training/wearables/watch-face-push).
 It is a signed APK dependency of the Wear app, not a runtime Android library. Its minimum
 is API 34 with WFF 2; the Wear app minimum is independently API 33. Push availability still
-requires a runtime capability check. Packaging alone does not implement installation
-recovery, activation, or updates; those belong to the subsequent controller and UI steps.
+requires a runtime capability check. The Wear app's `WatchFaceController` handles installation
+recovery, one-time activation and explicit updates; `WatchFaceScreen` presents the utility
+route. See [watch face setup](../README.md#watch-face-setup).
 
 ## Resource ownership
 
@@ -100,9 +101,8 @@ and no runtime validator or separate download helper is used.
 
 No Owner build, signing readiness, APK allowlist/provider-target inspection, official
 validation/token binding, cold-cache completion, warm reuse, or actual N-to-N+1 upgrade is
-claimed by this implementation step. These remain Owner acceptance after the four-commit
+claimed here. These remain Owner acceptance after the four-commit
 Runner execution finishes and Root reviews it. API 33 startup, supported Push installation,
 API 34/35 separate-install fallback, preserved configuration/selection, and complication
-propagation through both packages also remain pending. Controller/utility implementation
-and their documentation retain their subsequent planned positions. Device captures and
+propagation through both packages also remain pending. Device captures and
 measured baseline reconciliation belong to the required separate follow-up execution.

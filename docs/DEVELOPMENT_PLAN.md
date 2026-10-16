@@ -653,6 +653,7 @@ It should be built with Kotlin and Compose for Wear OS.
 Glance       — home page: how much is left
 Plan windows — second page: when each one comes back
 Alerts       — reached from the Glance pill
+Watch face   — utility route after Plan windows rows, also available before the first summary
 ```
 
 The MVP screens (Today, Week, Providers, Last sync, and an added Usage list) were replaced in
@@ -711,6 +712,43 @@ The watch face should support tap-to-open behavior into the Wear OS app where po
 
 The static today/week layout above is the accepted v1 (Phase 6). Phase 13 evolves the face
 into configurable percent ring arcs driven by the phone-side ring selection.
+
+### Watch Face Push status 2026-10-16
+
+The implementation adds a separately signed `app.wardpulse.watchfacepush.main` APK to the
+Wear build, consuming the canonical WFF resources without replacing the legacy
+`app.wardpulse.watchface` package or its settings. Wear minimum API is now 33; the phone
+minimum is unchanged. Supported Wear OS 6+ devices use capability-guarded Push; API 34/35
+retain separate WFF installation, while API 33 runs the dashboard with face-unsupported
+guidance. No Play listing, production signing readiness or device compatibility is certified.
+
+The **Watch face** utility keeps two home pages and the existing Alerts behavior. It offers
+separate explicit install, one-time consent/use and newer-only update actions, with safe
+occupied-slot recovery and durable permission/activation history. The implemented build,
+controller and utility do not close Owner acceptance. See
+[build/signing ownership](ANDROID_TOOLCHAIN.md#watch-face-push-builds) and the
+[pending acceptance matrix](product/RELEASE_CHECKLIST.md#watch-face-push-acceptance).
+
+Owner builds, release refusal, signed-artifact/token inspection, cold/warm validator proof,
+N-to-N+1 upgrades, compatibility and device scenarios remain pending after the four-commit
+execution reaches DONE, terminal approval and settled idle state, and Root completes its
+full independent zero-findings review. Documentation acceptance follows the explicit live
+output handoff. These checks are not initial commit preconditions.
+
+After actual device acceptance, a separate subsequently reviewed Runner execution must
+record **Revision 2026-10-16 — watch-face utility entry**, real round-watch measurements and
+`docs/assets/wear-watch-face-utility.png` (500×500, fixed dark), reconciling the baseline,
+screenshot index, watch guide and Wear README. Preserve Glance geometry and existing
+screenshot bytes. This required follow-up is unnumbered and outside the four-commit run;
+that run finishes without waiting for acceptance or captures. Final task handoff remains
+pending until supported acceptance and reconciliation are complete.
+
+Original working inputs remain `LOCAL_ARTIFACTS/business-model/WATCH_FACE_PUSH_TASK.md`,
+`LOCAL_ARTIFACTS/business-model/PLAY_RELEASE.md` sections “Автоматическая установка
+циферблата” / “Совместимость и объём изменений”, and
+`LOCAL_ARTIFACTS/business-model/PLAY_ROLLOUT_PLAN.md` sections 2–4. These are historical
+planning references, not evidence of completed acceptance. Historical verification dates
+elsewhere in this plan remain unchanged.
 
 ### Watch face rules
 

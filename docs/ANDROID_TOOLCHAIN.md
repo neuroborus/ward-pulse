@@ -585,8 +585,9 @@ Treat the configured AVDs as persistent development devices:
 
 ## Watch Face Format
 
-The watch face is a separate resource-only package in `apps/watchface_wff/` (Phase 13
-concentric baseline — `docs/product/WATCH_RING_DESIGN.md`):
+The legacy watch face is a separate resource-only package in `apps/watchface_wff/` (Phase 13
+concentric baseline — `docs/product/WATCH_RING_DESIGN.md`). Its resources are also canonical
+inputs to the [bundled Push APK](#watch-face-push-builds); the table describes legacy packaging:
 
 | Setting | Value | Purpose |
 | --- | --- | --- |
@@ -598,7 +599,7 @@ concentric baseline — `docs/product/WATCH_RING_DESIGN.md`):
 | Android Gradle Plugin | 9.3.0 | Shared Android build plugin |
 | Gradle | 9.6.1 | Checked-in wrapper version |
 
-No additional host package or runtime library is required. `just validate-watchface`
+The legacy build needs no Push runtime library. `just validate-watchface`
 downloads the official validator 1.7.0 once from GitHub asset `550531146`, checks
 SHA-256 `28b244289ab748bb2b07017e9f3c06bb76bdf165d6fa55652a5dc64b852c3121`, and caches it
 under `${XDG_CACHE_HOME:-$HOME/.cache}/wardpulse/`.
@@ -682,6 +683,72 @@ canonical Wear AVD. Its UI hierarchy showed enabled, clickable `Empty` and `Batt
 buttons at `[20,123][364,227]` and `[20,235][364,339]`, respectively. This verifies that the
 chooser offers an empty entry for that cell. No selection was made: actually clearing the
 cell and rendering a custom Status complication remain unverified.
+
+### Watch Face Push builds
+
+Implementation added on 2026-10-16; Owner build, signing, compatibility and device acceptance
+are pending. This addition does not refresh the historical verification dates above.
+The [Push module](../apps/wear_android/watchface_push/README.md) packages the canonical
+`apps/watchface_wff/src/main/res/` as `app.wardpulse.watchfacepush.main`, WFF 2, minimum API 34,
+with no application code. Legacy packaging and its independent workflow remain unchanged.
+The Wear host minimum is API 33 and uses `androidx.wear.watchfacepush:watchfacepush:1.0.0`.
+Factory support is checked before manager creation/use: API 33 keeps the dashboard usable
+but cannot install this face; API 34/35 offer separate WFF installation, and supported
+Wear OS 6+ devices offer Push.
+The phone minimum and phone-to-watch transport remain unchanged.
+
+Owner supplies ignored repository-root `watchface-push-debug.properties` and
+`watchface-push-release.properties`. Each uses the names `storeFile`, `storePassword`,
+`keyAlias` and `keyPassword`; values stay private. The keystore path must be absolute and
+outside the repository. Keep the development identity persistent outside build outputs,
+including across `clean` and N-to-N+1 builds. CI provisions its own development identity
+only. The build does not provision Owner Push identities.
+
+`RequirePushSigning` in the [Push build script](../apps/wear_android/watchface_push/build.gradle.kts)
+rejects missing/invalid signing and reuse of a configured Push development certificate for
+release. Neither variant falls back to a host key. `PrepareDefaultWatchFace` in the
+[Wear host build script](../apps/wear_android/app/build.gradle.kts) verifies that the signed
+APK certificate differs from the selected host certificate, including debug. The existing
+host `key.properties` / `wardpulseRequireReleaseKey` guard and shared phone/Wear identity
+still apply; Push release signing is additional. See [Signing](product/RELEASE_CHECKLIST.md#signing).
+
+From `apps/wear_android/`, after private signing setup, use ordinary builds:
+
+```sh
+./gradlew :app:assembleDebug -PwardpulsePushVersionCode=1
+./gradlew :app:assembleDebug -PwardpulsePushVersionCode=2
+./gradlew :app:bundleRelease -PwardpulseRequireReleaseKey=true -PwardpulsePushVersionCode=2
+```
+
+`wardpulsePushVersionCode` defaults to 1 and accepts a positive Android integer. Choose N
+and N+1 for upgrade acceptance, keeping the Push package and certificate identical.
+Release needs both host release configuration and separate Push release configuration.
+The normal variant graph consumes a signed APK artifact from `:watchface_push`, validates
+it, generates variant assets/resources and packages the host. There is no nested Gradle
+invocation, manual APK copy step, token substitution or source edit.
+
+`PrepareDefaultWatchFace` owns the nontransitive Google Maven dependency
+`com.google.android.wearable.watchface.validator:validator-push-cli:1.1.0-alpha01@jar`
+and `validatorSha256`, pinned to
+`04dc20a0994df3eaebf025e107f7589c147b2ce8a2c628745e01a5c0a63fe4dd`.
+The [official artifact](https://dl.google.com/dl/android/maven2/com/google/android/wearable/watchface/validator/validator-push-cli/1.1.0-alpha01/validator-push-cli-1.1.0-alpha01.jar)
+is resolved through the existing Google Maven repository. Review the version, checksum and
+CLI output contract together when changing the pin; this is a build-time tool, not a runtime
+dependency or a second download helper. The XML validator above retains its separate purpose.
+
+The producer invalidates old outputs, checks the JAR checksum before execution, verifies
+the signed APK and passes its absolute path as `--apk_path` with `--package_name app.wardpulse`.
+It requires official validation success and one token, without logging tokens or raw output.
+Only success publishes the exact validated bytes and matching token under ignored
+`app/build/generated/defaultWatchFace/<variant>/`: `assets/default_watchface.apk` and
+`res/values/default_watchface.xml` containing `@string/default_wf_token`. The host manifest's
+`com.google.android.wearable.marketplace.DEFAULT_WATCHFACE_VALIDATION_TOKEN` references it.
+APK/resources, version, signing identity and validation inputs invalidate the generated pair;
+failed validation leaves no published pair. No APK or token belongs in source control.
+
+See [pending Owner acceptance](product/RELEASE_CHECKLIST.md#watch-face-push-acceptance)
+for cold/warm validation, signed-artifact inspection, real upgrade and device scenarios.
+The injected-manager tests do not establish platform acceptance.
 
 ## Routine Verification
 
@@ -827,6 +894,11 @@ After an update:
 - [Build a Watch Face Format package](https://developer.android.com/training/wearables/wff/build)
 - [Watch Face Format ambient mode](https://developer.android.com/training/wearables/wff/ambient)
 - [Official WFF validator and schema](https://github.com/google/watchface)
+- [Watch Face Push](https://developer.android.com/training/wearables/watch-face-push)
+- [Push integration in a Wear app](https://developer.android.com/training/wearables/watch-face-push/wear-os-app)
+- [AndroidX Watch Face Push releases](https://developer.android.com/jetpack/androidx/releases/wear-watchfacepush)
+- [WatchFacePushManagerFactory](https://developer.android.com/reference/androidx/wear/watchfacepush/WatchFacePushManagerFactory)
+- [ComplicationDataSourceService metadata](https://developer.android.com/reference/androidx/wear/watchface/complications/datasource/ComplicationDataSourceService)
 - [Android NDK downloads](https://developer.android.com/ndk/downloads)
 - [Rust Android platform support](https://doc.rust-lang.org/rustc/platform-support/android.html)
 - [`cargo-ndk` releases](https://github.com/bbqsrc/cargo-ndk/releases)
