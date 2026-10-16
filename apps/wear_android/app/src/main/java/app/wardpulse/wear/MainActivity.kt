@@ -1,5 +1,6 @@
 package app.wardpulse.wear
 
+import android.annotation.SuppressLint
 import android.app.Application
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -34,6 +35,8 @@ class MainActivity : ComponentActivity() {
     private var summary by mutableStateOf<WatchDashboardSummary?>(null)
     private var storeObserver: AutoCloseable? = null
     private val watchFace by lazy { ViewModelProvider(this)[WatchFaceViewModel::class.java] }
+    // ComponentActivity owns this launcher; the diagnostic concerns transitive legacy Fragment handling.
+    @SuppressLint("InvalidFragmentVersionForActivityResult")
     private val watchFacePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         watchFace.onPermissionResult(it)
     }

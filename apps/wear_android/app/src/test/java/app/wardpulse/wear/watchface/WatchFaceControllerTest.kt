@@ -1,8 +1,13 @@
 package app.wardpulse.wear.watchface
 
+import java.util.Collections
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -19,15 +24,17 @@ class WatchFaceControllerTest {
         client.sdkInt = 33
         controller.check()
         controller.install()
-        controller.useWatchFace { error("Unexpected permission request") }
+        controller.useWatchFace { client.events += "permission" }
         assertEquals(WatchFaceStatus.FaceUnsupported, controller.state.value.status)
         assertTrue(client.events.isEmpty())
 
         client.sdkInt = 34
         client.supported = false
         controller.check()
+        controller.useWatchFace { client.events += "permission" }
         assertEquals(WatchFaceStatus.SeparateInstall, controller.state.value.status)
-        assertEquals(listOf("support"), client.events)
+        assertEquals(listOf("support", "support"), client.events)
+        assertEquals(0, client.events.count { it == "permission" })
     }
 
     @Test
@@ -176,7 +183,8 @@ class WatchFaceControllerTest {
         controller.update()
         controller.install()
         controller.check()
-        controller.useWatchFace { error("Unexpected permission request") }
+        controller.useWatchFace { client.events += "permission" }
+        assertEquals(0, client.events.count { it == "permission" })
         assertEquals(1, client.events.count { it == "list" })
         assertEquals(1, client.events.count { it == "update" })
         job.cancelAndJoin()
@@ -200,7 +208,7 @@ class WatchFaceControllerTest {
         assertEquals(WatchFaceConsent.PermissionPending, consent.saved)
         assertTrue(first.state.value.busy)
         assertTrue(client.events.indexOf("save:PermissionPending") < client.events.indexOf("permission"))
-        first.useWatchFace { error("Duplicate permission request") }
+        first.useWatchFace { client.events += "permission" }
         first.update()
         assertEquals(1, client.events.count { it == "permission" })
 
@@ -214,7 +222,8 @@ class WatchFaceControllerTest {
         assertEquals("returned", client.activatedSlot)
         assertTrue(client.events.indexOf("save:ActivationAttempted") < client.events.indexOf("activate"))
         recreated.onPermissionResult(true)
-        recreated.useWatchFace { error("Replayed permission request") }
+        recreated.useWatchFace { client.events += "permission" }
+        assertEquals(1, client.events.count { it == "permission" })
         assertEquals(1, client.events.count { it == "activate" })
         assertEquals(WatchFaceStatus.Installed, recreated.state.value.status)
     }
@@ -223,7 +232,7 @@ class WatchFaceControllerTest {
     fun permissionReturnWaitsForAnOverlappingReadAfterRecreation() = runBlocking {
         val client = FakeClient()
         val consent = FakeConsent(client.events)
-        controller(client, consent).useWatchFace {}
+        controller(client, consent).useWatchFace { client.events += "permission" }
         val recreated = controller(client, consent)
         client.permission = true
         val completion = CompletableDeferred<Unit>()
@@ -237,6 +246,7 @@ class WatchFaceControllerTest {
         returning.join()
         assertEquals("returned", client.activatedSlot)
         assertEquals(1, client.events.count { it == "activate" })
+        assertEquals(1, client.events.count { it == "permission" })
         assertFalse(recreated.state.value.busy)
     }
 
@@ -244,15 +254,16 @@ class WatchFaceControllerTest {
     fun denialOrDismissalPersistsAndNeverReplaysEvenIfPermissionIsLaterGranted() = runBlocking {
         val client = FakeClient()
         val consent = FakeConsent(client.events)
-        controller(client, consent).useWatchFace {}
+        controller(client, consent).useWatchFace { client.events += "permission" }
         val recreated = controller(client, consent)
         recreated.onPermissionResult(false)
         assertEquals(WatchFaceConsent.PermissionDeclined, consent.saved)
         assertEquals(WatchFaceStatus.Installed, recreated.state.value.status)
         assertEquals(WatchFaceManualSelection.PermissionDeclined, recreated.state.value.manualSelection)
         client.permission = true
-        controller(client, consent).useWatchFace { error("Replayed permission request") }
+        controller(client, consent).useWatchFace { client.events += "permission" }
         recreated.onPermissionResult(true)
+        assertEquals(1, client.events.count { it == "permission" })
         assertNoMutations(client)
     }
 
@@ -260,7 +271,7 @@ class WatchFaceControllerTest {
     fun failureDuringPermissionReturnConsumesTheActionWithoutReplayingIt() = runBlocking {
         val client = FakeClient()
         val consent = FakeConsent(client.events)
-        controller(client, consent).useWatchFace {}
+        controller(client, consent).useWatchFace { client.events += "permission" }
         client.permission = true
         client.listFailure = IllegalStateException()
         val recreated = controller(client, consent)
@@ -270,7 +281,8 @@ class WatchFaceControllerTest {
         client.listFailure = null
         recreated.check()
         recreated.onPermissionResult(true)
-        recreated.useWatchFace { error("Replayed permission request") }
+        recreated.useWatchFace { client.events += "permission" }
+        assertEquals(1, client.events.count { it == "permission" })
         assertFalse(recreated.state.value.useAvailable)
         assertNoMutations(client)
         assertEquals(client.opened, client.closed)
@@ -283,13 +295,128 @@ class WatchFaceControllerTest {
         val controller = controller(client, consent)
         controller.check()
         assertNoMutations(client)
-        controller.useWatchFace { error("Permission already granted") }
+        controller.useWatchFace { client.events += "permission" }
         assertEquals(WatchFaceConsent.ActivationAttempted, consent.saved)
         assertEquals(WatchFaceStatus.Installed, controller.state.value.status)
         controller.check()
         assertEquals(WatchFaceStatus.Installed, controller.state.value.status)
-        controller.useWatchFace { error("Replayed permission request") }
+        controller.useWatchFace { client.events += "permission" }
+        assertEquals(0, client.events.count { it == "permission" })
         assertEquals(1, client.events.count { it == "activate" })
+    }
+
+    @Test
+    fun overlappingOwnersClaimPermissionOrExistingGrantActivationOnlyOnce() = runBlocking {
+        for (granted in listOf(false, true)) {
+            val clients = List(2) { FakeClient().apply { permission = granted } }
+            val consent = FakeConsent(clients.first().events)
+            val ready = CountDownLatch(2)
+            val release = CountDownLatch(1)
+            consent.beforeClaim = {
+                // Both controllers have already read Eligible through their separate mutexes.
+                ready.countDown()
+                assertTrue(release.await(5, TimeUnit.SECONDS))
+            }
+            val owners = clients.map { controller(it, consent) }
+            val attempts = owners.mapIndexed { index, owner ->
+                async(Dispatchers.Default) {
+                    owner.useWatchFace { clients[index].events += "permission" }
+                }
+            }
+            try {
+                assertTrue(ready.await(5, TimeUnit.SECONDS))
+                release.countDown()
+                attempts.awaitAll()
+                consent.beforeClaim = {}
+
+                val history = if (granted) WatchFaceConsent.ActivationAttempted else WatchFaceConsent.PermissionPending
+                assertEquals(history, consent.saved)
+                assertEquals(1, clients.first().events.count { it == "save:$history" })
+                assertEquals(if (granted) 0 else 1, clients.sumOf { it.events.count { it == "permission" } })
+                assertEquals(if (granted) 1 else 0, clients.sumOf { it.events.count { it == "activate" } })
+                clients.forEach { assertEquals(it.opened, it.closed) }
+
+                // A new owner cannot replay the winner, even after the user changes faces.
+                clients.forEach { client ->
+                    controller(client, consent).useWatchFace { client.events += "permission" }
+                }
+                assertEquals(if (granted) 0 else 1, clients.sumOf { it.events.count { it == "permission" } })
+                assertEquals(if (granted) 1 else 0, clients.sumOf { it.events.count { it == "activate" } })
+            } finally {
+                release.countDown()
+                attempts.forEach { it.cancelAndJoin() }
+            }
+        }
+    }
+
+    @Test
+    fun overlappingPermissionResultsHaveOneConsumerBeforeFreshLookup() = runBlocking {
+        for (granted in listOf(false, true)) {
+            val clients = List(2) { index ->
+                FakeClient().apply {
+                    permission = true
+                    inventory = WatchFaceInventory(listOf(own(slot = "returned-$index")), 0)
+                }
+            }
+            val consent = FakeConsent(clients.first().events).apply { saved = WatchFaceConsent.PermissionPending }
+            val ready = CountDownLatch(2)
+            val release = CountDownLatch(1)
+            consent.beforeClaim = {
+                ready.countDown()
+                assertTrue(release.await(5, TimeUnit.SECONDS))
+            }
+            val owners = clients.map { controller(it, consent) }
+            val results = owners.map { owner -> async(Dispatchers.Default) { owner.onPermissionResult(granted) } }
+            try {
+                assertTrue(ready.await(5, TimeUnit.SECONDS))
+                release.countDown()
+                results.awaitAll()
+                consent.beforeClaim = {}
+
+                val history = if (granted) WatchFaceConsent.ActivationAttempted else WatchFaceConsent.PermissionDeclined
+                assertEquals(history, consent.saved)
+                assertEquals(1, clients.first().events.count { it == "save:$history" })
+                assertEquals(1, clients.sumOf { it.events.count { it == "list" } })
+                assertEquals(if (granted) 1 else 0, clients.sumOf { it.events.count { it == "activate" } })
+                if (granted) {
+                    clients.forEachIndexed { index, client ->
+                        if (client.activatedSlot != null) assertEquals("returned-$index", client.activatedSlot)
+                    }
+                }
+                clients.forEach { assertEquals(it.opened, it.closed) }
+
+                owners.forEach { it.onPermissionResult(!granted) }
+                clients.forEach { client ->
+                    controller(client, consent).useWatchFace { client.events += "permission" }
+                }
+                assertEquals(history, consent.saved)
+                assertEquals(0, clients.sumOf { it.events.count { it == "permission" } })
+                assertEquals(if (granted) 1 else 0, clients.sumOf { it.events.count { it == "activate" } })
+            } finally {
+                release.countDown()
+                results.forEach { it.cancelAndJoin() }
+            }
+        }
+    }
+
+    @Test
+    fun permissionLaunchAbandonmentCannotOverwriteAnotherOwnersCompletedResult() = runBlocking {
+        val client = FakeClient()
+        val consent = FakeConsent(client.events)
+        val first = controller(client, consent)
+        val recreated = controller(client, consent)
+        first.useWatchFace {
+            client.events += "permission"
+            client.permission = true
+            launch(start = CoroutineStart.UNDISPATCHED) { recreated.onPermissionResult(true) }
+            error("Activity lost after result delivery")
+        }
+        assertEquals(WatchFaceConsent.ActivationAttempted, consent.saved)
+        recreated.onPermissionResult(true)
+        recreated.useWatchFace { client.events += "permission" }
+        assertEquals(1, client.events.count { it == "permission" })
+        assertEquals(1, client.events.count { it == "activate" })
+        assertEquals(client.opened, client.closed)
     }
 
     @Test
@@ -297,10 +424,18 @@ class WatchFaceControllerTest {
         val client = FakeClient()
         val consent = FakeConsent(client.events).apply { writable = false }
         val controller = controller(client, consent)
-        controller.useWatchFace { error("Unpersisted permission request") }
+        controller.useWatchFace { client.events += "permission" }
+        assertEquals(0, client.events.count { it == "permission" })
         assertFalse(controller.state.value.useAvailable)
         client.permission = true
-        controller.useWatchFace { error("Unexpected permission request") }
+        controller.useWatchFace { client.events += "permission" }
+        assertEquals(0, client.events.count { it == "permission" })
+        consent.saved = WatchFaceConsent.PermissionPending
+        val recreated = controller(client, consent)
+        recreated.onPermissionResult(true)
+        assertEquals(WatchFaceStatus.CheckFailed, recreated.state.value.status)
+        assertFalse(recreated.state.value.busy)
+        assertEquals(WatchFaceManualSelection.ActivationUnavailable, recreated.state.value.manualSelection)
         assertNoMutations(client)
     }
 
@@ -309,11 +444,15 @@ class WatchFaceControllerTest {
         val client = FakeClient()
         val consent = FakeConsent(client.events)
         val controller = controller(client, consent)
-        controller.useWatchFace { error("Destroyed activity") }
+        controller.useWatchFace {
+            client.events += "permission"
+            error("Destroyed activity")
+        }
         assertEquals(WatchFaceConsent.PermissionDeclined, consent.saved)
         assertEquals(WatchFaceManualSelection.PermissionDeclined, controller.state.value.manualSelection)
         assertFalse(controller.state.value.busy)
-        controller.useWatchFace { error("Unexpected retry") }
+        controller.useWatchFace { client.events += "permission" }
+        assertEquals(1, client.events.count { it == "permission" })
         assertNoMutations(client)
     }
 
@@ -324,7 +463,9 @@ class WatchFaceControllerTest {
         val completion = CompletableDeferred<Unit>()
         client.activation = { completion.await() }
         val first = controller(client, consent)
-        val job = launch(start = CoroutineStart.UNDISPATCHED) { first.useWatchFace {} }
+        val job = launch(start = CoroutineStart.UNDISPATCHED) {
+            first.useWatchFace { client.events += "permission" }
+        }
         assertEquals(WatchFaceConsent.ActivationAttempted, consent.saved)
         job.cancelAndJoin()
         assertEquals(client.opened, client.closed)
@@ -332,7 +473,8 @@ class WatchFaceControllerTest {
         assertEquals(WatchFaceStatus.Installed, first.state.value.status)
         val recreated = controller(client, consent)
         recreated.check()
-        recreated.useWatchFace { error("Replayed permission request") }
+        recreated.useWatchFace { client.events += "permission" }
+        assertEquals(0, client.events.count { it == "permission" })
         assertEquals(1, client.events.count { it == "activate" })
         assertEquals(WatchFaceManualSelection.ActivationUnavailable, recreated.state.value.manualSelection)
 
@@ -341,10 +483,11 @@ class WatchFaceControllerTest {
             activation = { error("Platform activation opportunity exhausted") }
         }
         val failed = controller(failedClient)
-        failed.useWatchFace {}
+        failed.useWatchFace { failedClient.events += "permission" }
         assertEquals(WatchFaceStatus.Installed, failed.state.value.status)
         assertFalse(failed.state.value.useAvailable)
-        failed.useWatchFace {}
+        failed.useWatchFace { failedClient.events += "permission" }
+        assertEquals(0, failedClient.events.count { it == "permission" })
         assertEquals(1, failedClient.events.count { it == "activate" })
     }
 
@@ -356,13 +499,19 @@ class WatchFaceControllerTest {
     }
 
     private class FakeConsent(private val events: MutableList<String>) : WatchFaceConsentHistory {
+        @Volatile
         var saved = WatchFaceConsent.Eligible
         var writable = true
+        var beforeClaim: () -> Unit = {}
         override fun read() = saved
-        override fun write(consent: WatchFaceConsent): Boolean {
-            events += "save:$consent"
-            if (writable) saved = consent
-            return writable
+        override fun compareAndSet(expected: WatchFaceConsent, consent: WatchFaceConsent): Boolean {
+            beforeClaim()
+            return synchronized(this) {
+                if (saved != expected) return@synchronized false
+                events += "save:$consent"
+                if (writable) saved = consent
+                writable
+            }
         }
     }
 
@@ -382,7 +531,7 @@ class WatchFaceControllerTest {
         var mutation: suspend () -> Unit = {}
         var listing: suspend () -> Unit = {}
         var activation: suspend () -> Unit = {}
-        val events = mutableListOf<String>()
+        val events: MutableList<String> = Collections.synchronizedList(mutableListOf())
 
         override fun isSupported(): Boolean {
             events += "support"

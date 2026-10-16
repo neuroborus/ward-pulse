@@ -77,10 +77,14 @@ class WatchFaceController(
         withFace(observeActive = true) { _, _, installed ->
             if (installed == null || !state.value.useAvailable) return@withFace
             if (client.hasActivationPermission()) {
-                activate(installed)
+                if (consent.compareAndSet(WatchFaceConsent.Eligible, WatchFaceConsent.ActivationAttempted)) {
+                    activate(installed)
+                } else {
+                    manualSelection()
+                }
             } else {
                 // The pending marker carries only the explicit action, never a slot ID.
-                if (consent.write(WatchFaceConsent.PermissionPending)) {
+                if (consent.compareAndSet(WatchFaceConsent.Eligible, WatchFaceConsent.PermissionPending)) {
                     requestPermission = true
                     mutableState.value = state.value.copy(useAvailable = false, awaitingPermission = true)
                 } else {
@@ -109,11 +113,15 @@ class WatchFaceController(
             if (consent.read() != WatchFaceConsent.PermissionPending) return@withContext
             // Consume the result first: interruption during the fresh read cannot replay consent.
             val history = if (granted) WatchFaceConsent.ActivationAttempted else WatchFaceConsent.PermissionDeclined
-            val saved = consent.write(history)
+            val saved = consent.compareAndSet(WatchFaceConsent.PermissionPending, history)
             manualSelection(requireNotNull(history.manualSelection()))
+            if (!saved) {
+                mutableState.value = state.value.copy(status = WatchFaceStatus.CheckFailed)
+                return@withContext
+            }
             withFace { _, _, installed ->
                 manualSelection(requireNotNull(history.manualSelection()))
-                if (saved && granted && installed != null && client.hasActivationPermission()) activate(installed)
+                if (granted && installed != null && client.hasActivationPermission()) activate(installed)
             }
         }
     }
@@ -121,7 +129,6 @@ class WatchFaceController(
     private suspend fun activate(installed: InstalledWatchFace) {
         manualSelection()
         try {
-            if (!consent.write(WatchFaceConsent.ActivationAttempted)) return
             client.activate(installed.slotId)
             // Success is historical; only a separate status check can observe In use.
         } catch (failure: Exception) {
@@ -133,7 +140,7 @@ class WatchFaceController(
 
     private suspend fun abandonPermission() = withContext(ioDispatcher) {
         manualSelection(WatchFaceManualSelection.PermissionDeclined)
-        consent.write(WatchFaceConsent.PermissionDeclined)
+        consent.compareAndSet(WatchFaceConsent.PermissionPending, WatchFaceConsent.PermissionDeclined)
     }
 
     private suspend fun withFace(
