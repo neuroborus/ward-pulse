@@ -8,6 +8,8 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -65,6 +67,13 @@ fun WardPulseApp(
 ) {
     val navController = rememberSwipeDismissableNavController()
     val pagerState = rememberPagerState(pageCount = { HomePage.entries.size })
+    // Navigation retains destination content, so read current inputs inside each composition.
+    val currentSummary by rememberUpdatedState(summary)
+    val currentWatchFaceState by rememberUpdatedState(watchFaceState)
+    val currentOnCheck by rememberUpdatedState(onCheckWatchFace)
+    val currentOnInstall by rememberUpdatedState(onInstallWatchFace)
+    val currentOnUpdate by rememberUpdatedState(onUpdateWatchFace)
+    val currentOnUse by rememberUpdatedState(onUseWatchFace)
     // Straight clock: default curved TimeText warps on round API 34+ shells.
     // Sized to Glance review art (muted, not a face-style hero).
     AppScaffold(timeText = { StraightAppTimeText() }) {
@@ -73,11 +82,12 @@ fun WardPulseApp(
             startDestination = HOME_ROUTE,
         ) {
             composable(HOME_ROUTE) {
-                if (summary == null) {
+                val latestSummary = currentSummary
+                if (latestSummary == null) {
                     EmptyDashboardScreen(onOpenWatchFace = { navController.navigate(WATCH_FACE_ROUTE) })
                 } else {
                     HomeScreen(
-                        summary = summary,
+                        summary = latestSummary,
                         pagerState = pagerState,
                         onOpenAlerts = { navController.navigate(ALERTS_ROUTE) },
                         onOpenWatchFace = { navController.navigate(WATCH_FACE_ROUTE) },
@@ -85,19 +95,20 @@ fun WardPulseApp(
                 }
             }
             composable(ALERTS_ROUTE) {
-                if (summary == null) {
+                val latestSummary = currentSummary
+                if (latestSummary == null) {
                     EmptyDashboardScreen(onOpenWatchFace = { navController.navigate(WATCH_FACE_ROUTE) })
                 } else {
-                    SummaryScreen(title = "Alerts", rows = summary.alertRows())
+                    SummaryScreen(title = "Alerts", rows = latestSummary.alertRows())
                 }
             }
             composable(WATCH_FACE_ROUTE) {
                 WatchFaceScreen(
-                    state = watchFaceState,
-                    onCheck = onCheckWatchFace,
-                    onInstall = onInstallWatchFace,
-                    onUpdate = onUpdateWatchFace,
-                    onUse = onUseWatchFace,
+                    state = currentWatchFaceState,
+                    onCheck = currentOnCheck,
+                    onInstall = currentOnInstall,
+                    onUpdate = currentOnUpdate,
+                    onUse = currentOnUse,
                 )
             }
         }
