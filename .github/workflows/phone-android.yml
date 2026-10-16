@@ -10,6 +10,8 @@ on:
       - "fixtures/**"
       - "schemas/**"
       - "tools/build-android-rust/**"
+      - "tools/test-phone-cache/**"
+      - "tools/test-phone-widget/**"
       - ".github/workflows/phone-android.yml"
 
 permissions:
@@ -30,6 +32,12 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: gradle
+      - name: Test phone cache
+        run: tools/test-phone-cache/run.sh
+        working-directory: .
+      - name: Test phone widget
+        run: tools/test-phone-widget/run.sh
+        working-directory: .
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:

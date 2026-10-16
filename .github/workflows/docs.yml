@@ -11,6 +11,8 @@ on:
       - ".nvmrc"
       - "package.json"
       - "package-lock.json"
+      - "tools/check-doc-citations.py"
+      - "tools/test-doc-citations.py"
       - ".github/workflows/docs.yml"
   push:
     branches: [main]
@@ -34,6 +36,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: python3 tools/check-doc-citations.py
+      - run: python3 tools/test-doc-citations.py
       - run: WARDPULSE_DOCS_BASE_PATH=/ward-pulse npm run docs:build
       - uses: actions/upload-pages-artifact@v5.0.0
         if: >-
