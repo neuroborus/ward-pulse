@@ -528,12 +528,12 @@
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, 2)" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
                                         </Template>
                                     </Font>
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 2, textLength([COMPLICATION.TEXT]))" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
                                         </Template>
                                     </Font>
                                 </Text>
@@ -544,12 +544,12 @@
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, textLength([COMPLICATION.TEXT]) - 2)" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
                                         </Template>
                                     </Font>
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], textLength([COMPLICATION.TEXT]) - 2, textLength([COMPLICATION.TEXT]))" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
                                         </Template>
                                     </Font>
                                 </Text>
@@ -560,17 +560,17 @@
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, 2)" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
                                         </Template>
                                     </Font>
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 2, textLength([COMPLICATION.TEXT]) - 2)" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
                                         </Template>
                                     </Font>
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], textLength([COMPLICATION.TEXT]) - 2, textLength([COMPLICATION.TEXT]))" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
                                         </Template>
                                     </Font>
                                 </Text>
@@ -904,12 +904,12 @@
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, 2)" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
                                         </Template>
                                     </Font>
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 2, textLength([COMPLICATION.TEXT]))" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
                                         </Template>
                                     </Font>
                                 </Text>
@@ -920,12 +920,12 @@
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, textLength([COMPLICATION.TEXT]) - 2)" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
                                         </Template>
                                     </Font>
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], textLength([COMPLICATION.TEXT]) - 2, textLength([COMPLICATION.TEXT]))" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
                                         </Template>
                                     </Font>
                                 </Text>
@@ -936,17 +936,17 @@
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, 2)" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
                                         </Template>
                                     </Font>
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 2, textLength([COMPLICATION.TEXT]) - 2)" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
                                         </Template>
                                     </Font>
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], textLength([COMPLICATION.TEXT]) - 2, textLength([COMPLICATION.TEXT]))" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
                                         </Template>
                                     </Font>
                                 </Text>
@@ -1280,12 +1280,12 @@
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, 2)" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
                                         </Template>
                                     </Font>
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 2, textLength([COMPLICATION.TEXT]))" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
                                         </Template>
                                     </Font>
                                 </Text>
@@ -1296,12 +1296,12 @@
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, textLength([COMPLICATION.TEXT]) - 2)" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
                                         </Template>
                                     </Font>
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], textLength([COMPLICATION.TEXT]) - 2, textLength([COMPLICATION.TEXT]))" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
                                         </Template>
                                     </Font>
                                 </Text>
@@ -1312,17 +1312,17 @@
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, 2)" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
                                         </Template>
                                     </Font>
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 2, textLength([COMPLICATION.TEXT]) - 2)" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
                                         </Template>
                                     </Font>
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
                                         <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], textLength([COMPLICATION.TEXT]) - 2, textLength([COMPLICATION.TEXT]))" />
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
                                         </Template>
                                     </Font>
                                 </Text>

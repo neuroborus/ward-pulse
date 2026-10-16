@@ -1241,6 +1241,9 @@ function stripText(pad) {
   const { height, textInset, textWidth, fontSize } = STRIP
   const text = '[COMPLICATION.TEXT]'
   const length = `textLength(${text})`
+  // WFF may evaluate inactive branches; keep both cut points ordered inside TEXT.
+  const innerEnd = `clamp(2, 0, ${length})`
+  const outerStart = `clamp(${length} - 2, ${innerEnd}, ${length})`
   const part = (runs, innerPad) => `${innerPad}<PartText x="${textInset}" y="0" width="${textWidth}" height="${height}">
 ${innerPad}    <Text align="CENTER" ellipsis="TRUE">
 ${runs.map(([expression, exhausted]) => `${innerPad}        <Font family="SYNC_TO_DEVICE" size="${fontSize}" weight="BOLD" color="${exhausted ? COLOR.exhaustedPercent : COLOR.text}">
@@ -1255,17 +1258,17 @@ ${innerPad}</PartText>`
     {
       name: 'zeroInner',
       tokens: [ZERO_TOKEN, ...zeroTitles('zero-inner')],
-      runs: [[`subText(${text}, 0, 2)`, true], [`subText(${text}, 2, ${length})`, false]],
+      runs: [[`subText(${text}, 0, ${innerEnd})`, true], [`subText(${text}, ${innerEnd}, ${length})`, false]],
     },
     {
       name: 'zeroOuter',
       tokens: zeroTitles('zero-outer'),
-      runs: [[`subText(${text}, 0, ${length} - 2)`, false], [`subText(${text}, ${length} - 2, ${length})`, true]],
+      runs: [[`subText(${text}, 0, ${outerStart})`, false], [`subText(${text}, ${outerStart}, ${length})`, true]],
     },
     {
       name: 'zeroBoth',
       tokens: zeroTitles('zero-both'),
-      runs: [[`subText(${text}, 0, 2)`, true], [`subText(${text}, 2, ${length} - 2)`, false], [`subText(${text}, ${length} - 2, ${length})`, true]],
+      runs: [[`subText(${text}, 0, ${innerEnd})`, true], [`subText(${text}, ${innerEnd}, ${outerStart})`, false], [`subText(${text}, ${outerStart}, ${length})`, true]],
     },
   ]
   return `${pad}<Condition>
