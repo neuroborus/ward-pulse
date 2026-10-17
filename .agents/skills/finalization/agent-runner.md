@@ -57,20 +57,37 @@ applies, and it is the reason this file exists.
 
 **The step runs these in its own sandbox** — they work in the ordinary worktree:
 
-- `just check-phone` — Flutter formatting, analysis and tests.
 - `just check-designs`, `node tools/render-watchface.mjs --check` — generated art and face XML.
 - `just validate-fixtures` — schemas and golden fixtures.
 - `git diff --check HEAD`.
 - Rust gates from `AGENTS.md` when `core/` changed.
 
-The local Flutter SDK and warm dependencies can support ordinary checks without downloads.
+A local Flutter SDK and warm dependencies can avoid downloads; they do not establish that the
+whole phone check can execute.
 Cache access depends on the executor: ordinary Codex workspace-write command attempts use a
 fresh private `XDG_CACHE_HOME`, so prewarming the host cache does not populate it. Do not assume Gradle,
 pub or XDG caches are shared or writable. Report actual command results; an artifact grant or
 `unsupported: []` alone proves neither that a command ran nor that it can finish.
 
+On 2026-10-17, an actual ordinary Native Codex Dashboard implementation attempted a focused
+Flutter test and received `Failed to create server socket, 127.0.0.1, Operation not permitted`
+before any test executed. A local SDK and warm dependencies can avoid downloads; they do not
+grant loopback-socket permission. This is an inability to start tests, not a failed assertion
+or RED/GREEN result. It establishes the reason for this route's default host assignment, not
+universal unavailability across every executor or future run. Report actual capabilities and
+failures honestly; do not add network grants, socket workarounds, helpers, SDK/dependency
+changes or an alternate test runner to evade the limitation.
+
 **The owner runs these on the host, after the step:**
 
+- `just check-phone`, unchanged and complete, and every focused Flutter test execution on the
+  ordinary Native Codex workspace-write route. The owner runs these on HOST after the entire
+  run reaches DONE, its owned processes retire and ownership is quiescent, before final
+  acceptance or a coordinator commit. The full recipe still includes both existing
+  nonmutating Dart format checks, analysis, all Flutter tests and the cache/widget harnesses;
+  selected tests do not replace it. This assignment applies during implementation and review
+  as well as finalization: do not start an ad-hoc focused Flutter test or require Native
+  RED→GREEN execution while host evidence is pending.
 - `just validate-watchface`. It needs the checksum-pinned JAR, Java execution and writable
   temporary storage, plus network access on a cold cache. On 2026-10-15, supplying the valid
   JAR did not let an ordinary Native attempt complete Java/temp-directory setup. An artifact
@@ -113,9 +130,14 @@ the other way. It stays the owner's to confirm.
 
 **The owner's work is never a precondition of the step's commit.** A step that waits for it
 cannot produce complete terminal evidence, and the run fails — this happened on 2026-10-01
-(finding `R101`, `ERR_INVALID_PLAN_EXECUTION_OUTPUT`). Prove readiness with affected existing
-checks or necessary regression evidence under `test-authoring`; add tests only when justified,
-and let the owner verify afterwards.
+(finding `R101`, `ERR_INVALID_PLAN_EXECUTION_OUTPUT`). Keep necessary minimal tests and
+independent semantic review. For HOST-owned Flutter execution, Native regression work
+validates test source, assertions and coverage by source inspection only; it is not runtime
+evidence or Pass. Host results stay Pending until actually executed, and never become a
+host-await prerequisite for Native completion or its own scoped commit. The owner performs
+required nonmutating format checks. Code and formatting corrections remain actual Runner
+authorship in its writable step under existing capabilities; this adds no required Native
+formatter command and does not authorize the owner to run formatter-write or edit Source.
 
 A gate that cannot start for an environment reason is reported through the runner's
 environment-blocker path. Never weaken a test, an assertion, a gate, a skill or validation
