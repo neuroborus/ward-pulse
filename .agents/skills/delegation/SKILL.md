@@ -15,7 +15,7 @@ This is the owner's standing instruction, clarified 2026-10-13.
 | --- | --- | --- |
 | Design: locked baselines, visual language, mocks, review art | A subagent | Verify to zero findings |
 | Code: source, tests, schemas, build/tool scripts, generator source | Agent Runner execution and independent review steps | Verify to zero findings |
-| Documentation and workflow prose | A delegated subagent | Review the scoped prose change |
+| Documentation and workflow prose | A delegated subagent | Verify to zero findings |
 | Measurement, device capture, reading sources, running checks | Coordinator | — |
 | Deciding what to build | Owner | Put the choice in front of them |
 
@@ -34,12 +34,12 @@ review Runner work, but may not implement it independently.
 
 Choose supported pipelines and worker steps by their current capabilities, not just their
 names. `polishing` finalizes and stages an existing change set without committing; do not
-assume it replaces implementation from scratch. Standing owner authorization dated 2026-10-13
-permits Runner execution to commit within the approved task scope after its required reviews
-and checks, unless a task-specific instruction forbids it. Verify the execution route's commit
-behaviour before starting; do not invent a no-commit mode. If the task forbids commits and no
-supported noncommitting route fits, report that conflict and continue independent authorized
-work rather than implement by hand.
+assume it replaces implementation from scratch. Commit authorization is defined in
+[AGENTS.md](../../../AGENTS.md#working-agreements). A stage-only result can be followed by a
+separate authorized coordinator commit. Verify the execution route's commit behaviour before
+starting; do not invent a no-commit mode. If the task forbids commits and no supported
+noncommitting route fits, report that conflict and continue independent authorized work
+rather than implement by hand.
 
 **Who runs which check is settled in `.agents/skills/finalization/agent-runner.md`.** It
 carries the division between what a step proves inside its sandbox and what the owner runs on
@@ -135,7 +135,8 @@ or two to finished work. Standing instruction, 2026-10-11. So:
 Measurements, captures, scans, reading files, running existing operational commands and checks,
 and writing local notes under `LOCAL_ARTIFACTS/`. Creating or changing an implementation,
 helper or test script is code, not an operational command. Staging reviewed, scoped changes is
-permitted under finalization; manual coordinator commits require the owner's explicit request.
+permitted under finalization; coordinator commits follow the standing authorization in
+[AGENTS.md](../../../AGENTS.md#working-agreements) and [finalization](../finalization/SKILL.md#7-staging-and-commit-boundary).
 
 Not: production code, generated output, locked design documents, or review art.
 

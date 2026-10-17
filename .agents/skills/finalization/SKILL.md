@@ -9,7 +9,7 @@ description: Post-change finalization checklist for WardPulse (Rust core, Flutte
 >
 > Run this after implementation or documentation work to keep the monorepo coherent.
 >
-> Last Updated: 2026-10-15
+> Last Updated: 2026-10-17
 
 ## 1. Scope Review
 
@@ -122,21 +122,15 @@ the app runs; only the device is.
 
 ## 7. Staging And Commit Boundary
 
-Coordinator finalization and polishing are stage-only. Runner execution is the exception:
-standing owner authorization dated 2026-10-13 permits commits within the approved task scope
-after the pipeline's required reviews and checks, unless the task explicitly forbids commits.
-See the sibling `agent-runner.md` for the Runner execution boundary.
+Follow the standing commit authorization in [AGENTS.md](../../../AGENTS.md#working-agreements).
+For a coordinator commit, finish all applicable checks and the full independent zero-findings
+pass after the last correction, then stage only the files belonging to this change set.
+No new owner permission request is needed for work covered by that authorization.
 
-When the user asks to finalize, finish checks, then stage only the files that belong to
-this change set (`git add` the relevant paths). Stop there.
-
-- Do **not** run a manual `git commit`, `git commit --amend`, or any equivalent during
-  coordinator finalization or polishing.
-- Manual commits outside Runner require an explicit owner request; never amend or rewrite
-  history.
-- "Finalize", "finalization", "handoff", and "stage" do not grant manual commit permission.
-- Draft the message for stage-only finalization; leave a manual commit to the owner or a later
-  explicit request. Polishing still stages and stops.
+The `polishing` pipeline stages an existing change set and stops without committing. A
+coordinator commit is a separate action; it does not turn a canceled or failed Runner run
+into a completed run. See [agent-runner.md](agent-runner.md#6-commit) for the Runner boundary.
+If the task forbids commits, leave the reviewed change set staged and draft its message.
 
 ## 8. Commit Message Draft
 
@@ -198,7 +192,7 @@ When a body is genuinely required, keep it on one line:
 ```text
 chore(docs): plan adaptive provider UI, polling, and watch rings
 
-Record the dual plan/platform model and phases 9–13, set the global refresh floor to 5–60 minutes, and make coordinator finalization stage-only with an explicit no-manual-commit rule.
+Record the dual plan/platform model and phases 9–13, and set the global refresh floor to 5–60 minutes.
 ```
 
 ## 9. Handoff Summary
@@ -211,9 +205,9 @@ When finalization completes, report:
 3. Important files changed.
 4. Remaining risks or intentionally deferred work.
 5. Actual staging and commit state: what is staged, what remains unstaged or untracked, and
-   whether an authorized Runner commit exists.
+   whether an authorized scoped commit exists.
 6. Idiomatic draft message for a staged set, or the actual subject and hash for an authorized
-   Runner commit, using section 8.
+   commit, using section 8.
 
-For stage-only finalization, state that no commit was created. For Runner execution, identify
-the scoped commit it produced.
+If only staged, state that no commit was created. Otherwise identify the scoped commit and
+whether Runner or the coordinator created it. Report the Runner run's actual status separately.

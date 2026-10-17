@@ -14,7 +14,7 @@ to the operator's judgement, by way of the task.
 > boundaries; it does not authorize code implementation outside Agent Runner and must not be
 > edited to suit the runner. Where this file is silent, that one applies.
 >
-> Last updated: 2026-10-15.
+> Last updated: 2026-10-17.
 
 ## 1. Scope Review
 
@@ -137,11 +137,11 @@ infrastructure to make a check pass, and never report a check that did not run.
 
 ## 6. Commit
 
-Standing owner authorization dated 2026-10-13 permits Runner execution to commit within the
-approved task scope by default after the pipeline's required reviews and checks. A task-specific
-no-commit instruction overrides it. Polishing stages an existing change set and stops. Verify
-that the selected route respects the current instruction before execution. This is local commit
-permission, not push, amend/history rewrite, or unrelated-file authority. Either way:
+Follow the standing commit authorization in [AGENTS.md](../../../AGENTS.md#working-agreements).
+Verify that the selected route respects the current instruction before execution. The
+`polishing` pipeline stages an existing change set and stops; a later authorized coordinator
+commit is a separate action under [finalization §7](SKILL.md#7-staging-and-commit-boundary).
+For an authorized commit:
 
 - The message is a single Conventional Commits subject line: `type(scope): imperative summary`,
   about 72 characters or fewer, matching the scopes already in `git log`.
