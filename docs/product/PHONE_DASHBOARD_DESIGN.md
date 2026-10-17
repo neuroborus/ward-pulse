@@ -112,6 +112,49 @@ One AVD, one build. The tests above stand behind the cases a reader cannot stage
 every status in the glyph vocabulary, every shape of count — rather than behind the rules as a
 whole.
 
+## Family and source ownership
+
+**Clarification 2026-10-17.** Dashboard sections use `providerFamilyOf` and
+`providerFamilyLabel` from `provider_connection.dart`: OpenAI contains Codex plan
+and Platform reporting; Anthropic contains Claude plan and Organization reporting;
+Cursor contains its plan and Team Admin API. Unclassified providers, including
+Mock, retain their fallback identity, label, state and data. Domain provider kinds
+and stored account/connection identities do not change.
+
+The shared family header does not combine sources. Each account keeps its own
+allowance cards, history buckets and model detail, including accounts with the
+same provider kind. Periods, units and unknown values remain source-owned.
+Nonempty requests-only histories render; empty histories do not. A source without
+allowance or activity detail remains represented, including its unhealthy state
+when applicable.
+Source captions use existing provider or connection catalog metadata, with an
+ordinal when captions would otherwise be ambiguous. They expose no raw account
+or connection IDs or personal account data. Existing labels remain available;
+this change adds no saved-Label loading or display.
+
+Family identity and source placement depend on stable keys, independently of
+display copy. `_providerDashboardSections` orders families by the existing
+severity scale, then admissible same-currency month spend, then family key.
+Month spend is aggregated only for ordering; mixed currencies are never added.
+`FrozenOrder` holds the result through number-only refreshes and label edits,
+reranking on the existing family identity/status changes. No new source total or
+common Plan/API remainder is displayed; unrelated Dashboard summaries remain.
+
+The locked status and balance rules above and below still apply: count each
+account's unhealthy cards, otherwise one for an unhealthy account, and sum these
+counts into the family. Severity covers accounts and cards. The app bar counts
+reachable unhealthy families and reveals the first in rendered order. Both
+`codex` and `openai` reveal the shared OpenAI section on repeated requests, as
+well as on arrival from another tab; other provider targets remain supported.
+Reporting failures keep their named feedback and exact **Edit key** target even
+without account data. A missing or failed sibling supplies neither history nor
+reporting access to another source.
+
+This clarification locks no composition and records no new device measurement.
+The historical measurements remain above. Host presentation/navigation acceptance,
+public guidance/captures and final owner-generated real-usage acceptance remain
+separately pending.
+
 ## Reporting-key feedback
 
 **Revision 2026-10-17.** A saved reporting key is not proof of reporting access. These

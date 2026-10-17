@@ -67,6 +67,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final _sectionKeys = <String, GlobalKey>{};
+  int _revealGeneration = 0;
 
   @override
   void initState() {
@@ -88,15 +89,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (reveal == null) {
       return;
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_sectionKeys[reveal.provider]?.currentContext case final target?) {
+    // The shell clears the input after one frame; only a newer request
+    // supersedes accepted work that is still recovering a lazy target.
+    final generation = ++_revealGeneration;
+    final provider = providerFamilyOf(reveal.provider)?.name ?? reveal.provider;
+    var searchFromStart = true;
+    void revealAfterLayout(Duration _) {
+      if (!mounted || generation != _revealGeneration) {
+        return;
+      }
+      if (_sectionKeys[provider]?.currentContext case final target?) {
         Scrollable.ensureVisible(
           target,
           duration: const Duration(milliseconds: 250),
-          alignment: 0.1,
+          // A family can exceed the viewport; fractional alignment would put
+          // its heading above the visible area in that case.
+          alignment: 0.0,
         );
+        return;
       }
-    });
+      if (!widget.snapshot.accounts.any(
+        (account) =>
+            (providerFamilyOf(account.provider)?.name ?? account.provider) ==
+            provider,
+      )) {
+        return;
+      }
+      // The providers Column is one lazy list child. Remount it before
+      // aligning the family if scrolling discarded its target context.
+      final controller = PrimaryScrollController.maybeOf(context);
+      if (controller == null || controller.positions.length != 1) {
+        return;
+      }
+      final position = controller.position;
+      final offset =
+          searchFromStart
+              ? position.minScrollExtent
+              : (position.pixels + position.viewportDimension)
+                  .clamp(position.minScrollExtent, position.maxScrollExtent)
+                  .toDouble();
+      if (!searchFromStart && offset <= position.pixels) {
+        return;
+      }
+      searchFromStart = false;
+      position.jumpTo(offset);
+      WidgetsBinding.instance.addPostFrameCallback(revealAfterLayout);
+      WidgetsBinding.instance.scheduleFrame();
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback(revealAfterLayout);
   }
 
   @override
@@ -129,7 +170,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       widget.order,
     );
     final hasVisibleAllowances = providerSections.any(
-      (section) => section.allowances.isNotEmpty,
+      (section) =>
+          section.accounts.any((account) => account.allowances.isNotEmpty),
     );
     final hasPurchasedAllowance = allAllowances.any(
       (allowance) => allowance.source == AllowanceSource.purchased,
@@ -605,9 +647,7 @@ class _ProviderDashboardSection {
     required this.status,
     required this.spent,
     required this.flagged,
-    required this.allowances,
-    required this.buckets,
-    required this.modelBreakdown,
+    required this.accounts,
   });
 
   final String provider;
@@ -624,19 +664,11 @@ class _ProviderDashboardSection {
   /// a platform connection reports spend, not meters, and its trouble would
   /// otherwise have nowhere to show.
   final int flagged;
-  final List<AllowanceState> allowances;
-  final List<UsageBucket> buckets;
-  final List<ModelUsage> modelBreakdown;
-
-  bool get showUsageHistory => buckets.isNotEmpty;
-
-  bool get showModelUsage => modelBreakdown.isNotEmpty;
+  final List<ProviderSnapshot> accounts;
 }
 
-/// One plaque per provider family (plan + platform share a header).
-///
-/// Claude/Cursor use one `ProviderKind` for both connections; grouping by kind
-/// keeps allowances, history, and model breakdown under a single accent bar.
+/// One plaque per known family, with unclassified providers kept as fallbacks.
+/// Sources share identity chrome, never their histories or model breakdowns.
 List<_ProviderDashboardSection> _providerDashboardSections(
   List<ProviderSnapshot> accounts, [
   FrozenOrder? order,
@@ -644,28 +676,37 @@ List<_ProviderDashboardSection> _providerDashboardSections(
   final grouped = <String, List<ProviderSnapshot>>{};
   for (final account in accounts) {
     grouped
-        .putIfAbsent(account.provider, () => <ProviderSnapshot>[])
+        .putIfAbsent(
+          providerFamilyOf(account.provider)?.name ?? account.provider,
+          () => <ProviderSnapshot>[],
+        )
         .add(account);
   }
 
   final sections = <_ProviderDashboardSection>[];
-  for (final group in grouped.values) {
+  for (final entry in grouped.entries) {
+    final group = entry.value;
+    // Source placement depends on connection/account identity, never copy or
+    // quantities. Retain separate accounts even when they share a connection.
+    group.sort((left, right) {
+      final connection = (left.connection ?? left.provider).compareTo(
+        right.connection ?? right.provider,
+      );
+      return connection != 0
+          ? connection
+          : left.accountId.compareTo(right.accountId);
+    });
     final allowances = group
         .expand((account) => account.allowances)
         .toList(growable: false);
-    final buckets = group
-        .expand((account) => account.buckets)
-        .toList(growable: false);
-    final modelBreakdown = group
-        .expand((account) => account.modelBreakdown)
-        .toList(growable: false);
-    if (allowances.isEmpty && buckets.isEmpty && modelBreakdown.isEmpty) {
-      continue;
-    }
+    final family = providerFamilyOf(group.first.provider);
     sections.add(
       _ProviderDashboardSection(
-        provider: group.first.provider,
-        providerLabel: group.first.providerLabel,
+        provider: entry.key,
+        providerLabel:
+            family == null
+                ? group.first.providerLabel
+                : providerFamilyLabel(family),
         spent: _monthSpend(group),
         // A rollup covers what this section renders — its cards and the
         // accounts behind them. Cards alone are not enough: an account can read
@@ -686,9 +727,7 @@ List<_ProviderDashboardSection> _providerDashboardSections(
           }
           return total + (account.status == ProviderStatus.ok ? 0 : 1);
         }),
-        allowances: allowances,
-        buckets: buckets,
-        modelBreakdown: modelBreakdown,
+        accounts: group,
       ),
     );
   }
@@ -805,11 +844,13 @@ class _ProviderDashboardSectionView extends StatelessWidget {
       Theme.of(context).colorScheme,
       section.status,
     );
-    final accent = providerFamilyColor(section.provider);
-    final cards = [
-      for (final allowance in section.allowances)
-        AllowanceSummaryCard(allowance: allowance, accent: accent),
-    ];
+    // The existing accent registry names Anthropic's colour by its Claude key.
+    final accent = providerFamilyColor(
+      section.provider == ProviderFamily.anthropic.name
+          ? 'claude'
+          : section.provider,
+    );
+    final labels = section.accounts.map(_dashboardSourceLabel).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -843,8 +884,73 @@ class _ProviderDashboardSectionView extends StatelessWidget {
               ),
           ],
         ),
-        if (cards.isNotEmpty) ...[
+        for (final (index, account) in section.accounts.indexed) ...[
           const SizedBox(height: 12),
+          _ProviderDashboardSourceView(
+            account: account,
+            accent: accent,
+            caption:
+                labels[index] != section.providerLabel &&
+                        labels
+                                .where((label) => label == labels[index])
+                                .length ==
+                            1
+                    ? labels[index]
+                    : labels.length > 1
+                    ? '${labels[index]} · Source ${index + 1}'
+                    : null,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Only catalog/provider copy is eligible: raw connection and account IDs stay
+/// private, and a sibling's data never supplies a missing connection identity.
+String _dashboardSourceLabel(ProviderSnapshot account) {
+  final connection = ProviderConnectionId.fromStorageKey(
+    account.connection ?? '',
+  );
+  if (connection != null &&
+      connection.provider == providerFamilyOf(account.provider)) {
+    for (final metadata in providerConnectionCatalog()) {
+      if (metadata.id == connection) {
+        return metadata.title;
+      }
+    }
+  }
+  return account.providerLabel;
+}
+
+class _ProviderDashboardSourceView extends StatelessWidget {
+  const _ProviderDashboardSourceView({
+    required this.account,
+    required this.accent,
+    required this.caption,
+  });
+
+  final ProviderSnapshot account;
+  final Color accent;
+  final String? caption;
+
+  @override
+  Widget build(BuildContext context) {
+    final cards = [
+      for (final allowance in account.allowances)
+        AllowanceSummaryCard(allowance: allowance, accent: accent),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (caption case final caption?) ...[
+          Text(caption, style: Theme.of(context).textTheme.titleSmall),
+          if (cards.isNotEmpty ||
+              account.buckets.isNotEmpty ||
+              account.modelBreakdown.isNotEmpty)
+            const SizedBox(height: 8),
+        ],
+        if (cards.isNotEmpty)
           LayoutBuilder(
             builder: (context, constraints) {
               if (constraints.maxWidth < 760) {
@@ -869,17 +975,25 @@ class _ProviderDashboardSectionView extends StatelessWidget {
               );
             },
           ),
+        if (account.buckets.isNotEmpty) ...[
+          if (cards.isNotEmpty) const SizedBox(height: 12),
+          UsageHistoryChart(buckets: account.buckets, accent: accent),
         ],
-        if (section.showUsageHistory) ...[
-          const SizedBox(height: 12),
-          UsageHistoryChart(buckets: section.buckets, accent: accent),
-        ],
-        if (section.showModelUsage) ...[
-          const SizedBox(height: 12),
+        if (account.modelBreakdown.isNotEmpty) ...[
+          if (cards.isNotEmpty || account.buckets.isNotEmpty)
+            const SizedBox(height: 12),
           _SectionHeader(title: 'Model usage'),
           const SizedBox(height: 8),
-          _ModelUsagePanel(models: section.modelBreakdown, accent: accent),
+          _ModelUsagePanel(models: account.modelBreakdown, accent: accent),
         ],
+        if (cards.isEmpty &&
+            account.buckets.isEmpty &&
+            account.modelBreakdown.isEmpty)
+          Text(
+            account.status == ProviderStatus.ok
+                ? 'No usage details.'
+                : account.status.label,
+          ),
       ],
     );
   }

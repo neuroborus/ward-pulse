@@ -2182,17 +2182,22 @@ already answered for budgets by the period order the catalog builds.
 - **alphabetical sorts on a stable id**, never on the displayed label, so the order cannot
   follow a copy edit or a future translation. Which id depends on what a row is: only the
   pickers list connections, and they sort on the connection id. The Dashboard and Providers
-  both list families — one section per `account.provider`, one card per `ProviderFamily` — so
-  they sort on the provider key, with their other keys rolled up over the family's accounts or
-  connections. Neither tab reorders inside a family: a Providers card keeps plan above
-  platform, which is layout rather than order;
+  both list families — Dashboard uses `providerFamilyOf` for one section per known family
+  (retaining unclassified provider fallbacks), Providers one card per `ProviderFamily` — so
+  they sort on the stable family key. **Dashboard clarification 2026-10-17:** severity covers
+  its accounts and cards; admissible same-currency month spend is aggregated only for ordering,
+  never as a new displayed total. Each source retains its own allowances, history and model
+  detail, placed by connection/account identity independently of labels. Providers keeps plan
+  above platform, which is layout rather than order. See
+  [Family and source ownership](product/PHONE_DASHBOARD_DESIGN.md#family-and-source-ownership);
 - **"selectable" is not "connected"**, and only the pickers have this key at all. A provider that
   is not connected has no account in the snapshot, so `watchRingCatalog` never builds a row for
   it — there is nothing to sink. What the catalogs do keep visible but disabled is a row that
   cannot be put on a ring: an allowance with no percentage, or a budget period with no limit
   set. That is the state the pickers sort on, and `WatchRingMetric.isAvailable` already names
   it. The Dashboard and Providers have no such row: the Dashboard shows no card for a provider
-  that reports nothing, and Providers ranks by whether a credential is stored.
+  outside the snapshot; represented sources without usage data retain their state, and
+  Providers ranks by whether a credential is stored.
 
 Decided 2026-08-16, and both answers are about the same thing — a list that does not move
 under the reader:
