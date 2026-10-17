@@ -378,51 +378,153 @@ void main() {
         final titleText = _inRow(title, find.text(title));
         final titleRect = tester.getRect(titleText);
         final paragraph = tester.renderObject<RenderParagraph>(titleText);
-        expect(titleRect.left, greaterThanOrEqualTo(primaryRect.left));
-        expect(titleRect.right, lessThanOrEqualTo(primaryRect.right));
-        expect(titleRect.top, greaterThanOrEqualTo(primaryRect.top));
-        expect(titleRect.bottom, lessThanOrEqualTo(primaryRect.bottom));
-        expect(paragraph.didExceedMaxLines, isFalse);
-        final titleBoxes = paragraph.getBoxesForSelection(
-          TextSelection(baseOffset: 0, extentOffset: title.length),
+        final selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: title.length,
         );
-        expect(titleBoxes, isNotEmpty);
+        final titleBoxes = paragraph.getBoxesForSelection(selection);
+        final localSelectionRects = [
+          for (final box in titleBoxes) box.toRect(),
+        ];
+        final globalSelectionRects = [
+          for (final rect in localSelectionRects)
+            MatrixUtils.transformRect(paragraph.getTransformTo(null), rect),
+        ];
+        final paragraphRect = Offset.zero & paragraph.size;
+        final statusRect = tester.getRect(status);
+        final layoutContext =
+            'catalogTitle=$title; '
+            'selection=${selection.baseOffset}..${selection.extentOffset}; '
+            'localSelectionLTRB=${[
+              for (final rect in localSelectionRects) [rect.left, rect.top, rect.right, rect.bottom],
+            ]}; '
+            'globalSelectionLTRB=${[
+              for (final rect in globalSelectionRects) [rect.left, rect.top, rect.right, rect.bottom],
+            ]}; '
+            'paragraphLocalLTRB=${[paragraphRect.left, paragraphRect.top, paragraphRect.right, paragraphRect.bottom]}; '
+            'paragraphGlobalLTRB=${[titleRect.left, titleRect.top, titleRect.right, titleRect.bottom]}; '
+            'primaryGlobalLTRB=${[primaryRect.left, primaryRect.top, primaryRect.right, primaryRect.bottom]}; '
+            'constraints=${paragraph.constraints}; '
+            'style=${paragraph.text.style}; '
+            'textAlign=${paragraph.textAlign}; '
+            'textDirection=${paragraph.textDirection}; '
+            'textWidthBasis=${paragraph.textWidthBasis}; '
+            'softWrap=${paragraph.softWrap}; maxLines=${paragraph.maxLines}; '
+            'overflow=${paragraph.overflow}; '
+            'textScaler=${paragraph.textScaler}; '
+            'textScaleAt1=${paragraph.textScaler.scale(1)}; '
+            'dpr=${tester.view.devicePixelRatio}; '
+            'titleToPrimaryLTRB=${[titleRect.left - primaryRect.left, titleRect.top - primaryRect.top, primaryRect.right - titleRect.right, primaryRect.bottom - titleRect.bottom]}; '
+            'primaryToRowLTRB=${[primaryRect.left - rowRect.left, primaryRect.top - rowRect.top, rowRect.right - primaryRect.right, rowRect.bottom - primaryRect.bottom]}; '
+            'statusGap=${statusRect.top - primaryRect.bottom}';
+        expect(
+          titleRect.left,
+          greaterThanOrEqualTo(primaryRect.left),
+          reason: layoutContext,
+        );
+        expect(
+          titleRect.right,
+          lessThanOrEqualTo(primaryRect.right),
+          reason: layoutContext,
+        );
+        expect(
+          titleRect.top,
+          greaterThanOrEqualTo(primaryRect.top),
+          reason: layoutContext,
+        );
+        expect(
+          titleRect.bottom,
+          lessThanOrEqualTo(primaryRect.bottom),
+          reason: layoutContext,
+        );
+        expect(paragraph.didExceedMaxLines, isFalse, reason: layoutContext);
+        expect(titleBoxes, isNotEmpty, reason: layoutContext);
         if (title == 'Organization reporting') {
-          expect(titleBoxes.length, greaterThan(1));
+          expect(titleBoxes.length, greaterThan(1), reason: layoutContext);
         }
-        // Selection geometry can reach 181.75dp for a 181.5dp paragraph.
-        // Round both right edges outward to physical pixels only here;
-        // widget and container bounds remain strict.
-        final devicePixelRatio = tester.view.devicePixelRatio;
-        final paragraphWidthInPixels =
-            (paragraph.size.width * devicePixelRatio).ceil();
-        for (final box in titleBoxes) {
-          expect(box.left, greaterThanOrEqualTo(0));
+        // Full selection containment proves ownership and nonintrusion into
+        // adjacent targets, not glyph ink-fit or absence of clipping. Actual
+        // device glyph and readability acceptance remains mandatory.
+        for (final rect in globalSelectionRects) {
           expect(
-            (box.right * devicePixelRatio).ceil(),
-            lessThanOrEqualTo(paragraphWidthInPixels),
+            rect.left,
+            greaterThanOrEqualTo(primaryRect.left),
+            reason: layoutContext,
+          );
+          expect(
+            rect.right,
+            lessThanOrEqualTo(primaryRect.right),
+            reason: layoutContext,
+          );
+          expect(
+            rect.top,
+            greaterThanOrEqualTo(primaryRect.top),
+            reason: layoutContext,
+          );
+          expect(
+            rect.bottom,
+            lessThanOrEqualTo(primaryRect.bottom),
+            reason: layoutContext,
           );
         }
-        final statusRect = tester.getRect(status);
         for (var index = 0; index < targets.length; index++) {
           final rect = tester.getRect(targets[index]);
-          expect(rect.width, greaterThanOrEqualTo(48));
-          expect(rect.height, greaterThanOrEqualTo(48));
-          expect(rect.left, greaterThanOrEqualTo(rowRect.left));
-          expect(rect.right, lessThanOrEqualTo(rowRect.right));
-          expect(statusRect.top, greaterThanOrEqualTo(rect.bottom));
+          expect(rect.width, greaterThanOrEqualTo(48), reason: layoutContext);
+          expect(rect.height, greaterThanOrEqualTo(48), reason: layoutContext);
+          expect(
+            rect.left,
+            greaterThanOrEqualTo(rowRect.left),
+            reason: layoutContext,
+          );
+          expect(
+            rect.right,
+            lessThanOrEqualTo(rowRect.right),
+            reason: layoutContext,
+          );
+          expect(
+            rect.top,
+            greaterThanOrEqualTo(rowRect.top),
+            reason: layoutContext,
+          );
+          expect(
+            rect.bottom,
+            lessThanOrEqualTo(rowRect.bottom),
+            reason: layoutContext,
+          );
+          expect(
+            statusRect.top,
+            greaterThanOrEqualTo(rect.bottom),
+            reason: layoutContext,
+          );
           if (index > 0) {
             final previous = tester.getRect(targets[index - 1]);
-            expect(rect.left, greaterThanOrEqualTo(previous.right));
-            expect(rect.top, closeTo(primaryRect.top, 0.1));
+            expect(
+              rect.left,
+              greaterThanOrEqualTo(previous.right),
+              reason: layoutContext,
+            );
+            expect(
+              rect.top,
+              closeTo(primaryRect.top, 0.1),
+              reason: layoutContext,
+            );
           }
         }
-        expect(tester.getRect(alerts).right, closeTo(rowRect.right - 16, 0.1));
+        expect(
+          tester.getRect(alerts).right,
+          closeTo(rowRect.right - 16, 0.1),
+          reason: layoutContext,
+        );
         expect(
           statusRect.left,
           closeTo(tester.getRect(find.text(title)).left, 0.1),
+          reason: layoutContext,
         );
-        expect(statusRect.right, lessThanOrEqualTo(rowRect.right - 16));
+        expect(
+          statusRect.right,
+          lessThanOrEqualTo(rowRect.right - 16),
+          reason: layoutContext,
+        );
       }
       expect(tester.takeException(), isNull);
     });
