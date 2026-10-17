@@ -307,18 +307,32 @@ void main() {
         _inRow('Organization reporting', find.text('Connected')),
         findsOneWidget,
       );
-      await tester.scrollUntilVisible(
-        find.text('Platform reporting'),
-        300,
-        scrollable: find.byType(Scrollable).first,
+      final primary = find.ancestor(
+        of: _inRow('Platform reporting', find.text('Platform reporting')),
+        matching: find.byType(InkWell),
       );
+      final scrollable = find.byType(Scrollable).first;
+      await tester.scrollUntilVisible(primary, 300, scrollable: scrollable);
+      await tester.pumpAndSettle();
       expect(
         _inRow('Platform reporting', find.text('Could not read saved key')),
         findsOneWidget,
       );
-      await tester.tap(find.text('Platform reporting'));
+      final primaryRect = tester.getRect(primary);
+      final viewportRect = tester.getRect(scrollable);
+      expect(viewportRect.intersect(primaryRect), primaryRect);
+      expect(primary.hitTestable(), findsOneWidget);
+      await tester.tap(primary);
       await tester.pumpAndSettle();
-      expect(find.text('Remove'), findsOneWidget);
+      final editor = find.widgetWithText(
+        AlertDialog,
+        'OpenAI · Platform reporting',
+      );
+      expect(editor, findsOneWidget);
+      expect(
+        find.descendant(of: editor, matching: find.text('Remove')),
+        findsOneWidget,
+      );
     });
   });
 
@@ -372,12 +386,22 @@ void main() {
         final titleBoxes = paragraph.getBoxesForSelection(
           TextSelection(baseOffset: 0, extentOffset: title.length),
         );
+        expect(titleBoxes, isNotEmpty);
         if (title == 'Organization reporting') {
           expect(titleBoxes.length, greaterThan(1));
         }
+        // Selection geometry can reach 181.75dp for a 181.5dp paragraph.
+        // Round both right edges outward to physical pixels only here;
+        // widget and container bounds remain strict.
+        final devicePixelRatio = tester.view.devicePixelRatio;
+        final paragraphWidthInPixels =
+            (paragraph.size.width * devicePixelRatio).ceil();
         for (final box in titleBoxes) {
           expect(box.left, greaterThanOrEqualTo(0));
-          expect(box.right, lessThanOrEqualTo(titleRect.width));
+          expect(
+            (box.right * devicePixelRatio).ceil(),
+            lessThanOrEqualTo(paragraphWidthInPixels),
+          );
         }
         final statusRect = tester.getRect(status);
         for (var index = 0; index < targets.length; index++) {
@@ -408,99 +432,108 @@ void main() {
     ) async {
       _setTestSurface(tester, const Size(411, 900));
       final semantics = tester.ensureSemantics();
-      addTearDown(semantics.dispose);
-      var primaryTaps = 0;
-      var budgetTaps = 0;
-      var alertTaps = 0;
-      const title = 'A long saved reporting label';
-      const purpose = 'Anthropic · Organization reporting';
-      const error =
-          "Check this key's permissions and your account's reporting access.";
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: MediaQuery(
-              data: const MediaQueryData(textScaler: TextScaler.linear(1.7)),
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  Card(
-                    child: ProviderConnectionRow(
-                      icon: Icons.key_outlined,
-                      title: title,
-                      subtitle: purpose,
-                      status: const Text('Access denied'),
-                      supportingText: error,
-                      onTap: () => primaryTaps++,
-                      actions: [
-                        IconButton(
-                          tooltip: 'Budget limits',
-                          onPressed: () => budgetTaps++,
-                          icon: const Icon(Icons.savings),
-                        ),
-                        IconButton(
-                          tooltip: 'Alert thresholds',
-                          onPressed: () => alertTaps++,
-                          icon: const Icon(Icons.notifications),
-                        ),
-                      ],
+      try {
+        var primaryTaps = 0;
+        var budgetTaps = 0;
+        var alertTaps = 0;
+        const title = 'A long saved reporting label';
+        const purpose = 'Anthropic · Organization reporting';
+        const error =
+            "Check this key's permissions and your account's reporting access.";
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: MediaQuery(
+                data: const MediaQueryData(textScaler: TextScaler.linear(1.7)),
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    Card(
+                      child: ProviderConnectionRow(
+                        icon: Icons.key_outlined,
+                        title: title,
+                        subtitle: purpose,
+                        status: const Text('Access denied'),
+                        supportingText: error,
+                        onTap: () => primaryTaps++,
+                        actions: [
+                          IconButton(
+                            tooltip: 'Budget limits',
+                            onPressed: () => budgetTaps++,
+                            icon: const Icon(Icons.savings),
+                          ),
+                          IconButton(
+                            tooltip: 'Alert thresholds',
+                            onPressed: () => alertTaps++,
+                            icon: const Icon(Icons.notifications),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      final primary = find.ancestor(
-        of: find.text(title),
-        matching: find.byType(InkWell),
-      );
-      final budget = find.byTooltip('Budget limits');
-      final alerts = find.byTooltip('Alert thresholds');
-      final nodes = [
-        tester.getSemantics(primary),
-        tester.getSemantics(budget),
-        tester.getSemantics(alerts),
-      ];
-      expect(nodes.map((node) => node.id).toSet(), hasLength(3));
-      for (final node in nodes) {
-        expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
-        expect(node.getSemanticsData().flagsCollection.isButton, isTrue);
+        );
+        await tester.pumpAndSettle();
+        final primary = find.ancestor(
+          of: find.text(title),
+          matching: find.byType(InkWell),
+        );
+        final budget = find.byTooltip('Budget limits');
+        final alerts = find.byTooltip('Alert thresholds');
+        final nodes = [
+          tester.getSemantics(primary),
+          tester.getSemantics(budget),
+          tester.getSemantics(alerts),
+        ];
+        expect(nodes.map((node) => node.id).toSet(), hasLength(3));
+        for (final node in nodes) {
+          expect(
+            node.getSemanticsData().hasAction(SemanticsAction.tap),
+            isTrue,
+          );
+          expect(node.getSemanticsData().flagsCollection.isButton, isTrue);
+        }
+        expect(nodes[0].getSemanticsData().label, contains(title));
+        expect(nodes[0].getSemanticsData().label, contains(purpose));
+        expect(nodes[1].getSemanticsData().tooltip, 'Budget limits');
+        expect(nodes[2].getSemanticsData().tooltip, 'Alert thresholds');
+        final rowRect = tester.getRect(find.byType(ProviderConnectionRow));
+        final statusRect = tester.getRect(find.text('Access denied'));
+        final errorRect = tester.getRect(find.text(error));
+        final titleRect = tester.getRect(find.text(title));
+        final primaryRect = tester.getRect(primary);
+        expect(titleRect.height, greaterThan(30));
+        expect(titleRect.right, lessThanOrEqualTo(primaryRect.right));
+        expect(
+          primaryRect.right,
+          lessThanOrEqualTo(tester.getRect(budget).left),
+        );
+        expect(
+          tester.getRect(budget).right,
+          lessThanOrEqualTo(tester.getRect(alerts).left),
+        );
+        for (final target in [primary, budget, alerts]) {
+          final rect = tester.getRect(target);
+          expect(rect.width, greaterThanOrEqualTo(48));
+          expect(rect.height, greaterThanOrEqualTo(48));
+          expect(statusRect.top, greaterThanOrEqualTo(rect.bottom));
+        }
+        expect(errorRect.top, greaterThan(statusRect.bottom));
+        expect(errorRect.right, lessThanOrEqualTo(rowRect.right));
+        expect(errorRect.bottom, lessThanOrEqualTo(rowRect.bottom));
+        await tester.tap(budget);
+        expect([primaryTaps, budgetTaps, alertTaps], [0, 1, 0]);
+        await tester.tap(alerts);
+        expect([primaryTaps, budgetTaps, alertTaps], [0, 1, 1]);
+        await tester.tap(primary);
+        expect([primaryTaps, budgetTaps, alertTaps], [1, 1, 1]);
+        expect(tester.takeException(), isNull);
+      } finally {
+        semantics.dispose();
       }
-      expect(nodes[0].getSemanticsData().label, contains(title));
-      expect(nodes[0].getSemanticsData().label, contains(purpose));
-      expect(nodes[1].getSemanticsData().tooltip, 'Budget limits');
-      expect(nodes[2].getSemanticsData().tooltip, 'Alert thresholds');
-      final rowRect = tester.getRect(find.byType(ProviderConnectionRow));
-      final statusRect = tester.getRect(find.text('Access denied'));
-      final errorRect = tester.getRect(find.text(error));
-      final titleRect = tester.getRect(find.text(title));
-      final primaryRect = tester.getRect(primary);
-      expect(titleRect.height, greaterThan(30));
-      expect(titleRect.right, lessThanOrEqualTo(primaryRect.right));
-      expect(primaryRect.right, lessThanOrEqualTo(tester.getRect(budget).left));
-      expect(
-        tester.getRect(budget).right,
-        lessThanOrEqualTo(tester.getRect(alerts).left),
-      );
-      for (final target in [primary, budget, alerts]) {
-        final rect = tester.getRect(target);
-        expect(rect.width, greaterThanOrEqualTo(48));
-        expect(rect.height, greaterThanOrEqualTo(48));
-        expect(statusRect.top, greaterThanOrEqualTo(rect.bottom));
-      }
-      expect(errorRect.top, greaterThan(statusRect.bottom));
-      expect(errorRect.right, lessThanOrEqualTo(rowRect.right));
-      expect(errorRect.bottom, lessThanOrEqualTo(rowRect.bottom));
-      await tester.tap(budget);
-      expect([primaryTaps, budgetTaps, alertTaps], [0, 1, 0]);
-      await tester.tap(alerts);
-      expect([primaryTaps, budgetTaps, alertTaps], [0, 1, 1]);
-      await tester.tap(primary);
-      expect([primaryTaps, budgetTaps, alertTaps], [1, 1, 1]);
-      expect(tester.takeException(), isNull);
     });
 
     testWidgets('compact row grows for a long status', (tester) async {
