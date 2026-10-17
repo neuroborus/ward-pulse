@@ -1,7 +1,7 @@
 # Connect providers
 
 Open **Providers** on the phone. Each provider family has separate plan and reporting rows.
-Connect an existing account or organization/team Admin API key to read its usage. You do not
+Connect an existing account or a reporting key that can read its usage. You do not
 choose or change a subscription tier in WardPulse. Connecting one row does not automatically
 connect the other.
 
@@ -11,7 +11,7 @@ connect the other.
 | Anthropic | Claude subscription | Organization reporting |
 | Cursor | Cursor plan | Team Admin API |
 
-Plan connections are experimental. Reporting rows need administrative credentials. Keep
+Plan connections are experimental. Reporting rows require the appropriate provider access. Keep
 tokens, keys and authorization codes private, and enter them only into the matching
 provider's sign-in page or WardPulse's credential field.
 
@@ -116,54 +116,66 @@ links to Admin API key creation.
 1. Obtain the organization's Admin API key through its authorized administrator.
 2. In WardPulse, tap **Platform reporting** under OpenAI.
 3. Paste the key into **Value**. Optionally add a **Label** to identify this reporting connection.
-4. Tap **Save** and check the Dashboard's reporting status.
+4. Tap **Save** and check the result beside **Platform reporting**. **Connected** appears
+   after reporting succeeds; a saved key alone does not confirm access.
 
 This row reads API organization reporting, not personal ChatGPT or Codex subscription usage.
 
 ## Anthropic Organization reporting
 
-Use a Claude Console organization with Usage & Cost Admin API access and an organization
-Admin API key. This is separate from your Claude subscription sign-in. Anthropic documents
-the account and credential requirements in its
+Use a Claude Console key that can read the organization's usage and cost reports.
+Personal or service-account keys must not be scoped to a workspace. This is separate
+from your Claude subscription sign-in. Anthropic documents account and access requirements in its
 [Usage and Cost API guide](https://platform.claude.com/docs/en/manage-claude/usage-cost-api).
 
-1. Obtain the organization's Admin API key through its authorized administrator.
+1. Obtain a key with the required reporting access.
 2. Tap **Organization reporting** under Anthropic.
-3. Paste it into **Value**, optionally add a **Label**, and tap **Save**.
-4. Check reporting status on Dashboard.
+3. Paste the key into **Value**, optionally add a **Label**, and tap **Save**.
+4. Check the result beside that row. **Connected** appears after reporting succeeds.
 
-![Anthropic Organization reporting with empty Value and Label fields in the light theme.](/screenshots/phone-reporting-key-light.png)
+![Editing a saved Anthropic reporting key with an empty Value field in the light theme.](/screenshots/phone-reporting-key-light.png)
 
-![Anthropic Organization reporting with empty Value and Label fields in the dark theme.](/screenshots/phone-reporting-key-dark.png)
+![Editing a saved Anthropic reporting key with an empty Value field in the dark theme.](/screenshots/phone-reporting-key-dark.png)
 
-Enter the organization's Admin API key in **Value**. **Label** is optional.
+Edit a saved reporting key. Leave **Value** blank to keep it; **Label** is optional.
 
 This connection targets Claude Platform organization reporting. A Claude Enterprise Analytics
 key belongs to a different service and is not the credential for this row.
 
 ## Cursor Team Admin API
 
-You need an **Enterprise team administrator** and the team's Admin API key. A paid Teams plan
-alone does not grant access. Cursor lists the availability in its
+Use a team API key with access to the team's usage and spend reports. Check reporting
+access in the Cursor dashboard or with your team administrator. Cursor describes the API in its
 [API overview](https://cursor.com/docs/api), with details in the
 [Admin API documentation](https://cursor.com/docs/account/teams/admin-api).
 
-1. Have the Enterprise team administrator create the team's API key in the Cursor dashboard.
+1. Have your team administrator create the team's API key in the Cursor dashboard.
 2. Tap **Team Admin API** under Cursor.
 3. Paste the key into **Value**, optionally add a **Label**, and tap **Save**.
-4. Check Dashboard reporting. Usage may lag by about an hour even after a successful refresh.
+4. Check the result beside that row. **Connected** appears after reporting succeeds.
 
-That freshness note applies to the Team Admin API, not the experimental Cursor plan row.
+Usage may lag by about an hour after a successful refresh. This freshness note applies
+to the Team Admin API, not the Cursor plan row.
 
 ## Reconnect, change or remove a connection
 
 - For connected **Codex subscription** or **Claude subscription**, tap the row and choose
   **Reconnect** or **Disconnect**. For **Cursor plan**, the replacement action is **Sign in again**.
 - Cancelling a replacement sign-in preserves an existing valid connection.
-- To change a reporting key or its label, tap its row. The stored key is not displayed back
-  into **Value**. Leave Value blank to keep the key when updating its optional label.
+- To replace a reporting key, tap its row, enter the new **Value** and **Save**. The replacement
+  is checked before it appears Connected. To change only **Label**, leave Value blank; the
+  existing key stays in place. The stored key is not displayed back into the field.
 - To remove a pasted credential, use **Remove**. Cursor's Advanced paste dialog also offers
   Remove when a token is saved. **Cancel** leaves the current connection unchanged.
+
+Saving a reporting key starts a check. **Checking…** means a report request is running.
+**Not verified** means reporting access for the saved key is not currently confirmed.
+**Connected** appears after reporting succeeds.
+
+For **Key rejected**, check or replace the key in that row. **Access denied** asks you to
+review the key's permissions and the account's reporting access. For **Could not check**,
+check your connection and refresh when available. Dashboard names the same reporting
+connection; **Edit key**, where shown, takes you to its row.
 
 Disconnect/removal clears the selected local credential and prevents obsolete stored data
 from being reused. It does not revoke an API key at the provider; use that provider's key

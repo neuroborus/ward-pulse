@@ -51,7 +51,7 @@
   position: absolute;
   box-sizing: border-box;
   left: calc(var(--wardpulse-provider-action-x) - 6px);
-  top: calc(31.8125% - 6px);
+  top: calc(45.145833% - 6px);
   width: calc(5.833333% + 12px);
   height: calc(2.625% + 12px);
   border: 2px solid #2563EB;
@@ -59,11 +59,11 @@
 }
 
 .wardpulse-guide-screenshot__provider-action--budget {
-  --wardpulse-provider-action-x: 50.787037%;
+  --wardpulse-provider-action-x: 20.416667%;
 }
 
 .wardpulse-guide-screenshot__provider-action--alert {
-  --wardpulse-provider-action-x: 62.453704%;
+  --wardpulse-provider-action-x: 32.083333%;
 }
 
 :root:not([data-vocs-theme='dark'])

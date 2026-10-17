@@ -7,6 +7,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_app.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
+import 'package:ward_pulse_phone/dashboard/dashboard_load.dart';
+import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
+import 'package:ward_pulse_phone/sync/provider_reporting.dart';
 import 'package:ward_pulse_phone/dashboard/plan_recoveries.dart';
 import 'package:ward_pulse_phone/dashboard/provider_status_color.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
@@ -507,18 +510,22 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('Platform reporting'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
     final button = find.descendant(
       of: find.ancestor(
         of: find.text('Platform reporting'),
         matching: find.byType(ListTile),
       ),
-      matching: find.byTooltip('Budget limits'),
+      matching: find.byWidgetPredicate(
+        (widget) => widget is IconButton && widget.tooltip == 'Budget limits',
+      ),
     );
+    await tester.scrollUntilVisible(
+      button,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(button.hitTestable(), findsOneWidget);
     await tester.tap(button);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, '25');
@@ -771,20 +778,24 @@ void main() {
     await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(
-      find.text('Platform reporting'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
     Finder platformButton(String tooltip) => find.descendant(
       of: find.ancestor(
         of: find.text('Platform reporting'),
         matching: find.byType(ListTile),
       ),
-      matching: find.byTooltip(tooltip),
+      matching: find.byWidgetPredicate(
+        (widget) => widget is IconButton && widget.tooltip == tooltip,
+      ),
     );
 
     // The limit comes first: a percentage is meaningless without one.
+    await tester.scrollUntilVisible(
+      platformButton('Budget limits'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(platformButton('Budget limits').hitTestable(), findsOneWidget);
     await tester.tap(platformButton('Budget limits'));
     await tester.pumpAndSettle();
 
@@ -977,6 +988,451 @@ void main() {
     expect(find.text('Usage dashboard'), findsOneWidget);
   });
 
+  testWidgets(
+    'saved-key check survives tab disposal and a failed Label write',
+    (tester) async {
+      final store = _MemoryCredentialStore()..failLabelWrite = true;
+      final writeRelease = Completer<void>();
+      store.pendingWrite = writeRelease.future;
+      final response = Completer<String>();
+      var requests = 0;
+      final repository = _reportingRepository(store, (_) {
+        requests++;
+        return response.future;
+      });
+      await tester.pumpWidget(
+        WardPulseApp(repository: repository, credentialStore: store),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Organization reporting'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField).first, 'synthetic-key');
+      await tester.enterText(
+        find.byType(TextFormField).last,
+        'Synthetic label',
+      );
+      await tester.tap(find.text('Save'));
+      await tester.pump();
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      expect(requests, 0);
+      writeRelease.complete();
+      await tester.pumpAndSettle();
+      expect(requests, 1);
+      expect(find.text('Key saved. Could not update label.'), findsOneWidget);
+      response.completeError(
+        const ProviderReportingException(
+          ProviderReportingFailure.authentication,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      expect(find.text('Key rejected'), findsOneWidget);
+      expect(
+        find.textContaining('Anthropic · Organization reporting'),
+        findsWidgets,
+      );
+      expect(find.text('synthetic-key'), findsNothing);
+      expect(requests, 1);
+    },
+  );
+
+  testWidgets(
+    'manual and automatic refresh do not duplicate an active saved-key check',
+    (tester) async {
+      final store = _MemoryCredentialStore();
+      final response = Completer<String>();
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      var requests = 0;
+      final repository = _reportingRepository(store, (_) {
+        requests++;
+        return response.future;
+      });
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          credentialStore: store,
+          syncScheduler: scheduler,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Organization reporting'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField).first, 'synthetic-key');
+      await tester.tap(find.text('Save'));
+      await tester.pump();
+      await tester.pump();
+      expect(requests, 1);
+      expect(find.text('Checking…'), findsOneWidget);
+      expect(
+        tester
+            .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.refresh))
+            .onPressed,
+        isNull,
+      );
+      final row = tester.widget<ListTile>(
+        find.widgetWithText(ListTile, 'Organization reporting'),
+      );
+      expect(row.onTap, isNull);
+      scheduler.tick();
+      await tester.pump();
+      expect(requests, 1);
+      response.complete(DashboardSnapshot.empty().toJsonString());
+      await tester.pumpAndSettle();
+      expect(find.text('Connected'), findsOneWidget);
+      expect(requests, 1);
+    },
+  );
+
+  for (final previousSuccess in [false, true]) {
+    testWidgets(
+      'scheduled all-failed retries replace ${previousSuccess ? 'a later' : 'the initial'} Dashboard failure',
+      (tester) async {
+        final store = _MemoryCredentialStore();
+        await store.writeSecret(
+          ProviderConnections.anthropicPlatform,
+          'synthetic-key',
+        );
+        final scheduler = _ManualProviderSyncScheduler();
+        addTearDown(scheduler.dispose);
+        ProviderReportingFailure? failure =
+            previousSuccess ? null : ProviderReportingFailure.authentication;
+        var requests = 0;
+        final repository = _reportingRepository(store, (_) async {
+          requests++;
+          if (failure != null) throw ProviderReportingException(failure);
+          return DashboardSnapshot.empty().toJsonString();
+        });
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            credentialStore: store,
+            syncScheduler: scheduler,
+          ),
+        );
+        await tester.pumpAndSettle();
+        if (previousSuccess) {
+          repository.invalidate();
+          failure = ProviderReportingFailure.authentication;
+          await tester.tap(find.byTooltip('Refresh'));
+          await tester.pumpAndSettle();
+        }
+        expect(
+          find.textContaining(
+            'Anthropic · Organization reporting: Key rejected',
+          ),
+          findsOneWidget,
+        );
+        await tester.tap(find.text('Providers'));
+        await tester.pumpAndSettle();
+        expect(find.text('Key rejected'), findsOneWidget);
+        failure = ProviderReportingFailure.permissionDenied;
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(find.text('Access denied'), findsOneWidget);
+        await tester.tap(find.text('Dashboard'));
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining(
+            'Anthropic · Organization reporting: Access denied',
+          ),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Key rejected'), findsNothing);
+        expect(requests, previousSuccess ? 3 : 2);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('Remove retires Dashboard data even when local cleanup fails', (
+    tester,
+  ) async {
+    final store = _MemoryCredentialStore()..failDeleteAfterRetirement = true;
+    await store.writeSecret(
+      ProviderConnections.anthropicPlatform,
+      'synthetic-key',
+    );
+    await store.writeLabel(
+      ProviderConnections.anthropicPlatform,
+      'Synthetic label',
+    );
+    final json =
+        DashboardSnapshot.fromJsonString(
+          File(
+            '../../fixtures/snapshots/dashboard_today.json',
+          ).readAsStringSync(),
+        ).toJson();
+    final account = (json['accounts'] as List).single as Map;
+    account['provider'] = 'claude';
+    account['connection'] = ProviderConnections.anthropicPlatform.storageKey;
+    final live = DashboardSnapshot.fromJson(json);
+    var requests = 0;
+    final repository = _reportingRepository(store, (_) async {
+      requests++;
+      return live.toJsonString();
+    });
+    final watch = _FakeWatchSyncService();
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: repository,
+        credentialStore: store,
+        watchSyncService: watch,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(watch.syncedSnapshots.last.accounts, isNotEmpty);
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+    expect(find.text('Connected'), findsOneWidget);
+    await tester.tap(find.text('Synthetic label'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Connection removed. Could not finish local cleanup.'),
+      findsOneWidget,
+    );
+    expect(find.text('Connected'), findsNothing);
+    expect(
+      await store.readSecret(ProviderConnections.anthropicPlatform),
+      isNull,
+    );
+    expect(watch.syncedSnapshots.last.accounts, isEmpty);
+    await tester.tap(find.text('Dashboard'));
+    await tester.pumpAndSettle();
+    expect(find.text('Connect a provider'), findsOneWidget);
+    expect(requests, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('open Providers follows automatic and manual reporting results', (
+    tester,
+  ) async {
+    final store = _MemoryCredentialStore();
+    await store.writeSecret(
+      ProviderConnections.anthropicPlatform,
+      'synthetic-key',
+    );
+    final scheduler = _ManualProviderSyncScheduler();
+    addTearDown(scheduler.dispose);
+    ProviderReportingFailure? failure;
+    var requests = 0;
+    final repository = _reportingRepository(store, (_) async {
+      requests++;
+      if (failure != null) throw ProviderReportingException(failure);
+      return DashboardSnapshot.empty().toJsonString();
+    });
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: repository,
+        credentialStore: store,
+        syncScheduler: scheduler,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+    expect(find.text('Connected'), findsOneWidget);
+    failure = ProviderReportingFailure.permissionDenied;
+    scheduler.tick();
+    await tester.pumpAndSettle();
+    expect(find.text('Access denied'), findsOneWidget);
+    failure = ProviderReportingFailure.unavailable;
+    await tester.tap(find.byTooltip('Refresh'));
+    await tester.pumpAndSettle();
+    expect(find.text('Could not check'), findsOneWidget);
+    expect(find.text('Key rejected'), findsNothing);
+    expect(requests, 3);
+  });
+
+  testWidgets(
+    'refresh retires externally removed outcomes and keeps current sibling feedback',
+    (tester) async {
+      final store = _MemoryCredentialStore();
+      const rejected = ProviderConnections.anthropicPlatform;
+      const sibling = ProviderConnections.cursorPlatform;
+      await store.writeSecret(rejected, 'synthetic-rejected');
+      await store.writeSecret(sibling, 'synthetic-sibling');
+      final live = _PublicationRepository(
+        DashboardSnapshot.fromJsonString(
+          File(
+            '../../fixtures/snapshots/dashboard_today.json',
+          ).readAsStringSync(),
+        ),
+      );
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      var rejectedRequests = 0;
+      var siblingRequests = 0;
+      final repository = _reportingRepository(
+        store,
+        (_) async {
+          rejectedRequests++;
+          throw const ProviderReportingException(
+            ProviderReportingFailure.authentication,
+          );
+        },
+        fallback: _reportingRepository(
+          store,
+          (_) async {
+            siblingRequests++;
+            throw const ProviderReportingException(
+              ProviderReportingFailure.permissionDenied,
+            );
+          },
+          connection: sibling,
+          fallback: live,
+        ),
+      );
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          credentialStore: store,
+          syncScheduler: scheduler,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Anthropic · Organization reporting: Key rejected'),
+        findsOneWidget,
+      );
+      expect(find.text('Edit key'), findsNWidgets(2));
+
+      // Another lifecycle owner removes the key without the app's callback.
+      await store.deleteSecret(rejected);
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Key rejected'), findsNothing);
+      expect(
+        find.textContaining('Cursor · Team Admin API: Access denied'),
+        findsOneWidget,
+      );
+      expect(find.text('Edit key'), findsOneWidget);
+      expect(find.text('Connect a provider'), findsNothing);
+      expect(rejectedRequests, 1);
+      expect(siblingRequests, 2);
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Organization reporting'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(
+        find.descendant(
+          of: find.widgetWithText(ListTile, 'Organization reporting'),
+          matching: find.text('Not connected'),
+        ),
+        findsOneWidget,
+      );
+
+      await store.deleteSecret(sibling);
+      live.snapshot = DashboardSnapshot.empty();
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Key rejected'), findsNothing);
+      expect(find.textContaining('Access denied'), findsNothing);
+      expect(find.text('Edit key'), findsNothing);
+      expect(find.text('Connect a provider'), findsOneWidget);
+      expect(rejectedRequests, 1);
+      expect(siblingRequests, 2);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('failed key storage never checks or blames the provider', (
+    tester,
+  ) async {
+    final store = _MemoryCredentialStore()..failKeyWrite = true;
+    var requests = 0;
+    final repository = _reportingRepository(store, (_) async {
+      requests++;
+      return DashboardSnapshot.empty().toJsonString();
+    });
+    await tester.pumpWidget(
+      WardPulseApp(repository: repository, credentialStore: store),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Organization reporting'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).first, 'synthetic-key');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Could not update credential'), findsOneWidget);
+    expect(find.text('Key rejected'), findsNothing);
+    expect(
+      await store.readSecret(ProviderConnections.anthropicPlatform),
+      isNull,
+    );
+    expect(requests, 0);
+  });
+
+  testWidgets(
+    'initial all-failed feedback repairs the exact row despite labels and ordering',
+    (tester) async {
+      final store = _MemoryCredentialStore();
+      const ids = [
+        ProviderConnections.cursorPlatform,
+        ProviderConnections.openAiPlatform,
+        ProviderConnections.anthropicPlatform,
+      ];
+      for (final id in ids) {
+        await store.writeSecret(id, 'synthetic-key');
+        await store.writeLabel(id, 'Shared label');
+      }
+      final outcomes = [
+        for (final id in ids)
+          ConnectionReportingOutcome(
+            connection: id,
+            category: ReportingOutcomeCategory.authenticationRejected,
+            source: ReportingOutcomeSource.live,
+            credentialVersion: store.version(id),
+            freshness: ReportingOutcomeFreshness.current,
+          ),
+      ];
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: _OutcomeFailureRepository(outcomes),
+          credentialStore: store,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Connect a provider'), findsNothing);
+      for (final outcome in outcomes) {
+        expect(
+          find.textContaining('${outcome.connectionLabel}: Key rejected'),
+          findsOneWidget,
+        );
+      }
+      await tester.ensureVisible(find.text('Edit key').at(1));
+      await tester.tap(find.text('Edit key').at(1));
+      await tester.pumpAndSettle();
+      expect(
+        find.widgetWithText(AlertDialog, 'Anthropic · Organization reporting'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).first)
+            .controller!
+            .text,
+        isEmpty,
+      );
+      expect(find.text('Remove'), findsOneWidget);
+    },
+  );
+
   testWidgets('stores and masks an OpenAI Admin API key', (tester) async {
     final snapshot = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
@@ -1022,11 +1478,11 @@ void main() {
 
     expect(credentialStore.openAiSecret, 'secret-admin-key');
     await tester.scrollUntilVisible(
-      find.text('Connected'),
+      find.text('Not verified'),
       -300,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('Connected'), findsOneWidget);
+    expect(find.text('Not verified'), findsOneWidget);
     expect(find.text('secret-admin-key'), findsNothing);
   });
 
@@ -1105,6 +1561,8 @@ void main() {
       300,
       scrollable: providersList,
     );
+    await tester.ensureVisible(find.widgetWithText(ListTile, 'Work org key'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Work org key'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Remove'));
@@ -1112,6 +1570,12 @@ void main() {
 
     expect(credentialStore.openAiSecret, isNull);
     expect(credentialStore.openAiLabel, isNull);
+    await tester.scrollUntilVisible(
+      find.text('Platform reporting'),
+      300,
+      scrollable: providersList,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('Platform reporting'), findsOneWidget);
   });
 
@@ -1161,7 +1625,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Platform reporting'), findsOneWidget);
-    expect(find.text('Connected'), findsOneWidget);
+    expect(find.text('Not verified'), findsOneWidget);
     await tester.tap(find.text('Platform reporting'));
     await tester.pumpAndSettle();
     expect(find.text('Remove'), findsOneWidget);
@@ -1710,7 +2174,22 @@ class _MemoryAlertThresholdStore implements AlertThresholdPreferenceStore {
   }
 }
 
-class _MemoryCredentialStore implements ProviderCredentialStore {
+class _MemoryCredentialStore
+    implements ProviderCredentialStore, VersionedProviderCredentialStore {
+  final _generations = <ProviderConnectionId, int>{};
+  Future<void>? pendingWrite;
+  bool failLabelWrite = false;
+  bool failKeyWrite = false;
+  bool failDeleteAfterRetirement = false;
+  CredentialVersion version(ProviderConnectionId id) => CredentialVersion({
+    'generation': '${_generations[id] ?? 0}',
+    'revision': 'revision',
+    'epoch': 'epoch',
+    'identity': id.storageKey,
+  });
+  @override
+  ConnectionCredentialAccess credentialAccess(ProviderConnectionId id) =>
+      _MemoryCredentialAccess(this, id);
   _MemoryCredentialStore([String? openAiAdminKey]) {
     if (openAiAdminKey != null) {
       _secrets[ProviderConnections.openAiPlatform] = openAiAdminKey;
@@ -1729,12 +2208,18 @@ class _MemoryCredentialStore implements ProviderCredentialStore {
 
   @override
   Future<void> writeSecret(ProviderConnectionId id, String value) async {
+    await pendingWrite;
+    if (failKeyWrite) throw StateError('Synthetic write failure');
+    _generations[id] = (_generations[id] ?? 0) + 1;
     _secrets[id] = value;
   }
 
   @override
   Future<void> deleteSecret(ProviderConnectionId id) async {
+    _generations[id] = (_generations[id] ?? 0) + 1;
     _secrets.remove(id);
+    if (failDeleteAfterRetirement)
+      throw StateError('Synthetic cleanup failure');
     _labels.remove(id);
   }
 
@@ -1743,6 +2228,7 @@ class _MemoryCredentialStore implements ProviderCredentialStore {
 
   @override
   Future<void> writeLabel(ProviderConnectionId id, String? value) async {
+    if (failLabelWrite) throw StateError('Synthetic label failure');
     final trimmed = value?.trim();
     if (trimmed == null || trimmed.isEmpty) {
       _labels.remove(id);
@@ -1829,4 +2315,48 @@ class _DelayedAlertThresholdStore implements AlertThresholdPreferenceStore {
     await release.future;
     value = next;
   }
+}
+
+MergingConnectionRepository _reportingRepository(
+  _MemoryCredentialStore store,
+  Future<String> Function(String) fetch, {
+  ProviderConnectionId connection = ProviderConnections.anthropicPlatform,
+  DashboardRepository fallback = const NoProvidersDashboardRepository(),
+}) => MergingConnectionRepository(
+  connection: connection,
+  credentialStore: store,
+  loadCredentialReport: fetch,
+  normalizeReport: (value) => value,
+  fallback: fallback,
+  logger: const NullProviderSyncLogger(),
+  mapError: (error) => mapReportingError(error, const NullProviderSyncLogger()),
+);
+
+final class _MemoryCredentialAccess implements ConnectionCredentialAccess {
+  const _MemoryCredentialAccess(this.store, this.id);
+  final _MemoryCredentialStore store;
+  final ProviderConnectionId id;
+  @override
+  Future<VersionedCredential<String>?> read() async {
+    final value = await store.readSecret(id);
+    return value == null ? null : VersionedCredential(value, store.version(id));
+  }
+
+  @override
+  Future<bool> isCurrent(CredentialVersion expected) async =>
+      await store.readSecret(id) != null &&
+      expected.sameCache(store.version(id));
+  @override
+  Future<R> serializeFetch<R>(Future<R> Function() operation) => operation();
+}
+
+final class _OutcomeFailureRepository extends DashboardRepository {
+  const _OutcomeFailureRepository(this.outcomes);
+  final List<ConnectionReportingOutcome> outcomes;
+  @override
+  Future<DashboardSnapshot> load() async =>
+      throw DashboardLoadException.withOutcomes(
+        issue: DashboardSyncIssue.authentication,
+        reportingOutcomes: outcomes,
+      );
 }

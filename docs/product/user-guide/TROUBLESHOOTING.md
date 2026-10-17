@@ -22,15 +22,31 @@ If loading or errors continue, note the visible status and the step that failed 
 
 ## Credential rejected or access unavailable
 
-1. Check the row you used. Subscription sign-in, organization Admin API keys and Cursor dashboard
-   cookies are different credential types.
-2. Confirm the correct provider account or organization and the required administrative access.
-3. For a subscription/session error, use **Reconnect** or Cursor's **Sign in again**. For a reporting
-   key, enter the replacement under that reporting row and **Save**.
+Read the connection name on Dashboard or **Providers**. **Platform reporting**,
+**Organization reporting** and **Team Admin API** are separate from the plan login
+in the same provider family.
 
-OpenAI reporting requires an organization Admin key, not a project key. Cursor Team Admin API
-requires Enterprise administrative access. Claude callback paste expects **CODE#STATE**, not a
-reporting key. Do not paste a secret into an unrelated row or a help request.
+- **Key rejected:** check that you entered the full key for the named reporting row, or
+  replace it there. Use **Edit key** where offered.
+- **Access denied:** review the key's reporting permissions and the account's access at
+  the provider, then refresh. The value can belong to a valid key without permission to
+  read these reports.
+- **Could not check:** check the phone's network access and retry when available. A
+  timeout or unavailable service does not prove that the key is wrong.
+- **Could not read saved key:** WardPulse could not read the key from this phone. Retry;
+  if the problem persists, re-enter the key in the named reporting row.
+- **Could not read reporting data:** refresh later. If the problem persists,
+  [report the issue](#asking-for-help) with the visible message, without sharing the key.
+
+For **Rate limited**, follow [Previous data, offline or rate limited](#previous-data-offline-or-rate-limited).
+
+OpenAI Platform reporting needs an organization Admin key, not an ordinary project key.
+Anthropic reporting needs the required organization reporting access; personal/service
+keys must not be workspace-scoped. Cursor Team Admin API needs team reporting access.
+
+For a subscription/session error, use the named plan row's **Reconnect** or Cursor's
+**Sign in again**. Claude callback paste expects **CODE#STATE**, not a reporting key.
+Do not paste a secret into an unrelated row or a help request.
 
 ## Previous data, offline or rate limited
 

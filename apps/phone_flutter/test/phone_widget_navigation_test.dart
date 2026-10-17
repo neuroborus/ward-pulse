@@ -146,20 +146,24 @@ void main() {
       Future<void> openBudget() async {
         await tester.tap(find.text('Providers'));
         await tester.pumpAndSettle();
+        final button = find.descendant(
+          of: find.ancestor(
+            of: find.text('Platform reporting'),
+            matching: find.byType(ListTile),
+          ),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is IconButton && widget.tooltip == 'Budget limits',
+          ),
+        );
         await tester.scrollUntilVisible(
-          find.text('Platform reporting'),
+          button,
           300,
           scrollable: find.byType(Scrollable).first,
         );
-        await tester.tap(
-          find.descendant(
-            of: find.ancestor(
-              of: find.text('Platform reporting'),
-              matching: find.byType(ListTile),
-            ),
-            matching: find.byTooltip('Budget limits'),
-          ),
-        );
+        await tester.pumpAndSettle();
+        expect(button.hitTestable(), findsOneWidget);
+        await tester.tap(button);
         await tester.pumpAndSettle();
       }
 

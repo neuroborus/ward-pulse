@@ -115,6 +115,94 @@ void main() {
     expect(logger.events, [ProviderSyncEvent.authenticationRequired]);
   });
 
+  for (final (status, category) in [
+    (401, ReportingOutcomeCategory.authenticationRejected),
+    (403, ReportingOutcomeCategory.accessDenied),
+    (429, ReportingOutcomeCategory.rateLimited),
+    (503, ReportingOutcomeCategory.transientFailure),
+  ]) {
+    test(
+      'HTTP $status gives one classified connection outcome for both endpoints',
+      () async {
+        final transport = _FixtureTransport(usage: '{}', costs: '{}')
+          ..status = status;
+        final repository = openAiDashboardRepository(
+          credentialStore: _MemoryCredentialStore('synthetic-key'),
+          client: OpenAiReportingClient(
+            http: ProviderReportingHttp(
+              transport: transport,
+              delay: (_) async {},
+              random: () => 0,
+            ),
+          ),
+          logger: const NullProviderSyncLogger(),
+        );
+        await expectLater(
+          repository.load(),
+          throwsA(
+            isA<DashboardLoadException>()
+                .having(
+                  (error) => error.reportingOutcomes.length,
+                  'one connection',
+                  1,
+                )
+                .having(
+                  (error) => error.reportingOutcomes.single.connection,
+                  'identity',
+                  ProviderConnections.openAiPlatform,
+                )
+                .having(
+                  (error) => error.reportingOutcomes.single.category,
+                  'classification',
+                  category,
+                ),
+          ),
+        );
+        expect(transport.uris.map((uri) => uri.path).toSet(), hasLength(2));
+      },
+    );
+  }
+
+  test(
+    'malformed reporting is attributed without exposing arbitrary parse source',
+    () async {
+      final repository = openAiDashboardRepository(
+        credentialStore: _MemoryCredentialStore('synthetic-key'),
+        client: OpenAiReportingClient(
+          http: ProviderReportingHttp(
+            transport: _FixtureTransport(
+              usage: '{"data":[]}',
+              costs: '{"data":[]}',
+            ),
+          ),
+        ),
+        normalizeReport:
+            (_) =>
+                throw const FormatException(
+                  'Malformed report',
+                  'synthetic-source',
+                ),
+        logger: const NullProviderSyncLogger(),
+      );
+      await expectLater(
+        repository.load(),
+        throwsA(
+          isA<DashboardLoadException>()
+              .having(
+                (error) => error.reportingOutcomes.single.category,
+                'classification',
+                ReportingOutcomeCategory.malformedResponse,
+              )
+              .having(
+                (error) => error.details,
+                'sanitized details',
+                isNot(contains('synthetic-source')),
+              ),
+        ),
+      );
+    },
+  );
+
   test('preserves a safe Rust normalization error', () async {
     final page = jsonEncode({
       'object': 'page',
@@ -274,6 +362,7 @@ final class _FixtureTransport implements ProviderHttpTransport {
   final String costs;
   final uris = <Uri>[];
   bool fail = false;
+  int? status;
 
   @override
   Future<ProviderHttpResponse> get(
@@ -281,9 +370,9 @@ final class _FixtureTransport implements ProviderHttpTransport {
     required Map<String, String> headers,
   }) async {
     uris.add(uri);
-    if (fail) {
-      return const ProviderHttpResponse(
-        statusCode: HttpStatus.unauthorized,
+    if (fail || status != null) {
+      return ProviderHttpResponse(
+        statusCode: status ?? HttpStatus.unauthorized,
         headers: {},
         body: '{}',
       );

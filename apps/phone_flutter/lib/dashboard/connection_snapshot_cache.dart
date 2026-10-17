@@ -32,17 +32,23 @@ final class ConnectionSnapshotCache {
   });
   Future<bool> valid(CredentialVersion version) async =>
       await _invoke('valid', version) == true;
-  Future<bool> validSnapshot(DashboardSnapshot snapshot) async =>
-      await _platform.invoke('validAll', {
-        'versions': snapshot.connectionVersions,
-      }) ==
-      true;
-  bool owns(DashboardSnapshot snapshot) =>
-      snapshot.accounts.isNotEmpty &&
-      snapshot.accounts.every(
-        (account) =>
-            account.connection == connection && account.provider == _provider,
-      );
+  Future<bool> validSnapshot(DashboardSnapshot snapshot) async {
+    final versions = {...snapshot.connectionVersions};
+    for (final outcome in snapshot.reportingOutcomes) {
+      final version = outcome.credentialVersion;
+      if (version == null) continue;
+      final previous = versions[outcome.connection.storageKey];
+      if (previous != null && !version.sameCache(CredentialVersion(previous)))
+        return false;
+      versions[outcome.connection.storageKey] = version.values;
+    }
+    return await _platform.invoke('validAll', {'versions': versions}) == true;
+  }
+
+  bool owns(DashboardSnapshot snapshot) => snapshot.accounts.every(
+    (account) =>
+        account.connection == connection && account.provider == _provider,
+  );
   String get _provider => switch (connection) {
     'openai.plan' => 'codex',
     'openai.platform' => 'openai',
@@ -122,8 +128,8 @@ final class ConnectionSnapshotCache {
     CredentialVersion version,
   ) => snapshot.withConnectionVersions({connection: version.values});
 
-  Future<CapturedConnectionCache> capture() async {
-    var version = await _readCredentialVersion();
+  Future<CapturedConnectionCache> capture({CredentialVersion? expected}) async {
+    var version = expected ?? await _readCredentialVersion();
     if (version == null) return const CapturedConnectionCache(null, null);
     String? encoded;
     try {
@@ -132,7 +138,8 @@ final class ConnectionSnapshotCache {
       return CapturedConnectionCache(version, null);
     }
     if (encoded == null) {
-      if (!await valid(version)) version = await _readCredentialVersion();
+      if (!await valid(version))
+        version = expected == null ? await _readCredentialVersion() : null;
       return CapturedConnectionCache(version, null);
     }
     try {
@@ -149,6 +156,10 @@ final class ConnectionSnapshotCache {
       }
       return CapturedConnectionCache(version, stamp(snapshot, version));
     } catch (_) {
+      // Purging advances the epoch. A reporting load must keep the version of
+      // the credential it actually read; a fresh write can replace this corrupt
+      // payload without retiring that in-flight read.
+      if (expected != null) return CapturedConnectionCache(version, null);
       try {
         await clear(version);
       } catch (_) {

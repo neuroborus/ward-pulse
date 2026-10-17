@@ -142,7 +142,7 @@ List<ProviderConnection> providerConnectionCatalog({
     ProviderConnection(
       id: ProviderConnections.anthropicPlatform,
       title: 'Organization reporting',
-      subtitle: 'Admin API key · stored on this phone',
+      subtitle: 'API key with reporting access · stored on this phone',
       secretHint: 'API key',
       displayName:
           platformLabels[ProviderConnections.anthropicPlatform.storageKey],
@@ -155,7 +155,7 @@ List<ProviderConnection> providerConnectionCatalog({
     ProviderConnection(
       id: ProviderConnections.cursorPlatform,
       title: 'Team Admin API',
-      subtitle: 'Admin API key · teams and enterprise',
+      subtitle: 'Team key with reporting access',
       secretHint: 'API key',
       displayName:
           platformLabels[ProviderConnections.cursorPlatform.storageKey],

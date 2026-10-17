@@ -11,6 +11,7 @@ import '../dashboard/provider_status_color.dart';
 import '../dashboard/provider_status_severity.dart';
 import '../providers/claude_account_service.dart';
 import '../providers/codex_account_service.dart';
+import '../providers/credential_dialog.dart';
 import '../providers/provider_connection.dart';
 import '../providers/provider_credential_store.dart';
 import '../providers/providers_screen.dart';
@@ -172,6 +173,9 @@ class _DashboardHostState extends State<DashboardHost> {
   var _surfaceRevision = 0;
   late Future<DashboardSnapshot> _snapshot = _loadSnapshot();
   DashboardSnapshot? _currentSnapshot;
+  final _reportingUpdates = <ProviderConnectionId, ConnectionReportingUpdate>{};
+  ProviderConnectionId? _editReportingConnection;
+  final _reportingSaves = <ProviderConnectionId>{};
 
   /// Holds the Dashboard's card order for the run, so a poll that only moves
   /// spend leaves every card where the reader last saw it. Shared with the
@@ -191,6 +195,9 @@ class _DashboardHostState extends State<DashboardHost> {
   ({String provider, int token})? _reveal;
   StreamSubscription<void>? _syncTicks;
   var _autoSyncInFlight = false;
+  bool get _reportingCheckActive =>
+      _reportingSaves.isNotEmpty ||
+      _reportingUpdates.values.any((update) => update.checking);
 
   /// Latest Wear-accepted refresh tap; keeps the PollCadence floor honest while a
   /// reload is still in flight (before [DashboardSnapshot.generatedAt] advances).
@@ -428,33 +435,126 @@ class _DashboardHostState extends State<DashboardHost> {
     }
   }
 
-  Future<DashboardSnapshot> _loadSnapshot() async {
-    final revision = ++_loadRevision;
-    await _readRefreshInterval();
-    await _readRingPreferences();
-    await _readWidgetPreferences();
-    await _readAlertThresholds();
-    await _readDebugDataPreference();
-    await _readRecoveryNotificationPreference();
-    // Rescheduling before the load keeps the next tick a full interval away, so
-    // no connection is polled faster than its floor, and a failed load still
-    // retries on the next tick. Headless WorkManager uses ≥15 minutes.
-    unawaited(_scheduleAutoSync(_refreshInterval.interval));
-    final snapshot = widget.applyAlertSettings(
-      await widget.repository.load(),
-      _alertThresholds,
+  Future<DashboardSnapshot> _loadSnapshot() {
+    final load = _loadForegroundSnapshot();
+    // FutureBuilder subscribes on the next build. Observe classified failures
+    // immediately while preserving the original future for its error UI.
+    unawaited(
+      load.then<void>((_) {}).onError<DashboardLoadException>((_, _) {}),
     );
-    final current = await widget.repository.isSnapshotCurrent(snapshot);
-    if (!mounted || revision != _loadRevision || !current) {
-      throw const DashboardLoadException(
-        details: 'Connection changed during refresh.',
+    return load;
+  }
+
+  Future<DashboardSnapshot> _loadForegroundSnapshot() async {
+    final revision = ++_loadRevision;
+    try {
+      await _readRefreshInterval();
+      await _readRingPreferences();
+      await _readWidgetPreferences();
+      await _readAlertThresholds();
+      await _readDebugDataPreference();
+      await _readRecoveryNotificationPreference();
+      // Rescheduling before the load keeps the next tick a full interval away, so
+      // no connection is polled faster than its floor, and a failed load still
+      // retries on the next tick. Headless WorkManager uses ≥15 minutes.
+      unawaited(_scheduleAutoSync(_refreshInterval.interval));
+      final snapshot = widget.applyAlertSettings(
+        await _observedLoad(revision),
+        _alertThresholds,
       );
+      final current = await widget.repository.isSnapshotCurrent(snapshot);
+      if (!mounted || revision != _loadRevision || !current) {
+        throw const DashboardLoadException(
+          details: 'Connection changed during refresh.',
+        );
+      }
+      _currentSnapshot = snapshot;
+      unawaited(_syncRecoveries(snapshot));
+      unawaited(_syncWatch(snapshot));
+      unawaited(_syncPhoneWidget(snapshot));
+      return snapshot;
+    } catch (_) {
+      // A failed foreground load leaves an error-only Dashboard. Successful
+      // fallback loads return normally and retain their usable data.
+      if (mounted && revision == _loadRevision) _currentSnapshot = null;
+      rethrow;
     }
-    _currentSnapshot = snapshot;
-    unawaited(_syncRecoveries(snapshot));
-    unawaited(_syncWatch(snapshot));
-    unawaited(_syncPhoneWidget(snapshot));
-    return snapshot;
+  }
+
+  Future<DashboardSnapshot> _observedLoad(int revision) async {
+    if (!mounted || revision != _loadRevision) {
+      throw const DashboardLoadException(details: 'Refresh superseded.');
+    }
+    // A superseded request cannot leave a row spinning without active work.
+    _reportingUpdates.removeWhere((_, update) => update.checking);
+    final observed = <ProviderConnectionId>{};
+    void forgetObserved() {
+      if (mounted && revision == _loadRevision) {
+        setState(() {
+          for (final id in observed) {
+            _reportingUpdates.remove(id);
+          }
+        });
+      }
+    }
+
+    try {
+      final snapshot = await widget.repository.loadObserved((update) {
+        if (!mounted || revision != _loadRevision) return;
+        observed.add(update.connection);
+        setState(() => _reportingUpdates[update.connection] = update);
+      });
+      if (!await widget.repository.isSnapshotCurrent(snapshot) ||
+          !mounted ||
+          revision != _loadRevision) {
+        forgetObserved();
+        throw const DashboardLoadException(
+          details: 'Connection changed during refresh.',
+        );
+      }
+      setState(() {
+        // A completed, current load is authoritative, including omissions for
+        // removed connections. Its outcomes retain the current sibling facts.
+        _reportingUpdates.clear();
+        for (final outcome in snapshot.reportingOutcomes) {
+          _reportingUpdates[outcome.connection] = ConnectionReportingUpdate(
+            connection: outcome.connection,
+            credentialVersion: outcome.credentialVersion,
+            outcome: outcome,
+          );
+        }
+      });
+      return snapshot;
+    } on DashboardLoadException catch (failure) {
+      if (!await widget.repository.isFailureCurrent(failure) ||
+          !mounted ||
+          revision != _loadRevision) {
+        forgetObserved();
+        throw const DashboardLoadException(
+          details: 'Connection changed during refresh.',
+        );
+      }
+      setState(() {
+        _reportingUpdates.clear();
+        for (final outcome in failure.reportingOutcomes) {
+          _reportingUpdates[outcome.connection] = ConnectionReportingUpdate(
+            connection: outcome.connection,
+            credentialVersion: outcome.credentialVersion,
+            outcome: outcome,
+          );
+        }
+      });
+      rethrow;
+    } catch (_) {
+      forgetObserved();
+      throw const DashboardLoadException();
+    } finally {
+      if (mounted && revision == _loadRevision) {
+        setState(
+          () => _reportingUpdates.removeWhere((_, update) => update.checking),
+        );
+      }
+    }
   }
 
   Future<void> _syncRecoveries(DashboardSnapshot snapshot) async {
@@ -482,7 +582,7 @@ class _DashboardHostState extends State<DashboardHost> {
   }
 
   Future<void> _onScheduledSync() async {
-    if (_autoSyncInFlight || !mounted) {
+    if (_autoSyncInFlight || !mounted || _reportingCheckActive) {
       return;
     }
     _autoSyncInFlight = true;
@@ -491,7 +591,7 @@ class _DashboardHostState extends State<DashboardHost> {
       // Do not invalidate: load() already refetches, and clearing caches would
       // drop stale-with-issue recovery on a failed automatic tick.
       final snapshot = widget.applyAlertSettings(
-        await widget.repository.load(),
+        await _observedLoad(revision),
         _alertThresholds,
       );
       final current = await widget.repository.isSnapshotCurrent(snapshot);
@@ -504,6 +604,28 @@ class _DashboardHostState extends State<DashboardHost> {
       }
       await _syncWatch(snapshot);
       await _syncPhoneWidget(snapshot);
+    } on DashboardLoadException catch (failure) {
+      // Keep successful data, but an error-only dashboard must follow the most
+      // recent guarded result rather than the exception from its first load.
+      try {
+        final previous = _currentSnapshot;
+        if (previous != null &&
+            await widget.repository.isSnapshotCurrent(previous))
+          return;
+        if (await widget.repository.isFailureCurrent(failure) &&
+            mounted &&
+            revision == _loadRevision) {
+          final failed = Future<DashboardSnapshot>.error(failure);
+          // FutureBuilder attaches on the next build; observe errors meanwhile.
+          failed.ignore();
+          setState(() {
+            _currentSnapshot = null;
+            _snapshot = failed;
+          });
+        }
+      } catch (_) {
+        // Unavailable ownership cannot replace reader-visible state.
+      }
     } catch (_) {
       // Automatic sync failures keep the last successful snapshot visible.
     } finally {
@@ -582,7 +704,8 @@ class _DashboardHostState extends State<DashboardHost> {
     }
   }
 
-  void _reload() {
+  void _reload({bool forCredentialChange = false}) {
+    if (!forCredentialChange && _reportingCheckActive) return;
     // Mock demo is cached across auto-sync; refresh should draw a new seed.
     // Live repos must not clear connection recovery caches on every refresh.
     if (_mockDataEnabled) {
@@ -616,11 +739,92 @@ class _DashboardHostState extends State<DashboardHost> {
     });
   }
 
+  void _editReportingKey(ProviderConnectionId connection) {
+    setState(() {
+      _editReportingConnection = connection;
+      _selectedIndex = _providersIndex;
+    });
+  }
+
+  Future<void> _saveReportingCredential(
+    ProviderConnectionId id,
+    CredentialChange change,
+  ) async {
+    if (_reportingSaves.contains(id)) return;
+    setState(() => _reportingSaves.add(id));
+    try {
+      try {
+        if (change.updateLabelOnly) {
+          await widget.credentialStore.writeLabel(id, change.label);
+          return;
+        }
+        if (change.remove) {
+          await widget.credentialStore.deleteSecret(id);
+        } else {
+          await widget.credentialStore.writeSecret(id, change.value!);
+        }
+      } catch (_) {
+        if (change.remove) {
+          // Retirement can succeed before label or retired-slot cleanup fails.
+          // Reconcile through the normal load even if storage cannot confirm it.
+          if (mounted) {
+            _reportingUpdates.remove(id);
+            _onCredentialsChanged();
+          }
+          bool? remains;
+          try {
+            remains = await widget.credentialStore.readSecret(id) != null;
+          } catch (_) {
+            // The normal reload will report an unreadable local credential.
+          }
+          if (mounted)
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  remains == false
+                      ? 'Connection removed. Could not finish local cleanup.'
+                      : 'Could not finish removing credential.',
+                ),
+              ),
+            );
+          return;
+        }
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not update credential')),
+          );
+        return;
+      }
+      // App ownership survives disposal of the Providers tab and partial metadata
+      // failure. Exactly this one normal reload checks the newly stored key.
+      if (mounted) {
+        _reportingUpdates.remove(id);
+        _onCredentialsChanged();
+      }
+      if (!change.remove) {
+        try {
+          await widget.credentialStore.writeLabel(id, change.label);
+        } catch (_) {
+          if (mounted)
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Key saved. Could not update label.'),
+              ),
+            );
+        }
+      }
+    } finally {
+      _reportingSaves.remove(id);
+      if (mounted) setState(() {});
+    }
+  }
+
   void _onCredentialsChanged() {
     _loadRevision++;
     _surfaceRevision++;
+    _currentSnapshot = null;
     widget.repository.invalidate();
-    _reload();
+    _reload(forCredentialChange: true);
   }
 
   /// Worst status each family is reporting, for the Providers order.
@@ -647,7 +851,21 @@ class _DashboardHostState extends State<DashboardHost> {
     return FutureBuilder<DashboardSnapshot>(
       future: _snapshot,
       builder: (context, state) {
-        final snapshot = state.data;
+        // Credential changes retire visible data immediately while preserving
+        // the active tab, its scroll position and any app-owned save operation.
+        final data = _currentSnapshot == null ? null : state.data;
+        final snapshot =
+            data == null || _mockDataEnabled
+                ? data
+                : data.withReportingOutcomes(
+                  {
+                    for (final outcome in data.reportingOutcomes)
+                      outcome.connection: outcome,
+                    for (final update in _reportingUpdates.values)
+                      if (update.outcome != null)
+                        update.connection: update.outcome!,
+                  }.values,
+                );
 
         return Scaffold(
           appBar: AppBar(
@@ -668,7 +886,7 @@ class _DashboardHostState extends State<DashboardHost> {
                 ),
               IconButton(
                 tooltip: 'Refresh',
-                onPressed: _reload,
+                onPressed: _reportingCheckActive ? null : _reload,
                 icon: const Icon(Icons.refresh),
               ),
             ],
@@ -696,6 +914,13 @@ class _DashboardHostState extends State<DashboardHost> {
                 codexAccountService: widget.codexAccountService,
                 claudeAccountService: widget.claudeAccountService,
                 onCredentialsChanged: _onCredentialsChanged,
+                onSaveReportingCredential: _saveReportingCredential,
+                reportingUpdates: Map.unmodifiable(_reportingUpdates),
+                isSnapshotCurrent: widget.repository.isSnapshotCurrent,
+                savingConnections: Set.unmodifiable(_reportingSaves),
+                mockDataEnabled: _mockDataEnabled,
+                editConnection: _editReportingConnection,
+                onEditConnectionOpened: () => _editReportingConnection = null,
                 alertThresholds: _alertThresholds,
                 onAlertThresholdsChanged: _updateAlertThresholds,
                 statuses: _providerStatuses(snapshot),
@@ -722,11 +947,13 @@ class _DashboardHostState extends State<DashboardHost> {
                 failure: _dashboardFailure(state.error),
                 onRetry: _reload,
                 onOpenProviders: _openProviders,
+                onEditReportingKey: _editReportingKey,
               ),
               _ when snapshot != null => DashboardScreen(
                 onRefresh: _pullToRefresh,
                 snapshot: snapshot,
                 onOpenProviders: _openProviders,
+                onEditReportingKey: _editReportingKey,
                 reveal: _reveal,
                 order: _dashboardOrder,
               ),
@@ -791,61 +1018,71 @@ class _ErrorView extends StatelessWidget {
     required this.failure,
     required this.onRetry,
     this.onOpenProviders,
+    this.onEditReportingKey,
   });
 
   final DashboardLoadException failure;
   final VoidCallback onRetry;
   final VoidCallback? onOpenProviders;
+  final void Function(ProviderConnectionId)? onEditReportingKey;
 
   @override
   Widget build(BuildContext context) {
-    if (failure.issue == DashboardSyncIssue.noProviders) {
+    if (failure.issue == DashboardSyncIssue.noProviders &&
+        failure.reportingOutcomes.isEmpty) {
       return ConnectProviderPrompt(onOpenProviders: onOpenProviders);
     }
 
     final colors = Theme.of(context).colorScheme;
 
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Tooltip(
-              message: failure.issue.message,
-              child: Icon(Icons.error_outline, color: colors.error, size: 36),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Dashboard unavailable',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              failure.issue.message,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: colors.onSurfaceVariant),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 8,
-              children: [
-                if (failure.details != null)
-                  TextButton.icon(
-                    onPressed:
-                        () => _showErrorDetails(context, failure.details!),
-                    icon: const Icon(Icons.info_outline),
-                    label: const Text('Details'),
-                  ),
-                FilledButton.icon(
-                  onPressed: onRetry,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Retry'),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Tooltip(
+                message: failure.issue.message,
+                child: Icon(Icons.error_outline, color: colors.error, size: 36),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Dashboard unavailable',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              if (failure.reportingOutcomes.isEmpty)
+                Text(
+                  failure.issue.message,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: colors.onSurfaceVariant),
                 ),
-              ],
-            ),
-          ],
+              ReportingFailures(
+                outcomes: failure.reportingOutcomes,
+                onEditKey: onEditReportingKey,
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                children: [
+                  if (failure.details != null)
+                    TextButton.icon(
+                      onPressed:
+                          () => _showErrorDetails(context, failure.details!),
+                      icon: const Icon(Icons.info_outline),
+                      label: const Text('Details'),
+                    ),
+                  FilledButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

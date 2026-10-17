@@ -10,14 +10,18 @@ typedef ApplyAlertSettings =
       AlertThresholdPreferences settings,
     );
 
+typedef AlertSettingsJsonEffect =
+    String Function(String snapshotJson, String settingsJson);
+
 /// Applies phone alert prefs through the Rust core.
 ///
 /// When no rules are enabled, clears leftover alerts without calling FFI
 /// (default-off path for first-run hosts and widget tests).
 DashboardSnapshot applyUserAlertSettings(
   DashboardSnapshot snapshot,
-  AlertThresholdPreferences settings,
-) {
+  AlertThresholdPreferences settings, {
+  AlertSettingsJsonEffect applyJson = applyAlertSettingsJson,
+}) {
   if (!settings.hasEnabledRules) {
     if (snapshot.alerts.isEmpty) {
       return snapshot;
@@ -34,16 +38,14 @@ DashboardSnapshot applyUserAlertSettings(
       syncIssue: snapshot.syncIssue,
       syncDetails: snapshot.syncDetails,
       connectionVersions: snapshot.connectionVersions,
+      reportingOutcomes: snapshot.reportingOutcomes,
     );
   }
 
   final applied = DashboardSnapshot.fromJsonString(
-    applyAlertSettingsJson(snapshot.toJsonString(), settings.encode()),
+    applyJson(snapshot.toJsonString(), settings.encode()),
   );
-  // Phone-only sync metadata is not part of the Rust snapshot contract.
-  if (snapshot.syncIssue == null && snapshot.syncDetails == null) {
-    return applied.withConnectionVersions(snapshot.connectionVersions);
-  }
+  // Restore phone-only metadata after the shared JSON transformation.
   return DashboardSnapshot(
     generatedAt: applied.generatedAt,
     overallStatus: applied.overallStatus,
@@ -56,5 +58,6 @@ DashboardSnapshot applyUserAlertSettings(
     syncIssue: snapshot.syncIssue,
     syncDetails: snapshot.syncDetails,
     connectionVersions: snapshot.connectionVersions,
+    reportingOutcomes: snapshot.reportingOutcomes,
   );
 }

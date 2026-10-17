@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app/pull_to_refresh_list.dart';
 import '../app/surface_order.dart';
+import '../providers/provider_connection.dart';
 import '../charts/usage_history_chart.dart';
 import 'connected_capabilities.dart';
 import 'dashboard_models.dart';
@@ -38,6 +39,7 @@ class DashboardScreen extends StatefulWidget {
     super.key,
     required this.snapshot,
     this.onOpenProviders,
+    this.onEditReportingKey,
     this.reveal,
     this.order,
     required this.onRefresh,
@@ -45,6 +47,7 @@ class DashboardScreen extends StatefulWidget {
 
   final DashboardSnapshot snapshot;
   final VoidCallback? onOpenProviders;
+  final void Function(ProviderConnectionId)? onEditReportingKey;
 
   /// Keeps the cards where the reader last saw them. Owned by the shell, which
   /// shares it with the app-bar problem badge; `null` ranks afresh every build.
@@ -101,6 +104,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final snapshot = widget.snapshot;
     final onOpenProviders = widget.onOpenProviders;
     if (snapshot.accounts.isEmpty) {
+      if (snapshot.reportingOutcomes.isNotEmpty) {
+        return PullToRefreshList(
+          onRefresh: widget.onRefresh,
+          children: [
+            _SyncHeader(
+              snapshot: snapshot,
+              onEditReportingKey: widget.onEditReportingKey,
+            ),
+            const SizedBox(height: 16),
+            const Text('No reporting data yet.'),
+          ],
+        );
+      }
       return ConnectProviderPrompt(onOpenProviders: onOpenProviders);
     }
 
@@ -124,7 +140,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return PullToRefreshList(
       onRefresh: widget.onRefresh,
       children: [
-        _SyncHeader(snapshot: snapshot),
+        _SyncHeader(
+          snapshot: snapshot,
+          onEditReportingKey: widget.onEditReportingKey,
+        ),
         const SizedBox(height: 16),
         if (caps.showAllowances && !hasVisibleAllowances) ...[
           EmptyAllowanceCard(
@@ -439,9 +458,10 @@ class BudgetSummaryCard extends StatelessWidget {
 }
 
 class _SyncHeader extends StatelessWidget {
-  const _SyncHeader({required this.snapshot});
+  const _SyncHeader({required this.snapshot, this.onEditReportingKey});
 
   final DashboardSnapshot snapshot;
+  final void Function(ProviderConnectionId)? onEditReportingKey;
 
   @override
   Widget build(BuildContext context) {
@@ -463,7 +483,14 @@ class _SyncHeader extends StatelessWidget {
                 : 'Updated $updatedAt',
           ),
         ),
-        if (syncIssue != null) ...[
+        ReportingFailures(
+          outcomes: snapshot.reportingOutcomes,
+          onEditKey: onEditReportingKey,
+        ),
+        if (syncIssue != null &&
+            (snapshot.reportingOutcomes.every((outcome) => !outcome.failed) ||
+                syncIssue.name.startsWith('codex') ||
+                syncIssue.name.startsWith('claude'))) ...[
           const SizedBox(height: 8),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -482,6 +509,48 @@ class _SyncHeader extends StatelessWidget {
             ],
           ),
         ],
+      ],
+    );
+  }
+}
+
+/// The existing sync-feedback area also covers configured connections without
+/// accounts. Only classified, phone-local outcomes supply identity and copy.
+class ReportingFailures extends StatelessWidget {
+  const ReportingFailures({super.key, required this.outcomes, this.onEditKey});
+  final Iterable<ConnectionReportingOutcome> outcomes;
+  final void Function(ProviderConnectionId)? onEditKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final failures = {
+      for (final outcome in outcomes.where((outcome) => outcome.failed))
+        outcome.connection: outcome,
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final connection in providerConnectionCatalog())
+          if (failures[connection.id] case final outcome?)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${outcome.connectionLabel}: ${outcome.label}. ${outcome.supportingCopy}',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                  if (outcome.canEditKey && onEditKey != null)
+                    TextButton(
+                      onPressed: () => onEditKey!(outcome.connection),
+                      child: const Text('Edit key'),
+                    ),
+                ],
+              ),
+            ),
       ],
     );
   }

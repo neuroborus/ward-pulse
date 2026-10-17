@@ -20,6 +20,8 @@ class ProviderConnectionRow extends StatelessWidget {
     required this.status,
     this.actions = const [],
     this.onTap,
+    this.statusBelow = false,
+    this.supportingText,
   });
 
   static const _compactWidth = 360.0;
@@ -30,22 +32,24 @@ class ProviderConnectionRow extends StatelessWidget {
   final Widget status;
   final List<Widget> actions;
   final VoidCallback? onTap;
+  final bool statusBelow;
+  final String? supportingText;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < _compactWidth;
-        final stackedActions = compact && actions.length > 1;
+        final stackedActions = (compact || statusBelow) && actions.length > 1;
         final trailing = [
           if (!stackedActions) ...actions,
-          if (!compact) status,
+          if (!compact && !statusBelow) status,
         ];
         return ListTile(
           leading: Icon(icon),
           title: Text(title),
           subtitle:
-              compact
+              compact || statusBelow
                   ? Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -53,9 +57,12 @@ class ProviderConnectionRow extends StatelessWidget {
                       Text(subtitle),
                       const SizedBox(height: 4),
                       status,
+                      if (supportingText?.isNotEmpty == true) ...[
+                        const SizedBox(height: 4),
+                        Text(supportingText!),
+                      ],
                       if (stackedActions)
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
+                        Wrap(
                           children: [
                             for (final action in actions)
                               ConstrainedBox(
@@ -70,7 +77,7 @@ class ProviderConnectionRow extends StatelessWidget {
                     ],
                   )
                   : Text(subtitle),
-          isThreeLine: compact || subtitle.contains('\n'),
+          isThreeLine: compact || statusBelow || subtitle.contains('\n'),
           trailing:
               trailing.isEmpty
                   ? null

@@ -152,19 +152,35 @@ Every provider on the **Providers** tab is one section with up to two homogeneou
 - `plan`: subscription or allowance reads (Codex device-code OAuth; Claude Code PKCE OAuth
   with authorization-code paste from the callback page; Cursor dashboard WebView sign-in that
   captures `WorkosCursorSessionToken`, with optional Advanced paste);
-- `platform`: organization or team usage and cost reporting (OpenAI, Anthropic, and Cursor Admin
-  API keys).
+- `platform`: organization or team usage and cost reporting with provider-appropriate keys
+  and reporting access.
 
 OpenAI therefore shows Codex subscription and Platform reporting together. An optional
-user-defined label for platform Admin API keys is plain phone-local display metadata:
+user-defined label for reporting keys is plain phone-local display metadata:
 
 - stored beside the credential reference, never concatenated into the secure key value;
-- shown on the Providers connection row in place of the generic Platform title;
+- shown on the Providers row alongside its canonical family-and-kind identity;
 - removed when the credential is removed;
 - never sent to Wear OS or the watch face.
 
-Existing stored Admin API keys remain valid after the connection-catalog move from Settings to
+Existing stored keys remain in place after the connection-catalog move from Settings to
 Providers; users do not need to re-enter them.
+
+Reporting-key presence and verification are separate. `ConnectionReportingOutcome` binds
+a result to the exact connection and current credential/cache version; only a successful
+current result can show Connected. Saving or replacing a key requests one existing live
+load through the shared reporting/cache lifecycle. `ConnectionReportingUpdate` and the
+app own completion across Providers disposal or tab changes. Removal or a later version
+invalidates obsolete outcomes. Label-only edits keep the key and verification without
+another live check; a saved key still receives its check if later Label persistence fails.
+
+Dashboard and Providers show the same connection-specific sanitized category: authentication,
+access denial, transient failure, rate limit, invalid response or local credential-read failure.
+Cached previous data, a sibling plan and mock accounts cannot verify a replacement key.
+There is no prevalidator or duplicate validation poll. Debug mock mode that suppresses live
+reporting leaves the key Not verified without adding network requests. The Dashboard's
+[named-feedback rules](PHONE_DASHBOARD_DESIGN.md#reporting-key-feedback) preserve existing
+severity, family identity and rollup counts.
 
 ## OpenAI Platform organization reporting
 
@@ -304,9 +320,15 @@ Official references:
 
 Status: implemented on 2026-07-25.
 
+Checked 2026-10-16: the official [Usage and Cost guide](https://platform.claude.com/docs/en/manage-claude/usage-cost-api)
+permits Admin keys, OAuth with `org:admin`, and personal/service keys that are not
+workspace-scoped, with the required organization reporting rights. Workspace-scoped keys
+do not work. This key-entry integration does not add a reporting OAuth flow; a key prefix
+or personal ownership alone does not establish reporting access.
+
 Scope:
 
-- Use an organization Admin API key (`x-api-key`) against
+- Use a key with organization reporting access (`x-api-key`) against
   `GET /v1/organizations/usage_report/messages` and `GET /v1/organizations/cost_report`.
 - Request daily buckets (`bucket_width=1d`); usage also supports hourly and minute buckets.
 - Usage requests `group_by[]=model` for model breakdown; cost stays ungrouped.
@@ -315,7 +337,7 @@ Scope:
 - Documented poll floor is one minute; the global slider lower bound remains five minutes.
 - Never log the key, authorization header, or raw response bodies.
 
-Revocation is performed in Anthropic organization Admin API key settings.
+Revoke the key through the appropriate Console key-management controls for its type.
 
 Official references:
 
@@ -367,12 +389,15 @@ raw response bodies.
 
 ## Cursor team Admin API
 
-Status: implemented on 2026-07-25 for Enterprise team administrators.
+Status: implemented on 2026-07-25.
 
-Eligibility is narrower than the API's name suggests. Cursor's API overview states that the
-Admin and AI Code Tracking APIs require Enterprise teams, so a paid Teams plan alone does not
-grant access; checked 2026-10-06. An Enterprise team administrator creates the key under
-`cursor.com/dashboard` → API Keys. Keys are issued as `crsr_…`, belong to the organization
+Use a team API key whose account has reporting access. Checked 2026-10-16: the official
+[API overview](https://cursor.com/docs/api) lists Enterprise eligibility, while official
+[Teams pricing](https://cursor.com/docs/account/teams/pricing) describes Teams usage statistics
+through the Admin API. Preserve that discrepancy rather than asserting a universal
+Teams-insufficient rule; actual access denial is distinct from authentication rejection.
+A team administrator creates the key under `cursor.com/dashboard` → API Keys.
+Keys are issued as `crsr_…`, belong to the organization
 rather than their creator, and stay visible to every administrator, so WardPulse treats one as
 an organization-wide administrative secret.
 

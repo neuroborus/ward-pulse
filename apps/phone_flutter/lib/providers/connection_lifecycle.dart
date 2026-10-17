@@ -20,7 +20,13 @@ final class MethodChannelConnectionCachePlatform
 }
 
 final class CredentialVersion {
-  const CredentialVersion(this.values);
+  CredentialVersion(Map<String, String> values)
+    : values = Map.unmodifiable({
+        for (final key in ['generation', 'revision', 'epoch', 'identity'])
+          if (values[key] != null) key: values[key]!,
+      });
+
+  /// Immutable, non-secret native lifecycle stamp, safe to retain after a read.
   final Map<String, String> values;
   String get generation => values['generation']!;
   String get revision => values['revision']!;
@@ -42,6 +48,13 @@ final class VersionedCredential<T> {
   final CredentialVersion version;
 }
 
+/// Read and fetch ownership only; secret values remain transient.
+abstract interface class ConnectionCredentialAccess {
+  Future<VersionedCredential<String>?> read();
+  Future<bool> isCurrent(CredentialVersion expected);
+  Future<R> serializeFetch<R>(Future<R> Function() operation);
+}
+
 abstract interface class VersionedAccountStore<T> {
   Future<R> serializeFetch<R>(Future<R> Function() operation);
   Future<bool> isCurrent(CredentialVersion expected);
@@ -54,7 +67,7 @@ abstract interface class VersionedAccountStore<T> {
 }
 
 /// Secret values stay in FlutterSecureStorage; native storage receives only a digest.
-final class ConnectionCredentialStorage {
+final class ConnectionCredentialStorage implements ConnectionCredentialAccess {
   ConnectionCredentialStorage({
     required this.connection,
     required this.legacyKey,
@@ -71,6 +84,14 @@ final class ConnectionCredentialStorage {
   final String Function(String) _principal;
   final _fetchZoneKey = Object();
   String? get _fetchTicket => Zone.current[_fetchZoneKey] as String?;
+  Future<bool> isFetchCurrent() async =>
+      _fetchTicket == null ||
+      await platform.invoke('validFetch', {
+            'connection': connection,
+            'fetchTicket': _fetchTicket,
+          }) ==
+          true;
+  @override
   Future<R> serializeFetch<R>(Future<R> Function() operation) async {
     final lease = Map<String, Object?>.from(
       (await platform.invoke('acquireFetch', {'connection': connection}))!
@@ -78,10 +99,15 @@ final class ConnectionCredentialStorage {
     );
     final ticket = lease['fetchTicket']! as String;
     try {
-      final value = await runZoned(
-        operation,
-        zoneValues: {_fetchZoneKey: ticket},
-      );
+      late R value;
+      Object? failure;
+      StackTrace? failureStack;
+      try {
+        value = await runZoned(operation, zoneValues: {_fetchZoneKey: ticket});
+      } catch (error, stackTrace) {
+        failure = error;
+        failureStack = stackTrace;
+      }
       if (await platform.invoke('validFetch', {
             'connection': connection,
             'fetchTicket': ticket,
@@ -89,6 +115,7 @@ final class ConnectionCredentialStorage {
           true) {
         throw StateError('Account fetch superseded.');
       }
+      if (failure != null) Error.throwWithStackTrace(failure, failureStack!);
       return value;
     } finally {
       try {
@@ -164,13 +191,16 @@ final class ConnectionCredentialStorage {
     }
   }
 
+  @override
   Future<bool> isCurrent(CredentialVersion expected) async =>
+      await isFetchCurrent() &&
       await platform.invoke('valid', {
-        'connection': connection,
-        'expected': expected.values,
-      }) ==
-      true;
+            'connection': connection,
+            'expected': expected.values,
+          }) ==
+          true;
 
+  @override
   Future<VersionedCredential<String>?> read() async {
     final lease = await _begin('read');
     var finished = false;

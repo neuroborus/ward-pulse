@@ -1,5 +1,109 @@
 import 'dart:convert';
 
+import '../providers/connection_lifecycle.dart';
+import '../providers/provider_connection.dart';
+
+enum ReportingOutcomeCategory {
+  success,
+  authenticationRejected,
+  accessDenied,
+  transientFailure,
+  rateLimited,
+  malformedResponse,
+  localReadFailure,
+}
+
+enum ReportingOutcomeSource { live, cache, mock, local }
+
+enum ReportingOutcomeFreshness { current, stale, unknown }
+
+/// An observation of the ordinary load, never a separate credential probe.
+final class ConnectionReportingUpdate {
+  const ConnectionReportingUpdate({
+    required this.connection,
+    this.credentialVersion,
+    this.outcome,
+  });
+
+  final ProviderConnectionId connection;
+  final CredentialVersion? credentialVersion;
+
+  /// Null while the versioned request is actively running.
+  final ConnectionReportingOutcome? outcome;
+  bool get checking => outcome == null;
+}
+
+/// Phone-only result for an exact connection, independent of account data.
+///
+/// Contains no secret, response body, or credential-read object. A success only
+/// describes current live access when its source, freshness and version agree.
+final class ConnectionReportingOutcome {
+  const ConnectionReportingOutcome({
+    required this.connection,
+    required this.category,
+    required this.source,
+    this.freshness = ReportingOutcomeFreshness.unknown,
+    this.credentialVersion,
+  });
+
+  final ProviderConnectionId connection;
+  final ReportingOutcomeCategory category;
+  final ReportingOutcomeSource source;
+  final ReportingOutcomeFreshness freshness;
+  final CredentialVersion? credentialVersion;
+
+  bool get failed => category != ReportingOutcomeCategory.success;
+  bool get canEditKey =>
+      connection.kind == ConnectionKind.platform &&
+      (category == ReportingOutcomeCategory.authenticationRejected ||
+          category == ReportingOutcomeCategory.accessDenied ||
+          category == ReportingOutcomeCategory.localReadFailure);
+
+  String get label => switch (category) {
+    ReportingOutcomeCategory.success => 'Connected',
+    ReportingOutcomeCategory.authenticationRejected => 'Key rejected',
+    ReportingOutcomeCategory.accessDenied => 'Access denied',
+    ReportingOutcomeCategory.transientFailure => 'Could not check',
+    ReportingOutcomeCategory.rateLimited => 'Rate limited',
+    ReportingOutcomeCategory.malformedResponse =>
+      'Could not read reporting data',
+    ReportingOutcomeCategory.localReadFailure => 'Could not read saved key',
+  };
+
+  String get supportingCopy => switch (category) {
+    ReportingOutcomeCategory.success => '',
+    ReportingOutcomeCategory.authenticationRejected =>
+      'Check the key and try again.',
+    ReportingOutcomeCategory.accessDenied =>
+      "Check this key's permissions and your account's reporting access.",
+    ReportingOutcomeCategory.transientFailure =>
+      'Check your connection and try again.',
+    ReportingOutcomeCategory.rateLimited =>
+      'Try again when the provider allows another request.',
+    ReportingOutcomeCategory.malformedResponse =>
+      'Try refreshing the reporting data.',
+    ReportingOutcomeCategory.localReadFailure =>
+      'Edit or remove the saved key to try again.',
+  };
+
+  String get connectionLabel => switch ((
+    connection.provider,
+    connection.kind,
+  )) {
+    (ProviderFamily.openai, ConnectionKind.platform) =>
+      'OpenAI · Platform reporting',
+    (ProviderFamily.anthropic, ConnectionKind.platform) =>
+      'Anthropic · Organization reporting',
+    (ProviderFamily.cursor, ConnectionKind.platform) =>
+      'Cursor · Team Admin API',
+    (ProviderFamily.openai, ConnectionKind.plan) =>
+      'OpenAI · Codex subscription',
+    (ProviderFamily.anthropic, ConnectionKind.plan) =>
+      'Anthropic · Claude subscription',
+    (ProviderFamily.cursor, ConnectionKind.plan) => 'Cursor · Cursor plan',
+  };
+}
+
 enum ProviderStatus {
   ok,
   warning,
@@ -83,7 +187,7 @@ extension DashboardSyncIssueMessage on DashboardSyncIssue {
 }
 
 class DashboardSnapshot {
-  const DashboardSnapshot({
+  DashboardSnapshot({
     required this.generatedAt,
     required this.overallStatus,
     required this.accounts,
@@ -94,8 +198,13 @@ class DashboardSnapshot {
     required this.watchSummary,
     this.syncIssue,
     this.syncDetails,
-    this.connectionVersions = const {},
-  });
+    Map<String, Map<String, String>> connectionVersions = const {},
+    Iterable<ConnectionReportingOutcome> reportingOutcomes = const [],
+  }) : connectionVersions = Map.unmodifiable({
+         for (final entry in connectionVersions.entries)
+           entry.key: Map<String, String>.unmodifiable(entry.value),
+       }),
+       reportingOutcomes = List.unmodifiable(reportingOutcomes);
 
   final DateTime generatedAt;
   final ProviderStatus overallStatus;
@@ -110,6 +219,9 @@ class DashboardSnapshot {
 
   /// Phone-only lifecycle provenance; never serialized into shared contracts.
   final Map<String, Map<String, String>> connectionVersions;
+
+  /// Phone-only reporting results, including failures with no account data.
+  final List<ConnectionReportingOutcome> reportingOutcomes;
 
   String? get syncTooltip {
     final issue = syncIssue;
@@ -194,6 +306,7 @@ class DashboardSnapshot {
       syncIssue: syncIssue,
       syncDetails: syncDetails,
       connectionVersions: connectionVersions,
+      reportingOutcomes: reportingOutcomes,
     );
   }
 
@@ -210,6 +323,7 @@ class DashboardSnapshot {
       syncIssue: issue,
       syncDetails: details,
       connectionVersions: connectionVersions,
+      reportingOutcomes: reportingOutcomes,
     );
   }
 
@@ -226,10 +340,25 @@ class DashboardSnapshot {
     watchSummary: watchSummary,
     syncIssue: syncIssue,
     syncDetails: syncDetails,
-    connectionVersions: Map.unmodifiable({
-      for (final entry in versions.entries)
-        entry.key: Map<String, String>.unmodifiable(entry.value),
-    }),
+    connectionVersions: versions,
+    reportingOutcomes: reportingOutcomes,
+  );
+
+  DashboardSnapshot withReportingOutcomes(
+    Iterable<ConnectionReportingOutcome> outcomes,
+  ) => DashboardSnapshot(
+    generatedAt: generatedAt,
+    overallStatus: overallStatus,
+    accounts: accounts,
+    todayTotal: todayTotal,
+    weekTotal: weekTotal,
+    monthTotal: monthTotal,
+    alerts: alerts,
+    watchSummary: watchSummary,
+    syncIssue: syncIssue,
+    syncDetails: syncDetails,
+    connectionVersions: connectionVersions,
+    reportingOutcomes: outcomes,
   );
 }
 

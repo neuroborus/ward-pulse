@@ -426,7 +426,7 @@ void main() {
           await repository.load();
         }
         pending.complete('{"sanitized":true}');
-        await oldLoad;
+        await expectLater(oldLoad, throwsA(isA<DashboardLoadException>()));
         fallback.snapshot = _liveSnapshot(snapshot, 'openai', nextAt, 150);
         failReport();
 
@@ -457,7 +457,7 @@ void main() {
         pending.complete(
           completion == 'success' ? connection.toJsonString() : null,
         );
-        await oldLoad;
+        await expectLater(oldLoad, throwsA(isA<DashboardLoadException>()));
         failReport();
 
         final result = await repository.load();
@@ -482,10 +482,7 @@ void main() {
         await repository.load();
         pending.completeError(StateError('sanitized old request failure'));
 
-        final oldResult = await oldLoad;
-        expect(oldResult.accounts.map((account) => account.accountId), [
-          'openai-account',
-        ]);
+        await expectLater(oldLoad, throwsA(isA<DashboardLoadException>()));
         expect(
           logger.events,
           isNot(contains(ProviderSyncEvent.usingCachedSnapshot)),

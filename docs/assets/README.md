@@ -13,25 +13,26 @@ ratio retained; watch PNGs are 500×500px.
 ## Screenshot index
 
 Every screenshot file must have a row with DATE ADDED and a short description. The library
-contains 24 screenshots: the original twenty-three were captured and added on 2026-10-14;
-the watch-face utility capture was added on 2026-10-16.
+contains 24 screenshots: the original twenty-three entries were added on 2026-10-14;
+the watch-face utility capture was added on 2026-10-16. Twelve phone images were refreshed
+on 2026-10-17; their original addition dates remain unchanged.
 
 | File | Description | Theme | Date added | Captured | Last verified | Dimensions | App | Used in |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| [phone-dashboard-light.png](phone-dashboard-light.png) | Dashboard plan capacity and update status. | Light | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Light landing/README/Dashboard guide |
-| [phone-dashboard-dark.png](phone-dashboard-dark.png) | Dashboard plan capacity and update status. | Dark | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Dark landing/README/Dashboard guide |
-| [phone-providers-light.png](phone-providers-light.png) | Separate plan and reporting connection rows. | Light | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Light Providers/Getting started/Dashboard guides |
-| [phone-providers-dark.png](phone-providers-dark.png) | Separate plan and reporting connection rows. | Dark | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Dark Providers/Getting started/Dashboard guides |
-| [phone-cursor-sign-in-help-light.png](phone-cursor-sign-in-help-light.png) | Cursor help with Advanced paste action. | Light | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Light Providers guide |
-| [phone-cursor-sign-in-help-dark.png](phone-cursor-sign-in-help-dark.png) | Cursor help with Advanced paste action. | Dark | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Dark Providers guide |
-| [phone-cursor-paste-token-light.png](phone-cursor-paste-token-light.png) | Existing-token edit with instructions and empty Value. | Light | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Light Providers guide |
-| [phone-cursor-paste-token-dark.png](phone-cursor-paste-token-dark.png) | Existing-token edit with instructions and empty Value. | Dark | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Dark Providers guide |
-| [phone-reporting-key-light.png](phone-reporting-key-light.png) | New Anthropic reporting key dialog, empty Value and Label. | Light | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Light Providers guide |
-| [phone-reporting-key-dark.png](phone-reporting-key-dark.png) | New Anthropic reporting key dialog, empty Value and Label. | Dark | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Dark Providers guide |
-| [phone-budget-limits-light.png](phone-budget-limits-light.png) | Organization reporting Budget dialog, unsaved Today 25.00; Week/Month empty. | Light | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Light Dashboard guide |
-| [phone-budget-limits-dark.png](phone-budget-limits-dark.png) | Organization reporting Budget dialog, unsaved Today 25.00; Week/Month empty. | Dark | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Dark Dashboard guide |
-| [phone-alert-thresholds-light.png](phone-alert-thresholds-light.png) | Claude Alerts dialog, unsaved Plan 20% left and Purchased Off. | Light | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Light Dashboard guide |
-| [phone-alert-thresholds-dark.png](phone-alert-thresholds-dark.png) | Claude Alerts dialog, unsaved Plan 20% left and Purchased Off. | Dark | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Dark Dashboard guide |
+| [phone-dashboard-light.png](phone-dashboard-light.png) | Dashboard plan capacity and update status. | Light | 2026-10-14 | 2026-10-14 | 2026-10-17 | 864×1920 | WardPulse phone | Light landing/README/Dashboard guide |
+| [phone-dashboard-dark.png](phone-dashboard-dark.png) | Dashboard plan capacity and update status. | Dark | 2026-10-14 | 2026-10-14 | 2026-10-17 | 864×1920 | WardPulse phone | Dark landing/README/Dashboard guide |
+| [phone-providers-light.png](phone-providers-light.png) | Connected plan rows with named reporting Access denied and Key rejected feedback. | Light | 2026-10-14 | 2026-10-17 | 2026-10-17 | 864×1920 | WardPulse phone | Light Providers/Getting started/Dashboard guides |
+| [phone-providers-dark.png](phone-providers-dark.png) | Connected plan rows with named reporting Access denied and Key rejected feedback. | Dark | 2026-10-14 | 2026-10-17 | 2026-10-17 | 864×1920 | WardPulse phone | Dark Providers/Getting started/Dashboard guides |
+| [phone-cursor-sign-in-help-light.png](phone-cursor-sign-in-help-light.png) | Cursor help with Advanced paste action and current Providers background. | Light | 2026-10-14 | 2026-10-17 | 2026-10-17 | 864×1920 | WardPulse phone | Light Providers guide |
+| [phone-cursor-sign-in-help-dark.png](phone-cursor-sign-in-help-dark.png) | Cursor help with Advanced paste action and current Providers background. | Dark | 2026-10-14 | 2026-10-17 | 2026-10-17 | 864×1920 | WardPulse phone | Dark Providers guide |
+| [phone-cursor-paste-token-light.png](phone-cursor-paste-token-light.png) | Existing-token edit, instructions, empty Value and Remove/keep controls. | Light | 2026-10-14 | 2026-10-17 | 2026-10-17 | 864×1920 | WardPulse phone | Light Providers guide |
+| [phone-cursor-paste-token-dark.png](phone-cursor-paste-token-dark.png) | Existing-token edit, instructions, empty Value and Remove/keep controls. | Dark | 2026-10-14 | 2026-10-17 | 2026-10-17 | 864×1920 | WardPulse phone | Dark Providers guide |
+| [phone-reporting-key-light.png](phone-reporting-key-light.png) | Saved Anthropic reporting-key edit, empty Value/Label and Remove/keep controls. | Light | 2026-10-14 | 2026-10-17 | 2026-10-17 | 864×1920 | WardPulse phone | Light Providers guide |
+| [phone-reporting-key-dark.png](phone-reporting-key-dark.png) | Saved Anthropic reporting-key edit, empty Value/Label and Remove/keep controls. | Dark | 2026-10-14 | 2026-10-17 | 2026-10-17 | 864×1920 | WardPulse phone | Dark Providers guide |
+| [phone-budget-limits-light.png](phone-budget-limits-light.png) | Organization reporting Budget dialog, unsaved Today 25.00; Week/Month empty. | Light | 2026-10-14 | 2026-10-17 | 2026-10-17 | 864×1920 | WardPulse phone | Light Dashboard guide |
+| [phone-budget-limits-dark.png](phone-budget-limits-dark.png) | Organization reporting Budget dialog, unsaved Today 25.00; Week/Month empty. | Dark | 2026-10-14 | 2026-10-17 | 2026-10-17 | 864×1920 | WardPulse phone | Dark Dashboard guide |
+| [phone-alert-thresholds-light.png](phone-alert-thresholds-light.png) | Claude Alerts dialog, unsaved Plan 20% left and Purchased Off. | Light | 2026-10-14 | 2026-10-17 | 2026-10-17 | 864×1920 | WardPulse phone | Light Dashboard guide |
+| [phone-alert-thresholds-dark.png](phone-alert-thresholds-dark.png) | Claude Alerts dialog, unsaved Plan 20% left and Purchased Off. | Dark | 2026-10-14 | 2026-10-17 | 2026-10-17 | 864×1920 | WardPulse phone | Dark Dashboard guide |
 | [phone-widget-settings-light.png](phone-widget-settings-light.png) | Selected widget metrics, five of six slots used. | Light | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Light Widget guide |
 | [phone-widget-settings-dark.png](phone-widget-settings-dark.png) | Selected widget metrics, five of six slots used. | Dark | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Dark Widget guide |
 | [phone-home-widget-light.png](phone-home-widget-light.png) | Actual launcher widget with selected metric rows. | Light | 2026-10-14 | 2026-10-14 | 2026-10-14 | 864×1920 | WardPulse phone | Light Widget guide |
@@ -45,27 +46,72 @@ the watch-face utility capture was added on 2026-10-16.
 
 These are real anonymous app captures with normalized usage where visible, no identifying
 account information or credentials; they are not Mock/demo. All pictured credential fields
-are empty. The existing Dashboard pair retains its earlier source context (`74cf501`);
-its installed APK version was not recorded at capture. For the 2026-10-14 task scenes, recorded
+are empty. The existing Dashboard pair retains its 2026-10-14 capture and earlier source
+context (`74cf501`); its installed APK version was not recorded at capture. A pictured-UI
+freshness review on 2026-10-17 confirmed reuse without changing its bytes or claiming a
+new capture/build. For the unchanged 2026-10-14 task scenes, recorded
 installed metadata is phone 1.0 (code 1, package last update 2026-10-14 00:53:12), Wear 0.1.0
 (code 1, 2026-10-13 17:30:18), and watch face 0.1.0 (code 1, 2026-10-13 12:33:52).
 
 Phone status-bar notification/service icons were temporarily hidden using OS visibility
-controls; clock, network and battery remain. No notifications were dismissed, data erased,
-credentials entered or saved selections changed. Phone appearance and controls were restored.
-The Budget/Alerts pairs show unsaved drafts in the same phone 1.0 (code 1) build: Today
-25.00 with Week/Month empty, and Claude Plan 20% left with Purchased Off. Both editors were
-cancelled; reopening confirmed the three budget fields were empty and both alert choices
-were Off. No saved limits or alert rules changed. The reused Providers PNGs remain clean
-and byte-identical. The Dashboard guide reuses this pair for the action-icon examples;
-editorial highlights belong to the presentation, not the PNGs. No annotated PNG derivative
-was created.
+controls; clock, network and battery remain. Phone appearance and controls were restored.
+The Dashboard guide reuses the Providers pair for action-icon examples; editorial highlights
+belong to the presentation, not the PNGs. No annotated PNG derivative was created.
 The clean face was captured in an actual 85%-discharging device state without the unwanted
 red bottom status badge, then hardware/system settings were restored to their original
 100%-not-charging state. No badge or other app UI was erased from an image.
 Phone captures were resized from 1080×2400 to 864×1920; Wear captures from 384×384 to 500×500.
 Only pixels outside the actual circular Wear screen were made transparent; inside RGB/UI
 is unchanged after resizing. All Wear RGB comparisons against their resized source are zero.
+
+### Reporting-key feedback refresh, 2026-10-17
+
+The twelve refreshed phone images are genuine anonymous captures from
+`wardpulse_phone_play_api36` / `emulator-5556`, API 36, **1080×2400 / density 420**, normal
+font scale **1.0**, with the real light/dark app themes. They were proportionally resized
+to **864×1920** using ImageMagick only; no UI pixels were retouched, recoloured or generated.
+Privacy and pictured layout were reviewed in both themes: no identifying labels, private
+usage, credentials or extra notification icons are visible. These are normal-size captures,
+not the private enlarged-text QA frames.
+
+The installed APK SHA256 is
+`cec91c8090f9e2bea201f43de8f1a34f755a680e95738427ca4dabf2e869d5f9`;
+the reviewed staged runtime Source diff SHA256 is
+`6ed440ae4f3e86620ee02a4af14944bbe93a01d934601d1416c4a7c5c17c3f84`.
+The approved capture map has SHA256
+`13e481111d95434c9446006d032aa7c8ac06338eecb127df919539b6e7a248bd`.
+Capture and verification dates in the index are **2026-10-17, Europe/Paris**;
+the corresponding actual UTC capture timestamps are:
+
+| File | Captured at UTC |
+| --- | --- |
+| `phone-providers-light.png` | 2026-10-16T22:20:04.149768+00:00 |
+| `phone-providers-dark.png` | 2026-10-16T22:23:46.261332+00:00 |
+| `phone-reporting-key-light.png` | 2026-10-16T22:19:40.953700+00:00 |
+| `phone-reporting-key-dark.png` | 2026-10-16T22:24:06.525951+00:00 |
+| `phone-budget-limits-light.png` | 2026-10-16T22:21:22.468490+00:00 |
+| `phone-budget-limits-dark.png` | 2026-10-16T22:24:26.295593+00:00 |
+| `phone-alert-thresholds-light.png` | 2026-10-16T22:21:51.902772+00:00 |
+| `phone-alert-thresholds-dark.png` | 2026-10-16T22:24:30.999510+00:00 |
+| `phone-cursor-sign-in-help-light.png` | 2026-10-16T22:21:54.296716+00:00 |
+| `phone-cursor-sign-in-help-dark.png` | 2026-10-16T22:24:39.626359+00:00 |
+| `phone-cursor-paste-token-light.png` | 2026-10-16T22:22:26.080987+00:00 |
+| `phone-cursor-paste-token-dark.png` | 2026-10-16T22:24:42.037318+00:00 |
+
+Providers shows Anthropic **Access denied** and Cursor **Key rejected** beside independent
+Connected plan rows. The reporting-key and Cursor-token editors contain an existing saved
+credential, an empty **Value** field and **Remove** / leave-blank-to-keep controls; they do
+not reveal the stored value. The Budget pair shows an unsaved Today **25.00** draft with
+Week/Month empty; the Alerts pair shows unsaved Claude Plan **20% left**, Purchased **Off**.
+Both editors were cancelled. Reopening confirmed all three budget fields empty and both
+alert choices Off; no saved limits or alert rules changed. Font scale 1.0, light system
+appearance and ordinary status-bar visibility were restored after capture.
+
+The twelve canonical PNGs are exact approved normalized bytes. Their existing public
+mirror symlinks are preserved; the other twelve PNGs remain byte-identical. The Dashboard
+pair's later verification is a freshness review of its pictured healthy UI, not a recapture
+or a claim that its historical usage is current. Final documentation-build and browser
+publication checks follow the Owner finalization procedure.
 
 ### Watch-face utility provenance and Wear freshness, 2026-10-16
 
@@ -105,18 +151,18 @@ frames contain a system low-battery indicator and are not published.
 | --- | --- |
 | `phone-dashboard-light.png` | `c752adc0ba795b3cfbd98da09bcc5545f619a34a04865fc4013c14b53d1e5e7a` |
 | `phone-dashboard-dark.png` | `1b28e1587dd0a4754477051da621f505332c53e2d382dd9d9aaecb1768401c5f` |
-| `phone-providers-light.png` | `8ad9e237c8676e313c1499bdfeeeb15d56cbde32afee5c3ab5ea6e61d8f76a32` |
-| `phone-providers-dark.png` | `1b10d036eee7ef1d0d8d7cebbe2f6a150b32ae5eca8305dd8cc940f56c906b4a` |
-| `phone-cursor-sign-in-help-light.png` | `5c32b50b34076ab5196b8d93dc7b7424d51b68a68b092d82d5c6f5508b1fff2b` |
-| `phone-cursor-sign-in-help-dark.png` | `79b46fdb17e4fcd99061fb939980537eef4d9f811026cd2f22b4344fc793b819` |
-| `phone-cursor-paste-token-light.png` | `bdc477b439ea01412f2b96731c48c2e69b092957bd098667a50aff3fc5c3f95d` |
-| `phone-cursor-paste-token-dark.png` | `a8574fff2768809500d487a6c7621de13202871229b7b406e92e21575fff59b1` |
-| `phone-reporting-key-light.png` | `928ed91f25b2efebe642c6dfb2bfdeca2d6d819d70e15e2615f0285f377dfa1a` |
-| `phone-reporting-key-dark.png` | `1fa3c7c4ad25c9d0ddc36d740497521fa396a86f5a4064b00275551838bc9951` |
-| `phone-budget-limits-light.png` | `d1e329ad66a0a9080c9623afc6f860310fed77ea512a66036d08775bbca0a5ee` |
-| `phone-budget-limits-dark.png` | `a38b4bc31f875a1f8b35091442fcff2dddfa877dc2b644e42506bf22c1bd41d6` |
-| `phone-alert-thresholds-light.png` | `f36fb2a9805ea5a0d1919760022754dcc1558e56fbebdad61bdd349703816521` |
-| `phone-alert-thresholds-dark.png` | `a3e3ec9ed8f4e47931a5768ac431a9d6e6adb1b5501eb2f5412a4f2b3794a484` |
+| `phone-providers-light.png` | `818a5b9c4b69d31a9cfa012c341b57b32559497983c67ff6712eb18936e03667` |
+| `phone-providers-dark.png` | `3a1fbbc80455e86bfccb61593f3223f571eebdda1f638931406e5693aac1aee6` |
+| `phone-cursor-sign-in-help-light.png` | `af5022f07570daa7f89a97cc278b5505a63e247ac056dc6be4bf762187b12707` |
+| `phone-cursor-sign-in-help-dark.png` | `ee1be5f4fca952aeaec594885c92a56092b54576020de3ed6eb6fc4603f6db99` |
+| `phone-cursor-paste-token-light.png` | `50a2e8d52bc742ac81e061d146a3cffe372f15ddc9c4c3407fa9c55fb49ea9f9` |
+| `phone-cursor-paste-token-dark.png` | `b48de5e42b600852045a6ca763557cccd77e95ed54c1108682410ae3157500f5` |
+| `phone-reporting-key-light.png` | `2a0cdf13c069ab87011fe526fc5770ae57fb807dc153e4a5f8c5d8658b5a6c5d` |
+| `phone-reporting-key-dark.png` | `6c29a20fa27bbd3f7819ddb409f3fb0189ad3e850c36ed40036511455e57e209` |
+| `phone-budget-limits-light.png` | `897999e7674afccb328db4f33d72a72d7a9cec6b152cf70b885efd4d7c8e7b25` |
+| `phone-budget-limits-dark.png` | `a54fa0ed0780c71d577e757107ced744aca1a93f01d9ab505d49d556dd67891c` |
+| `phone-alert-thresholds-light.png` | `f29239b9d05fe9130e3b30c29f7dfa2eb854a7a0760c5be8ed831a94908b5b25` |
+| `phone-alert-thresholds-dark.png` | `54f0689497abebab91ddaee6663b5a3c9b5e6e35f7249329aa493bba5e07d118` |
 | `phone-widget-settings-light.png` | `b2d792c6493e3ceec0e883b4bd1d493e0764c806ce1ea9915a0a63f1b4ce2b17` |
 | `phone-widget-settings-dark.png` | `7e95bad7053710cf5e14f013ec9380620735ab2e984235a3e29e80f50da5de75` |
 | `phone-home-widget-light.png` | `b852f7d87ae44a8e61ba0b304a8d1ee39b8ae7afec6db84f3202e5402a0591b7` |

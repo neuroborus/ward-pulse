@@ -26,11 +26,28 @@ class ProvidersScreen extends StatefulWidget {
     required this.alertThresholds,
     required this.onAlertThresholdsChanged,
     this.cursorPlanSignIn,
+    this.onSaveReportingCredential,
+    this.reportingUpdates = const {},
+    this.isSnapshotCurrent,
+    this.savingConnections = const {},
+    this.mockDataEnabled = false,
+    this.editConnection,
+    this.onEditConnectionOpened,
     this.statuses = const {},
     required this.onRefresh,
   });
 
   final ProviderCredentialStore credentialStore;
+  final Future<void> Function(ProviderConnectionId, CredentialChange)?
+  onSaveReportingCredential;
+  final Map<ProviderConnectionId, ConnectionReportingUpdate> reportingUpdates;
+
+  /// The repository's complete publication gate, including native atomic proof.
+  final Future<bool> Function(DashboardSnapshot)? isSnapshotCurrent;
+  final bool mockDataEnabled;
+  final Set<ProviderConnectionId> savingConnections;
+  final ProviderConnectionId? editConnection;
+  final VoidCallback? onEditConnectionOpened;
   final CodexAccountService codexAccountService;
   final ClaudeAccountService claudeAccountService;
   final VoidCallback onCredentialsChanged;
@@ -59,6 +76,11 @@ class ProvidersScreen extends StatefulWidget {
 class _ProvidersScreenState extends State<ProvidersScreen> {
   final Map<String, bool> _hasSecret = {};
   final Map<String, String?> _labels = {};
+  final _readFailures = <String>{};
+  final _currentUpdates = <ProviderConnectionId, ConnectionReportingUpdate>{};
+  var _readRevision = 0;
+  ProviderConnectionId? _openingConnection;
+  final _saving = <ProviderConnectionId>{};
 
   /// Connections authorized by a pasted secret, in catalog order.
   static final _secretConnections = providerConnectionCatalog()
@@ -72,35 +94,128 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     _loadCredentialState();
   }
 
+  @override
+  void didUpdateWidget(ProvidersScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.reportingUpdates, widget.reportingUpdates) ||
+        oldWidget.credentialStore != widget.credentialStore) {
+      _currentUpdates.removeWhere(
+        (id, update) => !identical(widget.reportingUpdates[id], update),
+      );
+      _loadCredentialState();
+    }
+    if (oldWidget.editConnection != widget.editConnection) {
+      _openingConnection = null;
+      _scheduleEditor();
+    }
+  }
+
   Future<void> _loadCredentialState() async {
-    try {
-      final secrets = <String, bool>{};
-      final labels = <String, String?>{};
-      for (final id in _secretConnections) {
+    final revision = ++_readRevision;
+    final secrets = <String, bool>{};
+    final labels = <String, String?>{};
+    final failures = <String>{};
+    final updates = <ProviderConnectionId, ConnectionReportingUpdate>{};
+    for (final id in _secretConnections) {
+      final store = widget.credentialStore;
+      final access =
+          store is VersionedProviderCredentialStore
+              ? (store as VersionedProviderCredentialStore).credentialAccess(id)
+              : null;
+      try {
+        // Keep only presence and nonsecret proof; never put a saved value in UI state.
         secrets[id.storageKey] =
-            await widget.credentialStore.readSecret(id) != null;
-        labels[id.storageKey] = await widget.credentialStore.readLabel(id);
+            access == null
+                ? await store.readSecret(id) != null
+                : await access.read() != null;
+        final update = widget.reportingUpdates[id];
+        final version = update?.credentialVersion;
+        if (update != null &&
+            secrets[id.storageKey]! &&
+            version != null &&
+            access != null &&
+            await access.isCurrent(version)) {
+          updates[id] = update;
+        }
+      } catch (_) {
+        failures.add(id.storageKey);
+        secrets[id.storageKey] = false;
       }
-      if (mounted) {
-        setState(() {
-          _hasSecret
-            ..clear()
-            ..addAll(secrets);
-          _labels
-            ..clear()
-            ..addAll(labels);
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          for (final id in _secretConnections) {
-            _hasSecret[id.storageKey] = false;
-            _labels[id.storageKey] = null;
-          }
-        });
+      try {
+        labels[id.storageKey] = await store.readLabel(id);
+      } catch (_) {
+        labels[id.storageKey] = _labels[id.storageKey];
       }
     }
+    Future<bool> current(Iterable<ConnectionReportingUpdate> candidates) async {
+      final proof = DashboardSnapshot.empty()
+          .withConnectionVersions({
+            for (final update in candidates)
+              update.connection.storageKey: update.credentialVersion!.values,
+          })
+          .withReportingOutcomes([
+            for (final update in candidates)
+              if (update.outcome != null) update.outcome!,
+          ]);
+      try {
+        return await widget.isSnapshotCurrent?.call(proof) == true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    while (updates.isNotEmpty && !await current(updates.values)) {
+      final obsolete = <ProviderConnectionId>[];
+      for (final entry in updates.entries) {
+        if (!await current([entry.value])) obsolete.add(entry.key);
+      }
+      if (obsolete.isEmpty) {
+        // Individual checks cannot replace the complete publication gate.
+        if (!await current(updates.values)) updates.clear();
+        break;
+      }
+      for (final id in obsolete) updates.remove(id);
+      // Removing a retired connection must preserve current sibling feedback,
+      // including progress. Revalidate the retained set after every probe.
+    }
+    if (!mounted || revision != _readRevision) return;
+    setState(() {
+      _hasSecret
+        ..clear()
+        ..addAll(secrets);
+      _labels
+        ..clear()
+        ..addAll(labels);
+      _readFailures
+        ..clear()
+        ..addAll(failures);
+      _currentUpdates
+        ..clear()
+        ..addAll(updates);
+    });
+    _scheduleEditor();
+  }
+
+  void _scheduleEditor() {
+    final id = widget.editConnection;
+    if (id == null ||
+        _openingConnection == id ||
+        !_hasSecret.containsKey(id.storageKey))
+      return;
+    _openingConnection = id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      widget.onEditConnectionOpened?.call();
+      final connection = providerConnectionCatalog(
+        platformLabels: _labels,
+      ).firstWhere((entry) => entry.id == id);
+      _editSecret(
+        id,
+        allowLabel: true,
+        title: '${providerFamilyLabel(id.provider)} · ${connection.title}',
+        hint: connection.secretHint!,
+      );
+    });
   }
 
   Future<void> _editSecret(
@@ -117,7 +232,8 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
             title: title,
             hint: hint,
             allowLabel: allowLabel,
-            hasCredential: _hasSecret[key] ?? false,
+            hasCredential:
+                (_hasSecret[key] ?? false) || _readFailures.contains(key),
             initialLabel: _labels[key],
           ),
     );
@@ -125,13 +241,25 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
       return;
     }
 
+    final save = widget.onSaveReportingCredential;
+    if (save != null) {
+      if (mounted) setState(() => _saving.add(id));
+      await save(id, change);
+      if (mounted) {
+        setState(() => _saving.remove(id));
+        await _loadCredentialState();
+      }
+      return;
+    }
     try {
       if (change.remove) {
         await widget.credentialStore.deleteSecret(id);
+        widget.onCredentialsChanged();
       } else if (change.updateLabelOnly) {
         await widget.credentialStore.writeLabel(id, change.label);
       } else {
         await widget.credentialStore.writeSecret(id, change.value!);
+        widget.onCredentialsChanged();
         if (allowLabel) {
           await widget.credentialStore.writeLabel(id, change.label);
         }
@@ -143,7 +271,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
         _hasSecret[key] = !change.remove;
         _labels[key] = change.remove ? null : change.label;
       });
-      widget.onCredentialsChanged();
+      await _loadCredentialState();
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -289,14 +417,44 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     }
 
     final hasSecret = _hasSecret[connection.id.storageKey];
+    final update = _currentUpdates[connection.id];
+    final outcome = update?.outcome;
+    final readFailed = _readFailures.contains(connection.id.storageKey);
+    final checking = update?.checking == true;
+    final status =
+        readFailed
+            ? 'Could not read saved key'
+            : hasSecret == true && widget.mockDataEnabled
+            ? 'Not verified'
+            : checking
+            ? 'Checking…'
+            : hasSecret != true
+            ? 'Not connected'
+            : outcome != null &&
+                outcome.source == ReportingOutcomeSource.live &&
+                outcome.freshness == ReportingOutcomeFreshness.current
+            ? outcome.label
+            : 'Not verified';
+    final supporting =
+        readFailed
+            ? 'Edit or remove the saved key to try again.'
+            : hasSecret == true && widget.mockDataEnabled
+            ? 'Key not checked while Mock data is on.'
+            : outcome?.failed == true
+            ? '${outcome!.connectionLabel}\n${outcome.supportingCopy}'
+            : null;
     final controls = _rowControls(
       connection: connection,
-      status: switch (hasSecret) {
-        null => const RowProgress(),
-        // Match OAuth row copy: connection state, not "field empty/filled".
-        true => const Text('Connected'),
-        false => const Text('Not connected'),
-      },
+      status:
+          hasSecret == null
+              ? const RowProgress()
+              : checking && !widget.mockDataEnabled
+              ? const Wrap(
+                spacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [RowProgress(), Text('Checking…')],
+              )
+              : Text(status),
     );
     return ProviderConnectionRow(
       icon:
@@ -304,11 +462,19 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
               ? Icons.account_circle_outlined
               : Icons.key_outlined,
       title: connection.listTitle,
-      subtitle: connection.listSubtitle,
+      subtitle:
+          connection.displayName == null
+              ? connection.listSubtitle
+              : '${providerFamilyLabel(connection.id.provider)} · ${connection.title}\n${connection.listSubtitle}',
+      statusBelow: true,
+      supportingText: supporting,
       status: controls.status,
       actions: controls.actions,
       onTap:
-          hasSecret == null
+          hasSecret == null ||
+                  checking ||
+                  _saving.contains(connection.id) ||
+                  widget.savingConnections.contains(connection.id)
               ? null
               : () => _editSecret(
                 connection.id,

@@ -20,6 +20,7 @@ DashboardRepository openAiDashboardRepository({
   ConnectionSnapshotCache? cache,
   ProviderSyncLogger logger = const DeveloperProviderSyncLogger(),
   ReportNormalizer normalizeReport = normalizeOpenAiReportJson,
+  DashboardSnapshotMerger mergeSnapshots = mergeDashboardSnapshotsJson,
   DateTime Function()? clock,
 }) {
   final reporting = client ?? OpenAiReportingClient();
@@ -27,21 +28,14 @@ DashboardRepository openAiDashboardRepository({
 
   return MergingConnectionRepository(
     cache: cache,
+    connection: ProviderConnections.openAiPlatform,
+    credentialStore: credentialStore,
+    mergeSnapshots: mergeSnapshots,
     fallback: fallback ?? const NoProvidersDashboardRepository(),
     logger: logger,
     normalizeReport: normalizeReport,
     mapError: (error) => mapReportingError(error, logger),
-    loadReport: () async {
-      final adminApiKey = await readConnectionSecret(
-        store: credentialStore,
-        id: ProviderConnections.openAiPlatform,
-        logger: logger,
-      );
-      if (adminApiKey == null) {
-        logger.record(ProviderSyncEvent.skippedNoCredential);
-        return null;
-      }
-
+    loadCredentialReport: (adminApiKey) async {
       final period = ReportPeriodBounds.utc(now());
       final reports = await reporting.fetchDailyReports(
         adminApiKey: adminApiKey,

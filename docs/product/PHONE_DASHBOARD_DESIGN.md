@@ -112,6 +112,34 @@ One AVD, one build. The tests above stand behind the cases a reader cannot stage
 every status in the glyph vocabulary, every shape of count — rather than behind the rules as a
 whole.
 
+## Reporting-key feedback
+
+**Revision 2026-10-17.** A saved reporting key is not proof of reporting access. These
+rules apply to **OpenAI · Platform reporting**, **Anthropic · Organization reporting**
+and **Cursor · Team Admin API**, independently of each family's plan connection.
+
+- Saving or replacing a key starts one check through the existing live-load lifecycle.
+  **Checking…** means that request is running; **Not verified** means reporting access
+  for the saved key is not currently confirmed. **Connected** requires a successful
+  report for the current credential version. Cached data, mock data and a healthy
+  sibling plan row cannot supply that confirmation.
+- Dashboard names each failed reporting connection, including when no account data
+  loaded or several connections failed. Its safe outcome matches the corresponding
+  Providers row: **Key rejected** for authentication rejection, **Access denied** for
+  insufficient reporting access, and distinct wording for request, rate-limit,
+  saved-key-read and reporting-data failures. An optional user label supplements the
+  connection name; it never replaces the family and connection kind.
+- **Edit key**, where offered, opens that exact reporting connection's key editor.
+  A reporting failure must not direct the user to the sibling plan login. Providers
+  keeps status and supporting text below the connection details, readable when text
+  wraps, without crowding the existing trailing actions.
+- The app owns completion after Save, so leaving Providers does not lose the result.
+  Removing or replacing a key retires an obsolete result. Changing only **Label**
+  preserves the key and does not start another check; a label-write failure after a
+  successful key save is reported separately and does not cancel the key's check.
+- These messages preserve the existing glyph vocabulary, severity scale and rollup
+  rules. Reporting failures do not create automatic alerts; alerts remain user-configured.
+
 ## Balances
 
 **Locked 2026-10-11.** A purchased allowance card drew its balance as

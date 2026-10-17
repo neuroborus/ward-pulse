@@ -7,8 +7,67 @@ import 'package:ward_pulse_phone/app/ward_pulse_theme.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_screen.dart';
 import 'package:ward_pulse_phone/dashboard/status_pill.dart';
+import 'package:ward_pulse_phone/providers/provider_connection.dart';
 
 void main() {
+  testWidgets(
+    'empty configured feedback names every failure and repairs the exact connection',
+    (tester) async {
+      const outcomes = [
+        ConnectionReportingOutcome(
+          connection: ProviderConnections.openAiPlatform,
+          category: ReportingOutcomeCategory.authenticationRejected,
+          source: ReportingOutcomeSource.live,
+        ),
+        ConnectionReportingOutcome(
+          connection: ProviderConnections.anthropicPlatform,
+          category: ReportingOutcomeCategory.accessDenied,
+          source: ReportingOutcomeSource.live,
+        ),
+        ConnectionReportingOutcome(
+          connection: ProviderConnections.cursorPlatform,
+          category: ReportingOutcomeCategory.transientFailure,
+          source: ReportingOutcomeSource.live,
+        ),
+      ];
+      ProviderConnectionId? repaired;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MediaQuery(
+              data: const MediaQueryData(textScaler: TextScaler.linear(1.7)),
+              child: DashboardScreen(
+                snapshot: DashboardSnapshot.empty().withReportingOutcomes(
+                  outcomes,
+                ),
+                onRefresh: () async {},
+                onEditReportingKey: (id) => repaired = id,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Connect a provider'), findsNothing);
+      for (final outcome in outcomes) {
+        final text = find.textContaining(
+          '${outcome.connectionLabel}: ${outcome.label}',
+        );
+        await tester.scrollUntilVisible(
+          text,
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(text, findsOneWidget);
+      }
+      expect(find.text('Edit key'), findsNWidgets(2));
+      await tester.ensureVisible(find.text('Edit key').at(1));
+      await tester.tap(find.text('Edit key').at(1));
+      expect(repaired, ProviderConnections.anthropicPlatform);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   test('shows a balance in full, grouped, to at most one decimal place', () {
     // The Dashboard does not compact: `62.5K` is what a glance shows
     // (`PHONE_DASHBOARD_DESIGN.md`, Balances).

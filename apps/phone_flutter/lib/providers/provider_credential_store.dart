@@ -16,6 +16,12 @@ abstract interface class ProviderCredentialStore {
   Future<void> writeLabel(ProviderConnectionId id, String? value);
 }
 
+/// Optional lifecycle access for reporting keys and pasted plan sessions.
+abstract interface class VersionedProviderCredentialStore {
+  /// OAuth connections use their existing account stores instead.
+  ConnectionCredentialAccess? credentialAccess(ProviderConnectionId id);
+}
+
 abstract interface class ReconnectProviderCredentialStore {
   Future<CredentialVersion> beginReconnect(ProviderConnectionId id);
   Future<bool> completeReconnect(
@@ -36,6 +42,7 @@ abstract interface class LegacyProviderCredentialCleanup {
 final class SecureProviderCredentialStore
     implements
         ProviderCredentialStore,
+        VersionedProviderCredentialStore,
         ReconnectProviderCredentialStore,
         LegacyProviderCredentialCleanup {
   SecureProviderCredentialStore({
@@ -61,6 +68,10 @@ final class SecureProviderCredentialStore
         platform: _platform,
         principal: (value) => value.trim(),
       );
+  @override
+  ConnectionCredentialAccess? credentialAccess(ProviderConnectionId id) =>
+      _isOAuth(id) ? null : _credentials(id);
+
   Future<CredentialVersion?> readVersion(ProviderConnectionId id) async =>
       (await _credentials(id).read())?.version;
   @override

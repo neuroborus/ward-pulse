@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/dashboard/dashboard_load.dart';
+import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
+import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/providers/claude_account_service.dart';
 import 'package:ward_pulse_phone/providers/claude_account_store.dart';
@@ -11,6 +14,7 @@ import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/sync/claude_account_client.dart';
 import 'package:ward_pulse_phone/sync/codex_account_client.dart';
+import 'package:ward_pulse_phone/sync/provider_sync_logger.dart';
 
 import 'connection_cache_test_support.dart';
 
@@ -34,6 +38,239 @@ void main() {
         storage: secure,
         platform: bridge.platform(owner),
       );
+
+  SecureProviderCredentialStore reportingStore(String owner) =>
+      SecureProviderCredentialStore(
+        storage: secure,
+        platform: bridge.platform(owner),
+      );
+
+  test(
+    'optional reporting access retains only immutable read provenance',
+    () async {
+      const id = ProviderConnections.openAiPlatform;
+      final credentials = reportingStore('reporting');
+      final VersionedProviderCredentialStore capability = credentials;
+      final access = capability.credentialAccess(id)!;
+      expect(
+        capability.credentialAccess(ProviderConnections.codexPlan),
+        isNull,
+      );
+      expect(
+        capability.credentialAccess(ProviderConnections.claudePlan),
+        isNull,
+      );
+      await credentials.writeSecret(id, ' fake-current ');
+      final read = (await access.read())!;
+      expect(read.value, 'fake-current');
+      expect((await credentials.readVersion(id))?.values, read.version.values);
+      final original = Map.of(read.version.values);
+      expect(
+        original.keys,
+        unorderedEquals(['generation', 'revision', 'identity', 'epoch']),
+      );
+      final outcome = ConnectionReportingOutcome(
+        connection: id,
+        category: ReportingOutcomeCategory.success,
+        source: ReportingOutcomeSource.live,
+        freshness: ReportingOutcomeFreshness.current,
+        credentialVersion: read.version,
+      );
+      expect(
+        () => outcome.credentialVersion!.values.clear(),
+        throwsUnsupportedError,
+      );
+      final otherRevision = CredentialVersion({
+        ...original,
+        'revision': 'different-revision',
+      });
+      expect(read.version.sameCache(otherRevision), isTrue);
+      expect(await access.isCurrent(otherRevision), isTrue);
+
+      // Even an explicit replacement with the same value retires the old stamp.
+      final replacement = reportingStore('replacement');
+      await replacement.writeSecret(id, 'fake-current');
+      final current = (await access.read())!;
+      expect(read.version.sameCache(current.version), isFalse);
+      expect(await access.isCurrent(read.version), isFalse);
+      expect(await access.isCurrent(current.version), isTrue);
+      expect(outcome.credentialVersion!.values, original);
+      await replacement.deleteSecret(id);
+      expect(await access.isCurrent(current.version), isFalse);
+      expect(await access.read(), isNull);
+    },
+  );
+
+  for (final failure in ['label', 'retired slot']) {
+    test(
+      'reporting removal stays retired after $failure cleanup fails',
+      () async {
+        const id = ProviderConnections.openAiPlatform;
+        final credentials = reportingStore('reporting');
+        await credentials.writeSecret(id, 'synthetic-key');
+        await credentials.writeLabel(id, 'Synthetic label');
+        final version =
+            (await credentials.credentialAccess(id)!.read())!.version;
+        final failedKey =
+            failure == 'label'
+                ? 'wardpulse.openai.admin-api-key.label'
+                : secure.values.keys.singleWhere(
+                  (key) => key.startsWith('wardpulse.connection.'),
+                );
+        secure.failDeleteKey = failedKey;
+        await expectLater(credentials.deleteSecret(id), throwsStateError);
+        expect(await reportingStore('cold').readSecret(id), isNull);
+        expect(
+          await credentials.credentialAccess(id)!.isCurrent(version),
+          isFalse,
+        );
+        expect(secure.values[failedKey], isNotNull);
+        secure.failDeleteKey = null;
+        // A normal retry finishes both native-retired cleanup and label removal.
+        await reportingStore('cold').deleteSecret(id);
+        expect(secure.values[failedKey], isNull);
+      },
+    );
+  }
+
+  test(
+    'reporting absence differs from a failed local read and releases storage',
+    () async {
+      const id = ProviderConnections.cursorPlatform;
+      final credentials = reportingStore('reporting');
+      final access = credentials.credentialAccess(id)!;
+      Future<String?> readSecret(ProviderCredentialStore source) =>
+          readConnectionSecret(
+            store: source,
+            id: id,
+            logger: const NullProviderSyncLogger(),
+          );
+      expect(await access.read(), isNull);
+      expect(await readSecret(credentials), isNull);
+      expect(await readSecret(const EmptyProviderCredentialStore()), isNull);
+      await credentials.writeSecret(id, 'fake-saved');
+      secure.failRead = true;
+      await expectLater(access.read(), throwsStateError);
+      await expectLater(
+        readSecret(credentials),
+        throwsA(
+          isA<DashboardLoadException>()
+              .having(
+                (error) => error.issue,
+                'issue',
+                DashboardSyncIssue.credentialUnavailable,
+              )
+              .having((error) => error.details, 'safe details', isNull)
+              .having(
+                (error) => error.reportingOutcomes.single.connection,
+                'connection',
+                id,
+              )
+              .having(
+                (error) => error.reportingOutcomes.single.category,
+                'category',
+                ReportingOutcomeCategory.localReadFailure,
+              )
+              .having(
+                (error) => error.reportingOutcomes.single.source,
+                'source',
+                ReportingOutcomeSource.local,
+              )
+              .having(
+                (error) => error.reportingOutcomes.single.credentialVersion,
+                'unavailable provenance',
+                isNull,
+              ),
+        ),
+      );
+      secure.failRead = false;
+      expect((await access.read())?.value, 'fake-saved');
+    },
+  );
+
+  test(
+    'reporting fetch ownership serializes reads without holding a storage transaction',
+    () async {
+      const id = ProviderConnections.anthropicPlatform;
+      final credentials = reportingStore('reporting-a');
+      await credentials.writeSecret(id, 'fake-old');
+      final a = credentials.credentialAccess(id)!;
+      final queued = Completer<void>();
+      final platform = _RecordingPlatform(bridge.platform('reporting-b'))
+        ..onInvoke = (method, _) {
+          if (method == 'acquireFetch') queued.complete();
+        };
+      final b =
+          SecureProviderCredentialStore(
+            storage: secure,
+            platform: platform,
+          ).credentialAccess(id)!;
+      final entered = Completer<CredentialVersion>();
+      final release = Completer<void>();
+      final loadingA = a.serializeFetch(() async {
+        final read = (await a.read())!;
+        entered.complete(read.version);
+        await release.future;
+        return ConnectionReportingOutcome(
+          connection: id,
+          category: ReportingOutcomeCategory.authenticationRejected,
+          source: ReportingOutcomeSource.live,
+          credentialVersion: read.version,
+        );
+      });
+      final original = await entered.future;
+      var bEntered = false;
+      final loadingB = b.serializeFetch(() async {
+        bEntered = true;
+        return (await b.read())!;
+      });
+      await queued.future;
+      // User replacement commits while A's simulated network request is held.
+      await credentials.writeSecret(id, 'fake-new');
+      expect(bEntered, isFalse);
+      expect(await a.isCurrent(original), isFalse);
+      release.complete();
+      final oldResult = await loadingA;
+      final newRead = await loadingB;
+      expect(oldResult.credentialVersion, same(original));
+      expect(await a.isCurrent(oldResult.credentialVersion!), isFalse);
+      expect(newRead.value, 'fake-new');
+      expect(await b.isCurrent(newRead.version), isTrue);
+    },
+  );
+
+  test(
+    'reporting fetch ownership releases on errors and rejects detached completion',
+    () async {
+      const id = ProviderConnections.openAiPlatform;
+      final credentials = reportingStore('reporting-a');
+      await credentials.writeSecret(id, 'fake-current');
+      final a = credentials.credentialAccess(id)!;
+      final b = reportingStore('reporting-b').credentialAccess(id)!;
+      await expectLater(
+        a.serializeFetch<void>(
+          () async => throw StateError('Sanitized failure.'),
+        ),
+        throwsStateError,
+      );
+      expect(await b.serializeFetch(() => b.read()), isNotNull);
+
+      final entered = Completer<void>();
+      final release = Completer<void>();
+      final loading = a.serializeFetch(() async {
+        await a.read();
+        entered.complete();
+        await release.future;
+      });
+      final rejected = expectLater(loading, throwsStateError);
+      await entered.future;
+      await bridge.invoke('reporting-a', 'detach', {});
+      expect(await b.serializeFetch(() => b.read()), isNotNull);
+      release.complete();
+      await rejected;
+      expect(await b.serializeFetch(() => b.read()), isNotNull);
+    },
+  );
 
   test(
     'installed legacy credential survives cancelled and superseded reconnect',
@@ -567,9 +804,11 @@ final class _RecordingPlatform implements ConnectionCachePlatform {
   _RecordingPlatform(this.delegate);
   final ConnectionCachePlatform delegate;
   final calls = <({String method, Map<String, Object?> arguments})>[];
+  void Function(String, Map<String, Object?>)? onInvoke;
   @override
   Future<Object?> invoke(String method, Map<String, Object?> arguments) {
     calls.add((method: method, arguments: Map.of(arguments)));
+    onInvoke?.call(method, arguments);
     return delegate.invoke(method, arguments);
   }
 }

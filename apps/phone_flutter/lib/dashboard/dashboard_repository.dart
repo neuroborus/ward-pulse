@@ -4,11 +4,21 @@ import '../settings/debug_data_preferences.dart';
 import 'dashboard_models.dart';
 
 typedef DashboardJsonLoader = String Function();
+typedef ReportingObserver = void Function(ConnectionReportingUpdate update);
 
 abstract class DashboardRepository {
   const DashboardRepository();
 
   Future<DashboardSnapshot> load();
+
+  Future<DashboardSnapshot> loadObserved(ReportingObserver observer) => load();
+
+  Future<bool> isFailureCurrent(DashboardLoadException failure) =>
+      isSnapshotCurrent(
+        DashboardSnapshot.empty().withReportingOutcomes(
+          failure.reportingOutcomes,
+        ),
+      );
 
   void invalidate() {}
   Future<void> clearPersistentSnapshots() async {
@@ -22,10 +32,17 @@ final class DashboardLoadException implements Exception {
   const DashboardLoadException({
     this.issue = DashboardSyncIssue.dashboardUnavailable,
     this.details,
-  });
+  }) : reportingOutcomes = const [];
+
+  DashboardLoadException.withOutcomes({
+    this.issue = DashboardSyncIssue.dashboardUnavailable,
+    this.details,
+    required Iterable<ConnectionReportingOutcome> reportingOutcomes,
+  }) : reportingOutcomes = List.unmodifiable(reportingOutcomes);
 
   final DashboardSyncIssue issue;
   final String? details;
+  final List<ConnectionReportingOutcome> reportingOutcomes;
 
   @override
   String toString() => issue.message;
@@ -105,6 +122,12 @@ final class DebugDashboardRepository extends DashboardRepository {
   Future<DashboardSnapshot> load() async {
     final useMock = await _preferences.readMockDataEnabled();
     return useMock ? _mock.load() : _live.load();
+  }
+
+  @override
+  Future<DashboardSnapshot> loadObserved(ReportingObserver observer) async {
+    final useMock = await _preferences.readMockDataEnabled();
+    return useMock ? _mock.load() : _live.loadObserved(observer);
   }
 
   @override

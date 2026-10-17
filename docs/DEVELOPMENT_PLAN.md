@@ -536,9 +536,9 @@ Widget. Surface configuration lives on those tabs, not under Settings.
 
 - **Watchface** — configure Wear / WFF ring slots and preview the next watch payload.
 - **Widget** — configure the phone home-screen widget metrics and preview (Phase 14).
-- **Providers** — full connection catalog (every plan/platform row, Connected or Not
-  connected), credentials / auth, **all** user alert thresholds (plan/purchased per
-  connection; Today/Week/Month on platform connections), the spend limits those budget
+- **Providers** — full connection catalog (every plan/platform row, with reporting-key
+  verification and failure states), credentials / auth, **all** user alert thresholds
+  (plan/purchased per connection; Today/Week/Month on platform connections), the spend limits those budget
   thresholds need — their own row entry, because a limit is a ceiling and not a rule —
   and live status for synced accounts. Threshold UI speaks **% left**.
 - **Settings** — systemic only: global polling interval, diagnostics, data deletion,
@@ -589,7 +589,8 @@ Providers is the **connection hub**, not a read-only status list.
 
 It owns:
 
-- the full connection catalog (every plan/platform row in Not connected / Connected states);
+- the full connection catalog, including Not connected rows and reporting-key verification
+  and failure states;
 - credentials / auth entry for each connection (OAuth, session, API key — as today);
 - **all user-configured** alert thresholds:
   - plan / purchased meters on plan rows (opt-in; no hard-coded cutoffs);
@@ -601,6 +602,17 @@ It owns:
 - live status, last successful sync, last error, and supported metrics when connected.
 
 Rules can be prepared before the first successful sync because Not connected rows stay visible.
+
+Reporting-key feedback is implemented for OpenAI Platform reporting, Anthropic Organization
+reporting and Cursor Team Admin API. Saving or replacing a key starts one existing live
+load; storage alone never marks it Connected. Providers shows Checking…, Not verified or
+the current reporting outcome, and Dashboard names each failed reporting connection with
+matching safe feedback and an exact **Edit key** action where supported. Plan connections
+remain independent. Completion survives tab changes, while label-only edits do not poll.
+The durable UI rules are in
+[Reporting-key feedback](product/PHONE_DASHBOARD_DESIGN.md#reporting-key-feedback).
+Device, screenshot and rendered-documentation checks follow the existing Owner finalization
+procedure; their receipts record acceptance separately from this implementation description.
 
 ### Settings
 
@@ -973,8 +985,8 @@ presentation should be homogeneous:
 
 - `plan`: a per-user subscription/allowance read (plan windows in percent, purchased tokens or
   credits), authenticated with a user-level OAuth token or session;
-- `platform`: organization/team usage and cost reporting, authenticated with an
-  administrative API key.
+- `platform`: organization/team usage and cost reporting, authenticated with a
+  provider-appropriate key that has reporting access.
 
 One authorization per connection kind is unavoidable: for every provider the subscription data
 and the organization reporting live behind different credentials and different endpoints. A
@@ -987,33 +999,34 @@ OpenAI     Codex device-code OAuth                  Admin API key
            (compatibility, implemented)             /v1/organization/costs
                                                     (official, implemented)
 
-Anthropic  Claude subscription OAuth                Admin API key
+Anthropic  Claude subscription OAuth                Reporting API key
            GET /api/oauth/usage                     /v1/organizations/usage_report/messages
            utilization % per window + extra usage   /v1/organizations/cost_report
            (undocumented compatibility)             (official)
 
 Cursor     Dashboard session endpoints              Team/org Admin API key
            GET /api/usage-summary                   POST /teams/daily-usage-data
-           plan/on-demand percentages               (official, teams and enterprise only)
+           plan/on-demand percentages               (official, requires reporting access)
            (undocumented compatibility)
 ```
 
 Key findings per provider:
 
-- Anthropic mirrors OpenAI exactly. The official Usage & Cost Admin API returns token usage
-  (1m/1h/1d buckets) and daily USD cost as decimal strings, requires an organization Admin API
-  key, and is documented to support polling once per minute. The Claude subscription endpoint
+- Anthropic's official Usage & Cost API returns token usage (1m/1h/1d buckets) and daily
+  USD cost as decimal strings and is documented to support polling once per minute. It
+  accepts credentials with the required organization reporting rights; personal/service
+  keys must not be workspace-scoped. The Claude subscription endpoint
   `GET /api/oauth/usage` is the same undocumented contract Claude Code's `/usage` command uses:
   it returns `five_hour`, `seven_day`, and per-model window utilization percentages with reset
   timestamps plus an `extra_usage` purchased-credit block, and requires the Claude Code OAuth
   token, the `anthropic-beta: oauth-2025-04-20` header, and a Claude Code user agent. Community
   monitors observe stable behavior at roughly 3-minute polling. This is a Codex-style
   compatibility integration and must degrade gracefully.
-- Cursor has no official API for individual accounts. Personal plan usage exists only behind
-  cookie-authenticated dashboard endpoints (`GET /api/usage-summary` and related POST
+- WardPulse reads Cursor personal-plan usage through cookie-authenticated dashboard
+  endpoints (`GET /api/usage-summary` and related POST
   endpoints), which report plan and on-demand usage as percentages of the billing cycle. The
-  official Admin API covers teams and enterprise organizations only, uses Basic auth with a
-  team API key, allows 20 requests per minute, aggregates data hourly, and documents polling at
+  official Admin API requires team reporting access, uses Basic auth with a team API key,
+  allows 20 requests per minute, aggregates data hourly, and documents polling at
   most once per hour. A Cursor plan connection is therefore the riskiest compatibility
   integration and needs explicit experimental framing.
 - Codex-style plan data is percentage-first. All three plan connections can report usage as a
@@ -1023,6 +1036,12 @@ Key findings per provider:
 Everything normalizes into the existing core model: plan windows and purchased balances map to
 `AllowanceState`, platform reporting maps to `UsageBucket`/cost totals, and each connection gets
 its own capability descriptor so the UI can adapt.
+
+Credential eligibility was checked against official documentation on 2026-10-16. OpenAI
+still requires an organization Admin key. Anthropic accepts qualifying reporting credentials;
+Cursor's official API and Teams pricing pages give conflicting entitlement descriptions.
+Provider-specific access requirements and source qualifications live in
+[Provider notes](product/PROVIDER_NOTES.md#connection-grouping).
 
 Official references:
 
@@ -1675,7 +1694,7 @@ connections have stable, well-understood contracts.
 
 Deliverables:
 
-- Anthropic platform reporting: Admin API key transport for
+- Anthropic platform reporting: API-key transport with the required reporting access for
   `/v1/organizations/usage_report/messages` (daily buckets for the dashboard; hourly available)
   and `/v1/organizations/cost_report` (daily buckets only, USD as decimal-string cents), with
   pagination, Rust normalization, a capability descriptor, and sanitized fixtures;
@@ -1686,8 +1705,8 @@ Deliverables:
 - Cursor plan usage: session-authenticated dashboard endpoints normalized into plan and
   on-demand allowances; framed as experimental WebView dashboard sign-in (captures
   `WorkosCursorSessionToken`; Advanced paste remains), with the session token in secure storage;
-- Cursor platform reporting: team Admin API key support for users who administer an Enterprise team,
-  with the Settings freshness note (hourly aggregation) on the Admin API row only;
+- Cursor platform reporting: team API-key support for accounts with reporting access,
+  with the Providers freshness note (hourly aggregation) on the Admin API row only;
 - capability descriptors registered for `ProviderKind::Claude` and `ProviderKind::Cursor`;
 - `docs/product/PROVIDER_NOTES.md` updated per provider with credential type, permissions,
   rate limits, revocation path, and redaction rules.
