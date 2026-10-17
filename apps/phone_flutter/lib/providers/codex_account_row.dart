@@ -62,9 +62,9 @@ class _CodexAccountRowState extends State<CodexAccountRow> {
         context: context,
         builder:
             (context) => const ConnectedAccountDialog(
-              title: 'Codex account',
+              title: 'Codex plan',
               message:
-                  'WardPulse reads subscription limits and token activity '
+                  'WardPulse reads Codex plan limits and token activity '
                   'directly on this phone.',
             ),
       );
@@ -248,7 +248,7 @@ class _CodexLoginDialogState extends State<_CodexLoginDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Connect Codex'),
+      title: const Text('Connect Codex plan'),
       scrollable: true,
       content: Column(
         mainAxisSize: MainAxisSize.min,

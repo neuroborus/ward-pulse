@@ -8,6 +8,7 @@ import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/providers/alert_threshold_dialogs.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
+import 'package:ward_pulse_phone/providers/provider_connection_row.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
@@ -149,7 +150,7 @@ void main() {
         final button = find.descendant(
           of: find.ancestor(
             of: find.text('Platform reporting'),
-            matching: find.byType(ListTile),
+            matching: find.byType(ProviderConnectionRow),
           ),
           matching: find.byWidgetPredicate(
             (widget) =>

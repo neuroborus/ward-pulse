@@ -68,9 +68,9 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow> {
         context: context,
         builder:
             (context) => const ConnectedAccountDialog(
-              title: 'Claude account',
+              title: 'Claude plan',
               message:
-                  'WardPulse reads Claude subscription windows directly on '
+                  'WardPulse reads Claude plan windows directly on '
                   'this phone using Claude Code OAuth.',
             ),
       );
@@ -267,7 +267,7 @@ class _ClaudeLoginDialogState extends State<_ClaudeLoginDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Connect Claude'),
+      title: const Text('Connect Claude plan'),
       scrollable: true,
       content: Form(
         key: _formKey,

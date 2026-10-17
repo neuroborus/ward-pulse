@@ -141,7 +141,7 @@ final class MobileClaudeAccountService implements ClaudeAccountService {
     } catch (_) {
       throw const ClaudeAccountException(
         ClaudeAccountFailure.unavailable,
-        'Claude account · Secure storage unavailable',
+        'Claude plan · Secure storage unavailable',
       );
     }
     final session = managed == null ? await _readSession() : captured?.value;
@@ -194,7 +194,7 @@ final class MobileClaudeAccountService implements ClaudeAccountService {
     } catch (_) {
       throw const ClaudeAccountException(
         ClaudeAccountFailure.unavailable,
-        'Claude account · Secure storage unavailable',
+        'Claude plan · Secure storage unavailable',
       );
     }
   }
@@ -205,7 +205,7 @@ final class MobileClaudeAccountService implements ClaudeAccountService {
     } catch (_) {
       throw const ClaudeAccountException(
         ClaudeAccountFailure.unavailable,
-        'Claude account · Secure storage unavailable',
+        'Claude plan · Secure storage unavailable',
       );
     }
   }
@@ -216,7 +216,7 @@ final class MobileClaudeAccountService implements ClaudeAccountService {
     } catch (_) {
       throw const ClaudeAccountException(
         ClaudeAccountFailure.unavailable,
-        'Claude account · Secure storage unavailable',
+        'Claude plan · Secure storage unavailable',
       );
     }
   }

@@ -1587,6 +1587,19 @@ wide layout. `016ddbf` completed the compact case for rows with two actions by m
 actions below the text, keeping long titles intact at 320dp without reducing the 48dp targets.
 Both fixes were verified at the narrow and standard phone widths.
 
+Maintenance clarification (2026-10-17): all six Providers connections now use the shared
+`ProviderConnectionRow` hierarchy: icon, wrapping title and purpose, with existing actions
+aligned right; readable status and supporting errors follow below. Alerts stays rightmost,
+with reporting Budget or Cursor plan Help immediately before it. Primary and action targets
+are separate and at least 48dp. The three families, plan-before-reporting order, Labels,
+authentication flows and current-key reporting verification are preserved. Relevant phone
+connection rows, dialogs and Dashboard supporting/recovery copy use **Codex plan**,
+**Claude plan**, **Cursor plan** and standalone **Plan**; contextual selector headings,
+actual windows/pools and watch wire labels retain their identities. The 2026-10-01 layout
+measurements above remain historical evidence. Automated and device acceptance for this
+revision remain pending with Root HOST; Wear presentation and public captures/guidance
+remain later work.
+
 ### Phase 10 — capability-adaptive dashboard
 
 Status: completed as of 2026-07-24.

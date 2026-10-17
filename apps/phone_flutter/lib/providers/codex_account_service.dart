@@ -127,7 +127,7 @@ final class MobileCodexAccountService implements CodexAccountService {
     } catch (_) {
       throw const CodexAccountException(
         CodexAccountFailure.unavailable,
-        'Codex account · Secure storage unavailable',
+        'Codex plan · Secure storage unavailable',
       );
     }
     final session = managed == null ? await _readSession() : captured?.value;
@@ -186,7 +186,7 @@ final class MobileCodexAccountService implements CodexAccountService {
     } catch (_) {
       throw const CodexAccountException(
         CodexAccountFailure.unavailable,
-        'Codex account · Secure storage unavailable',
+        'Codex plan · Secure storage unavailable',
       );
     }
   }
@@ -197,7 +197,7 @@ final class MobileCodexAccountService implements CodexAccountService {
     } catch (_) {
       throw const CodexAccountException(
         CodexAccountFailure.unavailable,
-        'Codex account · Secure storage unavailable',
+        'Codex plan · Secure storage unavailable',
       );
     }
   }
@@ -208,7 +208,7 @@ final class MobileCodexAccountService implements CodexAccountService {
     } catch (_) {
       throw const CodexAccountException(
         CodexAccountFailure.unavailable,
-        'Codex account · Secure storage unavailable',
+        'Codex plan · Secure storage unavailable',
       );
     }
   }

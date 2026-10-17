@@ -408,7 +408,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.text(
-        'Connect a Codex subscription on the Providers tab to see plan limits.',
+        'Connect a Codex plan on the Providers tab to see plan limits.',
       ),
       findsOneWidget,
     );
@@ -883,7 +883,7 @@ void main() {
       expect(find.text('Anthropic'), findsOneWidget);
       final balances = ['1,234.6 credits', '50 tokens'];
       for (final (index, balance) in balances.indexed) {
-        final caption = find.text('Claude subscription · Source ${index + 1}');
+        final caption = find.text('Claude plan · Source ${index + 1}');
         final history = find.text('${21 + index} requests');
         expect(caption, findsOneWidget);
         expect(find.text(balance), findsOneWidget);
@@ -900,9 +900,7 @@ void main() {
       }
       expect(
         tester.getTopLeft(find.text('21 requests')).dy,
-        lessThan(
-          tester.getTopLeft(find.text('Claude subscription · Source 2')).dy,
-        ),
+        lessThan(tester.getTopLeft(find.text('Claude plan · Source 2')).dy),
       );
       expect(find.byType(UsageHistoryChart), findsNWidgets(2));
       expect(find.byType(Badge), findsNothing);

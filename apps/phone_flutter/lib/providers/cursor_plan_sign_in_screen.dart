@@ -188,7 +188,7 @@ class _CursorPlanSignInScreenState extends State<CursorPlanSignInScreen> {
     final error = _startupError;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Cursor sign-in'),
+        title: const Text('Cursor plan sign-in'),
         leading: IconButton(
           tooltip: 'Cancel',
           onPressed: () => Navigator.of(context).pop(),

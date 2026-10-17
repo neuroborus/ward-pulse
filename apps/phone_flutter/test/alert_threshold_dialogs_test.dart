@@ -4,6 +4,7 @@ import 'package:ward_pulse_phone/providers/alert_threshold_dialogs.dart';
 import 'package:ward_pulse_phone/providers/claude_account_service.dart';
 import 'package:ward_pulse_phone/providers/codex_account_service.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
+import 'package:ward_pulse_phone/providers/provider_connection_row.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/providers/providers_screen.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
@@ -188,7 +189,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     final button = find.descendant(
-      of: find.widgetWithText(ListTile, 'Platform reporting'),
+      of: find.widgetWithText(ProviderConnectionRow, 'Platform reporting'),
       matching: find.byTooltip('Budget limits'),
     );
     await tester.ensureVisible(button);

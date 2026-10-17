@@ -96,10 +96,9 @@ final class ConnectionReportingOutcome {
       'Anthropic · Organization reporting',
     (ProviderFamily.cursor, ConnectionKind.platform) =>
       'Cursor · Team Admin API',
-    (ProviderFamily.openai, ConnectionKind.plan) =>
-      'OpenAI · Codex subscription',
+    (ProviderFamily.openai, ConnectionKind.plan) => 'OpenAI · Codex plan',
     (ProviderFamily.anthropic, ConnectionKind.plan) =>
-      'Anthropic · Claude subscription',
+      'Anthropic · Claude plan',
     (ProviderFamily.cursor, ConnectionKind.plan) => 'Cursor · Cursor plan',
   };
 }
@@ -165,17 +164,17 @@ extension DashboardSyncIssueMessage on DashboardSyncIssue {
       DashboardSyncIssue.invalidResponse =>
         'The provider returned an unsupported reporting response.',
       DashboardSyncIssue.codexAuthentication =>
-        'Codex sign-in expired. Reconnect your ChatGPT account on the Providers tab.',
+        'Codex sign-in expired. Reconnect your Codex plan on the Providers tab.',
       DashboardSyncIssue.codexPermissionDenied =>
-        'This Codex account cannot access usage reporting.',
+        'This Codex plan connection cannot access usage reporting.',
       DashboardSyncIssue.codexUnavailable =>
         'Codex usage is unavailable. Check your connection and try again.',
       DashboardSyncIssue.codexInvalidResponse =>
         'Codex returned an unsupported usage response.',
       DashboardSyncIssue.claudeAuthentication =>
-        'Claude sign-in expired. Reconnect your Claude account on the Providers tab.',
+        'Claude sign-in expired. Reconnect your Claude plan on the Providers tab.',
       DashboardSyncIssue.claudePermissionDenied =>
-        'This Claude account cannot access usage reporting.',
+        'This Claude plan connection cannot access usage reporting.',
       DashboardSyncIssue.claudeUnavailable =>
         'Claude usage is unavailable. Check your connection and try again.',
       DashboardSyncIssue.claudeInvalidResponse =>

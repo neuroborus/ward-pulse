@@ -260,7 +260,7 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
     final controls = widget.buildControls(
       leading: [
         IconButton(
-          tooltip: 'About Cursor sign-in',
+          tooltip: 'About Cursor plan sign-in',
           onPressed: _isConnecting ? null : _showHelp,
           icon: const Icon(Icons.help_outline),
         ),
@@ -290,7 +290,7 @@ class _CursorPlanHelpDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Cursor sign-in'),
+      title: const Text('Cursor plan sign-in'),
       content: const SingleChildScrollView(
         child: Text(
           'Tap the Cursor plan row to open Cursor’s dashboard in the app and '

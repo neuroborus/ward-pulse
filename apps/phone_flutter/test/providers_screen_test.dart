@@ -265,14 +265,19 @@ void main() {
         );
         expect(
           tester
-              .widget<ListTile>(find.widgetWithText(ListTile, 'Team Admin API'))
+              .widget<ProviderConnectionRow>(
+                find.widgetWithText(ProviderConnectionRow, 'Team Admin API'),
+              )
               .onTap,
           isNull,
         );
         expect(
           tester
-              .widget<ListTile>(
-                find.widgetWithText(ListTile, 'Organization reporting'),
+              .widget<ProviderConnectionRow>(
+                find.widgetWithText(
+                  ProviderConnectionRow,
+                  'Organization reporting',
+                ),
               )
               .onTap,
           isNotNull,
@@ -317,166 +322,185 @@ void main() {
     });
   });
 
-  for (final width in [359.0, 361.0]) {
-    testWidgets('reporting copy and controls fit ${width}dp at enlarged text', (
+  group('connection row layout', () {
+    testWidgets('all six rows keep actions right and status below at 360dp', (
       tester,
     ) async {
-      _setTestSurface(tester, Size(width, 900));
-      var actions = 0;
+      await _pumpProvidersAtSize(tester, const Size(360, 640));
+      for (final title in const [
+        'Claude plan',
+        'Organization reporting',
+        'Cursor plan',
+        'Team Admin API',
+        'Codex plan',
+        'Platform reporting',
+      ]) {
+        final row = find.widgetWithText(ProviderConnectionRow, title);
+        await tester.scrollUntilVisible(
+          row,
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        final primary = find.ancestor(
+          of: _inRow(title, find.text(title)),
+          matching: find.byType(InkWell),
+        );
+        final status = _inRow(title, find.text('Not connected'));
+        final alerts = _inRow(title, find.byTooltip('Alert thresholds'));
+        final budget = _inRow(title, find.byTooltip('Budget limits'));
+        final help = _inRow(title, find.byTooltip('About Cursor plan sign-in'));
+        final isPlan = title.endsWith(' plan');
+        expect(budget, isPlan ? findsNothing : findsOneWidget);
+        expect(help, title == 'Cursor plan' ? findsOneWidget : findsNothing);
+        final targets = [
+          primary,
+          if (!isPlan) budget,
+          if (title == 'Cursor plan') help,
+          alerts,
+        ];
+        final rowRect = tester.getRect(row);
+        final primaryRect = tester.getRect(primary);
+        final titleText = _inRow(title, find.text(title));
+        final titleRect = tester.getRect(titleText);
+        final paragraph = tester.renderObject<RenderParagraph>(titleText);
+        expect(titleRect.left, greaterThanOrEqualTo(primaryRect.left));
+        expect(titleRect.right, lessThanOrEqualTo(primaryRect.right));
+        expect(titleRect.top, greaterThanOrEqualTo(primaryRect.top));
+        expect(titleRect.bottom, lessThanOrEqualTo(primaryRect.bottom));
+        expect(paragraph.didExceedMaxLines, isFalse);
+        final titleBoxes = paragraph.getBoxesForSelection(
+          TextSelection(baseOffset: 0, extentOffset: title.length),
+        );
+        if (title == 'Organization reporting') {
+          expect(titleBoxes.length, greaterThan(1));
+        }
+        for (final box in titleBoxes) {
+          expect(box.left, greaterThanOrEqualTo(0));
+          expect(box.right, lessThanOrEqualTo(titleRect.width));
+        }
+        final statusRect = tester.getRect(status);
+        for (var index = 0; index < targets.length; index++) {
+          final rect = tester.getRect(targets[index]);
+          expect(rect.width, greaterThanOrEqualTo(48));
+          expect(rect.height, greaterThanOrEqualTo(48));
+          expect(rect.left, greaterThanOrEqualTo(rowRect.left));
+          expect(rect.right, lessThanOrEqualTo(rowRect.right));
+          expect(statusRect.top, greaterThanOrEqualTo(rect.bottom));
+          if (index > 0) {
+            final previous = tester.getRect(targets[index - 1]);
+            expect(rect.left, greaterThanOrEqualTo(previous.right));
+            expect(rect.top, closeTo(primaryRect.top, 0.1));
+          }
+        }
+        expect(tester.getRect(alerts).right, closeTo(rowRect.right - 16, 0.1));
+        expect(
+          statusRect.left,
+          closeTo(tester.getRect(find.text(title)).left, 0.1),
+        );
+        expect(statusRect.right, lessThanOrEqualTo(rowRect.right - 16));
+      }
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('enlarged text keeps errors readable and targets independent', (
+      tester,
+    ) async {
+      _setTestSurface(tester, const Size(411, 900));
+      final semantics = tester.ensureSemantics();
+      addTearDown(semantics.dispose);
+      var primaryTaps = 0;
+      var budgetTaps = 0;
+      var alertTaps = 0;
+      const title = 'A long saved reporting label';
+      const purpose = 'Anthropic · Organization reporting';
+      const error =
+          "Check this key's permissions and your account's reporting access.";
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: MediaQuery(
               data: const MediaQueryData(textScaler: TextScaler.linear(1.7)),
-              child: SingleChildScrollView(
-                child: SizedBox(
-                  width: width,
-                  child: ProviderConnectionRow(
-                    icon: Icons.key_outlined,
-                    title: 'Organization reporting',
-                    subtitle: 'API key with reporting access',
-                    status: const Text('Access denied'),
-                    statusBelow: true,
-                    supportingText:
-                        "Check this key's permissions and your account's reporting access.",
-                    actions: [
-                      IconButton(
-                        tooltip: 'Budget limits',
-                        onPressed: () => actions++,
-                        icon: const Icon(Icons.savings),
-                      ),
-                      IconButton(
-                        tooltip: 'Alert thresholds',
-                        onPressed: () => actions++,
-                        icon: const Icon(Icons.notifications),
-                      ),
-                    ],
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Card(
+                    child: ProviderConnectionRow(
+                      icon: Icons.key_outlined,
+                      title: title,
+                      subtitle: purpose,
+                      status: const Text('Access denied'),
+                      supportingText: error,
+                      onTap: () => primaryTaps++,
+                      actions: [
+                        IconButton(
+                          tooltip: 'Budget limits',
+                          onPressed: () => budgetTaps++,
+                          icon: const Icon(Icons.savings),
+                        ),
+                        IconButton(
+                          tooltip: 'Alert thresholds',
+                          onPressed: () => alertTaps++,
+                          icon: const Icon(Icons.notifications),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
         ),
       );
       await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-      for (final tooltip in ['Budget limits', 'Alert thresholds']) {
-        await tester.ensureVisible(find.byTooltip(tooltip));
-        await tester.tap(find.byTooltip(tooltip));
-      }
-      expect(actions, 2);
-      final row = tester.getRect(find.byType(ListTile));
-      final copy = tester.getRect(
-        find.textContaining("Check this key's permissions"),
+      final primary = find.ancestor(
+        of: find.text(title),
+        matching: find.byType(InkWell),
       );
-      expect(copy.right, lessThanOrEqualTo(row.right));
-      expect(copy.bottom, lessThanOrEqualTo(row.bottom));
-    });
-  }
-
-  group('connection row layout', () {
-    testWidgets('stacks two actions without splitting words at 320dp', (
-      tester,
-    ) async {
-      await _pumpProvidersAtSize(tester, const Size(320, 640));
-
-      for (final title in const ['Organization reporting', 'Team Admin API']) {
-        await tester.scrollUntilVisible(
-          find.text(title),
-          300,
-          scrollable: find.byType(Scrollable).first,
-        );
-        await tester.pumpAndSettle();
-
-        final row = find.widgetWithText(ListTile, title);
-        final titleText = _inRow(title, find.text(title));
-        final subtitleText = _inRow(
-          title,
-          find.textContaining('reporting access'),
-        );
-        final status = _inRow(title, find.text('Not connected'));
-        final budget = _inRow(title, find.byTooltip('Budget limits'));
-        final alerts = _inRow(title, find.byTooltip('Alert thresholds'));
-
-        expect(row, findsOneWidget);
-        expect(budget, findsOneWidget);
-        expect(alerts, findsOneWidget);
-        _expectWordsStayIntact(tester, titleText, title);
-
-        final rowRect = tester.getRect(row);
-        final subtitleRect = tester.getRect(subtitleText);
-        final statusRect = tester.getRect(status);
-        final budgetRect = tester.getRect(budget);
-        final alertsRect = tester.getRect(alerts);
-        expect(statusRect.left, closeTo(subtitleRect.left, 0.1));
-        expect(statusRect.top, greaterThan(subtitleRect.bottom));
-        expect(budgetRect.top, greaterThanOrEqualTo(statusRect.bottom));
-        expect(alertsRect.center.dy, closeTo(budgetRect.center.dy, 0.1));
-        expect(alertsRect.left, greaterThanOrEqualTo(budgetRect.right));
-
-        for (final action in [budget, alerts]) {
-          final size = tester.getSize(action);
-          final rect = tester.getRect(action);
-          expect(size.width, greaterThanOrEqualTo(48));
-          expect(size.height, greaterThanOrEqualTo(48));
-          expect(rect.left, greaterThanOrEqualTo(rowRect.left));
-          expect(rect.right, lessThanOrEqualTo(rowRect.right));
-          expect(rect.bottom, lessThanOrEqualTo(rowRect.bottom));
-        }
+      final budget = find.byTooltip('Budget limits');
+      final alerts = find.byTooltip('Alert thresholds');
+      final nodes = [
+        tester.getSemantics(primary),
+        tester.getSemantics(budget),
+        tester.getSemantics(alerts),
+      ];
+      expect(nodes.map((node) => node.id).toSet(), hasLength(3));
+      for (final node in nodes) {
+        expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+        expect(node.getSemanticsData().flagsCollection.isButton, isTrue);
       }
-    });
-
-    testWidgets('keeps one compact action in the trailing slot', (
-      tester,
-    ) async {
-      await _pumpProvidersAtSize(tester, const Size(320, 640));
-
-      const title = 'Claude subscription';
-      await tester.scrollUntilVisible(
-        find.text(title),
-        300,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
-
-      final row = find.widgetWithText(ListTile, title);
-      final tile = tester.widget<ListTile>(row);
-      final status = _inRow(title, find.text('Not connected'));
-      final alerts = _inRow(title, find.byTooltip('Alert thresholds'));
-
-      expect(tile.trailing, isA<Row>());
-      expect((tile.trailing! as Row).children, hasLength(1));
+      expect(nodes[0].getSemanticsData().label, contains(title));
+      expect(nodes[0].getSemanticsData().label, contains(purpose));
+      expect(nodes[1].getSemanticsData().tooltip, 'Budget limits');
+      expect(nodes[2].getSemanticsData().tooltip, 'Alert thresholds');
+      final rowRect = tester.getRect(find.byType(ProviderConnectionRow));
+      final statusRect = tester.getRect(find.text('Access denied'));
+      final errorRect = tester.getRect(find.text(error));
+      final titleRect = tester.getRect(find.text(title));
+      final primaryRect = tester.getRect(primary);
+      expect(titleRect.height, greaterThan(30));
+      expect(titleRect.right, lessThanOrEqualTo(primaryRect.right));
+      expect(primaryRect.right, lessThanOrEqualTo(tester.getRect(budget).left));
       expect(
-        tester.getRect(alerts).left,
-        greaterThan(tester.getRect(status).right),
+        tester.getRect(budget).right,
+        lessThanOrEqualTo(tester.getRect(alerts).left),
       );
-    });
-
-    testWidgets('keeps reporting status outside the controls at 411dp', (
-      tester,
-    ) async {
-      await _pumpProvidersAtSize(tester, const Size(411, 640));
-
-      const title = 'Organization reporting';
-      final row = find.widgetWithText(ListTile, title);
-      final status = _inRow(title, find.text('Not connected'));
-      final budget = _inRow(title, find.byTooltip('Budget limits'));
-      final alerts = _inRow(title, find.byTooltip('Alert thresholds'));
-      final tile = tester.widget<ListTile>(row);
-
-      expect(row, findsOneWidget);
-      expect(budget, findsOneWidget);
-      expect(alerts, findsOneWidget);
-      expect(tile.subtitle, isA<Column>());
-      expect(tile.trailing, isNull);
-
-      final statusRect = tester.getRect(status);
-      final budgetRect = tester.getRect(budget);
-      final alertsRect = tester.getRect(alerts);
-      expect(alertsRect.left, greaterThanOrEqualTo(budgetRect.right));
-      expect(budgetRect.top, greaterThanOrEqualTo(statusRect.bottom));
-      expect(budgetRect.center.dy, closeTo(alertsRect.center.dy, 0.1));
-      expect(statusRect.right, lessThanOrEqualTo(tester.getRect(row).right));
+      for (final target in [primary, budget, alerts]) {
+        final rect = tester.getRect(target);
+        expect(rect.width, greaterThanOrEqualTo(48));
+        expect(rect.height, greaterThanOrEqualTo(48));
+        expect(statusRect.top, greaterThanOrEqualTo(rect.bottom));
+      }
+      expect(errorRect.top, greaterThan(statusRect.bottom));
+      expect(errorRect.right, lessThanOrEqualTo(rowRect.right));
+      expect(errorRect.bottom, lessThanOrEqualTo(rowRect.bottom));
+      await tester.tap(budget);
+      expect([primaryTaps, budgetTaps, alertTaps], [0, 1, 0]);
+      await tester.tap(alerts);
+      expect([primaryTaps, budgetTaps, alertTaps], [0, 1, 1]);
+      await tester.tap(primary);
+      expect([primaryTaps, budgetTaps, alertTaps], [1, 1, 1]);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('compact row grows for a long status', (tester) async {
@@ -516,7 +540,10 @@ void main() {
         ),
       );
 
-      final row = find.widgetWithText(ListTile, 'Organization reporting');
+      final row = find.widgetWithText(
+        ProviderConnectionRow,
+        'Organization reporting',
+      );
       final status = find.text(longStatus);
       final rowRect = tester.getRect(row);
       final statusRect = tester.getRect(status);
@@ -532,6 +559,7 @@ void main() {
   ) async {
     final store = _MemoryCredentialStore();
     var credentialsChanged = 0;
+    var signInCalls = 0;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -544,7 +572,10 @@ void main() {
             onCredentialsChanged: () => credentialsChanged++,
             alertThresholds: const AlertThresholdPreferences(),
             onAlertThresholdsChanged: (_) async {},
-            cursorPlanSignIn: (_) async => null,
+            cursorPlanSignIn: (_) async {
+              signInCalls++;
+              return null;
+            },
           ),
         ),
       ),
@@ -562,11 +593,13 @@ void main() {
     expect(find.text('Experimental · dashboard sign-in'), findsOneWidget);
     expect(find.text('Not connected'), findsWidgets);
 
-    await tester.tap(find.byTooltip('About Cursor sign-in'));
+    await tester.tap(find.byTooltip('About Cursor plan sign-in'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Cursor sign-in'), findsOneWidget);
+    expect(find.text('Cursor plan sign-in'), findsOneWidget);
     expect(find.text('Advanced paste'), findsOneWidget);
+    expect(signInCalls, 0);
+    expect(credentialsChanged, 0);
     await tester.tap(find.text('Advanced paste'));
     await tester.pumpAndSettle();
 
@@ -630,47 +663,77 @@ void main() {
     expect(find.text('Connected'), findsWidgets);
   });
 
-  testWidgets('budget limits are offered to platform connections only', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: ProvidersScreen(
-            onRefresh: _noRefresh,
-            credentialStore: _MemoryCredentialStore(),
-            codexAccountService: const EmptyCodexAccountService(),
-            claudeAccountService: const EmptyClaudeAccountService(),
-            onCredentialsChanged: () {},
-            alertThresholds: const AlertThresholdPreferences(),
-            onAlertThresholdsChanged: (_) async {},
-            cursorPlanSignIn: (_) async => null,
+  testWidgets(
+    'reporting controls and primary tap open only their own dialogs',
+    (tester) async {
+      final store = _MemoryCredentialStore();
+      await store.writeSecret(
+        ProviderConnections.cursorPlatform,
+        'synthetic-key',
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ProvidersScreen(
+              onRefresh: _noRefresh,
+              credentialStore: store,
+              codexAccountService: const EmptyCodexAccountService(),
+              claudeAccountService: const EmptyClaudeAccountService(),
+              onCredentialsChanged:
+                  () => fail('Unexpected credential mutation'),
+              alertThresholds: const AlertThresholdPreferences(),
+              onAlertThresholdsChanged:
+                  (_) async => fail('Unexpected settings save'),
+              cursorPlanSignIn: (_) async => null,
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(
-      find.text('Team Admin API'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Team Admin API'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
 
-    expect(
-      _inRow('Cursor plan', find.byTooltip('Budget limits')),
-      findsNothing,
-    );
-    expect(
-      _inRow('Cursor plan', find.byTooltip('Alert thresholds')),
-      findsOneWidget,
-    );
-    expect(
-      _inRow('Team Admin API', find.byTooltip('Budget limits')),
-      findsOneWidget,
-    );
-  });
+      expect(
+        _inRow('Cursor plan', find.byTooltip('Budget limits')),
+        findsNothing,
+      );
+      expect(
+        _inRow('Cursor plan', find.byTooltip('Alert thresholds')),
+        findsOneWidget,
+      );
+      expect(
+        _inRow('Team Admin API', find.byTooltip('Budget limits')),
+        findsOneWidget,
+      );
+      for (final (tooltip, dialog) in const [
+        ('Budget limits', 'Budget · Team Admin API'),
+        ('Alert thresholds', 'Alerts · Team Admin API'),
+      ]) {
+        final action = _inRow('Team Admin API', find.byTooltip(tooltip));
+        await tester.ensureVisible(action);
+        await tester.tap(action);
+        await tester.pumpAndSettle();
+        expect(find.text(dialog), findsOneWidget);
+        expect(find.byType(AlertDialog), findsOneWidget);
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.text('Team Admin API'));
+      await tester.pumpAndSettle();
+      expect(find.text('Cursor · Team Admin API'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(
+        await store.readSecret(ProviderConnections.cursorPlatform),
+        'synthetic-key',
+      );
+    },
+  );
 
   testWidgets('a budget period without a limit cannot be alerted on', (
     tester,
@@ -846,23 +909,9 @@ void main() {
 
 /// Scopes a finder to the catalog row titled [title].
 Finder _inRow(String title, Finder matching) => find.descendant(
-  of: find.widgetWithText(ListTile, title),
+  of: find.widgetWithText(ProviderConnectionRow, title),
   matching: matching,
 );
-
-void _expectWordsStayIntact(WidgetTester tester, Finder text, String contents) {
-  final paragraph = tester.renderObject<RenderParagraph>(text);
-  for (final word in RegExp(r'\S+').allMatches(contents)) {
-    final boxes = paragraph.getBoxesForSelection(
-      TextSelection(baseOffset: word.start, extentOffset: word.end),
-    );
-    expect(
-      boxes,
-      hasLength(1),
-      reason: '"${word.group(0)}" must not split across lines in "$contents"',
-    );
-  }
-}
 
 Future<void> _pumpProvidersAtSize(WidgetTester tester, Size size) async {
   _setTestSurface(tester, size);

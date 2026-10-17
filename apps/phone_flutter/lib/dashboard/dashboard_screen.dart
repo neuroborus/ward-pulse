@@ -210,7 +210,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _CapabilityGapRow(
             title: 'Plan usage',
             explanation:
-                'Connect a Codex subscription on the Providers tab to see plan limits.',
+                'Connect a Codex plan on the Providers tab to see plan limits.',
             onOpenProviders: onOpenProviders,
           ),
           const SizedBox(height: 16),

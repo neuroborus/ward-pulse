@@ -466,7 +466,6 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
           connection.displayName == null
               ? connection.listSubtitle
               : '${providerFamilyLabel(connection.id.provider)} · ${connection.title}\n${connection.listSubtitle}',
-      statusBelow: true,
       supportingText: supporting,
       status: controls.status,
       actions: controls.actions,

@@ -20,11 +20,8 @@ class ProviderConnectionRow extends StatelessWidget {
     required this.status,
     this.actions = const [],
     this.onTap,
-    this.statusBelow = false,
     this.supportingText,
   });
-
-  static const _compactWidth = 360.0;
 
   final IconData icon;
   final String title;
@@ -32,59 +29,93 @@ class ProviderConnectionRow extends StatelessWidget {
   final Widget status;
   final List<Widget> actions;
   final VoidCallback? onTap;
-  final bool statusBelow;
   final String? supportingText;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < _compactWidth;
-        final stackedActions = (compact || statusBelow) && actions.length > 1;
-        final trailing = [
-          if (!stackedActions) ...actions,
-          if (!compact && !statusBelow) status,
-        ];
-        return ListTile(
-          leading: Icon(icon),
-          title: Text(title),
-          subtitle:
-              compact || statusBelow
-                  ? Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(subtitle),
-                      const SizedBox(height: 4),
-                      status,
-                      if (supportingText?.isNotEmpty == true) ...[
-                        const SizedBox(height: 4),
-                        Text(supportingText!),
-                      ],
-                      if (stackedActions)
-                        Wrap(
-                          children: [
-                            for (final action in actions)
-                              ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  minWidth: kMinInteractiveDimension,
-                                  minHeight: kMinInteractiveDimension,
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: DefaultTextStyle(
+        style: theme.textTheme.bodyMedium!.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: MergeSemantics(
+                    child: Semantics(
+                      button: true,
+                      enabled: onTap != null,
+                      child: InkWell(
+                        onTap: onTap,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            minWidth: kMinInteractiveDimension,
+                            minHeight: kMinInteractiveDimension,
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.only(
+                              top: 4,
+                              right: 8,
+                              bottom: 4,
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  icon,
+                                  color: theme.colorScheme.onSurfaceVariant,
                                 ),
-                                child: action,
-                              ),
-                          ],
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        title,
+                                        style: theme.textTheme.bodyLarge,
+                                      ),
+                                      Text(subtitle),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                    ],
-                  )
-                  : Text(subtitle),
-          isThreeLine: compact || statusBelow || subtitle.contains('\n'),
-          trailing:
-              trailing.isEmpty
-                  ? null
-                  : Row(mainAxisSize: MainAxisSize.min, children: trailing),
-          onTap: onTap,
-        );
-      },
+                      ),
+                    ),
+                  ),
+                ),
+                for (final action in actions)
+                  SizedBox.square(
+                    dimension: kMinInteractiveDimension,
+                    child: action,
+                  ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 40, top: 4, bottom: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  status,
+                  if (supportingText?.isNotEmpty == true) ...[
+                    const SizedBox(height: 4),
+                    Text(supportingText!),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

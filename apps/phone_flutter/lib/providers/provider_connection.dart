@@ -123,7 +123,7 @@ List<ProviderConnection> providerConnectionCatalog({
   return [
     const ProviderConnection(
       id: ProviderConnections.codexPlan,
-      title: 'Codex subscription',
+      title: 'Codex plan',
       subtitle: 'Experimental · plan limits and token activity',
     ),
     ProviderConnection(
@@ -136,7 +136,7 @@ List<ProviderConnection> providerConnectionCatalog({
     ),
     const ProviderConnection(
       id: ProviderConnections.claudePlan,
-      title: 'Claude subscription',
+      title: 'Claude plan',
       subtitle: 'Experimental · Claude Code OAuth sign-in',
     ),
     ProviderConnection(

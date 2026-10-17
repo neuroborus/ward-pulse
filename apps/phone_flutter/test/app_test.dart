@@ -15,6 +15,7 @@ import 'package:ward_pulse_phone/dashboard/provider_status_color.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/dashboard/merging_connection_repository.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
+import 'package:ward_pulse_phone/providers/provider_connection_row.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
@@ -116,11 +117,11 @@ void main() {
     // (providers_screen_test.dart); this test only asks that the catalog
     // opened, so it scrolls to the row instead of assuming a position.
     await tester.scrollUntilVisible(
-      find.text('Codex subscription'),
+      find.text('Codex plan'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('Codex subscription'), findsOneWidget);
+    expect(find.text('Codex plan'), findsOneWidget);
     expect(find.text('Not connected'), findsWidgets);
   });
 
@@ -513,7 +514,7 @@ void main() {
     final button = find.descendant(
       of: find.ancestor(
         of: find.text('Platform reporting'),
-        matching: find.byType(ListTile),
+        matching: find.byType(ProviderConnectionRow),
       ),
       matching: find.byWidgetPredicate(
         (widget) => widget is IconButton && widget.tooltip == 'Budget limits',
@@ -781,7 +782,7 @@ void main() {
     Finder platformButton(String tooltip) => find.descendant(
       of: find.ancestor(
         of: find.text('Platform reporting'),
-        matching: find.byType(ListTile),
+        matching: find.byType(ProviderConnectionRow),
       ),
       matching: find.byWidgetPredicate(
         (widget) => widget is IconButton && widget.tooltip == tooltip,
@@ -856,13 +857,13 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.text('Codex subscription'),
+      find.text('Codex plan'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.tap(
       find.descendant(
-        of: find.widgetWithText(ListTile, 'Codex subscription'),
+        of: find.widgetWithText(ProviderConnectionRow, 'Codex plan'),
         matching: find.byTooltip('Alert thresholds'),
       ),
     );
@@ -1076,8 +1077,8 @@ void main() {
             .onPressed,
         isNull,
       );
-      final row = tester.widget<ListTile>(
-        find.widgetWithText(ListTile, 'Organization reporting'),
+      final row = tester.widget<ProviderConnectionRow>(
+        find.widgetWithText(ProviderConnectionRow, 'Organization reporting'),
       );
       expect(row.onTap, isNull);
       scheduler.tick();
@@ -1327,7 +1328,10 @@ void main() {
       );
       expect(
         find.descendant(
-          of: find.widgetWithText(ListTile, 'Organization reporting'),
+          of: find.widgetWithText(
+            ProviderConnectionRow,
+            'Organization reporting',
+          ),
           matching: find.text('Not connected'),
         ),
         findsOneWidget,
@@ -1509,7 +1513,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('OpenAI'), findsOneWidget);
-    expect(find.text('Codex subscription'), findsOneWidget);
+    expect(find.text('Codex plan'), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.text('Platform reporting'),
@@ -1561,7 +1565,9 @@ void main() {
       300,
       scrollable: providersList,
     );
-    await tester.ensureVisible(find.widgetWithText(ListTile, 'Work org key'));
+    await tester.ensureVisible(
+      find.widgetWithText(ProviderConnectionRow, 'Work org key'),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Work org key'));
     await tester.pumpAndSettle();
@@ -1841,11 +1847,11 @@ void main() {
 
     final planTile = find.ancestor(
       of: find.text('Cursor plan'),
-      matching: find.byType(ListTile),
+      matching: find.byType(ProviderConnectionRow),
     );
     final adminTile = find.ancestor(
       of: find.text('Team Admin API'),
-      matching: find.byType(ListTile),
+      matching: find.byType(ProviderConnectionRow),
     );
     expect(
       find.descendant(
@@ -1917,11 +1923,11 @@ void main() {
     // (providers_screen_test.dart); this test only asks that the catalog
     // opened, so it scrolls to the row instead of assuming a position.
     await tester.scrollUntilVisible(
-      find.text('Codex subscription'),
+      find.text('Codex plan'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('Codex subscription'), findsOneWidget);
+    expect(find.text('Codex plan'), findsOneWidget);
   });
 
   testWidgets(
