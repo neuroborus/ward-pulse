@@ -180,7 +180,9 @@ final class ProviderReportingHttp {
         HttpStatus.ok => response,
         HttpStatus.unauthorized =>
           throw ProviderReportingException(
-            ProviderReportingFailure.authentication,
+            _isMissingCursorReportingScope(response.body)
+                ? ProviderReportingFailure.permissionDenied
+                : ProviderReportingFailure.authentication,
             details: reportResponseDetails(label, response),
           ),
         HttpStatus.forbidden =>
@@ -292,6 +294,16 @@ DashboardSyncIssue reportingIssue(ProviderReportingFailure failure) {
 String encodeBasicAuth(String username) {
   final token = base64Encode(utf8.encode('$username:'));
   return 'Basic $token';
+}
+
+bool _isMissingCursorReportingScope(String body) {
+  try {
+    final value = jsonDecode(body);
+    return value is Map<String, dynamic> &&
+        value['message'] == 'Team API key missing required scope: read:*';
+  } on FormatException {
+    return false;
+  }
 }
 
 String? _errorCode(String body) {

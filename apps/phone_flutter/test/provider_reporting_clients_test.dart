@@ -137,6 +137,103 @@ void main() {
   });
 
   group('CursorPlatformClient', () {
+    const missingScope = 'Team API key missing required scope: read:*';
+    const invalidKey = 'Invalid API key';
+    const unrelatedPermission = 'Insufficient permissions or scope';
+    for (final scenario in [
+      (
+        name: 'explicit missing reporting scope',
+        body: jsonEncode({'message': missingScope}),
+        failure: ProviderReportingFailure.permissionDenied,
+      ),
+      (
+        name: 'invalid key',
+        body: jsonEncode({'message': invalidKey}),
+        failure: ProviderReportingFailure.authentication,
+      ),
+      (
+        name: 'malformed JSON',
+        body: '{"message":"$missingScope"',
+        failure: ProviderReportingFailure.authentication,
+      ),
+      (
+        name: 'non-object JSON',
+        body: jsonEncode([missingScope]),
+        failure: ProviderReportingFailure.authentication,
+      ),
+      (
+        name: 'non-string message',
+        body: jsonEncode({
+          'message': [missingScope],
+        }),
+        failure: ProviderReportingFailure.authentication,
+      ),
+      (
+        name: 'nested message',
+        body: jsonEncode({
+          'error': {'message': missingScope},
+        }),
+        failure: ProviderReportingFailure.authentication,
+      ),
+      (
+        name: 'unrelated permission text',
+        body: jsonEncode({'message': unrelatedPermission}),
+        failure: ProviderReportingFailure.authentication,
+      ),
+      (
+        name: 'message containing the template',
+        body: jsonEncode({'message': 'Unrelated: $missingScope'}),
+        failure: ProviderReportingFailure.authentication,
+      ),
+    ]) {
+      test(
+        'classifies 401 ${scenario.name} without exposing details',
+        () async {
+          const apiKey = 'synthetic-team-key';
+          final transport = _FakeTransport({
+            '/teams/daily-usage-data': [
+              ProviderHttpResponse(
+                statusCode: HttpStatus.unauthorized,
+                headers: const {},
+                body: scenario.body,
+              ),
+            ],
+          });
+          final client = CursorPlatformClient(
+            http: ProviderReportingHttp(transport: transport),
+            clock: () => DateTime.utc(2026, 7, 19, 12),
+          );
+          final safeDiagnostics = allOf(
+            isNot(contains(scenario.body)),
+            isNot(contains(missingScope)),
+            isNot(contains(invalidKey)),
+            isNot(contains(unrelatedPermission)),
+            isNot(contains(apiKey)),
+            isNot(contains(encodeBasicAuth(apiKey))),
+          );
+
+          await expectLater(
+            client.fetchReports(adminApiKey: apiKey),
+            throwsA(
+              isA<ProviderReportingException>()
+                  .having((error) => error.failure, 'failure', scenario.failure)
+                  .having(
+                    (error) => error.details,
+                    'safe details',
+                    allOf('Cursor daily usage · HTTP 401', safeDiagnostics),
+                  )
+                  .having(
+                    (error) => error.toString(),
+                    'safe message',
+                    safeDiagnostics,
+                  ),
+            ),
+          );
+          expect(transport.requests, hasLength(1));
+        },
+      );
+    }
+
     test('uses Basic auth and paginates spend pages', () async {
       final transport = _FakeTransport({
         '/teams/daily-usage-data': [_response('{"data":[]}')],
