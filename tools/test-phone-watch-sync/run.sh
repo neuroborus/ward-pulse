@@ -222,6 +222,9 @@ start_monitor() {
       next
     }
     /am_proc_start|am_proc_died/ {
+      if ($0 ~ /[[:cntrl:]]/ || $0 !~ /\[[^][]+\][ ]*$/) {
+        emit("GAP"); next
+      }
       line=$0; sub(/^.*\[/, "", line); sub(/\].*$/, "", line)
       n=split(line, fields, ",")
       for (i=1; i<=n; i++) gsub(/^[ \t]+|[ \t]+$/, "", fields[i])
@@ -241,7 +244,6 @@ start_monitor() {
         }
       } else if (index($0, "app.wardpulse")) {
         separate = name == "app.wardpulse.test" && !owned[fields[2]] &&
-            $0 !~ /[[:cntrl:]]/ &&
             $0 ~ /^[ ]*[0-9.]+[ ]+[0-9]+[ ]+[0-9]+[ ]+I[ ]+am_proc_(start|died)[ ]*:[ ]*\[[^][]+\][ ]*$/
         if (is_start) {
           component=fields[6]
