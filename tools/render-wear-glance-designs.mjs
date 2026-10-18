@@ -48,16 +48,18 @@ const FAMILY = {
   cursorPlatform: { name: 'Cursor platform', color: '#67E8D4' },
 }
 
-/**
- * Wear drops the family prefix when the pool name already opens with it
- * (`glancePrimaryLabel`), so the board must not print `Cursor · Cursor Models`.
- */
+/** Match Wear's recognized plan windows and preserve composed or already-named labels. */
 function rowTitle(row) {
   if (row.split) return `${row.family.name} plan`
+  const family = row.family.name
   // Wear compares the first word, not a prefix, so `Cursorish` would still be named.
-  return row.metric.split(' ')[0] === row.family.name
-    ? row.metric
-    : `${row.family.name} · ${row.metric}`
+  if (row.metric.includes(' · ') || row.metric.split(' ')[0] === family) return row.metric
+  if (family === 'Codex' && row.metric === 'Weekly plan') return `${family} plan · Weekly`
+  if (
+    (family === 'Claude' && ['5h', 'Weekly', 'Opus weekly', 'Sonnet weekly'].includes(row.metric)) ||
+    (family === 'Codex' && ['5h', 'Weekly', 'Spark 5h', 'Spark Weekly'].includes(row.metric))
+  ) return `${family} plan · ${row.metric}`
+  return `${family} · ${row.metric}`
 }
 
 /**
@@ -485,7 +487,7 @@ const variants = [
     ok: true,
     refreshEnabled: true,
     rows: [
-      { family: FAMILY.claude, metric: 'Opus weekly', used: 0.94, credits: '387' },
+      { family: FAMILY.claude, metric: 'Sonnet weekly', used: 0.94, credits: '387' },
       {
         // The ceiling board carries the largest balance a row can show, in the
         // compact form the app renders it in, so the longest subtitle the rules

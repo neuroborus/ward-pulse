@@ -41,7 +41,7 @@ remain separate and pending.
 and two remaining percentages for an active pair. Typography, row pitch and Alerts clearance
 are unchanged; the 2026-10-01 revision below verifies the paired-row fit on both screen shapes.
 
-**Revision 2026-09-16 — Codex/Spark:** the full board now shows two pairs in three
+**Revision 2026-09-16 — Codex/Spark:** the full board was revised to show two pairs in three
 rows. Codex main is the first arc/percentage and Spark the second; the title is
 `Codex plan`. Geometry and typography stay fixed; the paired-row footprint and three-row fit
 are covered by the 2026-10-01 verification below.
@@ -251,6 +251,34 @@ actual Data Layer loss. The utility UI owner is unchanged in the final reviewed 
 These emulator observations establish neither API35 nor physical-watch acceptance; see
 [the acceptance record](RELEASE_CHECKLIST.md#watch-face-push-acceptance).
 
+## Revision 2026-10-17 — selected plan titles
+
+Known ordinary Claude windows use `Claude plan · 5h`, `Claude plan · Weekly`,
+`Claude plan · Opus weekly` or `Claude plan · Sonnet weekly`. Codex main uses
+`Codex plan · 5h` or `Codex plan · Weekly`; the known legacy raw label `Weekly plan` is
+recognized as `Weekly` for presentation only, without changing the payload. Unpaired Spark
+keeps its selected window: `Codex plan · Spark 5h` or `Codex plan · Spark Weekly`.
+Complete pairs remain exactly `Cursor plan` / `Codex plan`, with inner-first arcs and
+percentages and purchased credits once per provider. If a half is unavailable, title the
+surviving half by its own window or pool. Preserve unknown labels, externally composed labels,
+budget labels and distinct `Cursor Models` / `Other Models` names; never strip arbitrary
+suffixes or duplicate family/plan wording.
+
+Phone selection and band order, including known zero and ties, remain unchanged, as do
+values, pools, colours, exhaustion styling, credits, refresh, Alerts and navigation.
+Typography, mini-arcs, 54-unit row pitch, 12-unit Alerts clearance and the three-row ceiling
+stay fixed; no font shrink, Clip workaround or geometry change is accepted.
+
+**Acceptance: Pending.** The revised SVG boards and their PNG previews must be regenerated
+together after this Source work and the separate sync correction finish. The full board must
+show the longest `Claude plan · Sonnet weekly` with complete credited Cursor and Codex pairs;
+ordinary credited boards and paired credit extremes remain. Updated-app glyph/bounds proof,
+with build and date, is pending on both the canonical 384×384 ROUND and existing 360×360
+NOTROUND targets, including exhausted, positive-rounded-zero, unavailable, unknown, empty,
+budget, refresh, Alerts and navigation cases. Historical measurements and readings above
+remain evidence for their recorded builds and labels; source inspection establishes no new
+art freshness, device-fit or runtime Pass.
+
 ## Goal
 
 Name each selected band with its provider/family, show remaining % and optional
@@ -264,10 +292,10 @@ user can map face colors to providers.
       (↻ OK )                ← OK / !OK inside dual-arrow refresh glyph
       [detail]               ← optional; only for problems (Stale, Rate limited, …)
 
-  (●)  Codex · Weekly plan   ← tightest remaining on top (same payload as face center)
+  (●)  Codex plan · Weekly   ← tightest remaining on top (same payload as face center)
        8% left · 320 credits
 
-  (●)  Claude · 5h
+  (●)  Claude plan · 5h
        39% left · 80 credits
 
   (●)  Cursor Models
@@ -295,14 +323,19 @@ Rules:
 - Primary line for a pair: **family name + ` plan`**, exactly `Cursor plan` for Cursor and
   `Codex plan` for Codex/Spark.
   The phone uses the same rule for its band label; the payload carries pool labels, not a
-  separate band name. For an ordinary row: family/provider + metric label. Codex keeps
-  `Weekly plan`; Cursor Pro+/Ultra
-  plan pools use `Cursor Models` / `Other Models` (known exhausted pools remain visible).
+  separate band name. Ordinary recognized Claude windows use `Claude plan · 5h`,
+  `Claude plan · Weekly`, `Claude plan · Opus weekly` or `Claude plan · Sonnet weekly`;
+  Codex main uses `Codex plan · 5h` / `Codex plan · Weekly`. Recognize the known legacy raw
+  Codex `Weekly plan` as `Weekly` only in presentation. Other ordinary labels keep the existing
+  family/provider + metric form; unknown suffixes are never stripped, and already named or
+  externally composed labels and budgets stay intact. Cursor Pro+/Ultra plan pools retain
+  distinct `Cursor Models` / `Other Models` names (known exhausted pools remain visible).
   Codex main and Spark windows collapse independently; an unpaired Spark row names
-  its winning window (`Codex · Spark 5h` / `Codex · Spark Weekly`).
+  its winning window (`Codex plan · Spark 5h` / `Codex plan · Spark Weekly`). If a partner is
+  unavailable, name the actual surviving window or pool rather than the complete pair.
   Claude’s subscription plan windows (`5h`, `Weekly`, optional Opus/Sonnet weekly) collapse to
   **one** ring on the phone, choosing the tightest known window including zero; Glance names
-  that window (`Claude · 5h` / `Claude · Weekly`). Equal known percentages retain the existing
+  that window with the plan wording above. Equal known percentages retain the existing
   priority: `5h`, `Weekly`, `Opus weekly`, `Sonnet weekly`. Unknown windows cannot beat a known zero.
 - Secondary line: ordinary rows keep `N% left`. A pair shows `82% · 41% left`, inner pool
   first, with one `left` applying to both remaining percentages. Append purchased credits
@@ -321,7 +354,8 @@ Rules:
   covers the mini arcs and both lines.
 - The block keeps **12 units clear of the Alerts pill**. Three rows is the ceiling, one per
   band, regardless of how many bands are paired. The 2026-10-01 round/notround measurement
-  verifies the three-row fit, available width and absence of clipping on both screen shapes.
+  records the earlier three-row fit; fit and glyph bounds for the revised titles remain
+  **Pending** on both screen shapes.
 - Empty selection or unavailable data: short copy centered between refresh and Alerts;
   no fabricated placeholder rings. Selected known zero is a row, not an empty state.
 
@@ -410,12 +444,16 @@ node tools/render-wear-glance-designs.mjs
 xdg-open apps/wear_android/design/preview-glance-legend-3.png
 ```
 
+The table describes the current generator variants. Regeneration of all affected SVG/PNG
+pairs and preview-to-board review for the 2026-10-17 titles are **Pending**; existing art and
+historical device readings do not establish acceptance of the revised titles.
+
 | File | Meaning |
 |------|---------|
 | `glance-legend-3.svg` | **Primary** — three providers, `OK` refresh enabled, Alerts disabled |
 | `glance-legend-1.svg` | Single provider with credits |
 | `glance-legend-pair.svg` | One Cursor pair — one row, two coloured arcs, inner-first percentages and credits once |
-| `glance-legend-full.svg` | Three rows — the ceiling: three bands, currently two paired; three-row and paired-row geometry verified on-device 2026-10-01. Its paired row carries a large balance (`62.5K credits`) so the longest subtitle the rules allow is on a board |
+| `glance-legend-full.svg` | Three-row ceiling: longest `Claude plan · Sonnet weekly` plus complete credited Cursor and Codex pairs. Preserve the paired credit extreme (`100% · 75% left · 62.5K credits`) and ordinary `320 credits` pair; revised art and device fit Pending |
 | `glance-legend-budget.svg` | Plan rows (with credits) + a connection budget row (family color, no credits) |
 | `glance-legend-stale.svg` | `!OK` + detail `Stale`, refresh enabled, Alerts active |
 | `glance-legend-cadence.svg` | Healthy `OK` but refresh **disabled** (cadence cooldown; no detail) |
@@ -428,7 +466,7 @@ xdg-open apps/wear_android/design/preview-glance-legend-3.png
 | `glance-legend-positive-rounds-zero.svg` | Positive arc geometry with ordinary `0%`; subpixel visibility is not asserted |
 | `glance-legend-zero-credits.svg` | Red `0%`, neutral `0 credits` |
 | `glance-legend-unavailable.svg` | Selected entries have no known percentage; `Ring data unavailable` |
-| `glance-legend-unavailable-inner-zero-outer.svg` | Invalid inner value omitted; zero outer survivor keeps its own family label |
+| `glance-legend-unavailable-inner-zero-outer.svg` | Invalid inner value omitted; zero outer survivor retains `Cursor · Other Models` |
 
 Wear only: `apps/wear_android/design/`. OpenPencil `.fig` inventory optional.
 
@@ -440,7 +478,8 @@ one row per band, at most three rows; band order matches the phone/face
 paired arcs and percentages: inner first, outer second; each retains its own colour
 paired title = family + " plan"; Cursor plan and Codex plan exactly
 paired subtitle = "82% · 41% left · 320 credits" (omit credits suffix when unavailable)
-54-unit row pitch; 12-unit Alerts clearance; round 384 / notround 360 width and clipping verified 2026-10-01
+fixed typography and mini-arcs; 54-unit row pitch; 12-unit Alerts clearance; no font shrink or Clip workaround
+revised-title glyph/bounds proof with build/date on round 384 / notround 360: Pending
 per-provider credits with explicit credits label (no footer sum)
 credit balance compact, as the face strip renders it: 62.5K credits / 1K credits / 320 credits / 0 credits
 a purchased balance in any unit but credits is omitted, never shown bare or relabelled
@@ -452,11 +491,15 @@ phone owns allowance via summary manualRefreshAllowed / manualRefreshAvailableAt
 Stale = orange !OK + Stale + enabled
 Alerts: N pill; active when N > 0; disabled at 0
 empty selection / unavailable data centered copy between refresh and Alerts
-ordinary metric labels unchanged (Codex Weekly plan; Cursor Models / Other Models)
+ordinary recognized titles: Claude plan · 5h / Weekly / Opus weekly / Sonnet weekly; Codex plan · 5h / Weekly
+legacy Codex Weekly plan recognized as Weekly for presentation only; payload unchanged
+unpaired Spark keeps Codex plan · Spark 5h / Spark Weekly; unavailable partner leaves actual surviving window
+unknown / budget / externally composed labels preserved; Cursor Models / Other Models stay distinct
 selected known zero stays a grey mini-track and a row with pale-red 0% only
 one or both exhausted known halves keep paired tracks, fixed identities and both percentages
 unknown/unavailable is absent, never fabricated as zero; tiny positive fractions stay ordinary
 review art: render-wear-glance-designs.mjs → preview-glance-legend-*.png
+revised SVG/PNG generation together, preview-to-board review and updated-app acceptance: Pending
 primary preview: preview-glance-legend-3.png
 ```
 

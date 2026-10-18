@@ -143,7 +143,7 @@ class GlanceModelsTest {
                 ),
             )
         assertEquals(3, rows.size)
-        assertEquals("Codex · Weekly plan", rows[0].title)
+        assertEquals("Codex plan · Weekly", rows[0].title)
         assertEquals("8% left · 320 credits", rows[0].subtitle)
         assertEquals("Cursor plan", rows[1].title)
         assertEquals("24% · 0% left", rows[1].subtitle)
@@ -176,13 +176,13 @@ class GlanceModelsTest {
             "allowance.codex.plan", "Weekly plan", 18.0, PulseStatus.OK,
             split = RingHalf("allowance.codex.spark", "Spark 5h", 59.0, PulseStatus.OK),
         )
-        val single = RingSummary("allowance.claude.plan", "Weekly", 10.0, PulseStatus.OK)
+        val single = RingSummary("allowance.claude.plan", "Sonnet weekly", 10.0, PulseStatus.OK)
         val credits = cursorCredits().copy(label = "Codex · Purchased credits")
         val rows = glanceLegendRows(baseSummary(
             rings = listOf(cursorPair(), codex, single),
             allowances = listOf(credits),
         ))
-        assertEquals(listOf("Cursor plan", "Codex plan", "Claude · Weekly"), rows.map { it.title })
+        assertEquals(listOf("Cursor plan", "Codex plan", "Claude plan · Sonnet weekly"), rows.map { it.title })
         assertEquals("82% · 41% left", rows[0].subtitle)
         assertEquals("82% · 41% left · 320 credits", rows[1].subtitle)
         assertEquals(RingFamily.CODEX, rows[1].colorArgb)
@@ -195,6 +195,22 @@ class GlanceModelsTest {
         assertEquals("0% · 41% left", remainingSpark.subtitle)
         assertEquals(0f, remainingSpark.remainingFraction)
         assertEquals(0.41f, requireNotNull(remainingSpark.secondaryArc).remainingFraction, 0.0001f)
+
+        val sparkOnly = glanceLegendRows(baseSummary(
+            rings = listOf(switched.copy(usedPercent = Double.NaN)),
+            allowances = listOf(credits),
+        )).single()
+        assertEquals("Codex plan · Spark Weekly", sparkOnly.title)
+        assertEquals("41% left · 320 credits", sparkOnly.subtitle)
+        assertEquals(RingFamily.CODEX_SPARK, sparkOnly.colorArgb)
+        assertNull(sparkOnly.secondaryArc)
+        val mainOnly = glanceLegendRows(baseSummary(rings = listOf(
+            codex.copy(label = "5h", split = requireNotNull(codex.split).copy(usedPercent = Double.NaN)),
+        ))).single()
+        assertEquals("Codex plan · 5h", mainOnly.title)
+        assertEquals("82% left", mainOnly.subtitle)
+        assertEquals(RingFamily.CODEX, mainOnly.colorArgb)
+        assertNull(mainOnly.secondaryArc)
     }
 
     @Test
@@ -261,6 +277,16 @@ class GlanceModelsTest {
         for (used in listOf(Double.NaN, Double.POSITIVE_INFINITY, -1.0)) {
             val row = cursorPair(used, 100.0).copy(split = null)
             assertTrue(glanceLegendRows(baseSummary(rings = listOf(row))).isEmpty())
+            val outerOnly = glanceLegendRows(baseSummary(rings = listOf(cursorPair(used, 100.0)))).single()
+            assertEquals("Cursor · Other Models", outerOnly.title)
+            assertEquals("0% left", outerOnly.subtitle)
+            assertEquals(listOf(0 until 2), outerOnly.exhaustedPercentRanges)
+            assertNull(outerOnly.secondaryArc)
+            val innerOnly = glanceLegendRows(baseSummary(rings = listOf(cursorPair(100.0, used)))).single()
+            assertEquals("Cursor Models", innerOnly.title)
+            assertEquals("0% left", innerOnly.subtitle)
+            assertEquals(listOf(0 until 2), innerOnly.exhaustedPercentRanges)
+            assertNull(innerOnly.secondaryArc)
         }
     }
 
@@ -329,7 +355,7 @@ class GlanceModelsTest {
             )
         assertEquals(
             listOf(
-                "Codex · Weekly plan",
+                "Codex plan · Weekly",
                 "Cursor plan",
                 "Budget · Today",
             ),
@@ -342,7 +368,7 @@ class GlanceModelsTest {
     }
 
     @Test
-    fun legendRows_keepPhoneComposedBudgetLabel() {
+    fun legendRows_keepBudgetUnknownAndComposedLabels() {
         val rows =
             glanceLegendRows(
                 baseSummary(
@@ -374,6 +400,10 @@ class GlanceModelsTest {
         // Credits belong to the plan pool, not to a spend ceiling.
         assertEquals("60% left", rows.single().subtitle)
         assertEquals(RingFamily.CLAUDE, rows.single().colorArgb)
+        assertEquals("External · Weekly plan", glancePrimaryLabel("allowance.codex.plan", "External · Weekly plan"))
+        assertEquals("Codex · Monthly plan", glancePrimaryLabel("allowance.codex.plan", "Monthly plan"))
+        assertEquals("Weekly plan", glancePrimaryLabel("external.plan", "Weekly plan"))
+        assertEquals("Claude plan · Weekly", glancePrimaryLabel("allowance.claude.plan", "Claude plan · Weekly"))
     }
 
     @Test

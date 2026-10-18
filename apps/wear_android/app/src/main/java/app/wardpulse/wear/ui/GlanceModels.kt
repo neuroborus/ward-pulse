@@ -128,7 +128,14 @@ internal fun glancePrimaryLabel(ringId: String, label: String): String {
     if (label.contains(" · ") || label.substringBefore(' ') == family) {
         return label
     }
-    return "$family · $label"
+    return when {
+        family == "Claude" && label in listOf("5h", "Weekly", "Opus weekly", "Sonnet weekly") ->
+            "$family plan · $label"
+        family == "Codex" && label == "Weekly plan" -> "$family plan · Weekly"
+        family == "Codex" && label in listOf("5h", "Weekly", "Spark 5h", "Spark Weekly") ->
+            "$family plan · $label"
+        else -> "$family · $label"
+    }
 }
 
 internal fun glanceFamilyName(ringId: String): String? = when {
