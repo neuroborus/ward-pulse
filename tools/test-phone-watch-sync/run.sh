@@ -347,7 +347,7 @@ native_jobs() {
       constraint_bit["BATTERY_NOT_LOW"]=2^1
       constraint_bit["STORAGE_NOT_LOW"]=2^2
       constraint_bit["TARE_WEALTH"]=2^3
-      constraint_bit["FLEXIBLE"]=2^21
+      constraint_bit["FLEXIBILITY"]=2^21
       constraint_bit["BACKGROUND_NOT_RESTRICTED"]=2^22
       constraint_bit["PREFETCH"]=2^23
       constraint_bit["WITHIN_QUOTA"]=2^24
