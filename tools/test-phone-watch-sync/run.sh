@@ -277,7 +277,7 @@ start_monitor() {
     }
     /chatty|logd|dropped|Unexpected EOF/ { emit("GAP"); next }
     /^[ ]*[0-9]+\.[0-9]+[ ]+[0-9]+[ ]+[0-9]+[ ]+I[ ]+WardPulseGate[ ]*:/ {
-      if ($0 ~ /: wp-gate-[0-9]+-[0-9]+-[0-9]+$/ && match($0, /wp-gate-[0-9]+-[0-9]+-[0-9]+/)) {
+      if (match($0, /wp-gate-[0-9]+-[0-9]+-[0-9]+/)) {
         gate_time=$1+0
         emit("MARK " substr($0, RSTART, RLENGTH))
       } else emit("GAP")
