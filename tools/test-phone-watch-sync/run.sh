@@ -940,14 +940,18 @@ check_separation() {
 }
 
 stop_app() {
-  local role=$1 serial=$2 required=$3 old current events= deadline identity
+  local role=$1 serial=$2 required=$3 old current events= identity key pending
+  local deadline=$((SECONDS + 15))
   barrier "$role" "$serial"
+  (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
   if (( RETAINING )); then
     require_no_receipts "$EVENTS"
     [[ -z "$EVENTS" ]] || hold 'Unexpected app activity before intended death.'
   fi
   old=$(app_processes "$serial" "$role") || hold 'Cannot establish old process identities.'
+  (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
   reconcile_role "$role" "$serial" "$old"
+  (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
   if [[ -z "$old" ]]; then
     printf '%s app was already absent; no death is claimed.\n' "$role"
     [[ "$required" == optional ]] || hold 'Retention requires an observed live process before intended death.'
@@ -957,29 +961,48 @@ stop_app() {
   printf '%s old process identities:\n%s\n' "$role" "$old"
   LIFECYCLE_ACTION="$role:death"
   adb_on "$serial" shell -n input keyevent KEYCODE_HOME || hold 'Cannot background the app.'
-  adb_on "$serial" shell -n am kill "$APP_ID" || hold 'am kill failed.'
-  deadline=$((SECONDS + 15))
+  (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
   while (( SECONDS < deadline )); do
     if (( RETAINING )) && [[ "$role" == wear ]]; then check_separation; fi
+    (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
     barrier "$role" "$serial"
+    (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
     if (( RETAINING )); then require_no_receipts "$EVENTS"; fi
     events+="${EVENTS}"$'\n'
     [[ "$events" != *START* ]] || hold 'Replacement/background process started during intended death.'
     current=$(app_processes "$serial" "$role") || hold 'Process observation raced intended death.'
+    (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
     while IFS= read -r identity; do
       [[ -z "$identity" ]] && continue
       [[ $'\n'"$old"$'\n' == *$'\n'"$identity"$'\n'* ]] || hold 'Unknown/reused process identity during intended death.'
     done <<< "$current"
     if [[ -z "$current" ]]; then
       sleep 0.2
+      (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
       current=$(app_processes "$serial" "$role") || hold 'Cannot reconcile absence.'
+      (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
       [[ -z "$current" ]] || hold 'Process reappeared after death.'
       barrier "$role" "$serial"
+      (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
       [[ -z "$EVENTS" ]] || hold 'Activity raced the observed absence.'
       reconcile_role "$role" "$serial" ""
+      (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
       OLD[$role]=$old
       LIFECYCLE_ACTION=
       return
+    fi
+    reconcile_role "$role" "$serial" "$current"
+    (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
+    # KILL retains live identity and publication ownership until the existing
+    # ledger reconciles death or stable absence; do not reissue while pending.
+    pending=0
+    for key in "${!KILLED[@]}"; do
+      if [[ "$key" == "$role,"* && "${KILLED[$key]}" == pending ]]; then pending=1; fi
+    done
+    if (( ! pending )); then
+      (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
+      adb_on "$serial" shell -n am kill "$APP_ID" || hold 'am kill failed.'
+      (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
     fi
     sleep 0.2
   done
