@@ -191,70 +191,103 @@ start_monitor() {
   mkfifo "$SCRATCH/$role.pipe"
   # Launch timeout directly so its recorded PID owns/forwards termination to ADB.
   timeout --kill-after=5s 3600s "$ADB" -s "$serial" logcat -b main -b events -v epoch -T 1 \
-    WardPulseGate:I WardPulseSync:I am_proc_start:I am_proc_died:I chatty:I logd:W '*:S' \
+    WardPulseGate:I WardPulseSync:I am_proc_start:I am_proc_died:I am_kill:I chatty:I logd:W '*:S' \
     >"$SCRATCH/$role.pipe" 2>/dev/null </dev/null &
   MONITORS+=("$!")
   awk -v role="$role" -v uid="${UIDS[$role]}" -v initial="$initial" '
-    BEGIN { n=split(initial, pids, /[ \n]+/); for (i=1;i<=n;i++) owned[pids[i]]=1 }
+    BEGIN {
+      n=split(initial, pids, /[ \n]+/)
+      for (i=1; i<=n; i++) if (length(pids[i])) owned[pids[i]]=""
+    }
     function emit(record) {
       bytes += length(record) + 1
       if (bytes > 262000) { print "GAP"; exit 1 }
       print record; fflush()
     }
+    /[[:cntrl:]]/ { emit("GAP"); next }
     /^---------/ { next }
     {
       if ($1 !~ /^[0-9]+\.[0-9]+$/ || $1+0 < last_time) { emit("GAP"); next }
       last_time=$1+0
     }
+    /^[ ]*[0-9]+\.[0-9]+[ ]+[0-9]+[ ]+[0-9]+[ ]+I[ ]+am_(proc_start|proc_died|kill)[ ]*:/ {
+      tag=$5; sub(/:.*/, "", tag)
+      is_start=tag == "am_proc_start"; is_kill=tag == "am_kill"
+      line=$0
+      sub(/^[ ]*[0-9]+\.[0-9]+[ ]+[0-9]+[ ]+[0-9]+[ ]+I[ ]+am_(proc_start|proc_died|kill)[ ]*:[ ]*/, "", line)
+      if (line !~ /^\[.*\][ ]*$/) {
+        emit("GAP"); next
+      }
+      sub(/^\[/, "", line); sub(/\][ ]*$/, "", line)
+      if (is_kill) {
+        # Android 16: user, PID, name, adj, opaque String reason, long RSS.
+        # Only the first four and last separators have structural meaning.
+        for (i=1; i<=4; i++) {
+          comma=index(line, ",")
+          if (!comma) break
+          fields[i]=substr(line, 1, comma-1); line=substr(line, comma+1)
+        }
+        if (i != 5 || !index(line, ",")) { emit("GAP"); next }
+        rss=line; sub(/^.*,/, "", rss); gsub(/^[ ]+|[ ]+$/, "", rss)
+        magnitude=rss; sub(/^-/, "", magnitude)
+        limit=rss ~ /^-/ ? "9223372036854775808" : "9223372036854775807"
+        if (rss !~ /^-?[0-9]+$/ || length(magnitude) > 19 ||
+            (length(magnitude) == 19 && ("x" magnitude) > ("x" limit))) {
+          emit("GAP"); next
+        }
+        n=4
+      } else {
+        if (line ~ /[][]/) { emit("GAP"); next }
+        n=split(line, fields, ",")
+      }
+      for (i=1; i<=n; i++) gsub(/^[ \t]+|[ \t]+$/, "", fields[i])
+      name=is_start ? fields[4] : fields[3]
+      if (n != (is_start ? 6 : (is_kill ? 4 : 5)) ||
+          fields[1] !~ /^[0-9]+$/ || length(fields[1]) > 10 || fields[1]+0 > 2147483647 ||
+          fields[2] !~ /^[0-9]+$/ || length(fields[2]) > 10 || fields[2]+0 < 1 || fields[2]+0 > 2147483647 ||
+          (is_start && (fields[3] !~ /^[0-9]+$/ || length(fields[3]) > 10 || fields[3]+0 < 1 || fields[3]+0 > 2147483647)) ||
+          (!is_start && (fields[4] !~ /^-?[0-9]+$/ || length(fields[4]) > 11 || fields[4]+0 < -2147483648 || fields[4]+0 > 2147483647)) ||
+          (!is_start && !is_kill && (fields[5] !~ /^-?[0-9]+$/ || length(fields[5]) > 11 || fields[5]+0 < -2147483648 || fields[5]+0 > 2147483647)) ||
+          !length(name)) {
+        emit("GAP"); next
+      }
+      relevant = is_start ? fields[3] == uid : (fields[2] in owned)
+      if (relevant || name == "app.wardpulse" || index(name, "app.wardpulse:") == 1) {
+        if (fields[1]+0 != int(uid/100000) ||
+            (is_start && fields[3] != uid) ||
+            (!is_start && (!(fields[2] in owned) ||
+              (length(owned[fields[2]]) && owned[fields[2]] != name)))) emit("GAP")
+        else {
+          if (is_start || is_kill) owned[fields[2]]=name
+          else delete owned[fields[2]]
+          emit((is_start ? "START " : (is_kill ? "KILL " : "DEATH ")) fields[2])
+        }
+      } else if ((fields[2] in owned) || index(name, "app.wardpulse") ||
+          (is_start && (index(fields[5], "app.wardpulse") || index(fields[6], "app.wardpulse")))) {
+        separate = name == "app.wardpulse.test" && !(fields[2] in owned)
+        if (is_start) {
+          component=fields[6]
+          gsub(/app[.]wardpulse[.]test([\/.}]|$)/, "", component)
+          separate = separate && length(fields[5]) && length(fields[6]) &&
+              !index(fields[5], "app.wardpulse") && !index(component, "app.wardpulse")
+        }
+        if (!separate) emit("GAP")
+      }
+      next
+    }
     /chatty|logd|dropped|Unexpected EOF/ { emit("GAP"); next }
-    /WardPulseGate/ {
-      if (match($0, /wp-gate-[0-9]+-[0-9]+-[0-9]+/)) {
+    /^[ ]*[0-9]+\.[0-9]+[ ]+[0-9]+[ ]+[0-9]+[ ]+I[ ]+WardPulseGate[ ]*:/ {
+      if ($0 ~ /: wp-gate-[0-9]+-[0-9]+-[0-9]+$/ && match($0, /wp-gate-[0-9]+-[0-9]+-[0-9]+/)) {
         gate_time=$1+0
         emit("MARK " substr($0, RSTART, RLENGTH))
       } else emit("GAP")
       next
     }
     /WardPulseSync/ {
-      if (!owned[$2]) emit("GAP")
+      if (!($2 in owned)) emit("GAP")
       else if (role == "phone" && $0 ~ /^[ ]*[0-9.]+[ ]+[0-9]+[ ]+[0-9]+[ ]+I[ ]+WardPulseSync[ ]*: Watch summary queued\.$/) emit("PUBLICATION")
       else if (role == "wear" && $0 ~ /^[ ]*[0-9.]+[ ]+[0-9]+[ ]+[0-9]+[ ]+I[ ]+WardPulseSync[ ]*: Watch summary received\.$/) emit("RECEIPT")
       else emit("GAP")
-      next
-    }
-    /am_proc_start|am_proc_died/ {
-      if ($0 ~ /[[:cntrl:]]/ || $0 !~ /\[[^][]+\][ ]*$/) {
-        emit("GAP"); next
-      }
-      line=$0; sub(/^.*\[/, "", line); sub(/\].*$/, "", line)
-      n=split(line, fields, ",")
-      for (i=1; i<=n; i++) gsub(/^[ \t]+|[ \t]+$/, "", fields[i])
-      name = /am_proc_start/ ? fields[4] : fields[3]
-      is_start = /am_proc_start/
-      if (n != (is_start ? 6 : 5) || fields[1] !~ /^[0-9]+$/ ||
-          fields[2] !~ /^[0-9]+$/ || (is_start && fields[3] !~ /^[0-9]+$/) || !length(name)) {
-        emit("GAP"); next
-      }
-      relevant = is_start ? fields[3] == uid : owned[fields[2]]
-      if (relevant || name == "app.wardpulse" || index(name, "app.wardpulse:") == 1) {
-        if (fields[2] !~ /^[0-9]+$/) emit("GAP")
-        else {
-          if (is_start) owned[fields[2]]=1
-          else delete owned[fields[2]]
-          emit((is_start ? "START " : "DEATH ") fields[2])
-        }
-      } else if (index($0, "app.wardpulse")) {
-        separate = name == "app.wardpulse.test" && !owned[fields[2]] &&
-            $0 ~ /^[ ]*[0-9.]+[ ]+[0-9]+[ ]+[0-9]+[ ]+I[ ]+am_proc_(start|died)[ ]*:[ ]*\[[^][]+\][ ]*$/
-        if (is_start) {
-          component=fields[6]
-          gsub(/app[.]wardpulse[.]test([\/.}]|$)/, "", component)
-          separate = separate && length(fields[5]) && length(fields[6]) &&
-              !index(fields[5], "app.wardpulse") && !index(component, "app.wardpulse")
-        } else {
-          separate = separate && fields[4] ~ /^-?[0-9]+$/ && fields[5] ~ /^-?[0-9]+$/
-        }
-        if (!separate) emit("GAP")
-      }
       next
     }
     { emit("GAP") }
@@ -530,28 +563,53 @@ native_jobs() {
 }
 
 record_sync_events() {
-  local role=$1 type pid extra key
+  local role=$1 type pid extra key normalized=
   if (( LEDGER_READY )); then
     while read -r type pid extra; do
       [[ -n "$type" ]] || continue
       key="$role,${pid:-}"
       case "$type" in
         START)
+          [[ "$LIFECYCLE_ACTION" != "$role:death" ]] \
+            || hold 'Replacement/background process started during intended death.'
           (( ! RETAINING )) || [[ "$LIFECYCLE_ACTION" == "$role:start" ]] \
             || hold 'Spontaneous/replacement process start invalidated retention.'
           [[ "$pid" =~ ^[0-9]+$ && -z "$extra" && ! -v "LIVE[$key]" ]] \
             || hold 'Duplicate/malformed app start; lifecycle continuity lost.'
-          LIVE[$key]=1 ;;
+          [[ ! -v "KILLED[$key]" ]] || hold 'PID reuse after kill has an unresolved death notice.'
+          LIVE[$key]=new ;;
+        KILL)
+          [[ "$LIFECYCLE_ACTION" != "$role:start" ]] || hold 'Launch process received a kill request.'
+          (( ! RETAINING )) || [[ "$LIFECYCLE_ACTION" == "$role:death" ]] \
+            || hold 'Unexpected process kill invalidated retention.'
+          [[ "$pid" =~ ^[0-9]+$ && -z "$extra" && -v "LIVE[$key]" && ! -v "KILLED[$key]" ]] \
+            || hold 'Unrecognized/duplicate app kill; lifecycle continuity lost.'
+          # Intent alone leaves both the live identity and publication ownership intact.
+          KILLED[$key]=pending ;;
         DEATH)
+          [[ "$pid" =~ ^[0-9]+$ && -z "$extra" ]] || hold 'Malformed app death.'
+          if [[ "${KILLED[$key]:-}" == absent && ! -v "LIVE[$key]" ]]; then
+            # One late corroboration of the same removal, with no intervening START.
+            unset 'KILLED[$key]'
+            continue
+          fi
+          [[ "$LIFECYCLE_ACTION" != "$role:start" ]] || hold 'Launch process disappeared/reappeared.'
           (( ! RETAINING )) || [[ "$LIFECYCLE_ACTION" == "$role:death" ]] \
             || hold 'Unexpected process death invalidated retention.'
-          [[ "$pid" =~ ^[0-9]+$ && -z "$extra" && -v "LIVE[$key]" ]] \
+          [[ -v "LIVE[$key]" ]] \
             || hold 'Unrecognized/malformed app death; lifecycle continuity lost.'
-          unset 'LIVE[$key]' 'START_TICKS[$key]' ;;
+          # Keep sampled ticks to reject reuse of that identity by a later START.
+          unset 'LIVE[$key]'
+          if [[ "${KILLED[$key]:-}" == pending ]]; then
+            unset 'KILLED[$key]'
+            continue
+          fi ;;
         PUBLICATION|RECEIPT) [[ -z "$pid$extra" ]] || hold 'Malformed sync event.' ;;
         *) hold 'Unrecognized sanitized event.' ;;
       esac
+      normalized+="$type${pid:+ $pid}"$'\n'
     done <<< "$EVENTS"
+    EVENTS=${normalized%$'\n'}
   fi
   if [[ "$EVENTS" == *PUBLICATION* || "$EVENTS" == *RECEIPT* ]]; then
     (( ! RETAINING )) || hold 'Publication/callback invalidated quiet, including identical payloads.'
@@ -568,17 +626,35 @@ reconcile_role() {
   barrier "$role" "$serial"
   current=$(app_processes "$serial" "$role") || hold 'Cannot reconcile observed processes.'
   barrier "$role" "$serial"
-  for key in "${!LIVE[@]}"; do
-    [[ "$key" != "$role,"* ]] || expected+="${key#*,}"$'\n'
-  done
+  [[ "$EVENTS" != *START* && "$EVENTS" != *KILL* && "$EVENTS" != *DEATH* ]] \
+    || hold 'Process lifecycle changed across the inventory boundary.'
+  [[ $# -lt 3 || "$current" == "${3-}" ]] || hold 'Process identities changed across the lifecycle action boundary.'
   while read -r pid ticks name; do
     [[ -n "$pid" ]] || continue
     key="$role,$pid"
-    [[ ! -v "START_TICKS[$key]" || "${START_TICKS[$key]}" == "$ticks" ]] \
-      || hold 'PID identity reuse lacks an observed death/start.'
+    [[ -v "LIVE[$key]" ]] || hold 'Observed process lacks lifecycle ownership.'
+    if [[ -v "START_TICKS[$key]" ]]; then
+      if [[ "${LIVE[$key]}" == new ]]; then
+        [[ "${START_TICKS[$key]}" != "$ticks" ]] || hold 'New start reused an old process identity.'
+      else
+        [[ "${START_TICKS[$key]}" == "$ticks" ]] || hold 'PID identity reuse lacks an observed death/start.'
+      fi
+    fi
+    LIVE[$key]=1
     START_TICKS[$key]=$ticks
     actual+="$pid"$'\n'
   done <<< "$current"
+  for key in "${!LIVE[@]}"; do
+    [[ "$key" == "$role,"* ]] || continue
+    if [[ $'\n'"$actual" != *$'\n'"${key#*,}"$'\n'* && "${KILLED[$key]:-}" == pending ]]; then
+      # The validated START may have lived wholly between inventories. No
+      # retrospective /proc read or invented start tick is evidence for it.
+      unset 'LIVE[$key]'
+      KILLED[$key]=absent
+    else
+      expected+="${key#*,}"$'\n'
+    fi
+  done
   [[ $(printf '%s' "$actual" | sort) == "$(printf '%s' "$expected" | sort)" ]] \
     || hold 'Process inventory and lifecycle stream disagree.'
 }
@@ -856,13 +932,14 @@ check_separation() {
 }
 
 stop_app() {
-  local role=$1 serial=$2 required=$3 old current events= deadline identity expected actual
+  local role=$1 serial=$2 required=$3 old current events= deadline identity
   barrier "$role" "$serial"
   if (( RETAINING )); then
     require_no_receipts "$EVENTS"
     [[ -z "$EVENTS" ]] || hold 'Unexpected app activity before intended death.'
   fi
   old=$(app_processes "$serial" "$role") || hold 'Cannot establish old process identities.'
+  reconcile_role "$role" "$serial" "$old"
   if [[ -z "$old" ]]; then
     printf '%s app was already absent; no death is claimed.\n' "$role"
     [[ "$required" == optional ]] || hold 'Retention requires an observed live process before intended death.'
@@ -870,8 +947,8 @@ stop_app() {
   fi
   # Preserve all old PID/start identities, including :background processes.
   printf '%s old process identities:\n%s\n' "$role" "$old"
-  adb_on "$serial" shell -n input keyevent KEYCODE_HOME || hold 'Cannot background the app.'
   LIFECYCLE_ACTION="$role:death"
+  adb_on "$serial" shell -n input keyevent KEYCODE_HOME || hold 'Cannot background the app.'
   adb_on "$serial" shell -n am kill "$APP_ID" || hold 'am kill failed.'
   deadline=$((SECONDS + 15))
   while (( SECONDS < deadline )); do
@@ -886,14 +963,12 @@ stop_app() {
       [[ $'\n'"$old"$'\n' == *$'\n'"$identity"$'\n'* ]] || hold 'Unknown/reused process identity during intended death.'
     done <<< "$current"
     if [[ -z "$current" ]]; then
-      expected=$(printf '%s\n' "$old" | awk '{ print "DEATH " $1 }' | sort)
-      actual=$(printf '%s\n' "$events" | awk '$1 == "START" || $1 == "DEATH"' | sort)
-      [[ "$actual" == "$expected" ]] || hold 'Absence lacks reconciled death events for every old process.'
       sleep 0.2
       current=$(app_processes "$serial" "$role") || hold 'Cannot reconcile absence.'
       [[ -z "$current" ]] || hold 'Process reappeared after death.'
       barrier "$role" "$serial"
       [[ -z "$EVENTS" ]] || hold 'Activity raced the observed absence.'
+      reconcile_role "$role" "$serial" ""
       OLD[$role]=$old
       LIFECYCLE_ACTION=
       return
@@ -916,7 +991,7 @@ launch_app() {
     barrier "$role" "$serial"
     if (( RETAINING )); then require_no_receipts "$EVENTS"; fi
     events+="${EVENTS}"$'\n'
-    [[ "$events" != *DEATH* ]] || hold 'Launch process disappeared/reappeared.'
+    [[ "$events" != *KILL* && "$events" != *DEATH* ]] || hold 'Launch process disappeared/reappeared.'
     current=$(app_processes "$serial" "$role") || hold 'Cannot establish launched process identity.'
     if [[ -n "$current" ]]; then
       expected=$(printf '%s\n' "$current" | awk '{ print "START " $1 }' | sort)
@@ -946,9 +1021,9 @@ wait_for_summary() {
   local current deadline=$((SECONDS + 30))
   while (( SECONDS < deadline )); do
     barrier phone "$PHONE_SERIAL"
-    [[ "$EVENTS" != *DEATH* && "$EVENTS" != *START* ]] || hold 'Phone process activity raced delivery.'
+    [[ "$EVENTS" != *KILL* && "$EVENTS" != *DEATH* && "$EVENTS" != *START* ]] || hold 'Phone process activity raced delivery.'
     barrier wear "$WEAR_SERIAL"
-    [[ "$EVENTS" != *DEATH* && "$EVENTS" != *START* ]] || hold 'Wear process activity raced delivery.'
+    [[ "$EVENTS" != *KILL* && "$EVENTS" != *DEATH* && "$EVENTS" != *START* ]] || hold 'Wear process activity raced delivery.'
     [[ "$EVENTS" != *RECEIPT* ]] || FRESH_RECEIPT=1
     current=$(app_processes "$WEAR_SERIAL" wear) || hold 'Cannot observe delivery process.'
     [[ "$current" == "${RUNNING[wear]}" ]] || hold 'Wear process changed during delivery.'
@@ -964,13 +1039,15 @@ package_update_time() {
 }
 
 update_install() {
-  local role=$1 serial=$2 apk=$3 before after result path installed built old current expected
+  local role=$1 serial=$2 apk=$3 before after result path installed built old current
   [[ -s "$apk" ]] || hold 'Current build did not produce the required debug APK.'
   built=$(sha256sum "$apk" | cut -d' ' -f1)
   before=$(package_update_time "$serial") || hold 'Cannot establish pre-update installed package identity.'
   barrier "$role" "$serial"
   old=$(app_processes "$serial" "$role") || hold 'Cannot record pre-update process identities.'
+  reconcile_role "$role" "$serial" "$old"
   printf '%s pre-update process identities (empty means already absent):\n%s\n' "$role" "$old"
+  LIFECYCLE_ACTION="$role:death"
   # dumpsys timestamps have second precision; make a real same-APK update observable.
   sleep 1
   result=$(bounded 90 "$ADB" -s "$serial" install -r "$apk") || hold 'Data-preserving update install failed.'
@@ -988,8 +1065,8 @@ update_install() {
   current=$(app_processes "$serial" "$role") || hold 'Cannot observe post-update processes.'
   [[ -z "$current" ]] || hold 'Unexpected live app after update; update death cannot be reconciled.'
   barrier "$role" "$serial"
-  expected=$(printf '%s\n' "$old" | awk 'NF { print "DEATH " $1 }' | sort)
-  [[ $(printf '%s\n' "$EVENTS" | awk '$1 == "START" || $1 == "DEATH"' | sort) == "$expected" ]] || hold 'Package update process deaths could not be reconciled.'
+  reconcile_role "$role" "$serial" ""
+  LIFECYCLE_ACTION=
 }
 
 remove_reader_staging() {
@@ -1211,7 +1288,7 @@ verify() {
     "Saved summary SHA-256: $after"
 }
 
-declare -A BOOT=() OLD=() RUNNING=() CURSOR=() UIDS=() LIVE=() START_TICKS=()
+declare -A BOOT=() OLD=() RUNNING=() CURSOR=() UIDS=() LIVE=() START_TICKS=() KILLED=()
 MONITORS=()
 SCRATCH= DEVICE_SCRATCH= EVENTS= BASELINE= BASELINE_METADATA= OBSERVER=
 READER_HOST= READER_DEVICE_PID=
