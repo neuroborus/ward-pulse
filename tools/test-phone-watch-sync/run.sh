@@ -433,7 +433,7 @@ native_jobs() {
           !counts($3) || !counts($5) || match($0, /[^[:space:]]/) != registered_indent) fail()
       next
     }
-    /^[[:space:]]*JOB/ {
+    registered && !closed && /^[[:space:]]*JOB/ {
       flush()
       if (!registered || closed || $1 != "JOB" || NF != 4 || ++blocks > 256 || length($2) > 192 ||
           $3 !~ /^[0-9a-fA-F]+$/ || length($3) > 8 || $2 !~ /:$/) fail()
@@ -470,6 +470,8 @@ native_jobs() {
           closed=1
         } else if (!block) fail()
       }
+      # Noninventory fields cannot complete or alter Registered job records.
+      if (!registered || closed) next
     }
     $1 == "Service:" {
       if (!block) {
