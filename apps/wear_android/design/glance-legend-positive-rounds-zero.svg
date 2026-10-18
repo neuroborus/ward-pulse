@@ -38,17 +38,17 @@
     <text x="225" y="101.0" text-anchor="middle"
       font-family="Noto Sans, sans-serif" font-size="13"
       font-weight="700" fill="#65D78A">OK</text>
-    <circle cx="175.5" cy="245" r="17" fill="none" stroke="#2E3632"
+    <circle cx="155.5" cy="245" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
-    <circle cx="175.5" cy="245" r="17" fill="none" stroke="#E8915A"
+    <circle cx="155.5" cy="245" r="17" fill="none" stroke="#E8915A"
       stroke-width="5" stroke-linecap="round"
       stroke-dasharray="0.00 106.81"
       stroke-dashoffset="-107.18"
-      transform="rotate(-90 175.5 245)" />
-    <text x="209.5" y="243.5"
+      transform="rotate(-90 155.5 245)" />
+    <text x="189.5" y="243.5"
       font-family="Noto Sans, sans-serif" font-size="16"
-      font-weight="700" fill="#F4FBF8">Claude · 5h</text>
-    <text x="209.5" y="263.0"
+      font-weight="700" fill="#F4FBF8">Claude plan · 5h</text>
+    <text x="189.5" y="263.0"
       font-family="Noto Sans, sans-serif" font-size="14"
       font-weight="700" fill="#8A968F">0% left</text>
     <rect x="161.0" y="372" width="128.0"

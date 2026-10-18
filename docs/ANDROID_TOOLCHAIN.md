@@ -36,8 +36,10 @@ build and test gates is ready:
   shapes, and passes its local-persistence tests on the round AVD.
 - Phone and Wear builds use Wearable Data Layer `20.0.1`; the Wear listener validates the
   versioned summary before replacing locally persisted state.
-- The paired Play Store phone and round Wear AVD deliver the canonical summary; it remains
-  unchanged after the phone app is force-stopped and the Wear app is restarted.
+- Historical paired-device acceptance on 2026-07-19 delivered the canonical summary and
+  retained it after phone force-stop and Wear restart. That result does not establish
+  current process, publication or scheduled-work preservation; the current gate requires
+  the complete checks in Routine Verification below.
 - The official WFF validator accepts the declarative watch face, and the package builds as
   APK/AAB without dex files.
 - The watch face installs and renders on the round and square Wear AVDs; tap-to-open and
@@ -577,9 +579,14 @@ Treat the configured AVDs as persistent development devices:
 - Do not delete or recreate an AVD to troubleshoot it. That discards Google sign-in, browser
   sessions, system settings, keyboard layout, and any existing phone-watch pairing.
 - Never run `pm clear com.google.android.gms` on the watch; it destroys the pairing record.
-- To restart the WardPulse app process without canceling scheduled WorkManager work, use
-  `am kill app.wardpulse`, not `am force-stop app.wardpulse`. This rule is scoped to the app;
-  the targeted `am force-stop com.google.android.wearable.sysui` recovery above remains valid.
+- Background WardPulse before a bounded `am kill app.wardpulse`; do not force-stop the app
+  to manufacture a restart or quiet interval. A successful command or HOT resume does not
+  prove death: verify the old process identities disappear and a subsequent launch creates a
+  new process, while checking scheduled-work preservation. The gate's `stop_app` in
+  `tools/test-phone-watch-sync/run.sh` re-evaluates ordinary kill within one overall
+  15-second request/wait deadline and respects pending KILL intent; intent is not death.
+  If that proof is unavailable, report HOLD. This rule is scoped to WardPulse; the targeted
+  `am force-stop com.google.android.wearable.sysui` recovery above remains valid.
 - Size `/data` before first boot. Its size is fixed once materialized, and snapshots prevent
   `qemu-img resize` from changing the image afterward.
 
@@ -819,6 +826,33 @@ platform spend are on by default; any can be hidden via Settings consumption-dis
 if at least one surface remains. The OAuth session stays in phone-secure storage and does not
 require a Codex CLI, local server, or `adb reverse`.
 
+Both `just test-wear-device` and the connected suite inside `just test-phone-watch-sync`
+require the shared Wear project policy in `apps/wear_android/gradle.properties`:
+`android.injected.androidTest.leaveApksInstalledAfterRun` must be true. It suppresses
+AGP's after-suite target/test/helper APK removal. Keep the complete suites; a post-test
+reinstall or snapshot restore cannot substitute for preserving the installed app.
+
+Before either route, use two separate built-in Gradle `:app:properties --property` reports
+for that property and `android.experimental.testOptions.uninstallIncompatibleApks`, in
+the same Wear project and invocation context. Require leave-installed true and
+incompatible-uninstall false, or verified absence with AGP's default false. These are
+selected project values, not an expanded AGP getter; bind them to the reviewed wiring
+and defaults. Do not inject values or dump all properties. An unproved policy or
+incompatible update is HOLD: no data clear, uninstall fallback, downgrade or fresh install.
+
+UI-driven connected suites require the selected canonical targets to be awake, interactive
+and unrestricted by keyguard. Record the prior power state and settings; an ordinary
+`KEYCODE_WAKEUP` may wake a sleeping target, but verify the actual state before testing.
+Restore temporary power-state or setting changes exactly after verification. No screen-timeout
+change is required.
+
+Prove scoped before/after continuity of target UID, APK identity, saved-summary digest,
+logical consent and verifier/debug-app/wait-for-debugger settings alongside work and pairing.
+A compatible build can change APK bytes; a legitimate fresh publication can change the
+summary digest. Correlate changes with the gate boundaries. Logical consent does not require
+identical preference-file presence or bytes. The keep-installed policy and test counts alone
+prove none of this. See [Phone-to-Watch Acceptance](../tools/test-phone-watch-sync/README.md).
+
 Run the Wear OS acceptance checks with one canonical Wear AVD active:
 
 ```sh
@@ -834,18 +868,74 @@ just check-watchface
 ANDROID_SERIAL="$WEAR_SERIAL" just run-watchface
 ```
 
-Prepare and run the paired phone-to-watch acceptance check:
+For an initial paired environment only:
 
 ```sh
 just prepare-phone-watch-sync
+```
+
+Follow **Pairing the canonical phone and Wear AVDs** for Studio and ADB consent. Do not
+prepare, recreate/reset devices or re-pair an existing pair to make verification pass;
+after a restart, restore the transient bridge instead.
+
+Run the complete paired phone-to-watch gate:
+
+```sh
 just test-phone-watch-sync
 ```
 
-The preparation command is one-time. Follow **Pairing the canonical phone and Wear AVDs** for
-the Studio assistant and ADB consent steps. After a restart, restore the transient bridge
-instead of pairing again. The test command discovers one online phone and one online Wear
-device without hardcoded emulator ports. Set `PHONE_SERIAL` and `WEAR_SERIAL` explicitly when
-additional devices are online.
+The gate proves live roles and canonical AVD names, not emulator ports. Set `PHONE_SERIAL`
+and `WEAR_SERIAL` explicitly when additional devices are online. Its fixed metadata reader
+requires existing `javac` 21, API36 `android.jar`, Build Tools 36 `d8`/`aapt2` and supported
+`run-as`/`app_process` execution; verification installs no SDK or SQLite dependency.
+
+The complete recipe includes current builds, full Wear instrumentation and both preserving
+updates; fresh phone publication and a distinct Wear callback; actual phone separation,
+old Wear process death and a new process; ten further seconds of quiet with stable saved
+summary evidence; and logical/native scheduled-work reconciliation. Matching data, command
+success, old receipts, Source review or a partial suite cannot replace the full gate.
+Unknown identity, missing metadata or lost observation is HOLD.
+
+Preflight uses bounded fixed-query metadata for the installed WorkManager 2.11.2/schema 24
+binding, SQLite version/source identity and a consistent read-only WAL snapshot. It observes
+sanitized lifecycle/publication events and job identity/specification changes. The reader
+does not initialize app/Room/WorkManager, export database payloads, read credentials or dump
+preferences; saved-summary contents flow only through the hash pipeline. Read-only does
+not promise zero filesystem effects: reviewed automatic SHM coordination is distinct from
+forbidden deliberate mutation, repair, checkpoint or journal conversion.
+
+On 2026-10-18, the complete ordinary paired gate passed on the canonical phone and round
+Wear AVD with the targets awake. All 16 connected tests and 138 Gradle tasks passed in
+46 seconds. Both preserving updates, all logical/native work checkpoints, fresh publication
+and Wear delivery, actual phone separation, Wear old-process death/new process and at least
+ten further seconds of quiet with stable summary hash/metadata passed; owned-reader cleanup
+also completed. Separate complete round and square connected routes each passed all 16 tests
+and 138 tasks, in 21 and 22 seconds respectively. Full `just check-phone`, `just check-wear`,
+`just check-designs` and `just check-docs` also passed.
+
+The installed WorkManager 2.11.2/schema 24/SQLite 3.44.3 WAL binding and current Java/DEX
+correspondence were verified. Thirteen canonical reader cycles completed, including the
+first ordinary observer after UID-wide phone-app absence and normal transaction end/close.
+Two pairs of verified coexisting read-only observers received concurrent GO invocations;
+all four completed their bounded DB results, END, exit and retirement. This is bounded
+concurrent-invocation evidence alongside the reviewed Source/compiled nondeleting-handler
+proof. Post-GO process co-liveness, overlapping internal SQLite transactions and contention
+were not observed; unexecuted sidecar, corruption and internal SHM branches are not claimed
+as dynamic passes. See `WorkSnapshot.snapshot` and `WorkSnapshot.main` in
+`tools/test-phone-watch-sync/WorkSnapshot.java` and the acceptance README's
+[Dated status](../tools/test-phone-watch-sync/README.md#dated-status).
+
+Actual native fit measurements completed all ten approved scenes on 384×384 round and
+360×360 notround targets, including the longest Sonnet title and three credited rows,
+with per-scene conditional summary restoration in fresh processes. After returning to the
+canonical Round, current pairing, fresh delivery, retained scheduled work, logical consent
+and app settings were verified, and the latest real summary was retained. Temporary Round
+wake-up was reversed to a verified noninteractive state without persistent setting changes;
+this is scoped logical restoration evidence. These are scoped emulator verification results.
+
+The historical force-stop result is not current preservation evidence. Follow
+[Phone-to-Watch Acceptance](../tools/test-phone-watch-sync/README.md) for the complete
+prerequisites, privacy limits and required evidence.
 
 Do not hardcode `emulator-5554` in project automation; resolve the active device through
 `flutter devices` or `adb devices` because the emulator port can change.

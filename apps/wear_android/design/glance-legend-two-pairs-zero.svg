@@ -42,7 +42,7 @@
       stroke-width="5" />
     <text x="137.5" y="189.5"
       font-family="Noto Sans, sans-serif" font-size="16"
-      font-weight="700" fill="#F4FBF8">Claude · 5h</text>
+      font-weight="700" fill="#F4FBF8">Claude plan · 5h</text>
     <text x="137.5" y="209.0"
       font-family="Noto Sans, sans-serif" font-size="14"
       font-weight="700" fill="#8A968F"><tspan fill="#FFB4AB">0%</tspan> left</text>

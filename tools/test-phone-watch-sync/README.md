@@ -223,9 +223,10 @@ initialization/reconstruction after phone death, lock survival, missing sidecars
 corruption and close behavior before runtime acceptance. In particular it must prove
 that open/end/close perform no forbidden creation, deletion, repair, checkpoint or
 journal conversion, while permitting only the bounded automatic SHM effects above.
-Unknown/unsafe behavior remains a concrete HOLD. Compilation/DEX and these HOST proofs
-are pending; version metadata is evidence for binding, not their substitute. Ordinary
-read access-time updates are possible; no zero-filesystem-effect claim is made.
+Unknown/unsafe behavior remains a concrete HOLD. The [Dated status](#dated-status) checkpoint
+records the executed HOST evidence and its limits; version metadata is evidence for binding,
+not its substitute. Ordinary read access-time updates are possible; no zero-filesystem-effect
+claim is made.
 
 The host records the observer's actual PID/start identity before GO, verifies its process
 under the app UID, checks normal exit and `/proc` absence, and reconciles surrounding app
@@ -349,3 +350,18 @@ acceptance can be claimed. There is no manual override or source-review substitu
   completion, retirement and quiescence. Prior reader projection evidence does not establish
   full sync, WAL safety, first-reader, concurrency or corruption acceptance. No runtime Pass
   or unexecuted validation is claimed.
+- 2026-10-18 — current verification checkpoint, superseding the earlier pending status at
+  implementation checkpoints: Java 21/API36/D8 compilation and the installed WorkManager
+  2.11.2/schema 24/SQLite 3.44.3 WAL binding were verified. The complete ordinary
+  `just test-phone-watch-sync` passed with thirteen normal reader cycles, including the
+  first ordinary observer after UID-wide phone-app absence, transaction end/close and
+  observer retirement. Two pairs of verified coexisting read-only instances received
+  concurrent GO invocations; all four returned complete bounded DB results/END, exited
+  successfully and retired. This exercises ordinary concurrent invocations, not observed
+  post-GO process co-liveness, overlapping internal SQLite transactions or contention.
+  The reviewed Source/compiled-reader correspondence supplies the nondeleting-handler
+  proof; corruption dispatch, missing-sidecar failures and individual internal SHM branches
+  are not claimed as dynamically exercised. No deliberate database mutation or zero-
+  filesystem-effect claim follows. Full HOST checks and separate complete round/square
+  connected-suite results are recorded in
+  [Routine Verification](../../docs/ANDROID_TOOLCHAIN.md#routine-verification).

@@ -38,17 +38,17 @@
     <text x="225" y="101.0" text-anchor="middle"
       font-family="Noto Sans, sans-serif" font-size="13"
       font-weight="700" fill="#65D78A">OK</text>
-    <circle cx="139.5" cy="245" r="17" fill="none" stroke="#2E3632"
+    <circle cx="139" cy="245" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
-    <circle cx="139.5" cy="245" r="17" fill="none" stroke="#65D78A"
+    <circle cx="139" cy="245" r="17" fill="none" stroke="#65D78A"
       stroke-width="5" stroke-linecap="round"
       stroke-dasharray="3.55 106.81"
       stroke-dashoffset="-100.77"
-      transform="rotate(-90 139.5 245)" />
-    <text x="173.5" y="243.5"
+      transform="rotate(-90 139 245)" />
+    <text x="173" y="243.5"
       font-family="Noto Sans, sans-serif" font-size="16"
-      font-weight="700" fill="#F4FBF8">Codex · Weekly plan</text>
-    <text x="173.5" y="263.0"
+      font-weight="700" fill="#F4FBF8">Codex plan · Weekly</text>
+    <text x="173" y="263.0"
       font-family="Noto Sans, sans-serif" font-size="14"
       font-weight="700" fill="#8A968F">8% left · 320 credits</text>
     <rect x="161.0" y="372" width="128.0"

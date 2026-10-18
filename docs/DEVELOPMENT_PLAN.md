@@ -1592,13 +1592,19 @@ Maintenance clarification (2026-10-17): all six Providers connections now use th
 aligned right; readable status and supporting errors follow below. Alerts stays rightmost,
 with reporting Budget or Cursor plan Help immediately before it. Primary and action targets
 are separate and at least 48dp. The three families, plan-before-reporting order, Labels,
-authentication flows and current-key reporting verification are preserved. Relevant phone
-connection rows, dialogs and Dashboard supporting/recovery copy use **Codex plan**,
-**Claude plan**, **Cursor plan** and standalone **Plan**; contextual selector headings,
-actual windows/pools and watch wire labels retain their identities. The 2026-10-01 layout
-measurements above remain historical evidence. Automated and device acceptance for this
-revision remain pending with Root HOST; Wear presentation and public captures/guidance
-remain later work.
+authentication flows, secure credential storage and current-key reporting verification are
+preserved under the [Connection grouping](product/PROVIDER_NOTES.md#connection-grouping)
+rules. Relevant phone connection rows, dialogs and Dashboard supporting/recovery copy use
+**Codex plan**, **Claude plan**, **Cursor plan** and standalone **Plan**; contextual selector
+headings, actual windows/pools and watch wire labels retain their identities. The 2026-10-01
+layout measurements above remain historical evidence. Scoped phone acceptance completed at
+**2026-10-17 22:21:53 UTC** for actual Runner-authored Providers changes through
+`aece4cbd7f6cc3058b6bce518b9f9ea6094aa4c5`: full `just check-phone` passed with **458 Flutter
+tests**; actual device checks covered all **eight Light/Dark × 360/approximately 411dp ×
+font 1.0/1.3** configurations, six-row layout/actions and Root's live insufficient-rights →
+working-key recovery. This accepts Providers row composition and phone Plan terminology;
+Wear presentation, physical-device coverage, public captures/guidance, revised phone-to-watch
+sync acceptance and unrelated app surfaces remain outside this checkpoint.
 
 ### Phase 10 — capability-adaptive dashboard
 

@@ -47,7 +47,7 @@
       transform="rotate(-90 122 191)" />
     <text x="156" y="189.5"
       font-family="Noto Sans, sans-serif" font-size="16"
-      font-weight="700" fill="#F4FBF8">Codex · Weekly plan</text>
+      font-weight="700" fill="#F4FBF8">Codex plan · Weekly</text>
     <text x="156" y="209.0"
       font-family="Noto Sans, sans-serif" font-size="14"
       font-weight="700" fill="#8A968F">16% left · 320 credits</text>
@@ -73,7 +73,7 @@
       transform="rotate(-90 122 299)" />
     <text x="156" y="297.5"
       font-family="Noto Sans, sans-serif" font-size="16"
-      font-weight="700" fill="#F4FBF8">Claude · 5h</text>
+      font-weight="700" fill="#F4FBF8">Claude plan · 5h</text>
     <text x="156" y="317.0"
       font-family="Noto Sans, sans-serif" font-size="14"
       font-weight="700" fill="#8A968F">60% left · 80 credits</text>
