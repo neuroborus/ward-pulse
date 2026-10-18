@@ -40,7 +40,7 @@ const screenshots = [
 ]
 
 const approvedScreenshot =
-  /^\/screenshots\/(?:phone-(?:alert-thresholds|budget-limits|cursor-(?:paste-token|sign-in-help)|dashboard|home-widget|providers|reporting-key|watch-settings|widget-settings)-(?:light|dark)|wear-(?:glance|plan-windows|watch-face|watch-face-utility))\.png$/
+  /^\/screenshots\/(?:phone-(?:alert-thresholds|budget-limits|cursor-(?:paste-token|sign-in-help)|dashboard|home-widget|providers|openai-reporting-key|reporting-key|watch-settings|widget-settings)-(?:light|dark)|wear-(?:glance|plan-windows|watch-face|watch-face-utility))\.png$/
 
 const requestedBasePath = process.env.WARDPULSE_DOCS_BASE_PATH
 
@@ -249,7 +249,15 @@ export default defineConfig({
       text: 'User guide',
       items: [
         { text: 'Getting started', link: '/guide/getting-started' },
-        { text: 'Providers', link: '/guide/providers' },
+        {
+          text: 'Providers',
+          items: [
+            { text: 'Overview', link: '/guide/providers' },
+            { text: 'OpenAI', link: '/guide/providers-openai' },
+            { text: 'Anthropic', link: '/guide/providers-anthropic' },
+            { text: 'Cursor', link: '/guide/providers-cursor' },
+          ],
+        },
         { text: 'Dashboard', link: '/guide/dashboard' },
         { text: 'Watch and watch face', link: '/guide/watch' },
         { text: 'Home widget', link: '/guide/widget' },

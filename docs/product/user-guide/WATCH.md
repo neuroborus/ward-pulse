@@ -17,12 +17,13 @@ sign in to providers on the watch. If the phone has data but the watch does not,
 ## Read the Wear app
 
 **Glance** shows remaining capacity with provider labels, compact tracks, optional purchased
-credits and refresh status.
+credits and refresh status. A title such as **Claude plan · Weekly** names the plan and its
+selected window. Paired **Cursor plan** or **Codex plan** rows show two pool percentages.
 
-![Wear Glance showing selected capacities in a circular screen.](/screenshots/wear-glance.png)
+![Wear Glance showing selected capacities, amber !OK and Stale in a circular screen.](/screenshots/wear-glance.png)
 
 The selected metric with the lowest remaining percentage appears first.
-The example has a grey **OK** control and disabled **Alerts: 0**.
+The example has an amber **!OK** control with **Stale** and disabled **Alerts: 0**.
 
 ### Plan windows
 
@@ -30,9 +31,9 @@ Swipe upward to the second page, **Plan windows**, to see reported windows and w
 return. Exhausted windows appear first. Within each group, upcoming resets appear soonest
 first; missing or overdue reset times follow. Reset times may be unavailable.
 
-![Plan windows showing a reported Claude window and its available reset time.](/screenshots/wear-plan-windows.png)
+![Plan windows showing Codex Weekly plan and its reported reset time.](/screenshots/wear-plan-windows.png)
 
-A reported plan window with its available upcoming reset time.
+The captured first window is **Codex · Weekly plan**, with **60% left · back Oct 24, 22:40**.
 
 ### Alerts and refresh
 
@@ -97,8 +98,9 @@ Codex's main pool or Cursor Models keeps the left/inner half; Spark or Other Mod
 the right/outer half.
 
 Claude plan windows use the tightest known window, including an exhausted zero. The phone
-Dashboard still lists the individual windows. On Glance, a selected exhausted metric keeps
-a grey empty track and pale-red **0%** token; it is not replaced by a less-used window.
+Dashboard still lists the individual windows. The Glance title keeps the chosen window's
+name: **5h**, **Weekly**, **Opus weekly** or **Sonnet weekly**. A selected exhausted metric
+keeps a grey empty track and pale-red **0%** token; it is not replaced by a less-used window.
 Tiny positive values rounded to zero keep ordinary styling.
 
 **Next watch payload** describes what the phone will send; it is not delivery confirmation.
@@ -111,7 +113,7 @@ the face cannot be installed there.
 
 Open WardPulse on the watch. From **Glance**, swipe up to **Plan windows**, scroll past the
 windows and tap **Watch face**. Before the first phone summary, the same entry is below
-**Sync from phone**. Swipe back to return to the dashboard.
+**Sync from phone**. Swipe back to return to the previous screen.
 
 On supported Wear OS 6+ devices, the face can be installed with the Wear app. If it is
 missing, tap **Install watch face**. Installation does not activate it. If another face
@@ -124,9 +126,10 @@ select WardPulse manually:
 
 > Touch and hold your current watch face, then find WardPulse in the watch-face list.
 
-![Watch face setup showing manual-selection guidance after declining activation.](/screenshots/wear-watch-face-utility.png)
+![Historical watch face setup example showing manual-selection guidance after declining activation.](/screenshots/wear-watch-face-utility.png)
 
-After declining activation, choose WardPulse from the watch-face list.
+Historical manual-selection example after declining activation; choose WardPulse from the
+watch-face list.
 
 WardPulse will not switch back after you choose another face. **In use** reports a checked
 current selection; **Installed** confirms installation, not selection.
@@ -140,10 +143,10 @@ On Wear OS 5, or another compatible watch without bundled installation, install 
 Watch Face separately and select it from your watch-face list. The existing separate
 installation and its settings are preserved.
 
-![WardPulse circular watch face with selected usage bands and upper complications.](/screenshots/wear-watch-face.png)
+![Historical WardPulse circular watch face with selected usage bands and upper complications.](/screenshots/wear-watch-face.png)
 
-The lowest selected remaining percentage fills the innermost band; upper cells show watch
-complications.
+Historical WardPulse face example. The lowest selected remaining percentage fills the
+innermost band; upper cells show watch complications.
 
 The three upper complication cells are customized in the **system watch-face editor**. Open
 the watch's edit/customize action for WardPulse and select an upper cell to choose an available

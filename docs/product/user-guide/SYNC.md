@@ -26,8 +26,9 @@ The selected interval is between 5 and 60 minutes while WardPulse is open; the d
 The text beside the slider shows both cadences. Background refresh may continue when you
 are not using WardPulse, subject to Android scheduling.
 
-Provider reporting has its own freshness. The Cursor **Team Admin API** may lag about an
-hour. This note does not describe the experimental **Cursor plan** connection.
+Provider reporting has its own freshness. Cursor aggregates team usage by the hour, so a
+successful refresh can return unchanged figures. This applies to **Team Admin API**,
+separately from the experimental **Cursor plan** connection. See [Cursor reporting history](/guide/providers-cursor#read-the-history).
 
 ## Offline, failed refresh and restart
 

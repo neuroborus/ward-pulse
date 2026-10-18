@@ -10,6 +10,9 @@ becoming public Vocs pages.
 
 - [Getting started](product/user-guide/GETTING_STARTED.md)
 - [Connect providers](product/user-guide/PROVIDERS.md)
+  - [OpenAI](product/user-guide/PROVIDERS_OPENAI.md)
+  - [Anthropic](product/user-guide/PROVIDERS_ANTHROPIC.md)
+  - [Cursor](product/user-guide/PROVIDERS_CURSOR.md)
 - [Read the Dashboard](product/user-guide/DASHBOARD.md)
 - [Watch and watch face](product/user-guide/WATCH.md)
 - [Home widget](product/user-guide/WIDGET.md)

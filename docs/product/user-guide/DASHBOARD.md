@@ -1,8 +1,9 @@
 # Read the Dashboard
 
-Open **Dashboard** to see the reporting available from your connected providers. Sections can
-change with the data a provider exposes: not every account has spend, model detail, purchased
-usage or a history chart.
+Open **Dashboard** to see the reporting available from your connected providers. Related plan
+and API connections appear together under their provider family: OpenAI, Anthropic or Cursor.
+Each connection keeps its own data and status. Not every account provides spend, model detail,
+purchased usage or a history chart.
 
 ## Read balances and bars
 
@@ -18,11 +19,12 @@ usage or a history chart.
 **0% left** means the reported capacity is exhausted. A small positive percentage may round
 to 0%; watch displays keep ordinary styling for that rounded value.
 
-![Dashboard plan capacities and update status in the light theme.](/screenshots/phone-dashboard-light.png)
+![Dashboard showing previous data and a Claude unsupported-response warning in the light theme.](/screenshots/phone-dashboard-light.png)
 
-![Dashboard plan capacities and update status in the dark theme.](/screenshots/phone-dashboard-dark.png)
+![Dashboard showing previous data and a Claude unsupported-response warning in the dark theme.](/screenshots/phone-dashboard-dark.png)
 
-Read each plan's capacity **left** and the reporting status beside it.
+Read each plan's capacity **left** and the reporting status beside it. These captures show
+a Claude unsupported-response warning and previous data.
 
 Selected exhausted watch metrics remain present with an empty grey track and a pale-red zero
 percentage. They do not disappear or get replaced by a less-used Claude window. The widget
@@ -30,9 +32,14 @@ also keeps exhausted rows as **0% left**. See [Watch](/guide/watch) and [Widget]
 
 ## Spend, history and model detail
 
-Platform reporting can show **Today**, **Week** and **Month** spend. A missing spend report is
-not proof of zero billing. History and **Model usage** appear when the provider supplies usable
-data; WardPulse does not create a local log of your prompts or a continuous activity history.
+API reporting can show **Today**, **Week** and **Month** spend where available. A missing
+spend report is not proof of zero billing. History and **Model usage** appear when the provider
+supplies usable data; WardPulse does not create a local log of your prompts or a continuous
+activity history.
+
+Personal plan activity and API organization/team usage keep separate histories and balances
+within a family. Use the source label when more than one connection is listed. Read each
+chart's unit: cost, tokens or requests.
 
 Some reporting services publish totals less frequently than WardPulse refreshes. A successful
 refresh can therefore return unchanged figures. See [Sync](/guide/sync).
@@ -76,9 +83,9 @@ For example, **Plan → 20% left** alerts when the reported plan capacity is 20%
 For a reporting connection with a **25.00** Today limit, a **20% left** Today threshold is
 reached at **20.00** spent. These examples depend on usable reporting from that connection.
 
-![Claude subscription Alerts dialog with a Plan 20% left draft in the light theme.](/screenshots/phone-alert-thresholds-light.png)
+![Claude plan Alerts dialog with a Plan 20% left draft in the light theme.](/screenshots/phone-alert-thresholds-light.png)
 
-![Claude subscription Alerts dialog with a Plan 20% left draft in the dark theme.](/screenshots/phone-alert-thresholds-dark.png)
+![Claude plan Alerts dialog with a Plan 20% left draft in the dark theme.](/screenshots/phone-alert-thresholds-dark.png)
 
 Unsaved example: **Plan 20% left**, **Purchased Off**. **Cancel** keeps the previous rules.
 
@@ -97,7 +104,8 @@ The header shows **Updated …**. After a failed refresh that recovers earlier d
 successful times. The header timestamp does not certify that every provider has fresh data:
 one connection may refresh while another retains stale data.
 
-Problem marks identify reporting or capacity issues. The top-bar problem control can take you
-to the relevant Dashboard section. These status marks are separate from your alert rules,
-so **No alerts** does not by itself mean every provider is healthy or freshly synced.
+Problem marks identify reporting or capacity issues. The top-bar count represents provider
+families with problems. Tap it to reach the first affected Dashboard family, then read the
+named connection or card. These status marks are separate from your alert rules, so
+**No alerts** does not by itself mean every provider is healthy or freshly synced.
 For rejected credentials, provider errors and rate limits, use [Troubleshooting](/guide/troubleshooting).

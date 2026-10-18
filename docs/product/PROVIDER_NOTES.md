@@ -55,9 +55,10 @@ separate from monetary budgets because their units and reset rules differ.
 - WardPulse does not invent a limit, balance, or percentage when the provider omits it.
 - Exact provider quantities cross shared contracts as decimal strings with an explicit `tokens`
   or `credits` unit.
-- Phone dashboard allowance cards are **per account**, grouped under a provider section
-  (family accent + provider name). Plan and purchased values are never summed across
-  providers into one card.
+- Phone dashboard accounts share a **family container** (OpenAI, Anthropic or Cursor).
+  Plan and reporting accounts retain independent histories, periods, units, model detail
+  and status. There is no combined Plan/API balance; plan and purchased values are never
+  summed across providers into one card.
 - Wear / WFF strips show remaining **purchased credits** per ring family from watch summary
   `allowances` (same lookup as Glance: `Codex · …`, `Claude · …`). Compact on the face
   (`% · 320`); Glance keeps the unit (`% left · 320 credits`). Schema `creditsGlance` remains
@@ -147,7 +148,7 @@ a running agent.
 
 ## Connection grouping
 
-Every provider on the **Providers** tab is one section with up to two homogeneous connections:
+Every family on the **Providers** tab is one section with distinct Plan and reporting connections:
 
 - `plan`: subscription or allowance reads (Codex device-code OAuth; Claude Code PKCE OAuth
   with authorization-code paste from the callback page; Cursor dashboard WebView sign-in that
@@ -155,8 +156,12 @@ Every provider on the **Providers** tab is one section with up to two homogeneou
 - `platform`: organization or team usage and cost reporting with provider-appropriate keys
   and reporting access.
 
-OpenAI therefore shows Codex subscription and Platform reporting together. An optional
-user-defined label for reporting keys is plain phone-local display metadata:
+The current user-facing plan names are **Codex plan**, **Claude plan** and **Cursor plan**.
+OpenAI groups Codex plan with Platform reporting; Anthropic groups Claude plan with
+Organization reporting; Cursor groups Cursor plan with Team Admin API. The Dashboard
+uses the same family grouping while keeping each account's data and status separate.
+A plan login does not grant reporting access or verify its sibling reporting key.
+An optional user-defined label for reporting keys is plain phone-local display metadata:
 
 - stored beside the credential reference, never concatenated into the secure key value;
 - shown on the Providers row alongside its canonical family-and-kind identity;
@@ -326,6 +331,20 @@ workspace-scoped, with the required organization reporting rights. Workspace-sco
 do not work. This key-entry integration does not add a reporting OAuth flow; a key prefix
 or personal ownership alone does not establish reporting access.
 
+Individual Console API organizations do not have Admin API access. The Console flow
+observed on 2026-10-17 was **Settings → Organization → Convert to team organization →
+Convert to team**, followed by organization details and API-use questions. Choosing
+**Scope: Organization** on a key does not change the organization's type. This conversion
+is separate from buying a claude.ai Team chat plan. The owner reported a successful
+reporting connection after conversion; that report is not an independent new API probe
+or a guarantee of eligibility, free conversion or reversal for other accounts.
+
+Organization-scoped personal keys use the linked account's reporting permissions;
+eligible service-account keys must also be outside workspace scope. Console Admin keys
+are a separate supported type without the personal-key Scope selector. Claude Enterprise
+Analytics keys are for another service. None of these reporting credentials replaces the
+separate **Claude plan** login.
+
 Scope:
 
 - Use a key with organization reporting access (`x-api-key`) against
@@ -342,6 +361,9 @@ Revoke the key through the appropriate Console key-management controls for its t
 Official references:
 
 - [Usage & Cost Admin API](https://platform.claude.com/docs/en/manage-claude/usage-cost-api)
+- [Console organization settings](https://platform.claude.com/settings/organization)
+- [Console API keys](https://platform.claude.com/settings/keys)
+- [Claude plans and separate API billing](https://support.claude.com/en/articles/9876003-i-have-a-paid-claude-subscription-pro-max-team-or-enterprise-plans-why-is-claude-api-usage-billed-separately-from-my-paid-claude-plan)
 - [Messages usage report](https://platform.claude.com/docs/en/api/admin/usage_report/retrieve_messages)
 - [Cost report](https://platform.claude.com/docs/en/api/admin/cost_report/retrieve)
 
@@ -396,10 +418,43 @@ Use a team API key whose account has reporting access. Checked 2026-10-16: the o
 [Teams pricing](https://cursor.com/docs/account/teams/pricing) describes Teams usage statistics
 through the Admin API. Preserve that discrepancy rather than asserting a universal
 Teams-insufficient rule; actual access denial is distinct from authentication rejection.
-A team administrator creates the key under `cursor.com/dashboard` → API Keys.
-Keys are issued as `crsr_…`, belong to the organization
-rather than their creator, and stay visible to every administrator, so WardPulse treats one as
-an organization-wide administrative secret.
+The unified Team-key path observed on 2026-10-17 uses the intended team's
+[Team API keys](https://grok.com/dashboard/api-keys/team). The tested setup clears the
+preselected permissions and enables only **General → View team resources**, whose
+description includes members, usage, spend, analytics, audit logs and settings. Other
+permissions, including Agents/Models and write access, stay off. **View member usage**
+alone was not a sufficient tested setup; do not recommend All permissions to recover
+reporting. Actual stored grants and legacy scope metadata were not inspected, so the
+observed menu choice does not establish a literal mapping to legacy scope names. Do not
+infer a universal key prefix or administrator visibility rule from this new UI.
+
+A Team key is distinct from a personal User key under **API & SSH Keys** and from the
+**Cursor plan** dashboard login. A personal Premium subscription does not confirm that a
+team exists or has reporting access. The observed creation path is **Get Teams** on the
+[official pricing page](https://x.ai/pricing); an already-paid Premium account looping
+through Start a team/Unify used the
+[Premium team-creation entry](https://grok.com/dashboard/members?modal=create-team&tier=premium).
+Admin is a role; Premium is a paid seat. One person can hold both. Assigning an already
+purchased unused seat differs from buying or upgrading one; review billing before any change.
+
+Before confirming **Unify**, verify the Cursor, Grok and optional X accounts shown:
+[completed unification cannot be undone](https://docs.x.ai/x-subscription/unify-accounts).
+[Moving a legacy Cursor plan to The X Subscription](https://cursor.com/docs/account/pricing/legacy-cursor-plans)
+is separately permanent. A separate account can leave an existing account and legacy plan
+unchanged. None of these observations guarantees reporting eligibility for every team or plan.
+
+Reporting outcomes:
+
+An explicit missing-reporting-scope response is **access denial**, distinct from an
+authentication rejection. A successful ordinary empty daily report can have no history;
+paginated inactive days containing only zero counts are not evidence of usage. Connected
+does not promise activity or immediate changes to the history. Provider-side hourly
+aggregation is not an exact publication deadline. The phone's `CursorPlatformClient.fetchReports`
+in `apps/phone_flutter/lib/sync/provider_reporting_clients.dart` owns retrieval;
+`_isMissingCursorReportingScope` in `apps/phone_flutter/lib/sync/provider_reporting.dart`
+identifies the explicit missing-scope response for error mapping;
+`cursor_platform_snapshot_from_report_json` in
+`core/ward-pulse-providers/src/cursor/platform.rs` owns normalization.
 
 Scope:
 
@@ -418,3 +473,4 @@ Official references:
 
 - [Cursor API overview](https://cursor.com/docs/api)
 - [Team Admin API](https://cursor.com/docs/account/teams/admin-api)
+- [Team roles, seats and invitations](https://docs.x.ai/x-subscription/team-plans)

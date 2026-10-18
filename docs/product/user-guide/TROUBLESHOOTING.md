@@ -9,6 +9,10 @@ If Dashboard says **Connect a provider**, use **Open Providers** and connect the
 plan account or organization/team reporting key. [Connect providers](/guide/providers) explains
 the prerequisites for each row.
 
+A **Connected** reporting row can show zero or no history before there is activity to report.
+This alone does not require replacing the key. See [Cursor's reporting history](/guide/providers-cursor#read-the-history)
+for its update timing.
+
 If a connection is saved but a meter says **Unknown**, **Balance unavailable** or is absent,
 check what that account exposes in the provider's own dashboard. Some providers do not report
 every balance, reset time, model breakdown or history. A missing value is not a zero.
@@ -40,11 +44,17 @@ in the same provider family.
 
 For **Rate limited**, follow [Previous data, offline or rate limited](#previous-data-offline-or-rate-limited).
 
-OpenAI Platform reporting needs an organization Admin key, not an ordinary project key.
-Anthropic reporting needs the required organization reporting access; personal/service
-keys must not be workspace-scoped. Cursor Team Admin API needs team reporting access.
+Check the setup for the named connection:
 
-For a subscription/session error, use the named plan row's **Reconnect** or Cursor's
+- [OpenAI Platform reporting](/guide/providers-openai#platform-reporting) needs an organization
+  Admin key, not an ordinary project key.
+- [Anthropic Organization reporting](/guide/providers-anthropic#organization-reporting) needs
+  organization reporting access; personal/service keys must not be workspace-scoped.
+  An Individual API organization needs the [Console conversion](/guide/providers-anthropic#convert-an-individual-organization).
+- [Cursor Team Admin API](/guide/providers-cursor#team-admin-api) needs a Team key with reporting
+  access; check [General → View team resources](/guide/providers-cursor#team-key-permissions).
+
+For a plan/session error, use the named plan row's **Reconnect** or Cursor's
 **Sign in again**. Claude callback paste expects **CODE#STATE**, not a reporting key.
 Do not paste a secret into an unrelated row or a help request.
 
@@ -53,6 +63,12 @@ Do not paste a secret into an unrelated row or a help request.
 **Showing previous data** and **STALE** identify earlier data kept after failed refresh. Restore
 network access and refresh on the phone. Earlier successful values and their timestamps can
 survive restart, but a connection with no successful report has no data to recover.
+
+![Dashboard showing previous data and a Claude unsupported-response warning in the light theme.](/screenshots/phone-dashboard-light.png)
+
+![Dashboard showing previous data and a Claude unsupported-response warning in the dark theme.](/screenshots/phone-dashboard-dark.png)
+
+This is a warning and previous-data example; the message alone does not establish its cause.
 
 If a provider reports a rate limit, wait for any supplied availability/reset time or try later.
 Repeated refresh taps cannot remove a provider limit. A successful report may still contain
