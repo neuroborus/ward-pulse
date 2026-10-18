@@ -470,8 +470,20 @@ package_uid() {
   local value
   value=$(adb_on "$1" shell -n cmd package list packages -U "$APP_ID" | tr -d '\r') \
     || hold 'Installed package UID unavailable.'
-  [[ "$value" =~ ^package:app\.wardpulse\ uid:([0-9]+)$ ]] || hold 'Package UID is missing or ambiguous.'
-  printf '%s' "${BASH_REMATCH[1]}"
+  [[ ${#value} -le 16384 ]] || hold 'Package UID inventory exceeds its bound.'
+  # PackageManager applies a substring filter; watchface siblings are valid records.
+  # Validate the entire bounded inventory, then require exactly the owned package.
+  printf '%s\n' "$value" | awk -v package="$APP_ID" '
+    function fail() { bad=1; exit 1 }
+    {
+      if (++rows > 128 || NF != 2 || $1 !~ /^package:[a-zA-Z0-9_.]+$/ ||
+          !index($1, package) || $2 !~ /^uid:[0-9]+$/ || seen[$1]++) fail()
+      uid=substr($2, 5)
+      if (length(uid) > 10 || uid+0 < 1 || uid+0 > 2147483647) fail()
+      if ($1 == "package:" package) { exact++; result=uid }
+    }
+    END { if (bad || exact != 1) exit 1; print result }
+  ' || hold 'Package UID inventory is missing, malformed or ambiguous.'
 }
 
 installed_apk() {
@@ -552,7 +564,7 @@ work_snapshot() {
       hold "Work reader: ${line#HOLD }"
     fi
     if [[ "$line" == "END $pid $ticks" ]]; then end=1; break; fi
-    [[ "$line" =~ ^(SCHEMA|TIME|WORK)\ [a-zA-Z0-9._\ -]+$ ]] || hold 'Malformed or unrecognized reader output.'
+    [[ "$line" =~ ^(SCHEMA|SQLITE|TIME|WORK)\ [a-zA-Z0-9._:\ -]+$ ]] || hold 'Malformed or unrecognized reader output.'
     output+="$line"$'\n'
   done
   [[ "$end" == 1 ]] || hold 'Partial reader evidence.'
@@ -574,6 +586,10 @@ work_snapshot() {
   printf '%s' "$output" >"$SCRATCH/work.current"
   reconcile_work "$label"
   native_jobs "$label" "$phone_live"
+  if [[ "$label" == preflight ]]; then
+    # Keep the narrow installed tuple visible for HOST binding after scratch cleanup.
+    awk '$1 == "SCHEMA" || $1 == "SQLITE"' "$SCRATCH/work.current"
+  fi
   # Advance the accepted pair only after logical AND native evidence reconcile.
   cp "$SCRATCH/work.current" "$SCRATCH/work.previous"
   cp "$SCRATCH/native.current" "$SCRATCH/native.previous"
@@ -597,20 +613,32 @@ reconcile_work() {
     FILENAME == previous {
       if ($1 == "WORK") { old[$3]=$0; oldstate[$3]=$4; oldname[$3]=$2 }
       if ($1 == "TIME") oldtime=$2
+      if ($1 == "SCHEMA") oldschema=$0
+      if ($1 == "SQLITE") oldsqlite=$0
       next
     }
     $1 == "SCHEMA" {
-      if (FNR != 1 || NF != 5 || $2 != "2.10.2" || $3 != 23 || $4 != "86254750241babac4b8d52996a675549" ||
-          ($5 != "no_backup" && $5 != "databases") || schema++) fail()
+      if (FNR != 1 || NF != 5 || $2 != "2.11.2" || $3 != 24 || $4 != "08b926448d86528e697981ddd30459f7" ||
+          ($5 != "no_backup" && $5 != "databases") || schema++ || (oldschema && $0 != oldschema)) fail()
       next
     }
-    $1 == "TIME" { if (FNR != 2 || NF != 2 || length($2) != 13 || $2 !~ /^[0-9]+$/ || time++) fail(); now=$2; next }
+    $1 == "SQLITE" {
+      source=$5; sub(/-alt[0-9]+$/, "", source)
+      if (FNR != 2 || NF != 6 || ($2 != "3.44.3" && $2 != "3.44.4") ||
+          $3 !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ ||
+          $4 !~ /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]$/ ||
+          length(source) != 64 || source !~ /^[0-9a-f]+$/ || length($5) > 79 ||
+          ($6 != "wal" && $6 != "delete") || sqlite++ || (oldsqlite && $0 != oldsqlite)) fail()
+      next
+    }
+    $1 == "TIME" { if (FNR != 3 || NF != 2 || length($2) != 13 || $2 !~ /^[0-9]+$/ || time++) fail(); now=$2; next }
     $1 == "WORK" {
-      if (schema != 1 || time != 1 || NF != 24 || ++rows > 32 || seen[$3]++ ||
+      if (schema != 1 || sqlite != 1 || time != 1 || NF != 25 || ++rows > 32 || seen[$3]++ ||
           ($2 != "wardpulse.providerSync" && $2 != "wardpulse.recoveryWake") ||
           $3 !~ /^[0-9a-f-]+$/ || $4 !~ /^[0-5]$/ ||
           $5 != "dev.fluttercommunity.workmanager.BackgroundWorker") fail()
-      for (i=6;i<=24;i++) if ($i !~ /^-?[0-9]+$/) fail()
+      for (i=6;i<=25;i++) if ($i !~ /^-?[0-9]+$/) fail()
+      if ($25 != -1 && $25 != 0 && $25 != 1) fail()
       if ($9 != 1 || $10 != 0 || $11 != 0 || $12 != 0 || $13 != 0) fail()
       if ($2 == "wardpulse.providerSync") {
         if ($6 < 900000 || $7 < 300000 || $7 > $6 || $4 == 4) fail()
@@ -622,10 +650,11 @@ reconcile_work() {
         split(old[$3], a, " ")
         # Identity/spec preservation; initial delay is a spec, never a countdown.
         for (i=2;i<=14;i++) if (i != 4 && i != 14 && !same($i, a[i])) fail()
+        if (!same($25, a[25])) fail()
         if (terminal(a[4])) {
           # Terminal identities cannot execute or be updated again. Only native
           # mapping/schedule retirement is compatible with terminal cleanup.
-          for (i=2;i<=24;i++) {
+          for (i=2;i<=25;i++) {
             if ((i == 15 || i == 17) && $i == -1) continue
             if (!same($i, a[i])) fail()
           }
@@ -655,7 +684,7 @@ reconcile_work() {
     }
     { fail() }
     END {
-      if (bad || schema != 1 || time != 1 || periodic != 1) exit 1
+      if (bad || schema != 1 || sqlite != 1 || time != 1 || periodic != 1) exit 1
       for (id in old) {
         # Already-terminal history may be pruned for either logical name.
         if (oldstate[id] == 2 || oldstate[id] == 3 || oldstate[id] == 5) continue

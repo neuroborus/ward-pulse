@@ -1,5 +1,6 @@
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteException;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
 import android.os.Process;
@@ -24,13 +25,14 @@ import java.util.zip.ZipFile;
 
 /** Standalone, fixed-query acceptance reader. Never loads the application or WorkManager. */
 public final class WorkSnapshot {
-    // Inspected in resolved work-runtime 2.10.2 WorkDatabase_Impl / WorkTypeConverters.
-    private static final String IDENTITY = "86254750241babac4b8d52996a675549";
+    // Inspected in work-runtime 2.11.2 WorkDatabase_Impl / WorkTypeConverters.
+    private static final String IDENTITY = "08b926448d86528e697981ddd30459f7";
     private static final String WORKER = "dev.fluttercommunity.workmanager.BackgroundWorker";
     private static final String NAME = "androidx.work.workdb";
     // SQLite's default Unix VFS lock bytes, not database contents. Guard the
     // entire range so both RESERVED writers and direct EXCLUSIVE mode changes
     // conflict, including a WAL-to-rollback transition during header inspection.
+    // WAL writers use SHM locks instead; SQLite's read transaction pins that snapshot.
     private static final long PENDING_BYTE = 0x40000000L;
     private static final long RESERVED_BYTE = PENDING_BYTE + 1;
     private static final long SHARED_FIRST = RESERVED_BYTE + 1;
@@ -40,7 +42,8 @@ public final class WorkSnapshot {
             + "backoff_delay_duration last_enqueue_time schedule_requested_at period_count generation "
             + "next_schedule_time_override next_schedule_time_override_generation stop_reason "
             + "required_network_type requires_charging requires_device_idle requires_battery_not_low "
-            + "requires_storage_not_low trigger_content_update_delay trigger_max_content_delay";
+            + "requires_storage_not_low trigger_content_update_delay trigger_max_content_delay "
+            + "backoff_on_system_interruptions";
     private static final long START = SystemClock.elapsedRealtime();
 
     private WorkSnapshot() {}
@@ -78,7 +81,7 @@ public final class WorkSnapshot {
                     count += n;
                 }
                 require(count <= 32 && new String(bytes, 0, count, StandardCharsets.US_ASCII)
-                        .trim().equals("2.10.2"), "INSTALLED_LIBRARY_IDENTITY");
+                        .trim().equals("2.11.2"), "INSTALLED_LIBRARY_IDENTITY");
             }
         }
     }
@@ -94,22 +97,15 @@ public final class WorkSnapshot {
         return selected;
     }
 
-    private static String stamp(File file) throws Exception {
-        StructStat s = Os.stat(file.getPath());
-        require(s.st_size >= 100 && s.st_size <= 64 * 1024 * 1024, "DATABASE_SIZE");
-        return s.st_dev + ":" + s.st_ino + ":" + s.st_size + ":"
-                + s.st_mtim.tv_sec + ":" + s.st_mtim.tv_nsec + ":"
-                + s.st_ctim.tv_sec + ":" + s.st_ctim.tv_nsec;
+    private static void noSidecar(File file, String suffix) {
+        require(!Files.exists(new File(file.getPath() + suffix).toPath(),
+                LinkOption.NOFOLLOW_LINKS), "UNEXPECTED_JOURNAL_OR_SIDECAR");
     }
 
-    private static void safeRollback(File file, FileInputStream input) throws Exception {
-        // SQLite read-only WAL connections can still create/write SHM read marks. No
-        // immutable/nolock flags or chmod of app state can turn that into safe evidence.
-        // Refuse WAL BEFORE SQLite opens it, even if its sidecars currently look absent.
-        for (String suffix : new String[] {"-wal", "-shm", "-journal"}) {
-            require(!Files.exists(new File(file.getPath() + suffix).toPath(),
-                    LinkOption.NOFOLLOW_LINKS), "SIDECAR_SAFETY_UNPROVEN");
-        }
+    private static boolean walMode(File file, FileInputStream input) throws Exception {
+        require(input.getChannel().size() >= 100
+                && input.getChannel().size() <= 64 * 1024 * 1024, "DATABASE_SIZE");
+        noSidecar(file, "-journal");
         byte[] header = new byte[100];
         // Never open/close another descriptor for this inode while guarding it:
         // POSIX locks belong to the process, and any such close releases them.
@@ -122,17 +118,50 @@ public final class WorkSnapshot {
         require(offset == header.length, "DATABASE_HEADER");
         require(new String(header, 0, 15, StandardCharsets.US_ASCII)
                 .equals("SQLite format 3") && header[15] == 0, "DATABASE_HEADER");
-        require(header[18] == 1 && header[19] == 1, "WAL_SAFETY_UNPROVEN");
+        require((header[18] == 1 && header[19] == 1)
+                || (header[18] == 2 && header[19] == 2), "JOURNAL_MODE_UNSUPPORTED");
+        return header[18] == 2;
     }
 
     private static StructStat sameFile(File file, FileDescriptor fd) throws Exception {
         StructStat held = Os.fstat(fd), path = Os.stat(file.getPath());
-        require(held.st_dev == path.st_dev && held.st_ino == path.st_ino
+        require(file.equals(file.getCanonicalFile())
+                && held.st_dev == path.st_dev && held.st_ino == path.st_ino
                 && held.st_uid == Process.myUid() && OsConstants.S_ISREG(held.st_mode),
                 "DATABASE_IDENTITY");
         require((Os.fcntlInt(fd, OsConstants.F_GETFL, 0) & OsConstants.O_ACCMODE)
                 == OsConstants.O_RDONLY, "READ_ONLY_DESCRIPTOR_REQUIRED");
         return held;
+    }
+
+    private static ParcelFileDescriptor sidecar(File file, String suffix, boolean wal)
+            throws Exception {
+        if (!wal) {
+            noSidecar(file, suffix);
+            return null;
+        }
+        File path = new File(file.getPath() + suffix);
+        require(path.equals(path.getCanonicalFile()) && path.isFile(), "WAL_SIDECAR_REQUIRED");
+        ParcelFileDescriptor descriptor = ParcelFileDescriptor.open(path,
+                ParcelFileDescriptor.MODE_READ_ONLY);
+        try {
+            sidecarIdentity(file, suffix, descriptor);
+            return descriptor;
+        } catch (Exception failure) {
+            descriptor.close();
+            throw failure;
+        }
+    }
+
+    private static void sidecarIdentity(File file, String suffix, ParcelFileDescriptor descriptor)
+            throws Exception {
+        if (descriptor == null) {
+            noSidecar(file, suffix);
+        } else {
+            StructStat s = sameFile(new File(file.getPath() + suffix), descriptor.getFileDescriptor());
+            require(s.st_size >= 0 && s.st_size <= (suffix.equals("-shm") ? 4194304 : 67108864),
+                    "WAL_SIDECAR_SIZE");
+        }
     }
 
     private static void requireStableJournalMode(File file, ParcelFileDescriptor descriptor,
@@ -173,7 +202,8 @@ public final class WorkSnapshot {
             }
         }
         // SQLite releases its transient PENDING read lock on acquiring SHARED;
-        // RESERVED + the complete SHARED range must still exclude every writer.
+        // RESERVED excludes rollback writers; SHARED excludes journal conversion.
+        // Neither proves WAL quiescence: ordinary SQLite SHM locks provide the read snapshot.
         require(inode && reserved && shared && (reading || pending),
                 "JOURNAL_MODE_STABILITY_UNPROVEN");
     }
@@ -216,6 +246,19 @@ public final class WorkSnapshot {
         return value;
     }
 
+    private static String platform(SQLiteDatabase db, boolean wal) {
+        String version = scalar(db, "SELECT sqlite_version()");
+        String source = scalar(db, "SELECT sqlite_source_id()");
+        require(version.equals("3.44.3") || version.equals("3.44.4"), "SQLITE_VERSION_UNREVIEWED");
+        require(source.length() <= 100 && source.matches(
+                "[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} [0-9a-f]{64}(-alt[0-9]+)?"),
+                "SQLITE_SOURCE_ID_UNSUPPORTED");
+        String mode = wal ? "wal" : "delete";
+        require(scalar(db, "PRAGMA journal_mode").equals(mode), "JOURNAL_MODE_CHANGED");
+        // Fixed nonsecret metadata for HOST binding, not proof of a vendor binary's behavior.
+        return "SQLITE " + version + " " + source + " " + mode;
+    }
+
     private static String project(SQLiteDatabase db) {
         // No input, output, progress, tags, preferences or payload contents are queried.
         // The two blob-derived booleans only reject unsupported constraint encodings.
@@ -230,7 +273,8 @@ public final class WorkSnapshot {
                 + "AND length(w.required_network_request)=0 THEN 0 ELSE 1 END,"
                 + "CASE WHEN typeof(w.content_uri_triggers)='blob' "
                 + "AND length(w.content_uri_triggers)=0 THEN 0 ELSE 1 END,"
-                + "w.trigger_content_update_delay,w.trigger_max_content_delay "
+                + "w.trigger_content_update_delay,w.trigger_max_content_delay,"
+                + "w.backoff_on_system_interruptions "
                 + "FROM WorkName n LEFT JOIN WorkSpec w ON w.id=n.work_spec_id "
                 + "LEFT JOIN SystemIdInfo s ON s.work_spec_id=w.id AND s.generation=w.generation "
                 + "WHERE n.name IN ('wardpulse.providerSync','wardpulse.recoveryWake') "
@@ -274,6 +318,9 @@ public final class WorkSnapshot {
                     long min = (i == 14 || i == 15) ? -1 : (i == 22 ? -256 : 0);
                     out.append(' ').append(i == 13 && c.isNull(i) ? -1 : integer(c, i, min));
                 }
+                long interruptBackoff = c.isNull(27) ? -1 : integer(c, 27, 0);
+                require(interruptBackoff <= 1, "BACKOFF_INTERRUPTION_ENCODING");
+                out.append(' ').append(interruptBackoff);
                 out.append('\n');
             }
         }
@@ -285,8 +332,7 @@ public final class WorkSnapshot {
     private static String snapshot(String apk) throws Exception {
         installedVersion(apk);
         File file = database();
-        String before;
-        String projection;
+        String projection, sqlite;
         ParcelFileDescriptor descriptor = ParcelFileDescriptor.open(file,
                 ParcelFileDescriptor.MODE_READ_ONLY);
         try (ParcelFileDescriptor.AutoCloseInputStream input =
@@ -294,47 +340,60 @@ public final class WorkSnapshot {
                 FileLock guard = input.getChannel().tryLock(PENDING_BYTE,
                         SHARED_LAST - PENDING_BYTE + 1, true)) {
             requireStableJournalMode(file, descriptor, guard, false);
-            before = stamp(file);
-            safeRollback(file, input);
+            boolean wal = walMode(file, input);
             requireStableJournalMode(file, descriptor, guard, false);
             // API36 READONLY skips journal/sync/checkpoint configuration; NO_LOCALIZED
             // also skips locale/metadata queries. No pre-BEGIN schema read is requested.
-            // The guard spans open and the first pager read, which then
-            // holds SQLite's own SHARED range until endTransaction. No writable retry.
-            try (SQLiteDatabase db = SQLiteDatabase.openDatabase(file.getPath(), null,
-                    SQLiteDatabase.OPEN_READONLY | SQLiteDatabase.NO_LOCALIZED_COLLATORS,
-                    ignored -> { throw new Hold("DATABASE_CORRUPTION"); })) {
-                requireStableJournalMode(file, descriptor, guard, false);
-                require(db.isReadOnly(), "READ_ONLY_REQUIRED");
-                db.beginTransactionReadOnly();
-                try {
+            // Retain every extra DB/sidecar descriptor until AFTER SQLite close:
+            // closing any descriptor for an inode releases this process's POSIX locks.
+            // Existing WAL/SHM are required. SQLite may automatically initialize/rebuild
+            // the SHM index and coordinate read marks, even as the first reader after
+            // app death. No explicit sidecar writes, checkpoint or writable fallback.
+            try (ParcelFileDescriptor walFile = sidecar(file, "-wal", wal);
+                    ParcelFileDescriptor shmFile = sidecar(file, "-shm", wal)) {
+                try (SQLiteDatabase db = SQLiteDatabase.openDatabase(file.getPath(), null,
+                        SQLiteDatabase.OPEN_READONLY | SQLiteDatabase.NO_LOCALIZED_COLLATORS,
+                        ignored -> { throw new Hold("DATABASE_CORRUPTION"); })) {
                     requireStableJournalMode(file, descriptor, guard, false);
-                    require(scalar(db, "PRAGMA user_version").equals("23"), "SCHEMA_VERSION");
-                    requireStableJournalMode(file, descriptor, guard, true);
-                    require(scalar(db, "SELECT identity_hash FROM room_master_table WHERE id=42")
-                            .equals(IDENTITY), "SCHEMA_IDENTITY");
-                    require(scalar(db, "SELECT count(*) FROM sqlite_master WHERE type='table' "
-                            + "AND name IN ('WorkName','WorkSpec','SystemIdInfo','room_master_table')")
-                            .equals("4"), "SCHEMA_TABLES");
-                    require(scalar(db, "PRAGMA journal_mode").equals("delete"), "JOURNAL_SAFETY_UNPROVEN");
-                    columns(db, "WorkName", "name work_spec_id", "", "");
-                    columns(db, "WorkSpec", "id worker_class_name", "state " + COLUMNS,
-                            "required_network_request content_uri_triggers");
-                    columns(db, "SystemIdInfo", "work_spec_id", "generation system_id", "");
-                    projection = project(db);
-                    requireStableJournalMode(file, descriptor, guard, true);
-                } finally {
-                    db.endTransaction();
+                    require(db.isReadOnly(), "READ_ONLY_REQUIRED");
+                    db.beginTransactionReadOnly();
+                    try {
+                        requireStableJournalMode(file, descriptor, guard, false);
+                        // First pager read establishes a committed SQLite snapshot, including
+                        // WAL frames under SQLite's own SHM reader/recovery locks.
+                        require(scalar(db, "PRAGMA user_version").equals("24"), "SCHEMA_VERSION");
+                        requireStableJournalMode(file, descriptor, guard, true);
+                        sqlite = platform(db, wal);
+                        require(scalar(db, "SELECT identity_hash FROM room_master_table WHERE id=42")
+                                .equals(IDENTITY), "SCHEMA_IDENTITY");
+                        require(scalar(db, "SELECT count(*) FROM sqlite_master WHERE type='table' "
+                                + "AND name IN ('WorkName','WorkSpec','SystemIdInfo','room_master_table')")
+                                .equals("4"), "SCHEMA_TABLES");
+                        columns(db, "WorkName", "name work_spec_id", "", "");
+                        columns(db, "WorkSpec", "id worker_class_name", "state " + COLUMNS,
+                                "required_network_request content_uri_triggers");
+                        columns(db, "SystemIdInfo", "work_spec_id", "generation system_id", "");
+                        projection = project(db);
+                        requireStableJournalMode(file, descriptor, guard, true);
+                        sidecarIdentity(file, "-wal", walFile);
+                        sidecarIdentity(file, "-shm", shmFile);
+                    } finally {
+                        db.endTransaction();
+                    }
+                } catch (SQLiteException failure) {
+                    throw new Hold("SQLITE_READ_OR_LOCK_UNAVAILABLE");
                 }
+                // No SQLite operation follows transaction end/close. Do not compare
+                // DB/WAL/SHM byte stamps: WAL writers and automatic SHM coordination
+                // can legitimately change them without changing our committed snapshot.
+                sameFile(file, descriptor.getFileDescriptor());
+                sidecarIdentity(file, "-wal", walFile);
+                sidecarIdentity(file, "-shm", shmFile);
+                noSidecar(file, "-journal");
             }
-            // SQLite may release all same-process locks at transaction end/close.
-            // There are no further SQLite operations after that point.
-            sameFile(file, descriptor.getFileDescriptor());
-            safeRollback(file, input);
-            require(stamp(file).equals(before), "DATABASE_CHANGED_DURING_READ");
         }
-        return "SCHEMA 2.10.2 23 " + IDENTITY + " " + file.getParentFile().getName()
-                + "\nTIME " + System.currentTimeMillis() + "\n" + projection;
+        return "SCHEMA 2.11.2 24 " + IDENTITY + " " + file.getParentFile().getName()
+                + "\n" + sqlite + "\nTIME " + System.currentTimeMillis() + "\n" + projection;
     }
 
     public static void main(String[] args) {

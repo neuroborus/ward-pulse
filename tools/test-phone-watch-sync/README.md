@@ -62,6 +62,9 @@ Discovery checks live phone/watch characteristics, hardware features and exact A
 unauthorized, ambiguous, swapped or noncanonical targets fail without fallback. Every
 ADB invocation has an explicit selector; only the server-wide `devices` inventory ignores
 that selector by ADB design. Verification never prepares or resets the environment.
+Package UID discovery validates a bounded inventory and selects exactly `app.wardpulse`;
+legitimate substring siblings such as watchface packages are retained during validation.
+Missing, duplicate, malformed or oversized UID evidence fails without choosing a first match.
 
 All of the following are required for a future Pass:
 
@@ -145,48 +148,84 @@ so they cannot consume later inventory records.
 
 The reader resolves only `no_backup/androidx.work.workdb` or the historical
 `databases/androidx.work.workdb`, rejecting missing, ambiguous or redirected locations.
-It binds the installed APK's WorkManager **2.10.2** marker, generated Room schema **23**
-identity `86254750241babac4b8d52996a675549`, required column types, and that version's
-state/network encodings (0–5 states; CONNECTED=1). Unknown versions/schemas HOLD. It joins
+It binds the installed APK's WorkManager **2.11.2** marker, generated Room schema **24**
+current identity `08b926448d86528e697981ddd30459f7`, required column types, and that version's
+state/network converters (ENQUEUED=0, RUNNING=1, SUCCEEDED=2, FAILED=3, BLOCKED=4,
+CANCELLED=5; CONNECTED=1; exponential/linear backoff=0/1). The generated legacy identity
+`149fd8ad55885d3fe3549a37a0163243` is not accepted as an alternative. The requested
+2.10.2 dependency or a cached artifact does not establish the resolved/installed tuple;
+HOST must reconcile the resolved 2.11.2 generated schema/converters with the installed
+APK marker, current identity, columns and actual values. Unknown versions/schemas HOLD. It joins
 only the two logical WorkNames through WorkSpec to SystemIdInfo, matching both ID and
 generation. At most 32 rows and 12 KiB of metadata leave the reader. Allowed fields are
 logical name, opaque ID, worker, state, interval/flex, initial delay, network/constraint
 flags, generation/job ID, enqueue/schedule, attempt/period, backoff, override and stop
-markers. Constraint blobs yield only absence flags; their contents are never exported.
+markers, including schema24's nullable `backoff_on_system_interruptions` (null=-1,
+false=0, true=1), which must remain unchanged for a retained work identity.
+Constraint blobs yield only absence flags; their contents are never exported.
 No input/output/progress, arbitrary tags, accounts, credentials, preferences or whole rows
 are read/exported. All exceptions become fixed, sanitized HOLD categories.
 
-The projection uses explicit `SQLiteDatabase.OPEN_READONLY` with a throwing, nondeleting
-corruption handler and a short `beginTransactionReadOnly` transaction. It never creates,
-upgrades, migrates, repairs, checkpoints, changes journal mode, disables locking, asserts
-immutability, deletes sidecars, copies/exports a database or retries writable. **Read-only
-flags do not by themselves prove zero filesystem effects.** The supported opening path
+The projection uses explicit `SQLiteDatabase.OPEN_READONLY | NO_LOCALIZED_COLLATORS` with a
+throwing, nondeleting corruption handler and a short `beginTransactionReadOnly` transaction.
+It never deliberately creates/edits/deletes database or sidecar files, upgrades, migrates,
+repairs, checkpoints, changes journal mode, disables locking, asserts immutability,
+copies/exports a database or retries writable. The sole permitted incidental writes are
+SQLite's bounded automatic SHM reader coordination, index initialization/reconstruction
+and read marks. This includes first-reader work after the phone app dies; the reader
+never requires keeping or relaunching the app to open its observer. **Read-only flags
+do not by themselves prove safe WAL behavior or zero filesystem effects.** The opening path
 first holds a nonblocking shared `FileChannel` lock over SQLite's default Unix VFS lock
 bytes (PENDING, RESERVED and the complete SHARED range), using one retained read-only
-`ParcelFileDescriptor`. This excludes RESERVED writers and EXCLUSIVE journal-mode
-changes before inspecting the header or opening SQLite. A busy writer causes HOLD; the
-reader does not wait/retry or alter scheduling to obtain the lock. WAL and any existing
-journal/WAL/SHM sidecar still cause a pre-open HOLD.
+`ParcelFileDescriptor`. This excludes rollback RESERVED writers and EXCLUSIVE journal-mode
+changes before inspecting the header or opening SQLite. A conflicting main-file lock causes HOLD; the
+reader does not wait/retry or alter scheduling to obtain the lock. Header 1/1 requires
+rollback/delete mode without journal/WAL/SHM sidecars. Header 2/2 admits WAL only with
+both existing regular, app-owned, canonical WAL and SHM sidecars, opened read-only and
+bound by descriptor/inode identity. Missing/redirected/oversized sidecars, a rollback
+journal or unsupported header/mode gives a sanitized HOLD. The main file is bounded at
+64 MiB, WAL at 64 MiB and SHM at 4 MiB. Sidecar contents are not exported.
 
 `requireStableJournalMode` reads at most 4 KiB from **only that owned descriptor's**
 `/proc/self/fdinfo` record. It binds kernel POSIX READ lock coverage, PID, inode and
 read-only descriptor flags; Java `FileLock.isValid()` alone cannot establish lock survival.
 The reader reuses the same descriptor for header reads: closing an additional descriptor
-for that inode would release all of this process's POSIX locks. API36 `OPEN_READONLY`
-skips journal/sync/checkpoint configuration, and `NO_LOCALIZED_COLLATORS` also skips
-locale/metadata queries before BEGIN. Kernel coverage is required before and after open,
+for that inode would release all of this process's POSIX locks. Extra main/WAL/SHM
+descriptors remain open until SQLite has ended its transaction and closed, so their
+closure cannot release SQLite's locks during the read. The reviewed Android16
+`SQLiteConnection.open` path skips journal/sync/checkpoint configuration for `OPEN_READONLY`,
+and `NO_LOCALIZED_COLLATORS` skips locale/metadata queries before BEGIN.
+Kernel main-file coverage is required before and after open,
 after BEGIN and before the first pager read, and during the consistent read transaction.
 SQLite's transient PENDING read unlock is allowed only after that first pager read;
-RESERVED and the entire SHARED range must remain held. No further SQLite operation follows
-transaction end/close, where SQLite may release same-process locks.
+RESERVED and the entire SHARED range must remain held. These locks exclude rollback
+writers and journal conversion; **they do not exclude WAL writers**. The first pager read
+inside the read-only transaction establishes the committed snapshot using SQLite's
+ordinary WAL/SHM read and recovery locks. Every schema/value query uses that same
+transaction. No further SQLite operation follows transaction end/close, where SQLite
+may release same-process locks. File/sidecar identity is checked during the transaction
+and after close. Concurrent commits/checkpoints and permitted SHM coordination can
+change whole DB/WAL/SHM bytes, sizes and timestamps; unchanged byte stamps are neither
+required nor used as snapshot consistency proof.
 
 Unavailable/shared-lock-incompatible behavior, missing or malformed kernel evidence,
 lost coverage or unknown inode/descriptor identity gives a concrete safety HOLD. There is
-no unconditional projection HOLD or manual bypass. File identity, nanosecond modification/
-change times and sidecar checks after close separately invalidate raced evidence; they
-do not replace the pre-open lock. HOST still owes compilation/DEX and actual platform,
-lock-survival, concurrent-writer, corruption and sidecar-safety acceptance. Access-time
-updates from ordinary reads are possible; no zero-filesystem-effect claim is made.
+no unconditional WAL/projection HOLD or manual bypass. Fixed `sqlite_version()` and
+`sqlite_source_id()` queries emit only bounded version/date/source identity and journal
+mode metadata. Preflight prints that tuple and the installed WorkManager/schema binding
+so HOST can retain it after scratch cleanup. The candidate admits the reviewed SQLite
+3.44.3/3.44.4 family; any other version or malformed identity HOLDs, and the complete
+binding, including database location, must stay equal across samples.
+API36 or an Android16 source branch alone does not identify the installed
+SQLite binary or prove its open/read/transaction-end/close behavior. HOST must bind
+that actual implementation and exercise normal/concurrent WAL reads, first-reader SHM
+initialization/reconstruction after phone death, lock survival, missing sidecars,
+corruption and close behavior before runtime acceptance. In particular it must prove
+that open/end/close perform no forbidden creation, deletion, repair, checkpoint or
+journal conversion, while permitting only the bounded automatic SHM effects above.
+Unknown/unsafe behavior remains a concrete HOLD. Compilation/DEX and these HOST proofs
+are pending; version metadata is evidence for binding, not their substitute. Ordinary
+read access-time updates are possible; no zero-filesystem-effect claim is made.
 
 The host records the observer's actual PID/start identity before GO, verifies its process
 under the app UID, checks normal exit and `/proc` absence, and reconciles surrounding app
@@ -273,3 +312,12 @@ acceptance can be claimed. There is no manual override or source-review substitu
   verified shared-lock opening path. WAL, busy/unsupported locking and uncertain evidence
   retain concrete HOLDs. Compilation, lock/SQLite safety probes and the complete ordinary
   acceptance gate remain pending on HOST; no runtime Pass is claimed.
+- 2026-10-18: exact-package UID selection now tolerates valid substring siblings;
+  Java/shell binding targets WorkManager 2.11.2/schema24/current identity and preserves
+  nullable interruption-backoff metadata. WAL admission uses the retained descriptor
+  guard plus SQLite's consistent read transaction and existing-sidecar identity checks,
+  allowing only automatic SHM reader effects. Fixed SQLite version/source metadata
+  supports the still-pending installed-platform binding. Independent review, helper
+  compilation/DEX, failure probes, full ordinary `just test-phone-watch-sync`, docs
+  validation and all other applicable HOST acceptance remain pending after whole Runner
+  completion, retirement and quiescence. No executed acceptance or runtime Pass is claimed.
