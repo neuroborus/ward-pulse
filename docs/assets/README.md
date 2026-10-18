@@ -18,25 +18,24 @@ on 2026-10-16 and two OpenAI editor images on 2026-10-18. Twenty-two existing im
 recaptured on 2026-10-18, and the two new editors were captured that day; two historical
 Wear images were retained after Source/visual review. Date added is unchanged by a refresh.
 
-The Used in column records existing references before the pending Docs presentation update.
-It does not claim that planned guide or showcase changes have already landed. Last verified
+The Used in column records the integrated guide and showcase references. Last verified
 2026-10-18 means actual-frame review for the 24 fresh images, but Source-backed historical
 pictured-UI reuse for the two retained images, as qualified below.
 
 | File | Description | Theme | Date added | Captured | Last verified | Dimensions | App | Used in |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| [phone-dashboard-light.png](phone-dashboard-light.png) | Family/source sections with Claude unsupported-response warning and previous data. | Light | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Light landing/README/Dashboard guide |
-| [phone-dashboard-dark.png](phone-dashboard-dark.png) | Family/source sections with Claude unsupported-response warning and previous data. | Dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Dark landing/README/Dashboard guide |
-| [phone-providers-light.png](phone-providers-light.png) | Four visible Connected rows and independent actions; legitimate global warning count one. | Light | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Light Providers/Getting started/Dashboard guides |
-| [phone-providers-dark.png](phone-providers-dark.png) | Four visible Connected rows and independent actions; legitimate global warning count one. | Dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Dark Providers/Getting started/Dashboard guides |
-| [phone-cursor-sign-in-help-light.png](phone-cursor-sign-in-help-light.png) | Cursor plan sign-in Help, Advanced paste and current Providers background. | Light | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Light Providers guide |
-| [phone-cursor-sign-in-help-dark.png](phone-cursor-sign-in-help-dark.png) | Cursor plan sign-in Help, Advanced paste and current Providers background. | Dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Dark Providers guide |
-| [phone-cursor-paste-token-light.png](phone-cursor-paste-token-light.png) | Saved-token editor with empty Value and Remove/leave-blank-to-keep controls. | Light | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Light Providers guide |
-| [phone-cursor-paste-token-dark.png](phone-cursor-paste-token-dark.png) | Saved-token editor with empty Value and Remove/leave-blank-to-keep controls. | Dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Dark Providers guide |
-| [phone-reporting-key-light.png](phone-reporting-key-light.png) | Saved Anthropic reporting-key editor with empty Value/Label and keep/Remove controls. | Light | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Light Providers guide |
-| [phone-reporting-key-dark.png](phone-reporting-key-dark.png) | Saved Anthropic reporting-key editor with empty Value/Label and keep/Remove controls. | Dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Dark Providers guide |
-| [phone-openai-reporting-key-light.png](phone-openai-reporting-key-light.png) | Saved OpenAI Platform reporting editor with empty Value/Label and fixed sk-admin-… hint. | Light | 2026-10-18 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | None yet; planned OpenAI guide after Docs integration |
-| [phone-openai-reporting-key-dark.png](phone-openai-reporting-key-dark.png) | Saved OpenAI Platform reporting editor with empty Value/Label and fixed sk-admin-… hint. | Dark | 2026-10-18 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | None yet; planned OpenAI guide after Docs integration |
+| [phone-dashboard-light.png](phone-dashboard-light.png) | Family/source sections with Claude unsupported-response warning and previous data. | Light | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Light Dashboard and Troubleshooting guides (warning / previous-data example) |
+| [phone-dashboard-dark.png](phone-dashboard-dark.png) | Family/source sections with Claude unsupported-response warning and previous data. | Dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Dark Dashboard and Troubleshooting guides (warning / previous-data example) |
+| [phone-providers-light.png](phone-providers-light.png) | Four visible Connected rows and independent actions; legitimate global warning count one. | Light | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Light landing/README; Providers overview; Anthropic/Cursor connection examples; Getting started; Dashboard actions |
+| [phone-providers-dark.png](phone-providers-dark.png) | Four visible Connected rows and independent actions; legitimate global warning count one. | Dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Dark landing/README; Providers overview; Anthropic/Cursor connection examples; Getting started; Dashboard actions |
+| [phone-cursor-sign-in-help-light.png](phone-cursor-sign-in-help-light.png) | Cursor plan sign-in Help, Advanced paste and current Providers background. | Light | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Light Cursor guide, Advanced paste |
+| [phone-cursor-sign-in-help-dark.png](phone-cursor-sign-in-help-dark.png) | Cursor plan sign-in Help, Advanced paste and current Providers background. | Dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Dark Cursor guide, Advanced paste |
+| [phone-cursor-paste-token-light.png](phone-cursor-paste-token-light.png) | Saved-token editor with empty Value and Remove/leave-blank-to-keep controls. | Light | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Light Cursor guide, Save the token |
+| [phone-cursor-paste-token-dark.png](phone-cursor-paste-token-dark.png) | Saved-token editor with empty Value and Remove/leave-blank-to-keep controls. | Dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Dark Cursor guide, Save the token |
+| [phone-reporting-key-light.png](phone-reporting-key-light.png) | Saved Anthropic reporting-key editor with empty Value/Label and keep/Remove controls. | Light | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Light Anthropic guide, Connect the key (pictured Organization reporting) |
+| [phone-reporting-key-dark.png](phone-reporting-key-dark.png) | Saved Anthropic reporting-key editor with empty Value/Label and keep/Remove controls. | Dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Dark Anthropic guide, Connect the key (pictured Organization reporting) |
+| [phone-openai-reporting-key-light.png](phone-openai-reporting-key-light.png) | Saved OpenAI Platform reporting editor with empty Value/Label and fixed sk-admin-… hint. | Light | 2026-10-18 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Light OpenAI guide, Connect the key (pictured Platform reporting) |
+| [phone-openai-reporting-key-dark.png](phone-openai-reporting-key-dark.png) | Saved OpenAI Platform reporting editor with empty Value/Label and fixed sk-admin-… hint. | Dark | 2026-10-18 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Dark OpenAI guide, Connect the key (pictured Platform reporting) |
 | [phone-budget-limits-light.png](phone-budget-limits-light.png) | Organization reporting Budget: unsaved Today 25.00; Week/Month empty. | Light | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Light Dashboard guide |
 | [phone-budget-limits-dark.png](phone-budget-limits-dark.png) | Organization reporting Budget: unsaved Today 25.00; Week/Month empty. | Dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Dark Dashboard guide |
 | [phone-alert-thresholds-light.png](phone-alert-thresholds-light.png) | Claude plan Alerts: unsaved Plan 20% left; Purchased Off. | Light | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Light Dashboard guide |
@@ -139,18 +138,28 @@ Dark appearance. No Show/reveal, paste, key/Label input, Save or Remove action o
 After Dark capture, Cancel left the saved Platform reporting row Connected. Phone HOME,
 light system appearance, font 1.0 and all status-bar disable masks0 were restored, without
 dismissing notifications. No new gallery subject was added.
-The new files have no guide references before the Docs integration.
+The new files illustrate the matching OpenAI guide connection step.
 
-### Current references versus planned presentation
+### Guide and showcase presentation
 
-The table above records current uses. The approved future three-subject Android showcase
-is phone Providers + Wear Glance + the historical WardPulse face; it is not yet a gallery
-change. Runner must replace the Dashboard showcase reference and update presentation.
-Dashboard's warning pair is suitable for the matching Dashboard/Troubleshooting explanation,
-not a healthy-success hero. Glance needs a truthful Stale caption; the face remains explicitly
-a historical WardPulse illustration. Plan windows' caption must match the visible Codex
-Weekly card. The Widget guide must distinguish four visible Stale rows from five selections.
-Both actual phone themes and clean original-image links must continue to match.
+The three-subject Android showcase uses phone Providers + Wear Glance + the historical
+WardPulse face in the landing and README galleries. Dashboard's warning pair illustrates
+`/guide/dashboard` and `/guide/troubleshooting#previous-data-offline-or-rate-limited`,
+not a healthy-success hero. Glance's caption identifies Stale; the face is explicitly a
+historical WardPulse illustration. Plan windows' caption matches the visible Codex Weekly
+card. The Widget guide distinguishes four visible Stale rows from five selections.
+Both actual phone themes and clean original-image links match their presentation.
+
+The Providers pair follows the connection table in `/guide/providers` and supplies the
+visible Anthropic/Cursor connection examples, existing Getting started illustration and
+Dashboard action examples. Its viewport is not used as an OpenAI reporting result.
+The empty Anthropic reporting-key editor belongs at
+`/guide/providers-anthropic#connect-the-key`, captioned as Organization reporting.
+The separate actual OpenAI editor belongs at `/guide/providers-openai#connect-the-key`,
+captioned as Platform reporting with empty fields and a fixed credential-type hint.
+Cursor Help belongs at `/guide/providers-cursor#advanced-paste`, and the empty token editor
+at `/guide/providers-cursor#save-the-token`. Budget and Alerts examples remain in the
+Dashboard guide; the Providers overview links there rather than duplicating those figures.
 
 ### Historical Wear reuse verified 2026-10-18
 

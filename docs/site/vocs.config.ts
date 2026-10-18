@@ -22,20 +22,20 @@ type MarkdownFile = {
 
 const screenshots = [
   {
-    url: '/screenshots/phone-dashboard-light.png',
-    alt: 'WardPulse phone Dashboard showing AI plan capacity and update status in the light theme.',
-    caption: 'Phone Dashboard',
-    darkOriginalUrl: '/screenshots/phone-dashboard-dark.png',
+    url: '/screenshots/phone-providers-light.png',
+    alt: 'WardPulse phone Providers showing separate plan and reporting connections, four Connected rows and warning count 1 in the light theme.',
+    caption: 'Phone Providers · Connected rows, warning count 1',
+    darkOriginalUrl: '/screenshots/phone-providers-dark.png',
   },
   {
     url: '/screenshots/wear-glance.png',
-    alt: 'WardPulse Watch Glance showing balances and refresh status.',
-    caption: 'Watch Glance',
+    alt: 'WardPulse Watch Glance showing plan capacities, amber !OK and Stale.',
+    caption: 'Watch Glance · Stale',
   },
   {
     url: '/screenshots/wear-watch-face.png',
-    alt: 'WardPulse watch face showing usage rings and upper complications.',
-    caption: 'Watch face',
+    alt: 'Historical WardPulse watch face showing usage rings and upper complications.',
+    caption: 'Historical WardPulse face',
   },
 ]
 
@@ -110,7 +110,7 @@ function homepageMarkdown() {
                   type: 'link',
                   url: darkOriginalUrl,
                   children: [
-                    { type: 'text', value: 'View dark Phone Dashboard original' },
+                    { type: 'text', value: 'View dark Phone Providers original' },
                   ],
                 },
               ],

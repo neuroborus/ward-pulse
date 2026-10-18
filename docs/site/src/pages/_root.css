@@ -23,7 +23,8 @@
   width: 288px;
   max-width: calc(100% - 2px);
   margin-inline: auto;
-  box-shadow: 0 0 0 1px var(--vocs-border-color-primary);
+  outline: 1px solid var(--vocs-border-color-primary);
+  border-radius: 0;
 }
 
 .wardpulse-guide-screenshot[data-wardpulse-screenshot-theme='fixed'] {
@@ -54,20 +55,31 @@
 .wardpulse-guide-screenshot__provider-action {
   position: absolute;
   box-sizing: border-box;
+  /* Keep 4px clear of the glyph inside the 2px border at every preview size. */
   left: calc(var(--wardpulse-provider-action-x) - 6px);
-  top: calc(45.145833% - 6px);
-  width: calc(5.833333% + 12px);
-  height: calc(2.625% + 12px);
+  top: calc(var(--wardpulse-provider-action-y) - 6px);
+  width: calc(var(--wardpulse-provider-action-width) + 12px);
+  height: calc(var(--wardpulse-provider-action-height) + 12px);
   border: 2px solid #2563EB;
   border-radius: 8px;
 }
 
+/* Full glyph bounds measured independently in both themes, native 1080×2400.
+   Percentages preserve the 864×1920 export transform and responsive scaling. */
 .wardpulse-guide-screenshot__provider-action--budget {
-  --wardpulse-provider-action-x: 20.416667%;
+  /* [780, 784, 834, 835), including antialiasing fringe. */
+  --wardpulse-provider-action-x: 72.222222%;
+  --wardpulse-provider-action-y: 32.666667%;
+  --wardpulse-provider-action-width: 5%;
+  --wardpulse-provider-action-height: 2.125%;
 }
 
 .wardpulse-guide-screenshot__provider-action--alert {
-  --wardpulse-provider-action-x: 32.083333%;
+  /* [911, 785, 955, 837), including antialiasing fringe. */
+  --wardpulse-provider-action-x: 84.351852%;
+  --wardpulse-provider-action-y: 32.708333%;
+  --wardpulse-provider-action-width: 4.074074%;
+  --wardpulse-provider-action-height: 2.166667%;
 }
 
 :root:not([data-vocs-theme='dark'])
@@ -107,7 +119,8 @@
 
 .wardpulse-gallery__phone img,
 .wardpulse-gallery__wear figure > a {
-  box-shadow: 0 0 0 1px var(--vocs-border-color-primary);
+  outline: 1px solid var(--vocs-border-color-primary);
+  border-radius: 0;
 }
 
 .wardpulse-gallery__wear figure > a {

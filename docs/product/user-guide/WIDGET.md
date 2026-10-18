@@ -27,11 +27,11 @@ The displayed ordering puts lower remaining percentages first. The phone's metri
 shared by placed WardPulse widgets; each widget's available size can fit a different number
 of rows and columns.
 
-![WardPulse home widget on the Android launcher in the light theme.](/screenshots/phone-home-widget-light.png)
+![STALE WardPulse home widget showing four complete rows on the Android launcher in the light theme.](/screenshots/phone-home-widget-light.png)
 
-![WardPulse home widget on the Android launcher in the dark theme.](/screenshots/phone-home-widget-dark.png)
+![STALE WardPulse home widget showing four complete rows on the Android launcher in the dark theme.](/screenshots/phone-home-widget-dark.png)
 
-The home widget shows the selected rows that fit its current size.
+This STALE example shows four complete rows at its current size, while five metrics are selected.
 
 ## Resize for the information you need
 

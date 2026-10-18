@@ -7,19 +7,19 @@ Wear OS summary, watch face and home-screen widget.
 <table width="100%">
   <tr>
     <td width="50%" rowspan="2" align="center">
-      <a href="docs/assets/phone-dashboard-light.png#gh-light-mode-only"><img src="docs/assets/phone-dashboard-light.png#gh-light-mode-only" width="216" alt="WardPulse phone Dashboard showing AI plan capacity and update status in the light theme."></a>
-      <a href="docs/assets/phone-dashboard-dark.png#gh-dark-mode-only"><img src="docs/assets/phone-dashboard-dark.png#gh-dark-mode-only" width="216" alt="WardPulse phone Dashboard showing AI plan capacity and update status in the dark theme."></a><br>
-      <strong>Phone Dashboard</strong>
+      <a href="docs/assets/phone-providers-light.png#gh-light-mode-only"><img src="docs/assets/phone-providers-light.png#gh-light-mode-only" width="216" alt="WardPulse phone Providers showing separate plan and reporting connections, four Connected rows and warning count 1 in the light theme."></a>
+      <a href="docs/assets/phone-providers-dark.png#gh-dark-mode-only"><img src="docs/assets/phone-providers-dark.png#gh-dark-mode-only" width="216" alt="WardPulse phone Providers showing separate plan and reporting connections, four Connected rows and warning count 1 in the dark theme."></a><br>
+      <strong>Phone Providers · Connected rows, warning count 1</strong>
     </td>
     <td width="50%" align="center">
-      <a href="docs/assets/wear-glance.png"><img src="docs/assets/wear-glance.png" width="200" alt="WardPulse Watch Glance showing balances and refresh status."></a><br>
-      <strong>Watch Glance</strong>
+      <a href="docs/assets/wear-glance.png"><img src="docs/assets/wear-glance.png" width="200" alt="WardPulse Watch Glance showing plan capacities, amber !OK and Stale."></a><br>
+      <strong>Watch Glance · Stale</strong>
     </td>
   </tr>
   <tr>
     <td width="50%" align="center">
-      <a href="docs/assets/wear-watch-face.png"><img src="docs/assets/wear-watch-face.png" width="200" alt="WardPulse watch face showing usage rings and upper complications."></a><br>
-      <strong>Watch face</strong>
+      <a href="docs/assets/wear-watch-face.png"><img src="docs/assets/wear-watch-face.png" width="200" alt="Historical WardPulse watch face showing usage rings and upper complications."></a><br>
+      <strong>Historical WardPulse face</strong>
     </td>
   </tr>
 </table>
