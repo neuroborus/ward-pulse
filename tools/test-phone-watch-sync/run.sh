@@ -216,8 +216,8 @@ start_monitor() {
     }
     /WardPulseSync/ {
       if (!owned[$2]) emit("GAP")
-      else if (role == "phone" && $0 ~ /^[0-9.]+[ ]+[0-9]+[ ]+[0-9]+[ ]+I[ ]+WardPulseSync[ ]*: Watch summary queued\.$/) emit("PUBLICATION")
-      else if (role == "wear" && $0 ~ /^[0-9.]+[ ]+[0-9]+[ ]+[0-9]+[ ]+I[ ]+WardPulseSync[ ]*: Watch summary received\.$/) emit("RECEIPT")
+      else if (role == "phone" && $0 ~ /^[ ]*[0-9.]+[ ]+[0-9]+[ ]+[0-9]+[ ]+I[ ]+WardPulseSync[ ]*: Watch summary queued\.$/) emit("PUBLICATION")
+      else if (role == "wear" && $0 ~ /^[ ]*[0-9.]+[ ]+[0-9]+[ ]+[0-9]+[ ]+I[ ]+WardPulseSync[ ]*: Watch summary received\.$/) emit("RECEIPT")
       else emit("GAP")
       next
     }
