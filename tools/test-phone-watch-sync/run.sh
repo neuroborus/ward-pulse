@@ -241,6 +241,7 @@ start_monitor() {
         }
       } else if (index($0, "app.wardpulse")) {
         separate = name == "app.wardpulse.test" && !owned[fields[2]] &&
+            $0 !~ /[[:cntrl:]]/ &&
             $0 ~ /^[ ]*[0-9.]+[ ]+[0-9]+[ ]+[0-9]+[ ]+I[ ]+am_proc_(start|died)[ ]*:[ ]*\[[^][]+\][ ]*$/
         if (is_start) {
           component=fields[6]
