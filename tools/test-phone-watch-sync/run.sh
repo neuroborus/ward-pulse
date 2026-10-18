@@ -306,27 +306,152 @@ wait_for_stable_summary() {
 
 # Native correlation remains supplementary; WorkSpec determines periodicity.
 native_jobs() {
-  local label=$1 phone_live=$2 metadata
+  local label=$1 phone_live=$2 metadata uid
+  uid=$(package_uid "$PHONE_SERIAL")
+  [[ "$uid" == "${UIDS[phone]}" ]] || hold 'Native scheduling package UID changed.'
   metadata=$(adb_on "$PHONE_SERIAL" shell -n '
-    (dumpsys jobscheduler app.wardpulse && printf "\nWP_DONE\n") | awk '\''
+    set -o pipefail || exit 1
+    (dumpsys jobscheduler app.wardpulse 2>&1 && printf "\nWP_DONE\n") | awk -v uid='"$uid"' '\''
+    function fail() { bad=1; exit 1 }
+    function number(value, limit) {
+      return value ~ /^(0|[1-9][0-9]*)$/ && length(value) <= 10 && value+0 <= limit
+    }
+    function counts(value, values, i) {
+      if (split(value, values, "/") != 3) return 0
+      for (i=1; i<=3; i++) if (values[i] != "-1" && !number(values[i], 2147483647)) return 0
+      return 1
+    }
+    function hex_mask(value, i, result) {
+      result=0
+      for (i=4; i<length(value); i++) {
+        result=result*16+index("0123456789abcdef", tolower(substr(value, i, 1)))-1
+      }
+      return result
+    }
     function flush() {
-      if (owned) print "native-job", id, wm+0, network+0
+      if (block && (services != 1 || constraints != 1)) fail()
+      if (block && relevant) {
+        if (!owned || !tagged || !wm || network != 1 ||
+            seen_job[id]++ || ++jobs > 64) fail()
+        inventory[jobs]="native-job " id " 1 1"
+      }
+      block=relevant=owned=tagged=services=wm=constraints=network=0
     }
-    /^WP_DONE$/ { flush(); owned=0; complete=1; next }
-    /^[[:space:]]*JOB #[^:]+:.* app\.wardpulse\// {
+    BEGIN {
+      if (!number(uid, 2147483647) || uid%100000 < 10000 || uid%100000 >= 99000) fail()
+      owner_uid=sprintf("u%da%d", int(uid/100000), uid%100000-10000)
+      service="app.wardpulse/androidx.work.impl.background.systemjob.SystemJobService"
+      work_namespace="androidx.work.systemjobscheduler"
+      # JobStatus constraint bits; use unsigned arithmetic without awk extensions.
+      constraint_bit["CHARGING"]=2^0
+      constraint_bit["BATTERY_NOT_LOW"]=2^1
+      constraint_bit["STORAGE_NOT_LOW"]=2^2
+      constraint_bit["TARE_WEALTH"]=2^3
+      constraint_bit["FLEXIBLE"]=2^21
+      constraint_bit["BACKGROUND_NOT_RESTRICTED"]=2^22
+      constraint_bit["PREFETCH"]=2^23
+      constraint_bit["WITHIN_QUOTA"]=2^24
+      constraint_bit["DEVICE_NOT_DOZING"]=2^25
+      constraint_bit["CONTENT_TRIGGER"]=2^26
+      constraint_bit["IDLE"]=2^27
+      constraint_bit["CONNECTIVITY"]=2^28
+      constraint_bit["DEADLINE"]=2^30
+      constraint_bit["TIMING_DELAY"]=2^31
+    }
+    {
+      bytes+=length($0)+1
+      if (complete || NR > 16384 || length($0) > 8192 || bytes > 1048576) fail()
+      if (footer && NF && $0 != "WP_DONE") fail()
+      lower=tolower($0)
+      if (lower ~ /^[[:space:]]*(\*+|[a-z0-9_.$]*(exception|error)([[:space:]:]|$)|caused by:)/ ||
+          lower ~ /^[[:space:]]*(failure|failed|timeout|truncated|aborted|fatal|warning|warn|unexpected|incomplete|partial)([[:space:]:]|$)/ ||
+          lower ~ /^[[:space:]]*(permission denial|permission denied|can.t find service)([[:space:]:]|$)/ ||
+          lower ~ /^[[:space:]]*at[[:space:]]+[a-z0-9_.$]+\(/ ||
+          lower ~ /^[[:space:]]*(dump|dumpsys|binder|remote).*([[:space:]]|:)(failed|failure|error|exception|timeout|timed out|truncated)([[:space:]:]|$)/) fail()
+    }
+    /^WP_DONE$/ {
+      if (block || !registered || !closed || !footer || blocks > registered_count) fail()
+      complete=1; next
+    }
+    /^[[:space:]]*Registered/ {
+      if (registered++ || NF != 3 || $1 != "Registered" || $3 != "jobs:" ||
+          !number($2, 2147483647)) fail()
+      registered_count=$2; registered_indent=match($0, /[^[:space:]]/)
+      next
+    }
+    /^[[:space:]]*PersistStats/ {
+      if (block || !registered || !closed || footer++ || NF != 5 ||
+          $1 != "PersistStats:" || $2 != "FirstLoad:" || $4 != "LastSave:" ||
+          !counts($3) || !counts($5) || match($0, /[^[:space:]]/) != registered_indent) fail()
+      next
+    }
+    /^[[:space:]]*JOB/ {
       flush()
-      owned=1; jobs++
-      if (jobs > 64 || $2 !~ /^#[a-zA-Z0-9_\/-]+:$/) exit 1
-      id=$2; sub(/^.*\//, "", id); sub(/:$/, "", id)
-      if (id !~ /^[0-9]+$/) exit 1
-      wm=0; network=0; next
+      if (!registered || closed || $1 != "JOB" || NF != 4 || ++blocks > 256 || length($2) > 192 ||
+          $3 !~ /^[0-9a-fA-F]+$/ || length($3) > 8 || $2 !~ /:$/) fail()
+      identity=$2; sub(/:$/, "", identity)
+      legacy=sub(/^#/, "", identity)
+      parts=split(identity, namespaced, ":"); namespace=""
+      if (parts == 2) {
+        namespace=namespaced[1]; identity=namespaced[2]
+        if (namespace !~ /^[a-zA-Z0-9_.-]+$/ || length(namespace) > 128) fail()
+      } else if (parts != 1 || !legacy) fail()
+      if (split(identity, pair, "/") != 2 || !number(pair[2], 2147483647)) fail()
+      job_uid=pair[1]; id=pair[2]
+      if (!number(job_uid, 2147483647)) {
+        if (job_uid !~ /^u[0-9]+[ais][0-9]+$/ || length(job_uid) > 24) fail()
+        user=job_uid; sub(/^u/, "", user); sub(/[ais].*$/, "", user)
+        app=job_uid; sub(/^u[0-9]+[ais]/, "", app)
+        if (!number(user, 21474) || !number(app, 99999)) fail()
+      }
+      if (seen_identity[namespace, job_uid, id]++) fail()
+      tagged=index($4, "app.wardpulse/") > 0
+      relevant=tagged || job_uid == owner_uid || ("x" job_uid) == ("x" uid)
+      owned=(job_uid == owner_uid || ("x" job_uid) == ("x" uid)) &&
+        (namespace == work_namespace || (legacy && namespace == ""))
+      indent=match($0, /[^[:space:]]/)
+      if (indent <= registered_indent) fail()
+      block=1; next
     }
-    /^[[:space:]]*JOB #/ { flush(); owned=0 }
-    owned && /Service: app\.wardpulse\/androidx\.work\.impl\.background\.systemjob\.SystemJobService/ { wm=1 }
-    owned && /Required constraints:/ {
-      network=(index($0, "CONNECTIVITY") ? 1 : 0)
+    {
+      # A new section also ends a job; its records cannot complete the old block.
+      if (block && NF && match($0, /[^[:space:]]/) <= indent) flush()
+      if (registered && !closed && NF) {
+        if (match($0, /[^[:space:]]/) <= registered_indent) {
+          if ($0 !~ /^[[:space:]]*[a-zA-Z][a-zA-Z0-9_ ()-]*:$/) fail()
+          closed=1
+        } else if (!block) fail()
+      }
     }
-    END { if (!complete) exit 1; print "native-count", jobs+0 }
+    $1 == "Service:" {
+      if (!block) {
+        if (index($0, "app.wardpulse/")) fail()
+        next
+      }
+      if (NF != 2 || $2 !~ /^[a-zA-Z0-9_.]+\/[a-zA-Z0-9_.$]+$/ || services++) fail()
+      wm=($2 == service)
+      if (index($2, "app.wardpulse/") == 1) relevant=1
+      next
+    }
+    $1 == "Required" && $2 == "constraints:" {
+      if (!block || constraints++ || NF < 3 || $NF !~ /^\[0x[0-9a-fA-F]+\]$/ || length($NF) > 12) fail()
+      expected_mask=0
+      for (i=3; i<NF; i++) {
+        if (!($i in constraint_bit) || seen_constraint[blocks, $i]++) fail()
+        expected_mask+=constraint_bit[$i]
+        if ($i == "CONNECTIVITY") network++
+      }
+      if (hex_mask($NF) != expected_mask) fail()
+      next
+    }
+    /^[[:space:]]*(Service|Required[[:space:]]+constraints)/ {
+      if (block || index($0, "app.wardpulse/")) fail()
+    }
+    END {
+      if (bad || !complete || !jobs) exit 1
+      for (i=1; i<=jobs; i++) print inventory[i]
+      print "native-count", jobs
+    }
   '\''') || hold 'Cannot obtain bounded native scheduling metadata.'
   [[ $(printf '%s' "$metadata" | wc -c) -le 8192 ]] || hold 'Native scheduling metadata exceeds its safe bound.'
   printf '%s\n' "$metadata" >"$SCRATCH/native.current"

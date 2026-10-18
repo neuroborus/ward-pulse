@@ -257,6 +257,27 @@ the final Pass. The accepted logical/native pair advances only after both checks
 Native IDs may change during explained rescheduling, and native flags do not determine
 WorkSpec periodicity. Whole volatile-dump equality and fixed IDs are not required.
 
+`native_jobs` recognizes four-field API36 namespaced `JOB` headers and validated legacy
+`JOB #` headers. The numeric scheduler ID comes from the UID/job identity, never the
+object hash. The fourth field is checked for its package substring without assuming a
+literal tag or bare component. Ownership requires the current package UID/user,
+`androidx.work.systemjobscheduler` namespace (or the legacy default namespace), and a
+separate exact `app.wardpulse/androidx.work.impl.background.systemjob.SystemJobService`
+record. Every block requires exactly one service and required-constraints record.
+The complete constraints record must contain only supported, unique constraint names
+followed by one bounded hexadecimal mask equal to their combined bits. Missing, extra or
+contradictory mask bits HOLD; an owned block requires an exact `CONNECTIVITY` token and
+its matching bit. Constraint names and masks never establish logical WorkSpec periodicity.
+Every job header and section boundary clears the previous block; foreign records
+cannot supply its service or constraints. Unknown or malformed headers/required records,
+duplicates, missing evidence and failed/partial dumps HOLD. Acceptance also requires the
+registered-jobs section, its closing section boundary and a terminal `PersistStats` record
+with bounded load/save counts before the subprocess completion marker. Diagnostics
+(including stderr), exceptions, missing/unknown completion structure and nonblank trailing
+output HOLD even on a zero subprocess exit status. Streaming input is bounded to 1 MiB,
+16,384 lines, 8 KiB per line and 256 job blocks; only a complete, nonempty inventory of at
+most 64 jobs and 8 KiB of sanitized metadata leaves the device. No raw dump or tag is retained.
+
 ## Publication boundary and proof guard
 
 A **fresh phone publication** is a new post-separation invocation of the app's summary-send /
@@ -321,3 +342,10 @@ acceptance can be claimed. There is no manual override or source-review substitu
   compilation/DEX, failure probes, full ordinary `just test-phone-watch-sync`, docs
   validation and all other applicable HOST acceptance remain pending after whole Runner
   completion, retirement and quiescence. No executed acceptance or runtime Pass is claimed.
+- 2026-10-18: namespaced native-job parsing and same-block UID/namespace/service/network
+  binding authored, retaining validated legacy headers and downstream correspondence.
+  Parser failure probes, full ordinary `just test-phone-watch-sync`, documentation
+  validation and all other applicable HOST acceptance remain pending after whole Runner
+  completion, retirement and quiescence. Prior reader projection evidence does not establish
+  full sync, WAL safety, first-reader, concurrency or corruption acceptance. No runtime Pass
+  or unexecuted validation is claimed.
