@@ -577,6 +577,12 @@ record_sync_events() {
           [[ "$pid" =~ ^[0-9]+$ && -z "$extra" && ! -v "LIVE[$key]" ]] \
             || hold 'Duplicate/malformed app start; lifecycle continuity lost.'
           [[ ! -v "KILLED[$key]" ]] || hold 'PID reuse after kill has an unresolved death notice.'
+          if [[ "$LIFECYCLE_ACTION" == "$role:update" ]]; then
+            [[ ! -v "START_TICKS[$key]" && ! -v "update_pids[$pid]" ]] \
+              || hold 'PID reuse made update process ownership ambiguous.'
+            # Include transient starts that never reach a sampled /proc identity.
+            update_pids[$pid]=1
+          fi
           LIVE[$key]=new ;;
         KILL)
           [[ "$LIFECYCLE_ACTION" != "$role:start" ]] || hold 'Launch process received a kill request.'
@@ -1039,17 +1045,19 @@ package_update_time() {
 }
 
 update_install() {
-  local role=$1 serial=$2 apk=$3 before after result path installed built old current
+  local role=$1 serial=$2 apk=$3 before after result path installed built old current pid ticks name key
+  local -A update_pids=()
   [[ -s "$apk" ]] || hold 'Current build did not produce the required debug APK.'
   built=$(sha256sum "$apk" | cut -d' ' -f1)
+  [[ $(package_uid "$serial") == "${UIDS[$role]}" ]] || hold 'Pre-update package UID changed.'
   before=$(package_update_time "$serial") || hold 'Cannot establish pre-update installed package identity.'
+  # dumpsys timestamps have second precision; make a real same-APK update observable.
+  sleep 1
   barrier "$role" "$serial"
   old=$(app_processes "$serial" "$role") || hold 'Cannot record pre-update process identities.'
   reconcile_role "$role" "$serial" "$old"
   printf '%s pre-update process identities (empty means already absent):\n%s\n' "$role" "$old"
-  LIFECYCLE_ACTION="$role:death"
-  # dumpsys timestamps have second precision; make a real same-APK update observable.
-  sleep 1
+  LIFECYCLE_ACTION="$role:update"
   result=$(bounded 90 "$ADB" -s "$serial" install -r "$apk") || hold 'Data-preserving update install failed.'
   [[ "$result" == *Success* ]] || hold 'Package manager did not confirm the update.'
   after=$(package_update_time "$serial") || hold 'Cannot establish post-update installed package identity.'
@@ -1059,13 +1067,18 @@ update_install() {
   [[ "$path" =~ ^/data/app/[a-zA-Z0-9_./=+~-]+/base\.apk$ && "$path" != *'/../'* ]] || hold 'Unknown or split installed APK layout.'
   installed=$(adb_on "$serial" shell -n sha256sum "$path" | tr -d '\r' | cut -d' ' -f1) || hold 'Installed APK hash unavailable.'
   [[ "$installed" == "$built" ]] || hold 'Installed APK does not match this successful build.'
+  [[ $(package_uid "$serial") == "${UIDS[$role]}" ]] || hold 'Post-update package UID changed.'
   if [[ "$role" == phone ]]; then
     PHONE_APK_PATH=$path PHONE_APK_HASH=$built PHONE_UPDATE_TIME=$after
   fi
   current=$(app_processes "$serial" "$role") || hold 'Cannot observe post-update processes.'
-  [[ -z "$current" ]] || hold 'Unexpected live app after update; update death cannot be reconciled.'
-  barrier "$role" "$serial"
-  reconcile_role "$role" "$serial" ""
+  reconcile_role "$role" "$serial" "$current"
+  while read -r pid ticks name; do
+    [[ -n "$pid" ]] || continue
+    key="$role,$pid"
+    # Reconciliation requires owned removal events plus stable absence, not KILL alone.
+    [[ ! -v "LIVE[$key]" ]] || hold 'Old app process survived the update.'
+  done <<< "$old"
   LIFECYCLE_ACTION=
 }
 
