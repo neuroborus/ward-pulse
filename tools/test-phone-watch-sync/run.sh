@@ -239,7 +239,19 @@ start_monitor() {
           else delete owned[fields[2]]
           emit((is_start ? "START " : "DEATH ") fields[2])
         }
-      } else if (index($0, "app.wardpulse")) emit("GAP")
+      } else if (index($0, "app.wardpulse")) {
+        separate = name == "app.wardpulse.test" && !owned[fields[2]] &&
+            $0 ~ /^[ ]*[0-9.]+[ ]+[0-9]+[ ]+[0-9]+[ ]+I[ ]+am_proc_(start|died)[ ]*:[ ]*\[[^][]+\][ ]*$/
+        if (is_start) {
+          component=fields[6]
+          gsub(/app[.]wardpulse[.]test([\/.}]|$)/, "", component)
+          separate = separate && length(fields[5]) && length(fields[6]) &&
+              !index(fields[5], "app.wardpulse") && !index(component, "app.wardpulse")
+        } else {
+          separate = separate && fields[4] ~ /^-?[0-9]+$/ && fields[5] ~ /^-?[0-9]+$/
+        }
+        if (!separate) emit("GAP")
+      }
       next
     }
     { emit("GAP") }
