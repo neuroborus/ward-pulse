@@ -7,10 +7,10 @@ manual sync, screenshots, old receipts and partial test suites do not establish 
 
 ## Bounded foreground observation
 
-`run.sh observe` provides a separate, read-only metadata/event session. It does not run
-`verify` or establish acceptance, quiet, lifecycle/work preservation, or measurement
-results. `prepare`, `verify` and the ordinary acceptance recipe keep their existing
-canonical round-watch target and defaults.
+`run.sh observe` provides a separate metadata/event session with fixed lifecycle controls.
+It does not run `verify` or establish acceptance, quiet, lifecycle/work preservation, or
+measurement results. `prepare`, `verify` and the ordinary acceptance recipe keep their
+existing canonical round-watch target and defaults.
 
 Select one existing Wear serial **and** its supported geometry explicitly:
 
@@ -43,12 +43,41 @@ with at most 32 requests including close:
 
 ```text
 DRAIN 1
-DRAIN 2
-CLOSE 3
+STOP PHONE 2
+STOP WEAR 3
+LAUNCH WEAR 4
+LAUNCH PHONE 5
+DRAIN 6
+CLOSE 7
 ```
 
 `DRAIN` rechecks identity, reconciles inventories and acknowledges fresh log boundaries on
-both roles. `CLOSE` performs those checks plus final acknowledged closing drains. It then
+both roles. `STOP PHONE`, `STOP WEAR`, `LAUNCH PHONE` and `LAUNCH WEAR` use the already-bound
+phone or selected watch, within the same live observer. Each lifecycle request checks both
+roles before acting and reconciles both roles again before its acknowledgement. No serial,
+PID, activity or command argument is accepted. The examples require an interactive caller
+that waits for each acknowledgement; do not send them as an unattended batch.
+
+`STOP` uses the existing lifecycle helper: it backgrounds the target with `KEYCODE_HOME`
+and uses `am kill app.wardpulse`, never force-stop. One overall 15-second deadline includes
+timer rearming, both-role prechecks, the action, waiting and final reconciliation. A surviving
+old process, replacement start, raced inventory or deadline overshoot fails the session.
+An initially absent app is allowed and claims no old death. Otherwise, all sampled old
+PID/start-tick identities must retire with stable UID-wide absence. A KILL event is only
+pending intent; it establishes neither death nor absence. The ledger retains that ownership
+until an ordered DEATH or reconciled stable absence, guards PID reuse and late DEATH, and
+retains transient START/KILL/DEATH evidence without inventing unsampled start ticks.
+
+`LAUNCH` requires absence, then normally starts the fixed phone `app.wardpulse/.MainActivity`
+or Wear `app.wardpulse/app.wardpulse.wear.MainActivity` through the existing helper. It
+requires a successful COLD activity result, observed START events, a unique new main
+process and genuine new PID/start-tick identity; an already-running app (HOT) fails.
+Launch retains its existing 15-second helper
+bound within the request deadline. Neither lifecycle acknowledgement establishes quiet,
+work preservation, saved-summary retention or product acceptance. All drained publications
+and receipts remain evidence, including late events and identical-data sends.
+
+`CLOSE` performs the boundary checks plus final acknowledged closing drains. It then
 retires the owned logcat producers, complete projectors and deadline timer, removes owned
 temporary pipes/records, and emits `COMPLETE <id> OBSERVATION_ONLY` only after successful
 retirement and cleanup. Require that terminal record **and a zero exit status** for
@@ -64,6 +93,8 @@ Output is a small line protocol (`id` is 0 during startup):
 | `RESULT <id> <phase> <role> <typed-event>` | Every drained projector record, before ledger normalization or `EVENTS` replacement. |
 | `READY 0 OBSERVATION_ONLY` | Startup bindings, drains and reconciliation completed. |
 | `ACK <id> DRAIN` | Both roles completed the requested boundary. |
+| `ACK <id> STOP <PHONE\|WEAR>` | Fixed stop completed, including both-role reconciliation; initial absence claims no death. |
+| `ACK <id> LAUNCH <PHONE\|WEAR>` | Fixed normal launch proved a new load and completed both-role reconciliation. |
 | `RETIRED <id> retirement <role> <host-pid>` | Owned monitor exited, was waited and is absent. |
 | `FAILED <id> <reason>` | Session failed; exit status is nonzero and no completion is valid. |
 | `COMPLETE <id> OBSERVATION_ONLY` | Explicit close and retirement completed; this is observation only. |
@@ -79,8 +110,10 @@ for its closing acknowledgement. Cleanup and retirement failures also emit `FAIL
 stdout remains usable. If output is broken or its bound is exhausted, complete evidence
 cannot be delivered and the session fails.
 
-Startup has 60 seconds, each request 30 seconds, each idle input wait 15 seconds and the
-whole session 180 seconds. A deadline timer covers blocked work as well as reads/writes;
+Startup has 60 seconds, each request at most 30 seconds (STOP has 15), each idle input wait
+15 seconds and the whole session 180 seconds. Timer rearming consumes the new phase's
+budget; nested waits and calls are clamped to existing deadlines. A deadline timer covers
+blocked work as well as reads/writes;
 an unresponsive shell has a further 20-second termination ceiling. ADB calls have at most
 five seconds (clamped to the current phase deadline), followed by at most one second to
 kill. Stdout copies have two seconds plus one second to kill. Monitor retirement has four
@@ -95,12 +128,15 @@ role guards, control-character checks, publication/receipt validation and loss d
 use the same complete projector as verification.
 
 EOF, errors, signals, expiry, monitor loss, malformed controls, changing bindings or
-unproved retirement produce a nonzero exit. Observation issues only device metadata reads,
-logcat reads and acknowledged `WardPulseGate` log markers, with owned host temporary pipes.
-It does not stop/launch apps, access the work reader, back up/inject/restore summaries,
-invoke app APIs, build/install, read keys/private payloads, change OS/network settings or
-accept arbitrary device/process commands. Full paired acceptance and later lifecycle,
-work and measurement access remain separate work.
+unproved retirement produce a nonzero exit. Observation issues device metadata reads,
+logcat reads, acknowledged `WardPulseGate` log markers and the fixed lifecycle actions above,
+with owned host temporary pipes. Helper diagnostics go to stderr; stdout remains the typed
+protocol, including sampled process identities. There is no observer restart, gap bridge,
+keepalive or silent deadline extension. It does not access the work reader or read, back up,
+inject or restore summaries. It does not invoke other app APIs, build/install/run suites,
+read keys/private payloads, force-stop/reset/re-pair devices, change settings/jobs or accept
+arbitrary device/process commands. Full paired acceptance, work preservation and
+measurement access remain separate work.
 
 ## Prerequisites
 

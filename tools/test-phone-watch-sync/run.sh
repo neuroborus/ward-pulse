@@ -361,6 +361,7 @@ barrier() {
   fi
   adb_on "$serial" shell -n log -p i -t WardPulseGate "$marker" || hold 'Cannot place monitoring boundary.'
   deadline=$((SECONDS + 5))
+  if (( OBSERVING && deadline > OBS_LIMIT )); then deadline=$OBS_LIMIT; fi
   while (( SECONDS < deadline )); do
     [[ $(wc -c <"$SCRATCH/$role.events") -le 262144 ]] || hold 'Event observation exceeded its safe bound.'
     line=$(awk -v marker="$marker" -v tag="$tag" '$0 == tag " " marker { print NR }' "$SCRATCH/$role.events")
@@ -1015,6 +1016,8 @@ check_separation() {
 stop_app() {
   local role=$1 serial=$2 required=$3 old current events= identity key pending
   local deadline=$((SECONDS + 15))
+  # The foreground STOP owns one budget, including its surrounding boundaries.
+  if (( OBSERVING && deadline > OBS_LIMIT )); then deadline=$OBS_LIMIT; fi
   barrier "$role" "$serial"
   (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
   if (( RETAINING )); then
@@ -1084,12 +1087,25 @@ stop_app() {
 
 launch_app() {
   local role=$1 serial=$2 component=$3 current events= expected actual pid start deadline=$((SECONDS + 15))
+  local OBS_LIMIT=$OBS_LIMIT launch
+  if (( OBSERVING && deadline < OBS_LIMIT )); then OBS_LIMIT=$deadline; fi
   current=$(app_processes "$serial" "$role") || hold 'Cannot observe pre-launch absence.'
   [[ -z "$current" ]] || hold 'Launch target is already running; HOT is not restart.'
   barrier "$role" "$serial"
   [[ -z "$EVENTS" ]] || hold 'Activity raced pre-launch absence.'
   LIFECYCLE_ACTION="$role:start"
-  adb_on "$serial" shell -n am start -W -n "$component" >/dev/null || hold 'Activity launch failed.'
+  if (( OBSERVING )); then
+    launch=$(adb_on "$serial" shell -n am start -W -n "$component" | tr -d '\r') || hold 'Activity launch failed.'
+    [[ ${#launch} -le 16384 && "${launch//$'\n'/}" != *[[:cntrl:]]* ]] || hold 'Malformed activity launch result.'
+    printf '%s\n' "$launch" | awk '
+      /^Status:/ { status++; if ($0 != "Status: ok") bad=1 }
+      /^LaunchState:/ { state++; if ($0 != "LaunchState: COLD") bad=1 }
+      /Warning:|Error:|Exception/ { bad=1 }
+      END { if (bad || status != 1 || state != 1) exit 1 }
+    ' || hold 'Launch did not prove a successful COLD load; HOT is not restart.'
+  else
+    adb_on "$serial" shell -n am start -W -n "$component" >/dev/null || hold 'Activity launch failed.'
+  fi
   while (( SECONDS < deadline )); do
     if (( RETAINING )); then check_separation; fi
     barrier "$role" "$serial"
@@ -1113,6 +1129,9 @@ launch_app() {
       RUNNING[$role]=$current
       # Receipts observed during launch still count toward fresh delivery.
       if [[ "$role" == wear && "$events" == *RECEIPT* ]]; then FRESH_RECEIPT=1; fi
+      if (( OBSERVING )); then
+        (( SECONDS < OBS_LIMIT )) || hold 'Launch exceeded its deadline.'
+      fi
       LIFECYCLE_ACTION=
       return
     fi
@@ -1212,7 +1231,7 @@ observe_emit() {
 
 observe_flush() {
   (( ! OBS_OUTPUT_FAILED )) || return 1
-  if ! timeout --kill-after=1s 2s cat "$SCRATCH/pending"; then
+  if ! timeout --kill-after=1s 2s cat "$SCRATCH/pending" >&"$OBS_PROTOCOL"; then
     OBS_OUTPUT_FAILED=1
     return 1
   fi
@@ -1280,12 +1299,13 @@ observe_retire_timer() {
 }
 
 observe_arm() {
-  local seconds=$1 owner=$$ remaining
+  local seconds=$1 owner=$$ remaining deadline=$((SECONDS + $1))
+  (( deadline <= OBS_EXPIRES )) || deadline=$OBS_EXPIRES
   observe_retire_timer || hold "$OBS_ERROR"
-  remaining=$((OBS_EXPIRES - SECONDS))
+  remaining=$((deadline - SECONDS))
   (( seconds > 0 && remaining > 0 )) || hold 'Observation lifetime expired.'
-  (( seconds <= remaining )) || seconds=$remaining
-  OBS_LIMIT=$((SECONDS + seconds))
+  seconds=$remaining
+  OBS_LIMIT=$deadline
   # A builtin timed read avoids an unowned sleep descendant. The second deadline
   # bounds an unresponsive shell; ordinary cleanup retains and retires its children.
   OBS_LAUNCHING=1
@@ -1448,10 +1468,10 @@ observe_cleanup() {
   # Terminal records fit the reserved output allowance after scratch removal.
   if (( result == 0 )); then
     # A blocked consumer cannot keep completion, or this foreground process, alive.
-    timeout --kill-after=1s 2s cat <<<"COMPLETE $OBS_REQUEST OBSERVATION_ONLY" || result=1
+    timeout --kill-after=1s 2s cat <<<"COMPLETE $OBS_REQUEST OBSERVATION_ONLY" >&"$OBS_PROTOCOL" || result=1
   fi
   if (( result != 0 )); then
-    timeout --kill-after=1s 2s cat <<<"FAILED $OBS_REQUEST ${OBS_ERROR:-Observation output, cleanup or retirement failed.}" || :
+    timeout --kill-after=1s 2s cat <<<"FAILED $OBS_REQUEST ${OBS_ERROR:-Observation output, cleanup or retirement failed.}" >&"$OBS_PROTOCOL" || :
     timeout --kill-after=1s 2s cat <<<"HOLD: ${OBS_ERROR:-Observation output, cleanup or retirement failed.}" >&2 || :
   fi
   return "$result"
@@ -1468,7 +1488,7 @@ observe() {
   [[ "${WEAR_SERIAL:-}" =~ ^[a-zA-Z0-9._:-]+$ ]] || hold 'Observe requires an explicit existing WEAR_SERIAL.'
   require_sdk_root
   require_executable "$ADB"
-  local tool role serial snapshot pid ticks name key command request
+  local tool role serial snapshot pid ticks name key command request component
   for tool in timeout awk cat mktemp mkfifo sort sed tr wc grep rm sleep; do
     command -v "$tool" >/dev/null || hold "Required host executable not found: $tool"
   done
@@ -1481,6 +1501,8 @@ observe() {
   trap 'observe_signal 130 "Observation interrupted by a signal or expired deadline."' INT
   trap 'observe_signal 143 "Observation interrupted by a signal or expired deadline."' TERM HUP
   trap 'observe_signal 1 "Observation output closed."' PIPE
+  # EXIT/signal cleanup must retain protocol stdout inside diagnostic redirects.
+  exec {OBS_PROTOCOL}>&1 || hold 'Cannot preserve observation protocol output.'
   : >"$SCRATCH/observed"
   : >"$SCRATCH/pending"
   mkfifo "$SCRATCH/deadline.pipe"
@@ -1518,12 +1540,36 @@ observe() {
     OBS_PHASE=input
     observe_arm 15
     observe_read
-    [[ "$OBS_INPUT" =~ ^(DRAIN|CLOSE)\ ([1-9]|[12][0-9]|3[0-2])$ ]] || hold 'Expected DRAIN or CLOSE with request number 1..32.'
+    [[ "$OBS_INPUT" =~ ^(DRAIN|CLOSE|STOP\ PHONE|STOP\ WEAR|LAUNCH\ PHONE|LAUNCH\ WEAR)\ ([1-9]|[12][0-9]|3[0-2])$ ]] \
+      || hold 'Expected DRAIN, CLOSE, STOP PHONE/WEAR or LAUNCH PHONE/WEAR with request number 1..32.'
     command=${BASH_REMATCH[1]} request=${BASH_REMATCH[2]}
     (( request == OBS_REQUEST + 1 )) || hold 'Observation request numbers must be consecutive.'
     OBS_REQUEST=$request OBS_PHASE=operation
-    observe_arm 30
+    case "$command" in
+      STOP\ *) observe_arm 15 ;;
+      *) observe_arm 30 ;;
+    esac
     observe_boundary
+    case "$command" in
+      'STOP PHONE'|'LAUNCH PHONE')
+        role=phone serial=$PHONE_SERIAL component="$APP_ID/.MainActivity" ;;
+      'STOP WEAR'|'LAUNCH WEAR')
+        role=wear serial=$WEAR_SERIAL component="$APP_ID/app.wardpulse.wear.MainActivity" ;;
+    esac
+    case "$command" in
+      STOP\ *)
+        stop_app "$role" "$serial" optional >&2
+        LIFECYCLE_ACTION="$role:death" ;;
+      LAUNCH\ *)
+        launch_app "$role" "$serial" "$component" >&2
+        LIFECYCLE_ACTION="$role:start" ;;
+    esac
+    case "$command" in
+      STOP\ *|LAUNCH\ *)
+        observe_boundary
+        LIFECYCLE_ACTION= ;;
+    esac
+    (( SECONDS < OBS_LIMIT )) || hold 'Observation operation exceeded its deadline.'
     if [[ "$command" == CLOSE ]]; then
       OBS_PHASE=closing
       for role in phone wear; do
@@ -1532,11 +1578,13 @@ observe() {
         reconcile_role "$role" "$serial"
         barrier "$role" "$serial" close
       done
+      (( SECONDS < OBS_LIMIT )) || hold 'Observation closing exceeded its deadline.'
       OBS_COMPLETE=1
       return
     fi
-    observe_emit "ACK $OBS_REQUEST DRAIN" || hold 'Cannot retain observation acknowledgment.'
+    observe_emit "ACK $OBS_REQUEST $command" || hold 'Cannot retain observation acknowledgment.'
     observe_flush || hold 'Observation output blocked or closed.'
+    (( SECONDS < OBS_LIMIT )) || hold 'Observation operation exceeded its deadline.'
   done
 }
 
@@ -1756,7 +1804,7 @@ SEQUENCE=0 RETAINING=0 DELIVERING=0 FRESH_RECEIPT=0 FRESH_PUBLICATION=0
 RETENTION_DEADLINE=0 LAST_OBSERVATION=0 LEDGER_READY=0 SENDER_COVERED=0
 PHONE_ACTIVITY=0 WORK_ACTIVITY=0
 OBSERVING=0 OBS_REQUEST=0 OBS_COMPLETE=0 OBS_LIMIT=0 OBS_EXPIRES=0
-OBS_OUTPUT_FAILED=0
+OBS_OUTPUT_FAILED=0 OBS_PROTOCOL=1
 OBS_LAUNCHING=0 OBS_PENDING_SIGNAL=0
 OBS_TIMER= OBS_CLOCK= OBS_PHASE= OBS_ERROR= OBS_INPUT= OBS_SIZE= OBS_SHAPE=
 
