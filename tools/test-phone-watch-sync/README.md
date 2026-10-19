@@ -94,9 +94,14 @@ For `SWITCHES_CANCELED`, the exact line is
 `Warning: Activity not started because the  current activity is being kept for the user.`
 with two ordinary spaces between `the` and `current`.
 Any other line containing `Warning:` sets `OTHER_WARNING`. `ERROR` flags any `Error:`
-substring and `EXCEPTION` flags any `Exception` substring. Every warning, error or exception
-still rejects the launch, including `OTHER_WARNING`; only the exact single `Status: ok`
-and `LaunchState: COLD` lines can satisfy the unchanged result guard. Command failures and
+substring and `EXCEPTION` flags any `Exception` substring. For subsequent bounded calls,
+zero or one whole-line byte-exact
+`Warning: Activity not started, its current task has been brought to the front`
+is permitted only with exactly one `Status: ok` and exactly one `LaunchState: COLD`.
+Duplicate canonical warnings, every other warning (including `OTHER_WARNING`), error or
+exception, altered text, whitespace violations and field-cardinality violations still
+reject the launch. Acceptance only permits continuation to the existing lifecycle checks
+before ACK; task reuse proves neither HOT nor sufficient restart evidence. Command failures and
 results rejected by the existing size/control check retain their existing fixed reasons;
 an unavailable parser diagnostic uses `DIAGNOSTIC_UNAVAILABLE`. No raw body, value,
 component, Intent or environment is emitted by these diagnostics.
@@ -104,6 +109,7 @@ component, Intent or environment is emitted by these diagnostics.
 These diagnostics localize a subsequent bounded actual call. Historical composite launch
 evidence remains `UNKNOWN`; the classifications establish no WARM/HOT behavior, lifecycle
 proof or product acceptance, and do not authorize retry-until-green.
+Historical held outcomes, unknown causes and retained evidence remain unchanged.
 
 `CLOSE` performs the boundary checks plus final acknowledged closing drains. It then
 retires the owned logcat producers, complete projectors and deadline timer, removes owned

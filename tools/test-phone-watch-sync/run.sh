@@ -1109,6 +1109,7 @@ launch_app() {
         else launch_state="OTHER"
       }
       /Warning:/ {
+        warning_count++
         if ($0 == "Warning: Activity not started because the  current activity is being kept for the user.") switches_canceled=1
         else if ($0 == "Warning: Activity not started, intent has been delivered to currently running top-most instance.") intent_delivered_to_top=1
         else if ($0 == "Warning: Activity not started because intent should be handled by the caller") return_intent_to_caller=1
@@ -1117,9 +1118,9 @@ launch_app() {
       }
       /Error:/ { error=1 }
       /Exception/ { exception=1 }
-      /Warning:|Error:|Exception/ { bad=1 }
+      /Error:|Exception/ { bad=1 }
       END {
-        if (bad || status != 1 || state != 1) {
+        if (bad || status != 1 || state != 1 || warning_count > task_to_front) {
           printf "StatusCount=%s Status=%s LaunchStateCount=%s LaunchState=%s", \
             (status == 0 ? "MISSING" : status == 1 ? "ONE" : "MULTIPLE"), \
             (status == 1 && status_ok ? "OK" : "NON_OK"), \
