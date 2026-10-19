@@ -96,21 +96,23 @@ function esc(text) {
 
 function miniArc({ cx, cy, r, thickness, remaining, color }) {
   const circ = 2 * Math.PI * r
-  if (remaining <= 0) {
+  const left = Math.max(0, Math.min(remaining, 1))
+  if (left === 0) {
     return `
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
       stroke-width="${thickness}" />`
   }
-  const left = Math.max(0.02, Math.min(remaining, 0.999))
   const paint = circ * left
   const used = circ * (1 - left)
+  const roundEnds = paint > thickness
+  const capInset = roundEnds ? thickness / 2 : 0
   return `
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
       stroke-width="${thickness}" />
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}"
-      stroke-width="${thickness}" stroke-linecap="round"
-      stroke-dasharray="${Math.max(0, paint - thickness).toFixed(2)} ${circ.toFixed(2)}"
-      stroke-dashoffset="${(-(used + thickness / 2)).toFixed(2)}"
+      stroke-width="${thickness}" stroke-linecap="${roundEnds ? 'round' : 'butt'}"
+      stroke-dasharray="${paint - 2 * capInset} ${circ}"
+      stroke-dashoffset="${-(used + capInset)}"
       transform="rotate(-90 ${cx} ${cy})" />`
 }
 
@@ -593,6 +595,24 @@ const variants = [
     { file: 'glance-legend-unavailable.svg', name: 'Selected entries have no known percentage', rows: [], emptyMessage: 'Ring data unavailable' },
     { file: 'glance-legend-unavailable-inner-zero-outer.svg', name: 'Unavailable inner pool with exhausted outer survivor', rows: [{ ...cursorOuterZero, used: -1 }] },
     { file: 'glance-legend-two-pairs-zero.svg', name: 'Three bands with two exhausted pairs', rows: [exhaustedClaude, cursorBothZero, { ...liveCodex, used: 1, split: { family: FAMILY.codexSpark, metric: 'Spark Weekly', used: 1 } }] },
+    {
+      file: 'glance-legend-low-positive-inner.svg',
+      name: 'Ordinary and paired inner pools at 4% remaining beside true zero',
+      rows: [
+        { ...exhaustedClaude, used: 0.96 },
+        { ...cursorBothZero, used: 0.96 },
+        { ...liveCodex, used: 0.96, split: { family: FAMILY.codexSpark, metric: 'Spark Weekly', used: 1 } },
+      ],
+    },
+    {
+      file: 'glance-legend-low-positive-outer.svg',
+      name: 'Ordinary zero and paired outer pools at 4% remaining',
+      rows: [
+        exhaustedClaude,
+        { ...cursorBothZero, split: { ...cursorBothZero.split, used: 0.96 } },
+        { ...liveCodex, used: 1, split: { family: FAMILY.codexSpark, metric: 'Spark Weekly', used: 0.96 } },
+      ],
+    },
   ].map((variant) => ({ ...variant, ok: true, refreshEnabled: true, alerts: 0 })),
 ]
 

@@ -473,6 +473,12 @@ The table describes the current generator variants. Regeneration of all affected
 pairs and preview-to-board review for the 2026-10-17 titles are **Pending**; existing art and
 historical device readings do not establish acceptance of the revised titles.
 
+**2026-10-19 renderer correspondence:** `miniArc` now follows the native proportional
+Butt/compensated Round cap policy above, including track-only zero. The two low-positive
+Source variants use 96% used for 4% remaining and 100% used for true zero. Their normal PNG
+companions and all affected SVG/PNG pairs await external regeneration and full review;
+integrated acceptance remains **Pending**.
+
 | File | Meaning |
 |------|---------|
 | `glance-legend-3.svg` | **Primary** — three providers, `OK` refresh enabled, Alerts disabled |
@@ -488,6 +494,8 @@ historical device readings do not establish acceptance of the revised titles.
 | `glance-legend-claude-zero.svg` / `glance-legend-3-claude-zero.svg` | Claude 5h zero alone and in the three-band ceiling |
 | `glance-legend-pair-inner-zero.svg` / `glance-legend-pair-outer-zero.svg` / `glance-legend-pair-both-zero.svg` | Fixed paired identities with either or both known pools exhausted |
 | `glance-legend-two-pairs-zero.svg` | Three rows including two exhausted pairs |
+| `glance-legend-low-positive-inner.svg` | Ordinary Claude 4% remaining; Cursor Models / Other Models and Codex / Spark each 4% / 0% remaining |
+| `glance-legend-low-positive-outer.svg` | Ordinary Claude true zero; Cursor Models / Other Models and Codex / Spark each 0% / 4% remaining, including dark Spark |
 | `glance-legend-positive-rounds-zero.svg` | Positive arc geometry with ordinary `0%`; subpixel visibility is not asserted |
 | `glance-legend-zero-credits.svg` | Red `0%`, neutral `0 credits` |
 | `glance-legend-unavailable.svg` | Selected entries have no known percentage; `Ring data unavailable` |
@@ -527,7 +535,8 @@ native low-positive arcs retain proportional span without a floor/dot; short end
 native pixel regression and both-shape 4% scene proof: Pending
 review art: render-wear-glance-designs.mjs → preview-glance-legend-*.png
 revised SVG/PNG generation together, preview-to-board review and updated-app acceptance: Pending
-low-positive renderer/review-variant alignment and integrated acceptance: Pending, separate second task
+2026-10-19 low-positive inner/outer Source variants: ordinary and both paired families at 4% versus true zero
+low-positive renderer/variant SVG/PNG review and integrated acceptance: Pending
 primary preview: preview-glance-legend-3.png
 ```
 
