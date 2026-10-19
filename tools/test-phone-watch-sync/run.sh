@@ -1087,7 +1087,7 @@ stop_app() {
 
 launch_app() {
   local role=$1 serial=$2 component=$3 current events= expected actual pid start deadline=$((SECONDS + 15))
-  local OBS_LIMIT=$OBS_LIMIT launch
+  local OBS_LIMIT=$OBS_LIMIT launch launch_diagnostic
   if (( OBSERVING && deadline < OBS_LIMIT )); then OBS_LIMIT=$deadline; fi
   current=$(app_processes "$serial" "$role") || hold 'Cannot observe pre-launch absence.'
   [[ -z "$current" ]] || hold 'Launch target is already running; HOT is not restart.'
@@ -1097,12 +1097,42 @@ launch_app() {
   if (( OBSERVING )); then
     launch=$(adb_on "$serial" shell -n am start -W -n "$component" | tr -d '\r') || hold 'Activity launch failed.'
     [[ ${#launch} -le 16384 && "${launch//$'\n'/}" != *[[:cntrl:]]* ]] || hold 'Malformed activity launch result.'
-    printf '%s\n' "$launch" | awk '
-      /^Status:/ { status++; if ($0 != "Status: ok") bad=1 }
-      /^LaunchState:/ { state++; if ($0 != "LaunchState: COLD") bad=1 }
+    launch_diagnostic=$(printf '%s\n' "$launch" | awk '
+      /^Status:/ { status++; if ($0 != "Status: ok") bad=1; else status_ok=1 }
+      /^LaunchState:/ {
+        state++; if ($0 != "LaunchState: COLD") bad=1
+        if ($0 == "LaunchState: COLD") launch_state="COLD"
+        else if ($0 == "LaunchState: WARM") launch_state="WARM"
+        else if ($0 == "LaunchState: HOT") launch_state="HOT"
+        else if ($0 == "LaunchState: RELAUNCH") launch_state="RELAUNCH"
+        else if ($0 == "LaunchState: UNKNOWN") launch_state="UNKNOWN"
+        else launch_state="OTHER"
+      }
+      /Warning:/ {
+        if ($0 == "Warning: Activity not started because the current activity is being kept for the user.") switches_canceled=1
+        else if ($0 == "Warning: Activity not started, intent has been delivered to currently running top-most instance.") intent_delivered_to_top=1
+        else if ($0 == "Warning: Activity not started because intent should be handled by the caller") return_intent_to_caller=1
+        else if ($0 == "Warning: Activity not started, its current task has been brought to the front") task_to_front=1
+        else other_warning=1
+      }
+      /Error:/ { error=1 }
+      /Exception/ { exception=1 }
       /Warning:|Error:|Exception/ { bad=1 }
-      END { if (bad || status != 1 || state != 1) exit 1 }
-    ' || hold 'Launch did not prove a successful COLD load; HOT is not restart.'
+      END {
+        if (bad || status != 1 || state != 1) {
+          printf "StatusCount=%s Status=%s LaunchStateCount=%s LaunchState=%s", \
+            (status == 0 ? "MISSING" : status == 1 ? "ONE" : "MULTIPLE"), \
+            (status == 1 && status_ok ? "OK" : "NON_OK"), \
+            (state == 0 ? "MISSING" : state == 1 ? "ONE" : "MULTIPLE"), \
+            (state == 1 ? launch_state : "OTHER")
+          printf " SWITCHES_CANCELED=%d INTENT_DELIVERED_TO_TOP=%d RETURN_INTENT_TO_CALLER=%d", \
+            switches_canceled+0, intent_delivered_to_top+0, return_intent_to_caller+0
+          printf " TASK_TO_FRONT=%d OTHER_WARNING=%d ERROR=%d EXCEPTION=%d\n", \
+            task_to_front+0, other_warning+0, error+0, exception+0
+          exit 1
+        }
+      }
+    ') || hold "Launch did not prove a successful COLD load; HOT is not restart. ${launch_diagnostic:-DIAGNOSTIC_UNAVAILABLE}"
   else
     adb_on "$serial" shell -n am start -W -n "$component" >/dev/null || hold 'Activity launch failed.'
   fi

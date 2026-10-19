@@ -77,6 +77,30 @@ bound within the request deadline. Neither lifecycle acknowledgement establishes
 work preservation, saved-summary retention or product acceptance. All drained publications
 and receipts remain evidence, including late events and identical-data sends.
 
+When the existing composite launch-result guard rejects a bounded result, its existing
+`FAILED`/`HOLD` reason includes finite ASCII diagnostics from that same capture (at most
+16 KiB). `StatusCount` and `LaunchStateCount` are `MISSING`, `ONE` or `MULTIPLE`, counting
+only lines anchored at `Status:` and `LaunchState:`. `Status` is `OK` only for a single
+exact `Status: ok` line; otherwise it is `NON_OK`. For a single exact `LaunchState: <token>`
+line, `LaunchState` is `COLD`, `WARM`, `HOT`, `RELAUNCH` or `UNKNOWN`; missing, multiple or
+other values/whitespace produce `OTHER`. Unknown values stay opaque.
+
+Independent `0`/`1` warning flags are `SWITCHES_CANCELED`, `INTENT_DELIVERED_TO_TOP`,
+`RETURN_INTENT_TO_CALLER`, `TASK_TO_FRONT` and `OTHER_WARNING`. The first four recognize
+the exact complete Android warning lines for a kept current activity, delivery to the
+running top-most instance, handling by the caller and bringing the current task forward.
+Any other line containing `Warning:` sets `OTHER_WARNING`. `ERROR` flags any `Error:`
+substring and `EXCEPTION` flags any `Exception` substring. Every warning, error or exception
+still rejects the launch, including `OTHER_WARNING`; only the exact single `Status: ok`
+and `LaunchState: COLD` lines can satisfy the unchanged result guard. Command failures and
+results rejected by the existing size/control check retain their existing fixed reasons;
+an unavailable parser diagnostic uses `DIAGNOSTIC_UNAVAILABLE`. No raw body, value,
+component, Intent or environment is emitted by these diagnostics.
+
+These diagnostics localize a subsequent bounded actual call. Historical composite launch
+evidence remains `UNKNOWN`; the classifications establish no WARM/HOT behavior, lifecycle
+proof or product acceptance, and do not authorize retry-until-green.
+
 `CLOSE` performs the boundary checks plus final acknowledged closing drains. It then
 retires the owned logcat producers, complete projectors and deadline timer, removes owned
 temporary pipes/records, and emits `COMPLETE <id> OBSERVATION_ONLY` only after successful
