@@ -5,6 +5,103 @@ acceptance gate. It orchestrates the Flutter debug build, full Wear instrumentat
 update installs, real Data Layer delivery, and saved-summary retention. Source review,
 manual sync, screenshots, old receipts and partial test suites do not establish acceptance.
 
+## Bounded foreground observation
+
+`run.sh observe` provides a separate, read-only metadata/event session. It does not run
+`verify` or establish acceptance, quiet, lifecycle/work preservation, or measurement
+results. `prepare`, `verify` and the ordinary acceptance recipe keep their existing
+canonical round-watch target and defaults.
+
+Select one existing Wear serial **and** its supported geometry explicitly:
+
+```sh
+WEAR_SERIAL=emulator-5556 tools/test-phone-watch-sync/run.sh observe 384-round
+WEAR_SERIAL=emulator-5558 tools/test-phone-watch-sync/run.sh observe 360-notround
+```
+
+The targets are `wardpulse_wear_round_api36_1` (384×384, `round`) and
+`wardpulse_wear_square_api36_1` (360×360, `notround`). The phone must be
+`wardpulse_phone_play_api36`; set `PHONE_SERIAL` explicitly when other phones are online.
+Ports do not prove identity. Both selected devices must already be online with
+`app.wardpulse` installed. Observation needs Bash 4.4+, GNU `timeout`, an existing SDK's
+executable ADB, and the ordinary `awk`, `cat`, `mktemp`, `mkfifo`, `sort`, `sed`, `tr`,
+`wc`, `grep`, `rm` and `sleep` tools. It needs no Flutter, Java reader, build tools,
+install, pairing change or `run-as` access.
+
+Discovery and repeated boundary checks bind the actual AVD name, live role/features,
+exact package UID with exclusive ownership, boot ID and UID-wide PID/start-tick
+identities. Wear size must have no override, and its live resource configuration must
+match the selected watch shape. Shared, isolated, unknown or ambiguous process ownership,
+boot/UID changes and unexplained PID reuse fail closed. Existing installed apps may
+produce observed lifecycle and sync events; the lifecycle ledger must reconcile them.
+
+The process stays in the foreground. Keep its stdin and stdout open and consume output
+promptly, retaining stdout in the caller's evidence stream. Wait for `READY` before the
+first request, and for `ACK` before each subsequent request. Send ASCII lines with exactly
+one space and a newline; request IDs must be consecutive decimal integers starting at 1,
+with at most 32 requests including close:
+
+```text
+DRAIN 1
+DRAIN 2
+CLOSE 3
+```
+
+`DRAIN` rechecks identity, reconciles inventories and acknowledges fresh log boundaries on
+both roles. `CLOSE` performs those checks plus final acknowledged closing drains. It then
+retires the owned logcat producers, complete projectors and deadline timer, removes owned
+temporary pipes/records, and emits `COMPLETE <id> OBSERVATION_ONLY` only after successful
+retirement and cleanup. Require that terminal record **and a zero exit status** for
+completion. A finite input file without `CLOSE` fails; EOF never proves quiet.
+A single `CLOSE 1` after readiness is sufficient for a session with no intermediate drains.
+
+Output is a small line protocol (`id` is 0 during startup):
+
+| Record | Meaning |
+| --- | --- |
+| `IDENTITY <id> <phase> <role> <avd> <serial> <geometry> <uid> <boot>` | Validated device/package binding; phone geometry is labelled `phone`. |
+| `PROCESS <id> <phase> <role> <pid> <start-ticks> <name>` | Sanitized process identity sampled by the existing inventory path. |
+| `RESULT <id> <phase> <role> <typed-event>` | Every drained projector record, before ledger normalization or `EVENTS` replacement. |
+| `READY 0 OBSERVATION_ONLY` | Startup bindings, drains and reconciliation completed. |
+| `ACK <id> DRAIN` | Both roles completed the requested boundary. |
+| `RETIRED <id> retirement <role> <host-pid>` | Owned monitor exited, was waited and is absent. |
+| `FAILED <id> <reason>` | Session failed; exit status is nonzero and no completion is valid. |
+| `COMPLETE <id> OBSERVATION_ONLY` | Explicit close and retirement completed; this is observation only. |
+
+Phases are `startup`, `input`, `operation`, `closing` and `retirement`. Typed events retain
+`START <pid>`, `KILL <pid>`, `DEATH <pid>`, `PUBLICATION`, `RECEIPT`, `GAP`, and numeric
+`MARK wp-gate-<pid>-<sequence>-<tick>` boundaries. Acknowledged explicit projector closure
+uses `CLOSE wp-gate-<pid>-0-<uid>`. Only that exact owned marker permits normal projector
+termination; unrequested EOF still emits `GAP`. No GAP is filtered, and no lifecycle or
+sync event is hidden by normalization. Failed startup/operations also retain their
+available role-labelled results during retirement. A monitor's finite EOF cannot substitute
+for its closing acknowledgement. Cleanup and retirement failures also emit `FAILED` when
+stdout remains usable. If output is broken or its bound is exhausted, complete evidence
+cannot be delivered and the session fails.
+
+Startup has 60 seconds, each request 30 seconds, each idle input wait 15 seconds and the
+whole session 180 seconds. A deadline timer covers blocked work as well as reads/writes;
+an unresponsive shell has a further 20-second termination ceiling. ADB calls have at most
+five seconds (clamped to the current phase deadline), followed by at most one second to
+kill. Stdout copies have two seconds plus one second to kill. Monitor retirement has four
+seconds before forced termination makes the session fail, then one second to prove absence
+after KILL; exit statuses are collected only after child absence is proved. Timer retirement,
+including rearming, allows four seconds for TERM and one second to prove absence after KILL;
+forced or unproved retirement fails the session. Each input line has at most 16 characters;
+NUL, CR, tabs, other controls, unknown commands, repeated/skipped/out-of-range
+IDs and oversized lines fail. Each role retains the whole existing projector's 262,144-byte
+ceiling; total typed output is bounded below 1 MiB, including terminal records. Events,
+role guards, control-character checks, publication/receipt validation and loss detection
+use the same complete projector as verification.
+
+EOF, errors, signals, expiry, monitor loss, malformed controls, changing bindings or
+unproved retirement produce a nonzero exit. Observation issues only device metadata reads,
+logcat reads and acknowledged `WardPulseGate` log markers, with owned host temporary pipes.
+It does not stop/launch apps, access the work reader, back up/inject/restore summaries,
+invoke app APIs, build/install, read keys/private payloads, change OS/network settings or
+accept arbitrary device/process commands. Full paired acceptance and later lifecycle,
+work and measurement access remain separate work.
+
 ## Prerequisites
 
 - Bash 4.4 or newer, GNU `timeout` (including `--kill-after`), `sha256sum`, `mktemp`,

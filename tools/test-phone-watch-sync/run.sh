@@ -73,10 +73,21 @@ prepare() {
 bounded() {
   local seconds=$1
   shift
+  if (( OBSERVING )); then
+    local remaining=$((OBS_LIMIT - SECONDS))
+    (( remaining > 0 )) || hold 'Observation deadline expired.'
+    (( seconds <= remaining )) || seconds=$remaining
+    timeout --kill-after=1s "${seconds}s" "$@"
+    return
+  fi
   timeout --kill-after=5s "${seconds}s" "$@"
 }
 
 hold() {
+  if (( OBSERVING )); then
+    OBS_ERROR=$*
+    exit 1
+  fi
   printf 'HOLD: %s\n' "$*" >&2
   exit 1
 }
@@ -90,14 +101,24 @@ adb_on() {
 resolve_devices() {
   local inventory serial state characteristics name features phone wear deadline=$((SECONDS + 30))
   local -a phones wears
+  local -A seen
   while (( SECONDS < deadline )); do
     # The selector is explicit even for the server-wide inventory operation.
     inventory=$(adb_on "${PHONE_SERIAL:-$PHONE_AVD}" devices) || hold 'ADB discovery failed.'
-    phones=() wears=()
+    if (( OBSERVING )); then
+      local printable=${inventory//$'\n'/}
+      [[ ${#inventory} -le 32768 && "${printable//$'\t'/}" != *[[:cntrl:]]* ]] \
+        || hold 'ADB discovery inventory exceeds observation bounds.'
+    fi
+    phones=() wears=() seen=()
     while read -r serial state _; do
       [[ -z "$serial" || "$serial" == List || "$serial" == '*' ]] && continue
       (( SECONDS < deadline )) || hold 'Device discovery exceeded its deadline.'
       [[ "$serial" =~ ^[a-zA-Z0-9._:-]+$ ]] || hold 'Unrecognized ADB serial.'
+      if (( OBSERVING )); then
+        [[ ! -v "seen[$serial]" ]] || hold 'Duplicate device identity in discovery.'
+        seen[$serial]=1
+      fi
       [[ "$state" == device ]] || hold 'An offline/unauthorized target is present; restore the existing pair first.'
       characteristics=$(adb_on "$serial" shell -n getprop ro.build.characteristics) || hold 'Cannot read live role.'
       characteristics=${characteristics//$'\r'/}
@@ -180,21 +201,47 @@ app_processes() {
   if [[ "$2" == phone && -n "$OBSERVER" ]]; then
     identities=$(printf '%s\n' "$identities" | awk -v observer="$OBSERVER" '$0 != observer')
   fi
+  if (( OBSERVING )); then
+    [[ ${#identities} -le 16384 ]] || hold 'Process inventory exceeds observation bounds.'
+    printf '%s\n' "$identities" | awk '
+      NF == 0 { next }
+      { if (++rows > 128 || NF != 3 || $0 ~ /[[:cntrl:]]/ ||
+          $1 !~ /^[0-9]+$/ || length($1) > 10 || $1+0 < 1 || $1+0 > 2147483647 || seen[$1]++ ||
+          $2 !~ /^[0-9]+$/ || length($2) > 20 || $2+0 < 1 ||
+          (length($2) == 20 && ("x" $2) > "x18446744073709551615") ||
+          length($3) > 128 || $3 !~ /^app[.]wardpulse(:[a-zA-Z0-9_.]+)?$/) exit 1 }
+    ' || hold 'App process identity is malformed, shared or ambiguous.'
+    local pid ticks name
+    while read -r pid ticks name; do
+      [[ -n "$pid" ]] || continue
+      observe_emit "PROCESS $OBS_REQUEST $OBS_PHASE $2 $pid $ticks $name" \
+        || hold 'Cannot retain process identity.'
+    done <<< "$identities"
+  fi
   printf '%s' "$identities"
 }
 
 # Keep only safe event types and numeric PIDs. Raw log lines are never saved.
 # The FIFO is a pipe, not a raw log file. Both owned readers are retired on exit.
 start_monitor() {
-  local role=$1 serial=$2 initial
+  local role=$1 serial=$2 initial lifetime=3600 grace=5 closing=
   initial=$(app_processes "$serial" "$role" | awk '{ print $1 }')
   mkfifo "$SCRATCH/$role.pipe"
+  : >"$SCRATCH/$role.events"
+  if (( OBSERVING )); then
+    lifetime=180 grace=1 closing="wp-gate-$$-0-${UIDS[$role]}"
+    OBS_CLOSE[$role]=$closing
+  fi
   # Launch timeout directly so its recorded PID owns/forwards termination to ADB.
-  timeout --kill-after=5s 3600s "$ADB" -s "$serial" logcat -b main -b events -v epoch -T 1 \
+  if (( OBSERVING )); then OBS_LAUNCHING=1; fi
+  timeout --kill-after="${grace}s" "${lifetime}s" "$ADB" -s "$serial" logcat -b main -b events -v epoch -T 1 \
     WardPulseGate:I WardPulseSync:I am_proc_start:I am_proc_died:I am_kill:I chatty:I logd:W '*:S' \
     >"$SCRATCH/$role.pipe" 2>/dev/null </dev/null &
   MONITORS+=("$!")
-  awk -v role="$role" -v uid="${UIDS[$role]}" -v initial="$initial" '
+  PRODUCERS[$role]=$!
+  if (( OBSERVING )); then observe_launch_done; fi
+  if (( OBSERVING )); then OBS_LAUNCHING=1; fi
+  awk -v role="$role" -v uid="${UIDS[$role]}" -v initial="$initial" -v closing="$closing" '
     BEGIN {
       n=split(initial, pids, /[ \n]+/)
       for (i=1; i<=n; i++) if (length(pids[i])) owned[pids[i]]=""
@@ -253,7 +300,8 @@ start_monitor() {
       }
       relevant = is_start ? fields[3] == uid : (fields[2] in owned)
       if (relevant || name == "app.wardpulse" || index(name, "app.wardpulse:") == 1) {
-        if (fields[1]+0 != int(uid/100000) ||
+        if ((length(closing) && name !~ /^app[.]wardpulse(:[a-zA-Z0-9_.]+)?$/) ||
+            fields[1]+0 != int(uid/100000) ||
             (is_start && fields[3] != uid) ||
             (!is_start && (!(fields[2] in owned) ||
               (length(owned[fields[2]]) && owned[fields[2]] != name)))) emit("GAP")
@@ -277,9 +325,16 @@ start_monitor() {
     }
     /chatty|logd|dropped|Unexpected EOF/ { emit("GAP"); next }
     /^[ ]*[0-9]+\.[0-9]+[ ]+[0-9]+[ ]+[0-9]+[ ]+I[ ]+WardPulseGate[ ]*:/ {
+      if (length(closing) && $0 !~ /: wp-gate-[0-9]+-[0-9]+-[0-9]+$/) {
+        emit("GAP"); next
+      }
       if (match($0, /wp-gate-[0-9]+-[0-9]+-[0-9]+/)) {
         gate_time=$1+0
-        emit("MARK " substr($0, RSTART, RLENGTH))
+        marker=substr($0, RSTART, RLENGTH)
+        if (length(closing) && marker == closing) {
+          closed=1; emit("CLOSE " marker); exit
+        }
+        emit("MARK " marker)
       } else emit("GAP")
       next
     }
@@ -291,27 +346,45 @@ start_monitor() {
       next
     }
     { emit("GAP") }
-    END { print "GAP" }
+    END { if (!closed) print "GAP" }
   ' <"$SCRATCH/$role.pipe" >"$SCRATCH/$role.events" &
   MONITORS+=("$!")
+  PROJECTORS[$role]=$!
+  if (( OBSERVING )); then observe_launch_done; fi
 }
 
 barrier() {
-  local role=$1 serial=$2 marker deadline pid line
+  local role=$1 serial=$2 marker deadline pid line tag=MARK
   marker="wp-gate-$$-$((++SEQUENCE))-$SECONDS"
+  if (( OBSERVING )) && [[ "${3:-}" == close ]]; then
+    marker=${OBS_CLOSE[$role]} tag=CLOSE
+  fi
   adb_on "$serial" shell -n log -p i -t WardPulseGate "$marker" || hold 'Cannot place monitoring boundary.'
   deadline=$((SECONDS + 5))
   while (( SECONDS < deadline )); do
+    [[ $(wc -c <"$SCRATCH/$role.events") -le 262144 ]] || hold 'Event observation exceeded its safe bound.'
+    line=$(awk -v marker="$marker" -v tag="$tag" '$0 == tag " " marker { print NR }' "$SCRATCH/$role.events")
+    [[ -z "$line" || "$line" =~ ^[1-9][0-9]*$ ]] || hold 'Monitoring boundary is ambiguous.'
     for pid in "${MONITORS[@]}"; do
+      if (( OBSERVING )); then
+        [[ "${OBS_CLOSED[$pid]:-0}" == 0 ]] || continue
+        if [[ "$tag" == CLOSE && -n "$line" && ( "$pid" == "${PROJECTORS[$role]}" || "$pid" == "${PRODUCERS[$role]}" ) ]]; then
+          continue
+        fi
+      fi
       kill -0 "$pid" 2>/dev/null || hold 'Owned event monitor exited.'
     done
-    [[ $(wc -c <"$SCRATCH/$role.events") -le 262144 ]] || hold 'Event observation exceeded its safe bound.'
-    line=$(awk -v marker="$marker" '$0 == "MARK " marker { print NR }' "$SCRATCH/$role.events")
     if [[ -n "$line" ]]; then
-      EVENTS=$(awk -v lo="${CURSOR[$role]:-0}" -v hi="$line" 'NR > lo && NR < hi && $1 != "MARK"' "$SCRATCH/$role.events")
-      [[ "$EVENTS" != *GAP* ]] || hold 'Event loss or monitoring gap.'
+      EVENTS=$(awk -v lo="${CURSOR[$role]:-0}" -v hi="$line" 'NR > lo && NR < hi && $1 != "MARK" && $1 != "CLOSE"' "$SCRATCH/$role.events")
+      if (( OBSERVING )); then
+        observe_retain "$role" "$line" || hold 'Cannot retain typed observation results.'
+      fi
       CURSOR[$role]=$line
+      [[ "$EVENTS" != *GAP* ]] || hold 'Event loss or monitoring gap.'
       record_sync_events "$role"
+      if [[ "$tag" == CLOSE ]]; then
+        OBS_CLOSED[${PRODUCERS[$role]}]=1 OBS_CLOSED[${PROJECTORS[$role]}]=1
+      fi
       return
     fi
     sleep 0.1
@@ -1126,9 +1199,354 @@ verify_sender_identity() {
     && $(package_uid "$PHONE_SERIAL") == "${UIDS[phone]}" ]] || hold 'Installed sender ownership changed.'
 }
 
+# Observation records are retained before EVENTS can be normalized or replaced.
+# Only bounded copies of these typed records reach stdout; raw logcat stays in pipes.
+observe_emit() {
+  local record=$* bytes
+  [[ ${#record} -le 512 && "$record" != *[[:cntrl:]]* ]] || return 1
+  bytes=$(wc -c <"$SCRATCH/observed") || return 1
+  (( bytes + ${#record} + 1 <= 1046528 )) || return 1
+  printf '%s\n' "$record" >>"$SCRATCH/observed" || return 1
+  printf '%s\n' "$record" >>"$SCRATCH/pending"
+}
+
+observe_flush() {
+  (( ! OBS_OUTPUT_FAILED )) || return 1
+  if ! timeout --kill-after=1s 2s cat "$SCRATCH/pending"; then
+    OBS_OUTPUT_FAILED=1
+    return 1
+  fi
+  : >"$SCRATCH/pending"
+}
+
+observe_retain() {
+  local role=$1 hi=$2 records line
+  [[ -f "$SCRATCH/$role.events" ]] || return 0
+  [[ $(wc -c <"$SCRATCH/$role.events") -le 262144 ]] || return 1
+  records=$(awk -v lo="${CURSOR[$role]:-0}" -v hi="$hi" 'NR > lo && NR <= hi' "$SCRATCH/$role.events") || return 1
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    observe_emit "RESULT $OBS_REQUEST $OBS_PHASE $role $line" || return 1
+  done <<< "$records"
+  CURSOR[$role]=$hi
+}
+
+observe_signal() {
+  OBS_ERROR=$2
+  if (( OBS_LAUNCHING )); then
+    OBS_PENDING_SIGNAL=$1
+  else
+    exit "$1"
+  fi
+}
+
+observe_launch_done() {
+  # Register every ownership entry before a signal can enter cleanup.
+  OBS_LAUNCHING=0
+  if (( OBS_PENDING_SIGNAL )); then exit "$OBS_PENDING_SIGNAL"; fi
+}
+
+observe_retire_timer() {
+  local pid=$OBS_TIMER deadline=$((SECONDS + 4)) forced=0
+  [[ -n "$pid" ]] || return 0
+  if ! kill -0 "$pid" 2>/dev/null; then
+    OBS_ERROR='Observation timer exited before owned retirement.'
+    wait "$pid" 2>/dev/null || :
+    OBS_TIMER=
+    return 1
+  fi
+  kill -TERM "$pid" 2>/dev/null || :
+  while kill -0 "$pid" 2>/dev/null; do
+    if (( SECONDS >= deadline )); then
+      if (( forced )); then
+        OBS_ERROR='Observation timer retirement is unproved.'
+        return 1
+      fi
+      OBS_ERROR='Observation timer retirement exceeded its deadline.'
+      forced=1
+      kill -KILL "$pid" 2>/dev/null || :
+      deadline=$((SECONDS + 1))
+    fi
+    sleep 0.05
+  done
+  # Wait only after absence is established, so a stopped timer cannot block it.
+  wait "$pid" 2>/dev/null || :
+  if kill -0 "$pid" 2>/dev/null; then
+    OBS_ERROR='Observation timer retirement is unproved.'
+    return 1
+  fi
+  OBS_TIMER=
+  return "$forced"
+}
+
+observe_arm() {
+  local seconds=$1 owner=$$ remaining
+  observe_retire_timer || hold "$OBS_ERROR"
+  remaining=$((OBS_EXPIRES - SECONDS))
+  (( seconds > 0 && remaining > 0 )) || hold 'Observation lifetime expired.'
+  (( seconds <= remaining )) || seconds=$remaining
+  OBS_LIMIT=$((SECONDS + seconds))
+  # A builtin timed read avoids an unowned sleep descendant. The second deadline
+  # bounds an unresponsive shell; ordinary cleanup retains and retires its children.
+  OBS_LAUNCHING=1
+  (
+    trap 'exit 0' INT TERM HUP
+    IFS= read -r -t "$seconds" -u "$OBS_CLOCK" _ || :
+    kill -TERM "$owner" 2>/dev/null || exit 0
+    IFS= read -r -t 20 -u "$OBS_CLOCK" _ || :
+    kill -KILL "$owner" 2>/dev/null || :
+  ) >/dev/null 2>&1 &
+  OBS_TIMER=$!
+  observe_launch_done
+}
+
+observe_identity() {
+  local role=$1 serial=$2 name characteristics features uid packages size config qualifier boot
+  name=$(adb_on "$serial" emu avd name | tr -d '\r' | sed '/^OK$/d; /^$/d') \
+    || hold 'Cannot recheck actual AVD identity.'
+  characteristics=$(adb_on "$serial" shell -n getprop ro.build.characteristics | tr -d '\r') \
+    || hold 'Cannot recheck actual device role.'
+  features=$(adb_on "$serial" shell -n pm list features | tr -d '\r') \
+    || hold 'Cannot recheck device features.'
+  [[ ${#name} -le 128 && -n "$characteristics" && ${#characteristics} -le 128 && ${#features} -le 65536 \
+    && "$name$characteristics${features//$'\n'/}" != *[[:cntrl:]]* ]] \
+    || hold 'Device identity metadata exceeds observation bounds.'
+  if [[ "$role" == phone ]]; then
+    [[ "$name" == "$PHONE_AVD" && ",$characteristics," != *,watch,* \
+      && $'\n'"$features"$'\n' == *$'\nfeature:android.hardware.telephony\n'* \
+      && "$features" != *android.hardware.type.watch* ]] || hold 'Canonical phone identity changed.'
+    qualifier=phone
+  else
+    [[ "$name" == "$WEAR_AVD" && ",$characteristics," == *,watch,* \
+      && $'\n'"$features"$'\n' == *$'\nfeature:android.hardware.type.watch\n'* ]] \
+      || hold 'Selected Wear identity changed.'
+    size=$(adb_on "$serial" shell -n wm size | tr -d '\r') || hold 'Cannot prove Wear geometry.'
+    [[ "$size" == "Physical size: ${OBS_SIZE}x${OBS_SIZE}" ]] || hold 'Wear size is overridden or unexpected.'
+    config=$(adb_on "$serial" shell -n cmd activity get-config | tr -d '\r') || hold 'Cannot prove Wear shape.'
+    [[ ${#config} -le 16384 && "${config//$'\n'/}" != *[[:cntrl:]]* ]] || hold 'Wear configuration is malformed.'
+    qualifier=$(printf '%s\n' "$config" | awk '$1 == "config:" { if (NF != 2) exit 1; count++; value=$2 }
+      END { if (count != 1) exit 1; print value }') || hold 'Wear configuration is ambiguous.'
+    [[ "-$qualifier-" == *-watch-* && "-$qualifier-" == *-"$OBS_SHAPE"-* ]] || hold 'Wear shape differs from selection.'
+    if [[ "$OBS_SHAPE" == round ]]; then
+      [[ "-$qualifier-" != *-notround-* ]] || hold 'Wear shape is ambiguous.'
+    else
+      [[ "-$qualifier-" != *-round-* ]] || hold 'Wear shape is ambiguous.'
+    fi
+    qualifier="$OBS_SIZE-$OBS_SHAPE"
+  fi
+  uid=$(package_uid "$serial") || hold 'Cannot recheck exact installed package UID.'
+  [[ "$uid" == "${UIDS[$role]}" ]] || hold 'Exact installed package UID changed.'
+  (( uid % 100000 >= 10000 && uid % 100000 <= 19999 )) || hold 'Package UID is not an ordinary app UID.'
+  packages=$(adb_on "$serial" shell -n cmd package list packages -U --uid "$uid" | tr -d '\r') \
+    || hold 'Cannot exclude shared UID ownership.'
+  [[ "$packages" == "package:$APP_ID uid:$uid" ]] || hold 'Installed UID ownership is ambiguous.'
+  boot=$(adb_on "$serial" shell -n cat /proc/sys/kernel/random/boot_id | tr -d '\r') \
+    || hold 'Cannot recheck boot identity.'
+  [[ "$boot" == "${BOOT[$role]}" ]] || hold 'Device rebooted during observation.'
+  observe_emit "IDENTITY $OBS_REQUEST $OBS_PHASE $role $name $serial $qualifier $uid ${BOOT[$role]}" \
+    || hold 'Cannot retain device identity.'
+}
+
+observe_boundary() {
+  local role serial
+  for role in phone wear; do
+    if [[ "$role" == phone ]]; then serial=$PHONE_SERIAL; else serial=$WEAR_SERIAL; fi
+    observe_identity "$role" "$serial"
+    reconcile_role "$role" "$serial"
+    observe_identity "$role" "$serial"
+    barrier "$role" "$serial"
+  done
+}
+
+observe_read() {
+  local char remaining
+  OBS_INPUT=
+  while :; do
+    remaining=$((OBS_LIMIT - SECONDS))
+    (( remaining > 0 )) || hold 'Observation input deadline expired.'
+    # NUL is the delimiter, so it produces an empty character and is rejected,
+    # rather than silently disappearing as it does with ordinary Bash read.
+    IFS= read -r -n 1 -d '' -t "$remaining" char || hold 'Observation input ended or expired without typed close.'
+    (( SECONDS < OBS_LIMIT )) || hold 'Observation input deadline expired.'
+    [[ "$char" != $'\n' ]] || return 0
+    [[ "$char" == [A-Z0-9\ ] && ${#OBS_INPUT} -lt 16 ]] || hold 'Malformed or oversized observation control.'
+    OBS_INPUT+="$char"
+  done
+}
+
+observe_cleanup() {
+  local result=$1 role pid deadline=$((SECONDS + 4)) alive status forced=0
+  trap 'result=1; OBS_ERROR="Signal during observation retirement."' INT TERM HUP PIPE
+  OBS_PHASE=retirement
+  # Acknowledged CLOSE lets the complete projector exit normally. All other
+  # exits are losses, and their final GAP remains part of the retained result.
+  for pid in "${MONITORS[@]}"; do
+    [[ "${OBS_CLOSED[$pid]:-0}" == 1 && ( "$pid" == "${PROJECTORS[phone]:-}" || "$pid" == "${PROJECTORS[wear]:-}" ) ]] \
+      || kill "$pid" 2>/dev/null || :
+  done
+  for role in phone wear; do
+    [[ ! -v "PRODUCERS[$role]" ]] || kill -TERM -- "-${PRODUCERS[$role]}" 2>/dev/null || :
+  done
+  while :; do
+    alive=0
+    for pid in "${MONITORS[@]}"; do
+      if kill -0 "$pid" 2>/dev/null; then alive=1; fi
+    done
+    for role in phone wear; do
+      if [[ -v "PRODUCERS[$role]" ]] && kill -0 -- "-${PRODUCERS[$role]}" 2>/dev/null; then alive=1; fi
+    done
+    (( alive )) || break
+    if (( SECONDS >= deadline )); then
+      if (( forced )); then
+        OBS_ERROR='Owned monitor absence is unproved.'
+        break
+      fi
+      result=1 OBS_ERROR='Owned monitor retirement exceeded its deadline.'
+      forced=1
+      for pid in "${MONITORS[@]}"; do kill -KILL "$pid" 2>/dev/null || :; done
+      for role in phone wear; do
+        [[ ! -v "PRODUCERS[$role]" ]] || kill -KILL -- "-${PRODUCERS[$role]}" 2>/dev/null || :
+      done
+      deadline=$((SECONDS + 1))
+    fi
+    sleep 0.05
+  done
+  for role in phone wear; do
+    status=1
+    for pid in "${PRODUCERS[$role]:-}" "${PROJECTORS[$role]:-}"; do
+      [[ -n "$pid" ]] || continue
+      # Never enter an unbounded wait while an owned child is still present.
+      if kill -0 "$pid" 2>/dev/null; then
+        result=1 OBS_ERROR='Owned monitor absence is unproved.'
+        continue
+      fi
+      if wait "$pid" 2>/dev/null; then
+        if [[ "$pid" == "${PROJECTORS[$role]:-}" ]]; then status=0; fi
+      fi
+      if kill -0 "$pid" 2>/dev/null || { [[ "$pid" == "${PRODUCERS[$role]:-}" ]] && kill -0 -- "-$pid" 2>/dev/null; }; then
+        result=1 OBS_ERROR='Owned monitor absence is unproved.'
+      else
+        observe_emit "RETIRED $OBS_REQUEST $OBS_PHASE $role $pid" || result=1
+      fi
+    done
+    if [[ "${OBS_CLOSED[${PROJECTORS[$role]:-missing}]:-0}" != 1 || "$status" != 0 ]]; then
+      result=1
+      [[ -n "$OBS_ERROR" ]] || OBS_ERROR='Projector ended without acknowledged close.'
+    fi
+    if [[ -f "$SCRATCH/$role.events" ]]; then
+      observe_retain "$role" "$(wc -l <"$SCRATCH/$role.events")" || result=1
+    fi
+  done
+  if (( result != 0 || ! OBS_COMPLETE )); then
+    result=1
+    [[ -n "$OBS_ERROR" ]] || OBS_ERROR='Observation failed before explicit close.'
+  fi
+  observe_flush || result=1
+  rm -rf -- "$SCRATCH" || result=1
+  observe_retire_timer || result=1
+  if [[ -n "$OBS_CLOCK" ]] && ! exec {OBS_CLOCK}>&-; then result=1; fi
+  # Terminal records fit the reserved output allowance after scratch removal.
+  if (( result == 0 )); then
+    # A blocked consumer cannot keep completion, or this foreground process, alive.
+    timeout --kill-after=1s 2s cat <<<"COMPLETE $OBS_REQUEST OBSERVATION_ONLY" || result=1
+  fi
+  if (( result != 0 )); then
+    timeout --kill-after=1s 2s cat <<<"FAILED $OBS_REQUEST ${OBS_ERROR:-Observation output, cleanup or retirement failed.}" || :
+    timeout --kill-after=1s 2s cat <<<"HOLD: ${OBS_ERROR:-Observation output, cleanup or retirement failed.}" >&2 || :
+  fi
+  return "$result"
+}
+
+observe() {
+  OBS_EXPIRES=$((SECONDS + 180)) OBS_LIMIT=$((SECONDS + 60))
+  [[ $# == 1 ]] || hold 'Observe requires exactly one target: 384-round or 360-notround.'
+  case "$1" in
+    384-round) WEAR_AVD=wardpulse_wear_round_api36_1; OBS_SIZE=384 OBS_SHAPE=round ;;
+    360-notround) WEAR_AVD=wardpulse_wear_square_api36_1; OBS_SIZE=360 OBS_SHAPE=notround ;;
+    *) hold 'Unsupported observation target.' ;;
+  esac
+  [[ "${WEAR_SERIAL:-}" =~ ^[a-zA-Z0-9._:-]+$ ]] || hold 'Observe requires an explicit existing WEAR_SERIAL.'
+  require_sdk_root
+  require_executable "$ADB"
+  local tool role serial snapshot pid ticks name key command request
+  for tool in timeout awk cat mktemp mkfifo sort sed tr wc grep rm sleep; do
+    command -v "$tool" >/dev/null || hold "Required host executable not found: $tool"
+  done
+  (( BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 4) )) \
+    || hold 'Bash 4.4 or newer is required.'
+  export LC_ALL=C
+  SCRATCH=$(timeout --kill-after=1s 5s mktemp -d)
+  OBSERVING=1 OBS_PHASE=startup
+  trap cleanup EXIT
+  trap 'observe_signal 130 "Observation interrupted by a signal or expired deadline."' INT
+  trap 'observe_signal 143 "Observation interrupted by a signal or expired deadline."' TERM HUP
+  trap 'observe_signal 1 "Observation output closed."' PIPE
+  : >"$SCRATCH/observed"
+  : >"$SCRATCH/pending"
+  mkfifo "$SCRATCH/deadline.pipe"
+  exec {OBS_CLOCK}<>"$SCRATCH/deadline.pipe"
+  observe_arm "$((OBS_LIMIT - SECONDS))"
+  resolve_devices
+  for role in phone wear; do
+    if [[ "$role" == phone ]]; then serial=$PHONE_SERIAL; else serial=$WEAR_SERIAL; fi
+    UIDS[$role]=$(package_uid "$serial") || hold 'Cannot establish exact installed package UID.'
+    snapshot=$(processes "$serial" "$role") || hold 'Cannot establish boot/process identities.'
+    BOOT[$role]=${snapshot%%$'\n'*}
+    BOOT[$role]=${BOOT[$role]#boot }
+    [[ "${BOOT[$role]}" =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ ]] || hold 'Missing boot identity.'
+    observe_identity "$role" "$serial"
+  done
+  start_monitor phone "$PHONE_SERIAL"
+  start_monitor wear "$WEAR_SERIAL"
+  for role in phone wear; do
+    if [[ "$role" == phone ]]; then serial=$PHONE_SERIAL; else serial=$WEAR_SERIAL; fi
+    barrier "$role" "$serial"
+    snapshot=$(app_processes "$serial" "$role") || hold 'Cannot bind initial observed processes.'
+    barrier "$role" "$serial"
+    [[ -z "$EVENTS" ]] || hold 'Activity raced initial observation boundary.'
+    while read -r pid ticks name; do
+      [[ -n "$pid" ]] || continue
+      key="$role,$pid"
+      LIVE[$key]=1 START_TICKS[$key]=$ticks
+    done <<< "$snapshot"
+  done
+  LEDGER_READY=1
+  observe_boundary
+  observe_emit 'READY 0 OBSERVATION_ONLY' || hold 'Cannot retain observation readiness.'
+  observe_flush || hold 'Observation output blocked or closed.'
+  while :; do
+    OBS_PHASE=input
+    observe_arm 15
+    observe_read
+    [[ "$OBS_INPUT" =~ ^(DRAIN|CLOSE)\ ([1-9]|[12][0-9]|3[0-2])$ ]] || hold 'Expected DRAIN or CLOSE with request number 1..32.'
+    command=${BASH_REMATCH[1]} request=${BASH_REMATCH[2]}
+    (( request == OBS_REQUEST + 1 )) || hold 'Observation request numbers must be consecutive.'
+    OBS_REQUEST=$request OBS_PHASE=operation
+    observe_arm 30
+    observe_boundary
+    if [[ "$command" == CLOSE ]]; then
+      OBS_PHASE=closing
+      for role in phone wear; do
+        if [[ "$role" == phone ]]; then serial=$PHONE_SERIAL; else serial=$WEAR_SERIAL; fi
+        observe_identity "$role" "$serial"
+        reconcile_role "$role" "$serial"
+        barrier "$role" "$serial" close
+      done
+      OBS_COMPLETE=1
+      return
+    fi
+    observe_emit "ACK $OBS_REQUEST DRAIN" || hold 'Cannot retain observation acknowledgment.'
+    observe_flush || hold 'Observation output blocked or closed.'
+  done
+}
+
 cleanup() {
   local result=$? pid deadline retired=1 current identity unknown
   trap - EXIT
+  if (( OBSERVING )); then
+    observe_cleanup "$result"
+    exit $?
+  fi
   if [[ -n "$READER_HOST" ]]; then
     kill "$READER_HOST" 2>/dev/null || :
     wait "$READER_HOST" 2>/dev/null || :
@@ -1327,6 +1745,7 @@ verify() {
 }
 
 declare -A BOOT=() OLD=() RUNNING=() CURSOR=() UIDS=() LIVE=() START_TICKS=() KILLED=()
+declare -A PRODUCERS=() PROJECTORS=() OBS_CLOSE=() OBS_CLOSED=()
 MONITORS=()
 SCRATCH= DEVICE_SCRATCH= EVENTS= BASELINE= BASELINE_METADATA= OBSERVER=
 READER_HOST= READER_DEVICE_PID=
@@ -1336,12 +1755,17 @@ PHONE_APK_PATH= PHONE_APK_HASH= PHONE_UPDATE_TIME=
 SEQUENCE=0 RETAINING=0 DELIVERING=0 FRESH_RECEIPT=0 FRESH_PUBLICATION=0
 RETENTION_DEADLINE=0 LAST_OBSERVATION=0 LEDGER_READY=0 SENDER_COVERED=0
 PHONE_ACTIVITY=0 WORK_ACTIVITY=0
+OBSERVING=0 OBS_REQUEST=0 OBS_COMPLETE=0 OBS_LIMIT=0 OBS_EXPIRES=0
+OBS_OUTPUT_FAILED=0
+OBS_LAUNCHING=0 OBS_PENDING_SIGNAL=0
+OBS_TIMER= OBS_CLOCK= OBS_PHASE= OBS_ERROR= OBS_INPUT= OBS_SIZE= OBS_SHAPE=
 
 case "${1:-}" in
   prepare) prepare ;;
   verify) verify ;;
+  observe) shift; observe "$@" ;;
   *)
-    printf 'Usage: %s prepare|verify\n' "$0" >&2
+    printf 'Usage: %s prepare|verify|observe 384-round|360-notround\n' "$0" >&2
     exit 2
     ;;
 esac
