@@ -279,6 +279,29 @@ budget, refresh, Alerts and navigation cases. Historical measurements and readin
 remain evidence for their recorded builds and labels; source inspection establishes no new
 art freshness, device-fit or runtime Pass.
 
+## Revision 2026-10-19 — proportional native low-positive arcs
+
+Actual **4% remaining** must paint its proportional family-coloured span. When two round
+ends would consume the span, the native mini arc uses flat ends instead; it neither erases
+the span nor inflates it with a percentage floor or minimum dot. Longer spans retain their
+compensated round ends, clockwise-from-12 melt and near-full usage gap. The policy applies
+to both pools of Cursor and Codex/Spark, including darker family colours.
+
+True zero remains track-only `#2E3632`, with only its exhausted percentage token `#FFB4AB`.
+A positive fraction rounded to `0%` retains its actual positive paint input and ordinary
+token colour; this is not a promise that every subpixel span is visible. Fractions, rounding,
+pair identities/order, credits, unavailable omission, three-row ceiling, 39-unit boxes and
+5-unit strokes at design diameter 450, typography, 54-unit pitch, 12-unit Alerts clearance
+and interactions stay unchanged.
+
+**Acceptance: Pending.** `MiniRemainingArcPaintTest` exercises the production painter's
+bitmap pixels at 384/450 and 360/450 scales, including 4% versus zero, the short-span
+transition, both paired palettes, ordinary round ends and the near-full gap. Execution and
+new native scene proof remain Pending on both shapes. Historical measurements and statuses
+above remain evidence only for their recorded builds. Renderer/review-variant alignment,
+paired SVG/PNG regeneration and integrated acceptance belong to the separate second task;
+this native correction alone does not complete the 4% fix.
+
 ## Goal
 
 Name each selected band with its provider/family, show remaining % and optional
@@ -313,13 +336,15 @@ Rules:
   and percentages always put the inner pool first (left), outer pool second (right),
   independently of which percentage is tighter.
 - Mini arc = **remaining** (`100 - usedPercent`), family color from the face palette and the
-  same clockwise-from-12 melt as the watch face (usage gap opens at 12). Its round caps reach
-  half a stroke past each end — on a 17-unit arc that is 8.4° per cap, more than a 4%-used row
-  has to show — so the sweep is drawn short by one cap at each end and the caps fill it back in.
-  Without that a nearly full row reads as a closed ring (`WATCH_RING_DESIGN.md`, Ring geometry,
-  where the same correction is measured on the face).
+  same clockwise-from-12 melt as the watch face (usage gap opens at 12). Longer spans
+  compensate the round caps' half-stroke reach by drawing the sweep short by one cap at
+  each end; without that a nearly full row reads as a closed ring (`WATCH_RING_DESIGN.md`,
+  Ring geometry). If those two cap allowances would consume the span, use flat ends and
+  the actual proportional sweep instead. Actual 4% remaining must paint family colour;
+  no percentage floor or minimum dot is permitted for short spans.
   At known exhaustion, keep only the existing grey track `#2E3632`, with no coloured arc.
-  Positive fractions that round to `0%` remain positive arcs and keep ordinary label colour.
+  Positive fractions that round to `0%` keep their positive paint input and ordinary label
+  colour, without a universal subpixel-visibility guarantee.
 - Primary line for a pair: **family name + ` plan`**, exactly `Cursor plan` for Cursor and
   `Codex plan` for Codex/Spark.
   The phone uses the same rule for its band label; the payload carries pool labels, not a
@@ -498,8 +523,11 @@ unknown / budget / externally composed labels preserved; Cursor Models / Other M
 selected known zero stays a grey mini-track and a row with pale-red 0% only
 one or both exhausted known halves keep paired tracks, fixed identities and both percentages
 unknown/unavailable is absent, never fabricated as zero; tiny positive fractions stay ordinary
+native low-positive arcs retain proportional span without a floor/dot; short ends may be flat, long ends round
+native pixel regression and both-shape 4% scene proof: Pending
 review art: render-wear-glance-designs.mjs → preview-glance-legend-*.png
 revised SVG/PNG generation together, preview-to-board review and updated-app acceptance: Pending
+low-positive renderer/review-variant alignment and integrated acceptance: Pending, separate second task
 primary preview: preview-glance-legend-3.png
 ```
 

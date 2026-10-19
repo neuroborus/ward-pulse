@@ -134,6 +134,25 @@ just test-wear-device
 just run-wear
 ```
 
+`MiniRemainingArcPaintTest` is a focused device regression that reads bitmap pixels from
+the production mini-arc painter at 384/450 and 360/450 scales. It distinguishes coloured
+4% from track-only zero, checks proportional short-span extent through 4.6%/4.8% with
+bounded raster tolerance, and covers both paired palettes, ordinary round ends and the
+near-full usage gap. It does not establish screen fit or native scene acceptance.
+
+HOST only, from `apps/wear_android`, after the whole Runner run is DONE and all owned
+processes/leases have retired:
+
+```sh
+ANDROID_SERIAL=<serial> ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=app.wardpulse.wear.ui.MiniRemainingArcPaintTest
+```
+
+Before this invocation or any other candidate upgrade, preserve a fresh old-installed-APK
+native 4%-remaining failure witness bound to compiled Source/APK, scene, shape and time;
+if unavailable, HOLD for reconciliation. Candidate GREEN and full unchanged
+`just check-wear`, `just test-wear-device` on both shapes, `just check-docs` and applicable
+finalization checks remain external duties, as do native scene review and safe restoration.
+
 `test-wear-device` and `run-wear` require one active Wear AVD. Canonical AVD names and setup
 commands live in
 [`docs/ANDROID_TOOLCHAIN.md`](https://github.com/neuroborus/ward-pulse/blob/main/docs/ANDROID_TOOLCHAIN.md).
