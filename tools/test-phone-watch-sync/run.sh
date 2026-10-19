@@ -1270,9 +1270,10 @@ observe_flush() {
 }
 
 observe_retain() {
-  local role=$1 hi=$2 records line
+  local role=$1 hi=$2 records line bytes
   [[ -f "$SCRATCH/$role.events" ]] || return 0
-  [[ $(wc -c <"$SCRATCH/$role.events") -le 262144 ]] || return 1
+  bytes=$(wc -c <"$SCRATCH/$role.events") || return 1
+  (( bytes <= 262144 )) || return 1
   records=$(awk -v lo="${CURSOR[$role]:-0}" -v hi="$hi" 'NR > lo && NR <= hi' "$SCRATCH/$role.events") || return 1
   while IFS= read -r line; do
     [[ -n "$line" ]] || continue
@@ -1282,11 +1283,12 @@ observe_retain() {
 }
 
 observe_signal() {
-  OBS_ERROR=$2
-  if (( OBS_LAUNCHING )); then
-    OBS_PENDING_SIGNAL=$1
-  else
-    exit "$1"
+  OBS_FAILED=1 OBS_ERROR=$2 OBS_PENDING_SIGNAL=$1
+  # Even a signal before EXIT claims retirement must finish it before exiting.
+  # Once claimed, nested signals only latch failure; no handler uses locals.
+  if (( ! OBS_RETIRING && ! OBS_LAUNCHING )); then
+    observe_cleanup || OBS_FAILED=1
+    exit "$OBS_FAILED"
   fi
 }
 
@@ -1297,7 +1299,7 @@ observe_launch_done() {
 }
 
 observe_retire_timer() {
-  local pid=$OBS_TIMER deadline=$((SECONDS + 4)) forced=0
+  local pid=$OBS_TIMER deadline=$((SECONDS + 4)) forced=0 failed=0
   [[ -n "$pid" ]] || return 0
   if ! kill -0 "$pid" 2>/dev/null; then
     OBS_ERROR='Observation timer exited before owned retirement.'
@@ -1317,7 +1319,7 @@ observe_retire_timer() {
       kill -KILL "$pid" 2>/dev/null || :
       deadline=$((SECONDS + 1))
     fi
-    sleep 0.05
+    sleep 0.05 || { failed=1; OBS_ERROR='Observation timer retirement wait failed.'; }
   done
   # Wait only after absence is established, so a stopped timer cannot block it.
   wait "$pid" 2>/dev/null || :
@@ -1326,7 +1328,7 @@ observe_retire_timer() {
     return 1
   fi
   OBS_TIMER=
-  return "$forced"
+  return "$((forced || failed))"
 }
 
 observe_arm() {
@@ -1426,8 +1428,11 @@ observe_read() {
 }
 
 observe_cleanup() {
-  local result=$1 role pid deadline=$((SECONDS + 4)) alive status forced=0
-  trap 'result=1; OBS_ERROR="Signal during observation retirement."' INT TERM HUP PIPE
+  # Before this claim, a nested handler completes retirement before it exits.
+  # After it, handlers cannot exit, including before local initialization.
+  if (( OBS_RETIRING )); then return "$OBS_FAILED"; fi
+  OBS_RETIRING=1
+  local role pid deadline=$((SECONDS + 4)) alive status forced=0 retired=1 lines
   OBS_PHASE=retirement
   # Acknowledged CLOSE lets the complete projector exit normally. All other
   # exits are losses, and their final GAP remains part of the retained result.
@@ -1449,10 +1454,10 @@ observe_cleanup() {
     (( alive )) || break
     if (( SECONDS >= deadline )); then
       if (( forced )); then
-        OBS_ERROR='Owned monitor absence is unproved.'
+        OBS_FAILED=1 OBS_ERROR='Owned monitor absence is unproved.'
         break
       fi
-      result=1 OBS_ERROR='Owned monitor retirement exceeded its deadline.'
+      OBS_FAILED=1 OBS_ERROR='Owned monitor retirement exceeded its deadline.'
       forced=1
       for pid in "${MONITORS[@]}"; do kill -KILL "$pid" 2>/dev/null || :; done
       for role in phone wear; do
@@ -1460,52 +1465,69 @@ observe_cleanup() {
       done
       deadline=$((SECONDS + 1))
     fi
-    sleep 0.05
+    sleep 0.05 || OBS_FAILED=1
   done
   for role in phone wear; do
     status=1
     for pid in "${PRODUCERS[$role]:-}" "${PROJECTORS[$role]:-}"; do
       [[ -n "$pid" ]] || continue
       # Never enter an unbounded wait while an owned child is still present.
-      if kill -0 "$pid" 2>/dev/null; then
-        result=1 OBS_ERROR='Owned monitor absence is unproved.'
+      if kill -0 "$pid" 2>/dev/null || { [[ "$pid" == "${PRODUCERS[$role]:-}" ]] && kill -0 -- "-$pid" 2>/dev/null; }; then
+        OBS_FAILED=1 retired=0 OBS_ERROR='Owned monitor absence is unproved.'
         continue
       fi
       if wait "$pid" 2>/dev/null; then
         if [[ "$pid" == "${PROJECTORS[$role]:-}" ]]; then status=0; fi
       fi
       if kill -0 "$pid" 2>/dev/null || { [[ "$pid" == "${PRODUCERS[$role]:-}" ]] && kill -0 -- "-$pid" 2>/dev/null; }; then
-        result=1 OBS_ERROR='Owned monitor absence is unproved.'
+        OBS_FAILED=1 retired=0 OBS_ERROR='Owned monitor absence is unproved.'
       else
-        observe_emit "RETIRED $OBS_REQUEST $OBS_PHASE $role $pid" || result=1
+        observe_emit "RETIRED $OBS_REQUEST $OBS_PHASE $role $pid" || OBS_FAILED=1
       fi
     done
     if [[ "${OBS_CLOSED[${PROJECTORS[$role]:-missing}]:-0}" != 1 || "$status" != 0 ]]; then
-      result=1
+      OBS_FAILED=1
       [[ -n "$OBS_ERROR" ]] || OBS_ERROR='Projector ended without acknowledged close.'
     fi
     if [[ -f "$SCRATCH/$role.events" ]]; then
-      observe_retain "$role" "$(wc -l <"$SCRATCH/$role.events")" || result=1
+      if lines=$(wc -l <"$SCRATCH/$role.events"); then
+        observe_retain "$role" "$lines" || OBS_FAILED=1
+      else
+        OBS_FAILED=1
+      fi
     fi
   done
-  if (( result != 0 || ! OBS_COMPLETE )); then
-    result=1
+  if (( OBS_EXIT_STATUS != 0 || ! OBS_COMPLETE )); then
+    OBS_FAILED=1
     [[ -n "$OBS_ERROR" ]] || OBS_ERROR='Observation failed before explicit close.'
   fi
-  observe_flush || result=1
-  rm -rf -- "$SCRATCH" || result=1
-  observe_retire_timer || result=1
-  if [[ -n "$OBS_CLOCK" ]] && ! exec {OBS_CLOCK}>&-; then result=1; fi
-  # Terminal records fit the reserved output allowance after scratch removal.
-  if (( result == 0 )); then
-    # A blocked consumer cannot keep completion, or this foreground process, alive.
-    timeout --kill-after=1s 2s cat <<<"COMPLETE $OBS_REQUEST OBSERVATION_ONLY" >&"$OBS_PROTOCOL" || result=1
+  observe_flush || OBS_FAILED=1
+  observe_retire_timer || OBS_FAILED=1
+  [[ -z "$OBS_TIMER" ]] || retired=0
+  if [[ -n "$OBS_CLOCK" ]] && ! exec {OBS_CLOCK}>&-; then OBS_FAILED=1; fi
+  # Keep recovery pipes and records whenever an owned tree or timer may survive.
+  # The timer is now absent, so bound the existing removal like stdout copies.
+  if (( retired )); then
+    timeout --kill-after=1s 2s rm -rf -- "$SCRATCH" || OBS_FAILED=1
   fi
-  if (( result != 0 )); then
+  if (( SECONDS >= OBS_LIMIT )); then
+    OBS_FAILED=1
+    [[ -n "$OBS_ERROR" ]] || OBS_ERROR='Observation deadline expired during retirement.'
+  fi
+  # Terminal records fit the reserved output allowance even if scratch is retained.
+  if (( ! OBS_FAILED )); then
+    # A blocked consumer cannot keep completion, or this foreground process, alive.
+    timeout --kill-after=1s 2s cat <<<"COMPLETE $OBS_REQUEST OBSERVATION_ONLY" >&"$OBS_PROTOCOL" || OBS_FAILED=1
+    if (( SECONDS >= OBS_LIMIT )); then
+      OBS_FAILED=1
+      [[ -n "$OBS_ERROR" ]] || OBS_ERROR='Observation deadline expired during terminal delivery.'
+    fi
+  fi
+  if (( OBS_FAILED )); then
     timeout --kill-after=1s 2s cat <<<"FAILED $OBS_REQUEST ${OBS_ERROR:-Observation output, cleanup or retirement failed.}" >&"$OBS_PROTOCOL" || :
     timeout --kill-after=1s 2s cat <<<"HOLD: ${OBS_ERROR:-Observation output, cleanup or retirement failed.}" >&2 || :
   fi
-  return "$result"
+  return "$OBS_FAILED"
 }
 
 observe() {
@@ -1528,7 +1550,10 @@ observe() {
   export LC_ALL=C
   SCRATCH=$(timeout --kill-after=1s 5s mktemp -d)
   OBSERVING=1 OBS_PHASE=startup
-  trap cleanup EXIT
+  # Signals entering before the cleanup claim also retire before they can exit.
+  # The conditional call prevents errexit from abandoning the retirement pass;
+  # each fallible cleanup operation retains failure and lets retirement continue.
+  trap 'OBS_EXIT_STATUS=$?; observe_cleanup || OBS_FAILED=1; exit "$OBS_FAILED"' EXIT
   trap 'observe_signal 130 "Observation interrupted by a signal or expired deadline."' INT
   trap 'observe_signal 143 "Observation interrupted by a signal or expired deadline."' TERM HUP
   trap 'observe_signal 1 "Observation output closed."' PIPE
@@ -1622,10 +1647,6 @@ observe() {
 cleanup() {
   local result=$? pid deadline retired=1 current identity unknown
   trap - EXIT
-  if (( OBSERVING )); then
-    observe_cleanup "$result"
-    exit $?
-  fi
   if [[ -n "$READER_HOST" ]]; then
     kill "$READER_HOST" 2>/dev/null || :
     wait "$READER_HOST" 2>/dev/null || :
@@ -1837,6 +1858,7 @@ PHONE_ACTIVITY=0 WORK_ACTIVITY=0
 OBSERVING=0 OBS_REQUEST=0 OBS_COMPLETE=0 OBS_LIMIT=0 OBS_EXPIRES=0
 OBS_OUTPUT_FAILED=0 OBS_PROTOCOL=1
 OBS_LAUNCHING=0 OBS_PENDING_SIGNAL=0
+OBS_RETIRING=0 OBS_FAILED=0 OBS_EXIT_STATUS=0
 OBS_TIMER= OBS_CLOCK= OBS_PHASE= OBS_ERROR= OBS_INPUT= OBS_SIZE= OBS_SHAPE=
 
 case "${1:-}" in

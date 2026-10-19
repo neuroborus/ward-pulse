@@ -118,6 +118,22 @@ retirement and cleanup. Require that terminal record **and a zero exit status** 
 completion. A finite input file without `CLOSE` fails; EOF never proves quiet.
 A single `CLOSE 1` after readiness is sufficient for a session with no intermediate drains.
 
+Deadline, handled-signal and EXIT failures use that same bounded retirement path. Its
+guard and failure latch are persistent state initialized before traps are armed. A signal
+before the guard is claimed completes retirement before exiting, even at the earliest
+EXIT entry; once claimed, additional signals only latch failure. The guard precedes local
+initialization, and signal handlers use only persistent state throughout retirement.
+They cannot exit recursively or abandon cleanup. A signal during monitor/timer launch still
+waits for every ownership entry to be registered before exit.
+Individual cleanup failures retain failure while the remaining retirement work continues.
+Producer process-group absence is required before wait and retirement evidence; owned
+pipes and records are retained whenever any monitor tree or timer remains unproved.
+After timer absence is proved, owned scratch removal has the same two-second bound plus
+one second to kill as stdout copies.
+Expiry, signals and forced or unproved retirement keep a nonzero status, with bounded
+`FAILED` delivery when stdout remains usable. A `COMPLETE` record without zero status
+never establishes completion.
+
 Output is a small line protocol (`id` is 0 during startup):
 
 | Record | Meaning |
@@ -481,6 +497,11 @@ acceptance can be claimed. There is no manual override or source-review substitu
 
 ## Dated status
 
+- 2026-10-20: observation retirement entry correction authored. Historical idle-retirement
+  evidence remains HOLD; its exact signal/EXIT scheduling interleaving remains unproved.
+  Source changes establish no runtime or product acceptance. Both-shape behavioral,
+  retirement and original-preservation proofs remain pending after whole Runner completion,
+  full retirement and quiescence.
 - 2026-10-18: preservation correction authored. The previous force-stop/old-log approach
   is replaced by bounded lifecycle and independent callback/persistence requirements,
   with an explicit preflight HOLD for unavailable logical work evidence. No runtime
