@@ -20,6 +20,14 @@ type MarkdownFile = {
   value?: unknown
 }
 
+type HtmlNode = {
+  type: string
+  tagName?: string
+  properties?: Record<string, unknown>
+  children?: HtmlNode[]
+  value?: string
+}
+
 const screenshots = [
   {
     url: '/screenshots/phone-providers-light.png',
@@ -227,6 +235,70 @@ function prefixMarkdownUrls() {
   }
 }
 
+function renderCompatibilityAliases() {
+  const aliasesByFile = new Map([
+    [
+      resolve(import.meta.dirname, '../product/user-guide/PROVIDERS.md'),
+      new Set([
+        'codex-subscription',
+        'claude-subscription',
+        'cursor-plan',
+        'openai-platform-reporting',
+        'anthropic-organization-reporting',
+        'cursor-team-admin-api',
+        'chrome',
+        'firefox',
+        'safari',
+        'save-the-token',
+      ]),
+    ],
+    [
+      resolve(import.meta.dirname, '../product/user-guide/PROVIDERS_CURSOR.md'),
+      new Set(['create-team', 'team-key-permissions']),
+    ],
+  ])
+
+  return (tree: HtmlNode, file: { path?: string }) => {
+    const aliases = file.path && aliasesByFile.get(resolve(file.path))
+    if (!aliases) return
+
+    const visit = (node: HtmlNode) => {
+      const children = node.children
+      if (!children) return
+
+      for (let index = 0; index < children.length; index += 1) {
+        const opening = children[index]
+        const content = children[index + 1]
+        const closing = children[index + 2]
+        const id =
+          opening.type === 'raw'
+            ? opening.value?.match(/^<span id="([a-z0-9-]+)">$/)?.[1]
+            : undefined
+
+        // MDX discards raw HTML in .md imports; preserve only these existing aliases.
+        if (
+          id &&
+          aliases.has(id) &&
+          content?.type === 'element' &&
+          (content.tagName === 'a' || content.tagName === 'strong') &&
+          closing?.type === 'raw' &&
+          closing.value === '</span>'
+        )
+          children.splice(index, 3, {
+            type: 'element',
+            tagName: 'span',
+            properties: { id },
+            children: [content],
+          })
+
+        visit(children[index])
+      }
+    }
+
+    visit(tree)
+  }
+}
+
 export default defineConfig({
   basePath,
   description:
@@ -234,6 +306,7 @@ export default defineConfig({
   iconUrl: withBasePath('/favicon.svg'),
   markdown: {
     remarkPlugins: [inlineGuideMarkdown],
+    rehypePlugins: [renderCompatibilityAliases],
     outputRemarkPlugins: [
       homepageMarkdown,
       guideScreenshotMarkdown,
