@@ -82,13 +82,17 @@ When the existing composite launch-result guard rejects a bounded result, its ex
 16 KiB). `StatusCount` and `LaunchStateCount` are `MISSING`, `ONE` or `MULTIPLE`, counting
 only lines anchored at `Status:` and `LaunchState:`. `Status` is `OK` only for a single
 exact `Status: ok` line; otherwise it is `NON_OK`. For a single exact `LaunchState: <token>`
-line, `LaunchState` is `COLD`, `WARM`, `HOT`, `RELAUNCH` or `UNKNOWN`; missing, multiple or
-other values/whitespace produce `OTHER`. Unknown values stay opaque.
+line, `LaunchState` recognizes `COLD`, `WARM`, `HOT` and `RELAUNCH`. The exact complete
+`LaunchState: UNKNOWN (0)` line maps to `UNKNOWN`; missing, multiple or other
+values/whitespace produce `OTHER`. Other unknown numeric formatter values stay opaque.
 
 Independent `0`/`1` warning flags are `SWITCHES_CANCELED`, `INTENT_DELIVERED_TO_TOP`,
 `RETURN_INTENT_TO_CALLER`, `TASK_TO_FRONT` and `OTHER_WARNING`. The first four recognize
 the exact complete Android warning lines for a kept current activity, delivery to the
 running top-most instance, handling by the caller and bringing the current task forward.
+For `SWITCHES_CANCELED`, the exact line is
+`Warning: Activity not started because the  current activity is being kept for the user.`
+with two ordinary spaces between `the` and `current`.
 Any other line containing `Warning:` sets `OTHER_WARNING`. `ERROR` flags any `Error:`
 substring and `EXCEPTION` flags any `Exception` substring. Every warning, error or exception
 still rejects the launch, including `OTHER_WARNING`; only the exact single `Status: ok`

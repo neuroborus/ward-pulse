@@ -1105,11 +1105,11 @@ launch_app() {
         else if ($0 == "LaunchState: WARM") launch_state="WARM"
         else if ($0 == "LaunchState: HOT") launch_state="HOT"
         else if ($0 == "LaunchState: RELAUNCH") launch_state="RELAUNCH"
-        else if ($0 == "LaunchState: UNKNOWN") launch_state="UNKNOWN"
+        else if ($0 == "LaunchState: UNKNOWN (0)") launch_state="UNKNOWN"
         else launch_state="OTHER"
       }
       /Warning:/ {
-        if ($0 == "Warning: Activity not started because the current activity is being kept for the user.") switches_canceled=1
+        if ($0 == "Warning: Activity not started because the  current activity is being kept for the user.") switches_canceled=1
         else if ($0 == "Warning: Activity not started, intent has been delivered to currently running top-most instance.") intent_delivered_to_top=1
         else if ($0 == "Warning: Activity not started because intent should be handled by the caller") return_intent_to_caller=1
         else if ($0 == "Warning: Activity not started, its current task has been brought to the front") task_to_front=1
