@@ -963,40 +963,112 @@ class _DashboardHostState extends State<DashboardHost> {
               ),
             },
           ),
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: (index) {
-              setState(() {
-                _selectedIndex = index;
-              });
+          bottomNavigationBar: LayoutBuilder(
+            builder: (context, constraints) {
+              const destinations = [
+                NavigationDestination(
+                  icon: Icon(Icons.dashboard_outlined),
+                  selectedIcon: Icon(Icons.dashboard),
+                  label: 'Dashboard',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.watch_outlined),
+                  selectedIcon: Icon(Icons.watch),
+                  label: 'Watchface',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.widgets_outlined),
+                  selectedIcon: Icon(Icons.widgets),
+                  label: 'Widget',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.hub_outlined),
+                  selectedIcon: Icon(Icons.hub),
+                  label: 'Providers',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.settings_outlined),
+                  selectedIcon: Icon(Icons.settings),
+                  label: 'Settings',
+                ),
+              ];
+              final theme = Theme.of(context);
+              // Material uses labelMedium for both selection states, with
+              // state colors supplied by NavigationBar itself.
+              final labelStyle = theme.textTheme.labelMedium!;
+              final measuredStyle =
+                  MediaQuery.boldTextOf(context)
+                      ? labelStyle.copyWith(fontWeight: FontWeight.bold)
+                      : labelStyle;
+              final labelWidth =
+                  (constraints.maxWidth -
+                      MediaQuery.paddingOf(context).horizontal) /
+                  destinations.length;
+              // Match NavigationDestination's existing scaling allowance.
+              final textScaler = MediaQuery.textScalerOf(
+                context,
+              ).clamp(maxScaleFactor: 1.3);
+              final painter = TextPainter(
+                textDirection: Directionality.of(context),
+                textScaler: textScaler,
+                locale: Localizations.maybeLocaleOf(context),
+              );
+              bool fits(double fontSize) {
+                for (final destination in destinations) {
+                  painter
+                    ..text = TextSpan(
+                      text: destination.label,
+                      style: measuredStyle.copyWith(fontSize: fontSize),
+                    )
+                    ..layout();
+                  if (painter.width > labelWidth) return false;
+                }
+                return true;
+              }
+
+              var fontSize = labelStyle.fontSize!;
+              if (!fits(fontSize)) {
+                var lower = 0.0;
+                var upper = fontSize;
+                while (upper - lower > 0.01) {
+                  final candidate = (lower + upper) / 2;
+                  if (fits(candidate)) {
+                    lower = candidate;
+                  } else {
+                    upper = candidate;
+                  }
+                }
+                fontSize = lower;
+              }
+              painter.dispose();
+
+              final navigationBar = NavigationBar(
+                selectedIndex: _selectedIndex,
+                onDestinationSelected: (index) {
+                  setState(() {
+                    _selectedIndex = index;
+                  });
+                },
+                destinations: destinations,
+              );
+              if (fontSize == labelStyle.fontSize) return navigationBar;
+              return Theme(
+                data: theme.copyWith(
+                  textTheme: theme.textTheme.copyWith(
+                    labelMedium: labelStyle.copyWith(
+                      fontSize: fontSize,
+                      // Keep the label row's height, hence the icon and
+                      // indicator positions, unchanged when fitting the type.
+                      height:
+                          labelStyle.height! *
+                          textScaler.scale(labelStyle.fontSize!) /
+                          textScaler.scale(fontSize),
+                    ),
+                  ),
+                ),
+                child: navigationBar,
+              );
             },
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.dashboard_outlined),
-                selectedIcon: Icon(Icons.dashboard),
-                label: 'Dashboard',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.watch_outlined),
-                selectedIcon: Icon(Icons.watch),
-                label: 'Watchface',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.widgets_outlined),
-                selectedIcon: Icon(Icons.widgets),
-                label: 'Widget',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.hub_outlined),
-                selectedIcon: Icon(Icons.hub),
-                label: 'Providers',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.settings_outlined),
-                selectedIcon: Icon(Icons.settings),
-                label: 'Settings',
-              ),
-            ],
           ),
         );
       },
