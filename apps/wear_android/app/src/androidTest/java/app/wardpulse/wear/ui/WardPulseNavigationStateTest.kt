@@ -1,5 +1,7 @@
 package app.wardpulse.wear.ui
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.SystemClock
 import android.view.Choreographer
 import android.view.KeyEvent
@@ -25,6 +27,7 @@ import app.wardpulse.wear.model.WatchDataMode
 import app.wardpulse.wear.ui.theme.WardPulseTheme
 import app.wardpulse.wear.watchface.WatchFaceState
 import app.wardpulse.wear.watchface.WatchFaceStatus
+import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
@@ -52,7 +55,7 @@ class WardPulseNavigationStateTest {
     private val calls = mutableListOf<String>()
     private var callbacks by mutableStateOf(callbacksFor("initial"))
     private val alpha = summary("Alpha", usedPercent = 25.0)
-    private val beta = summary("Beta", usedPercent = 75.0)
+    private val beta = summary("Beta", usedPercent = 96.0)
 
     @After
     fun tearDown() {
@@ -144,7 +147,7 @@ class WardPulseNavigationStateTest {
         assertVisible("In use")
         back()
         assertVisible("Codex Beta")
-        assertVisible("25% left")
+        assertVisible("4% left")
         assertTrue(scroll(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD))
         assertVisible("Plan windows")
         reveal("Codex Beta")
@@ -166,8 +169,35 @@ class WardPulseNavigationStateTest {
         assertVisible("75% left")
         change { summary = beta }
         assertVisible("Codex Beta")
-        assertVisible("25% left")
+        assertVisible("4% left")
         assertAbsent("Codex Alpha", anchor = "Codex Beta")
+
+        // Controlled in-memory Beta evidence: overwrite one native-size PNG in the target cache.
+        val screenshot = checkNotNull(automation.takeScreenshot()) { "Beta screenshot failed" }
+        try {
+            val width = screenshot.width
+            val height = screenshot.height
+            assertTrue("Beta screenshot dimensions exceed bounds", width in 1..1024 && height in 1..1024)
+            val evidence = File(instrumentation.targetContext.cacheDir, "wear-beta-four-percent.png")
+            evidence.outputStream().use { output ->
+                assertTrue("Beta PNG compression failed", screenshot.compress(Bitmap.CompressFormat.PNG, 100, output))
+            }
+            assertTrue("Beta PNG size exceeds bounds", evidence.isFile && evidence.length() in 1L..(4L * 1024 * 1024))
+            val options = BitmapFactory.Options().apply { inScaled = false }
+            val decoded = checkNotNull(BitmapFactory.decodeFile(evidence.absolutePath, options)) {
+                "Beta PNG could not be decoded"
+            }
+            try {
+                assertEquals("Beta artifact is not PNG", "image/png", options.outMimeType)
+                assertEquals("Beta PNG width changed", width, decoded.width)
+                assertEquals("Beta PNG height changed", height, decoded.height)
+            } finally {
+                decoded.recycle()
+            }
+        } finally {
+            screenshot.recycle()
+        }
+
         change { summary = null }
         assertVisible("Sync from phone")
         assertAbsent("Codex Beta", anchor = "Sync from phone")
@@ -204,7 +234,7 @@ class WardPulseNavigationStateTest {
         change { summary = beta }
         assertVisible("Plan windows")
         reveal("Codex Beta")
-        assertVisible("25% left")
+        assertVisible("4% left")
 
         change { watchFaceState = WatchFaceState(WatchFaceStatus.InUse) }
         click("Watch face")

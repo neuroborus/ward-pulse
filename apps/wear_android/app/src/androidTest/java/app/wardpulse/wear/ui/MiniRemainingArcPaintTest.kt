@@ -141,10 +141,10 @@ class MiniRemainingArcPaintTest {
                 255,
                 pixel ushr 24,
             )
-            // Antialiased track pixels can only blend the background and track.
+            // Allow one lower quantization unit for retained native pixel 0xFF090D0A.
             listOf(0, 8, 16).forEach { shift ->
                 val channel = (pixel ushr shift) and 255
-                val lower = (background ushr shift) and 255
+                val lower = ((background ushr shift) and 255) - 1
                 val upper = (track ushr shift) and 255
                 val channelName = when (shift) {
                     0 -> "B"
