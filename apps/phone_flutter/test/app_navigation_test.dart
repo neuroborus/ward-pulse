@@ -122,7 +122,8 @@ void main() {
           textDirection: paragraph.textDirection,
           textScaler: paragraph.textScaler,
           maxLines: paragraph.maxLines,
-          ellipsis: paragraph.overflow == TextOverflow.ellipsis ? '\u2026' : null,
+          ellipsis:
+              paragraph.overflow == TextOverflow.ellipsis ? '\u2026' : null,
           locale: paragraph.locale,
           strutStyle: paragraph.strutStyle,
           textWidthBasis: paragraph.textWidthBasis,
