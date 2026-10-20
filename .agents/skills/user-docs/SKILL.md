@@ -100,10 +100,12 @@ Index a derivative with its source only if an actual separate annotated PNG is p
   prompts or sensitive provider data. Review visible usage before publication. Record real
   anonymous app captures as such; do not label them Mock/demo. Describe demonstration or
   sanitized content honestly, and do not invent data or unperformed captures.
-- Capture success illustrations in an appropriate real device state, without irrelevant
-  system notifications/service icons, low-battery warnings or transient errors. Use existing
-  OS/device controls; never erase, fake or retouch legitimate app UI. Show a warning when
-  illustrating that documented state; otherwise capture the actual normal state.
+- General examples, setup steps and showcases must use screenshots without errors,
+  including persistent credential or provider errors. Show an error or warning only when
+  nearby text explicitly explains that exact state; never use it as a generic illustration.
+  Capture the appropriate real device state without irrelevant system notifications/service
+  icons or low-battery warnings. Use existing OS/device controls; never erase, fake or
+  retouch legitimate app UI.
   Before phone captures, hide extraneous status-bar icons with visibility-only OS controls;
   ordinary clock, battery and network indicators may remain. Do not dismiss notifications
   or erase data. Restore temporary OS/device state after capture, and review both phone
