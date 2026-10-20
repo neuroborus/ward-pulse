@@ -394,11 +394,30 @@ barrier() {
 }
 
 summary_hash() {
-  # The only consumer of watch_summary.xml is this hash-only pipeline.
-  adb_on "$WEAR_SERIAL" exec-out \
-    run-as "$APP_ID" cat shared_prefs/watch_summary.xml \
-    | sha256sum \
-    | cut -d' ' -f1
+  # Summary bytes stay on Wear; emit only a complete digest after command success.
+  # Completion lines also require a final newline from both SHA-256 and ADB.
+  local digest
+  digest=$(
+    {
+      adb_on "$WEAR_SERIAL" shell -n '
+        set -o pipefail || exit 1
+        { run-as '"$APP_ID"' sha256sum shared_prefs/watch_summary.xml && printf "DONE\n"; } |
+          LC_ALL=C awk '\''
+            NR == 1 && length($1) == 64 && $1 ~ /^[0-9a-f]+$/ &&
+                $0 == $1 "  shared_prefs/watch_summary.xml" { digest=$1; next }
+            NR == 2 && $0 == "DONE" { complete=1; next }
+            { bad=1; exit 1 }
+            END { if (bad || !complete || NR != 2) exit 1; print digest }
+          '\''
+      ' 2>/dev/null && printf 'DONE\n'
+    } | LC_ALL=C awk '
+      NR == 1 && length($0) == 64 && /^[0-9a-f]+$/ { digest=$0; next }
+      NR == 2 && $0 == "DONE" { complete=1; next }
+      { bad=1; exit 1 }
+      END { if (bad || !complete || NR != 2) exit 1; print digest }
+    '
+  ) || return 1
+  printf '%s\n' "$digest"
 }
 
 summary_metadata() {

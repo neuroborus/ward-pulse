@@ -493,15 +493,23 @@ interval, and preserve event continuity through the final boundary/Pass. Missing
 coverage or an insufficient causal/observation boundary is HOLD, never assumed quiet.
 Queued success logs alone cannot exclude a still-running app's in-flight send invocation.
 
-`summary_hash` remains the sole content reader of `watch_summary.xml`: bytes go directly
-through its hash pipeline. Only final hashes and bounded metadata are retained; XML/payloads
-are never displayed or saved. `stat` observes file identity/write times independently of
-the callback. Equal hashes, a receipt, or a WorkSpec sample alone does not prove quiet.
-Continuous sanitized role-aware event streams, lifecycle reconciliation, UID-wide process
+`summary_hash` remains the sole content reader of `watch_summary.xml`: SHA-256 runs entirely
+on Wear through the existing app-UID `run-as` seam. Only a complete, validated 64-character
+lowercase hexadecimal digest leaves that pipeline after successful command completion;
+failed commands or malformed, oversized, incomplete or trailing output fail the read.
+Original summary bytes never reach host hashing, stdout, stderr, evidence, DEX or staging.
+Only final hashes and bounded metadata are retained. Host `sha256sum` remains required for
+the unrelated APK and reader-DEX comparisons. `stat` observes file identity/write times
+independently of the callback. Equal hashes, a receipt, or a WorkSpec sample alone does not
+prove quiet. Continuous sanitized role-aware event streams, lifecycle reconciliation, UID-wide process
 observations and acknowledged markers supply the bounded guard. They are not intrinsically
 lossless; malformed/unrecognized events, detectable loss, races or unavailable continuity
 must HOLD. HOST failure probes must establish the guard's actual boundaries before runtime
 acceptance can be claimed. There is no manual override or source-review substitute.
+
+This digest transport slice leaves four-gap completion, installed sender binding, cohesive
+reader/FD/staging/whole-pair cleanup, opt-in all-nine integration and full runtime
+compatibility/fit proof pending. It establishes no runtime or product acceptance.
 
 ## Dated status
 
