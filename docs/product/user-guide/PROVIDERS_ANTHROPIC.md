@@ -78,7 +78,8 @@ Read Organization reporting's own status, separately from Claude plan.
 For **Access denied**, confirm that the key belongs to the intended Console organization,
 has organization reporting rights and is not workspace-scoped. A working Claude plan login
 does not confirm the reporting key. Zero or missing history can be normal before API usage
-is reported.
+is reported. API token history can appear before reported costs. Costs stay unknown until
+Anthropic reports them.
 
 ## Reconnect, change or remove a connection
 

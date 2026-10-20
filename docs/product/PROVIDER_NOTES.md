@@ -349,12 +349,22 @@ Scope:
 
 - Use a key with organization reporting access (`x-api-key`) against
   `GET /v1/organizations/usage_report/messages` and `GET /v1/organizations/cost_report`.
-- Request daily buckets (`bucket_width=1d`); usage also supports hourly and minute buckets.
+- Fetch historical usage in daily buckets (`bucket_width=1d`, limit 31), ending at the
+  supplied snapshot end's UTC midnight. Fetch only the requested current-day intersection
+  in completed minute buckets (`bucket_width=1m`, limit 1440), through the actual snapshot
+  end. Skip empty ranges and paginate both widths; never extend the end into the future.
 - Usage requests `group_by[]=model` for model breakdown; cost stays ungrouped.
-- Cost amounts are decimal strings in lowest currency units (cents); WardPulse rounds to integer
-  USD cents after summing.
+- Costs keep daily aggregation over the original requested interval. Amounts are decimal
+  strings in lowest currency units (cents); WardPulse rounds reported amounts to integer
+  USD cents without estimating prices from tokens.
+- Rust coalesces minute usage into one UTC-day history bucket ending at the latest reported
+  bucket end, preserving model/cache totals and historical daily cost alignment. Reported
+  zero remains known zero; absent cost stays unknown in history and affected period totals.
+  API token history can appear before reported costs; no reporting deadline is promised.
 - Documented poll floor is one minute; the global slider lower bound remains five minutes.
 - Never log the key, authorization header, or raw response bodies.
+
+The 2026-10-20 current-day correction still needs HOST runtime and live phone/watch acceptance.
 
 Revoke the key through the appropriate Console key-management controls for its type.
 

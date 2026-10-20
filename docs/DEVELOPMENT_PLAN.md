@@ -1714,9 +1714,12 @@ connections have stable, well-understood contracts.
 Deliverables:
 
 - Anthropic platform reporting: API-key transport with the required reporting access for
-  `/v1/organizations/usage_report/messages` (daily buckets for the dashboard; hourly available)
+  `/v1/organizations/usage_report/messages` (historical daily buckets through UTC midnight,
+  then only current-day completed minute buckets bounded by the actual snapshot end)
   and `/v1/organizations/cost_report` (daily buckets only, USD as decimal-string cents), with
-  pagination, Rust normalization, a capability descriptor, and sanitized fixtures;
+  pagination, Rust daily coalescing, a capability descriptor, and sanitized fixtures. Token
+  history can appear before reported costs; absent cost remains unknown, without a latency
+  promise;
 - Claude subscription: phone-owned Claude Code PKCE OAuth (authorize URL + pasted `CODE#STATE`),
   refresh-token storage, `GET /api/oauth/usage` normalization of window utilization percentages,
   reset timestamps, and extra-usage credits into `AllowanceState`; explicitly a compatibility
@@ -1729,6 +1732,10 @@ Deliverables:
 - capability descriptors registered for `ProviderKind::Claude` and `ProviderKind::Cursor`;
 - `docs/product/PROVIDER_NOTES.md` updated per provider with credential type, permissions,
   rate limits, revocation path, and redaction rules.
+
+The 2026-10-20 Anthropic current-day correction leaves HOST Flutter execution, live refresh
+and affected phone/watch acceptance pending. It does not complete the deferred live-usage
+acceptance item.
 
 Acceptance:
 

@@ -122,6 +122,7 @@ void main() {
             logger: const _SilentLogger(),
           ),
           caches: caches,
+          clock: () => firstAt,
           anthropicReportingClient: AnthropicReportingClient(http: http),
           cursorReportingClient: CursorPlatformClient(
             http: http,
@@ -156,8 +157,16 @@ void main() {
         }
         expect(
           transport.requests,
-          hasLength(6),
-        ); // Each required endpoint, once.
+          unorderedEquals([
+            '/v1/organization/usage/completions',
+            '/v1/organization/costs',
+            '/v1/organizations/usage_report/messages',
+            '/v1/organizations/usage_report/messages',
+            '/v1/organizations/cost_report',
+            '/teams/daily-usage-data',
+            '/teams/spend',
+          ]),
+        );
         expect(snapshot.toJsonString(), isNot(contains('synthetic-')));
         expect(snapshot.toJsonString(), isNot(contains('reportingOutcomes')));
       },
