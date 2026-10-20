@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:isolate';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -881,15 +879,13 @@ void main() {
   ) async {
     // Use the phone font so line wrapping reflects the actual dialog widths.
     await tester.runAsync(() async {
-      final flutter = await Isolate.resolvePackageUri(
-        Uri.parse('package:flutter/material.dart'),
-      );
+      final flutterRoot = Directory(Platform.environment['FLUTTER_ROOT']!).uri;
       final loader = FontLoader('Roboto');
       for (final weight in ['Regular', 'Medium']) {
         loader.addFont(
           File.fromUri(
-            flutter!.resolve(
-              '../../../bin/cache/artifacts/material_fonts/Roboto-$weight.ttf',
+            flutterRoot.resolve(
+              'bin/cache/artifacts/material_fonts/Roboto-$weight.ttf',
             ),
           ).readAsBytes().then((bytes) => ByteData.sublistView(bytes)),
         );
@@ -1058,7 +1054,10 @@ void main() {
         expect(button.hitTestable(), findsOneWidget);
         final bounds = tester.getRect(button);
         expect(tester.getRect(dialog).intersect(bounds), bounds);
-        expect(tester.getRect(scrollable).bottom, lessThanOrEqualTo(bounds.top));
+        expect(
+          tester.getRect(scrollable).bottom,
+          lessThanOrEqualTo(bounds.top),
+        );
       }
       return measurements;
     }
@@ -1089,7 +1088,10 @@ void main() {
     for (var index = 0; index < narrow.length; index++) {
       expect(narrow[index].lines, greaterThan(1));
       expect(narrow[index].lines, greaterThanOrEqualTo(ordinary[index].lines));
-      expect(narrow[index].lineHeight, closeTo(ordinary[index].lineHeight, 0.001));
+      expect(
+        narrow[index].lineHeight,
+        closeTo(ordinary[index].lineHeight, 0.001),
+      );
     }
     await changeMonth();
     await tester.tap(find.text('Save'));

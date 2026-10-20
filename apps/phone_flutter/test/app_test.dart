@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:isolate';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -72,15 +71,13 @@ void main() {
   ) async {
     // Ahem's square glyphs cannot represent the phone's width boundary.
     await tester.runAsync(() async {
-      final flutter = await Isolate.resolvePackageUri(
-        Uri.parse('package:flutter/material.dart'),
-      );
+      final flutterRoot = Directory(Platform.environment['FLUTTER_ROOT']!).uri;
       final loader = FontLoader('Roboto');
       for (final weight in ['Regular', 'Medium']) {
         loader.addFont(
           File.fromUri(
-            flutter!.resolve(
-              '../../../bin/cache/artifacts/material_fonts/Roboto-$weight.ttf',
+            flutterRoot.resolve(
+              'bin/cache/artifacts/material_fonts/Roboto-$weight.ttf',
             ),
           ).readAsBytes().then((bytes) => ByteData.sublistView(bytes)),
         );
@@ -101,7 +98,8 @@ void main() {
       'Providers',
       'Settings',
     ];
-    List<({Rect glyphs, double baseline, Rect icon, Rect indicator})> measure() {
+    List<({Rect glyphs, double baseline, Rect icon, Rect indicator})>
+    measure() {
       final bar = find.byType(NavigationBar);
       final barRect = tester.getRect(bar);
       expect(barRect.size, Size(tester.view.physicalSize.width, 80));
@@ -117,7 +115,10 @@ void main() {
           destinationRect.width,
           closeTo(barRect.width / labels.length, 0.001),
         );
-        final text = find.descendant(of: destination, matching: find.text(label));
+        final text = find.descendant(
+          of: destination,
+          matching: find.text(label),
+        );
         final paragraph = tester.renderObject<RenderParagraph>(text);
         final origin = paragraph.localToGlobal(Offset.zero);
         final paragraphRect = origin & paragraph.size;
@@ -135,7 +136,11 @@ void main() {
           expect(characterBoxes, hasLength(1), reason: '$label[$offset]');
           final character = characterBoxes.single.toRect().shift(origin);
           expect(character.top, closeTo(glyphs.top, 0.001), reason: label);
-          expect(character.bottom, closeTo(glyphs.bottom, 0.001), reason: label);
+          expect(
+            character.bottom,
+            closeTo(glyphs.bottom, 0.001),
+            reason: label,
+          );
           for (final bounds in [paragraphRect, destinationRect]) {
             expect(
               bounds.inflate(0.001).contains(character.topLeft),
