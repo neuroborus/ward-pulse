@@ -156,13 +156,19 @@ void main() {
             reason: '$characterContext ends outside $destinationContext',
           );
         }
+        final baseline = paragraph.getDryBaseline(
+          paragraph.constraints,
+          TextBaseline.alphabetic,
+        );
+        final baselineContext =
+            '$paragraphContext, alphabetic baseline $baseline, '
+            'constraints ${paragraph.constraints}';
+        expect(baseline, isNotNull, reason: baselineContext);
+        expect(baseline!.isFinite, isTrue, reason: baselineContext);
         final relativeOrigin = Offset(destinationRect.center.dx, barRect.top);
         final measurement = (
           selection: selection.shift(-relativeOrigin),
-          baseline:
-              origin.dy +
-              paragraph.getDistanceToBaseline(TextBaseline.alphabetic)! -
-              barRect.top,
+          baseline: origin.dy + baseline - barRect.top,
           icon: tester
               .getRect(
                 find.descendant(of: destination, matching: find.byType(Icon)),
