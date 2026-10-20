@@ -388,6 +388,16 @@ phone dashboard cards. It may surface as a warning/error alert
 **only when the user configures a threshold** for that meter on Providers — never from a
 hard-coded utilization cutoff alone.
 
+Claude plan resets are validated by `claude_provider_snapshot_from_report_json` in
+`core/ward-pulse-providers/src/claude/mod.rs`. Supported input is ASCII Gregorian
+`YYYY-MM-DDTHH:MM:SS[.digits]` with uppercase `T` and a mandatory uppercase `Z` or numeric
+`±HH:MM` zone (at most `23:59`), valid calendar dates, and no leap seconds. Years must stay
+within `0000`–`9999` before and after UTC conversion. The adapter validates the entire fraction,
+applies the offset, then drops sub-second precision to emit `YYYY-MM-DDTHH:MM:SSZ`.
+Missing or null resets stay absent; malformed or overflowing resets return the sanitized
+`InvalidTimestamp` adapter error. This boundary leaves the shared infallible `DateTimeUtc`
+and its text-based equality and ordering policy unchanged; see [Boundary](#boundary).
+
 This is a compatibility integration, not a published third-party API. Endpoint or OAuth client
 changes may require an app update. Never log tokens, authorization codes, or raw response bodies.
 
