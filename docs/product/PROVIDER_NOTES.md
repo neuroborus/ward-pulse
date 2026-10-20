@@ -364,7 +364,13 @@ Scope:
 - Documented poll floor is one minute; the global slider lower bound remains five minutes.
 - Never log the key, authorization header, or raw response bodies.
 
-The 2026-10-20 current-day correction still needs HOST runtime and live phone/watch acceptance.
+Verified 2026-10-20: host Rust, fixture, Flutter and documentation checks passed, followed by
+both Android Rust builds, a debug phone APK build and a preserving installation. Live phone
+history changed from 19 daily buckets with USD 0.00 to 20 buckets with 39 reported tokens;
+the model rows showed Haiku 4.5 with 16 tokens and Opus 5.5 with 23. Only the Haiku request
+is attributed to the scoped test. Selected plan allowances remained consistent on the phone
+widget, Wear Glance and watch face after a fresh sync. API budgets were not configured on
+those surfaces, so this does not claim that they rendered the API token history.
 
 Revoke the key through the appropriate Console key-management controls for its type.
 
@@ -507,6 +513,12 @@ Official references:
 - [Staff clarification of per-member and pooled spend](https://forum.cursor.com/t/admin-api-docs-missing-includedspendcents-and-new-teams-usage-metrics/162742/9)
 - [Team roles, seats and invitations](https://docs.x.ai/x-subscription/team-plans)
 
-The 2026-10-20 normalization corrections do not establish the cause of the observed empty
-live daily ledger or create evidence of live activity. Billing context and paid-seat
-verification remain separate owner work; live phone/watch acceptance is pending.
+Verified 2026-10-20: the normalization corrections passed host checks and a preserving phone
+update; the selected plan allowances were checked on the phone widget, Wear Glance and watch
+face after fresh sync. These checks do not establish positive Team ledger activity or which
+team paid for the personal CLI test. The owner subsequently confirmed a current paid seat;
+the exact tier and seat state during the earlier test were not independently verified. The
+installed CLI computes team selectability locally from direct membership, billing metadata
+and a positive seat count; its listed team remains unselectable despite that owner report.
+This metadata discrepancy, the empty live Team ledger and the earlier test's billed context
+remain unresolved. No publication deadline, current Free seat or billing cause is inferred.

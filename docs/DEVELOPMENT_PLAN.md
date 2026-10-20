@@ -1736,10 +1736,19 @@ Deliverables:
 - `docs/product/PROVIDER_NOTES.md` updated per provider with credential type, permissions,
   rate limits, revocation path, and redaction rules.
 
-The 2026-10-20 Anthropic current-day and Cursor normalization corrections leave HOST Flutter
-execution, live refresh and affected phone/watch acceptance pending. They do not complete the
-deferred live-usage acceptance item. Cursor's empty live daily ledger and its billing-context
-and paid-seat investigation remain unresolved.
+Verified 2026-10-20: the Anthropic current-day and Cursor normalization corrections passed
+host Rust checks (113 tests, no failures), JSON validation (23 files parsed, including schemas
+and fixtures; 6 fixture files checked against schemas), Flutter
+checks (472 tests, 64 native cache assertions and 28 native widget assertions), documentation
+build (37 routes), both Android Rust builds, a debug APK build and preserving phone install.
+Live phone history shows Anthropic 20 buckets / 39 tokens and OpenAI 20 buckets / 13 tokens.
+The selected plan allowances were also checked on the phone widget, Wear Glance and watch
+face after fresh sync. API budgets were not configured, so those surface checks do not claim
+to display API token history. The owner subsequently confirmed a current paid Cursor seat;
+the exact tier and seat state at the time of the earlier CLI test were not independently
+verified. The CLI's local billing/seat metadata still makes the listed team unselectable.
+The deferred live-usage item remains open for positive Cursor Team ledger activity and the
+billed context of that test; the metadata discrepancy does not establish the billing cause.
 
 Acceptance:
 
