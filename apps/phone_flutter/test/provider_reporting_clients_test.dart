@@ -106,6 +106,45 @@ void main() {
     });
 
     for (final scenario in [
+      (name: 'missing', body: '{"has_more":true,"data":[]}'),
+      (name: 'null', body: _page(hasMore: true)),
+      (name: 'non-string', body: '{"has_more":true,"next_page":42,"data":[]}'),
+      (name: 'empty', body: _page(hasMore: true, nextPage: '')),
+    ]) {
+      test('rejects a ${scenario.name} continuation cursor', () async {
+        final transport = _FakeTransport({
+          '/v1/organizations/usage_report/messages': [_response(scenario.body)],
+          '/v1/organizations/cost_report': [_response(_page())],
+        });
+        final client = AnthropicReportingClient(
+          http: ProviderReportingHttp(transport: transport),
+        );
+
+        await expectLater(
+          client.fetchDailyReports(
+            adminApiKey: 'synthetic-key',
+            start: DateTime.utc(2026, 7, 18),
+            end: DateTime.utc(2026, 7, 19),
+          ),
+          throwsA(
+            isA<ProviderReportingException>()
+                .having(
+                  (error) => error.failure,
+                  'failure',
+                  ProviderReportingFailure.invalidResponse,
+                )
+                .having(
+                  (error) => error.details,
+                  'safe details',
+                  'Invalid pagination cursor',
+                ),
+          ),
+        );
+        expect(transport.requests, hasLength(1));
+      });
+    }
+
+    for (final scenario in [
       (
         name: 'midnight end has no current-day range',
         start: DateTime.utc(2026, 7, 18),

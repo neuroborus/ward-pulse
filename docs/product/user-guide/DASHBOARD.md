@@ -39,7 +39,8 @@ activity history.
 
 Personal plan activity and API organization/team usage keep separate histories and balances
 within a family. Use the source label when more than one connection is listed. Read each
-chart's unit: cost, tokens or requests.
+chart's unit: cost, tokens or requests. Known bars can remain visible when **No totals**
+means the provider did not supply a complete total.
 
 Some reporting services publish totals less frequently than WardPulse refreshes. A successful
 refresh can therefore return unchanged figures. See [Sync](/guide/sync).

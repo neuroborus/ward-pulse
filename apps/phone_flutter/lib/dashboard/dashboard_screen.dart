@@ -1103,7 +1103,9 @@ class _ModelUsageRow extends StatelessWidget {
           spacing: 16,
           runSpacing: 4,
           children: [
-            Text('${formatCount(model.requests)} requests'),
+            Text(
+              '${formatCount(model.requests)} ${model.requests == 1 ? 'request' : 'requests'}',
+            ),
             Text('${formatCount(model.totalTokens)} tokens'),
           ],
         ),

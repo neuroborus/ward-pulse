@@ -783,6 +783,28 @@ void main() {
       );
     }
 
+    testWidgets('formats singular, plural and unknown model request counts', (
+      tester,
+    ) async {
+      final data =
+          account('cursor')
+            ..['allowances'] = <Object>[]
+            ..['modelBreakdown'] = [
+              {'model': 'model-single', 'requests': 1},
+              {'model': 'model-zero', 'requests': 0},
+              {'model': 'model-multiple', 'requests': 1234},
+              {'model': 'model-unknown', 'requests': null},
+            ];
+
+      await show(tester, snapshotOf([data]));
+
+      expect(find.text('1 request'), findsOneWidget);
+      expect(find.text('1 requests'), findsNothing);
+      expect(find.text('0 requests'), findsOneWidget);
+      expect(find.text('1,234 requests'), findsOneWidget);
+      expect(find.text('Unknown requests'), findsOneWidget);
+    });
+
     testWidgets('families retain separate connection histories and models', (
       tester,
     ) async {

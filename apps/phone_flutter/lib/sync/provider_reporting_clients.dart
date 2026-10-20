@@ -92,7 +92,17 @@ final class AnthropicReportingClient {
       final page = decodeReportObject(response.body);
       final hasMore = page['has_more'] == true;
       final next = page['next_page'];
-      cursor = hasMore && next is String && next.isNotEmpty ? next : null;
+      if (hasMore) {
+        if (next is! String || next.isEmpty) {
+          throw const ProviderReportingException(
+            ProviderReportingFailure.invalidResponse,
+            details: 'Invalid pagination cursor',
+          );
+        }
+        cursor = next;
+      } else {
+        cursor = null;
+      }
       if (cursor != null && !seen.add(cursor)) {
         throw const ProviderReportingException(
           ProviderReportingFailure.invalidResponse,

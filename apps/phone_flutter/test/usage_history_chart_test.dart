@@ -41,6 +41,47 @@ void main() {
     );
   });
 
+  testWidgets('keeps known request bars without claiming a partial total', (
+    tester,
+  ) async {
+    final painter = await _pumpChart(tester, [
+      _requestBucket(DateTime.utc(2026, 7, 18), 7),
+      _requestBucket(DateTime.utc(2026, 7, 19), null),
+    ]);
+
+    expect(find.text('No totals'), findsOneWidget);
+    expect(find.text('7 requests'), findsNothing);
+    expect(find.text('0 requests'), findsNothing);
+    expect(
+      await tester.runAsync(() => _primaryPixelCount(painter)),
+      greaterThan(0),
+    );
+  });
+
+  for (final scenario in [
+    (requests: 0, label: '0 requests'),
+    (requests: 1, label: '1 request'),
+    (requests: null, label: 'No totals'),
+  ]) {
+    testWidgets('shows ${scenario.label} for request-only history', (
+      tester,
+    ) async {
+      final painter = await _pumpChart(tester, [
+        _requestBucket(DateTime.utc(2026, 7, 18), scenario.requests),
+      ]);
+
+      expect(find.text(scenario.label), findsOneWidget);
+      expect(find.text('1 requests'), findsNothing);
+      if (scenario.requests == null) {
+        expect(find.text('0 requests'), findsNothing);
+      }
+      expect(
+        await tester.runAsync(() => _primaryPixelCount(painter)),
+        scenario.requests == 1 ? greaterThan(0) : 0,
+      );
+    });
+  }
+
   testWidgets('renders dense token history without inventing zero usage', (
     tester,
   ) async {
@@ -142,7 +183,7 @@ UsageBucket _tokenBucket(DateTime start, int tokens) {
   );
 }
 
-UsageBucket _requestBucket(DateTime start, int requests) {
+UsageBucket _requestBucket(DateTime start, int? requests) {
   return UsageBucket(
     startAt: start,
     endAt: start.add(const Duration(days: 1)),

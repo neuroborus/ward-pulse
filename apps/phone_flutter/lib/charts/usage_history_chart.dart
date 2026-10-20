@@ -30,17 +30,15 @@ class UsageHistoryChart extends StatelessWidget {
           bucket.cost?.minorUnits ?? 0
         else if (totalTokens != null)
           bucket.totalTokens ?? 0
-        else if (totalRequests != null)
-          bucket.requests ?? 0
         else
-          0,
+          bucket.requests ?? 0,
     ];
     final totalLabel =
         totalCost?.label ??
         (totalTokens != null
             ? '${formatCount(totalTokens)} tokens'
             : totalRequests != null
-            ? '${formatCount(totalRequests)} requests'
+            ? '${formatCount(totalRequests)} ${totalRequests == 1 ? 'request' : 'requests'}'
             : 'No totals');
     final showDates = _spansMultipleUtcDays(buckets);
 
@@ -206,14 +204,11 @@ int? _totalTokens(List<UsageBucket> buckets) {
 }
 
 int? _totalRequests(List<UsageBucket> buckets) {
-  if (buckets.isEmpty || buckets.every((bucket) => bucket.requests == null)) {
+  if (buckets.isEmpty || buckets.any((bucket) => bucket.requests == null)) {
     return null;
   }
 
-  return buckets.fold<int>(
-    0,
-    (total, bucket) => total + (bucket.requests ?? 0),
-  );
+  return buckets.fold<int>(0, (total, bucket) => total + bucket.requests!);
 }
 
 bool _spansMultipleUtcDays(List<UsageBucket> buckets) {
