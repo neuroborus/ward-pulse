@@ -40,7 +40,7 @@ class MiniRemainingArcPaintTest {
             val tolerance = Math.toDegrees(1.0 / ((side - stroke) / 2.0))
             pairedColors.forEach { color ->
                 val zero = paint(0f, color, side, stroke)
-                assertTrackOnly(zero, side)
+                assertTrackOnly(zero, side, scale, color, stroke)
                 var previousExtent = 0.0
                 listOf(0.02f, 0.04f, 0.046f, 0.048f, 0.06f, 0.08f, 0.1f).forEach { remaining ->
                     val pixels = paint(remaining, color, side, stroke)
@@ -113,17 +113,50 @@ class MiniRemainingArcPaintTest {
         }
     }
 
-    private fun assertTrackOnly(pixels: IntArray, side: Int) {
-        assertEquals(background, pixels[(side / 2) * side + side / 2])
-        assertTrue("Zero has no solid track", pixels.any { it == track })
-        pixels.forEach { pixel ->
-            assertEquals(255, pixel ushr 24)
+    private fun assertTrackOnly(pixels: IntArray, side: Int, scale: Float, color: Int, stroke: Float) {
+        val family = when (color) {
+            RingFamily.CODEX -> "Codex main"
+            RingFamily.CODEX_SPARK -> "Codex Spark"
+            RingFamily.CURSOR_OWN -> "Cursor own models"
+            RingFamily.CURSOR -> "Cursor other models"
+            else -> "Unknown"
+        }
+        val context = "scale=$scale family=$family color=0x${"%08X".format(color)} side=$side stroke=$stroke"
+        assertEquals(
+            "Zero centre is not background: $context pixel=(${side / 2},${side / 2}) " +
+                "argb=0x${"%08X".format(pixels[(side / 2) * side + side / 2])} " +
+                "expectedArgb=0x${"%08X".format(background)}",
+            background,
+            pixels[(side / 2) * side + side / 2],
+        )
+        assertTrue(
+            "Zero has no solid track: $context expectedArgb=0x${"%08X".format(track)}",
+            pixels.any { it == track },
+        )
+        pixels.forEachIndexed { index, pixel ->
+            val pixelContext = "$context pixel=(${index % side},${index / side}) argb=0x${"%08X".format(pixel)}"
+            assertEquals(
+                "Zero pixel is not opaque: $pixelContext channel=A value=${pixel ushr 24} " +
+                    "allowed=255..255 deviation=${255 - (pixel ushr 24)}",
+                255,
+                pixel ushr 24,
+            )
             // Antialiased track pixels can only blend the background and track.
             listOf(0, 8, 16).forEach { shift ->
                 val channel = (pixel ushr shift) and 255
                 val lower = (background ushr shift) and 255
                 val upper = (track ushr shift) and 255
-                assertTrue("Zero contains paint outside the track palette", channel in lower..upper)
+                val channelName = when (shift) {
+                    0 -> "B"
+                    8 -> "G"
+                    else -> "R"
+                }
+                assertTrue(
+                    "Zero contains paint outside the track palette: $pixelContext " +
+                        "channel=$channelName value=$channel allowed=$lower..$upper " +
+                        "deviation=${maxOf(lower - channel, channel - upper, 0)}",
+                    channel in lower..upper,
+                )
             }
         }
     }
