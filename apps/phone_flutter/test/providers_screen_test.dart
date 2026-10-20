@@ -1,8 +1,13 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/app/ward_pulse_theme.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/providers/claude_account_service.dart';
 import 'package:ward_pulse_phone/providers/codex_account_service.dart';
@@ -11,6 +16,7 @@ import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/providers/provider_connection_row.dart';
 import 'package:ward_pulse_phone/providers/providers_screen.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
+import 'package:ward_pulse_phone/settings/alert_percent_threshold_editor.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 
 void main() {
@@ -870,25 +876,64 @@ void main() {
     },
   );
 
-  testWidgets('a budget period without a limit cannot be alerted on', (
+  testWidgets('missing budget limits disable alerts with readable guidance', (
     tester,
   ) async {
+    // Use the phone font so line wrapping reflects the actual dialog widths.
+    await tester.runAsync(() async {
+      final flutter = await Isolate.resolvePackageUri(
+        Uri.parse('package:flutter/material.dart'),
+      );
+      final loader = FontLoader('Roboto');
+      for (final weight in ['Regular', 'Medium']) {
+        loader.addFont(
+          File.fromUri(
+            flutter!.resolve(
+              '../../../bin/cache/artifacts/material_fonts/Roboto-$weight.ttf',
+            ),
+          ).readAsBytes().then((bytes) => ByteData.sublistView(bytes)),
+        );
+      }
+      await loader.load();
+    });
+    _setTestSurface(tester, const Size(411, 640));
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+    final initial = const AlertThresholdPreferences()
+        .withConnection(
+          ProviderConnections.cursorPlatform,
+          const ConnectionAlertThresholds(
+            today: AlertPercentThreshold(at: 70),
+            week: AlertPercentThreshold(at: 90),
+            month: AlertPercentThreshold(at: 80),
+            budget: ConnectionBudget(month: 2000),
+          ),
+        )
+        .withConnection(
+          ProviderConnections.openAiPlatform,
+          const ConnectionAlertThresholds(
+            today: AlertPercentThreshold(at: 50),
+            budget: ConnectionBudget(today: 4000),
+          ),
+        );
+    AlertThresholdPreferences? saved;
+    var saves = 0;
     await tester.pumpWidget(
       MaterialApp(
+        theme: wardPulseDarkTheme,
         home: Scaffold(
           body: ProvidersScreen(
             onRefresh: _noRefresh,
             credentialStore: _MemoryCredentialStore(),
             codexAccountService: const EmptyCodexAccountService(),
             claudeAccountService: const EmptyClaudeAccountService(),
-            onCredentialsChanged: () {},
-            alertThresholds: const AlertThresholdPreferences().withConnection(
-              ProviderConnections.cursorPlatform,
-              const ConnectionAlertThresholds(
-                budget: ConnectionBudget(today: 2000),
-              ),
-            ),
-            onAlertThresholdsChanged: (_) async {},
+            onCredentialsChanged: () => fail('Unexpected credential mutation'),
+            alertThresholds: initial,
+            onAlertThresholdsChanged: (edit) async {
+              saved = edit(initial);
+              saves++;
+            },
             cursorPlanSignIn: (_) async => null,
           ),
         ),
@@ -896,29 +941,173 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(
-      find.text('Team Admin API'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      _inRow('Team Admin API', find.byTooltip('Alert thresholds')),
-    );
-    await tester.pumpAndSettle();
+    Future<void> openAlerts() async {
+      final action = _inRow(
+        'Team Admin API',
+        find.byTooltip('Alert thresholds'),
+      );
+      await tester.scrollUntilVisible(
+        action,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+      expect(find.text('Alerts · Team Admin API'), findsOneWidget);
+    }
 
-    final periods =
-        tester
-            .widgetList<DropdownButton<int?>>(find.byType(DropdownButton<int?>))
-            .toList();
-    expect(periods, hasLength(3));
-    expect(periods[0].onChanged, isNotNull, reason: 'Today has a limit');
-    expect(periods[1].onChanged, isNull);
-    expect(periods[2].onChanged, isNull);
-    expect(
-      find.text('Set this period’s limit under Budget limits'),
-      findsNWidgets(2),
+    final dialog = find.byType(AlertDialog);
+    final scrollable = find.descendant(
+      of: dialog,
+      matching: find.byType(Scrollable),
     );
+    Finder editor(String period) =>
+        find.widgetWithText(AlertPercentThresholdEditor, period);
+    Finder dropdown(String period) => find.descendant(
+      of: editor(period),
+      matching: find.byType(DropdownButton<int?>),
+    );
+    Future<List<({int lines, double lineHeight})>> inspectGuidance() async {
+      const reason = 'Set this period’s limit under Budget limits';
+      final periods =
+          tester
+              .widgetList<DropdownButton<int?>>(
+                find.descendant(
+                  of: dialog,
+                  matching: find.byType(DropdownButton<int?>),
+                ),
+              )
+              .toList();
+      expect(periods, hasLength(3));
+      expect(periods[0].onChanged, isNull, reason: 'Today has no limit');
+      expect(periods[1].onChanged, isNull, reason: 'Week has no limit');
+      expect(periods[2].onChanged, isNotNull, reason: 'Month has a limit');
+      expect(periods.map((period) => period.value), [30, 10, 20]);
+      expect(scrollable, findsOneWidget);
+      final measurements = <({int lines, double lineHeight})>[];
+      for (final period in const ['Today', 'Week']) {
+        final control = editor(period);
+        await tester.ensureVisible(control);
+        await tester.pumpAndSettle();
+        final helper = find.descendant(
+          of: control,
+          matching: find.text(reason),
+        );
+        final paragraph = tester.renderObject<RenderParagraph>(helper);
+        final origin = paragraph.localToGlobal(Offset.zero);
+        final paragraphRect = origin & paragraph.size;
+        final boxes = paragraph.getBoxesForSelection(
+          TextSelection(baseOffset: 0, extentOffset: reason.length),
+        );
+        expect(boxes, isNotEmpty, reason: period);
+        expect(paragraph.didExceedMaxLines, isFalse, reason: period);
+        expect(paragraph.textScaler.scale(10), closeTo(13, 0.001));
+        expect(
+          tester.getRect(dropdown(period)).bottom,
+          lessThanOrEqualTo(paragraphRect.top),
+          reason: '$period guidance must not overlap its dropdown',
+        );
+        // Every visible character, including the final "Budget limits", must
+        // survive layout and fit inside the editor and the scrolled viewport.
+        final containmentBounds = [
+          paragraphRect,
+          tester.getRect(control),
+          tester.getRect(scrollable),
+          tester.getRect(dialog),
+        ];
+        for (var offset = 0; offset < reason.length; offset++) {
+          if (reason[offset] == ' ') continue;
+          final glyphs = paragraph.getBoxesForSelection(
+            TextSelection(baseOffset: offset, extentOffset: offset + 1),
+          );
+          expect(glyphs, hasLength(1), reason: '$period[$offset]');
+          final glyph = glyphs.single.toRect().shift(origin);
+          expect(glyph.width, greaterThan(0), reason: '$period[$offset]');
+          expect(glyph.height, greaterThan(0), reason: '$period[$offset]');
+          for (final bounds in containmentBounds) {
+            expect(
+              bounds.inflate(0.001).contains(glyph.topLeft),
+              isTrue,
+              reason: '$period[$offset] starts outside $bounds',
+            );
+            expect(
+              bounds.inflate(0.001).contains(glyph.bottomRight),
+              isTrue,
+              reason: '$period[$offset] ends outside $bounds',
+            );
+          }
+        }
+        measurements.add((
+          lines: boxes.length,
+          lineHeight: boxes.first.bottom - boxes.first.top,
+        ));
+      }
+      expect(
+        tester.getRect(editor('Today')).bottom,
+        lessThanOrEqualTo(tester.getRect(editor('Week')).top),
+      );
+      expect(
+        tester.getRect(editor('Week')).bottom,
+        lessThanOrEqualTo(tester.getRect(editor('Month')).top),
+      );
+      for (final button in [
+        find.widgetWithText(TextButton, 'Cancel'),
+        find.widgetWithText(FilledButton, 'Save'),
+      ]) {
+        expect(button.hitTestable(), findsOneWidget);
+        final bounds = tester.getRect(button);
+        expect(tester.getRect(dialog).intersect(bounds), bounds);
+        expect(tester.getRect(scrollable).bottom, lessThanOrEqualTo(bounds.top));
+      }
+      return measurements;
+    }
+
+    Future<void> changeMonth() async {
+      await tester.ensureVisible(editor('Month'));
+      await tester.pumpAndSettle();
+      expect(dropdown('Month').hitTestable(), findsOneWidget);
+      await tester.tap(dropdown('Month'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('30% left').last);
+      await tester.pumpAndSettle();
+      expect(tester.widget<DropdownButton<int?>>(dropdown('Month')).value, 30);
+    }
+
+    await openAlerts();
+    final ordinary = await inspectGuidance();
+    await changeMonth();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(saved, isNull);
+    expect(saves, 0);
+
+    tester.view.physicalSize = const Size(360, 640);
+    await tester.pumpAndSettle();
+    await openAlerts();
+    final narrow = await inspectGuidance();
+    for (var index = 0; index < narrow.length; index++) {
+      expect(narrow[index].lines, greaterThan(1));
+      expect(narrow[index].lines, greaterThanOrEqualTo(ordinary[index].lines));
+      expect(narrow[index].lineHeight, closeTo(ordinary[index].lineHeight, 0.001));
+    }
+    await changeMonth();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(dialog, findsNothing);
+    expect(saves, 1);
+    expect(
+      saved!.toJson(),
+      initial
+          .withConnection(
+            ProviderConnections.cursorPlatform,
+            initial
+                .forConnection(ProviderConnections.cursorPlatform)
+                .copyWith(month: const AlertPercentThreshold(at: 70)),
+          )
+          .toJson(),
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('a recovery is not something a connection configures', (

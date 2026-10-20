@@ -40,6 +40,7 @@ class AlertPercentThresholdEditor extends StatelessWidget {
             isDense: true,
             enabled: enabled,
             helperText: disabledReason,
+            helperMaxLines: 3,
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<int?>(
