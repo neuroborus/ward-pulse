@@ -42,8 +42,8 @@
       stroke-width="5" />
     <circle cx="91.5" cy="191" r="17" fill="none" stroke="#E8915A"
       stroke-width="5" stroke-linecap="round"
-      stroke-dasharray="1.41 106.81"
-      stroke-dashoffset="-102.91"
+      stroke-dasharray="1.4088490133231844 106.81415022205297"
+      stroke-dashoffset="-102.9053012087298"
       transform="rotate(-90 91.5 191)" />
     <text x="125.5" y="189.5"
       font-family="Noto Sans, sans-serif" font-size="16"
@@ -55,15 +55,15 @@
       stroke-width="5" />
     <circle cx="91.5" cy="245" r="17" fill="none" stroke="#65D78A"
       stroke-width="5" stroke-linecap="round"
-      stroke-dasharray="82.59 106.81"
-      stroke-dashoffset="-21.73"
+      stroke-dasharray="82.58760318208344 106.81415022205297"
+      stroke-dashoffset="-21.726547039969528"
       transform="rotate(-90 91.5 245)" />
     <circle cx="142.5" cy="245" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
     <circle cx="142.5" cy="245" r="17" fill="none" stroke="#186020"
       stroke-width="5" stroke-linecap="round"
-      stroke-dasharray="38.79 106.81"
-      stroke-dashoffset="-65.52"
+      stroke-dasharray="38.79380159104172 106.81415022205297"
+      stroke-dashoffset="-65.52034863101125"
       transform="rotate(-90 142.5 245)" />
     <text x="176.5" y="243.5"
       font-family="Noto Sans, sans-serif" font-size="16"
@@ -75,15 +75,15 @@
       stroke-width="5" />
     <circle cx="91.5" cy="299" r="17" fill="none" stroke="#7E93B8"
       stroke-width="5" stroke-linecap="round"
-      stroke-dasharray="101.71 106.81"
-      stroke-dashoffset="-2.61"
+      stroke-dasharray="101.81415022205297 106.81415022205297"
+      stroke-dashoffset="-2.5"
       transform="rotate(-90 91.5 299)" />
     <circle cx="142.5" cy="299" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
     <circle cx="142.5" cy="299" r="17" fill="none" stroke="#67E8D4"
       stroke-width="5" stroke-linecap="round"
-      stroke-dasharray="75.11 106.81"
-      stroke-dashoffset="-29.20"
+      stroke-dasharray="75.11061266653974 106.81415022205297"
+      stroke-dashoffset="-29.203537555513243"
       transform="rotate(-90 142.5 299)" />
     <text x="176.5" y="297.5"
       font-family="Noto Sans, sans-serif" font-size="16"
