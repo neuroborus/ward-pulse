@@ -17,10 +17,11 @@ were refreshed and three images were added: a healthy Dashboard theme pair and W
 Glance. The original Dashboard warning pair and stale Glance remain available only for
 explanations of those exact states. Date added is unchanged by a refresh.
 
-The Used in column records source placements for this refresh; rendered publication review
-remains pending. Last verified 2026-10-20 records actual-frame review of the 23 new captures,
-not a new capture of retained images or completed website verification. Earlier dates retain
-the verification scope recorded in the historical sections.
+The Used in column records the source placements for each image. Last verified 2026-10-20
+records actual-frame review of the 23 new captures; earlier dates retain the verification
+scope recorded in the historical sections. Image review and publication review are
+separate: check theme selection, original-image links, layout and captions whenever an
+image or its placement changes.
 
 | File | Description | Theme | Date added | Captured | Last verified | Dimensions | App | Used in |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
