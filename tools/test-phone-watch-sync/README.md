@@ -125,6 +125,13 @@ EXIT entry; once claimed, additional signals only latch failure. The guard prece
 initialization, and signal handlers use only persistent state throughout retirement.
 They cannot exit recursively or abandon cleanup. A signal during monitor/timer launch still
 waits for every ownership entry to be registered before exit.
+Timer arming then waits for that child's PID acknowledgement on a separate internal pipe,
+written only after its cancellation handlers are installed. PID registration or liveness
+alone is not readiness. The deadline read uses the remaining absolute phase budget;
+the readiness wait must finish within that same budget. Before the next timer is launched,
+the previous timer must be cancelled, proved absent and waited successfully, even for
+immediately queued controls. Failed or expired readiness and abnormal cancellation use
+the same failure cleanup and watchdog backstop.
 Individual cleanup failures retain failure while the remaining retirement work continues.
 Producer process-group absence is required before wait and retirement evidence; owned
 pipes and records are retained whenever any monitor tree or timer remains unproved.
@@ -161,8 +168,9 @@ stdout remains usable. If output is broken or its bound is exhausted, complete e
 cannot be delivered and the session fails.
 
 Startup has 60 seconds, each request at most 30 seconds (STOP has 15), each idle input wait
-15 seconds and the whole session 180 seconds. Timer rearming consumes the new phase's
-budget; nested waits and calls are clamped to existing deadlines. A deadline timer covers
+15 seconds and the whole session 180 seconds. Previous-timer retirement and new-timer
+readiness consume the new phase's original budget without resetting its deadline;
+nested waits and calls are clamped to existing deadlines. A deadline timer covers
 blocked work as well as reads/writes;
 an unresponsive shell has a further 20-second termination ceiling. ADB calls have at most
 five seconds (clamped to the current phase deadline), followed by at most one second to
@@ -497,6 +505,12 @@ acceptance can be claimed. There is no manual override or source-review substitu
 
 ## Dated status
 
+- 2026-10-20: bounded timer readiness correction authored. Cancellation readiness and
+  previous-timer absence are required before rearming returns. The historical signal
+  mechanism remains UNKNOWN; Square positive F2 remains HOLD at timer cancellation.
+  Historical Round20 and Square idle evidence is not current both-shape acceptance.
+  Both-shape lifecycle/retirement and original-preservation proofs remain pending after
+  whole Runner completion, full retirement and quiescence; no product acceptance is claimed.
 - 2026-10-20: observation retirement entry correction authored. Historical idle-retirement
   evidence remains HOLD; its exact signal/EXIT scheduling interleaving remains unproved.
   Source changes establish no runtime or product acceptance. Both-shape behavioral,

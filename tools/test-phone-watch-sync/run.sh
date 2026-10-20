@@ -1322,7 +1322,10 @@ observe_retire_timer() {
     sleep 0.05 || { failed=1; OBS_ERROR='Observation timer retirement wait failed.'; }
   done
   # Wait only after absence is established, so a stopped timer cannot block it.
-  wait "$pid" 2>/dev/null || :
+  if ! wait "$pid" 2>/dev/null; then
+    failed=1
+    OBS_ERROR='Observation timer did not acknowledge cancellation.'
+  fi
   if kill -0 "$pid" 2>/dev/null; then
     OBS_ERROR='Observation timer retirement is unproved.'
     return 1
@@ -1332,25 +1335,40 @@ observe_retire_timer() {
 }
 
 observe_arm() {
-  local seconds=$1 owner=$$ remaining deadline=$((SECONDS + $1))
+  local seconds=$1 owner=$$ remaining ready deadline=$((SECONDS + $1))
   (( deadline <= OBS_EXPIRES )) || deadline=$OBS_EXPIRES
+  OBS_LIMIT=$deadline
   observe_retire_timer || hold "$OBS_ERROR"
   remaining=$((deadline - SECONDS))
   (( seconds > 0 && remaining > 0 )) || hold 'Observation lifetime expired.'
-  seconds=$remaining
-  OBS_LIMIT=$deadline
   # A builtin timed read avoids an unowned sleep descendant. The second deadline
   # bounds an unresponsive shell; ordinary cleanup retains and retires its children.
   OBS_LAUNCHING=1
   (
     trap 'exit 0' INT TERM HUP
-    IFS= read -r -t "$seconds" -u "$OBS_CLOCK" _ || :
+    # Only this child writes readiness, after cancellation is operative. Its
+    # separate pipe cannot be consumed by the timer's own deadline read.
+    if printf '%s\n' "$BASHPID" >&"$OBS_TIMER_READY"; then
+      remaining=$((deadline - SECONDS))
+      if (( remaining > 0 )); then
+        IFS= read -r -t "$remaining" -u "$OBS_CLOCK" _ || :
+      fi
+    fi
     kill -TERM "$owner" 2>/dev/null || exit 0
     IFS= read -r -t 20 -u "$OBS_CLOCK" _ || :
     kill -KILL "$owner" 2>/dev/null || :
   ) >/dev/null 2>&1 &
   OBS_TIMER=$!
   observe_launch_done
+  # Ownership is registered before this fallible wait. Retirement and readiness
+  # consume the phase's original absolute budget, including immediately queued input.
+  remaining=$((deadline - SECONDS))
+  (( remaining > 0 )) || hold 'Observation timer readiness deadline expired.'
+  IFS= read -r -t "$remaining" -u "$OBS_TIMER_READY" ready \
+    || hold 'Observation timer readiness failed or expired.'
+  [[ "$ready" == "$OBS_TIMER" ]] && kill -0 "$OBS_TIMER" 2>/dev/null \
+    || hold 'Observation timer readiness is unproved.'
+  (( SECONDS < deadline )) || hold 'Observation timer readiness deadline expired.'
 }
 
 observe_identity() {
@@ -1505,6 +1523,7 @@ observe_cleanup() {
   observe_retire_timer || OBS_FAILED=1
   [[ -z "$OBS_TIMER" ]] || retired=0
   if [[ -n "$OBS_CLOCK" ]] && ! exec {OBS_CLOCK}>&-; then OBS_FAILED=1; fi
+  if [[ -n "$OBS_TIMER_READY" ]] && ! exec {OBS_TIMER_READY}>&-; then OBS_FAILED=1; fi
   # Keep recovery pipes and records whenever an owned tree or timer may survive.
   # The timer is now absent, so bound the existing removal like stdout copies.
   if (( retired )); then
@@ -1561,8 +1580,9 @@ observe() {
   exec {OBS_PROTOCOL}>&1 || hold 'Cannot preserve observation protocol output.'
   : >"$SCRATCH/observed"
   : >"$SCRATCH/pending"
-  mkfifo "$SCRATCH/deadline.pipe"
+  mkfifo "$SCRATCH/deadline.pipe" "$SCRATCH/deadline-ready.pipe"
   exec {OBS_CLOCK}<>"$SCRATCH/deadline.pipe"
+  exec {OBS_TIMER_READY}<>"$SCRATCH/deadline-ready.pipe"
   observe_arm "$((OBS_LIMIT - SECONDS))"
   resolve_devices
   for role in phone wear; do
@@ -1859,7 +1879,7 @@ OBSERVING=0 OBS_REQUEST=0 OBS_COMPLETE=0 OBS_LIMIT=0 OBS_EXPIRES=0
 OBS_OUTPUT_FAILED=0 OBS_PROTOCOL=1
 OBS_LAUNCHING=0 OBS_PENDING_SIGNAL=0
 OBS_RETIRING=0 OBS_FAILED=0 OBS_EXIT_STATUS=0
-OBS_TIMER= OBS_CLOCK= OBS_PHASE= OBS_ERROR= OBS_INPUT= OBS_SIZE= OBS_SHAPE=
+OBS_TIMER= OBS_CLOCK= OBS_TIMER_READY= OBS_PHASE= OBS_ERROR= OBS_INPUT= OBS_SIZE= OBS_SHAPE=
 
 case "${1:-}" in
   prepare) prepare ;;
