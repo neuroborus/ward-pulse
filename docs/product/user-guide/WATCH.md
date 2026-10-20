@@ -20,10 +20,11 @@ sign in to providers on the watch. If the phone has data but the watch does not,
 credits and refresh status. A title such as **Claude plan · Weekly** names the plan and its
 selected window. Paired **Cursor plan** or **Codex plan** rows show two pool percentages.
 
-![Wear Glance showing selected capacities, amber !OK and Stale in a circular screen.](/screenshots/wear-glance.png)
+![Wear Glance showing Cursor, Codex and Claude plan capacity with purchased credits in a circular screen.](/screenshots/wear-glance-overview.png)
 
 The selected metric with the lowest remaining percentage appears first.
-The example has an amber **!OK** control with **Stale** and disabled **Alerts: 0**.
+This example shows plan capacity and Codex purchased credits. Its grey **OK** control is
+unavailable while refresh waits; see the [refresh status legend](#refresh-status).
 
 ### Plan windows
 
@@ -63,6 +64,11 @@ that every provider is current or that a refresh reached the phone.
 | **Warning** | The summary reports a warning. Check the phone's Dashboard and active alerts. |
 | **Error** | A reporting attempt failed. Open the phone's Dashboard for details and recovery. |
 | **Unknown** | The summary's status is unavailable. Check reporting on the phone. |
+
+![Wear Glance showing amber !OK, Stale and disabled Alerts: 0 in a circular screen.](/screenshots/wear-glance.png)
+
+This earlier capture shows amber **!OK** with **Stale**: the summary needs a newer report.
+**Alerts: 0** is disabled because there are no active alerts.
 
 If **Ring data unavailable** replaces the rows, none of the selected rings has displayable
 data. Check the phone's Dashboard and [ring choices](#choose-usage-rings).

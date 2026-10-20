@@ -68,7 +68,9 @@ survive restart, but a connection with no successful report has no data to recov
 
 ![Dashboard showing previous data and a Claude unsupported-response warning in the dark theme.](/screenshots/phone-dashboard-dark.png)
 
-This is a warning and previous-data example; the message alone does not establish its cause.
+These captures show **Claude returned an unsupported usage response.** with **Showing previous
+data**. Earlier data remains visible; the message alone does not establish why the response
+was unsupported.
 
 If a provider reports a rate limit, wait for any supplied availability/reset time or try later.
 Repeated refresh taps cannot remove a provider limit. A successful report may still contain

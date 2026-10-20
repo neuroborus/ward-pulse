@@ -37,11 +37,12 @@ This connection does not provide personal ChatGPT or Codex plan limits.
 3. Tap **Save** and wait for the check beside **Platform reporting**.
 4. When it says **Connected**, open Dashboard to read the available reports.
 
-![OpenAI Platform reporting editor with empty Value and Label fields in the light theme.](/screenshots/phone-openai-reporting-key-light.png)
+![Saved OpenAI Platform reporting-key editor with empty Value and Label fields in the light theme.](/screenshots/phone-openai-reporting-key-light.png)
 
-![OpenAI Platform reporting editor with empty Value and Label fields in the dark theme.](/screenshots/phone-openai-reporting-key-dark.png)
+![Saved OpenAI Platform reporting-key editor with empty Value and Label fields in the dark theme.](/screenshots/phone-openai-reporting-key-dark.png)
 
-The empty editor shows a fixed `sk-admin-…` credential-type hint, not a revealed key.
+This saved-key editor keeps the existing key when **Value** is left blank; **Remove** clears
+it. The empty field shows a fixed `sk-admin-…` credential-type hint, not a revealed key.
 
 For **Key rejected**, check that you pasted the full Admin key into this row. For
 **Access denied**, review its reporting access and the organization it belongs to.

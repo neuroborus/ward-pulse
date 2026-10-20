@@ -16,7 +16,7 @@ credits. It is updated from the phone's reporting and has its own metric choices
 
 ![Widget selection showing checked metrics and five of six slots used in the dark theme.](/screenshots/phone-widget-settings-dark.png)
 
-Select metrics under **Home screen widget**; choices save as you tap.
+This example has five metrics selected under **Home screen widget**; choices save as you tap.
 
 You can select up to **six** metrics. Widget selection is independent of Watchface; changing
 one does not change the other. Claude windows remain separate widget choices, and Cursor
@@ -27,11 +27,11 @@ The displayed ordering puts lower remaining percentages first. The phone's metri
 shared by placed WardPulse widgets; each widget's available size can fit a different number
 of rows and columns.
 
-![STALE WardPulse home widget showing four complete rows on the Android launcher in the light theme.](/screenshots/phone-home-widget-light.png)
+![WardPulse home widget showing five metric rows and Codex purchased credits on the Android launcher in the light theme.](/screenshots/phone-home-widget-light.png)
 
-![STALE WardPulse home widget showing four complete rows on the Android launcher in the dark theme.](/screenshots/phone-home-widget-dark.png)
+![WardPulse home widget showing five metric rows and Codex purchased credits on the Android launcher in the dark theme.](/screenshots/phone-home-widget-dark.png)
 
-This STALE example shows four complete rows at its current size, while five metrics are selected.
+This example fits all five selected metrics, with purchased credits beside the Codex row.
 
 ## Resize for the information you need
 

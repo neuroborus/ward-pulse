@@ -30,15 +30,15 @@ type HtmlNode = {
 
 const screenshots = [
   {
-    url: '/screenshots/phone-providers-light.png',
-    alt: 'WardPulse phone Providers showing separate plan and reporting connections, four Connected rows and warning count 1 in the light theme.',
-    caption: 'Phone Providers · Connected rows, warning count 1',
-    darkOriginalUrl: '/screenshots/phone-providers-dark.png',
+    url: '/screenshots/phone-dashboard-overview-light.png',
+    alt: 'WardPulse phone Dashboard showing Claude plan windows and organization usage history in the light theme.',
+    caption: 'Phone Dashboard · Plan windows and usage history',
+    darkOriginalUrl: '/screenshots/phone-dashboard-overview-dark.png',
   },
   {
-    url: '/screenshots/wear-glance.png',
-    alt: 'WardPulse Watch Glance showing plan capacities, amber !OK and Stale.',
-    caption: 'Watch Glance · Stale',
+    url: '/screenshots/wear-glance-overview.png',
+    alt: 'WardPulse Watch Glance showing Cursor, Codex and Claude plan capacity with purchased credits.',
+    caption: 'Watch Glance · Plan capacity and credits',
   },
   {
     url: '/screenshots/wear-watch-face.png',
@@ -48,7 +48,7 @@ const screenshots = [
 ]
 
 const approvedScreenshot =
-  /^\/screenshots\/(?:phone-(?:alert-thresholds|budget-limits|cursor-(?:paste-token|sign-in-help)|dashboard|home-widget|providers|openai-reporting-key|reporting-key|watch-settings|widget-settings)-(?:light|dark)|wear-(?:glance|plan-windows|watch-face|watch-face-utility))\.png$/
+  /^\/screenshots\/(?:phone-(?:alert-thresholds|budget-limits|cursor-(?:paste-token|sign-in-help)|dashboard(?:-overview)?|home-widget|providers|openai-reporting-key|reporting-key|watch-settings|widget-settings)-(?:light|dark)|wear-(?:glance(?:-overview)?|plan-windows|watch-face|watch-face-utility))\.png$/
 
 const requestedBasePath = process.env.WARDPULSE_DOCS_BASE_PATH
 
@@ -118,7 +118,7 @@ function homepageMarkdown() {
                   type: 'link',
                   url: darkOriginalUrl,
                   children: [
-                    { type: 'text', value: 'View dark Phone Providers original' },
+                    { type: 'text', value: 'View dark Phone Dashboard original' },
                   ],
                 },
               ],

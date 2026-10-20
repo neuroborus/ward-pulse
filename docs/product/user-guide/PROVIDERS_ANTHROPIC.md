@@ -63,11 +63,12 @@ for this row.
 2. Paste the key into **Value**, optionally add a **Label**, and tap **Save**.
 3. Wait for the check beside that row. **Connected** means a report succeeded.
 
-![Anthropic Organization reporting editor with empty Value and Label fields in the light theme.](/screenshots/phone-reporting-key-light.png)
+![Saved Anthropic Organization reporting-key editor with empty Value and Label fields in the light theme.](/screenshots/phone-reporting-key-light.png)
 
-![Anthropic Organization reporting editor with empty Value and Label fields in the dark theme.](/screenshots/phone-reporting-key-dark.png)
+![Saved Anthropic Organization reporting-key editor with empty Value and Label fields in the dark theme.](/screenshots/phone-reporting-key-dark.png)
 
-The editor keeps a saved key when Value is left blank; Remove clears that credential.
+This saved-key editor keeps the existing key when **Value** is left blank; **Remove** clears
+that credential. The empty field's **API key** text is a placeholder.
 
 ![Providers showing the Organization reporting connection and its status in the light theme.](/screenshots/phone-providers-light.png)
 

@@ -51,12 +51,15 @@ Copy only its **Value**, without the cookie name, a `name=` prefix or a full Coo
 
 ### Save the token
 
-Paste the value into **Cursor plan · Paste token** and tap **Save**. If a token is already
-saved, leaving Value blank keeps it. The cookie is a private session credential.
+Paste the value into **Cursor plan · Paste token** and tap **Save**. The cookie is a private
+session credential.
 
-![Cursor plan Paste token editor with empty fields in the light theme.](/screenshots/phone-cursor-paste-token-light.png)
+![Saved Cursor plan token editor with an empty Value field in the light theme.](/screenshots/phone-cursor-paste-token-light.png)
 
-![Cursor plan Paste token editor with empty fields in the dark theme.](/screenshots/phone-cursor-paste-token-dark.png)
+![Saved Cursor plan token editor with an empty Value field in the dark theme.](/screenshots/phone-cursor-paste-token-dark.png)
+
+This saved-token editor keeps the existing token when **Value** is left blank; **Remove**
+clears it. The saved value is not displayed.
 
 If the cookie is missing, confirm that you are signed in, reload the dashboard and check
 the selected site under Cookies. To return to app sign-in, tap **Cancel**, then the Cursor

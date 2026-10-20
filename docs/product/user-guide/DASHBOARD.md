@@ -19,12 +19,12 @@ purchased usage or a history chart.
 **0% left** means the reported capacity is exhausted. A small positive percentage may round
 to 0%; watch displays keep ordinary styling for that rounded value.
 
-![Dashboard showing previous data and a Claude unsupported-response warning in the light theme.](/screenshots/phone-dashboard-light.png)
+![Dashboard showing Claude plan windows and organization usage history in the light theme.](/screenshots/phone-dashboard-overview-light.png)
 
-![Dashboard showing previous data and a Claude unsupported-response warning in the dark theme.](/screenshots/phone-dashboard-dark.png)
+![Dashboard showing Claude plan windows and organization usage history in the dark theme.](/screenshots/phone-dashboard-overview-dark.png)
 
 Read each plan's capacity **left** and the reporting status beside it. These captures show
-a Claude unsupported-response warning and previous data.
+two Claude plan windows at **100% left** and organization usage history totalling **39 tokens**.
 
 Selected exhausted watch metrics remain present with an empty grey track and a pale-red zero
 percentage. They do not disappear or get replaced by a less-used Claude window. The widget

@@ -7,13 +7,13 @@ Wear OS summary, watch face and home-screen widget.
 <table width="100%">
   <tr>
     <td width="50%" rowspan="2" align="center">
-      <a href="docs/assets/phone-providers-light.png#gh-light-mode-only"><img src="docs/assets/phone-providers-light.png#gh-light-mode-only" width="216" alt="WardPulse phone Providers showing separate plan and reporting connections, four Connected rows and warning count 1 in the light theme."></a>
-      <a href="docs/assets/phone-providers-dark.png#gh-dark-mode-only"><img src="docs/assets/phone-providers-dark.png#gh-dark-mode-only" width="216" alt="WardPulse phone Providers showing separate plan and reporting connections, four Connected rows and warning count 1 in the dark theme."></a><br>
-      <strong>Phone Providers · Connected rows, warning count 1</strong>
+      <a href="docs/assets/phone-dashboard-overview-light.png#gh-light-mode-only"><img src="docs/assets/phone-dashboard-overview-light.png#gh-light-mode-only" width="216" alt="WardPulse phone Dashboard showing Claude plan windows and organization usage history in the light theme."></a>
+      <a href="docs/assets/phone-dashboard-overview-dark.png#gh-dark-mode-only"><img src="docs/assets/phone-dashboard-overview-dark.png#gh-dark-mode-only" width="216" alt="WardPulse phone Dashboard showing Claude plan windows and organization usage history in the dark theme."></a><br>
+      <strong>Phone Dashboard · Plan windows and usage history</strong>
     </td>
     <td width="50%" align="center">
-      <a href="docs/assets/wear-glance.png"><img src="docs/assets/wear-glance.png" width="200" alt="WardPulse Watch Glance showing plan capacities, amber !OK and Stale."></a><br>
-      <strong>Watch Glance · Stale</strong>
+      <a href="docs/assets/wear-glance-overview.png"><img src="docs/assets/wear-glance-overview.png" width="200" alt="WardPulse Watch Glance showing Cursor, Codex and Claude plan capacity with purchased credits."></a><br>
+      <strong>Watch Glance · Plan capacity and credits</strong>
     </td>
   </tr>
   <tr>

@@ -101,7 +101,8 @@ Index a derivative with its source only if an actual separate annotated PNG is p
   anonymous app captures as such; do not label them Mock/demo. Describe demonstration or
   sanitized content honestly, and do not invent data or unperformed captures.
 - General examples, setup steps and showcases must use screenshots without errors,
-  including persistent credential or provider errors. Show an error or warning only when
+  warnings or stale-data indicators such as `Stale`, including persistent credential or
+  provider errors. Show an error, warning or stale-data state only when
   nearby text explicitly explains that exact state; never use it as a generic illustration.
   Capture the appropriate real device state without irrelevant system notifications/service
   icons or low-battery warnings. Use existing OS/device controls; never erase, fake or
