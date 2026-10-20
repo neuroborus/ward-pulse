@@ -480,10 +480,21 @@ Scope:
 
 - Basic auth with a team Admin API key against `POST /teams/daily-usage-data` and
   `POST /teams/spend`.
-- Spend responses use `teamMemberSpend` with `page` / `pageSize` pagination; WardPulse
-  sums `overallSpendCents` across pages into the month budget only.
+- Spend responses use `teamMemberSpend` (also accepted as `teamMembers`) with
+  `page` / `pageSize` pagination. For each member, `overallSpendCents` takes precedence,
+  including zero; otherwise both `includedSpendCents` and `spendCents` must be reported
+  and their sum is the total. Round the selected member total once to integer cents,
+  reject non-finite or out-of-range totals, then checked-add across members and pages.
+  Missing/null collections, no spend pages or incomplete member amounts leave the month
+  spend unknown. Explicit empty collections and complete zero amounts remain known zero;
+  malformed collections are rejected.
 - Spend is billing-cycle scoped and maps only to the month budget; today and week stay
   unknown until a day-scoped spend source exists.
+- Daily request counts are raw usage events, not billed request units. Count only the complete
+  funding family `subscriptionIncludedReqs + usageBasedReqs + apiKeyReqs`; the overlapping
+  `composerRequests`, `chatRequests` and `agentRequests` breakdown is ignored. Explicit
+  canonical zeros stay known zero. An incomplete funding family makes that day's count
+  unknown across all rows and pages; complete counts retain saturating addition and UTC dates.
 - Hard ceiling is 20 requests per minute; WardPulse polls at the global slider cadence (minimum
   five minutes). Usage aggregates hourly on the provider side; Providers shows that freshness
   note on this Admin API row only.
@@ -493,4 +504,9 @@ Official references:
 
 - [Cursor API overview](https://cursor.com/docs/api)
 - [Team Admin API](https://cursor.com/docs/account/teams/admin-api)
+- [Staff clarification of per-member and pooled spend](https://forum.cursor.com/t/admin-api-docs-missing-includedspendcents-and-new-teams-usage-metrics/162742/9)
 - [Team roles, seats and invitations](https://docs.x.ai/x-subscription/team-plans)
+
+The 2026-10-20 normalization corrections do not establish the cause of the observed empty
+live daily ledger or create evidence of live activity. Billing context and paid-seat
+verification remain separate owner work; live phone/watch acceptance is pending.

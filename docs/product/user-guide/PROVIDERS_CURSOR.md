@@ -133,6 +133,8 @@ Team key, not a personal User key. See [connection status](/guide/providers#chec
 
 ### Read the history
 
+Request counts are raw usage events, not billed request units.
+
 Connected can appear before the team has usage to report. If no team activity is reported,
 Usage history may be absent. Cursor aggregates team usage by the hour, so a refresh can
 succeed without changing the figures. This note applies to Team Admin API, separately from

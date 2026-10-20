@@ -1729,13 +1729,17 @@ Deliverables:
   `WorkosCursorSessionToken`; Advanced paste remains), with the session token in secure storage;
 - Cursor platform reporting: team API-key support for accounts with reporting access,
   with the Providers freshness note (hourly aggregation) on the Admin API row only;
+  billing-cycle spend accepts canonical pooled totals or complete included-plus-on-demand
+  member totals, preserving unknown data; daily counts use complete funding-channel raw
+  events without adding the overlapping feature breakdown;
 - capability descriptors registered for `ProviderKind::Claude` and `ProviderKind::Cursor`;
 - `docs/product/PROVIDER_NOTES.md` updated per provider with credential type, permissions,
   rate limits, revocation path, and redaction rules.
 
-The 2026-10-20 Anthropic current-day correction leaves HOST Flutter execution, live refresh
-and affected phone/watch acceptance pending. It does not complete the deferred live-usage
-acceptance item.
+The 2026-10-20 Anthropic current-day and Cursor normalization corrections leave HOST Flutter
+execution, live refresh and affected phone/watch acceptance pending. They do not complete the
+deferred live-usage acceptance item. Cursor's empty live daily ledger and its billing-context
+and paid-seat investigation remain unresolved.
 
 Acceptance:
 
