@@ -46,16 +46,21 @@ void main() {
     measure(String scene) {
       final sceneContext = '$scene at ${tester.view.physicalSize.width}dp';
       final bar = find.byType(NavigationBar);
+      expect(bar, findsOneWidget, reason: sceneContext);
       final barRect = tester.getRect(bar);
       expect(
         barRect.size,
         Size(tester.view.physicalSize.width, 80),
         reason: '$sceneContext: bar $barRect',
       );
-      final destinations = find.byType(NavigationDestination);
+      final destinations = find.descendant(
+        of: bar,
+        matching: find.byType(NavigationDestination),
+      );
       expect(destinations, findsNWidgets(labels.length));
       final measurements =
           <({Rect selection, double baseline, Rect icon, Rect indicator})>[];
+      final allocations = <({Rect label, Rect icon, Rect indicator})>[];
       for (var index = 0; index < labels.length; index++) {
         final label = labels[index];
         final destination = destinations.at(index);
@@ -70,6 +75,7 @@ void main() {
           of: destination,
           matching: find.text(label),
         );
+        expect(text, findsOneWidget, reason: '$sceneContext: $label');
         final paragraph = tester.renderObject<RenderParagraph>(text);
         final context =
             '$sceneContext, scale ${paragraph.textScaler.scale(1)}, $label';
@@ -77,10 +83,81 @@ void main() {
         final paragraphRect = origin & paragraph.size;
         final paragraphContext =
             '$context: paragraph [${paragraphRect.left}, ${paragraphRect.top}, '
-            '${paragraphRect.right}, ${paragraphRect.bottom}]';
-        // RenderParagraph.performLayout/paint clip on text layout overflow,
-        // not on selection rectangles extending past the paragraph box.
-        // Check that the complete single-line layout fits its allocated size.
+            '${paragraphRect.right}, ${paragraphRect.bottom}], '
+            'size ${paragraph.size}, constraints ${paragraph.constraints}';
+        expect(
+          paragraph.text.toPlainText(includeSemanticsLabels: false),
+          label,
+          reason: paragraphContext,
+        );
+        expect(paragraph.childCount, 0, reason: paragraphContext);
+        final destinationContext =
+            '$paragraphContext, destination $destinationRect';
+        expect(paragraphRect.isEmpty, isFalse, reason: destinationContext);
+        expect(
+          paragraphRect.left,
+          greaterThanOrEqualTo(destinationRect.left),
+          reason: destinationContext,
+        );
+        expect(
+          paragraphRect.top,
+          greaterThanOrEqualTo(destinationRect.top),
+          reason: destinationContext,
+        );
+        expect(
+          paragraphRect.right,
+          lessThanOrEqualTo(destinationRect.right),
+          reason: destinationContext,
+        );
+        expect(
+          paragraphRect.bottom,
+          lessThanOrEqualTo(destinationRect.bottom),
+          reason: destinationContext,
+        );
+        // Replay RenderParagraph's width semantics and effective text settings.
+        // Allocation and layout checks do not prove every painted pixel fits.
+        final painter = TextPainter(
+          text: paragraph.text,
+          textAlign: paragraph.textAlign,
+          textDirection: paragraph.textDirection,
+          textScaler: paragraph.textScaler,
+          maxLines: paragraph.maxLines,
+          ellipsis: paragraph.overflow == TextOverflow.ellipsis ? '\u2026' : null,
+          locale: paragraph.locale,
+          strutStyle: paragraph.strutStyle,
+          textWidthBasis: paragraph.textWidthBasis,
+          textHeightBehavior: paragraph.textHeightBehavior,
+        );
+        try {
+          final maxWidth =
+              paragraph.softWrap || paragraph.overflow == TextOverflow.ellipsis
+                  ? paragraph.constraints.maxWidth
+                  : double.infinity;
+          painter.layout(
+            minWidth: paragraph.constraints.minWidth,
+            maxWidth: maxWidth,
+          );
+          final lines = painter.computeLineMetrics();
+          final layoutContext =
+              '$paragraphContext, replay minWidth ${paragraph.constraints.minWidth}, '
+              'maxWidth $maxWidth, size ${painter.size}, '
+              'lines ${lines.length}, truncated ${painter.didExceedMaxLines}';
+          expect(lines, hasLength(1), reason: layoutContext);
+          expect(painter.didExceedMaxLines, isFalse, reason: layoutContext);
+          expect(paragraph.didExceedMaxLines, isFalse, reason: layoutContext);
+          expect(
+            painter.width,
+            lessThanOrEqualTo(paragraph.size.width),
+            reason: layoutContext,
+          );
+          expect(
+            painter.height,
+            lessThanOrEqualTo(paragraph.size.height),
+            reason: layoutContext,
+          );
+        } finally {
+          painter.dispose();
+        }
         final singleLineSize = Size(
           paragraph.getMaxIntrinsicWidth(double.infinity),
           paragraph.getMaxIntrinsicHeight(double.infinity),
@@ -100,29 +177,14 @@ void main() {
         final boxes = paragraph.getBoxesForSelection(
           TextSelection(baseOffset: 0, extentOffset: label.length),
         );
-        expect(boxes, hasLength(1), reason: context);
-        expect(paragraph.didExceedMaxLines, isFalse, reason: context);
+        expect(boxes, hasLength(1), reason: paragraphContext);
         expect(paragraph.textScaler.scale(10), closeTo(13, 0.001));
         // Selection boxes measure layout, not pixel ink or paint clipping.
         final selection = boxes.single.toRect().shift(origin);
-        final destinationBounds = destinationRect.inflate(0.001);
         final selectionContext =
             '$context: selection [${selection.left}, ${selection.top}, '
             '${selection.right}, ${selection.bottom}]';
-        final destinationContext =
-            'destination [${destinationBounds.left}, ${destinationBounds.top}, '
-            '${destinationBounds.right}, ${destinationBounds.bottom}]';
         expect(selection.isEmpty, isFalse, reason: selectionContext);
-        expect(
-          destinationBounds.contains(selection.topLeft),
-          isTrue,
-          reason: '$selectionContext starts outside $destinationContext',
-        );
-        expect(
-          destinationBounds.contains(selection.bottomRight),
-          isTrue,
-          reason: '$selectionContext ends outside $destinationContext',
-        );
         for (var offset = 0; offset < label.length; offset++) {
           final characterBoxes = paragraph.getBoxesForSelection(
             TextSelection(baseOffset: offset, extentOffset: offset + 1),
@@ -145,16 +207,6 @@ void main() {
             reason:
                 '$characterContext, full selection bottom ${selection.bottom}',
           );
-          expect(
-            destinationBounds.contains(character.topLeft),
-            isTrue,
-            reason: '$characterContext starts outside $destinationContext',
-          );
-          expect(
-            destinationBounds.contains(character.bottomRight),
-            isTrue,
-            reason: '$characterContext ends outside $destinationContext',
-          );
         }
         final baseline = paragraph.getDryBaseline(
           paragraph.constraints,
@@ -165,23 +217,29 @@ void main() {
             'constraints ${paragraph.constraints}';
         expect(baseline, isNotNull, reason: baselineContext);
         expect(baseline!.isFinite, isTrue, reason: baselineContext);
+        final icon = find.descendant(
+          of: destination,
+          matching: find.byType(Icon),
+        );
+        final indicator = find.descendant(
+          of: destination,
+          matching: find.byType(NavigationIndicator),
+        );
+        expect(icon, findsOneWidget, reason: context);
+        expect(indicator, findsOneWidget, reason: context);
+        final iconRect = tester.getRect(icon);
+        final indicatorRect = tester.getRect(indicator);
+        allocations.add((
+          label: paragraphRect,
+          icon: iconRect,
+          indicator: indicatorRect,
+        ));
         final relativeOrigin = Offset(destinationRect.center.dx, barRect.top);
         final measurement = (
           selection: selection.shift(-relativeOrigin),
           baseline: origin.dy + baseline - barRect.top,
-          icon: tester
-              .getRect(
-                find.descendant(of: destination, matching: find.byType(Icon)),
-              )
-              .shift(-relativeOrigin),
-          indicator: tester
-              .getRect(
-                find.descendant(
-                  of: destination,
-                  matching: find.byType(NavigationIndicator),
-                ),
-              )
-              .shift(-relativeOrigin),
+          icon: iconRect.shift(-relativeOrigin),
+          indicator: indicatorRect.shift(-relativeOrigin),
         );
         if (measurements.isNotEmpty) {
           expect(
@@ -206,6 +264,33 @@ void main() {
           );
         }
         measurements.add(measurement);
+      }
+      for (var index = 0; index < allocations.length; index++) {
+        final allocation = allocations[index];
+        for (var other = 0; other < allocations.length; other++) {
+          final neighbor = allocations[other];
+          final context =
+              '$sceneContext: ${labels[index]} allocation ${allocation.label}, '
+              '${labels[other]} allocation ${neighbor.label}, '
+              'icon ${neighbor.icon}, indicator ${neighbor.indicator}';
+          if (other > index) {
+            expect(
+              allocation.label.overlaps(neighbor.label),
+              isFalse,
+              reason: context,
+            );
+          }
+          expect(
+            allocation.label.overlaps(neighbor.icon),
+            isFalse,
+            reason: context,
+          );
+          expect(
+            allocation.label.overlaps(neighbor.indicator),
+            isFalse,
+            reason: context,
+          );
+        }
       }
       return measurements;
     }
@@ -254,27 +339,63 @@ void main() {
     // A measurably larger common candidate must fail at least one label;
     // this guards against replacing measured fitting with a small fixed size.
     var largerWouldWrap = false;
+    double? commonFontSize;
+    final largerLayouts = <String>[];
     for (final label in labels) {
-      final paragraph = tester.renderObject<RenderParagraph>(
-        find.descendant(
-          of: find.byType(NavigationBar),
-          matching: find.text(label),
-        ),
+      final text = find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text(label),
       );
-      final style = paragraph.text.style!;
+      expect(text, findsOneWidget, reason: 'larger candidate: $label');
+      final paragraph = tester.renderObject<RenderParagraph>(text);
+      final context =
+          'larger candidate: $label, allocation ${paragraph.size}, '
+          'constraints ${paragraph.constraints}';
+      expect(paragraph.text, isA<TextSpan>(), reason: context);
+      final span = paragraph.text as TextSpan;
+      expect(span.text, label, reason: context);
+      expect(span.children, isNull, reason: context);
+      expect(span.style, isNotNull, reason: context);
+      final style = span.style!;
+      expect(style.fontSize, isNotNull, reason: context);
+      final fontSize = style.fontSize!;
+      expect(fontSize.isFinite, isTrue, reason: context);
+      expect(fontSize, greaterThan(0), reason: context);
+      commonFontSize ??= fontSize;
+      expect(fontSize, commonFontSize, reason: context);
       final painter = TextPainter(
         text: TextSpan(
           text: label,
-          style: style.copyWith(fontSize: style.fontSize! + 0.02),
+          style: style.copyWith(fontSize: fontSize + 0.02),
         ),
+        textAlign: paragraph.textAlign,
         textDirection: paragraph.textDirection,
         textScaler: paragraph.textScaler,
+        maxLines: paragraph.maxLines,
+        ellipsis: paragraph.overflow == TextOverflow.ellipsis ? '\u2026' : null,
         locale: paragraph.locale,
-      )..layout();
-      largerWouldWrap |= painter.width > paragraph.constraints.maxWidth;
-      painter.dispose();
+        strutStyle: paragraph.strutStyle,
+        textWidthBasis: paragraph.textWidthBasis,
+        textHeightBehavior: paragraph.textHeightBehavior,
+      );
+      try {
+        painter.layout();
+        largerLayouts.add(
+          '$label fontSize ${fontSize + 0.02}, layout ${painter.size}, '
+          'constraints ${paragraph.constraints}',
+        );
+        largerWouldWrap |= painter.width > paragraph.constraints.maxWidth;
+      } finally {
+        painter.dispose();
+      }
     }
-    expect(largerWouldWrap, isTrue);
+    expect(
+      largerWouldWrap,
+      isTrue,
+      reason:
+          '360dp common font size $commonFontSize, increment 0.02: '
+          '${largerLayouts.join('; ')}',
+    );
 
     // Settle the other long label's selected style without duplicating the
     // existing tests of what each destination opens.
