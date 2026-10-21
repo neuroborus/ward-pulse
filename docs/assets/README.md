@@ -12,21 +12,21 @@ watch PNGs are 500×500px with transparent corners outside the circular screen.
 
 ## Screenshot index
 
-The library contains 29 screenshots. On 2026-10-20, twenty general-purpose phone images
-were refreshed and three images were added: a healthy Dashboard theme pair and Watch
-Glance. The original Dashboard warning pair and stale Glance remain available only for
-explanations of those exact states. Date added is unchanged by a refresh.
+The library contains 29 screenshots. On 2026-10-21, the eleven related Dashboard, Watch
+and Widget images were refreshed from one shared live state. The original Dashboard
+warning pair and stale Glance remain available only for explanations of those exact
+states. Date added is unchanged by a refresh.
 
-The Used in column records the source placements for each image. Last verified 2026-10-20
-records actual-frame review of the 23 new captures; earlier dates retain the verification
-scope recorded in the historical sections. Image review and publication review are
+The Used in column records the source placements for each image. Last verified records
+actual-frame review on the stated date; the dated capture sections describe its scope.
+Image review and publication review are
 separate: check theme selection, original-image links, layout and captions whenever an
 image or its placement changes.
 
 | File | Description | Theme | Date added | Captured | Last verified | Dimensions | App | Used in |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| [phone-dashboard-overview-light.png](phone-dashboard-overview-light.png) | Healthy Dashboard with Claude plan windows and a nonzero usage-history bar. | Light | 2026-10-20 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Light landing/README and Dashboard guide |
-| [phone-dashboard-overview-dark.png](phone-dashboard-overview-dark.png) | Healthy Dashboard with Claude plan windows and a nonzero usage-history bar. | Dark | 2026-10-20 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Dark landing/README and Dashboard guide |
+| [phone-dashboard-overview-light.png](phone-dashboard-overview-light.png) | Shared-state Dashboard: Claude windows 100% left and organization history 39 tokens. | Light | 2026-10-20 | 2026-10-21 | 2026-10-21 | 864×1920 | WardPulse phone | Light landing/README and Dashboard guide |
+| [phone-dashboard-overview-dark.png](phone-dashboard-overview-dark.png) | Shared-state Dashboard: Claude windows 100% left and organization history 39 tokens. | Dark | 2026-10-20 | 2026-10-21 | 2026-10-21 | 864×1920 | WardPulse phone | Dark landing/README and Dashboard guide |
 | [phone-dashboard-light.png](phone-dashboard-light.png) | Claude unsupported-response warning and previous data. | Light | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Light Troubleshooting guide, warning / previous-data example only |
 | [phone-dashboard-dark.png](phone-dashboard-dark.png) | Claude unsupported-response warning and previous data. | Dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Dark Troubleshooting guide, warning / previous-data example only |
 | [phone-providers-light.png](phone-providers-light.png) | Four visible Connected rows and independent actions, without a warning badge. | Light | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Providers overview; Anthropic/Cursor connection examples; Getting started; Dashboard actions |
@@ -43,19 +43,58 @@ image or its placement changes.
 | [phone-budget-limits-dark.png](phone-budget-limits-dark.png) | Organization reporting Budget: unsaved Today 25.00; Week/Month empty. | Dark | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Dark Dashboard guide |
 | [phone-alert-thresholds-light.png](phone-alert-thresholds-light.png) | Claude plan Alerts: unsaved Plan 20% left; Purchased Off. | Light | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Light Dashboard guide |
 | [phone-alert-thresholds-dark.png](phone-alert-thresholds-dark.png) | Claude plan Alerts: unsaved Plan 20% left; Purchased Off. | Dark | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Dark Dashboard guide |
-| [phone-widget-settings-light.png](phone-widget-settings-light.png) | Actual widget selections, five of six slots used, with healthy plan status. | Light | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Light Widget guide |
-| [phone-widget-settings-dark.png](phone-widget-settings-dark.png) | Actual widget selections, five of six slots used, with healthy plan status. | Dark | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Dark Widget guide |
-| [phone-home-widget-light.png](phone-home-widget-light.png) | Healthy launcher widget with five metric rows and purchased credits. | Light | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Light Widget guide |
-| [phone-home-widget-dark.png](phone-home-widget-dark.png) | Healthy launcher widget with five metric rows and purchased credits. | Dark | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Dark Widget guide |
-| [phone-watch-settings-light.png](phone-watch-settings-light.png) | Healthy selected plan metrics, with unconfigured Platform entries below Plan. | Light | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Light Watch guide |
-| [phone-watch-settings-dark.png](phone-watch-settings-dark.png) | Healthy selected plan metrics, with unconfigured Platform entries below Plan. | Dark | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Dark Watch guide |
-| [wear-glance-overview.png](wear-glance-overview.png) | Healthy plan capacities and credits; ordinary gray OK while refresh waits, no Stale label. | Fixed dark | 2026-10-20 | 2026-10-20 | 2026-10-20 | 500×500 | WardPulse Wear | Both landing/README themes and general Watch guide |
+| [phone-widget-settings-light.png](phone-widget-settings-light.png) | Five selected metrics: Claude 100%/100%, Cursor 100%/64%, Codex 47%, all OK. | Light | 2026-10-14 | 2026-10-21 | 2026-10-21 | 864×1920 | WardPulse phone | Light Widget guide |
+| [phone-widget-settings-dark.png](phone-widget-settings-dark.png) | Five selected metrics: Claude 100%/100%, Cursor 100%/64%, Codex 47%, all OK. | Dark | 2026-10-14 | 2026-10-21 | 2026-10-21 | 864×1920 | WardPulse phone | Dark Widget guide |
+| [phone-home-widget-light.png](phone-home-widget-light.png) | The same five selected metrics in the launcher widget, with Codex 61.8K credits. | Light | 2026-10-14 | 2026-10-21 | 2026-10-21 | 864×1920 | WardPulse phone | Light Widget guide |
+| [phone-home-widget-dark.png](phone-home-widget-dark.png) | The same five selected metrics in the launcher widget, with Codex 61.8K credits. | Dark | 2026-10-14 | 2026-10-21 | 2026-10-21 | 864×1920 | WardPulse phone | Dark Widget guide |
+| [phone-watch-settings-light.png](phone-watch-settings-light.png) | Selected Claude 5h 100%, Cursor 100%/64% and Codex Weekly 47%; three bands used. | Light | 2026-10-14 | 2026-10-21 | 2026-10-21 | 864×1920 | WardPulse phone | Light Watch guide |
+| [phone-watch-settings-dark.png](phone-watch-settings-dark.png) | Selected Claude 5h 100%, Cursor 100%/64% and Codex Weekly 47%; three bands used. | Dark | 2026-10-14 | 2026-10-21 | 2026-10-21 | 864×1920 | WardPulse phone | Dark Watch guide |
+| [wear-glance-overview.png](wear-glance-overview.png) | Shared-state Codex 47% / 61.8K credits, Cursor 100%/64%, Claude 5h 100%; gray OK. | Fixed dark | 2026-10-20 | 2026-10-21 | 2026-10-21 | 500×500 | WardPulse Wear | Both landing/README themes and general Watch guide |
 | [wear-glance.png](wear-glance.png) | Plan/window titles and credits; amber !OK / Stale, Alerts 0 disabled. | Fixed dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 500×500 | WardPulse Wear | Watch guide, refresh-status explanation of Stale / !OK only |
-| [wear-plan-windows.png](wear-plan-windows.png) | First visible reset-ordered window: Codex Weekly plan, 60% left, back Oct 24. | Fixed dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 500×500 | WardPulse Wear | Watch guide in both themes |
-| [wear-watch-face.png](wear-watch-face.png) | Historical WardPulse bands/upper complications; Source-backed reuse, not current selected face. | Fixed dark | 2026-10-14 | 2026-10-14 | 2026-10-18 | 500×500 | WardPulse watch face | Both landing/README themes and Watch guide |
+| [wear-plan-windows.png](wear-plan-windows.png) | Shared-state first window: Claude Weekly plan, 100% left, back Oct 25 at 09:00. | Fixed dark | 2026-10-14 | 2026-10-21 | 2026-10-21 | 500×500 | WardPulse Wear | Watch guide in both themes |
+| [wear-watch-face.png](wear-watch-face.png) | Actual selected WardPulse face with the same Codex 47%, Cursor 100%/64%, Claude 100% and 61.8K credits. | Fixed dark | 2026-10-14 | 2026-10-21 | 2026-10-21 | 500×500 | WardPulse watch face | Both landing/README themes and Watch guide |
 | [wear-watch-face-utility.png](wear-watch-face-utility.png) | Historical manual-selection guidance after Don’t allow; Source-backed UI reuse. | Fixed dark | 2026-10-16 | 2026-10-16 | 2026-10-18 | 500×500 | WardPulse Wear | Watch guide in both themes |
 
+## Shared-state capture refresh, 2026-10-21
+
+The eleven refreshed images form one related group: the Dashboard theme pair, Glance,
+watch face, Plan windows, Watchface selection theme pair, Widget selection theme pair
+and launcher-widget theme pair. They were captured on the canonical phone and round Wear
+AVDs between 07:05:45 and 07:09:18 UTC from the live snapshot generated at 07:04:39 UTC.
+The watch logged receipt at 09:04:46.448 local time. Its derived summary was identical
+before and after the entire capture window; no data or selections were injected.
+
+Both Claude windows show 100% left; the selected watch window is 5h. Codex Weekly shows
+47% left with 61.8K purchased credits. Cursor Models/Other Models show 100%/64% left on
+the compact surfaces. The first Plan window is Claude Weekly, back Oct 25 at 09:00,
+matching the Dashboard reset. Both Dashboard themes show 21 history buckets and 39 tokens.
+The five checked widget metrics match all five launcher rows. Glance and the face share
+the three selected bands and their order. These are actual anonymous app states, not
+Mock/demo images. Only normal surface rounding differs; no visible value was retouched.
+
+Phone package `app.wardpulse` was versionName 1.0/versionCode 1, last updated
+2026-10-20 16:44:11; Wear `app.wardpulse` was 0.1.0/1, last updated 2026-10-20 06:17:24.
+The already-selected WardPulse face was captured without changing its selection or upper
+complications. Installed legacy and Push face packages both reported 0.1.0/1; the runtime
+wallpaper component alone does not identify which package supplies the active face.
+No APK hash or compiled-source identity was measured in this session.
+
+Eight phone captures were resized proportionally from 1080×2400 to 864×1920. Three actual
+384×384 round Wear captures were masked only outside the screen and resized to 500×500,
+with antialiased transparent edges. All eleven frames were viewed for matching readings,
+theme, privacy, ordinary status indicators and absence of errors or Stale labels. Image
+review does not replace the separate publication checks described above.
+
+Only phone system theme and notification-icon visibility were temporarily changed;
+notifications were not dismissed. The phone returned to light appearance, status-bar masks
+0/0 and Dashboard at the Cursor history section. Wear returned to the original WardPulse
+face in Dozing. Ring/widget selections, consent, provider settings, cadence, pairing and
+installed packages were not changed; no inference requests were made.
+
 ## Capture refresh, 2026-10-20
+
+This section records the October 20 image bytes and review. For the eleven files refreshed
+on October 21, the shared-state capture section above supersedes its values and provenance.
 
 The 22 phone images are actual anonymous captures from canonical
 `wardpulse_phone_play_api36`, discovered as `emulator-5554`, at native 1080×2400 and font
@@ -98,9 +137,8 @@ requests were made for this screenshot refresh.
 
 The following dated records describe earlier image bytes and verification. Their capture
 counts, hashes, current-state wording and normalization details are historical. For files
-refreshed on 2026-10-20, the index and capture section above supersede those earlier facts.
-The retained Dashboard error pair and four retained Wear files keep their original dates;
-no new capture of them is implied.
+refreshed later, the index and corresponding capture section above supersede those earlier
+facts. The current index identifies which images retain their earlier capture dates.
 
 ## Capture refresh, 2026-10-18
 

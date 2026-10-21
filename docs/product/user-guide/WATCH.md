@@ -32,9 +32,9 @@ Swipe upward to the second page, **Plan windows**, to see reported windows and w
 return. Exhausted windows appear first. Within each group, upcoming resets appear soonest
 first; missing or overdue reset times follow. Reset times may be unavailable.
 
-![Plan windows showing Codex Weekly plan and its reported reset time.](/screenshots/wear-plan-windows.png)
+![Plan windows showing Claude Weekly plan and its reported reset time.](/screenshots/wear-plan-windows.png)
 
-The captured first window is **Codex · Weekly plan**, with **60% left · back Oct 24, 22:40**.
+The first window here is **Claude · Weekly plan**, with **100% left · back Oct 25, 09:00**.
 
 ### Alerts and refresh
 
@@ -149,10 +149,11 @@ On Wear OS 5, or another compatible watch without bundled installation, install 
 Watch Face separately and select it from your watch-face list. The existing separate
 installation and its settings are preserved.
 
-![Historical WardPulse circular watch face with selected usage bands and upper complications.](/screenshots/wear-watch-face.png)
+![WardPulse circular watch face with the selected Codex, Cursor and Claude usage bands and upper complications.](/screenshots/wear-watch-face.png)
 
-Historical WardPulse face example. The lowest selected remaining percentage fills the
-innermost band; upper cells show watch complications.
+The same selected metrics appear on Glance and the face. Here, Codex has **47% left**,
+Cursor has **100% / 64% left**, and Claude has **100% left**. Codex fills the innermost
+band; the upper cells show watch complications.
 
 The three upper complication cells are customized in the **system watch-face editor**. Open
 the watch's edit/customize action for WardPulse and select an upper cell to choose an available

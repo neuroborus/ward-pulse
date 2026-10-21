@@ -31,7 +31,8 @@ of rows and columns.
 
 ![WardPulse home widget showing five metric rows and Codex purchased credits on the Android launcher in the dark theme.](/screenshots/phone-home-widget-dark.png)
 
-This example fits all five selected metrics, with purchased credits beside the Codex row.
+The widget shows the same five metrics selected above, with purchased credits beside the
+Codex row.
 
 ## Resize for the information you need
 

@@ -5,6 +5,20 @@ and API connections appear together under their provider family: OpenAI, Anthrop
 Each connection keeps its own data and status. Not every account provides spend, model detail,
 purchased usage or a history chart.
 
+## Display order
+
+Provider families with the most urgent status appear first: **Error**, **Auth required**,
+**Rate limited**, **Warning**, **Stale**, **Unknown**, then **OK**. Each family takes the
+most urgent status of its connections and allowances.
+
+When statuses match, higher monthly spend comes first where the currencies can be compared.
+Remaining ties use **Anthropic → Cursor → OpenAI**. Ordinary changes to percentages or spend
+keep the current order; a status change or an added or removed provider family recalculates it.
+
+Within each family, the plan appears before API reporting, and each history stays beside
+its source. Remaining percentages do not set the Dashboard order. The
+[watch orders selected metrics by remaining capacity](/guide/watch#display-order).
+
 ## Read balances and bars
 
 - **Plan** percentages speak in capacity **left**. A fuller plan bar means more remaining

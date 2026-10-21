@@ -31,19 +31,19 @@ type HtmlNode = {
 const screenshots = [
   {
     url: '/screenshots/phone-dashboard-overview-light.png',
-    alt: 'WardPulse phone Dashboard showing Claude plan windows and organization usage history in the light theme.',
+    alt: 'WardPulse phone Dashboard showing Claude plan windows at 100% left and organization usage history of 39 tokens in the light theme.',
     caption: 'Phone Dashboard · Plan windows and usage history',
     darkOriginalUrl: '/screenshots/phone-dashboard-overview-dark.png',
   },
   {
     url: '/screenshots/wear-glance-overview.png',
-    alt: 'WardPulse Watch Glance showing Cursor, Codex and Claude plan capacity with purchased credits.',
-    caption: 'Watch Glance · Plan capacity and credits',
+    alt: 'WardPulse Watch Glance showing Codex Weekly at 47% left with 61.8K purchased credits, Cursor at 100% / 64% left and Claude 5h at 100% left.',
+    caption: 'Watch Glance · Selected plan capacity and credits',
   },
   {
     url: '/screenshots/wear-watch-face.png',
-    alt: 'Historical WardPulse watch face showing usage rings and upper complications.',
-    caption: 'Historical WardPulse face',
+    alt: 'WardPulse watch face showing Codex Weekly at 47%, Cursor at 100% / 64% and Claude 5h at 100% left, with upper complications.',
+    caption: 'WardPulse face · Selected usage bands and upper complications',
   },
 ]
 

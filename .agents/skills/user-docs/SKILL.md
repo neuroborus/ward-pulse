@@ -76,6 +76,15 @@ home-screen widgets. Choose the smallest useful set; avoid decorative quotas or 
 walls of images. Guide images follow the same theme, clean-status-bar, privacy, size, index
 and freshness rules below.
 
+Screenshots of different components shown together or beside one another must depict a
+shared application state. Capture the whole related group in one session from the same
+live phone snapshot and its delivered watch/widget state; do not mix historical and current
+captures. Check overlapping percentages, purchased credits, selected pools and windows,
+history and statuses across components and both themes, allowing only the surfaces' actual
+display rounding. If the underlying state changes during capture, recapture the whole
+affected group. Record the shared state and capture session in the screenshot index. Apply
+this rule to guide pages as well as the identical approved Overview/README gallery.
+
 Prefer clear captions. Useful action highlights are optional editorial overlays authored by
 Runner over clean PNGs: transparent interior, `#2563EB` outline at 2 CSS px, 4 CSS px clearance
 around the confirmed glyph bounds and 8 CSS px corner radius, retained at responsive sizes.
