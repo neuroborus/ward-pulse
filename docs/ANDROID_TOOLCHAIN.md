@@ -607,8 +607,8 @@ inputs to the [bundled Push APK](#watch-face-push-builds); the table describes l
 | Gradle | 9.6.1 | Checked-in wrapper version |
 
 The legacy build needs no Push runtime library. `just validate-watchface`
-downloads the official validator 1.7.0 once from GitHub asset `550531146`, checks
-SHA-256 `28b244289ab748bb2b07017e9f3c06bb76bdf165d6fa55652a5dc64b852c3121`, and caches it
+downloads the official validator 1.7.0 once from GitHub asset `646791144`, checks
+SHA-256 `fb3262aa146de24c169a1d451901b4df2bfedca28a27c3c168a487e02d393771`, and caches it
 under `${XDG_CACHE_HOME:-$HOME/.cache}/wardpulse/`.
 Upstream assets can be removed or replaced; the explicit asset/checksum pair pins content
 without guaranteeing availability. Validate, build, and lint locally with:
