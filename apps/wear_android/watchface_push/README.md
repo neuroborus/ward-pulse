@@ -32,8 +32,17 @@ credentials in examples, logs, notes, Source, or command-line Gradle properties.
 
 Keep the development keystore in a persistent private location outside all build outputs:
 `clean` must not delete it. Reuse that same certificate for version N and N+1. A different
-development key on each local build prevents a normal face upgrade. CI creates its own
-temporary development identity for its debug build; it never provisions a release key.
+development key on each local build prevents a normal face upgrade. Pull-request Wear CI
+generates its own temporary development identity for debug builds. The manual
+[Stage A release workflow](../../../docs/product/RELEASE_CHECKLIST.md#manual-android-release-build-stage-a)
+imports the existing persistent shared upload and separate Push release identities from
+eight Environment secrets; it generates no keys. Public tooling setup precedes secret
+exposure. Separate import, build and verification steps retain imported keys in restricted
+temporary storage outside checkout only while needed. Successful builds remove escaped
+ignored signing properties and the Push keystore; AAB verification retains upload-keystore
+trust until it exits. Failure/signal traps and unconditional pre-upload cleanup remove
+workflow-created signing state and private diagnostics. Hosted cleanup/transfer acceptance
+remains pending.
 
 `RequirePushSigning` rejects absent/incomplete configuration and unusable private keys.
 Neither Push build type falls back to the host signing configuration or the conventional
@@ -77,6 +86,14 @@ Provide both host release signing and separate Push release signing before that 
 The ordinary variant dependency graph packages and signs the face, validates it, generates
 the variant bundle, and packages the Wear app. No recursive Gradle, manual APK copy, token
 substitution, or source edit is needed. `clean` removes the generated bundle, not keys.
+
+Stage A also builds the ordinary guarded Wear release installer, verifies the fixed public
+signer pins and compares the producer Push bytes with the generated asset, embedded Wear
+AAB, embedded installer and staged Push APK. Its single Actions artifact contains seven
+signed binaries plus checksums and sanitized provenance, as listed in the release checklist.
+Direct host installers use the upload key, which does not promise debug/Play install update
+compatibility. Received-artifact verification and GitHub draft publication remain unfinished
+Stage B work; neither a successful upload nor historical debug acceptance closes those gates.
 
 ## Official validation and generated outputs
 

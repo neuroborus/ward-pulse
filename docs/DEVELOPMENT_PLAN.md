@@ -1441,10 +1441,12 @@ and verify the live phone/watch UI
 
 ### Phase 8 — MVP hardening
 
-Status: in progress as of 2026-10-13. Release signing, real-device testing and the remaining
-error/offline acceptance review remain open. Persistent per-connection recovery is implemented
-and covered by host regressions and final-APK emulator acceptance below. Phase 7 live
-acceptance remains a separate provider-integration gate.
+Status: in progress as of 2026-10-21. Manual release Stage A build automation is implemented;
+hosted acceptance and Stage B GitHub draft publication remain pending. Release acceptance,
+real-device testing and the remaining error/offline acceptance review remain open.
+Persistent per-connection recovery is implemented and covered by host regressions and
+final-APK emulator acceptance below. Phase 7 live acceptance remains a separate
+provider-integration gate.
 
 Completed slice:
 
@@ -3057,15 +3059,24 @@ Every workflow that can reach a shared contract also runs
 `tools/validate-fixtures/validate_json.py`: it validates the golden fixtures and checks that the
 watch payload version agrees across the schema, the phone, and the Wear store.
 
-Release CI can be added later:
+Manual release Stage A is implemented in
+[release-android.yml](../.github/workflows/release-android.yml), job `build`:
 
 ```text
 release-android.yml
-  build signed phone AAB
-  build signed wear AAB
-  build signed watch face AAB
-  upload artifacts
+  workflow_dispatch on main; original exact source SHA and source versions
+  import persistent upload and separate Push signing after public tooling setup
+  guarded phone/Wear/legacy AABs and direct installers plus producer Push APK
+  verify seven signatures, fixed certificate pins and exact embedded Push bytes
+  separate import/build/verification steps; remove private signing state before upload
+  upload seven binaries, SHA256SUMS and sanitized provenance under an attempt identity
 ```
+
+The [manual build instructions](product/RELEASE_CHECKLIST.md#manual-android-release-build-stage-a)
+own Environment/secrets setup and artifact download. Hosted permissions, secret provisioning,
+cleanup and transfer acceptance remain pending. Stage B received-artifact verification and
+GitHub draft publication/retry are unfinished; Stage A creates no tag or release. This source
+implementation does not close local signed-artifact, Play delivery or runtime acceptance.
 
 ---
 

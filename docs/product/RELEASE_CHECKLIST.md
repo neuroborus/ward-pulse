@@ -221,8 +221,11 @@ persistent development signing and a separate release identity through ignored r
 `watchface-push-debug.properties` / `watchface-push-release.properties`; each names
 `storeFile`, `storePassword`, `keyAlias` and `keyPassword` without tracked example values.
 Keep keys outside the repository and build outputs, and keep credential values out of logs
-and notes. CI provisions only its own development identity. The build provisions no Owner
-Push identity. See [Push signing inputs](../../apps/wear_android/watchface_push/README.md#signing-inputs).
+and notes. Pull-request Wear CI generates a temporary development identity for debug
+builds. The manual [Android release build](#manual-android-release-build-stage-a) imports
+the existing persistent upload and Push release identities; it generates no keys. The
+Gradle producers provision no Owner Push identity. See
+[Push signing inputs](../../apps/wear_android/watchface_push/README.md#signing-inputs).
 
 - `key.properties` exists at the repository root and names a keystore stored **outside** the
   repository.
@@ -286,6 +289,93 @@ self-managed signing identity.
 - The Wear artifact embeds the separately signed Push APK and matching validation token.
   Use the independent [release versions](#release-versions); preserve the Push package and
   certificate and increase its code for a face update.
+
+## Manual Android release build (Stage A)
+
+[release-android.yml](../../.github/workflows/release-android.yml), job `build`, implements
+the build half only. Hosted permissions, secrets, failure/cancellation cleanup and artifact
+transfer acceptance remain pending. Stage B received-artifact verification and GitHub draft
+publication/retry are **unfinished**. A successful upload creates neither a tag nor a release
+and does not establish Play delivery or runtime acceptance. Normal PR test CI stays separate.
+
+Before a future dispatch, the Owner configures an `android-release` GitHub Environment
+restricted to the `main` branch and supplies the eight Environment secrets below. Required
+reviewers are an optional Owner policy, not a workflow prerequisite. Reuse the existing
+authorized identities after resolving [signing/version history](#release-versions); do not
+generate, rotate or upload new credentials as part of source preparation.
+
+| Environment secret | Private input |
+| --- | --- |
+| `ANDROID_UPLOAD_KEYSTORE_BASE64` | Single-line base64 of the persistent shared upload keystore |
+| `ANDROID_UPLOAD_STORE_PASSWORD` | Upload keystore password |
+| `ANDROID_UPLOAD_KEY_ALIAS` | Upload private-key alias |
+| `ANDROID_UPLOAD_KEY_PASSWORD` | Upload private-key password |
+| `ANDROID_PUSH_RELEASE_KEYSTORE_BASE64` | Single-line base64 of the separate persistent Push release keystore |
+| `ANDROID_PUSH_RELEASE_STORE_PASSWORD` | Push release keystore password |
+| `ANDROID_PUSH_RELEASE_KEY_ALIAS` | Push release private-key alias |
+| `ANDROID_PUSH_RELEASE_KEY_PASSWORD` | Push release private-key password |
+
+The workflow pins SHA-256 certificates to upload
+`d02f85820e60d6cf49e939a1af72a84c17d3ce107c840b4e9d3ac0f3946f078e`
+and Push `04fa77a4feabb08e8c71fb1ddc32000c63f18e6ff5967e3b5b8acbd5b36d4950`.
+Both imported private keys, both passwords per identity and these public pins are checked
+before Gradle. Public tooling is installed before secrets are exposed. Keystores and private
+diagnostics live in restricted `RUNNER_TEMP` outside checkout; only the existing ignored root
+`key.properties` and `watchface-push-release.properties` hold escaped signing configuration.
+Import, guarded builds and verification/staging run in separate bounded steps. All eight
+secret inputs are scoped to import; only the upload store password is also supplied to AAB
+verification. Successful import retains signing files for the builds, which remove signing
+properties and the Push keystore on success. The upload keystore remains for AAB trust checks
+until verification exits. Failure/signal traps clean immediately; an unconditional cleanup
+step also removes workflow-created signing files and private temporary state on success,
+failure or cancellation before upload. No release configuration is cached or uploaded.
+Hosted behavior still needs the acceptance above; private signing material must never enter
+logs or receipts.
+
+For a future authorized invocation, open **Actions → Android release artifacts → Run
+workflow**, select branch `main`, and enter the stable tag (default `v0.1.0`). The workflow
+rejects other refs and checks out the original full dispatch SHA without persisted Git
+credentials. Before setup it checks all four source versionNames against the tag and enforces
+positive odd phone / next-even Wear codes and independent positive face codes. It never
+overrides versions or resolves a moving source ref. Build permission is only `contents: read`;
+runs are serialized with cancellation disabled.
+
+The unchanged guarded `just bundle-phone`, `just bundle-wear`, `just bundle-watchface`
+and guarded ordinary release APK builds produce these seven files for the current sources:
+
+| File in the Actions artifact | Purpose |
+| --- | --- |
+| `wardpulse-phone-0.1.0-code1.aab` | Phone Play upload bundle |
+| `wardpulse-phone-0.1.0-code1.apk` | Direct phone installer |
+| `wardpulse-wear-0.1.0-code2.aab` | Wear Play upload bundle |
+| `wardpulse-wear-0.1.0-code2.apk` | Direct Wear installer |
+| `wardpulse-legacy-0.1.0-code1.aab` | Legacy WFF Play upload bundle |
+| `wardpulse-legacy-0.1.0-code1.apk` | Direct legacy WFF installer |
+| `wardpulse-push-0.1.0-code1.apk` | Separate Push identity, embedded by the Wear producer |
+
+The three direct installers are signed with the **upload key**. This does not promise update
+compatibility with debug installs or Play-delivered installs, whose app-signing certificates
+may differ. Push retains its separate persistent signer. These are direct release producer
+APKs; no debug or bundletool universal substitute is used. Installer basenames are discovered
+from the actual producer output directories, including legacy filename casing.
+
+Standard `jarsigner`/`keytool` verify the three AABs; `apksigner` verifies all four APKs.
+Positive verification evidence and fixed signer pins are required. The pinned imported
+keystore supplies AAB trust for the self-signed upload certificate; missing timestamps are
+accepted, while strict signer failures and unsigned entries fail. Exact Push bytes must match
+the generated asset, Wear AAB, Wear installer and staged Push APK. `PrepareDefaultWatchFace`,
+the official validator and AGP retain token/package/version ownership; raw tokens and resources
+are never exported as diagnostics.
+
+The explicit upload allowlist adds only `SHA256SUMS` and `provenance.json` to those seven
+binaries. Provenance records the exact source SHA, tag/version, run ID, originating build
+attempt, binary hashes, public signer fingerprints and completed producer checks. Download
+the artifact from the successful run's summary within its 14-day retention period; its name
+is `wardpulse-android-<tag>-<run-id>-attempt-<build-attempt>`. Keep that originating attempt
+with the bytes when retrying later work. Job outputs expose the exact upload `artifact_id`,
+`artifact_name`, `source_sha`, `tag`, `version`, `build_run_id` and `build_run_attempt` for
+Stage B. This producer receipt and upload do not implement received-artifact verification
+or draft publication. No build tree, logs, signing configuration or raw tokens are uploaded.
 
 ## Acceptance gates
 
