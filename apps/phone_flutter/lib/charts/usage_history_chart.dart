@@ -22,7 +22,24 @@ class UsageHistoryChart extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final totalCost = _totalCost(buckets);
     final totalTokens = _totalTokens(buckets);
-    final usesTokens = totalCost == null && totalTokens != null;
+    final totalRequests = _totalRequests(buckets);
+    // Prefer money, then tokens, then request counts (Cursor Admin is request-only).
+    final values = [
+      for (final bucket in buckets)
+        if (totalCost != null)
+          bucket.cost?.minorUnits ?? 0
+        else if (totalTokens != null)
+          bucket.totalTokens ?? 0
+        else
+          bucket.requests ?? 0,
+    ];
+    final totalLabel =
+        totalCost?.label ??
+        (totalTokens != null
+            ? '${formatCount(totalTokens)} tokens'
+            : totalRequests != null
+            ? '${formatCount(totalRequests)} ${totalRequests == 1 ? 'request' : 'requests'}'
+            : 'No totals');
     final showDates = _spansMultipleUtcDays(buckets);
 
     return Card(
@@ -52,14 +69,7 @@ class UsageHistoryChart extends StatelessWidget {
                 child: CustomPaint(
                   key: const ValueKey('usage-history-bars'),
                   painter: _UsageHistoryPainter(
-                    values: buckets
-                        .map(
-                          (bucket) =>
-                              usesTokens
-                                  ? bucket.totalTokens ?? 0
-                                  : bucket.cost?.minorUnits ?? 0,
-                        )
-                        .toList(growable: false),
+                    values: values,
                     color: accent ?? colors.primary,
                     baselineColor: colors.outlineVariant,
                   ),
@@ -71,12 +81,7 @@ class UsageHistoryChart extends StatelessWidget {
                   Expanded(
                     child: Text(_rangeLabel(buckets.first.startAt, showDates)),
                   ),
-                  Text(
-                    totalCost?.label ??
-                        (totalTokens == null
-                            ? 'No totals'
-                            : '${formatCount(totalTokens)} tokens'),
-                  ),
+                  Text(totalLabel),
                   Expanded(
                     child: Text(
                       _rangeLabel(buckets.last.endAt, showDates),
@@ -196,6 +201,14 @@ int? _totalTokens(List<UsageBucket> buckets) {
     0,
     (total, bucket) => total + (bucket.totalTokens ?? 0),
   );
+}
+
+int? _totalRequests(List<UsageBucket> buckets) {
+  if (buckets.isEmpty || buckets.any((bucket) => bucket.requests == null)) {
+    return null;
+  }
+
+  return buckets.fold<int>(0, (total, bucket) => total + bucket.requests!);
 }
 
 bool _spansMultipleUtcDays(List<UsageBucket> buckets) {

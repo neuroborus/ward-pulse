@@ -16,11 +16,203 @@
 - Keep Rust domain logic deterministic and independent from Flutter, Android, Google Play APIs, secure storage, and platform transport.
 - Keep platform shells responsible for UI, transport, storage, background scheduling, and phone-to-watch propagation.
 - Prefer small, focused changes.
+- Follow [delegation](.agents/skills/delegation/SKILL.md): code is authored only by Agent Runner execution with independent review, followed by the coordinator's full zero-findings pass. Neither the coordinator nor a standalone subagent may implement a fallback outside Runner.
 - Do not generate full Flutter or Gradle projects unless the current task explicitly requires it.
-- Do not create a git commit unless the user explicitly asks to commit. Finalization stages relevant files and drafts a message; it does not commit.
+- Standing owner authorization (2026-10-17, extending 2026-10-13): Agent Runner execution may commit within the approved task scope after its required pipeline reviews and checks. The coordinator may also make a separate local commit of reviewed delegated changes without a new permission request: code must have been authored by actual Runner execution and independently reviewed; design or documentation must have been prepared by a subagent and independently reviewed. Before a coordinator commit, complete all applicable mandatory checks and the coordinator's full zero-findings pass after the last correction. A task-specific no-commit instruction overrides this permission. It does not authorize code authorship outside Runner, push, amend/history rewrite, unrelated files, or commit trailers. The polishing pipeline itself remains stage-only; an authorized coordinator commit is a separate action.
 - Do not commit secrets, provider credentials, authorization headers, raw prompts, or sensitive raw provider payloads.
 - Do not treat WardPulse brand assets as covered by Apache-2.0 unless a file explicitly says so.
 - Keep OpenPencil `.fig` sources with their owner and regenerate runtime exports instead of editing them by hand.
+
+## Repository Map
+
+Use this map before exploring. It is the navigation source of truth; update it when
+ownership or layout changes. `justfile` at the root is the command index (`just --list`).
+
+| Subsystem | Path | Purpose |
+| --- | --- | --- |
+| Rust domain core | `core/ward-pulse-core/` | Deterministic domain logic: snapshot building, alerts, budgets, projections |
+| Provider adapters | `core/ward-pulse-providers/` | Parse per-provider usage reports into provider snapshots |
+| FFI crate | `core/ward-pulse-ffi/` | C-ABI JSON-string exports of core + providers for the phone |
+| CLI | `core/ward-pulse-cli/` | Prints the mock dashboard snapshot (`just snapshot-core`, stdout only) |
+| Bindings | `bindings/dart/` | `ward_pulse_bindings` package; loads `libward_pulse_ffi.so` via `dart:ffi` (`kotlin`/`swift` siblings are `.gitkeep` placeholders) |
+| Phone shell | `apps/phone_flutter/` | Flutter dashboard, provider connections, settings, watch/widget sync |
+| Wear OS app | `apps/wear_android/` | Compose Glance legend, summary store, complications |
+| Push face packaging | `apps/wear_android/watchface_push/` | Separately signed APK for the Wear app; consumes canonical WFF resources |
+| Watch face | `apps/watchface_wff/` | Legacy WFF package and canonical resources shared with Push packaging |
+| Schemas | `schemas/` | JSON Schemas for snapshots, accounts, usage buckets, budgets, watch summary |
+| Fixtures | `fixtures/` | Sanitized provider payloads + cross-language golden snapshots |
+| Tools | `tools/` | Review-art generators, icon export, Rust-for-Android build, validators |
+| Brand assets | `brand/` | WardPulse identity sources and locked previews (ownership: `docs/DESIGN_ASSETS.md`) |
+| Docs | `docs/` | Durable documentation; `docs/product/user-guide/` owns user guidance and `docs/product/` holds locked design baselines |
+| UI screenshots | `docs/assets/` | Public PNGs; `docs/assets/README.md` owns the screenshot index and freshness rules |
+| Skills | `.agents/skills/` | Repo workflow skills (`.claude/skills` is a symlink to it) |
+| Local scratch | `LOCAL_ARTIFACTS/` | Gitignored working notes and plans; never committed |
+
+### Rust workspace (`core/`)
+
+Run all cargo commands from `core/` — there is no root `Cargo.toml`. Tests are in-module
+(`#[cfg(test)] mod tests` at the bottom of each `mod.rs`); there are no `tests/` directories.
+
+- Types live in `ward-pulse-core/src/model/mod.rs` (`DashboardSnapshot`, `ProviderSnapshot`,
+  `Money`). Time handling: `time.rs`.
+- `dashboard/mod.rs` builds snapshots and aggregate totals; `alerts/mod.rs` applies alert
+  settings and local budget limits; `budget/` evaluates spend against a limit; `projection/`
+  projects spend linearly over a period.
+- One adapter module per family: `openai/`, `codex/`, `claude/`, `cursor/`, `mock/`.
+  `claude/platform.rs` and `cursor/platform.rs` normalize the Anthropic organization and
+  Cursor team Admin APIs; `mock/demo.rs` invents demo data. Shared: `allowance.rs`, `poll.rs`.
+- FFI surface: `ward-pulse-ffi/src/lib.rs` (single file). Adding a core capability the phone
+  needs means touching ffi + `bindings/dart/lib/src/ward_pulse_bindings.dart` +
+  `apps/phone_flutter/lib/dashboard/phone_live_bindings.dart`.
+
+### Phone (`apps/phone_flutter/`)
+
+Entry: `lib/main.dart` → `lib/app/ward_pulse_app.dart`. Tests: flat `test/`
+(`<name>_test.dart`, usually matching a lib file). Config: `pubspec.yaml` (path dependency on
+`bindings/dart`).
+
+- `lib/dashboard/` — screen, per-provider repositories, `phone_live_bindings.dart` (FFI wiring).
+- `lib/providers/` — Providers tab: connection rows, credential stores/dialogs,
+  `alert_threshold_dialogs.dart`.
+- `lib/settings/` — preference stores; `watch_ring_preferences.dart` owns the ring catalog,
+  selection, and ring-id migrations.
+- `lib/sync/` — headless provider polling and phone→watch transport
+  (`watch_sync_service.dart`, scheduler, reporting clients).
+- `lib/watchface/` — Watchface tab; `lib/widget/` — home-widget payload and preferences;
+  `lib/charts/` — history chart and budget bar.
+- Android host code: `android/app/src/main/kotlin/app/wardpulse/` (`MainActivity`,
+  `WardPulseAppWidget`, `WatchRefreshListenerService`); native widget helpers are under
+  `android/app/src/main/java/app/wardpulse/` (`PhoneWidgetLayout`, `DashboardLaunchRequest`).
+  Their JVM harness lives in `tools/test-phone-widget/`; `just test-phone-widget` runs it and
+  is included in `just check-phone`.
+
+### Wear (`apps/wear_android/`)
+
+Kotlin lives under `app/src/main/java/app/wardpulse/wear/` (ignore the empty top-level
+`data/`, `ui/`, `test/` directories). Unit tests: `app/src/test/`; device tests:
+`app/src/androidTest/`. Review art: `design/`.
+
+- `ui/` — `WardPulseApp.kt` (Glance page, plan windows page, Alerts),
+  `GlanceModels.kt`/`GlanceLegend.kt`, `PlanWindows.kt` (when each window comes back),
+  `RingFamily.kt` (ring-id → family color).
+- `data/WatchSummaryStore.kt` — persisted summary; owns `SCHEMA_VERSION` (must match the
+  `schemaVersion` written by phone `watch_sync_service.dart`; a mismatch discards the payload).
+- `sync/` — `WatchSummaryListenerService.kt`, `WatchDataContract.kt` (paths/keys),
+  `PhoneRefreshRequester.kt`. `complication/` — watch complications.
+
+### Watch face (`apps/watchface_wff/`)
+
+One declarative file, `src/main/res/raw/watchface.xml`, plus the ring-type drawables it names
+(`res/drawable-nodpi/`) — all **generated** by `tools/render-watchface.mjs`
+(`just render-watchface`, needs ImageMagick); edit the generator, never its output.
+`just check-watchface` fails on drift; it wraps `node tools/render-watchface.mjs --check`,
+which proves the same drift on its own and needs no network. Metadata in
+`res/xml/watch_face_info.xml`. Validate with `just validate-watchface`. Geometry and language
+rules are locked in `docs/product/WATCH_RING_DESIGN.md` — read it before changing the face.
+
+### Shared contracts and goldens
+
+- `schemas/*.schema.json` — JSON Schemas; validate with `just validate-fixtures`.
+- `fixtures/providers/<family>/` — sanitized provider payloads used by Rust and phone tests.
+- `fixtures/snapshots/` — cross-language goldens; `dashboard_today.json` is compared in
+  FFI/CLI tests and loaded by 12+ phone tests. Regenerate via `just snapshot-core > fixtures/snapshots/dashboard_today.json`;
+  the other snapshot fixtures have no generator and are edited by hand.
+
+### Design and docs
+
+- Locked baselines in `docs/product/`: `WATCH_RING_DESIGN.md` (face), `WEAR_GLANCE_DESIGN.md`
+  (Glance), `PHONE_WIDGET_DESIGN.md` (widget), `PHONE_DASHBOARD_DESIGN.md` (Dashboard status
+  marks and balances — rules, no review board); asset ownership in `docs/DESIGN_ASSETS.md`;
+  phases in `docs/DEVELOPMENT_PLAN.md`; provider API notes in `docs/product/PROVIDER_NOTES.md`.
+- Review art is generated, never hand-edited: `tools/render-watch-ring-designs.mjs` (face),
+  `tools/render-wear-glance-designs.mjs` (Glance), `tools/render-phone-widget-designs.mjs`
+  (widget), `tools/render-brand-icons.mjs` + `just export-icons` (brand marks). Redraw all four
+  with `just render-designs`; `just check-designs` fails when the tree no longer matches them.
+- Android toolchain and device workflow: `docs/ANDROID_TOOLCHAIN.md`.
+
+## Task → first files
+
+### Provider parsing or a new provider capability
+Start with:
+- `core/ward-pulse-providers/src/<family>/mod.rs`
+- `fixtures/providers/<family>/`
+- `docs/product/PROVIDER_NOTES.md`
+
+### Dashboard aggregation, alerts, budgets
+Start with:
+- `core/ward-pulse-core/src/dashboard/mod.rs`
+- `core/ward-pulse-core/src/alerts/mod.rs`
+- `core/ward-pulse-core/src/model/mod.rs`
+
+### Exposing core data to the phone (FFI)
+Start with:
+- `core/ward-pulse-ffi/src/lib.rs`
+- `bindings/dart/lib/src/ward_pulse_bindings.dart`
+- `apps/phone_flutter/lib/dashboard/phone_live_bindings.dart`
+
+### Phone UI (dashboard, providers, settings)
+Start with:
+- `docs/product/PHONE_DASHBOARD_DESIGN.md` (status marks and balances — read before adding either)
+- `apps/phone_flutter/lib/dashboard/dashboard_screen.dart`
+- `apps/phone_flutter/lib/providers/providers_screen.dart`
+- `apps/phone_flutter/lib/settings/settings_screen.dart`
+
+### Watch ring catalog, selection, payload
+Start with:
+- `apps/phone_flutter/lib/settings/watch_ring_preferences.dart`
+- `apps/phone_flutter/lib/sync/watch_sync_service.dart`
+- `apps/phone_flutter/lib/watchface/watchface_screen.dart`
+
+### Phone→watch transport or summary schema
+Start with:
+- `apps/phone_flutter/lib/sync/watch_sync_service.dart`
+- `apps/wear_android/app/src/main/java/app/wardpulse/wear/data/WatchSummaryStore.kt`
+- `apps/wear_android/app/src/main/java/app/wardpulse/wear/sync/WatchDataContract.kt`
+
+### Wear UI (Glance, rings, complications)
+Start with:
+- `apps/wear_android/app/src/main/java/app/wardpulse/wear/ui/WardPulseApp.kt`
+- `apps/wear_android/app/src/main/java/app/wardpulse/wear/ui/GlanceModels.kt`
+- `apps/wear_android/app/src/main/java/app/wardpulse/wear/ui/RingFamily.kt`
+
+### Watch face rendering
+Start with:
+- `docs/product/WATCH_RING_DESIGN.md`
+- `tools/render-watchface.mjs` (writes `apps/watchface_wff/src/main/res/raw/watchface.xml` and
+  the ring-type drawables beside it)
+
+### Phone home widget
+Start with:
+- `apps/phone_flutter/lib/widget/phone_widget_payload.dart`
+- `apps/phone_flutter/android/app/src/main/kotlin/app/wardpulse/WardPulseAppWidget.kt`
+- `docs/product/PHONE_WIDGET_DESIGN.md`
+
+### Review art or design changes
+Start with:
+- the owning design doc in `docs/product/`
+- the matching `tools/render-*-designs.mjs` generator
+
+### Tests
+Start with:
+- Rust: `mod tests` at the bottom of the module you changed (run from `core/`)
+- Phone: `apps/phone_flutter/test/<file>_test.dart` (usually mirrors the lib file name)
+- Wear: `apps/wear_android/app/src/test/` (unit) or `app/src/androidTest/` (device)
+
+## Context and File Reading Policy
+
+- Use the Repository Map and Task → first files before exploring the tree.
+- Search for symbols (grep) before opening files; open a file only when the search confirms it
+  is relevant.
+- Prefer targeted reads (line ranges around the match) over full-file reads; most files here
+  are read for one function or one table.
+- Do not reread files that have not changed since the last read.
+- Do not read generated, build, lock, or vendor content (`core/target/`, `*/build/`,
+  `node_modules/`, `Cargo.lock`, `package-lock.json`, `pubspec.lock`, `bindings/*/generated/`)
+  unless the task is specifically about it.
+- Use subagents for broad repository exploration; keep the main session's context on files
+  relevant to the current change.
+- Never sacrifice correctness to save context: verify claims in the actual code before acting
+  on them, and prefer one extra targeted read over a guess.
 
 ## Required Checks
 
@@ -29,10 +221,12 @@ After Rust changes, run:
 ```bash
 cd core && cargo fmt --all -- --check
 cd core && cargo clippy --workspace --all-targets -- -D warnings
+cd core && RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
 cd core && cargo test --workspace
 ```
 
-After schema or fixture changes, validate JSON syntax and keep examples sanitized:
+After schema or fixture changes — and after touching the payload version in either shell —
+validate the shared contracts and keep examples sanitized:
 
 ```bash
 just validate-fixtures
@@ -50,11 +244,37 @@ After durable documentation, Vocs page, or navigation changes, run:
 just check-docs
 ```
 
+This runs the source-citation gate before the Vocs build. Use `just check-doc-citations`
+(or `python3 tools/check-doc-citations.py`) for the checkout-only gate without Node or network.
+Cite repository files by named symbols or recipes, or documentation section anchors, rather
+than line numbers. Parser and discovery regressions run with `just test-doc-citations`.
+
+### When a check cannot run where you are
+
+Every check above stays required. What changes, in a sandbox with no network or no device, is
+**who runs it**. Name the checks you could not run and hand them to the operator. Never skip one
+in silence, and never report one as passing that you did not execute.
+
+| Reaches for | Checks |
+| --- | --- |
+| The network | `just check-docs` (npm), `just check-watchface` and `just check-wear` (Gradle), `just validate-watchface` (fetches the validator JAR), `cargo` against a cold registry cache |
+| A device or emulator | `just test-install-phone`, `just test-wear-device`, `just test-phone-watch-sync`, and the emulator check in the `finalization` skill |
+| Nothing but the checkout | `just check-doc-citations`, `just test-doc-citations`, `just validate-fixtures`, `just check-designs`, `node tools/render-watchface.mjs --check`, the skill validator |
+
+The last row is what an isolated agent can still prove on its own, and it covers source
+citations, generator drift, schemas and review art. The rest is reported, not assumed: the change is unfinished until
+someone with the network and the device has run them. The same test applies to any check not
+listed — does it reach past the checkout?
+
 ## Documentation
 
 - Start from `docs/README.md` for durable project documentation.
-- Keep root `README.md` short and operational.
+- Keep root `README.md` short and product-first, with an early screenshot gallery and user-guide
+  entry; put the contributor link at the end and keep developer commands beside their owners.
 - Keep product, provider, security, and release guidance in `docs/product/`.
-- Keep component-specific guidance beside its owner and expose it through thin pages in `docs/site/`.
+- Keep component guidance beside its owner. Expose only user guidance and relevant privacy/help
+  through thin Vocs pages; keep engineering references in the repository and its docs index.
 - Update `docs/site/vocs.config.ts` when site navigation changes.
 - Update local skills in `.agents/skills/` when repository workflow or ownership boundaries change.
+- `.claude/skills` is a symlink to `.agents/skills/` so Claude Code discovers the same set. Edit
+  the skills through `.agents/skills/`; never add a second copy under `.claude/`.

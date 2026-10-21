@@ -9,10 +9,15 @@
  * Usage: node tools/render-wear-glance-designs.mjs
  */
 
-import { execFileSync } from 'node:child_process'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
+
+import { FONT_FILE, emit, renderPreviews } from './design-output.mjs'
+
+const runFile = promisify(execFile)
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -26,43 +31,60 @@ const DISABLED = '#5A635C'
 /** Quieter than MUTED — problem detail under the refresh plate. */
 const DETAIL = '#5C655E'
 const FONT = 'Noto Sans'
-const FONT_FILE = '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf'
 const SIZE = 450
 
+/** The density that takes a 450-unit board to the 675 the previews are read at. */
+const PREVIEW_DENSITY = 144
+
+// A budget row belongs to one connection and takes that connection's family
+// color, so `cursorPlatform` repeats the Cursor teal on purpose. A Cursor plan's
+// own models carry a color of their own (`WATCH_RING_DESIGN.md`, palette).
 const FAMILY = {
   codex: { name: 'Codex', color: '#65D78A' },
+  codexSpark: { name: 'Codex', color: '#186020' },
   claude: { name: 'Claude', color: '#E8915A' },
   cursor: { name: 'Cursor', color: '#67E8D4' },
-  budget: { name: 'Budget', color: '#8AB4F8' },
+  cursorOwn: { name: 'Cursor', color: '#7E93B8' },
+  cursorPlatform: { name: 'Cursor platform', color: '#67E8D4' },
 }
 
-function loadFontMetrics(fontSize, texts) {
-  const fallback = {
-    widths: Object.fromEntries(texts.map((t) => [t, fontSize * 0.55 * t.length])),
-    ascent: fontSize,
-    descent: fontSize * 0.25,
-  }
-  try {
-    const out = execFileSync(
-      'python3',
+/** Match Wear's recognized plan windows and preserve composed or already-named labels. */
+function rowTitle(row) {
+  if (row.split) return `${row.family.name} plan`
+  const family = row.family.name
+  // Wear compares the first word, not a prefix, so `Cursorish` would still be named.
+  if (row.metric.includes(' · ') || row.metric.split(' ')[0] === family) return row.metric
+  if (family === 'Codex' && row.metric === 'Weekly plan') return `${family} plan · Weekly`
+  if (
+    (family === 'Claude' && ['5h', 'Weekly', 'Opus weekly', 'Sonnet weekly'].includes(row.metric)) ||
+    (family === 'Codex' && ['5h', 'Weekly', 'Spark 5h', 'Spark Weekly'].includes(row.metric))
+  ) return `${family} plan · ${row.metric}`
+  return `${family} · ${row.metric}`
+}
+
+/**
+ * Real metrics or nothing. These place every baseline and size the alerts plate, so a guessed
+ * width moves the art: the fallback this replaces returned character-count estimates without
+ * a word, which made committed SVGs depend on whether the rendering machine had Pillow.
+ */
+async function loadFontMetrics(fontSize, texts) {
+  const { stdout } = await runFile(
+    'python3',
+    [
+      '-c',
       [
-        '-c',
-        [
-          'import json',
-          'from PIL import ImageFont',
-          `font = ImageFont.truetype(${JSON.stringify(FONT_FILE)}, ${fontSize})`,
-          `texts = ${JSON.stringify(texts)}`,
-          'asc, desc = font.getmetrics()',
-          'widths = {t: font.getbbox(t)[2] - font.getbbox(t)[0] for t in texts}',
-          'print(json.dumps({"widths": widths, "ascent": asc, "descent": desc}))',
-        ].join('\n'),
-      ],
-      { encoding: 'utf8' },
-    )
-    return JSON.parse(out)
-  } catch {
-    return fallback
-  }
+        'import json',
+        'from PIL import ImageFont',
+        `font = ImageFont.truetype(${JSON.stringify(FONT_FILE)}, ${fontSize})`,
+        `texts = ${JSON.stringify(texts)}`,
+        'asc, desc = font.getmetrics()',
+        'widths = {t: font.getbbox(t)[2] - font.getbbox(t)[0] for t in texts}',
+        'print(json.dumps({"widths": widths, "ascent": asc, "descent": desc}))',
+      ].join('\n'),
+    ],
+    { encoding: 'utf8' },
+  )
+  return JSON.parse(stdout)
 }
 
 function esc(text) {
@@ -74,14 +96,23 @@ function esc(text) {
 
 function miniArc({ cx, cy, r, thickness, remaining, color }) {
   const circ = 2 * Math.PI * r
-  const left = Math.max(0.02, Math.min(remaining, 0.999))
+  const left = Math.max(0, Math.min(remaining, 1))
+  if (left === 0) {
+    return `
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
+      stroke-width="${thickness}" />`
+  }
   const paint = circ * left
+  const used = circ * (1 - left)
+  const roundEnds = paint > thickness
+  const capInset = roundEnds ? thickness / 2 : 0
   return `
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
       stroke-width="${thickness}" />
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}"
-      stroke-width="${thickness}" stroke-linecap="round"
-      stroke-dasharray="${paint.toFixed(2)} ${circ.toFixed(2)}"
+      stroke-width="${thickness}" stroke-linecap="${roundEnds ? 'round' : 'butt'}"
+      stroke-dasharray="${paint - 2 * capInset} ${circ}"
+      stroke-dashoffset="${-(used + capInset)}"
       transform="rotate(-90 ${cx} ${cy})" />`
 }
 
@@ -128,7 +159,7 @@ function refreshArrow(cx, cy, startDeg, tipDeg, arcR, sw, fill, opacity) {
  * Status label in the open center of a dual-arrow refresh ring.
  * Returns { markup, plateR } so callers can place detail text below the plate.
  */
-function refreshStatusControl({
+async function refreshStatusControl({
   cx,
   cy,
   r,
@@ -142,7 +173,7 @@ function refreshStatusControl({
   const textFill = enabled ? accent : DISABLED
   const plate = enabled ? '#141916' : '#121512'
   const opacity = enabled ? 1 : 0.7
-  const labelMetrics = loadFontMetrics(labelSize, [text])
+  const labelMetrics = await loadFontMetrics(labelSize, [text])
   const baseline =
     cy + (labelMetrics.ascent - labelMetrics.descent) / 2
   const sw = 2.2
@@ -162,20 +193,49 @@ function refreshStatusControl({
   return { markup, plateR: r }
 }
 
-/** Tightest remaining first — same order rule as the watch face. */
+/**
+ * Tightest remaining first — same order rule as the watch face.
+ *
+ * Sort bands by their tighter half, keeping the inner pool first within a row.
+ */
 function sortByRemaining(rows) {
-  return [...rows].sort((a, b) => b.used - a.used)
+  const hasPercent = (value) => Number.isFinite(value) && value >= 0
+  return [...rows]
+    .flatMap((row) => {
+      if (!hasPercent(row.used)) {
+        return hasPercent(row.split?.used)
+          ? [{ ...row.split, credits: row.credits ?? row.split.credits }]
+          : []
+      }
+      return [{ ...row, split: hasPercent(row.split?.used) ? row.split : null }]
+    })
+    .sort((a, b) =>
+      Math.max(b.used, b.split?.used ?? b.used) - Math.max(a.used, a.split?.used ?? a.used),
+    )
 }
 
 function rowSubLine(row) {
-  const pct = Math.round((1 - row.used) * 100)
+  const pct = Math.round(Math.max(0, 1 - row.used) * 100)
+  const left = row.split
+    ? `${pct}% · ${Math.round(Math.max(0, 1 - row.split.used) * 100)}% left`
+    : `${pct}% left`
   if (row.credits == null || row.credits === '') {
-    return `${pct}% left`
+    return left
   }
-  return `${pct}% left · ${row.credits} credits`
+  return `${left} · ${row.credits} credits`
 }
 
-function glanceSvg({
+/** Keep only true exhausted percentage tokens red; separators and credits stay ordinary. */
+function zeroLabelMarkup(text, row) {
+  return text.split(' · ').map((part, index) => {
+    const exhausted = index === 0 ? row.used >= 1 : index === 1 && row.split?.used >= 1
+    return exhausted && part.startsWith('0%')
+      ? `<tspan fill="#FFB4AB">0%</tspan>${esc(part.slice(2))}`
+      : esc(part)
+  }).join(' · ')
+}
+
+async function glanceSvg({
   name,
   ok = true,
   refreshEnabled = true,
@@ -197,6 +257,7 @@ function glanceSvg({
   const miniT = 5
   const arcColW = 44
   const textGap = 12
+  const secondArcOffset = miniR * 2 + miniT + textGap
   const alertsLabel = `Alerts: ${alerts}`
   const alertsActive = alerts > 0
   const alertsFill = alertsActive ? '#2A322C' : '#171B18'
@@ -204,22 +265,27 @@ function glanceSvg({
   const alertsText = alertsActive ? LABEL : DISABLED
 
   const ordered = sortByRemaining(rows)
-  const titles = ordered.map((row) => `${row.family.name} · ${row.metric}`)
+  const titles = ordered.map(rowTitle)
   const subs = ordered.map((row) => rowSubLine(row))
-  const titleMetrics = loadFontMetrics(titleSize, titles)
-  const subMetrics = loadFontMetrics(subSize, [...subs, alertsLabel])
-  const alertsMetrics = loadFontMetrics(alertsSize, [alertsLabel])
+  const titleMetrics = await loadFontMetrics(titleSize, titles)
+  const subMetrics = await loadFontMetrics(subSize, [...subs, alertsLabel])
+  const alertsMetrics = await loadFontMetrics(alertsSize, [alertsLabel])
   const maxTitleW = Math.max(0, ...titles.map((t) => titleMetrics.widths[t] ?? 0))
   const maxSubW = Math.max(0, ...subs.map((t) => subMetrics.widths[t] ?? 0))
   const textColW = Math.max(maxTitleW, maxSubW)
-  const blockW = arcColW + textGap + textColW
+  const blockW = Math.max(
+    arcColW + textGap + textColW,
+    ...ordered.map((row, i) =>
+      arcColW + (row.split ? secondArcOffset : 0) + textGap +
+        Math.max(titleMetrics.widths[titles[i]], subMetrics.widths[subs[i]]),
+    ),
+  )
   const blockLeft = Math.max(42, Math.min(cx - blockW / 2, SIZE - 42 - blockW))
   const arcX = blockLeft + arcColW / 2
-  const contentLeft = blockLeft + arcColW + textGap
 
   const refreshCy = 96
   const refreshR = 34
-  const refresh = refreshStatusControl({
+  const refresh = await refreshStatusControl({
     cx,
     cy: refreshCy,
     r: refreshR,
@@ -262,7 +328,7 @@ function glanceSvg({
 
   if (emptyMessage) {
     const lines = emptyMessage.split('\n')
-    const emptyMetrics = loadFontMetrics(titleSize, lines)
+    const emptyMetrics = await loadFontMetrics(titleSize, lines)
     const lineGap = 22
     const blockH =
       (lines.length - 1) * lineGap +
@@ -292,7 +358,7 @@ function glanceSvg({
 
     for (const row of ordered) {
       const remaining = 1 - row.used
-      const title = `${row.family.name} · ${row.metric}`
+      const title = rowTitle(row)
       const sub = rowSubLine(row)
       const rowMid = y + rowH / 2
       body += miniArc({
@@ -303,6 +369,17 @@ function glanceSvg({
         remaining,
         color: row.family.color,
       })
+      if (row.split) {
+        body += miniArc({
+          cx: arcX + secondArcOffset,
+          cy: rowMid,
+          r: miniR,
+          thickness: miniT,
+          remaining: 1 - row.split.used,
+          color: row.split.family.color,
+        })
+      }
+      const contentLeft = blockLeft + arcColW + (row.split ? secondArcOffset : 0) + textGap
       const titleBaseline =
         rowMid - 8 + (titleMetrics.ascent - titleMetrics.descent) / 2
       const subBaseline =
@@ -313,7 +390,7 @@ function glanceSvg({
       font-weight="700" fill="${LABEL}">${esc(title)}</text>
     <text x="${contentLeft}" y="${subBaseline.toFixed(1)}"
       font-family="${FONT}, sans-serif" font-size="${subSize}"
-      font-weight="700" fill="${MUTED}">${esc(sub)}</text>`
+      font-weight="700" fill="${MUTED}">${zeroLabelMarkup(sub, row)}</text>`
       y += rowH
     }
   }
@@ -346,7 +423,7 @@ function glanceSvg({
   <circle cx="${cx}" cy="${cx}" r="${(SIZE / 2 - 1).toFixed(1)}" fill="none"
     stroke="#1A201C" stroke-width="2" />
 </svg>
-`
+`.replace(/^[ \t]+$/gm, '')
 }
 
 const wearDir = join(root, 'apps/wear_android/design')
@@ -355,8 +432,18 @@ await mkdir(wearDir, { recursive: true })
 const three = [
   { family: FAMILY.codex, metric: 'Weekly plan', used: 0.92, credits: '320' },
   { family: FAMILY.claude, metric: '5h', used: 0.61, credits: '80' },
-  { family: FAMILY.cursor, metric: 'Weekly plan', used: 0.28 },
+  // Matches fixtures/providers/cursor/usage_summary.json autoPercentUsed.
+  { family: FAMILY.cursorOwn, metric: 'Cursor Models', used: 0.47 },
 ]
+const exhaustedClaude = { family: FAMILY.claude, metric: '5h', used: 1 }
+const liveCodex = { family: FAMILY.codex, metric: 'Weekly plan', used: 0.04, credits: '62.5K' }
+const liveCursor = {
+  family: FAMILY.cursorOwn, metric: 'Cursor Models', used: 0,
+  split: { family: FAMILY.cursor, metric: 'Other Models', used: 0.32 },
+}
+const cursorInnerZero = { ...liveCursor, used: 1 }
+const cursorOuterZero = { ...liveCursor, split: { ...liveCursor.split, used: 1 } }
+const cursorBothZero = { ...cursorInnerZero, split: { ...liveCursor.split, used: 1 } }
 
 const variants = [
   {
@@ -378,6 +465,58 @@ const variants = [
     alerts: 0,
   },
   {
+    // One band, one row: inner pool first, even when the outer pool is tighter.
+    file: 'glance-legend-pair.svg',
+    name: 'Glance · legend · Cursor pair · OK refresh',
+    ok: true,
+    refreshEnabled: true,
+    rows: [
+      {
+        family: FAMILY.cursorOwn,
+        metric: 'Cursor Models',
+        used: 0.18,
+        credits: '320',
+        // Synthetic active pools exercise the paired row and its credits suffix.
+        split: { family: FAMILY.cursor, metric: 'Other Models', used: 0.59 },
+      },
+    ],
+    alerts: 0,
+  },
+  {
+    // Three rows is the ceiling: three bands, with both supported pairs active.
+    file: 'glance-legend-full.svg',
+    name: 'Glance · legend · three rows (three bands, two paired)',
+    ok: true,
+    refreshEnabled: true,
+    rows: [
+      { family: FAMILY.claude, metric: 'Sonnet weekly', used: 0.94, credits: '387' },
+      {
+        // The ceiling board carries the largest balance a row can show, in the
+        // compact form the app renders it in, so the longest subtitle the rules
+        // allow is on a board rather than only on a watch
+        // (`WEAR_GLANCE_DESIGN.md`, revision 2026-10-11).
+        family: FAMILY.cursorOwn,
+        metric: 'Cursor Models',
+        used: 0.0,
+        credits: '62.5K',
+        split: {
+          family: FAMILY.cursor,
+          metric: 'Other Models',
+          used: 0.25,
+          credits: '62.5K',
+        },
+      },
+      {
+        family: FAMILY.codex,
+        metric: 'Weekly plan',
+        used: 0.18,
+        credits: '320',
+        split: { family: FAMILY.codexSpark, metric: 'Spark 5h', used: 0.59 },
+      },
+    ],
+    alerts: 0,
+  },
+  {
     file: 'glance-legend-budget.svg',
     name: 'Glance · legend · plan + budget · OK refresh',
     ok: true,
@@ -395,7 +534,9 @@ const variants = [
         used: 0.4,
         credits: '80',
       },
-      { family: FAMILY.budget, metric: 'Today', used: 0.55 },
+      // Cursor platform reports billing-cycle spend only, so a monthly budget
+      // is the one it can actually carry.
+      { family: FAMILY.cursorPlatform, metric: 'Month', used: 0.55 },
     ],
     alerts: 0,
   },
@@ -436,18 +577,59 @@ const variants = [
   },
   {
     file: 'glance-legend-exhausted.svg',
-    name: 'Glance · legend · exhausted · OK refresh',
+    name: 'Glance · all selected metrics exhausted · retained rows',
     ok: true,
     refreshEnabled: true,
-    rows: [],
-    emptyMessage: 'No remaining capacity',
-    alerts: 1,
+    rows: [exhaustedClaude, cursorBothZero, { ...liveCodex, used: 1 }],
+    emptyMessage: null,
+    alerts: 0,
   },
+  ...[
+    { file: 'glance-legend-claude-zero.svg', name: 'Claude 5h at zero', rows: [exhaustedClaude] },
+    { file: 'glance-legend-3-claude-zero.svg', name: 'Claude zero with Cursor pair and Codex', rows: [exhaustedClaude, liveCursor, liveCodex] },
+    { file: 'glance-legend-pair-inner-zero.svg', name: 'Pair inner pool zero', rows: [cursorInnerZero, liveCodex] },
+    { file: 'glance-legend-pair-outer-zero.svg', name: 'Pair outer pool zero', rows: [cursorOuterZero, liveCodex] },
+    { file: 'glance-legend-pair-both-zero.svg', name: 'Pair both pools zero', rows: [cursorBothZero, liveCodex] },
+    { file: 'glance-legend-positive-rounds-zero.svg', name: 'Positive fraction rounds to ordinary zero label', rows: [{ ...exhaustedClaude, used: 0.999 }] },
+    { file: 'glance-legend-zero-credits.svg', name: 'Exhausted percent with neutral zero credits', rows: [{ ...liveCodex, used: 1, credits: '0' }] },
+    { file: 'glance-legend-unavailable.svg', name: 'Selected entries have no known percentage', rows: [], emptyMessage: 'Ring data unavailable' },
+    { file: 'glance-legend-unavailable-inner-zero-outer.svg', name: 'Unavailable inner pool with exhausted outer survivor', rows: [{ ...cursorOuterZero, used: -1 }] },
+    { file: 'glance-legend-two-pairs-zero.svg', name: 'Three bands with two exhausted pairs', rows: [exhaustedClaude, cursorBothZero, { ...liveCodex, used: 1, split: { family: FAMILY.codexSpark, metric: 'Spark Weekly', used: 1 } }] },
+    {
+      file: 'glance-legend-low-positive-inner.svg',
+      name: 'Ordinary and paired inner pools at 4% remaining beside true zero',
+      rows: [
+        { ...exhaustedClaude, used: 0.96 },
+        { ...cursorBothZero, used: 0.96 },
+        { ...liveCodex, used: 0.96, split: { family: FAMILY.codexSpark, metric: 'Spark Weekly', used: 1 } },
+      ],
+    },
+    {
+      file: 'glance-legend-low-positive-outer.svg',
+      name: 'Ordinary zero and paired outer pools at 4% remaining',
+      rows: [
+        exhaustedClaude,
+        { ...cursorBothZero, split: { ...cursorBothZero.split, used: 0.96 } },
+        { ...liveCodex, used: 1, split: { family: FAMILY.codexSpark, metric: 'Spark Weekly', used: 0.96 } },
+      ],
+    },
+  ].map((variant) => ({ ...variant, ok: true, refreshEnabled: true, alerts: 0 })),
 ]
 
 for (const variant of variants) {
-  const svg = glanceSvg(variant)
-  const path = join(wearDir, variant.file)
-  await writeFile(path, svg)
-  console.log(`wrote ${path}`)
+  const svg = await glanceSvg(variant)
+  await emit(join(wearDir, variant.file), svg, 'render-designs')
 }
+
+/**
+ * Every board has exactly one preview, named after it. Deriving the list from
+ * the boards rather than keeping a second one beside them means a new variant
+ * cannot ship without the picture the baseline will be read against.
+ */
+await renderPreviews(
+  variants.map(({ file }) => ({
+    svg: join(wearDir, file),
+    png: join(wearDir, `preview-${file.replace(/\.svg$/, '.png')}`),
+    density: PREVIEW_DENSITY,
+  })),
+)

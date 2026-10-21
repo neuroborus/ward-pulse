@@ -2,8 +2,8 @@
 set -euo pipefail
 
 readonly VALIDATOR_VERSION="1.7.0"
-readonly VALIDATOR_ASSET_ID="464497818"
-readonly VALIDATOR_SHA256="3a10def0521ab97f41ab1b7e27a35649370af51580603b5bf656604d88f1aa29"
+readonly VALIDATOR_ASSET_ID="646791144"
+readonly VALIDATOR_SHA256="fb3262aa146de24c169a1d451901b4df2bfedca28a27c3c168a487e02d393771"
 
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 cache_root="${XDG_CACHE_HOME:-${HOME}/.cache}"

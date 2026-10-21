@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import app.wardpulse.wear.model.Money
 import app.wardpulse.wear.model.PreviewWatchDashboardSummary
 import app.wardpulse.wear.model.WatchDataMode
 import org.junit.Assert.assertEquals
@@ -12,6 +13,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.json.JSONObject
 
 @RunWith(AndroidJUnit4::class)
 class WatchSummaryStoreTest {
@@ -41,12 +43,58 @@ class WatchSummaryStoreTest {
         assertEquals(WatchDataMode.MOCK, store.load()?.dataMode)
     }
 
+    /**
+     * The paired fixture is the phone's own output, asserted byte for byte by
+     * `watch_sync_service_test.dart` — so this parses what the phone writes,
+     * not a literal written here to match it.
+     */
+    @Test
+    fun keepsBothPoolsOfASplitBand() {
+        val encoded = testContext.assets.open("watch_dashboard_summary_paired.json")
+            .bufferedReader()
+            .use { it.readText() }
+
+        assertTrue(store.saveEncoded(encoded))
+        // One entry is one band, and its second pool rides inside it.
+        val rings = store.load()?.rings.orEmpty()
+        assertEquals(1, rings.size)
+        assertEquals("allowance.cursor.cursor-plan-other", rings.first().split?.id)
+        assertEquals(62.0, rings.first().split?.usedPercent)
+    }
+
+    @Test
+    fun rejectsNonfiniteCoercedRingValuesWhileKeepingKnownExhaustion() {
+        val encoded = testContext.assets.open("watch_dashboard_summary_paired.json")
+            .bufferedReader()
+            .use { it.readText() }
+        val exhausted = JSONObject(encoded).apply {
+            getJSONArray("rings").getJSONObject(0).apply {
+                put("usedPercent", 100.0)
+                getJSONObject("split").put("usedPercent", 100.0)
+            }
+        }.toString()
+        assertTrue(store.saveEncoded(exhausted))
+
+        for (outer in listOf(false, true)) {
+            for (invalid in listOf("Infinity", "NaN", "1e400")) {
+                val malformed = JSONObject(exhausted).apply {
+                    val ring = getJSONArray("rings").getJSONObject(0)
+                    val target = if (outer) ring.getJSONObject("split") else ring
+                    target.put("usedPercent", invalid)
+                }.toString()
+                assertFalse(store.saveEncoded(malformed))
+                assertEquals(100.0, store.load()?.rings?.single()?.usedPercent)
+                assertEquals(100.0, store.load()?.rings?.single()?.split?.usedPercent)
+            }
+        }
+    }
+
     @Test
     fun rejectsLegacyPayloadWithoutAnExplicitDataMode() {
         val encoded = testContext.assets.open("watch_dashboard_summary.json")
             .bufferedReader()
             .use { it.readText() }
-            .replace("\"schemaVersion\": 7,", "\"schemaVersion\": 2,")
+            .replace("\"schemaVersion\": 9,", "\"schemaVersion\": 2,")
             .replace("  \"dataMode\": \"mock\",\n", "")
 
         assertFalse(store.saveEncoded(encoded))
@@ -67,12 +115,45 @@ class WatchSummaryStoreTest {
         assertTrue(store.load()?.allowances?.single()?.unlimited == true)
     }
 
+    /**
+     * The fixture carries no ring — mock accounts hold no budget — so this is the only place
+     * the phone's literal ring shape meets the parser. Wear's own round-trip cannot prove it:
+     * it writes and reads the same keys, and would drift from the phone in step.
+     */
+    @Test
+    fun readsBudgetMoneyInThePhoneWireShape() {
+        val encoded = testContext.assets.open("watch_dashboard_summary.json")
+            .bufferedReader()
+            .use { it.readText() }
+            .replace(
+                "\"rings\": []",
+                """"rings": [{"id":"budget.anthropic.platform.week","label":"Week","usedPercent":28.5,"status":"ok","spent":{"minorUnits":7130,"currency":"USD"},"limit":{"minorUnits":25000,"currency":"USD"}}]""",
+            )
+
+        assertTrue(store.saveEncoded(encoded))
+        val ring = store.load()?.rings?.single()
+        assertEquals(Money(7_130, "USD"), ring?.spent)
+        assertEquals(Money(25_000, "USD"), ring?.limit)
+    }
+
     @Test
     fun invalidSummaryKeepsPreviousState() {
         store.save(PreviewWatchDashboardSummary.value)
 
         assertFalse(store.saveEncoded("{\"schemaVersion\":3,\"rings\":[]}"))
         assertEquals(PreviewWatchDashboardSummary.value, store.load())
+    }
+
+    /** A schema bump throws away what the previous build stored — quietly, not by crashing. */
+    @Test
+    fun discardsASummaryStoredByAnOlderSchema() {
+        val encoded = testContext.assets.open("watch_dashboard_summary.json")
+            .bufferedReader()
+            .use { it.readText() }
+            .replace("\"schemaVersion\": 9,", "\"schemaVersion\": 7,")
+        preferences.edit().putString("latest", encoded).commit()
+
+        assertNull(store.load())
     }
 
     @Test

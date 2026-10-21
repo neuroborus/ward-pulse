@@ -1,6 +1,7 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'provider_connection.dart';
+import 'connection_lifecycle.dart';
 
 /// Local secret and label storage for plan/platform connections.
 abstract interface class ProviderCredentialStore {
@@ -15,15 +16,81 @@ abstract interface class ProviderCredentialStore {
   Future<void> writeLabel(ProviderConnectionId id, String? value);
 }
 
-final class SecureProviderCredentialStore implements ProviderCredentialStore {
-  SecureProviderCredentialStore({FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage();
+/// Optional lifecycle access for reporting keys and pasted plan sessions.
+abstract interface class VersionedProviderCredentialStore {
+  /// OAuth connections use their existing account stores instead.
+  ConnectionCredentialAccess? credentialAccess(ProviderConnectionId id);
+}
+
+abstract interface class ReconnectProviderCredentialStore {
+  Future<CredentialVersion> beginReconnect(ProviderConnectionId id);
+  Future<bool> completeReconnect(
+    ProviderConnectionId id,
+    String value,
+    CredentialVersion ticket,
+  );
+  Future<void> cancelReconnect(
+    ProviderConnectionId id,
+    CredentialVersion ticket,
+  );
+}
+
+abstract interface class LegacyProviderCredentialCleanup {
+  Future<void> deleteLegacySecret(ProviderConnectionId id);
+}
+
+final class SecureProviderCredentialStore
+    implements
+        ProviderCredentialStore,
+        VersionedProviderCredentialStore,
+        ReconnectProviderCredentialStore,
+        LegacyProviderCredentialCleanup {
+  SecureProviderCredentialStore({
+    FlutterSecureStorage? storage,
+    ConnectionCachePlatform? platform,
+  }) : _storage = storage ?? const FlutterSecureStorage(),
+       _platform = platform ?? const MethodChannelConnectionCachePlatform();
 
   /// Stable keys for OpenAI keep existing installs working.
   static const _legacyOpenAiKey = 'wardpulse.openai.admin-api-key';
   static const _legacyOpenAiLabel = 'wardpulse.openai.admin-api-key.label';
 
   final FlutterSecureStorage _storage;
+  final ConnectionCachePlatform _platform;
+  bool _isOAuth(ProviderConnectionId id) =>
+      id == ProviderConnections.codexPlan ||
+      id == ProviderConnections.claudePlan;
+  ConnectionCredentialStorage _credentials(ProviderConnectionId id) =>
+      ConnectionCredentialStorage(
+        connection: id.storageKey,
+        legacyKey: _secretKey(id),
+        storage: _storage,
+        platform: _platform,
+        principal: (value) => value.trim(),
+      );
+  @override
+  ConnectionCredentialAccess? credentialAccess(ProviderConnectionId id) =>
+      _isOAuth(id) ? null : _credentials(id);
+
+  Future<CredentialVersion?> readVersion(ProviderConnectionId id) async =>
+      (await _credentials(id).read())?.version;
+  @override
+  Future<CredentialVersion> beginReconnect(ProviderConnectionId id) =>
+      _credentials(id).beginReconnect();
+  @override
+  Future<bool> completeReconnect(
+    ProviderConnectionId id,
+    String value,
+    CredentialVersion ticket,
+  ) => _credentials(id).completeReconnect(value.trim(), ticket);
+  @override
+  Future<void> cancelReconnect(
+    ProviderConnectionId id,
+    CredentialVersion ticket,
+  ) => _credentials(id).cancelReconnect(ticket);
+  @override
+  Future<void> deleteLegacySecret(ProviderConnectionId id) =>
+      _credentials(id).deleteLegacyPastedSecret();
 
   String _secretKey(ProviderConnectionId id) {
     if (id == ProviderConnections.openAiPlatform) {
@@ -41,21 +108,29 @@ final class SecureProviderCredentialStore implements ProviderCredentialStore {
 
   @override
   Future<String?> readSecret(ProviderConnectionId id) async {
-    final value = (await _storage.read(key: _secretKey(id)))?.trim();
+    final value =
+        (_isOAuth(id)
+                ? await _storage.read(key: _secretKey(id))
+                : (await _credentials(id).read())?.value)
+            ?.trim();
     return value == null || value.isEmpty ? null : value;
   }
 
   @override
   Future<void> writeSecret(ProviderConnectionId id, String value) {
-    return _storage.write(key: _secretKey(id), value: value.trim());
+    return _isOAuth(id)
+        ? _storage.write(key: _secretKey(id), value: value.trim())
+        : _credentials(id).write(value.trim());
   }
 
   @override
-  Future<void> deleteSecret(ProviderConnectionId id) {
-    return Future.wait([
-      _storage.delete(key: _secretKey(id)),
-      _storage.delete(key: _labelKey(id)),
-    ]);
+  Future<void> deleteSecret(ProviderConnectionId id) async {
+    if (_isOAuth(id)) {
+      await deleteLegacySecret(id);
+    } else {
+      await _credentials(id).delete();
+    }
+    await _storage.delete(key: _labelKey(id));
   }
 
   @override

@@ -1,5 +1,108 @@
 import 'dart:convert';
 
+import '../providers/connection_lifecycle.dart';
+import '../providers/provider_connection.dart';
+
+enum ReportingOutcomeCategory {
+  success,
+  authenticationRejected,
+  accessDenied,
+  transientFailure,
+  rateLimited,
+  malformedResponse,
+  localReadFailure,
+}
+
+enum ReportingOutcomeSource { live, cache, mock, local }
+
+enum ReportingOutcomeFreshness { current, stale, unknown }
+
+/// An observation of the ordinary load, never a separate credential probe.
+final class ConnectionReportingUpdate {
+  const ConnectionReportingUpdate({
+    required this.connection,
+    this.credentialVersion,
+    this.outcome,
+  });
+
+  final ProviderConnectionId connection;
+  final CredentialVersion? credentialVersion;
+
+  /// Null while the versioned request is actively running.
+  final ConnectionReportingOutcome? outcome;
+  bool get checking => outcome == null;
+}
+
+/// Phone-only result for an exact connection, independent of account data.
+///
+/// Contains no secret, response body, or credential-read object. A success only
+/// describes current live access when its source, freshness and version agree.
+final class ConnectionReportingOutcome {
+  const ConnectionReportingOutcome({
+    required this.connection,
+    required this.category,
+    required this.source,
+    this.freshness = ReportingOutcomeFreshness.unknown,
+    this.credentialVersion,
+  });
+
+  final ProviderConnectionId connection;
+  final ReportingOutcomeCategory category;
+  final ReportingOutcomeSource source;
+  final ReportingOutcomeFreshness freshness;
+  final CredentialVersion? credentialVersion;
+
+  bool get failed => category != ReportingOutcomeCategory.success;
+  bool get canEditKey =>
+      connection.kind == ConnectionKind.platform &&
+      (category == ReportingOutcomeCategory.authenticationRejected ||
+          category == ReportingOutcomeCategory.accessDenied ||
+          category == ReportingOutcomeCategory.localReadFailure);
+
+  String get label => switch (category) {
+    ReportingOutcomeCategory.success => 'Connected',
+    ReportingOutcomeCategory.authenticationRejected => 'Key rejected',
+    ReportingOutcomeCategory.accessDenied => 'Access denied',
+    ReportingOutcomeCategory.transientFailure => 'Could not check',
+    ReportingOutcomeCategory.rateLimited => 'Rate limited',
+    ReportingOutcomeCategory.malformedResponse =>
+      'Could not read reporting data',
+    ReportingOutcomeCategory.localReadFailure => 'Could not read saved key',
+  };
+
+  String get supportingCopy => switch (category) {
+    ReportingOutcomeCategory.success => '',
+    ReportingOutcomeCategory.authenticationRejected =>
+      'Check the key and try again.',
+    ReportingOutcomeCategory.accessDenied =>
+      "Check this key's permissions and your account's reporting access.",
+    ReportingOutcomeCategory.transientFailure =>
+      'Check your connection and try again.',
+    ReportingOutcomeCategory.rateLimited =>
+      'Try again when the provider allows another request.',
+    ReportingOutcomeCategory.malformedResponse =>
+      'Try refreshing the reporting data.',
+    ReportingOutcomeCategory.localReadFailure =>
+      'Edit or remove the saved key to try again.',
+  };
+
+  String get connectionLabel => switch ((
+    connection.provider,
+    connection.kind,
+  )) {
+    (ProviderFamily.openai, ConnectionKind.platform) =>
+      'OpenAI · Platform reporting',
+    (ProviderFamily.anthropic, ConnectionKind.platform) =>
+      'Anthropic · Organization reporting',
+    (ProviderFamily.cursor, ConnectionKind.platform) =>
+      'Cursor · Team Admin API',
+    (ProviderFamily.openai, ConnectionKind.plan) => 'OpenAI · Codex plan',
+    (ProviderFamily.anthropic, ConnectionKind.plan) =>
+      'Anthropic · Claude plan',
+    (ProviderFamily.cursor, ConnectionKind.plan) => 'Cursor · Cursor plan',
+  };
+}
+
 enum ProviderStatus {
   ok,
   warning,
@@ -20,18 +123,6 @@ extension ProviderStatusLabel on ProviderStatus {
       ProviderStatus.authRequired => 'Auth required',
       ProviderStatus.stale => 'Stale',
       ProviderStatus.unknown => 'Unknown',
-    };
-  }
-
-  String get description {
-    return switch (this) {
-      ProviderStatus.ok => 'Provider data is current.',
-      ProviderStatus.warning => 'Usage is approaching a configured limit.',
-      ProviderStatus.error => 'Provider sync failed.',
-      ProviderStatus.rateLimited => 'Provider rate limit reached.',
-      ProviderStatus.authRequired => 'Provider authentication is required.',
-      ProviderStatus.stale => 'Showing data from the last successful sync.',
-      ProviderStatus.unknown => 'Provider status is unavailable.',
     };
   }
 }
@@ -59,9 +150,9 @@ extension DashboardSyncIssueMessage on DashboardSyncIssue {
   String get message {
     return switch (this) {
       DashboardSyncIssue.noProviders =>
-        'Connect a provider in Settings to load dashboard data.',
+        'Connect a provider on the Providers tab to load dashboard data.',
       DashboardSyncIssue.credentialUnavailable =>
-        'The saved key could not be read. Re-enter it in Settings.',
+        'The saved key could not be read. Re-enter it on the Providers tab.',
       DashboardSyncIssue.authentication =>
         'The provider rejected the credential. Check that you pasted the full key or token.',
       DashboardSyncIssue.permissionDenied =>
@@ -73,17 +164,17 @@ extension DashboardSyncIssueMessage on DashboardSyncIssue {
       DashboardSyncIssue.invalidResponse =>
         'The provider returned an unsupported reporting response.',
       DashboardSyncIssue.codexAuthentication =>
-        'Codex sign-in expired. Reconnect your ChatGPT account in Settings.',
+        'Codex sign-in expired. Reconnect your Codex plan on the Providers tab.',
       DashboardSyncIssue.codexPermissionDenied =>
-        'This Codex account cannot access usage reporting.',
+        'This Codex plan connection cannot access usage reporting.',
       DashboardSyncIssue.codexUnavailable =>
         'Codex usage is unavailable. Check your connection and try again.',
       DashboardSyncIssue.codexInvalidResponse =>
         'Codex returned an unsupported usage response.',
       DashboardSyncIssue.claudeAuthentication =>
-        'Claude sign-in expired. Reconnect your Claude account in Settings.',
+        'Claude sign-in expired. Reconnect your Claude plan on the Providers tab.',
       DashboardSyncIssue.claudePermissionDenied =>
-        'This Claude account cannot access usage reporting.',
+        'This Claude plan connection cannot access usage reporting.',
       DashboardSyncIssue.claudeUnavailable =>
         'Claude usage is unavailable. Check your connection and try again.',
       DashboardSyncIssue.claudeInvalidResponse =>
@@ -95,7 +186,7 @@ extension DashboardSyncIssueMessage on DashboardSyncIssue {
 }
 
 class DashboardSnapshot {
-  const DashboardSnapshot({
+  DashboardSnapshot({
     required this.generatedAt,
     required this.overallStatus,
     required this.accounts,
@@ -106,7 +197,13 @@ class DashboardSnapshot {
     required this.watchSummary,
     this.syncIssue,
     this.syncDetails,
-  });
+    Map<String, Map<String, String>> connectionVersions = const {},
+    Iterable<ConnectionReportingOutcome> reportingOutcomes = const [],
+  }) : connectionVersions = Map.unmodifiable({
+         for (final entry in connectionVersions.entries)
+           entry.key: Map<String, String>.unmodifiable(entry.value),
+       }),
+       reportingOutcomes = List.unmodifiable(reportingOutcomes);
 
   final DateTime generatedAt;
   final ProviderStatus overallStatus;
@@ -118,6 +215,12 @@ class DashboardSnapshot {
   final WatchSummary watchSummary;
   final DashboardSyncIssue? syncIssue;
   final String? syncDetails;
+
+  /// Phone-only lifecycle provenance; never serialized into shared contracts.
+  final Map<String, Map<String, String>> connectionVersions;
+
+  /// Phone-only reporting results, including failures with no account data.
+  final List<ConnectionReportingOutcome> reportingOutcomes;
 
   String? get syncTooltip {
     final issue = syncIssue;
@@ -201,6 +304,8 @@ class DashboardSnapshot {
       watchSummary: watchSummary._withStatus(ProviderStatus.stale),
       syncIssue: syncIssue,
       syncDetails: syncDetails,
+      connectionVersions: connectionVersions,
+      reportingOutcomes: reportingOutcomes,
     );
   }
 
@@ -216,14 +321,51 @@ class DashboardSnapshot {
       watchSummary: watchSummary,
       syncIssue: issue,
       syncDetails: details,
+      connectionVersions: connectionVersions,
+      reportingOutcomes: reportingOutcomes,
     );
   }
+
+  DashboardSnapshot withConnectionVersions(
+    Map<String, Map<String, String>> versions,
+  ) => DashboardSnapshot(
+    generatedAt: generatedAt,
+    overallStatus: overallStatus,
+    accounts: accounts,
+    todayTotal: todayTotal,
+    weekTotal: weekTotal,
+    monthTotal: monthTotal,
+    alerts: alerts,
+    watchSummary: watchSummary,
+    syncIssue: syncIssue,
+    syncDetails: syncDetails,
+    connectionVersions: versions,
+    reportingOutcomes: reportingOutcomes,
+  );
+
+  DashboardSnapshot withReportingOutcomes(
+    Iterable<ConnectionReportingOutcome> outcomes,
+  ) => DashboardSnapshot(
+    generatedAt: generatedAt,
+    overallStatus: overallStatus,
+    accounts: accounts,
+    todayTotal: todayTotal,
+    weekTotal: weekTotal,
+    monthTotal: monthTotal,
+    alerts: alerts,
+    watchSummary: watchSummary,
+    syncIssue: syncIssue,
+    syncDetails: syncDetails,
+    connectionVersions: connectionVersions,
+    reportingOutcomes: outcomes,
+  );
 }
 
 class ProviderSnapshot {
   const ProviderSnapshot({
     required this.accountId,
     required this.provider,
+    this.connection,
     required this.status,
     required this.today,
     required this.week,
@@ -238,6 +380,12 @@ class ProviderSnapshot {
 
   final String accountId;
   final String provider;
+
+  /// Connection storage key stamped by the Rust adapter, when present.
+  ///
+  /// Carried verbatim so the round trip back into the core keeps alert rules
+  /// keyed by connection rather than by provider family.
+  final String? connection;
   final ProviderStatus status;
   final BudgetState today;
   final BudgetState week;
@@ -253,6 +401,7 @@ class ProviderSnapshot {
     return ProviderSnapshot(
       accountId: json['accountId'] as String,
       provider: json['provider'] as String,
+      connection: json['connection'] as String?,
       status: _statusFromJson(json['status']),
       today: BudgetState.fromJson(_jsonMap(json['today'])),
       week: BudgetState.fromJson(_jsonMap(json['week'])),
@@ -275,6 +424,7 @@ class ProviderSnapshot {
   Map<String, dynamic> toJson() => {
     'accountId': accountId,
     'provider': provider,
+    if (connection != null) 'connection': connection,
     'status': status.name,
     'today': today.toJson(),
     'week': week.toJson(),
@@ -287,33 +437,13 @@ class ProviderSnapshot {
     'lastError': lastError?.toJson(),
   };
 
-  String get providerLabel {
-    return switch (provider) {
-      'openai' => 'OpenAI',
-      'codex' => 'Codex',
-      'claude' => 'Claude',
-      'cursor' => 'Cursor',
-      'mock' => 'Mock',
-      _ => provider,
-    };
-  }
-
-  /// User-facing title for provider lists and details.
-  ///
-  /// [platformLabel] is phone-local display metadata for platform Admin API
-  /// key connections and is never part of the watch payload.
-  String displayTitle({String? platformLabel}) {
-    final label = platformLabel?.trim();
-    if (label != null && label.isNotEmpty) {
-      return label;
-    }
-    return providerLabel;
-  }
+  String get providerLabel => providerDisplayLabel(provider);
 
   ProviderSnapshot _withStatus(ProviderStatus value) {
     return ProviderSnapshot(
       accountId: accountId,
       provider: provider,
+      connection: connection,
       status: value,
       today: today,
       week: week,
@@ -528,20 +658,70 @@ class Quantity {
 
   Map<String, dynamic> toJson() => {'value': value, 'unit': unit};
 
-  /// Display form — strip provider float noise like `500.0000000000`.
+  /// The one display form of a reported quantity
+  /// (`PHONE_DASHBOARD_DESIGN.md`, Balances).
   String get label => '${formatQuantityValue(value)} $unit';
 }
 
-/// `500.0000000000` → `500`, `12.50` → `12.5`.
+/// A balance in full, grouped, to at most one decimal place:
+/// `500.0000000000` → `500`, `12.50` → `12.5`, `62479.294375` → `62,479.3`.
+///
+/// Everything past the first decimal is the provider's own arithmetic and
+/// nobody acts on it. The Dashboard does not compact — that is what a glance
+/// does, and this is the screen the figure is read on — so the digits that
+/// survive are grouped, the way this screen has always written a long count
+/// (`PHONE_DASHBOARD_DESIGN.md`, Balances).
+///
+/// A whole number keeps every digit it arrived with: grouping is applied to the
+/// text, never to a parsed number, so a balance longer than a double can hold
+/// is separated but never reshaped. Text that is not a number keeps itself,
+/// ungrouped — inventing a rounding, or a separator, for something unparsed
+/// would say more than the payload does.
 String formatQuantityValue(String value) {
   if (!value.contains('.')) {
+    return _wholeNumber.hasMatch(value) ? _groupDigits(value) : value;
+  }
+  final parsed = double.tryParse(value);
+  if (parsed == null) {
     return value;
   }
-  final trimmed = value.replaceFirst(RegExp(r'0+$'), '');
-  if (trimmed.endsWith('.')) {
-    return trimmed.substring(0, trimmed.length - 1);
+  final rounded = (parsed * 10).round() / 10;
+  final places = rounded.truncateToDouble() == rounded ? 0 : 1;
+  return _groupDigits(rounded.toStringAsFixed(places));
+}
+
+final RegExp _wholeNumber = RegExp(r'^-?\d+$');
+
+/// Separates the integer part every third digit: `19213690951` →
+/// `19,213,690,951`, `-1234.5` → `-1,234.5`.
+///
+/// The one grouping in the app, shared by [formatQuantityValue] and
+/// [formatCount], so a balance and a count beside it on the same screen cannot
+/// disagree about how a long number is written. It works on the text: the sign
+/// and everything from the decimal point on are carried through untouched, and
+/// no digit is parsed, so precision a double could not hold survives.
+String _groupDigits(String value) {
+  final negative = value.startsWith('-');
+  final body = negative ? value.substring(1) : value;
+  final point = body.indexOf('.');
+  final whole = point == -1 ? body : body.substring(0, point);
+  final fraction = point == -1 ? '' : body.substring(point);
+
+  final buffer = StringBuffer();
+  if (negative) {
+    buffer.write('-');
   }
-  return trimmed;
+  for (var index = 0; index < whole.length; index += 1) {
+    final remaining = whole.length - index;
+    buffer.write(whole[index]);
+
+    if (remaining > 1 && remaining % 3 == 1) {
+      buffer.write(',');
+    }
+  }
+  buffer.write(fraction);
+
+  return buffer.toString();
 }
 
 class BudgetState {
@@ -594,15 +774,6 @@ class BudgetState {
     'status': status.name,
   };
 
-  double? get usedFraction {
-    final value = usedPercent;
-    if (value == null) {
-      return null;
-    }
-
-    return (value / 100).clamp(0.0, 1.0).toDouble();
-  }
-
   String get periodLabel {
     return switch (period) {
       'today' => 'Today',
@@ -610,32 +781,6 @@ class BudgetState {
       'month' => 'Month',
       _ => period,
     };
-  }
-
-  String get usedPercentLabel {
-    final value = usedPercent;
-    if (value == null) {
-      return 'Unknown';
-    }
-
-    final places = value.truncateToDouble() == value ? 0 : 1;
-    return '${value.toStringAsFixed(places)}%';
-  }
-
-  /// Why this budget card shows its status — shown on StatusPill tap/hover.
-  String get statusExplanation {
-    if (status != ProviderStatus.unknown) {
-      return status.description;
-    }
-    if (spent != null && limit == null) {
-      return 'Organization/platform API spend has no local budget limit yet, '
-          'so percent used and status stay Unknown. Subscription credit '
-          'purchases are not included in these totals.';
-    }
-    if (spent == null) {
-      return 'No organization/platform API spend was reported for this period.';
-    }
-    return status.description;
   }
 }
 
@@ -797,6 +942,16 @@ class WatchSummary {
   }
 }
 
+/// Display name for a raw provider key (`cursor` → `Cursor`).
+String providerDisplayLabel(String provider) => switch (provider) {
+  'openai' => 'OpenAI',
+  'codex' => 'Codex',
+  'claude' => 'Claude',
+  'cursor' => 'Cursor',
+  'mock' => 'Mock',
+  _ => provider,
+};
+
 /// Device-local wall clock for sync / reset labels.
 String formatLocal(DateTime value) {
   final local = value.toLocal();
@@ -810,24 +965,14 @@ String formatUtc(DateTime value) {
   return '$date UTC';
 }
 
+/// A reported count, grouped exactly as a balance is — one rule, one
+/// implementation (`_groupDigits`).
 String formatCount(int? value) {
   if (value == null) {
     return 'Unknown';
   }
 
-  final digits = value.toString();
-  final buffer = StringBuffer();
-
-  for (var index = 0; index < digits.length; index += 1) {
-    final remaining = digits.length - index;
-    buffer.write(digits[index]);
-
-    if (remaining > 1 && remaining % 3 == 1) {
-      buffer.write(',');
-    }
-  }
-
-  return buffer.toString();
+  return _groupDigits(value.toString());
 }
 
 ProviderStatus _statusFromJson(Object? value) {

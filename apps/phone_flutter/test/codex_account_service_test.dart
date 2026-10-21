@@ -108,7 +108,7 @@ void main() {
             .having(
               (error) => error.details,
               'details',
-              'Codex account · Secure storage unavailable',
+              'Codex plan · Secure storage unavailable',
             ),
       ),
     );

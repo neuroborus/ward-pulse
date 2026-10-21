@@ -7,17 +7,20 @@ import 'dashboard_models.dart';
 import 'dashboard_load.dart';
 import 'dashboard_repository.dart';
 import 'merging_connection_repository.dart';
+import 'connection_snapshot_cache.dart';
 
 /// Merges the on-device Codex subscription report into [fallback].
 DashboardRepository codexDashboardRepository({
   required CodexAccountService accountService,
   required DashboardRepository fallback,
+  ConnectionSnapshotCache? cache,
   ProviderSyncLogger logger = const DeveloperProviderSyncLogger(),
   ReportNormalizer normalizeReport = normalizeCodexReportJson,
   DashboardSnapshotMerger mergeSnapshots = mergeDashboardSnapshotsJson,
   ConnectionReportLoader? loadReport,
 }) {
   return MergingConnectionRepository(
+    cache: cache,
     fallback: fallback,
     logger: logger,
     loadReport: loadReport ?? accountService.fetchReport,

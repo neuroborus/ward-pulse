@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "apps/wear_android/**"
+      - "apps/watchface_wff/src/main/res/**"
+      - "tools/render-watchface.mjs"
       - "fixtures/**"
       - "schemas/**"
       - ".github/workflows/wear-android.yml"
@@ -31,4 +33,32 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           packages: "platforms;android-37.1 build-tools;36.0.0"
+      - name: Validate shared contracts
+        run: python3 tools/validate-fixtures/validate_json.py
+        working-directory: .
+      - name: Provision CI Push development signing
+        shell: bash
+        run: |
+          umask 077
+          push_key_dir="$RUNNER_TEMP/wardpulse-push-signing"
+          mkdir -p "$push_key_dir"
+          push_store_password=$(openssl rand -hex 32)
+          push_key_password=$(openssl rand -hex 32)
+          echo "::add-mask::$push_store_password"
+          echo "::add-mask::$push_key_password"
+          export WARDPULSE_PUSH_STORE_PASSWORD="$push_store_password"
+          export WARDPULSE_PUSH_KEY_PASSWORD="$push_key_password"
+          keytool -genkeypair -noprompt -storetype JKS \
+            -keystore "$push_key_dir/development.jks" \
+            -storepass:env WARDPULSE_PUSH_STORE_PASSWORD \
+            -keypass:env WARDPULSE_PUSH_KEY_PASSWORD \
+            -alias wardpulse-push-development -keyalg RSA -keysize 2048 \
+            -validity 3650 -dname "CN=WardPulse CI Push Development" \
+            >/dev/null 2>&1
+          {
+            printf 'storeFile=%s\n' "$push_key_dir/development.jks"
+            printf 'storePassword=%s\n' "$push_store_password"
+            printf 'keyAlias=%s\n' 'wardpulse-push-development'
+            printf 'keyPassword=%s\n' "$push_key_password"
+          } > ../../watchface-push-debug.properties
       - run: ./gradlew --no-daemon lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest

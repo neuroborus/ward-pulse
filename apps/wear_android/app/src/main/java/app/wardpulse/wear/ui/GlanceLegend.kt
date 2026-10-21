@@ -5,7 +5,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -41,8 +40,11 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -109,7 +111,7 @@ private data class GlanceMetrics(
     val miniStroke: Dp,
     val textGap: Dp,
     val rowHeight: Dp,
-    val rowGap: Dp,
+    val alertsGap: Dp,
     val timeClearance: Dp,
     val bottomClearance: Dp,
     val contentPadH: Dp,
@@ -138,8 +140,11 @@ private fun glanceMetricsFor(diameter: Dp): GlanceMetrics {
         miniArcSize = art(39f),
         miniStroke = art(5f),
         textGap = art(12f),
+        // Row pitch, as the art lays it out: 54 covers the mini arc and both
+        // lines, and rows sit one after another with no gap added on top.
         rowHeight = art(54f),
-        rowGap = art(6f),
+        // The art keeps the block clear of the pill by 12 (`alertsBtnY - 12`).
+        alertsGap = art(12f),
         timeClearance = art(62f),
         // alertsBtnY = SIZE-78, h=36 → 42px below pill to rim.
         bottomClearance = art(42f),
@@ -242,10 +247,7 @@ internal fun GlanceLegendPage(
                     GlanceEmptyCopy(summary = summary, titleStyle = metrics.title)
                 } else {
                     // Wrap-content block (review art blockLeft), not full-bleed rows.
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(metrics.rowGap),
-                        modifier = Modifier.wrapContentWidth(),
-                    ) {
+                    Column(modifier = Modifier.wrapContentWidth()) {
                         rows.forEach { row ->
                             key(row.title, row.subtitle) {
                                 GlanceLegendRow(row = row, metrics = metrics)
@@ -255,6 +257,7 @@ internal fun GlanceLegendPage(
                 }
             }
 
+            Spacer(modifier = Modifier.height(metrics.alertsGap))
             GlanceAlertsPill(
                 count = alertCount,
                 metrics = metrics,
@@ -269,13 +272,7 @@ private fun GlanceEmptyCopy(
     summary: WatchDashboardSummary,
     titleStyle: TextStyle,
 ) {
-    val lines = when {
-        summary.providers.isEmpty() && summary.rings.isEmpty() ->
-            listOf("Connect a provider", "on your phone")
-        summary.rings.isEmpty() ->
-            listOf("Choose percent rings", "in the phone app")
-        else -> listOf("No remaining capacity")
-    }
+    val lines = glanceEmptyLines(summary)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         lines.forEach { line ->
             Text(
@@ -287,6 +284,15 @@ private fun GlanceEmptyCopy(
         }
     }
 }
+
+internal fun glanceEmptyLines(summary: WatchDashboardSummary): List<String> =
+    when {
+        summary.providers.isEmpty() && summary.rings.isEmpty() ->
+            listOf("Connect a provider", "on your phone")
+        summary.rings.isEmpty() ->
+            listOf("Choose percent rings", "in the phone app")
+        else -> listOf("Ring data unavailable")
+    }
 
 @Composable
 private fun GlanceLegendRow(
@@ -303,6 +309,15 @@ private fun GlanceLegendRow(
             stroke = metrics.miniStroke,
             modifier = Modifier.size(metrics.miniArcSize),
         )
+        row.secondaryArc?.let { arc ->
+            Spacer(modifier = Modifier.width(metrics.textGap))
+            MiniRemainingArc(
+                remainingFraction = arc.remainingFraction,
+                color = Color(arc.colorArgb),
+                stroke = metrics.miniStroke,
+                modifier = Modifier.size(metrics.miniArcSize),
+            )
+        }
         Spacer(modifier = Modifier.width(metrics.textGap))
         Column {
             Text(
@@ -314,7 +329,7 @@ private fun GlanceLegendRow(
                 overflow = TextOverflow.Clip,
             )
             Text(
-                row.subtitle,
+                glanceSubtitleText(row),
                 style = metrics.subtitle,
                 color = LabelMuted,
                 maxLines = 1,
@@ -325,6 +340,15 @@ private fun GlanceLegendRow(
     }
 }
 
+/** Only genuinely exhausted percent tokens take the existing phone error color. */
+internal fun glanceSubtitleText(row: GlanceLegendRowModel): AnnotatedString =
+    buildAnnotatedString {
+        append(row.subtitle)
+        row.exhaustedPercentRanges.forEach { range ->
+            addStyle(SpanStyle(color = Color(0xFFFFB4AB)), range.first, range.last + 1)
+        }
+    }
+
 @Composable
 private fun MiniRemainingArc(
     remainingFraction: Float,
@@ -334,31 +358,49 @@ private fun MiniRemainingArc(
 ) {
     val strokeWidth = with(LocalDensity.current) { stroke.toPx() }
     Canvas(modifier = modifier) {
-        val strokeStyle = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-        val inset = strokeStyle.width / 2f
-        val arcSize = Size(size.width - inset * 2f, size.height - inset * 2f)
-        val topLeft = Offset(inset, inset)
+        drawMiniRemainingArc(remainingFraction, color, strokeWidth)
+    }
+}
+
+/** Shared by the legend Canvas and the native pixel regression. */
+internal fun DrawScope.drawMiniRemainingArc(
+    remainingFraction: Float,
+    color: Color,
+    strokeWidth: Float,
+) {
+    val inset = strokeWidth / 2f
+    val arcSize = Size(size.width - inset * 2f, size.height - inset * 2f)
+    val topLeft = Offset(inset, inset)
+    drawArc(
+        color = TrackGray,
+        startAngle = -90f,
+        sweepAngle = 360f,
+        useCenter = false,
+        topLeft = topLeft,
+        size = arcSize,
+        style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
+    )
+    val remaining = remainingFraction.coerceIn(0f, 1f)
+    if (remaining > 0f) {
+        val span = remaining * 360f
+        val capDegrees =
+            Math.toDegrees((strokeWidth / 2f / (arcSize.width / 2f)).toDouble()).toFloat()
+        // Compensate round ends only when they fit. Short spans keep their actual
+        // angular extent with flat ends instead of disappearing or becoming a dot.
+        val roundEnds = span > 2f * capDegrees
+        val capInset = if (roundEnds) capDegrees else 0f
         drawArc(
-            color = TrackGray,
-            startAngle = -90f,
-            sweepAngle = 360f,
+            color = color,
+            startAngle = -90f + (1f - remaining) * 360f + capInset,
+            sweepAngle = span - 2f * capInset,
             useCenter = false,
             topLeft = topLeft,
             size = arcSize,
-            style = strokeStyle,
+            style = Stroke(
+                width = strokeWidth,
+                cap = if (roundEnds) StrokeCap.Round else StrokeCap.Butt,
+            ),
         )
-        val sweep = remainingFraction.coerceIn(0f, 1f) * 360f
-        if (sweep > 0f) {
-            drawArc(
-                color = color,
-                startAngle = -90f,
-                sweepAngle = sweep,
-                useCenter = false,
-                topLeft = topLeft,
-                size = arcSize,
-                style = strokeStyle,
-            )
-        }
     }
 }
 

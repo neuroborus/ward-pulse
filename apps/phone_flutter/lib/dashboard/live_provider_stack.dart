@@ -13,6 +13,7 @@ import 'claude_dashboard_repository.dart';
 import 'dashboard_load.dart';
 import 'dashboard_repository.dart';
 import 'merging_connection_repository.dart';
+import 'connection_snapshot_cache.dart';
 
 /// Chains every credential-backed connection in front of [openAiAndCodex].
 ///
@@ -22,20 +23,36 @@ DashboardRepository buildLiveProviderStack({
   required ProviderCredentialStore credentialStore,
   required ClaudeAccountService claudeAccountService,
   required DashboardRepository openAiAndCodex,
+  Map<String, ConnectionSnapshotCache> caches = const {},
   ProviderSyncLogger logger = const DeveloperProviderSyncLogger(),
   DateTime Function()? clock,
+  AnthropicReportingClient? anthropicReportingClient,
+  CursorPlatformClient? cursorReportingClient,
+  ReportNormalizer normalizeAnthropicReport = normalizeAnthropicReportJson,
+  ReportNormalizer normalizeCursorPlatformReport =
+      normalizeCursorPlatformReportJson,
+  DashboardSnapshotMerger mergeSnapshots = mergeDashboardSnapshotsJson,
 }) {
   final now = clock ?? DateTime.now;
-  final anthropicClient = AnthropicReportingClient();
+  final anthropicClient =
+      anthropicReportingClient ?? AnthropicReportingClient();
   final cursorPlanClient = CursorPlanClient();
-  final cursorPlatformClient = CursorPlatformClient(clock: now);
+  final cursorPlatformClient =
+      cursorReportingClient ?? CursorPlatformClient(clock: now);
 
   DashboardRepository connect({
+    required String connection,
     required DashboardRepository fallback,
     required ReportNormalizer normalizeReport,
-    required ConnectionReportLoader loadReport,
+    ConnectionReportLoader? loadReport,
+    Future<String> Function(String credential)? loadCredentialReport,
   }) {
     return MergingConnectionRepository(
+      cache: caches[connection],
+      connection: ProviderConnectionId.fromStorageKey(connection),
+      credentialStore: credentialStore,
+      loadCredentialReport: loadCredentialReport,
+      mergeSnapshots: mergeSnapshots,
       fallback: fallback,
       logger: logger,
       mapError: (error) => mapReportingError(error, logger),
@@ -68,17 +85,10 @@ DashboardRepository buildLiveProviderStack({
   }
 
   final anthropic = connect(
+    connection: ProviderConnections.anthropicPlatform.storageKey,
     fallback: openAiAndCodex,
-    normalizeReport: normalizeAnthropicReportJson,
-    loadReport: () async {
-      final key = await readConnectionSecret(
-        store: credentialStore,
-        id: ProviderConnections.anthropicPlatform,
-        logger: logger,
-      );
-      if (key == null) {
-        return null;
-      }
+    normalizeReport: normalizeAnthropicReport,
+    loadCredentialReport: (key) async {
       final period = ReportPeriodBounds.utc(now());
       final reports = await anthropicClient.fetchDailyReports(
         adminApiKey: key,
@@ -99,22 +109,17 @@ DashboardRepository buildLiveProviderStack({
 
   final claude = claudeDashboardRepository(
     accountService: claudeAccountService,
+    mergeSnapshots: mergeSnapshots,
+    cache: caches[ProviderConnections.claudePlan.storageKey],
     fallback: anthropic,
     logger: logger,
   );
 
   final cursorTeam = connect(
+    connection: ProviderConnections.cursorPlatform.storageKey,
     fallback: claude,
-    normalizeReport: normalizeCursorPlatformReportJson,
-    loadReport: () async {
-      final key = await readConnectionSecret(
-        store: credentialStore,
-        id: ProviderConnections.cursorPlatform,
-        logger: logger,
-      );
-      if (key == null) {
-        return null;
-      }
+    normalizeReport: normalizeCursorPlatformReport,
+    loadCredentialReport: (key) async {
       final reports = await cursorPlatformClient.fetchReports(adminApiKey: key);
       return jsonEncode({
         'accountId': 'cursor-team-local',
@@ -126,6 +131,7 @@ DashboardRepository buildLiveProviderStack({
   );
 
   return connect(
+    connection: ProviderConnections.cursorPlan.storageKey,
     fallback: cursorTeam,
     normalizeReport: normalizeCursorPlanReportJson,
     loadReport: planReport(

@@ -18,6 +18,11 @@ Use this skill for work under `core/` and Rust-owned contracts.
 
 - Provider-specific raw data enters the core; normalized dashboard snapshots leave the core.
 - Rust owns budgets, credits, projections, alerts, model breakdowns, status mapping, and watch summary derivation.
+- Alert evaluation uses **user-configured** rules/thresholds from platform preferences
+  (`calculate_alerts(snapshot, settings)`). Each rule is a single used-% threshold (`at`).
+  Providers owns all alert rules (plan/purchased + OpenAI Platform budgets). Do not invent
+  dashboard alerts from allowance or budget `ProviderStatus` alone; status chrome and the
+  alerts list are separate.
 - Platform code owns HTTP clients, TLS, retries, background execution, secure credential retrieval, encrypted storage, and UI state.
 - Prefer deterministic functions that are easy to fixture-test.
 - Preserve previous successful snapshot semantics when modeling sync failure states.
@@ -40,7 +45,12 @@ After Rust changes, run:
 ```bash
 cd core && cargo fmt --all -- --check
 cd core && cargo clippy --workspace --all-targets -- -D warnings
+cd core && RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
 cd core && cargo test --workspace
 ```
+
+These need the crate registry whenever the cache is cold, so an agent without the network
+reports them to the operator rather than skipping them — `AGENTS.md`, *When a check cannot run
+where you are*.
 
 Add or update tests when changing budget math, projection logic, alert rules, status aggregation, provider normalization, or public FFI shape.

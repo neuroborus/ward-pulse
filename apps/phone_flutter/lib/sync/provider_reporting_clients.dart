@@ -16,23 +16,46 @@ final class AnthropicReportingClient {
     required DateTime start,
     required DateTime end,
   }) async {
-    final usage = await _fetchPages(
-      path: '/v1/organizations/usage_report/messages',
-      adminApiKey: adminApiKey,
-      start: start,
-      end: end,
-      groupByModel: true,
-      label: 'Usage',
+    final utcEnd = end.toUtc();
+    final midnight = DateTime.utc(utcEnd.year, utcEnd.month, utcEnd.day);
+    final usage = <String>[];
+    if (start.isBefore(midnight)) {
+      usage.addAll(
+        await _fetchPages(
+          path: '/v1/organizations/usage_report/messages',
+          adminApiKey: adminApiKey,
+          start: start,
+          end: midnight,
+          bucketWidth: '1d',
+          limit: 31,
+          groupByModel: true,
+          label: 'Usage',
+        ),
+      );
+    }
+    usage.addAll(
+      await _fetchPages(
+        path: '/v1/organizations/usage_report/messages',
+        adminApiKey: adminApiKey,
+        start: start.isAfter(midnight) ? start : midnight,
+        end: utcEnd,
+        bucketWidth: '1m',
+        limit: 1440,
+        groupByModel: true,
+        label: 'Usage',
+      ),
     );
     final costs = await _fetchPages(
       path: '/v1/organizations/cost_report',
       adminApiKey: adminApiKey,
       start: start,
       end: end,
+      bucketWidth: '1d',
+      limit: 31,
       groupByModel: false,
       label: 'Costs',
     );
-    return (usage: usage, costs: costs);
+    return (usage: List<String>.unmodifiable(usage), costs: costs);
   }
 
   Future<List<String>> _fetchPages({
@@ -40,9 +63,13 @@ final class AnthropicReportingClient {
     required String adminApiKey,
     required DateTime start,
     required DateTime end,
+    required String bucketWidth,
+    required int limit,
     required bool groupByModel,
     required String label,
   }) async {
+    if (!start.isBefore(end)) return const [];
+
     final pages = <String>[];
     final seen = <String>{};
     String? cursor;
@@ -51,8 +78,8 @@ final class AnthropicReportingClient {
       final parameters = <String, dynamic>{
         'starting_at': start.toUtc().toIso8601String(),
         'ending_at': end.toUtc().toIso8601String(),
-        'bucket_width': '1d',
-        'limit': '31',
+        'bucket_width': bucketWidth,
+        'limit': '$limit',
         if (groupByModel) 'group_by[]': 'model',
         if (cursor != null) 'page': cursor,
       };
@@ -65,7 +92,17 @@ final class AnthropicReportingClient {
       final page = decodeReportObject(response.body);
       final hasMore = page['has_more'] == true;
       final next = page['next_page'];
-      cursor = hasMore && next is String && next.isNotEmpty ? next : null;
+      if (hasMore) {
+        if (next is! String || next.isEmpty) {
+          throw const ProviderReportingException(
+            ProviderReportingFailure.invalidResponse,
+            details: 'Invalid pagination cursor',
+          );
+        }
+        cursor = next;
+      } else {
+        cursor = null;
+      }
       if (cursor != null && !seen.add(cursor)) {
         throw const ProviderReportingException(
           ProviderReportingFailure.invalidResponse,
@@ -89,9 +126,7 @@ final class CursorPlanClient {
   Future<String> fetchUsageSummary({required String sessionToken}) async {
     final response = await _http.get(
       _baseUri.replace(path: '/api/usage-summary'),
-      headers: {
-        'Cookie': '$cursorSessionCookieName=$sessionToken',
-      },
+      headers: {'Cookie': '$cursorSessionCookieName=$sessionToken'},
       label: 'Cursor usage',
     );
     return response.body;

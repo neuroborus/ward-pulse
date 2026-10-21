@@ -10,35 +10,32 @@ import '../sync/report_period.dart';
 import 'dashboard_load.dart';
 import 'dashboard_repository.dart';
 import 'merging_connection_repository.dart';
+import 'connection_snapshot_cache.dart';
 
 /// Loads OpenAI Platform Admin reporting and merges it into [fallback].
 DashboardRepository openAiDashboardRepository({
   required ProviderCredentialStore credentialStore,
   OpenAiReportingClient? client,
   DashboardRepository? fallback,
+  ConnectionSnapshotCache? cache,
   ProviderSyncLogger logger = const DeveloperProviderSyncLogger(),
   ReportNormalizer normalizeReport = normalizeOpenAiReportJson,
+  DashboardSnapshotMerger mergeSnapshots = mergeDashboardSnapshotsJson,
   DateTime Function()? clock,
 }) {
   final reporting = client ?? OpenAiReportingClient();
   final now = clock ?? DateTime.now;
 
   return MergingConnectionRepository(
+    cache: cache,
+    connection: ProviderConnections.openAiPlatform,
+    credentialStore: credentialStore,
+    mergeSnapshots: mergeSnapshots,
     fallback: fallback ?? const NoProvidersDashboardRepository(),
     logger: logger,
     normalizeReport: normalizeReport,
     mapError: (error) => mapReportingError(error, logger),
-    loadReport: () async {
-      final adminApiKey = await readConnectionSecret(
-        store: credentialStore,
-        id: ProviderConnections.openAiPlatform,
-        logger: logger,
-      );
-      if (adminApiKey == null) {
-        logger.record(ProviderSyncEvent.skippedNoCredential);
-        return null;
-      }
-
+    loadCredentialReport: (adminApiKey) async {
       final period = ReportPeriodBounds.utc(now());
       final reports = await reporting.fetchDailyReports(
         adminApiKey: adminApiKey,

@@ -1,24 +1,39 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 
+import '../dashboard/apply_alert_settings.dart';
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_repository.dart';
 import '../dashboard/dashboard_screen.dart';
+import '../dashboard/provider_status_color.dart';
+import '../dashboard/provider_status_severity.dart';
 import '../providers/claude_account_service.dart';
 import '../providers/codex_account_service.dart';
+import '../providers/credential_dialog.dart';
 import '../providers/provider_connection.dart';
 import '../providers/provider_credential_store.dart';
 import '../providers/providers_screen.dart';
+import '../settings/alert_threshold_preferences.dart';
 import '../settings/settings_screen.dart';
-import '../settings/consumption_display_preferences.dart';
 import '../settings/debug_data_preferences.dart';
+import '../settings/recovery_notification_preferences.dart';
 import '../settings/refresh_interval_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
 import '../sync/headless_provider_sync.dart';
 import '../sync/manual_refresh_window.dart';
 import '../sync/provider_sync_scheduler.dart';
+import '../sync/recovery_notifications.dart';
+import '../sync/recovery_wake.dart';
+import '../sync/recovery_watchlist.dart';
 import '../sync/watch_sync_service.dart';
+import '../watchface/watchface_screen.dart';
+import '../widget/phone_widget_preferences.dart';
+import '../widget/phone_widget_navigation.dart';
+import '../widget/phone_widget_sync.dart';
+import '../widget/widget_screen.dart';
+import 'surface_order.dart';
 import 'ward_pulse_theme.dart';
 
 class WardPulseApp extends StatelessWidget {
@@ -26,29 +41,46 @@ class WardPulseApp extends StatelessWidget {
     super.key,
     required this.repository,
     this.watchSyncService = const MethodChannelWatchSyncService(),
+    this.phoneWidgetSyncService = const DisabledPhoneWidgetSyncService(),
+    this.phoneWidgetNavigationService =
+        const MethodChannelPhoneWidgetNavigationService(),
     this.credentialStore = const EmptyProviderCredentialStore(),
     this.codexAccountService = const EmptyCodexAccountService(),
     this.claudeAccountService = const EmptyClaudeAccountService(),
-    this.displayPreferenceStore =
-        const DefaultConsumptionDisplayPreferenceStore(),
     this.refreshIntervalStore = const DefaultRefreshIntervalPreferenceStore(),
     this.watchRingPreferenceStore = const DefaultWatchRingPreferenceStore(),
+    this.phoneWidgetPreferenceStore = const DefaultPhoneWidgetPreferenceStore(),
+    this.alertThresholdStore = const DefaultAlertThresholdPreferenceStore(),
+    this.applyAlertSettings = applyUserAlertSettings,
     this.syncScheduler = const DisabledProviderSyncScheduler(),
     this.debugDataAvailable = false,
     this.debugDataPreferenceStore = const DisabledDebugDataPreferenceStore(),
+    this.recoveryWatchlistStore = const DisabledRecoveryWatchlistStore(),
+    this.recoveryNotifier = const SilentRecoveryNotifier(),
+    this.recoveryWake = const DisabledRecoveryWakeScheduler(),
+    this.recoveryNotificationStore =
+        const DefaultRecoveryNotificationPreferenceStore(),
   });
 
   final DashboardRepository repository;
   final WatchSyncService watchSyncService;
+  final PhoneWidgetSyncService phoneWidgetSyncService;
+  final PhoneWidgetNavigationService phoneWidgetNavigationService;
   final ProviderCredentialStore credentialStore;
   final CodexAccountService codexAccountService;
   final ClaudeAccountService claudeAccountService;
-  final ConsumptionDisplayPreferenceStore displayPreferenceStore;
   final RefreshIntervalPreferenceStore refreshIntervalStore;
   final WatchRingPreferenceStore watchRingPreferenceStore;
+  final PhoneWidgetPreferenceStore phoneWidgetPreferenceStore;
+  final AlertThresholdPreferenceStore alertThresholdStore;
+  final ApplyAlertSettings applyAlertSettings;
   final ProviderSyncScheduler syncScheduler;
   final bool debugDataAvailable;
   final DebugDataPreferenceStore debugDataPreferenceStore;
+  final RecoveryWatchlistStore recoveryWatchlistStore;
+  final RecoveryNotifier recoveryNotifier;
+  final RecoveryWakeScheduler recoveryWake;
+  final RecoveryNotificationPreferenceStore recoveryNotificationStore;
 
   @override
   Widget build(BuildContext context) {
@@ -60,15 +92,23 @@ class WardPulseApp extends StatelessWidget {
       home: DashboardHost(
         repository: repository,
         watchSyncService: watchSyncService,
+        phoneWidgetSyncService: phoneWidgetSyncService,
+        phoneWidgetNavigationService: phoneWidgetNavigationService,
         credentialStore: credentialStore,
         codexAccountService: codexAccountService,
         claudeAccountService: claudeAccountService,
-        displayPreferenceStore: displayPreferenceStore,
         refreshIntervalStore: refreshIntervalStore,
         watchRingPreferenceStore: watchRingPreferenceStore,
+        phoneWidgetPreferenceStore: phoneWidgetPreferenceStore,
+        alertThresholdStore: alertThresholdStore,
+        applyAlertSettings: applyAlertSettings,
         syncScheduler: syncScheduler,
         debugDataAvailable: debugDataAvailable,
         debugDataPreferenceStore: debugDataPreferenceStore,
+        recoveryWatchlistStore: recoveryWatchlistStore,
+        recoveryNotifier: recoveryNotifier,
+        recoveryWake: recoveryWake,
+        recoveryNotificationStore: recoveryNotificationStore,
       ),
     );
   }
@@ -79,55 +119,85 @@ class DashboardHost extends StatefulWidget {
     super.key,
     required this.repository,
     required this.watchSyncService,
+    required this.phoneWidgetSyncService,
+    required this.phoneWidgetNavigationService,
     required this.credentialStore,
     required this.codexAccountService,
     required this.claudeAccountService,
-    required this.displayPreferenceStore,
     required this.refreshIntervalStore,
     required this.watchRingPreferenceStore,
+    required this.phoneWidgetPreferenceStore,
+    required this.alertThresholdStore,
+    required this.applyAlertSettings,
     required this.syncScheduler,
     required this.debugDataAvailable,
     required this.debugDataPreferenceStore,
+    required this.recoveryWatchlistStore,
+    required this.recoveryNotifier,
+    required this.recoveryWake,
+    required this.recoveryNotificationStore,
   });
 
   final DashboardRepository repository;
   final WatchSyncService watchSyncService;
+  final PhoneWidgetSyncService phoneWidgetSyncService;
+  final PhoneWidgetNavigationService phoneWidgetNavigationService;
   final ProviderCredentialStore credentialStore;
   final CodexAccountService codexAccountService;
   final ClaudeAccountService claudeAccountService;
-  final ConsumptionDisplayPreferenceStore displayPreferenceStore;
   final RefreshIntervalPreferenceStore refreshIntervalStore;
   final WatchRingPreferenceStore watchRingPreferenceStore;
+  final PhoneWidgetPreferenceStore phoneWidgetPreferenceStore;
+  final AlertThresholdPreferenceStore alertThresholdStore;
+  final ApplyAlertSettings applyAlertSettings;
   final ProviderSyncScheduler syncScheduler;
   final bool debugDataAvailable;
   final DebugDataPreferenceStore debugDataPreferenceStore;
+  final RecoveryNotificationPreferenceStore recoveryNotificationStore;
+  final RecoveryWakeScheduler recoveryWake;
+  final RecoveryNotifier recoveryNotifier;
+  final RecoveryWatchlistStore recoveryWatchlistStore;
 
   @override
   State<DashboardHost> createState() => _DashboardHostState();
 }
 
 class _DashboardHostState extends State<DashboardHost> {
-  static const _settingsIndex = 2;
+  static const _dashboardIndex = 0;
+  static const _watchfaceIndex = 1;
+  static const _widgetIndex = 2;
+  static const _providersIndex = 3;
+  static const _settingsIndex = 4;
 
-  /// Account ids carried by each platform connection's normalized report.
-  static const _platformAccountIds = {
-    'openai-local': ProviderConnections.openAiPlatform,
-    'anthropic-local': ProviderConnections.anthropicPlatform,
-    'cursor-team-local': ProviderConnections.cursorPlatform,
-  };
-
+  var _loadRevision = 0;
+  var _surfaceRevision = 0;
   late Future<DashboardSnapshot> _snapshot = _loadSnapshot();
   DashboardSnapshot? _currentSnapshot;
-  ConsumptionDisplayPreferences _displayPreferences =
-      const ConsumptionDisplayPreferences();
+  final _reportingUpdates = <ProviderConnectionId, ConnectionReportingUpdate>{};
+  ProviderConnectionId? _editReportingConnection;
+  final _reportingSaves = <ProviderConnectionId>{};
+
+  /// Holds the Dashboard's card order for the run, so a poll that only moves
+  /// spend leaves every card where the reader last saw it. Shared with the
+  /// app-bar badge, which must point at the topmost flagged card.
+  final _dashboardOrder = FrozenOrder();
   RefreshIntervalPreference _refreshInterval =
       const RefreshIntervalPreference();
   WatchRingPreferences _ringPreferences = const WatchRingPreferences();
-  Map<String, String> _platformLabels = const {};
+  PhoneWidgetPreferences _widgetPreferences = const PhoneWidgetPreferences();
+  AlertThresholdPreferences _alertThresholds =
+      const AlertThresholdPreferences();
+  Future<void> _alertThresholdWrite = Future<void>.value();
   bool _mockDataEnabled = false;
+  bool _recoveryNotificationsEnabled = true;
   int _selectedIndex = 0;
+  bool _widgetNavigationPending = false;
+  ({String provider, int token})? _reveal;
   StreamSubscription<void>? _syncTicks;
   var _autoSyncInFlight = false;
+  bool get _reportingCheckActive =>
+      _reportingSaves.isNotEmpty ||
+      _reportingUpdates.values.any((update) => update.checking);
 
   /// Latest Wear-accepted refresh tap; keeps the PollCadence floor honest while a
   /// reload is still in flight (before [DashboardSnapshot.generatedAt] advances).
@@ -140,6 +210,24 @@ class _DashboardHostState extends State<DashboardHost> {
       unawaited(_onScheduledSync());
     });
     widget.watchSyncService.bindWatchRefreshListener(_onWatchRefreshRequested);
+    widget.phoneWidgetNavigationService.bind(_openDashboardFromWidget);
+  }
+
+  void _openDashboardFromWidget() {
+    if (!mounted || _widgetNavigationPending) return;
+    _widgetNavigationPending = true;
+    // Ready delivery can arrive during the first build or a Navigator transition.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _widgetNavigationPending = false;
+      if (!mounted) return;
+      // Cancel the route before disposing the tab that owns its unsaved form.
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      setState(() {
+        _selectedIndex = _dashboardIndex;
+      });
+    });
+    // An idle native message has no build of its own to drive that callback.
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   /// Later of snapshot time and the last accepted Wear refresh tap.
@@ -158,7 +246,6 @@ class _DashboardHostState extends State<DashboardHost> {
     final snapshot = _currentSnapshot;
     if (snapshot == null) {
       // Load in flight / failed — reload; a later empty snapshot clears Wear.
-      widget.repository.invalidate();
       _reload();
       return;
     }
@@ -173,25 +260,16 @@ class _DashboardHostState extends State<DashboardHost> {
     _wearRefreshAnchorAt = DateTime.now().toUtc();
     // Push disabled chrome immediately; the reload will push again with fresh data.
     unawaited(_syncWatch(snapshot));
-    widget.repository.invalidate();
     _reload();
   }
 
   @override
   void dispose() {
     widget.watchSyncService.unbindWatchRefreshListener();
+    widget.phoneWidgetNavigationService.unbind();
     unawaited(_syncTicks?.cancel());
     unawaited(widget.syncScheduler.cancel());
     super.dispose();
-  }
-
-  Future<void> _readDisplayPreferences() async {
-    try {
-      final value = await widget.displayPreferenceStore.read();
-      _displayPreferences = value;
-    } catch (_) {
-      // The default plan view remains available if local preferences fail.
-    }
   }
 
   Future<void> _readRefreshInterval() async {
@@ -210,19 +288,49 @@ class _DashboardHostState extends State<DashboardHost> {
     }
   }
 
-  Future<void> _readConnectionMetadata() async {
+  Future<void> _readWidgetPreferences() async {
     try {
-      final labels = <String, String>{};
-      for (final entry in _platformAccountIds.entries) {
-        final label = await widget.credentialStore.readLabel(entry.value);
-        if (label != null) {
-          labels[entry.key] = label;
-        }
-      }
-      _platformLabels = labels;
+      _widgetPreferences = await widget.phoneWidgetPreferenceStore.read();
     } catch (_) {
-      _platformLabels = const {};
+      _widgetPreferences = const PhoneWidgetPreferences();
     }
+  }
+
+  Future<void> _readAlertThresholds() async {
+    try {
+      _alertThresholds = await widget.alertThresholdStore.read();
+    } catch (_) {
+      _alertThresholds = const AlertThresholdPreferences();
+    }
+  }
+
+  Future<void> _readRecoveryNotificationPreference() async {
+    try {
+      _recoveryNotificationsEnabled =
+          await widget.recoveryNotificationStore.read();
+    } catch (_) {
+      // A store that will not answer leaves the switch where it defaults, on:
+      // the feature exists to interrupt, and Android still gates the post.
+      _recoveryNotificationsEnabled = true;
+    }
+  }
+
+  /// Writes the switch, and asks Android for the permission when it goes on.
+  ///
+  /// The asking happens here because only a foreground Activity can ask, while
+  /// the poll that posts runs in a background isolate with none.
+  /// Answers whether a recovery may actually reach the reader now: the switch
+  /// is the reader's wish, and Android has the last word on it.
+  Future<bool> _updateRecoveryNotifications(bool enabled) async {
+    await widget.recoveryNotificationStore.write(enabled);
+    final granted =
+        enabled ? await widget.recoveryNotifier.requestPermission() : true;
+    if (mounted) {
+      setState(() {
+        _recoveryNotificationsEnabled = enabled;
+      });
+    }
+    return granted;
   }
 
   Future<void> _readDebugDataPreference() async {
@@ -235,21 +343,6 @@ class _DashboardHostState extends State<DashboardHost> {
           await widget.debugDataPreferenceStore.readMockDataEnabled();
     } catch (_) {
       _mockDataEnabled = false;
-    }
-  }
-
-  Future<void> _updateDisplayPreferences(
-    ConsumptionDisplayPreferences value,
-  ) async {
-    await widget.displayPreferenceStore.write(value);
-    if (mounted) {
-      setState(() {
-        _displayPreferences = value;
-      });
-    }
-    final snapshot = _currentSnapshot;
-    if (snapshot != null) {
-      unawaited(_syncWatch(snapshot));
     }
   }
 
@@ -276,20 +369,211 @@ class _DashboardHostState extends State<DashboardHost> {
     }
   }
 
-  Future<DashboardSnapshot> _loadSnapshot() async {
-    await _readDisplayPreferences();
-    await _readRefreshInterval();
-    await _readRingPreferences();
-    await _readConnectionMetadata();
-    await _readDebugDataPreference();
-    // Rescheduling before the load keeps the next tick a full interval away, so
-    // no connection is polled faster than its floor, and a failed load still
-    // retries on the next tick. Headless WorkManager uses ≥15 minutes.
-    unawaited(_scheduleAutoSync(_refreshInterval.interval));
-    final snapshot = await widget.repository.load();
-    _currentSnapshot = snapshot;
-    unawaited(_syncWatch(snapshot));
-    return snapshot;
+  Future<void> _updateWidgetPreferences(PhoneWidgetPreferences value) async {
+    await widget.phoneWidgetPreferenceStore.write(value);
+    if (mounted) {
+      setState(() {
+        _widgetPreferences = value;
+      });
+    }
+    final snapshot = _currentSnapshot;
+    if (snapshot != null) {
+      unawaited(_syncPhoneWidget(snapshot));
+    }
+  }
+
+  Future<void> _updateAlertThresholds(
+    AlertThresholdPreferences Function(AlertThresholdPreferences current)
+    update,
+  ) async {
+    final previous = _alertThresholdWrite;
+    final done = Completer<void>();
+    _alertThresholdWrite = done.future;
+    await previous;
+    try {
+      final value = update(_alertThresholds);
+      final snapshot = _currentSnapshot;
+      final loadRevision = _loadRevision;
+      final surfaceRevision = _surfaceRevision;
+      // Evaluate before persisting so a core/FFI failure does not leave the
+      // store ahead of in-memory prefs / dashboard alerts.
+      final withAlerts =
+          snapshot == null ? null : widget.applyAlertSettings(snapshot, value);
+      await widget.alertThresholdStore.write(value);
+      var owned = withAlerts == null;
+      if (withAlerts != null) {
+        try {
+          owned = await widget.repository.isSnapshotCurrent(withAlerts);
+        } catch (_) {
+          /* Preferences are saved; unavailable ownership cannot replace dashboard data. */
+        }
+      }
+      final publish =
+          mounted &&
+          owned &&
+          loadRevision == _loadRevision &&
+          surfaceRevision == _surfaceRevision;
+      if (mounted) {
+        setState(() {
+          _alertThresholds = value;
+          if (publish && withAlerts != null) {
+            _currentSnapshot = withAlerts;
+            _snapshot = Future.value(withAlerts);
+          }
+        });
+      } else {
+        _alertThresholds = value;
+        if (publish && withAlerts != null) {
+          _currentSnapshot = withAlerts;
+        }
+      }
+      if (publish && withAlerts != null) {
+        unawaited(_syncWatch(withAlerts));
+      }
+    } finally {
+      done.complete();
+    }
+  }
+
+  Future<DashboardSnapshot> _loadSnapshot() {
+    final load = _loadForegroundSnapshot();
+    // FutureBuilder subscribes on the next build. Observe classified failures
+    // immediately while preserving the original future for its error UI.
+    unawaited(
+      load.then<void>((_) {}).onError<DashboardLoadException>((_, _) {}),
+    );
+    return load;
+  }
+
+  Future<DashboardSnapshot> _loadForegroundSnapshot() async {
+    final revision = ++_loadRevision;
+    try {
+      await _readRefreshInterval();
+      await _readRingPreferences();
+      await _readWidgetPreferences();
+      await _readAlertThresholds();
+      await _readDebugDataPreference();
+      await _readRecoveryNotificationPreference();
+      // Rescheduling before the load keeps the next tick a full interval away, so
+      // no connection is polled faster than its floor, and a failed load still
+      // retries on the next tick. Headless WorkManager uses ≥15 minutes.
+      unawaited(_scheduleAutoSync(_refreshInterval.interval));
+      final snapshot = widget.applyAlertSettings(
+        await _observedLoad(revision),
+        _alertThresholds,
+      );
+      final current = await widget.repository.isSnapshotCurrent(snapshot);
+      if (!mounted || revision != _loadRevision || !current) {
+        throw const DashboardLoadException(
+          details: 'Connection changed during refresh.',
+        );
+      }
+      _currentSnapshot = snapshot;
+      unawaited(_syncRecoveries(snapshot));
+      unawaited(_syncWatch(snapshot));
+      unawaited(_syncPhoneWidget(snapshot));
+      return snapshot;
+    } catch (_) {
+      // A failed foreground load leaves an error-only Dashboard. Successful
+      // fallback loads return normally and retain their usable data.
+      if (mounted && revision == _loadRevision) _currentSnapshot = null;
+      rethrow;
+    }
+  }
+
+  Future<DashboardSnapshot> _observedLoad(int revision) async {
+    if (!mounted || revision != _loadRevision) {
+      throw const DashboardLoadException(details: 'Refresh superseded.');
+    }
+    // A superseded request cannot leave a row spinning without active work.
+    _reportingUpdates.removeWhere((_, update) => update.checking);
+    final observed = <ProviderConnectionId>{};
+    void forgetObserved() {
+      if (mounted && revision == _loadRevision) {
+        setState(() {
+          for (final id in observed) {
+            _reportingUpdates.remove(id);
+          }
+        });
+      }
+    }
+
+    try {
+      final snapshot = await widget.repository.loadObserved((update) {
+        if (!mounted || revision != _loadRevision) return;
+        observed.add(update.connection);
+        setState(() => _reportingUpdates[update.connection] = update);
+      });
+      if (!await widget.repository.isSnapshotCurrent(snapshot) ||
+          !mounted ||
+          revision != _loadRevision) {
+        forgetObserved();
+        throw const DashboardLoadException(
+          details: 'Connection changed during refresh.',
+        );
+      }
+      setState(() {
+        // A completed, current load is authoritative, including omissions for
+        // removed connections. Its outcomes retain the current sibling facts.
+        _reportingUpdates.clear();
+        for (final outcome in snapshot.reportingOutcomes) {
+          _reportingUpdates[outcome.connection] = ConnectionReportingUpdate(
+            connection: outcome.connection,
+            credentialVersion: outcome.credentialVersion,
+            outcome: outcome,
+          );
+        }
+      });
+      return snapshot;
+    } on DashboardLoadException catch (failure) {
+      if (!await widget.repository.isFailureCurrent(failure) ||
+          !mounted ||
+          revision != _loadRevision) {
+        forgetObserved();
+        throw const DashboardLoadException(
+          details: 'Connection changed during refresh.',
+        );
+      }
+      setState(() {
+        _reportingUpdates.clear();
+        for (final outcome in failure.reportingOutcomes) {
+          _reportingUpdates[outcome.connection] = ConnectionReportingUpdate(
+            connection: outcome.connection,
+            credentialVersion: outcome.credentialVersion,
+            outcome: outcome,
+          );
+        }
+      });
+      rethrow;
+    } catch (_) {
+      forgetObserved();
+      throw const DashboardLoadException();
+    } finally {
+      if (mounted && revision == _loadRevision) {
+        setState(
+          () => _reportingUpdates.removeWhere((_, update) => update.checking),
+        );
+      }
+    }
+  }
+
+  Future<void> _syncRecoveries(DashboardSnapshot snapshot) async {
+    try {
+      final revision = _surfaceRevision;
+      if (!await widget.repository.isSnapshotCurrent(snapshot) ||
+          revision != _surfaceRevision)
+        return;
+      await syncPlanRecoveries(
+        snapshot,
+        widget.recoveryWatchlistStore,
+        widget.recoveryNotifier,
+        widget.recoveryWake,
+        mockData: _mockDataEnabled,
+        notifications: _recoveryNotificationsEnabled,
+      );
+    } catch (_) {
+      // Recovery bookkeeping cannot publish retired data or block the dashboard.
+    }
   }
 
   Future<void> _scheduleAutoSync(Duration interval) async {
@@ -298,14 +582,20 @@ class _DashboardHostState extends State<DashboardHost> {
   }
 
   Future<void> _onScheduledSync() async {
-    if (_autoSyncInFlight || !mounted) {
+    if (_autoSyncInFlight || !mounted || _reportingCheckActive) {
       return;
     }
     _autoSyncInFlight = true;
+    final revision = ++_loadRevision;
     try {
       // Do not invalidate: load() already refetches, and clearing caches would
       // drop stale-with-issue recovery on a failed automatic tick.
-      final snapshot = await widget.repository.load();
+      final snapshot = widget.applyAlertSettings(
+        await _observedLoad(revision),
+        _alertThresholds,
+      );
+      final current = await widget.repository.isSnapshotCurrent(snapshot);
+      if (!mounted || revision != _loadRevision || !current) return;
       _currentSnapshot = snapshot;
       if (mounted) {
         setState(() {
@@ -313,6 +603,29 @@ class _DashboardHostState extends State<DashboardHost> {
         });
       }
       await _syncWatch(snapshot);
+      await _syncPhoneWidget(snapshot);
+    } on DashboardLoadException catch (failure) {
+      // Keep successful data, but an error-only dashboard must follow the most
+      // recent guarded result rather than the exception from its first load.
+      try {
+        final previous = _currentSnapshot;
+        if (previous != null &&
+            await widget.repository.isSnapshotCurrent(previous))
+          return;
+        if (await widget.repository.isFailureCurrent(failure) &&
+            mounted &&
+            revision == _loadRevision) {
+          final failed = Future<DashboardSnapshot>.error(failure);
+          // FutureBuilder attaches on the next build; observe errors meanwhile.
+          failed.ignore();
+          setState(() {
+            _currentSnapshot = null;
+            _snapshot = failed;
+          });
+        }
+      } catch (_) {
+        // Unavailable ownership cannot replace reader-visible state.
+      }
     } catch (_) {
       // Automatic sync failures keep the last successful snapshot visible.
     } finally {
@@ -321,6 +634,9 @@ class _DashboardHostState extends State<DashboardHost> {
   }
 
   Future<void> _updateMockDataEnabled(bool value) async {
+    _loadRevision++;
+    _surfaceRevision++;
+    await widget.repository.clearPersistentSnapshots();
     await widget.debugDataPreferenceStore.writeMockDataEnabled(value);
     if (!mounted) {
       return;
@@ -340,12 +656,32 @@ class _DashboardHostState extends State<DashboardHost> {
     }
   }
 
-  Future<void> _queueWatchSummary(DashboardSnapshot snapshot) {
-    return widget.watchSyncService.sync(
+  Future<void> _syncPhoneWidget(DashboardSnapshot snapshot) async {
+    final revision = _surfaceRevision;
+    try {
+      if (!await widget.repository.isSnapshotCurrent(snapshot) ||
+          revision != _surfaceRevision)
+        return;
+      await widget.phoneWidgetSyncService.sync(snapshot, _widgetPreferences);
+    } catch (error) {
+      // Launcher widget updates must not block the phone dashboard.
+      developer.log(
+        'Dashboard refresh could not update the widget.',
+        name: phoneWidgetLogName,
+      );
+    }
+  }
+
+  Future<void> _queueWatchSummary(DashboardSnapshot snapshot) async {
+    final revision = _surfaceRevision;
+    if (!await widget.repository.isSnapshotCurrent(snapshot) ||
+        revision != _surfaceRevision)
+      return;
+    await widget.watchSyncService.sync(
       snapshot,
-      _displayPreferences,
       _ringPreferences,
       manualRefreshAnchorAt: _manualRefreshAnchorAt(snapshot),
+      mockDataMode: _mockDataEnabled,
     );
   }
 
@@ -357,16 +693,157 @@ class _DashboardHostState extends State<DashboardHost> {
     await _queueWatchSummary(snapshot);
   }
 
-  void _reload() {
+  /// Pull-to-refresh runs the same reload the app-bar action does; the gesture
+  /// only has to hold the spinner until the snapshot lands.
+  Future<void> _pullToRefresh() async {
+    _reload();
+    try {
+      await _snapshot;
+    } catch (_) {
+      // The failure state already tells the reader; the gesture just ends.
+    }
+  }
+
+  void _reload({bool forCredentialChange = false}) {
+    if (!forCredentialChange && _reportingCheckActive) return;
+    // Mock demo is cached across auto-sync; refresh should draw a new seed.
+    // Live repos must not clear connection recovery caches on every refresh.
+    if (_mockDataEnabled) {
+      widget.repository.invalidate();
+    }
     setState(() {
       _snapshot = _loadSnapshot();
     });
   }
 
-  void _openSettings() {
+  /// The top mark is a way in, not a copy: it opens the Dashboard when another
+  /// tab is showing and then brings the first unhealthy section into view
+  /// (PHONE_DASHBOARD_DESIGN.md).
+  void _revealProblem(String provider) {
     setState(() {
-      _selectedIndex = _settingsIndex;
+      _selectedIndex = _dashboardIndex;
+      _reveal = (provider: provider, token: (_reveal?.token ?? 0) + 1);
     });
+    // A request is answered once. Left standing, it would scroll again every
+    // time the reader came back to the tab, long after they asked.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() => _reveal = null);
+      }
+    });
+  }
+
+  void _openProviders() {
+    setState(() {
+      _selectedIndex = _providersIndex;
+    });
+  }
+
+  void _editReportingKey(ProviderConnectionId connection) {
+    setState(() {
+      _editReportingConnection = connection;
+      _selectedIndex = _providersIndex;
+    });
+  }
+
+  Future<void> _saveReportingCredential(
+    ProviderConnectionId id,
+    CredentialChange change,
+  ) async {
+    if (_reportingSaves.contains(id)) return;
+    setState(() => _reportingSaves.add(id));
+    try {
+      try {
+        if (change.updateLabelOnly) {
+          await widget.credentialStore.writeLabel(id, change.label);
+          return;
+        }
+        if (change.remove) {
+          await widget.credentialStore.deleteSecret(id);
+        } else {
+          await widget.credentialStore.writeSecret(id, change.value!);
+        }
+      } catch (_) {
+        if (change.remove) {
+          // Retirement can succeed before label or retired-slot cleanup fails.
+          // Reconcile through the normal load even if storage cannot confirm it.
+          if (mounted) {
+            _reportingUpdates.remove(id);
+            _onCredentialsChanged();
+          }
+          bool? remains;
+          try {
+            remains = await widget.credentialStore.readSecret(id) != null;
+          } catch (_) {
+            // The normal reload will report an unreadable local credential.
+          }
+          if (mounted)
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  remains == false
+                      ? 'Connection removed. Could not finish local cleanup.'
+                      : 'Could not finish removing credential.',
+                ),
+              ),
+            );
+          return;
+        }
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not update credential')),
+          );
+        return;
+      }
+      // App ownership survives disposal of the Providers tab and partial metadata
+      // failure. Exactly this one normal reload checks the newly stored key.
+      if (mounted) {
+        _reportingUpdates.remove(id);
+        _onCredentialsChanged();
+      }
+      if (!change.remove) {
+        try {
+          await widget.credentialStore.writeLabel(id, change.label);
+        } catch (_) {
+          if (mounted)
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Key saved. Could not update label.'),
+              ),
+            );
+        }
+      }
+    } finally {
+      _reportingSaves.remove(id);
+      if (mounted) setState(() {});
+    }
+  }
+
+  void _onCredentialsChanged() {
+    _loadRevision++;
+    _surfaceRevision++;
+    _currentSnapshot = null;
+    widget.repository.invalidate();
+    _reload(forCredentialChange: true);
+  }
+
+  /// Worst status each family is reporting, for the Providers order.
+  ///
+  /// Accounts only: that tab manages connections, so a plan meter crossing its
+  /// own threshold is not what should pull a card to the top of it.
+  Map<ProviderFamily, ProviderStatus> _providerStatuses(
+    DashboardSnapshot? snapshot,
+  ) {
+    final byFamily = <ProviderFamily, List<ProviderStatus>>{};
+    for (final account in snapshot?.accounts ?? const <ProviderSnapshot>[]) {
+      if (providerFamilyOf(account.provider) case final family?) {
+        byFamily.putIfAbsent(family, () => []).add(account.status);
+      }
+    }
+    return {
+      for (final entry in byFamily.entries)
+        entry.key: worstProviderStatus(entry.value),
+    };
   }
 
   @override
@@ -374,68 +851,111 @@ class _DashboardHostState extends State<DashboardHost> {
     return FutureBuilder<DashboardSnapshot>(
       future: _snapshot,
       builder: (context, state) {
-        final snapshot = state.data;
+        // Credential changes retire visible data immediately while preserving
+        // the active tab, its scroll position and any app-owned save operation.
+        final data = _currentSnapshot == null ? null : state.data;
+        final snapshot =
+            data == null || _mockDataEnabled
+                ? data
+                : data.withReportingOutcomes(
+                  {
+                    for (final outcome in data.reportingOutcomes)
+                      outcome.connection: outcome,
+                    for (final update in _reportingUpdates.values)
+                      if (update.outcome != null)
+                        update.connection: update.outcome!,
+                  }.values,
+                );
 
         return Scaffold(
           appBar: AppBar(
+            leading: const Center(
+              child: Image(
+                image: AssetImage('assets/brand/wardpulse.png'),
+                width: 32,
+                height: 32,
+                excludeFromSemantics: true,
+              ),
+            ),
             title: const Text('WardPulse'),
             actions: [
               if (snapshot != null)
-                Padding(
-                  padding: const EdgeInsetsDirectional.only(end: 12),
-                  child: StatusPill(
-                    status: snapshot.overallStatus,
-                    tooltip: snapshot.syncTooltip,
-                  ),
+                _AppBarProblems(
+                  problems: dashboardProblems(snapshot, _dashboardOrder),
+                  onReveal: _revealProblem,
                 ),
               IconButton(
                 tooltip: 'Refresh',
-                onPressed: _reload,
+                onPressed: _reportingCheckActive ? null : _reload,
                 icon: const Icon(Icons.refresh),
               ),
             ],
           ),
           body: SafeArea(
             child: switch (state.connectionState) {
-              _ when _selectedIndex == _settingsIndex => SettingsScreen(
-                key: const ValueKey('settings'),
+              _ when _selectedIndex == _watchfaceIndex => WatchfaceScreen(
+                key: const ValueKey('watchface'),
+                onRefresh: _pullToRefresh,
                 snapshot: snapshot,
+                ringPreferences: _ringPreferences,
+                onRingPreferencesChanged: _updateRingPreferences,
+              ),
+              _ when _selectedIndex == _widgetIndex => WidgetScreen(
+                key: const ValueKey('widget'),
+                onRefresh: _pullToRefresh,
+                snapshot: snapshot,
+                preferences: _widgetPreferences,
+                onPreferencesChanged: _updateWidgetPreferences,
+              ),
+              _ when _selectedIndex == _providersIndex => ProvidersScreen(
+                key: const ValueKey('providers'),
+                onRefresh: _pullToRefresh,
                 credentialStore: widget.credentialStore,
                 codexAccountService: widget.codexAccountService,
                 claudeAccountService: widget.claudeAccountService,
-                displayPreferences: _displayPreferences,
-                onDisplayPreferencesChanged: _updateDisplayPreferences,
+                onCredentialsChanged: _onCredentialsChanged,
+                onSaveReportingCredential: _saveReportingCredential,
+                reportingUpdates: Map.unmodifiable(_reportingUpdates),
+                isSnapshotCurrent: widget.repository.isSnapshotCurrent,
+                savingConnections: Set.unmodifiable(_reportingSaves),
+                mockDataEnabled: _mockDataEnabled,
+                editConnection: _editReportingConnection,
+                onEditConnectionOpened: () => _editReportingConnection = null,
+                alertThresholds: _alertThresholds,
+                onAlertThresholdsChanged: _updateAlertThresholds,
+                statuses: _providerStatuses(snapshot),
+              ),
+              _ when _selectedIndex == _settingsIndex => SettingsScreen(
+                key: const ValueKey('settings'),
+                onRefresh: _pullToRefresh,
+                snapshot: snapshot,
                 refreshInterval: _refreshInterval,
                 onRefreshIntervalChanged: _updateRefreshInterval,
                 ringPreferences: _ringPreferences,
-                onRingPreferencesChanged: _updateRingPreferences,
                 onSyncWatch: _onSettingsSyncWatch,
+                recoveryNotificationsEnabled: _recoveryNotificationsEnabled,
+                onRecoveryNotificationsChanged: _updateRecoveryNotifications,
                 debugDataAvailable: widget.debugDataAvailable,
                 mockDataEnabled: _mockDataEnabled,
                 onMockDataEnabledChanged: _updateMockDataEnabled,
-                onCredentialsChanged: () {
-                  unawaited(() async {
-                    await _readConnectionMetadata();
-                    if (!mounted) {
-                      return;
-                    }
-                    widget.repository.invalidate();
-                    _reload();
-                  }());
-                },
               ),
-              ConnectionState.waiting => const _LoadingView(),
+              // Only the very first load has nothing to show; a reload keeps
+              // the dashboard up rather than blanking it.
+              ConnectionState.waiting when snapshot == null =>
+                const _LoadingView(),
               _ when state.hasError => _ErrorView(
                 failure: _dashboardFailure(state.error),
                 onRetry: _reload,
-                onOpenSettings: _openSettings,
+                onOpenProviders: _openProviders,
+                onEditReportingKey: _editReportingKey,
               ),
-              _ when snapshot != null => _SelectedSurface(
-                selectedIndex: _selectedIndex,
+              _ when snapshot != null => DashboardScreen(
+                onRefresh: _pullToRefresh,
                 snapshot: snapshot,
-                displayPreferences: _displayPreferences,
-                platformLabels: _platformLabels,
-                onOpenSettings: _openSettings,
+                onOpenProviders: _openProviders,
+                onEditReportingKey: _editReportingKey,
+                reveal: _reveal,
+                order: _dashboardOrder,
               ),
               _ => _ErrorView(
                 failure: const DashboardLoadException(),
@@ -443,66 +963,116 @@ class _DashboardHostState extends State<DashboardHost> {
               ),
             },
           ),
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: (index) {
-              setState(() {
-                _selectedIndex = index;
-              });
+          bottomNavigationBar: LayoutBuilder(
+            builder: (context, constraints) {
+              const destinations = [
+                NavigationDestination(
+                  icon: Icon(Icons.dashboard_outlined),
+                  selectedIcon: Icon(Icons.dashboard),
+                  label: 'Dashboard',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.watch_outlined),
+                  selectedIcon: Icon(Icons.watch),
+                  label: 'Watchface',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.widgets_outlined),
+                  selectedIcon: Icon(Icons.widgets),
+                  label: 'Widget',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.hub_outlined),
+                  selectedIcon: Icon(Icons.hub),
+                  label: 'Providers',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.settings_outlined),
+                  selectedIcon: Icon(Icons.settings),
+                  label: 'Settings',
+                ),
+              ];
+              final theme = Theme.of(context);
+              // Material uses labelMedium for both selection states, with
+              // state colors supplied by NavigationBar itself.
+              final labelStyle = theme.textTheme.labelMedium!;
+              final measuredStyle =
+                  MediaQuery.boldTextOf(context)
+                      ? labelStyle.copyWith(fontWeight: FontWeight.bold)
+                      : labelStyle;
+              final labelWidth =
+                  (constraints.maxWidth -
+                      MediaQuery.paddingOf(context).horizontal) /
+                  destinations.length;
+              // Match NavigationDestination's existing scaling allowance.
+              final textScaler = MediaQuery.textScalerOf(
+                context,
+              ).clamp(maxScaleFactor: 1.3);
+              final painter = TextPainter(
+                textDirection: Directionality.of(context),
+                textScaler: textScaler,
+                locale: Localizations.maybeLocaleOf(context),
+              );
+              bool fits(double fontSize) {
+                for (final destination in destinations) {
+                  painter
+                    ..text = TextSpan(
+                      text: destination.label,
+                      style: measuredStyle.copyWith(fontSize: fontSize),
+                    )
+                    ..layout();
+                  if (painter.width > labelWidth) return false;
+                }
+                return true;
+              }
+
+              var fontSize = labelStyle.fontSize!;
+              if (!fits(fontSize)) {
+                var lower = 0.0;
+                var upper = fontSize;
+                while (upper - lower > 0.01) {
+                  final candidate = (lower + upper) / 2;
+                  if (fits(candidate)) {
+                    lower = candidate;
+                  } else {
+                    upper = candidate;
+                  }
+                }
+                fontSize = lower;
+              }
+              painter.dispose();
+
+              final navigationBar = NavigationBar(
+                selectedIndex: _selectedIndex,
+                onDestinationSelected: (index) {
+                  setState(() {
+                    _selectedIndex = index;
+                  });
+                },
+                destinations: destinations,
+              );
+              if (fontSize == labelStyle.fontSize) return navigationBar;
+              return Theme(
+                data: theme.copyWith(
+                  textTheme: theme.textTheme.copyWith(
+                    labelMedium: labelStyle.copyWith(
+                      fontSize: fontSize,
+                      // Keep the label row's height, hence the icon and
+                      // indicator positions, unchanged when fitting the type.
+                      height:
+                          labelStyle.height! *
+                          textScaler.scale(labelStyle.fontSize!) /
+                          textScaler.scale(fontSize),
+                    ),
+                  ),
+                ),
+                child: navigationBar,
+              );
             },
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.dashboard_outlined),
-                selectedIcon: Icon(Icons.dashboard),
-                label: 'Dashboard',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.hub_outlined),
-                selectedIcon: Icon(Icons.hub),
-                label: 'Providers',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.settings_outlined),
-                selectedIcon: Icon(Icons.settings),
-                label: 'Settings',
-              ),
-            ],
           ),
         );
       },
     );
-  }
-}
-
-class _SelectedSurface extends StatelessWidget {
-  const _SelectedSurface({
-    required this.selectedIndex,
-    required this.snapshot,
-    required this.displayPreferences,
-    this.platformLabels = const {},
-    this.onOpenSettings,
-  });
-
-  final int selectedIndex;
-  final DashboardSnapshot snapshot;
-  final ConsumptionDisplayPreferences displayPreferences;
-  final Map<String, String> platformLabels;
-  final VoidCallback? onOpenSettings;
-
-  @override
-  Widget build(BuildContext context) {
-    return switch (selectedIndex) {
-      0 => DashboardScreen(
-        snapshot: snapshot,
-        displayPreferences: displayPreferences,
-        onOpenSettings: onOpenSettings,
-      ),
-      _ => ProvidersScreen(
-        snapshot: snapshot,
-        displayPreferences: displayPreferences,
-        platformLabels: platformLabels,
-      ),
-    };
   }
 }
 
@@ -519,62 +1089,72 @@ class _ErrorView extends StatelessWidget {
   const _ErrorView({
     required this.failure,
     required this.onRetry,
-    this.onOpenSettings,
+    this.onOpenProviders,
+    this.onEditReportingKey,
   });
 
   final DashboardLoadException failure;
   final VoidCallback onRetry;
-  final VoidCallback? onOpenSettings;
+  final VoidCallback? onOpenProviders;
+  final void Function(ProviderConnectionId)? onEditReportingKey;
 
   @override
   Widget build(BuildContext context) {
-    if (failure.issue == DashboardSyncIssue.noProviders) {
-      return ConnectProviderPrompt(onOpenSettings: onOpenSettings);
+    if (failure.issue == DashboardSyncIssue.noProviders &&
+        failure.reportingOutcomes.isEmpty) {
+      return ConnectProviderPrompt(onOpenProviders: onOpenProviders);
     }
 
     final colors = Theme.of(context).colorScheme;
 
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Tooltip(
-              message: failure.issue.message,
-              child: Icon(Icons.error_outline, color: colors.error, size: 36),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Dashboard unavailable',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              failure.issue.message,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: colors.onSurfaceVariant),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 8,
-              children: [
-                if (failure.details != null)
-                  TextButton.icon(
-                    onPressed:
-                        () => _showErrorDetails(context, failure.details!),
-                    icon: const Icon(Icons.info_outline),
-                    label: const Text('Details'),
-                  ),
-                FilledButton.icon(
-                  onPressed: onRetry,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Retry'),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Tooltip(
+                message: failure.issue.message,
+                child: Icon(Icons.error_outline, color: colors.error, size: 36),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Dashboard unavailable',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              if (failure.reportingOutcomes.isEmpty)
+                Text(
+                  failure.issue.message,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: colors.onSurfaceVariant),
                 ),
-              ],
-            ),
-          ],
+              ReportingFailures(
+                outcomes: failure.reportingOutcomes,
+                onEditKey: onEditReportingKey,
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                children: [
+                  if (failure.details != null)
+                    TextButton.icon(
+                      onPressed:
+                          () => _showErrorDetails(context, failure.details!),
+                      icon: const Icon(Icons.info_outline),
+                      label: const Text('Details'),
+                    ),
+                  FilledButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -602,4 +1182,41 @@ void _showErrorDetails(BuildContext context, String details) {
           ],
         ),
   );
+}
+
+/// The app bar's rollup: how many sections a tap can take the reader to, in the
+/// worst of their colors. Silent when nothing below deviates.
+class _AppBarProblems extends StatelessWidget {
+  const _AppBarProblems({required this.problems, required this.onReveal});
+
+  final DashboardProblems problems;
+  final void Function(String provider) onReveal;
+
+  @override
+  Widget build(BuildContext context) {
+    if (problems.first case final provider?) {
+      final chip = providerStatusChipColors(
+        Theme.of(context).colorScheme,
+        problems.status,
+      );
+      return Padding(
+        padding: const EdgeInsetsDirectional.only(end: 12),
+        child: Tooltip(
+          message: 'Go to ${problems.status.label.toLowerCase()}',
+          child: InkResponse(
+            onTap: () => onReveal(provider),
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Badge(
+                backgroundColor: chip.fill,
+                textColor: chip.ink,
+                label: Text('${problems.sections}'),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  }
 }

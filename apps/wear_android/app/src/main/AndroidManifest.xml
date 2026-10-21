@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
     <uses-feature android:name="android.hardware.type.watch" />
+    <uses-permission android:name="com.google.wear.permission.PUSH_WATCH_FACES" />
+    <uses-permission android:name="com.google.wear.permission.SET_PUSHED_WATCH_FACE_AS_ACTIVE" />
 
     <application
         android:allowBackup="false"
@@ -13,6 +15,9 @@
         <meta-data
             android:name="com.google.android.wearable.standalone"
             android:value="false" />
+        <meta-data
+            android:name="com.google.android.wearable.marketplace.DEFAULT_WATCHFACE_VALIDATION_TOKEN"
+            android:value="@string/default_wf_token" />
 
         <activity
             android:name=".MainActivity"
@@ -50,6 +55,9 @@
                 android:name="android.support.wearable.complications.SUPPORTED_TYPES"
                 android:value="RANGED_VALUE,SHORT_TEXT" />
             <meta-data
+                android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
+                android:value="app.wardpulse.watchface,app.wardpulse.watchfacepush.main" />
+            <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
                 android:value="0" />
         </service>
@@ -66,6 +74,9 @@
             <meta-data
                 android:name="android.support.wearable.complications.SUPPORTED_TYPES"
                 android:value="RANGED_VALUE,SHORT_TEXT" />
+            <meta-data
+                android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
+                android:value="app.wardpulse.watchface,app.wardpulse.watchfacepush.main" />
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
                 android:value="0" />
@@ -84,22 +95,28 @@
                 android:name="android.support.wearable.complications.SUPPORTED_TYPES"
                 android:value="RANGED_VALUE,SHORT_TEXT" />
             <meta-data
+                android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
+                android:value="app.wardpulse.watchface,app.wardpulse.watchfacepush.main" />
+            <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
                 android:value="0" />
         </service>
 
         <service
-            android:name=".complication.Ring4ComplicationDataSourceService"
+            android:name=".complication.RingSplitComplicationDataSourceService"
             android:exported="true"
             android:icon="@drawable/ic_complication"
-            android:label="@string/ring4_complication"
+            android:label="@string/ring_split_complication"
             android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
             <intent-filter>
                 <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
             </intent-filter>
             <meta-data
                 android:name="android.support.wearable.complications.SUPPORTED_TYPES"
-                android:value="RANGED_VALUE,SHORT_TEXT" />
+                android:value="RANGED_VALUE" />
+            <meta-data
+                android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
+                android:value="app.wardpulse.watchface,app.wardpulse.watchfacepush.main" />
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
                 android:value="0" />
@@ -118,73 +135,31 @@
                 android:name="android.support.wearable.complications.SUPPORTED_TYPES"
                 android:value="SHORT_TEXT" />
             <meta-data
+                android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
+                android:value="app.wardpulse.watchface,app.wardpulse.watchfacepush.main" />
+            <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
                 android:value="0" />
         </service>
 
+
+
+
         <service
-            android:name=".complication.TokensComplicationDataSourceService"
+            android:name=".complication.StripSplitComplicationDataSourceService"
             android:exported="true"
             android:icon="@drawable/ic_complication"
-            android:label="@string/tokens_complication"
+            android:label="@string/split_marker_complication"
             android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
             <intent-filter>
                 <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
             </intent-filter>
             <meta-data
                 android:name="android.support.wearable.complications.SUPPORTED_TYPES"
-                android:value="SHORT_TEXT" />
+                android:value="RANGED_VALUE" />
             <meta-data
-                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
-                android:value="0" />
-        </service>
-
-        <service
-            android:name=".complication.Strip2ComplicationDataSourceService"
-            android:exported="true"
-            android:icon="@drawable/ic_complication"
-            android:label="@string/strip2_complication"
-            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
-            <intent-filter>
-                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
-            </intent-filter>
-            <meta-data
-                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
-                android:value="SHORT_TEXT" />
-            <meta-data
-                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
-                android:value="0" />
-        </service>
-
-        <service
-            android:name=".complication.Strip3ComplicationDataSourceService"
-            android:exported="true"
-            android:icon="@drawable/ic_complication"
-            android:label="@string/strip3_complication"
-            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
-            <intent-filter>
-                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
-            </intent-filter>
-            <meta-data
-                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
-                android:value="SHORT_TEXT" />
-            <meta-data
-                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
-                android:value="0" />
-        </service>
-
-        <service
-            android:name=".complication.Strip4ComplicationDataSourceService"
-            android:exported="true"
-            android:icon="@drawable/ic_complication"
-            android:label="@string/strip4_complication"
-            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
-            <intent-filter>
-                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
-            </intent-filter>
-            <meta-data
-                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
-                android:value="SHORT_TEXT" />
+                android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
+                android:value="app.wardpulse.watchface,app.wardpulse.watchfacepush.main" />
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
                 android:value="0" />

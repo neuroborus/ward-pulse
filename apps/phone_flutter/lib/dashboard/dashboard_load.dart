@@ -30,6 +30,12 @@ final class CapturedDashboardLoad {
   final Object? _error;
   final StackTrace? _stackTrace;
 
+  List<ConnectionReportingOutcome> get reportingOutcomes {
+    final error = _error;
+    return _value?.reportingOutcomes ??
+        (error is DashboardLoadException ? error.reportingOutcomes : const []);
+  }
+
   DashboardSnapshot get value {
     final value = _value;
     if (value != null) {
@@ -49,14 +55,8 @@ String loadFailureDetails(Object error) {
   if (error is WardPulseBindingsException) {
     return error.message;
   }
-  final message = error.toString().trim();
-  if (message.isEmpty) {
-    return 'Unexpected ${error.runtimeType}';
-  }
-  // Prefer the exception message (e.g. ArgumentError) while staying short.
-  final clipped =
-      message.length > 240 ? '${message.substring(0, 240)}…' : message;
-  return clipped;
+  // Arbitrary exception strings can include request input or response bodies.
+  return 'Reporting data could not be processed (${error.runtimeType}).';
 }
 
 /// Maps a reporting or normalize failure into a dashboard load issue.
@@ -94,8 +94,15 @@ Future<String?> readConnectionSecret({
     return await store.readSecret(id);
   } catch (_) {
     logger.record(ProviderSyncEvent.unavailable);
-    throw const DashboardLoadException(
+    throw DashboardLoadException.withOutcomes(
       issue: DashboardSyncIssue.credentialUnavailable,
+      reportingOutcomes: [
+        ConnectionReportingOutcome(
+          connection: id,
+          category: ReportingOutcomeCategory.localReadFailure,
+          source: ReportingOutcomeSource.local,
+        ),
+      ],
     );
   }
 }

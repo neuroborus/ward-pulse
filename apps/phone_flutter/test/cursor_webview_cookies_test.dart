@@ -59,7 +59,9 @@ void main() {
         isTrue,
       );
       expect(
-        isCursorSessionCookieHost(Uri.parse('https://authenticator.cursor.sh/')),
+        isCursorSessionCookieHost(
+          Uri.parse('https://authenticator.cursor.sh/'),
+        ),
         isFalse,
       );
       expect(

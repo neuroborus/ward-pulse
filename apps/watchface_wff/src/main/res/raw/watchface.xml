@@ -4,11 +4,23 @@
   (docs/product/WATCH_RING_DESIGN.md, baseline 2026-07-25).
 
   Visual target: apps/wear_android/design/round-*-plan*.svg
-  — radial lift background, ~14px visual stroke (WeightedStroke thickness
-  compensated), equal-width sunk strips (rx=6) stacked for a clear 3-up aperture.
+  — radial lift background, 40-unit ring stroke (WFF paints about half of it), equal-width
+  sunk strips (88, rx=6) sized for "100% · 10.0M". Strip slots are RANGED_VALUE so accents
+  use the same ColorRamp as arcs ([COMPLICATION.RANGED_VALUE_COLORS]).
 
-  BoundingArc clips ring-slot content — strips use BoundingBox slots after clock.
-  Center strip TEXT = full label (100% · 500); lower strips TEXT = digits, Template adds %%.
+  Ring type: the budget period from COMPLICATION.TITLE (D / 7D / M) repeated around the
+  band and punched out in the background colour at low alpha, so the arc underneath keeps
+  the family and the type stays a shade in the band.
+
+  Ring slots take a full-canvas BoundingBox: a BoundingArc clips a slot to its own
+  band and halves its stroke, so each band declares the 20 units it paints. That clip
+  is also what kept a strip out, so since 2026-10-09 each ring slot draws its own
+  legend row and the three slots that freed carry the upper cells instead.
+  Ring TEXT = full strip label (`46%` or `100% · 500` on the owning family).
+  Ring TITLE = the band's own token, suffixed with the outer-pool token when the
+  band is shared: one slot, two jobs, one string to say both in.
+  Remaining melt: Transform startAngle (1 - value/max)*359.9, endAngle fixed 359.9
+  so usage opens clockwise from 12 and remaining ends at 12.
 -->
 <WatchFace width="450" height="450">
     <Metadata key="CLOCK_TYPE" value="DIGITAL" />
@@ -27,6 +39,184 @@
                 </Fill>
             </Ellipse>
         </PartDraw>
+        <!-- What lies under the cells, declared ahead of every slot so a filled
+             cell's own opaque well covers it: 152,114  204,100  256,114 at 42 units, centres on a
+             curved row translated three units below its original concentric layout.
+             The middle and right cells
+             carry the default weather, which costs no complication slot. -->
+        <Group x="152" y="114" width="42" height="42" name="cell1Chrome">
+            <PartDraw x="0" y="0" width="42" height="42">
+                <Ellipse x="0" y="0" width="42" height="42">
+                    <Fill color="#ff0b0e0c">
+                        <RadialGradient
+                            centerX="21"
+                            centerY="21"
+                            radius="21"
+                            colors="#ff0b0e0c #ff0b0e0c #ff242a27"
+                            positions="0.0 0.55 1.0" />
+                    </Fill>
+                </Ellipse>
+            </PartDraw>
+        </Group>
+
+        <Group x="204" y="100" width="42" height="42" name="cell2Chrome">
+            <Condition>
+                <Expressions>
+                    <Expression name="hasWeather"><![CDATA[[WEATHER.IS_AVAILABLE]]]></Expression>
+                </Expressions>
+                <Compare expression="hasWeather">
+                    <Group x="0" y="0" width="42" height="42" name="cell2Reading">
+                        <PartDraw x="0" y="0" width="42" height="42">
+                            <Ellipse x="0" y="0" width="42" height="42">
+                                <Fill color="#eb0b0e0c" />
+                            </Ellipse>
+                        </PartDraw>
+                        <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                            <Arc
+                                centerX="21"
+                                centerY="21"
+                                width="40.5"
+                                height="40.5"
+                                startAngle="0"
+                                endAngle="359.9">
+                                <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                    <LinearGradient
+                                        startX="21"
+                                        startY="41.25"
+                                        endX="21"
+                                        endY="0.75"
+                                        colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                        positions="0 0.5 0.625 0.75 0.875 1" />
+                                </Stroke>
+                            </Arc>
+                        </PartDraw>
+                        <Condition>
+                            <Expressions>
+                                <Expression name="isCelsius"><![CDATA[[WEATHER.TEMPERATURE_UNIT] == 1]]></Expression>
+                                <Expression name="isFahrenheit"><![CDATA[[WEATHER.TEMPERATURE_UNIT] == 2]]></Expression>
+                            </Expressions>
+                            <Compare expression="isCelsius">
+                                <PartText x="2" y="12" width="37" height="18" alpha="255">
+                                    <Variant mode="AMBIENT" target="alpha" value="140" />
+                                    <Text align="CENTER" ellipsis="TRUE">
+                                        <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                            <Template>%s°C
+                                                <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                            </Template>
+                                        </Font>
+                                    </Text>
+                                </PartText>
+                            </Compare>
+                            <Compare expression="isFahrenheit">
+                                <PartText x="2" y="12" width="37" height="18" alpha="255">
+                                    <Variant mode="AMBIENT" target="alpha" value="140" />
+                                    <Text align="CENTER" ellipsis="TRUE">
+                                        <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                            <Template>%s°F
+                                                <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                            </Template>
+                                        </Font>
+                                    </Text>
+                                </PartText>
+                            </Compare>
+                            <Default>
+                                <PartText x="2" y="12" width="37" height="18" alpha="255">
+                                    <Variant mode="AMBIENT" target="alpha" value="140" />
+                                    <Text align="CENTER" ellipsis="TRUE">
+                                        <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                            <Template>%s°
+                                                <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                            </Template>
+                                        </Font>
+                                    </Text>
+                                </PartText>
+                            </Default>
+                        </Condition>
+                    </Group>
+                </Compare>
+                <Default>
+                    <Group x="0" y="0" width="42" height="42" name="cell2Bare">
+                        <PartDraw x="0" y="0" width="42" height="42">
+                            <Ellipse x="0" y="0" width="42" height="42">
+                                <Fill color="#ff0b0e0c">
+                                    <RadialGradient
+                                        centerX="21"
+                                        centerY="21"
+                                        radius="21"
+                                        colors="#ff0b0e0c #ff0b0e0c #ff242a27"
+                                        positions="0.0 0.55 1.0" />
+                                </Fill>
+                            </Ellipse>
+                        </PartDraw>
+                    </Group>
+                </Default>
+            </Condition>
+        </Group>
+
+        <Group x="256" y="114" width="42" height="42" name="cell3Chrome">
+            <Condition>
+                <Expressions>
+                    <Expression name="hasWeather"><![CDATA[[WEATHER.IS_AVAILABLE]]]></Expression>
+                </Expressions>
+                <Compare expression="hasWeather">
+                    <Group x="0" y="0" width="42" height="42" name="cell3Reading">
+                        <PartDraw x="0" y="0" width="42" height="42">
+                            <Ellipse x="0" y="0" width="42" height="42">
+                                <Fill color="#eb0b0e0c" />
+                            </Ellipse>
+                        </PartDraw>
+                        <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                            <Arc
+                                centerX="21"
+                                centerY="21"
+                                width="40.5"
+                                height="40.5"
+                                startAngle="0"
+                                endAngle="359.9">
+                                <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                    <LinearGradient
+                                        startX="10.869379"
+                                        startY="38.533768"
+                                        endX="31.130621"
+                                        endY="3.466232"
+                                        colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                        positions="0 0.5 0.625 0.75 0.875 1" />
+                                </Stroke>
+                            </Arc>
+                        </PartDraw>
+                        <PartText x="2" y="12" width="37" height="18" alpha="255">
+                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                    <Template>UV %s
+                                        <Parameter expression="[WEATHER.UV_INDEX]" />
+                                    </Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Group>
+                </Compare>
+                <Default>
+                    <Group x="0" y="0" width="42" height="42" name="cell3Bare">
+                        <PartDraw x="0" y="0" width="42" height="42">
+                            <Ellipse x="0" y="0" width="42" height="42">
+                                <Fill color="#ff0b0e0c">
+                                    <RadialGradient
+                                        centerX="21"
+                                        centerY="21"
+                                        radius="21"
+                                        colors="#ff0b0e0c #ff0b0e0c #ff242a27"
+                                        positions="0.0 0.55 1.0" />
+                                </Fill>
+                            </Ellipse>
+                        </PartDraw>
+                    </Group>
+                </Default>
+            </Condition>
+        </Group>
+
         <ComplicationSlot
             x="0"
             y="0"
@@ -41,56 +231,364 @@
                 primaryProviderType="RANGED_VALUE"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingArc
-                centerX="225"
-                centerY="225"
-                width="392"
-                height="392"
-                thickness="28"
-                startAngle="0"
-                endAngle="359.9"
-                isRoundEdge="TRUE" />
+            <BoundingBox x="0" y="0" width="450" height="450" />
             <Complication type="RANGED_VALUE">
+                <!-- The band, unless this is the lone credits row: that one has a
+                     reading but no ring behind it, so it draws its strip only. -->
                 <Condition>
                     <Expressions>
-                        <Expression name="hasRing">
-                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]>
+                        <Expression name="hasBand">
+                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 0 && !([COMPLICATION.TITLE] == "credits")]]>
                         </Expression>
                     </Expressions>
-                    <Compare expression="hasRing">
-                        <Group x="0" y="0" width="450" height="450" name="ring1">
-                            <PartDraw x="0" y="0" width="450" height="450">
-                                <Arc
-                                    centerX="225"
-                                    centerY="225"
-                                    width="392"
-                                    height="392"
-                                    startAngle="0"
-                                    endAngle="359.9">
-                                    <Stroke color="#ff2e3632" thickness="28" cap="ROUND" />
-                                </Arc>
-                            </PartDraw>
-                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
-                                <Variant mode="AMBIENT" target="alpha" value="140" />
-                                <Arc
-                                    centerX="225"
-                                    centerY="225"
-                                    width="392"
-                                    height="392"
-                                    startAngle="0"
-                                    endAngle="0">
-                                    <Transform
-                                        target="endAngle"
-                                        value="([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9" />
-                                    <WeightedStroke
-                                        thickness="28"
-                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-                                        cap="ROUND" />
-                                </Arc>
-                            </PartDraw>
-                        </Group>
+                    <Compare expression="hasBand">
+                        <!-- Shared band: this slot keeps the inner half, the outer one
+                             comes from the slot that serves every band. -->
+                        <Condition>
+                            <Expressions>
+                                <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
+                            </Expressions>
+                            <Compare expression="isSplit">
+                                <Group x="0" y="0" width="450" height="450" name="ring1Half">
+                                    <PartDraw x="0" y="0" width="450" height="450">
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="374"
+                                            height="374"
+                                            startAngle="0"
+                                            endAngle="359.9">
+                                            <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                        </Expressions>
+                                        <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                        <Compare expression="hasRemaining">
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                            <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008502]]></Expression>
+                                        </Expressions>
+                                        <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                             leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                             the transform so the two round caps close over each other. -->
+                                        <Compare expression="isFull">
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="374"
+                                                    height="374"
+                                                    startAngle="0"
+                                                    endAngle="358.37">
+                                                    <WeightedStroke
+                                                        thickness="10"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Compare>
+                                        <!-- The two-cap inset cannot represent a smaller positive remainder:
+                                             its sweep would be zero or negative. Keep the proportional
+                                             centreline without either inset and use straight ends so the
+                                             visible sweep does not overstate the remainder. -->
+                                        <Compare expression="isNearEmpty">
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="374"
+                                                    height="374"
+                                                    startAngle="0"
+                                                    endAngle="359.9">
+                                                    <Transform
+                                                        target="startAngle"
+                                                        value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                                    <WeightedStroke
+                                                        thickness="10"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="BUTT" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Compare>
+                                        <Default>
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="374"
+                                                    height="374"
+                                                    startAngle="0"
+                                                    endAngle="358.37">
+                                                    <Transform
+                                                        target="startAngle"
+                                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.53, 0, 358.37)" />
+                                                    <WeightedStroke
+                                                        thickness="10"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Default>
+                                    </Condition>
+                                        </Compare>
+                                    </Condition>
+                                </Group>
+                            </Compare>
+                            <Default>
+                                <Group x="0" y="0" width="450" height="450" name="ring1">
+                                    <PartDraw x="0" y="0" width="450" height="450">
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="384"
+                                            height="384"
+                                            startAngle="0"
+                                            endAngle="359.9">
+                                            <Stroke color="#ff2e3632" thickness="20" cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                        </Expressions>
+                                        <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                        <Compare expression="hasRemaining">
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                            <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.016560]]></Expression>
+                                        </Expressions>
+                                        <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                             leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                             the transform so the two round caps close over each other. -->
+                                        <Compare expression="isFull">
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="384"
+                                                    height="384"
+                                                    startAngle="0"
+                                                    endAngle="356.92">
+                                                    <WeightedStroke
+                                                        thickness="20"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Compare>
+                                        <!-- The two-cap inset cannot represent a smaller positive remainder:
+                                             its sweep would be zero or negative. Keep the proportional
+                                             centreline without either inset and use straight ends so the
+                                             visible sweep does not overstate the remainder. -->
+                                        <Compare expression="isNearEmpty">
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="384"
+                                                    height="384"
+                                                    startAngle="0"
+                                                    endAngle="359.9">
+                                                    <Transform
+                                                        target="startAngle"
+                                                        value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                                    <WeightedStroke
+                                                        thickness="20"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="BUTT" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Compare>
+                                        <Default>
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="384"
+                                                    height="384"
+                                                    startAngle="0"
+                                                    endAngle="356.92">
+                                                    <Transform
+                                                        target="startAngle"
+                                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 2.98, 0, 356.92)" />
+                                                    <WeightedStroke
+                                                        thickness="20"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Default>
+                                    </Condition>
+                                        </Compare>
+                                    </Condition>
+                            <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="isDay"><![CDATA[[COMPLICATION.TITLE] == "D"]]></Expression>
+                                    <Expression name="isWeek"><![CDATA[[COMPLICATION.TITLE] == "7D"]]></Expression>
+                                    <Expression name="isMonth"><![CDATA[[COMPLICATION.TITLE] == "M"]]></Expression>
+                                </Expressions>
+                                <Compare expression="isDay">
+                                    <PartImage x="23" y="23" width="404" height="404" alpha="115">
+                                        <Variant mode="AMBIENT" target="alpha" value="63" />
+                                        <Image resource="ring1_type_day" />
+                                    </PartImage>
+                                </Compare>
+                                <Compare expression="isWeek">
+                                    <PartImage x="23" y="23" width="404" height="404" alpha="115">
+                                        <Variant mode="AMBIENT" target="alpha" value="63" />
+                                        <Image resource="ring1_type_week" />
+                                    </PartImage>
+                                </Compare>
+                                <Compare expression="isMonth">
+                                    <PartImage x="23" y="23" width="404" height="404" alpha="115">
+                                        <Variant mode="AMBIENT" target="alpha" value="63" />
+                                        <Image resource="ring1_type_month" />
+                                    </PartImage>
+                                </Compare>
+                            </Condition>
+                                </Group>
+                            </Default>
+                        </Condition>
                     </Compare>
                 </Condition>
+                <!-- The legend row this ring owns. Its own slot since 2026-10-09:
+                     the three the strips held are the three the cells took. -->
+                <Group x="181" y="325" width="88" height="18" name="ring1_strip" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="90" />
+                    <PartDraw x="0" y="0" width="88" height="18">
+                        <RoundRectangle x="0" y="0" width="88" height="18" cornerRadiusX="6" cornerRadiusY="6">
+                            <Fill color="#eb0b0e0c" />
+                        </RoundRectangle>
+                        <!-- Family accent from ColorRamp (same path as matching ring). -->
+                        <Arc
+                            centerX="1.5"
+                            centerY="9"
+                            width="3"
+                            height="14"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <WeightedStroke
+                                thickness="3"
+                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                cap="BUTT" />
+                        </Arc>
+                    </PartDraw>
+                    <Condition>
+                        <Expressions>
+                            <Expression name="isPool0"><![CDATA[[COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both"]]></Expression>
+                            <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
+                        </Expressions>
+                        <Compare expression="isPool0">
+                            <PartDraw x="0" y="0" width="88" height="18">
+                                <Arc
+                                    centerX="86.5"
+                                    centerY="9"
+                                    width="3"
+                                    height="14"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke thickness="3" color="#67E8D4" cap="BUTT" />
+                                </Arc>
+                            </PartDraw>
+                        </Compare>
+                        <Compare expression="isPool1">
+                            <PartDraw x="0" y="0" width="88" height="18">
+                                <Arc
+                                    centerX="86.5"
+                                    centerY="9"
+                                    width="3"
+                                    height="14"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke thickness="3" color="#186020" cap="BUTT" />
+                                </Arc>
+                            </PartDraw>
+                        </Compare>
+                    </Condition>
+                    <Condition>
+                        <Expressions>
+                            <Expression name="zeroInner"><![CDATA[[COMPLICATION.TITLE] == "zero" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-inner"]]></Expression>
+                            <Expression name="zeroOuter"><![CDATA[[COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-outer"]]></Expression>
+                            <Expression name="zeroBoth"><![CDATA[[COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
+                        </Expressions>
+                        <Compare expression="zeroInner">
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Compare expression="zeroOuter">
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Compare expression="zeroBoth">
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Default>
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Default>
+                    </Condition>
+                </Group>
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>
@@ -109,56 +607,364 @@
                 primaryProviderType="RANGED_VALUE"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingArc
-                centerX="225"
-                centerY="225"
-                width="356"
-                height="356"
-                thickness="28"
-                startAngle="0"
-                endAngle="359.9"
-                isRoundEdge="TRUE" />
+            <BoundingBox x="0" y="0" width="450" height="450" />
             <Complication type="RANGED_VALUE">
+                <!-- The band, unless this is the lone credits row: that one has a
+                     reading but no ring behind it, so it draws its strip only. -->
                 <Condition>
                     <Expressions>
-                        <Expression name="hasRing">
-                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]>
+                        <Expression name="hasBand">
+                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 0 && !([COMPLICATION.TITLE] == "credits")]]>
                         </Expression>
                     </Expressions>
-                    <Compare expression="hasRing">
-                        <Group x="0" y="0" width="450" height="450" name="ring2">
-                            <PartDraw x="0" y="0" width="450" height="450">
-                                <Arc
-                                    centerX="225"
-                                    centerY="225"
-                                    width="356"
-                                    height="356"
-                                    startAngle="0"
-                                    endAngle="359.9">
-                                    <Stroke color="#ff2e3632" thickness="28" cap="ROUND" />
-                                </Arc>
-                            </PartDraw>
-                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
-                                <Variant mode="AMBIENT" target="alpha" value="140" />
-                                <Arc
-                                    centerX="225"
-                                    centerY="225"
-                                    width="356"
-                                    height="356"
-                                    startAngle="0"
-                                    endAngle="0">
-                                    <Transform
-                                        target="endAngle"
-                                        value="([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9" />
-                                    <WeightedStroke
-                                        thickness="28"
-                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-                                        cap="ROUND" />
-                                </Arc>
-                            </PartDraw>
-                        </Group>
+                    <Compare expression="hasBand">
+                        <!-- Shared band: this slot keeps the inner half, the outer one
+                             comes from the slot that serves every band. -->
+                        <Condition>
+                            <Expressions>
+                                <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
+                            </Expressions>
+                            <Compare expression="isSplit">
+                                <Group x="0" y="0" width="450" height="450" name="ring2Half">
+                                    <PartDraw x="0" y="0" width="450" height="450">
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="326"
+                                            height="326"
+                                            startAngle="0"
+                                            endAngle="359.9">
+                                            <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                        </Expressions>
+                                        <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                        <Compare expression="hasRemaining">
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                            <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009780]]></Expression>
+                                        </Expressions>
+                                        <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                             leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                             the transform so the two round caps close over each other. -->
+                                        <Compare expression="isFull">
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="326"
+                                                    height="326"
+                                                    startAngle="0"
+                                                    endAngle="358.14">
+                                                    <WeightedStroke
+                                                        thickness="10"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Compare>
+                                        <!-- The two-cap inset cannot represent a smaller positive remainder:
+                                             its sweep would be zero or negative. Keep the proportional
+                                             centreline without either inset and use straight ends so the
+                                             visible sweep does not overstate the remainder. -->
+                                        <Compare expression="isNearEmpty">
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="326"
+                                                    height="326"
+                                                    startAngle="0"
+                                                    endAngle="359.9">
+                                                    <Transform
+                                                        target="startAngle"
+                                                        value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                                    <WeightedStroke
+                                                        thickness="10"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="BUTT" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Compare>
+                                        <Default>
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="326"
+                                                    height="326"
+                                                    startAngle="0"
+                                                    endAngle="358.14">
+                                                    <Transform
+                                                        target="startAngle"
+                                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.76, 0, 358.14)" />
+                                                    <WeightedStroke
+                                                        thickness="10"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Default>
+                                    </Condition>
+                                        </Compare>
+                                    </Condition>
+                                </Group>
+                            </Compare>
+                            <Default>
+                                <Group x="0" y="0" width="450" height="450" name="ring2">
+                                    <PartDraw x="0" y="0" width="450" height="450">
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="336"
+                                            height="336"
+                                            startAngle="0"
+                                            endAngle="359.9">
+                                            <Stroke color="#ff2e3632" thickness="20" cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                        </Expressions>
+                                        <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                        <Compare expression="hasRemaining">
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                            <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.018950]]></Expression>
+                                        </Expressions>
+                                        <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                             leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                             the transform so the two round caps close over each other. -->
+                                        <Compare expression="isFull">
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="336"
+                                                    height="336"
+                                                    startAngle="0"
+                                                    endAngle="356.49">
+                                                    <WeightedStroke
+                                                        thickness="20"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Compare>
+                                        <!-- The two-cap inset cannot represent a smaller positive remainder:
+                                             its sweep would be zero or negative. Keep the proportional
+                                             centreline without either inset and use straight ends so the
+                                             visible sweep does not overstate the remainder. -->
+                                        <Compare expression="isNearEmpty">
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="336"
+                                                    height="336"
+                                                    startAngle="0"
+                                                    endAngle="359.9">
+                                                    <Transform
+                                                        target="startAngle"
+                                                        value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                                    <WeightedStroke
+                                                        thickness="20"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="BUTT" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Compare>
+                                        <Default>
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="336"
+                                                    height="336"
+                                                    startAngle="0"
+                                                    endAngle="356.49">
+                                                    <Transform
+                                                        target="startAngle"
+                                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 3.41, 0, 356.49)" />
+                                                    <WeightedStroke
+                                                        thickness="20"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Default>
+                                    </Condition>
+                                        </Compare>
+                                    </Condition>
+                            <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="isDay"><![CDATA[[COMPLICATION.TITLE] == "D"]]></Expression>
+                                    <Expression name="isWeek"><![CDATA[[COMPLICATION.TITLE] == "7D"]]></Expression>
+                                    <Expression name="isMonth"><![CDATA[[COMPLICATION.TITLE] == "M"]]></Expression>
+                                </Expressions>
+                                <Compare expression="isDay">
+                                    <PartImage x="47" y="47" width="356" height="356" alpha="115">
+                                        <Variant mode="AMBIENT" target="alpha" value="63" />
+                                        <Image resource="ring2_type_day" />
+                                    </PartImage>
+                                </Compare>
+                                <Compare expression="isWeek">
+                                    <PartImage x="47" y="47" width="356" height="356" alpha="115">
+                                        <Variant mode="AMBIENT" target="alpha" value="63" />
+                                        <Image resource="ring2_type_week" />
+                                    </PartImage>
+                                </Compare>
+                                <Compare expression="isMonth">
+                                    <PartImage x="47" y="47" width="356" height="356" alpha="115">
+                                        <Variant mode="AMBIENT" target="alpha" value="63" />
+                                        <Image resource="ring2_type_month" />
+                                    </PartImage>
+                                </Compare>
+                            </Condition>
+                                </Group>
+                            </Default>
+                        </Condition>
                     </Compare>
                 </Condition>
+                <!-- The legend row this ring owns. Its own slot since 2026-10-09:
+                     the three the strips held are the three the cells took. -->
+                <Group x="181" y="304" width="88" height="18" name="ring2_strip" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="90" />
+                    <PartDraw x="0" y="0" width="88" height="18">
+                        <RoundRectangle x="0" y="0" width="88" height="18" cornerRadiusX="6" cornerRadiusY="6">
+                            <Fill color="#eb0b0e0c" />
+                        </RoundRectangle>
+                        <!-- Family accent from ColorRamp (same path as matching ring). -->
+                        <Arc
+                            centerX="1.5"
+                            centerY="9"
+                            width="3"
+                            height="14"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <WeightedStroke
+                                thickness="3"
+                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                cap="BUTT" />
+                        </Arc>
+                    </PartDraw>
+                    <Condition>
+                        <Expressions>
+                            <Expression name="isPool0"><![CDATA[[COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both"]]></Expression>
+                            <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
+                        </Expressions>
+                        <Compare expression="isPool0">
+                            <PartDraw x="0" y="0" width="88" height="18">
+                                <Arc
+                                    centerX="86.5"
+                                    centerY="9"
+                                    width="3"
+                                    height="14"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke thickness="3" color="#67E8D4" cap="BUTT" />
+                                </Arc>
+                            </PartDraw>
+                        </Compare>
+                        <Compare expression="isPool1">
+                            <PartDraw x="0" y="0" width="88" height="18">
+                                <Arc
+                                    centerX="86.5"
+                                    centerY="9"
+                                    width="3"
+                                    height="14"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke thickness="3" color="#186020" cap="BUTT" />
+                                </Arc>
+                            </PartDraw>
+                        </Compare>
+                    </Condition>
+                    <Condition>
+                        <Expressions>
+                            <Expression name="zeroInner"><![CDATA[[COMPLICATION.TITLE] == "zero" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-inner"]]></Expression>
+                            <Expression name="zeroOuter"><![CDATA[[COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-outer"]]></Expression>
+                            <Expression name="zeroBoth"><![CDATA[[COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
+                        </Expressions>
+                        <Compare expression="zeroInner">
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Compare expression="zeroOuter">
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Compare expression="zeroBoth">
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Default>
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Default>
+                    </Condition>
+                </Group>
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>
@@ -177,53 +983,675 @@
                 primaryProviderType="RANGED_VALUE"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
+            <BoundingBox x="0" y="0" width="450" height="450" />
+            <Complication type="RANGED_VALUE">
+                <!-- The band, unless this is the lone credits row: that one has a
+                     reading but no ring behind it, so it draws its strip only. -->
+                <Condition>
+                    <Expressions>
+                        <Expression name="hasBand">
+                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 0 && !([COMPLICATION.TITLE] == "credits")]]>
+                        </Expression>
+                    </Expressions>
+                    <Compare expression="hasBand">
+                        <!-- Shared band: this slot keeps the inner half, the outer one
+                             comes from the slot that serves every band. -->
+                        <Condition>
+                            <Expressions>
+                                <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
+                            </Expressions>
+                            <Compare expression="isSplit">
+                                <Group x="0" y="0" width="450" height="450" name="ring3Half">
+                                    <PartDraw x="0" y="0" width="450" height="450">
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="278"
+                                            height="278"
+                                            startAngle="0"
+                                            endAngle="359.9">
+                                            <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                        </Expressions>
+                                        <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                        <Compare expression="hasRemaining">
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                            <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.011448]]></Expression>
+                                        </Expressions>
+                                        <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                             leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                             the transform so the two round caps close over each other. -->
+                                        <Compare expression="isFull">
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="278"
+                                                    height="278"
+                                                    startAngle="0"
+                                                    endAngle="357.84">
+                                                    <WeightedStroke
+                                                        thickness="10"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Compare>
+                                        <!-- The two-cap inset cannot represent a smaller positive remainder:
+                                             its sweep would be zero or negative. Keep the proportional
+                                             centreline without either inset and use straight ends so the
+                                             visible sweep does not overstate the remainder. -->
+                                        <Compare expression="isNearEmpty">
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="278"
+                                                    height="278"
+                                                    startAngle="0"
+                                                    endAngle="359.9">
+                                                    <Transform
+                                                        target="startAngle"
+                                                        value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                                    <WeightedStroke
+                                                        thickness="10"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="BUTT" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Compare>
+                                        <Default>
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="278"
+                                                    height="278"
+                                                    startAngle="0"
+                                                    endAngle="357.84">
+                                                    <Transform
+                                                        target="startAngle"
+                                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 2.06, 0, 357.84)" />
+                                                    <WeightedStroke
+                                                        thickness="10"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Default>
+                                    </Condition>
+                                        </Compare>
+                                    </Condition>
+                                </Group>
+                            </Compare>
+                            <Default>
+                                <Group x="0" y="0" width="450" height="450" name="ring3">
+                                    <PartDraw x="0" y="0" width="450" height="450">
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="288"
+                                            height="288"
+                                            startAngle="0"
+                                            endAngle="359.9">
+                                            <Stroke color="#ff2e3632" thickness="20" cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                        </Expressions>
+                                        <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                        <Compare expression="hasRemaining">
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                            <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.022117]]></Expression>
+                                        </Expressions>
+                                        <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                             leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                             the transform so the two round caps close over each other. -->
+                                        <Compare expression="isFull">
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="288"
+                                                    height="288"
+                                                    startAngle="0"
+                                                    endAngle="355.92">
+                                                    <WeightedStroke
+                                                        thickness="20"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Compare>
+                                        <!-- The two-cap inset cannot represent a smaller positive remainder:
+                                             its sweep would be zero or negative. Keep the proportional
+                                             centreline without either inset and use straight ends so the
+                                             visible sweep does not overstate the remainder. -->
+                                        <Compare expression="isNearEmpty">
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="288"
+                                                    height="288"
+                                                    startAngle="0"
+                                                    endAngle="359.9">
+                                                    <Transform
+                                                        target="startAngle"
+                                                        value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                                    <WeightedStroke
+                                                        thickness="20"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="BUTT" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Compare>
+                                        <Default>
+                                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="288"
+                                                    height="288"
+                                                    startAngle="0"
+                                                    endAngle="355.92">
+                                                    <Transform
+                                                        target="startAngle"
+                                                        value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 3.98, 0, 355.92)" />
+                                                    <WeightedStroke
+                                                        thickness="20"
+                                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                        cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Default>
+                                    </Condition>
+                                        </Compare>
+                                    </Condition>
+                            <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="isDay"><![CDATA[[COMPLICATION.TITLE] == "D"]]></Expression>
+                                    <Expression name="isWeek"><![CDATA[[COMPLICATION.TITLE] == "7D"]]></Expression>
+                                    <Expression name="isMonth"><![CDATA[[COMPLICATION.TITLE] == "M"]]></Expression>
+                                </Expressions>
+                                <Compare expression="isDay">
+                                    <PartImage x="71" y="71" width="308" height="308" alpha="115">
+                                        <Variant mode="AMBIENT" target="alpha" value="63" />
+                                        <Image resource="ring3_type_day" />
+                                    </PartImage>
+                                </Compare>
+                                <Compare expression="isWeek">
+                                    <PartImage x="71" y="71" width="308" height="308" alpha="115">
+                                        <Variant mode="AMBIENT" target="alpha" value="63" />
+                                        <Image resource="ring3_type_week" />
+                                    </PartImage>
+                                </Compare>
+                                <Compare expression="isMonth">
+                                    <PartImage x="71" y="71" width="308" height="308" alpha="115">
+                                        <Variant mode="AMBIENT" target="alpha" value="63" />
+                                        <Image resource="ring3_type_month" />
+                                    </PartImage>
+                                </Compare>
+                            </Condition>
+                                </Group>
+                            </Default>
+                        </Condition>
+                    </Compare>
+                </Condition>
+                <!-- The legend row this ring owns. Its own slot since 2026-10-09:
+                     the three the strips held are the three the cells took. -->
+                <Group x="181" y="283" width="88" height="18" name="ring3_strip" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="90" />
+                    <PartDraw x="0" y="0" width="88" height="18">
+                        <RoundRectangle x="0" y="0" width="88" height="18" cornerRadiusX="6" cornerRadiusY="6">
+                            <Fill color="#eb0b0e0c" />
+                        </RoundRectangle>
+                        <!-- Family accent from ColorRamp (same path as matching ring). -->
+                        <Arc
+                            centerX="1.5"
+                            centerY="9"
+                            width="3"
+                            height="14"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <WeightedStroke
+                                thickness="3"
+                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                cap="BUTT" />
+                        </Arc>
+                    </PartDraw>
+                    <Condition>
+                        <Expressions>
+                            <Expression name="isPool0"><![CDATA[[COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both"]]></Expression>
+                            <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
+                        </Expressions>
+                        <Compare expression="isPool0">
+                            <PartDraw x="0" y="0" width="88" height="18">
+                                <Arc
+                                    centerX="86.5"
+                                    centerY="9"
+                                    width="3"
+                                    height="14"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke thickness="3" color="#67E8D4" cap="BUTT" />
+                                </Arc>
+                            </PartDraw>
+                        </Compare>
+                        <Compare expression="isPool1">
+                            <PartDraw x="0" y="0" width="88" height="18">
+                                <Arc
+                                    centerX="86.5"
+                                    centerY="9"
+                                    width="3"
+                                    height="14"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke thickness="3" color="#186020" cap="BUTT" />
+                                </Arc>
+                            </PartDraw>
+                        </Compare>
+                    </Condition>
+                    <Condition>
+                        <Expressions>
+                            <Expression name="zeroInner"><![CDATA[[COMPLICATION.TITLE] == "zero" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-inner"]]></Expression>
+                            <Expression name="zeroOuter"><![CDATA[[COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-outer"]]></Expression>
+                            <Expression name="zeroBoth"><![CDATA[[COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
+                        </Expressions>
+                        <Compare expression="zeroInner">
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Compare expression="zeroOuter">
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Compare expression="zeroBoth">
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                        </Template>
+                                    </Font>
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
+                                        <Template>%s
+                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Default>
+                            <PartText x="6" y="0" width="78" height="18">
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Default>
+                    </Condition>
+                </Group>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <ComplicationSlot
+            x="0"
+            y="0"
+            width="450"
+            height="450"
+            slotId="106"
+            displayName="@string/outer_half_complication"
+            supportedTypes="RANGED_VALUE EMPTY"
+            isCustomizable="FALSE">
+            <DefaultProviderPolicy
+                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.RingSplitComplicationDataSourceService"
+                primaryProviderType="RANGED_VALUE"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
             <BoundingArc
                 centerX="225"
                 centerY="225"
-                width="320"
-                height="320"
-                thickness="28"
+                width="414"
+                height="414"
+                thickness="68"
                 startAngle="0"
                 endAngle="359.9"
                 isRoundEdge="TRUE" />
             <Complication type="RANGED_VALUE">
                 <Condition>
                     <Expressions>
-                        <Expression name="hasRing">
-                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]>
-                        </Expression>
+                        <Expression name="isBand0"><![CDATA[[COMPLICATION.TITLE] == "0"]]></Expression>
+                        <Expression name="isBand1"><![CDATA[[COMPLICATION.TITLE] == "1"]]></Expression>
+                        <Expression name="isBand2"><![CDATA[[COMPLICATION.TITLE] == "2"]]></Expression>
                     </Expressions>
-                    <Compare expression="hasRing">
-                        <Group x="0" y="0" width="450" height="450" name="ring3">
+                    <Compare expression="isBand0">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_1">
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
                                     centerY="225"
-                                    width="320"
-                                    height="320"
+                                    width="394"
+                                    height="394"
                                     startAngle="0"
                                     endAngle="359.9">
-                                    <Stroke color="#ff2e3632" thickness="28" cap="ROUND" />
+                                    <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
                                 </Arc>
                             </PartDraw>
-                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
-                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                </Expressions>
+                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                <Compare expression="hasRemaining">
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008058]]></Expression>
+                                </Expressions>
+                                <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                     leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                     the transform so the two round caps close over each other. -->
+                                <Compare expression="isFull">
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="394"
+                                            height="394"
+                                            startAngle="0"
+                                            endAngle="358.45">
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Compare>
+                                <!-- The two-cap inset cannot represent a smaller positive remainder:
+                                     its sweep would be zero or negative. Keep the proportional
+                                     centreline without either inset and use straight ends so the
+                                     visible sweep does not overstate the remainder. -->
+                                <Compare expression="isNearEmpty">
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="394"
+                                            height="394"
+                                            startAngle="0"
+                                            endAngle="359.9">
+                                            <Transform
+                                                target="startAngle"
+                                                value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="BUTT" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Compare>
+                                <Default>
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="394"
+                                            height="394"
+                                            startAngle="0"
+                                            endAngle="358.45">
+                                            <Transform
+                                                target="startAngle"
+                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.45, 0, 358.45)" />
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Default>
+                            </Condition>
+                                </Compare>
+                            </Condition>
+                        </Group>
+                    </Compare>
+                    <Compare expression="isBand1">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_2">
+                            <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
                                     centerY="225"
-                                    width="320"
-                                    height="320"
+                                    width="346"
+                                    height="346"
                                     startAngle="0"
-                                    endAngle="0">
-                                    <Transform
-                                        target="endAngle"
-                                        value="([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9" />
-                                    <WeightedStroke
-                                        thickness="28"
-                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-                                        cap="ROUND" />
+                                    endAngle="359.9">
+                                    <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
                                 </Arc>
                             </PartDraw>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                </Expressions>
+                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                <Compare expression="hasRemaining">
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009225]]></Expression>
+                                </Expressions>
+                                <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                     leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                     the transform so the two round caps close over each other. -->
+                                <Compare expression="isFull">
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="346"
+                                            height="346"
+                                            startAngle="0"
+                                            endAngle="358.24">
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Compare>
+                                <!-- The two-cap inset cannot represent a smaller positive remainder:
+                                     its sweep would be zero or negative. Keep the proportional
+                                     centreline without either inset and use straight ends so the
+                                     visible sweep does not overstate the remainder. -->
+                                <Compare expression="isNearEmpty">
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="346"
+                                            height="346"
+                                            startAngle="0"
+                                            endAngle="359.9">
+                                            <Transform
+                                                target="startAngle"
+                                                value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="BUTT" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Compare>
+                                <Default>
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="346"
+                                            height="346"
+                                            startAngle="0"
+                                            endAngle="358.24">
+                                            <Transform
+                                                target="startAngle"
+                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.66, 0, 358.24)" />
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Default>
+                            </Condition>
+                                </Compare>
+                            </Condition>
+                        </Group>
+                    </Compare>
+                    <Compare expression="isBand2">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_3">
+                            <PartDraw x="0" y="0" width="450" height="450">
+                                <Arc
+                                    centerX="225"
+                                    centerY="225"
+                                    width="298"
+                                    height="298"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
+                                </Arc>
+                            </PartDraw>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                </Expressions>
+                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                <Compare expression="hasRemaining">
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.010670]]></Expression>
+                                </Expressions>
+                                <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                     leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                     the transform so the two round caps close over each other. -->
+                                <Compare expression="isFull">
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="298"
+                                            height="298"
+                                            startAngle="0"
+                                            endAngle="357.98">
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Compare>
+                                <!-- The two-cap inset cannot represent a smaller positive remainder:
+                                     its sweep would be zero or negative. Keep the proportional
+                                     centreline without either inset and use straight ends so the
+                                     visible sweep does not overstate the remainder. -->
+                                <Compare expression="isNearEmpty">
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="298"
+                                            height="298"
+                                            startAngle="0"
+                                            endAngle="359.9">
+                                            <Transform
+                                                target="startAngle"
+                                                value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="BUTT" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Compare>
+                                <Default>
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="298"
+                                            height="298"
+                                            startAngle="0"
+                                            endAngle="357.98">
+                                            <Transform
+                                                target="startAngle"
+                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.92, 0, 357.98)" />
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Default>
+                            </Condition>
+                                </Compare>
+                            </Condition>
                         </Group>
                     </Compare>
                 </Condition>
@@ -236,62 +1664,308 @@
             y="0"
             width="450"
             height="450"
-            slotId="106"
-            displayName="@string/ring4_complication"
+            slotId="109"
+            displayName="@string/split_marker_complication"
             supportedTypes="RANGED_VALUE EMPTY"
             isCustomizable="FALSE">
             <DefaultProviderPolicy
-                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.Ring4ComplicationDataSourceService"
+                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.StripSplitComplicationDataSourceService"
                 primaryProviderType="RANGED_VALUE"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
             <BoundingArc
                 centerX="225"
                 centerY="225"
-                width="284"
-                height="284"
-                thickness="28"
+                width="414"
+                height="414"
+                thickness="68"
                 startAngle="0"
                 endAngle="359.9"
                 isRoundEdge="TRUE" />
             <Complication type="RANGED_VALUE">
                 <Condition>
                     <Expressions>
-                        <Expression name="hasRing">
-                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]>
-                        </Expression>
+                        <Expression name="isBand0"><![CDATA[[COMPLICATION.TITLE] == "0"]]></Expression>
+                        <Expression name="isBand1"><![CDATA[[COMPLICATION.TITLE] == "1"]]></Expression>
+                        <Expression name="isBand2"><![CDATA[[COMPLICATION.TITLE] == "2"]]></Expression>
                     </Expressions>
-                    <Compare expression="hasRing">
-                        <Group x="0" y="0" width="450" height="450" name="ring4">
+                    <Compare expression="isBand0">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_1">
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
                                     centerY="225"
-                                    width="284"
-                                    height="284"
+                                    width="394"
+                                    height="394"
                                     startAngle="0"
                                     endAngle="359.9">
-                                    <Stroke color="#ff2e3632" thickness="28" cap="ROUND" />
+                                    <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
                                 </Arc>
                             </PartDraw>
-                            <PartDraw x="0" y="0" width="450" height="450" alpha="255">
-                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                </Expressions>
+                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                <Compare expression="hasRemaining">
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008058]]></Expression>
+                                </Expressions>
+                                <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                     leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                     the transform so the two round caps close over each other. -->
+                                <Compare expression="isFull">
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="394"
+                                            height="394"
+                                            startAngle="0"
+                                            endAngle="358.45">
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Compare>
+                                <!-- The two-cap inset cannot represent a smaller positive remainder:
+                                     its sweep would be zero or negative. Keep the proportional
+                                     centreline without either inset and use straight ends so the
+                                     visible sweep does not overstate the remainder. -->
+                                <Compare expression="isNearEmpty">
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="394"
+                                            height="394"
+                                            startAngle="0"
+                                            endAngle="359.9">
+                                            <Transform
+                                                target="startAngle"
+                                                value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="BUTT" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Compare>
+                                <Default>
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="394"
+                                            height="394"
+                                            startAngle="0"
+                                            endAngle="358.45">
+                                            <Transform
+                                                target="startAngle"
+                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.45, 0, 358.45)" />
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Default>
+                            </Condition>
+                                </Compare>
+                            </Condition>
+                        </Group>
+                    </Compare>
+                    <Compare expression="isBand1">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_2">
+                            <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
                                     centerY="225"
-                                    width="284"
-                                    height="284"
+                                    width="346"
+                                    height="346"
                                     startAngle="0"
-                                    endAngle="0">
-                                    <Transform
-                                        target="endAngle"
-                                        value="([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9" />
-                                    <WeightedStroke
-                                        thickness="28"
-                                        colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-                                        cap="ROUND" />
+                                    endAngle="359.9">
+                                    <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
                                 </Arc>
                             </PartDraw>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                </Expressions>
+                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                <Compare expression="hasRemaining">
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009225]]></Expression>
+                                </Expressions>
+                                <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                     leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                     the transform so the two round caps close over each other. -->
+                                <Compare expression="isFull">
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="346"
+                                            height="346"
+                                            startAngle="0"
+                                            endAngle="358.24">
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Compare>
+                                <!-- The two-cap inset cannot represent a smaller positive remainder:
+                                     its sweep would be zero or negative. Keep the proportional
+                                     centreline without either inset and use straight ends so the
+                                     visible sweep does not overstate the remainder. -->
+                                <Compare expression="isNearEmpty">
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="346"
+                                            height="346"
+                                            startAngle="0"
+                                            endAngle="359.9">
+                                            <Transform
+                                                target="startAngle"
+                                                value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="BUTT" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Compare>
+                                <Default>
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="346"
+                                            height="346"
+                                            startAngle="0"
+                                            endAngle="358.24">
+                                            <Transform
+                                                target="startAngle"
+                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.66, 0, 358.24)" />
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Default>
+                            </Condition>
+                                </Compare>
+                            </Condition>
+                        </Group>
+                    </Compare>
+                    <Compare expression="isBand2">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_3">
+                            <PartDraw x="0" y="0" width="450" height="450">
+                                <Arc
+                                    centerX="225"
+                                    centerY="225"
+                                    width="298"
+                                    height="298"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke color="#ff2e3632" thickness="10" cap="ROUND" />
+                                </Arc>
+                            </PartDraw>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                                </Expressions>
+                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
+                                <Compare expression="hasRemaining">
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.010670]]></Expression>
+                                </Expressions>
+                                <!-- Nothing spent yet: there is no melt to inset, and the inset would
+                                     leave a seam at 12 on a ring that has spent nothing. Drawn without
+                                     the transform so the two round caps close over each other. -->
+                                <Compare expression="isFull">
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="298"
+                                            height="298"
+                                            startAngle="0"
+                                            endAngle="357.98">
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Compare>
+                                <!-- The two-cap inset cannot represent a smaller positive remainder:
+                                     its sweep would be zero or negative. Keep the proportional
+                                     centreline without either inset and use straight ends so the
+                                     visible sweep does not overstate the remainder. -->
+                                <Compare expression="isNearEmpty">
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="298"
+                                            height="298"
+                                            startAngle="0"
+                                            endAngle="359.9">
+                                            <Transform
+                                                target="startAngle"
+                                                value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9" />
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="BUTT" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Compare>
+                                <Default>
+                                    <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Arc
+                                            centerX="225"
+                                            centerY="225"
+                                            width="298"
+                                            height="298"
+                                            startAngle="0"
+                                            endAngle="357.98">
+                                            <Transform
+                                                target="startAngle"
+                                                value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * 359.9 + 1.92, 0, 357.98)" />
+                                            <WeightedStroke
+                                                thickness="10"
+                                                colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+                                                cap="ROUND" />
+                                        </Arc>
+                                    </PartDraw>
+                                </Default>
+                            </Condition>
+                                </Compare>
+                            </Condition>
                         </Group>
                     </Compare>
                 </Condition>
@@ -302,7 +1976,7 @@
         <DigitalClock x="0" y="0" width="450" height="450">
             <TimeText
                 x="0"
-                y="180"
+                y="160"
                 width="450"
                 height="90"
                 alpha="255"
@@ -319,7 +1993,7 @@
             </TimeText>
             <TimeText
                 x="0"
-                y="180"
+                y="160"
                 width="450"
                 height="90"
                 alpha="0"
@@ -338,173 +2012,403 @@
 
         <Group x="0" y="0" width="450" height="450" name="wardpulse">
             <Launch target="app.wardpulse/app.wardpulse.wear.MainActivity" />
-            <PartImage x="189" y="248" width="72" height="72" alpha="95">
+            <!-- The asset is padded: the box runs to 293, the ink stops at 268. -->
+            <PartImage x="192" y="227" width="66" height="66" alpha="95">
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <Image resource="wardpulse_mono" />
             </PartImage>
-            <PartImage x="201" y="255" width="48" height="48" alpha="0">
+            <PartImage x="198" y="233" width="54" height="54" alpha="0">
                 <Variant mode="AMBIENT" target="alpha" value="70" />
                 <Image resource="wardpulse_mono" />
             </PartImage>
         </Group>
-        <!-- Equal-width strips (120), centered; 3-up stack y=318/342/366 clears thinner rings. -->
+
+        <!-- Three cells the wearer fills, above the clock. The system owns what goes
+             in them; this face owns only the declaration and how it is drawn.
+             (docs/product/WATCH_RING_DESIGN.md, Upper cells, revision 2026-10-09) -->
         <ComplicationSlot
-            x="165"
-            y="318"
-            width="120"
-            height="20"
-            slotId="104"
-            displayName="@string/strip1_complication"
-            supportedTypes="SHORT_TEXT EMPTY"
-            isCustomizable="FALSE">
+            x="152"
+            y="114"
+            width="42"
+            height="42"
+            slotId="201"
+            displayName="@string/cell1_complication"
+            supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
+            isCustomizable="TRUE">
             <DefaultProviderPolicy
-                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.TokensComplicationDataSourceService"
-                primaryProviderType="SHORT_TEXT"
-                defaultSystemProvider="EMPTY"
-                defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="120" height="20" />
+                defaultSystemProvider="DAY_OF_WEEK"
+                defaultSystemProviderType="SHORT_TEXT" />
+            <BoundingBox x="0" y="0" width="42" height="42" />
             <Complication type="SHORT_TEXT">
-                <Group x="0" y="0" width="120" height="20" name="ring1_strip" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <PartDraw x="0" y="0" width="120" height="20">
-                        <RoundRectangle x="0" y="0" width="120" height="20" cornerRadiusX="6" cornerRadiusY="6">
-                            <Fill color="#eb0b0e0c" />
-                        </RoundRectangle>
-                        <RoundRectangle x="0" y="2" width="3" height="16" cornerRadiusX="2" cornerRadiusY="2">
-                            <Fill color="#ff65d78a" />
-                        </RoundRectangle>
+            <Group x="0" y="0" width="42" height="42" name="cell1">
+                    <PartDraw x="0" y="0" width="42" height="42">
+                        <Ellipse x="0" y="0" width="42" height="42">
+                            <Fill color="#ff0b0e0c" />
+                        </Ellipse>
                     </PartDraw>
-                    <PartText x="6" y="0" width="110" height="20">
+                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Arc
+                            centerX="21"
+                            centerY="21"
+                            width="40.5"
+                            height="40.5"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                <LinearGradient
+                                    startX="31.130621"
+                                    startY="38.533768"
+                                    endX="10.869379"
+                                    endY="3.466232"
+                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                    positions="0 0.5 0.625 0.75 0.875 1" />
+                            </Stroke>
+                        </Arc>
+                    </PartDraw>
+                    <PartText x="2" y="12" width="37" height="18" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Text align="CENTER" ellipsis="TRUE">
-                            <Font family="SYNC_TO_DEVICE" size="13" weight="BOLD" color="#fff4fbf8">
+                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
                                 <Template>%s
                                     <Parameter expression="[COMPLICATION.TEXT]" />
                                 </Template>
                             </Font>
                         </Text>
                     </PartText>
-                </Group>
+            </Group>
             </Complication>
-            <Complication type="EMPTY" />
-        </ComplicationSlot>
-
-        <ComplicationSlot
-            x="165"
-            y="342"
-            width="120"
-            height="20"
-            slotId="107"
-            displayName="@string/strip2_complication"
-            supportedTypes="SHORT_TEXT EMPTY"
-            isCustomizable="FALSE">
-            <DefaultProviderPolicy
-                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.Strip2ComplicationDataSourceService"
-                primaryProviderType="SHORT_TEXT"
-                defaultSystemProvider="EMPTY"
-                defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="120" height="20" />
-            <Complication type="SHORT_TEXT">
-                <Group x="0" y="0" width="120" height="20" name="ring2_strip" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <PartDraw x="0" y="0" width="120" height="20">
-                        <RoundRectangle x="0" y="0" width="120" height="20" cornerRadiusX="6" cornerRadiusY="6">
-                            <Fill color="#eb0b0e0c" />
-                        </RoundRectangle>
-                        <RoundRectangle x="0" y="2" width="3" height="16" cornerRadiusX="2" cornerRadiusY="2">
-                            <Fill color="#ffe8915a" />
-                        </RoundRectangle>
+            <Complication type="RANGED_VALUE">
+            <Group x="0" y="0" width="42" height="42" name="cell1">
+                    <PartDraw x="0" y="0" width="42" height="42">
+                        <Ellipse x="0" y="0" width="42" height="42">
+                            <Fill color="#ff0b0e0c" />
+                        </Ellipse>
                     </PartDraw>
-                    <!-- Inner strips: digits only; credits live on strip 1. -->
-                    <PartText x="6" y="0" width="110" height="20">
+                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Arc
+                            centerX="21"
+                            centerY="21"
+                            width="40.5"
+                            height="40.5"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                <LinearGradient
+                                    startX="31.130621"
+                                    startY="38.533768"
+                                    endX="10.869379"
+                                    endY="3.466232"
+                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                    positions="0 0.5 0.625 0.75 0.875 1" />
+                            </Stroke>
+                        </Arc>
+                    </PartDraw>
+                    <PartText x="2" y="12" width="37" height="18" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Text align="CENTER" ellipsis="TRUE">
-                            <Font family="SYNC_TO_DEVICE" size="13" weight="BOLD" color="#fff4fbf8">
-                                <Template>%s%%
+                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                <Template>%s
                                     <Parameter expression="[COMPLICATION.TEXT]" />
                                 </Template>
                             </Font>
                         </Text>
                     </PartText>
+            </Group>
+            </Complication>
+            <Complication type="MONOCHROMATIC_IMAGE">
+            <Group x="0" y="0" width="42" height="42" name="cell1Icon">
+                    <PartDraw x="0" y="0" width="42" height="42">
+                        <Ellipse x="0" y="0" width="42" height="42">
+                            <Fill color="#ff0b0e0c" />
+                        </Ellipse>
+                    </PartDraw>
+                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Arc
+                            centerX="21"
+                            centerY="21"
+                            width="40.5"
+                            height="40.5"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                <LinearGradient
+                                    startX="31.130621"
+                                    startY="38.533768"
+                                    endX="10.869379"
+                                    endY="3.466232"
+                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                    positions="0 0.5 0.625 0.75 0.875 1" />
+                            </Stroke>
+                        </Arc>
+                    </PartDraw>
+                <Group x="10" y="10" width="21" height="21" name="cell1Tint" tintColor="#fff4fbf8">
+                    <PartImage x="0" y="0" width="21" height="21" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                    </PartImage>
                 </Group>
+            </Group>
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>
 
         <ComplicationSlot
-            x="165"
-            y="366"
-            width="120"
-            height="20"
-            slotId="108"
-            displayName="@string/strip3_complication"
-            supportedTypes="SHORT_TEXT EMPTY"
-            isCustomizable="FALSE">
+            x="204"
+            y="100"
+            width="42"
+            height="42"
+            slotId="202"
+            displayName="@string/cell2_complication"
+            supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
+            isCustomizable="TRUE">
             <DefaultProviderPolicy
-                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.Strip3ComplicationDataSourceService"
-                primaryProviderType="SHORT_TEXT"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="120" height="20" />
+            <BoundingBox x="0" y="0" width="42" height="42" />
             <Complication type="SHORT_TEXT">
-                <Group x="0" y="0" width="120" height="20" name="ring3_strip" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <PartDraw x="0" y="0" width="120" height="20">
-                        <RoundRectangle x="0" y="0" width="120" height="20" cornerRadiusX="6" cornerRadiusY="6">
-                            <Fill color="#eb0b0e0c" />
-                        </RoundRectangle>
-                        <RoundRectangle x="0" y="2" width="3" height="16" cornerRadiusX="2" cornerRadiusY="2">
-                            <Fill color="#ff67e8d4" />
-                        </RoundRectangle>
+            <Group x="0" y="0" width="42" height="42" name="cell2">
+                    <PartDraw x="0" y="0" width="42" height="42">
+                        <Ellipse x="0" y="0" width="42" height="42">
+                            <Fill color="#ff0b0e0c" />
+                        </Ellipse>
                     </PartDraw>
-                    <PartText x="6" y="0" width="110" height="20">
+                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Arc
+                            centerX="21"
+                            centerY="21"
+                            width="40.5"
+                            height="40.5"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                <LinearGradient
+                                    startX="21"
+                                    startY="41.25"
+                                    endX="21"
+                                    endY="0.75"
+                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                    positions="0 0.5 0.625 0.75 0.875 1" />
+                            </Stroke>
+                        </Arc>
+                    </PartDraw>
+                    <PartText x="2" y="12" width="37" height="18" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Text align="CENTER" ellipsis="TRUE">
-                            <Font family="SYNC_TO_DEVICE" size="13" weight="BOLD" color="#fff4fbf8">
-                                <Template>%s%%
+                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                <Template>%s
                                     <Parameter expression="[COMPLICATION.TEXT]" />
                                 </Template>
                             </Font>
                         </Text>
                     </PartText>
+            </Group>
+            </Complication>
+            <Complication type="RANGED_VALUE">
+            <Group x="0" y="0" width="42" height="42" name="cell2">
+                    <PartDraw x="0" y="0" width="42" height="42">
+                        <Ellipse x="0" y="0" width="42" height="42">
+                            <Fill color="#ff0b0e0c" />
+                        </Ellipse>
+                    </PartDraw>
+                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Arc
+                            centerX="21"
+                            centerY="21"
+                            width="40.5"
+                            height="40.5"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                <LinearGradient
+                                    startX="21"
+                                    startY="41.25"
+                                    endX="21"
+                                    endY="0.75"
+                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                    positions="0 0.5 0.625 0.75 0.875 1" />
+                            </Stroke>
+                        </Arc>
+                    </PartDraw>
+                    <PartText x="2" y="12" width="37" height="18" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Text align="CENTER" ellipsis="TRUE">
+                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                <Template>%s
+                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                </Template>
+                            </Font>
+                        </Text>
+                    </PartText>
+            </Group>
+            </Complication>
+            <Complication type="MONOCHROMATIC_IMAGE">
+            <Group x="0" y="0" width="42" height="42" name="cell2Icon">
+                    <PartDraw x="0" y="0" width="42" height="42">
+                        <Ellipse x="0" y="0" width="42" height="42">
+                            <Fill color="#ff0b0e0c" />
+                        </Ellipse>
+                    </PartDraw>
+                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Arc
+                            centerX="21"
+                            centerY="21"
+                            width="40.5"
+                            height="40.5"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                <LinearGradient
+                                    startX="21"
+                                    startY="41.25"
+                                    endX="21"
+                                    endY="0.75"
+                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                    positions="0 0.5 0.625 0.75 0.875 1" />
+                            </Stroke>
+                        </Arc>
+                    </PartDraw>
+                <Group x="10" y="10" width="21" height="21" name="cell2Tint" tintColor="#fff4fbf8">
+                    <PartImage x="0" y="0" width="21" height="21" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                    </PartImage>
                 </Group>
+            </Group>
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>
 
         <ComplicationSlot
-            x="165"
-            y="390"
-            width="120"
-            height="20"
-            slotId="109"
-            displayName="@string/strip4_complication"
-            supportedTypes="SHORT_TEXT EMPTY"
-            isCustomizable="FALSE">
+            x="256"
+            y="114"
+            width="42"
+            height="42"
+            slotId="203"
+            displayName="@string/cell3_complication"
+            supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
+            isCustomizable="TRUE">
             <DefaultProviderPolicy
-                primaryProvider="app.wardpulse/app.wardpulse.wear.complication.Strip4ComplicationDataSourceService"
-                primaryProviderType="SHORT_TEXT"
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="120" height="20" />
+            <BoundingBox x="0" y="0" width="42" height="42" />
             <Complication type="SHORT_TEXT">
-                <Group x="0" y="0" width="120" height="20" name="ring4_strip" alpha="255">
-                    <Variant mode="AMBIENT" target="alpha" value="0" />
-                    <PartDraw x="0" y="0" width="120" height="20">
-                        <RoundRectangle x="0" y="0" width="120" height="20" cornerRadiusX="6" cornerRadiusY="6">
-                            <Fill color="#eb0b0e0c" />
-                        </RoundRectangle>
-                        <RoundRectangle x="0" y="2" width="3" height="16" cornerRadiusX="2" cornerRadiusY="2">
-                            <Fill color="#ff8ab4f8" />
-                        </RoundRectangle>
+            <Group x="0" y="0" width="42" height="42" name="cell3">
+                    <PartDraw x="0" y="0" width="42" height="42">
+                        <Ellipse x="0" y="0" width="42" height="42">
+                            <Fill color="#ff0b0e0c" />
+                        </Ellipse>
                     </PartDraw>
-                    <PartText x="6" y="0" width="110" height="20">
+                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Arc
+                            centerX="21"
+                            centerY="21"
+                            width="40.5"
+                            height="40.5"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                <LinearGradient
+                                    startX="10.869379"
+                                    startY="38.533768"
+                                    endX="31.130621"
+                                    endY="3.466232"
+                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                    positions="0 0.5 0.625 0.75 0.875 1" />
+                            </Stroke>
+                        </Arc>
+                    </PartDraw>
+                    <PartText x="2" y="12" width="37" height="18" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Text align="CENTER" ellipsis="TRUE">
-                            <Font family="SYNC_TO_DEVICE" size="13" weight="BOLD" color="#fff4fbf8">
-                                <Template>%s%%
+                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                <Template>%s
                                     <Parameter expression="[COMPLICATION.TEXT]" />
                                 </Template>
                             </Font>
                         </Text>
                     </PartText>
+            </Group>
+            </Complication>
+            <Complication type="RANGED_VALUE">
+            <Group x="0" y="0" width="42" height="42" name="cell3">
+                    <PartDraw x="0" y="0" width="42" height="42">
+                        <Ellipse x="0" y="0" width="42" height="42">
+                            <Fill color="#ff0b0e0c" />
+                        </Ellipse>
+                    </PartDraw>
+                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Arc
+                            centerX="21"
+                            centerY="21"
+                            width="40.5"
+                            height="40.5"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                <LinearGradient
+                                    startX="10.869379"
+                                    startY="38.533768"
+                                    endX="31.130621"
+                                    endY="3.466232"
+                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                    positions="0 0.5 0.625 0.75 0.875 1" />
+                            </Stroke>
+                        </Arc>
+                    </PartDraw>
+                    <PartText x="2" y="12" width="37" height="18" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Text align="CENTER" ellipsis="TRUE">
+                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                <Template>%s
+                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                </Template>
+                            </Font>
+                        </Text>
+                    </PartText>
+            </Group>
+            </Complication>
+            <Complication type="MONOCHROMATIC_IMAGE">
+            <Group x="0" y="0" width="42" height="42" name="cell3Icon">
+                    <PartDraw x="0" y="0" width="42" height="42">
+                        <Ellipse x="0" y="0" width="42" height="42">
+                            <Fill color="#ff0b0e0c" />
+                        </Ellipse>
+                    </PartDraw>
+                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Arc
+                            centerX="21"
+                            centerY="21"
+                            width="40.5"
+                            height="40.5"
+                            startAngle="0"
+                            endAngle="359.9">
+                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                <LinearGradient
+                                    startX="10.869379"
+                                    startY="38.533768"
+                                    endX="31.130621"
+                                    endY="3.466232"
+                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                    positions="0 0.5 0.625 0.75 0.875 1" />
+                            </Stroke>
+                        </Arc>
+                    </PartDraw>
+                <Group x="10" y="10" width="21" height="21" name="cell3Tint" tintColor="#fff4fbf8">
+                    <PartImage x="0" y="0" width="21" height="21" alpha="255">
+                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                        <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                    </PartImage>
                 </Group>
+            </Group>
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>

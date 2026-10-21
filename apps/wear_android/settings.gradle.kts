@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "WardPulseWear"
 include(":app")
+include(":watchface_push")

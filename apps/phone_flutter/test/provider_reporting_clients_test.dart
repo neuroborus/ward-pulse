@@ -7,13 +7,18 @@ import 'package:ward_pulse_phone/sync/provider_reporting_clients.dart';
 
 void main() {
   group('AnthropicReportingClient', () {
-    test('paginates usage and cost reports without exposing the key', () async {
+    test('splits UTC usage ranges and paginates both bucket widths', () async {
       final transport = _FakeTransport({
         '/v1/organizations/usage_report/messages': [
-          _response(_page(hasMore: true, nextPage: 'usage-2')),
+          _response(_page(hasMore: true, nextPage: 'daily-2')),
+          _response(_page()),
+          _response(_page(hasMore: true, nextPage: 'minute-2')),
           _response(_page()),
         ],
-        '/v1/organizations/cost_report': [_response(_page())],
+        '/v1/organizations/cost_report': [
+          _response(_page(hasMore: true, nextPage: 'cost-2')),
+          _response(_page()),
+        ],
       });
       final client = AnthropicReportingClient(
         http: ProviderReportingHttp(transport: transport),
@@ -21,28 +26,199 @@ void main() {
 
       final reports = await client.fetchDailyReports(
         adminApiKey: 'secret-admin-key',
-        start: DateTime.utc(2026, 7, 1),
-        end: DateTime.utc(2026, 7, 19, 12),
+        start: DateTime.parse('2026-07-01T03:00:00+03:00'),
+        end: DateTime.parse('2026-07-20T01:00:00+13:00'),
       );
 
-      expect(reports.usage, hasLength(2));
-      expect(reports.costs, hasLength(1));
+      expect(reports.usage, hasLength(4));
+      expect(reports.costs, hasLength(2));
       final usageRequests =
           transport.requests
               .where((request) => request.uri.path.endsWith('/messages'))
               .toList();
-      expect(usageRequests[0].headers['x-api-key'], 'secret-admin-key');
-      expect(usageRequests[0].headers.containsKey('Authorization'), isFalse);
-      expect(usageRequests[0].uri.queryParameters['bucket_width'], '1d');
-      expect(usageRequests[0].uri.queryParametersAll['group_by[]'], ['model']);
-      expect(usageRequests[1].uri.queryParameters['page'], 'usage-2');
+      for (final request in usageRequests) {
+        expect(request.headers['x-api-key'], 'secret-admin-key');
+        expect(request.headers['anthropic-version'], '2023-06-01');
+        expect(request.headers.containsKey('Authorization'), isFalse);
+        expect(request.uri.queryParametersAll['group_by[]'], ['model']);
+      }
+      expect(
+        usageRequests.map((request) {
+          final parameters = request.uri.queryParameters;
+          return [
+            parameters['starting_at'],
+            parameters['ending_at'],
+            parameters['bucket_width'],
+            parameters['limit'],
+            parameters['page'],
+          ];
+        }),
+        [
+          [
+            '2026-07-01T00:00:00.000Z',
+            '2026-07-19T00:00:00.000Z',
+            '1d',
+            '31',
+            null,
+          ],
+          [
+            '2026-07-01T00:00:00.000Z',
+            '2026-07-19T00:00:00.000Z',
+            '1d',
+            '31',
+            'daily-2',
+          ],
+          [
+            '2026-07-19T00:00:00.000Z',
+            '2026-07-19T12:00:00.000Z',
+            '1m',
+            '1440',
+            null,
+          ],
+          [
+            '2026-07-19T00:00:00.000Z',
+            '2026-07-19T12:00:00.000Z',
+            '1m',
+            '1440',
+            'minute-2',
+          ],
+        ],
+      );
       final costRequests =
           transport.requests
               .where((request) => request.uri.path.endsWith('/cost_report'))
               .toList();
-      expect(costRequests.single.uri.queryParametersAll['group_by[]'], null);
+      for (final request in costRequests) {
+        expect(request.uri.queryParametersAll['group_by[]'], null);
+        expect(request.uri.queryParameters['bucket_width'], '1d');
+        expect(request.uri.queryParameters['limit'], '31');
+        expect(
+          request.uri.queryParameters['starting_at'],
+          '2026-07-01T00:00:00.000Z',
+        );
+        expect(
+          request.uri.queryParameters['ending_at'],
+          '2026-07-19T12:00:00.000Z',
+        );
+      }
+      expect(costRequests[1].uri.queryParameters['page'], 'cost-2');
       expect(reports.usage.join(), isNot(contains('secret-admin-key')));
     });
+
+    for (final scenario in [
+      (name: 'missing', body: '{"has_more":true,"data":[]}'),
+      (name: 'null', body: _page(hasMore: true)),
+      (name: 'non-string', body: '{"has_more":true,"next_page":42,"data":[]}'),
+      (name: 'empty', body: _page(hasMore: true, nextPage: '')),
+    ]) {
+      test('rejects a ${scenario.name} continuation cursor', () async {
+        final transport = _FakeTransport({
+          '/v1/organizations/usage_report/messages': [_response(scenario.body)],
+          '/v1/organizations/cost_report': [_response(_page())],
+        });
+        final client = AnthropicReportingClient(
+          http: ProviderReportingHttp(transport: transport),
+        );
+
+        await expectLater(
+          client.fetchDailyReports(
+            adminApiKey: 'synthetic-key',
+            start: DateTime.utc(2026, 7, 18),
+            end: DateTime.utc(2026, 7, 19),
+          ),
+          throwsA(
+            isA<ProviderReportingException>()
+                .having(
+                  (error) => error.failure,
+                  'failure',
+                  ProviderReportingFailure.invalidResponse,
+                )
+                .having(
+                  (error) => error.details,
+                  'safe details',
+                  'Invalid pagination cursor',
+                ),
+          ),
+        );
+        expect(transport.requests, hasLength(1));
+      });
+    }
+
+    for (final scenario in [
+      (
+        name: 'midnight end has no current-day range',
+        start: DateTime.utc(2026, 7, 18),
+        end: DateTime.utc(2026, 7, 19),
+        width: '1d',
+        limit: '31',
+      ),
+      (
+        name: 'current-day-only range retains its supplied start and end',
+        start: DateTime.utc(2026, 7, 19, 0, 15),
+        end: DateTime.utc(2026, 7, 19, 12, 34, 56),
+        width: '1m',
+        limit: '1440',
+      ),
+    ]) {
+      test(scenario.name, () async {
+        final transport = _FakeTransport({
+          '/v1/organizations/usage_report/messages': [_response(_page())],
+          '/v1/organizations/cost_report': [_response(_page())],
+        });
+        final client = AnthropicReportingClient(
+          http: ProviderReportingHttp(transport: transport),
+        );
+
+        final reports = await client.fetchDailyReports(
+          adminApiKey: 'synthetic-key',
+          start: scenario.start,
+          end: scenario.end,
+        );
+
+        expect(reports.usage, hasLength(1));
+        expect(reports.costs, hasLength(1));
+        final usageRequest = transport.requests.first;
+        expect(usageRequest.uri.path, endsWith('/messages'));
+        expect(
+          usageRequest.uri.queryParameters['bucket_width'],
+          scenario.width,
+        );
+        expect(usageRequest.uri.queryParameters['limit'], scenario.limit);
+        for (final request in transport.requests) {
+          expect(
+            request.uri.queryParameters['starting_at'],
+            scenario.start.toIso8601String(),
+          );
+          expect(
+            request.uri.queryParameters['ending_at'],
+            scenario.end.toIso8601String(),
+          );
+        }
+        expect(transport.requests.last.uri.path, endsWith('/cost_report'));
+      });
+    }
+
+    for (final start in [
+      DateTime.utc(2026, 7, 19, 12),
+      DateTime.utc(2026, 7, 20),
+    ]) {
+      test('skips an empty interval starting at $start', () async {
+        final transport = _FakeTransport({});
+        final client = AnthropicReportingClient(
+          http: ProviderReportingHttp(transport: transport),
+        );
+
+        final reports = await client.fetchDailyReports(
+          adminApiKey: 'synthetic-key',
+          start: start,
+          end: DateTime.utc(2026, 7, 19, 12),
+        );
+
+        expect(reports.usage, isEmpty);
+        expect(reports.costs, isEmpty);
+        expect(transport.requests, isEmpty);
+      });
+    }
 
     test('maps an unauthorized usage response to authentication', () async {
       final transport = _FakeTransport({
@@ -137,6 +313,103 @@ void main() {
   });
 
   group('CursorPlatformClient', () {
+    const missingScope = 'Team API key missing required scope: read:*';
+    const invalidKey = 'Invalid API key';
+    const unrelatedPermission = 'Insufficient permissions or scope';
+    for (final scenario in [
+      (
+        name: 'explicit missing reporting scope',
+        body: jsonEncode({'message': missingScope}),
+        failure: ProviderReportingFailure.permissionDenied,
+      ),
+      (
+        name: 'invalid key',
+        body: jsonEncode({'message': invalidKey}),
+        failure: ProviderReportingFailure.authentication,
+      ),
+      (
+        name: 'malformed JSON',
+        body: '{"message":"$missingScope"',
+        failure: ProviderReportingFailure.authentication,
+      ),
+      (
+        name: 'non-object JSON',
+        body: jsonEncode([missingScope]),
+        failure: ProviderReportingFailure.authentication,
+      ),
+      (
+        name: 'non-string message',
+        body: jsonEncode({
+          'message': [missingScope],
+        }),
+        failure: ProviderReportingFailure.authentication,
+      ),
+      (
+        name: 'nested message',
+        body: jsonEncode({
+          'error': {'message': missingScope},
+        }),
+        failure: ProviderReportingFailure.authentication,
+      ),
+      (
+        name: 'unrelated permission text',
+        body: jsonEncode({'message': unrelatedPermission}),
+        failure: ProviderReportingFailure.authentication,
+      ),
+      (
+        name: 'message containing the template',
+        body: jsonEncode({'message': 'Unrelated: $missingScope'}),
+        failure: ProviderReportingFailure.authentication,
+      ),
+    ]) {
+      test(
+        'classifies 401 ${scenario.name} without exposing details',
+        () async {
+          const apiKey = 'synthetic-team-key';
+          final transport = _FakeTransport({
+            '/teams/daily-usage-data': [
+              ProviderHttpResponse(
+                statusCode: HttpStatus.unauthorized,
+                headers: const {},
+                body: scenario.body,
+              ),
+            ],
+          });
+          final client = CursorPlatformClient(
+            http: ProviderReportingHttp(transport: transport),
+            clock: () => DateTime.utc(2026, 7, 19, 12),
+          );
+          final safeDiagnostics = allOf(
+            isNot(contains(scenario.body)),
+            isNot(contains(missingScope)),
+            isNot(contains(invalidKey)),
+            isNot(contains(unrelatedPermission)),
+            isNot(contains(apiKey)),
+            isNot(contains(encodeBasicAuth(apiKey))),
+          );
+
+          await expectLater(
+            client.fetchReports(adminApiKey: apiKey),
+            throwsA(
+              isA<ProviderReportingException>()
+                  .having((error) => error.failure, 'failure', scenario.failure)
+                  .having(
+                    (error) => error.details,
+                    'safe details',
+                    allOf('Cursor daily usage · HTTP 401', safeDiagnostics),
+                  )
+                  .having(
+                    (error) => error.toString(),
+                    'safe message',
+                    safeDiagnostics,
+                  ),
+            ),
+          );
+          expect(transport.requests, hasLength(1));
+        },
+      );
+    }
+
     test('uses Basic auth and paginates spend pages', () async {
       final transport = _FakeTransport({
         '/teams/daily-usage-data': [_response('{"data":[]}')],

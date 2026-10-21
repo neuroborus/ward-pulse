@@ -1,30 +1,11 @@
 {
-  "schemaVersion": 7,
+  "schemaVersion": 9,
   "dataMode": "mock",
   "generatedAt": "2026-06-27T18:42:00.000Z",
   "overallStatus": "ok",
   "manualRefreshAllowed": true,
   "manualRefreshAvailableAt": null,
-  "rings": [
-    {
-      "id": "budget.week",
-      "label": "Week",
-      "usedPercent": 28.5,
-      "status": "ok"
-    },
-    {
-      "id": "budget.month",
-      "label": "Month",
-      "usedPercent": 26.5,
-      "status": "ok"
-    },
-    {
-      "id": "budget.today",
-      "label": "Today",
-      "usedPercent": 24.8,
-      "status": "ok"
-    }
-  ],
+  "rings": [],
   "creditsGlance": null,
   "today": {
     "period": "today",
@@ -32,17 +13,11 @@
       "minorUnits": 1240,
       "currency": "USD"
     },
-    "limit": {
-      "minorUnits": 5000,
-      "currency": "USD"
-    },
-    "remaining": {
-      "minorUnits": 3760,
-      "currency": "USD"
-    },
-    "usedPercent": 24.8,
+    "limit": null,
+    "remaining": null,
+    "usedPercent": null,
     "projectedTotal": null,
-    "status": "ok"
+    "status": "unknown"
   },
   "week": {
     "period": "week",
@@ -50,20 +25,14 @@
       "minorUnits": 7130,
       "currency": "USD"
     },
-    "limit": {
-      "minorUnits": 25000,
-      "currency": "USD"
-    },
-    "remaining": {
-      "minorUnits": 17870,
-      "currency": "USD"
-    },
-    "usedPercent": 28.52,
+    "limit": null,
+    "remaining": null,
+    "usedPercent": null,
     "projectedTotal": {
       "minorUnits": 22800,
       "currency": "USD"
     },
-    "status": "ok"
+    "status": "unknown"
   },
   "allowances": [],
   "providers": [

@@ -12,19 +12,38 @@ lint-core:
 test-core:
     cd core && cargo test --workspace
 
+# Rustdoc reads only the items it documents, hence --document-private-items.
+# Fails on a broken intra-doc link; nothing else in the repo reports one.
+doc-core:
+    cd core && RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
+
+# Dart formatting for the phone shell and the bindings package it consumes.
+fmt-phone:
+    cd apps/phone_flutter && dart format lib test
+    cd bindings/dart && dart format lib
+
 lint-phone:
     cd apps/phone_flutter && flutter analyze
 
 test-phone:
     cd apps/phone_flutter && flutter test
 
-check-phone:
+test-phone-cache:
+    tools/test-phone-cache/run.sh
+
+test-phone-widget:
+    tools/test-phone-widget/run.sh
+
+check-phone: test-phone-cache test-phone-widget
+    cd apps/phone_flutter && dart format --output=none --set-exit-if-changed lib test
+    cd bindings/dart && dart format --output=none --set-exit-if-changed lib
     just lint-phone
     just test-phone
 
 check-core: validate-fixtures
     cd core && cargo fmt --all -- --check
     cd core && cargo clippy --workspace --all-targets -- -D warnings
+    cd core && RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
     cd core && cargo test --workspace
 
 snapshot-core:
@@ -36,7 +55,13 @@ validate-fixtures:
 docs-dev:
     npm run docs:dev
 
-check-docs:
+test-doc-citations:
+    python3 tools/test-doc-citations.py
+
+check-doc-citations:
+    python3 tools/check-doc-citations.py
+
+check-docs: check-doc-citations
     npm run docs:build
 
 export-design source output format="svg" scale="1":
@@ -53,14 +78,46 @@ build-android-rust:
 run-phone: build-android-rust
     cd apps/phone_flutter && flutter run
 
+install-phone:
+    @test -n "${ANDROID_SERIAL:-}" || { echo "Set ANDROID_SERIAL to a phone device serial."; exit 1; }
+    @set -e; \
+        before="$(adb -s "$ANDROID_SERIAL" shell dumpsys package app.wardpulse | grep -m 1 'lastUpdateTime' || true)"; \
+        adb -s "$ANDROID_SERIAL" install -r apps/phone_flutter/build/app/outputs/flutter-apk/app-debug.apk; \
+        after="$(adb -s "$ANDROID_SERIAL" shell dumpsys package app.wardpulse | grep -m 1 'lastUpdateTime' || true)"; \
+        test -n "$after" || { echo "Phone package lastUpdateTime is unavailable after installation."; exit 1; }; \
+        test "$before" != "$after" || { echo "Phone package lastUpdateTime did not change after installation."; exit 1; }
+
+test-install-phone:
+    tools/test-install-phone/run.sh
+
 check-wear:
     cd apps/wear_android && ./gradlew --no-daemon lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest
 
 validate-watchface:
     tools/validate-watchface/validate.sh
 
+# Writes watchface.xml and the ring-type drawables; edit the generator, not its output.
+# Needs ImageMagick `convert` for the drawables, as export-icons does.
+render-watchface:
+    node tools/render-watchface.mjs
+
 check-watchface: validate-watchface
+    node tools/render-watchface.mjs --check
     cd apps/watchface_wff && ./gradlew --no-daemon lintDebug assembleDebug bundleDebug
+
+# Review art for the Glance, the face, the widget, and the brand marks.
+render-designs:
+    node tools/render-watch-ring-designs.mjs
+    node tools/render-wear-glance-designs.mjs
+    node tools/render-phone-widget-designs.mjs
+    node tools/render-brand-icons.mjs
+
+# Fails when review art no longer matches its generator (SVG only; see design-output.mjs).
+check-designs:
+    node tools/render-watch-ring-designs.mjs --check
+    node tools/render-wear-glance-designs.mjs --check
+    node tools/render-phone-widget-designs.mjs --check
+    node tools/render-brand-icons.mjs --check
 
 test-wear-device:
     cd apps/wear_android && ./gradlew --no-daemon connectedDebugAndroidTest
@@ -74,9 +131,13 @@ test-phone-watch-sync:
 build-wear:
     cd apps/wear_android && ./gradlew --no-daemon assembleDebug
 
+# The Wear app shares `app.wardpulse` with the phone shell, so an install that
+# reaches a paired phone replaces the dashboard with the watch UI. Naming the
+# watch scopes both steps: Gradle's install task filters devices by ANDROID_SERIAL.
 run-wear:
+    @test -n "${ANDROID_SERIAL:-}" || { echo "Set ANDROID_SERIAL to a Wear device serial."; exit 1; }
     cd apps/wear_android && ./gradlew --no-daemon installDebug
-    adb shell am start -n app.wardpulse/app.wardpulse.wear.MainActivity
+    adb -s "$ANDROID_SERIAL" shell am start -n app.wardpulse/app.wardpulse.wear.MainActivity
 
 build-watchface:
     cd apps/watchface_wff && ./gradlew --no-daemon assembleDebug bundleDebug
@@ -86,4 +147,19 @@ run-watchface:
     cd apps/watchface_wff && ./gradlew --no-daemon installDebug
     adb -s "$ANDROID_SERIAL" shell am broadcast -a com.google.android.wearable.app.DEBUG_SURFACE --es operation set-watchface --es watchFaceId app.wardpulse.watchface
 
-test-all: check-core check-phone check-wear check-watchface check-docs
+# Publishable artefacts, one per Play listing: `app.wardpulse` carries the phone
+# and the Wear app, `app.wardpulse.watchface` is its own. Each refuses to build
+# without the release key instead of handing back a debug-signed bundle that
+# looks shippable — the key is the owner's to create, and the sequence is in
+# docs/product/RELEASE_CHECKLIST.md under Signing. The requirement is enforced in
+# each build.gradle.kts, not here, so a new entry point cannot forget it.
+bundle-phone: build-android-rust
+    cd apps/phone_flutter && ORG_GRADLE_PROJECT_wardpulseRequireReleaseKey=1 flutter build appbundle --release
+
+bundle-wear:
+    cd apps/wear_android && ORG_GRADLE_PROJECT_wardpulseRequireReleaseKey=1 ./gradlew --no-daemon bundleRelease
+
+bundle-watchface:
+    cd apps/watchface_wff && ORG_GRADLE_PROJECT_wardpulseRequireReleaseKey=1 ./gradlew --no-daemon bundleRelease
+
+test-all: check-core check-phone check-wear check-watchface check-designs test-doc-citations check-docs

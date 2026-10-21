@@ -7,7 +7,7 @@ use std::fmt;
 use serde::Deserialize;
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
-    BudgetPeriod, Money, ProviderKind, ProviderSnapshot, ProviderStatus, UsageBucket,
+    connection, BudgetPeriod, Money, ProviderKind, ProviderSnapshot, ProviderStatus, UsageBucket,
 };
 use ward_pulse_core::time::DateTimeUtc;
 
@@ -55,32 +55,57 @@ pub fn cursor_platform_snapshot_from_report_json(
     let report: RawReport =
         serde_json::from_str(report_json).map_err(CursorPlatformReportError::Json)?;
 
-    let mut requests_by_day = BTreeMap::<String, u64>::new();
+    let mut requests_by_day = BTreeMap::<String, Option<u64>>::new();
     for page_json in &report.daily_usage_pages {
         let page: RawDailyUsagePage =
             serde_json::from_str(page_json).map_err(CursorPlatformReportError::Json)?;
         for row in page.data {
             let day = row.day.ok_or(CursorPlatformReportError::InvalidDate)?;
-            let requests = row
-                .subscription_included_reqs
-                .saturating_add(row.usage_based_reqs)
-                .saturating_add(row.api_key_reqs)
-                .saturating_add(row.composer_requests)
-                .saturating_add(row.chat_requests)
-                .saturating_add(row.agent_requests);
-            let entry = requests_by_day.entry(day).or_default();
-            *entry = entry.saturating_add(requests);
+            // Funding channels count raw events; feature counters overlap those events.
+            let requests = match (
+                row.subscription_included_reqs,
+                row.usage_based_reqs,
+                row.api_key_reqs,
+            ) {
+                (Some(included), Some(usage_based), Some(api_key)) => {
+                    Some(included.saturating_add(usage_based).saturating_add(api_key))
+                }
+                _ => None,
+            };
+            let entry = requests_by_day.entry(day).or_insert(Some(0));
+            *entry = entry
+                .zip(requests)
+                .map(|(total, requests)| total.saturating_add(requests));
         }
     }
 
     let mut spend_cents = 0_i64;
+    let mut complete_spend = !report.spend_pages.is_empty();
     for page_json in &report.spend_pages {
         let page: RawSpendPage =
             serde_json::from_str(page_json).map_err(CursorPlatformReportError::Json)?;
-        for member in page.team_member_spend {
-            let cents = member.overall_spend_cents.unwrap_or(0.0).round() as i64;
+        let Some(members) = page.team_member_spend else {
+            complete_spend = false;
+            continue;
+        };
+        for member in members {
+            let cents = member.overall_spend_cents.or_else(|| {
+                member
+                    .included_spend_cents
+                    .zip(member.spend_cents)
+                    .map(|(included, on_demand)| included + on_demand)
+            });
+            let Some(cents) = cents else {
+                complete_spend = false;
+                continue;
+            };
+            let cents = cents.round();
+            // i64::MAX rounds to 2^63 as f64, so the upper bound must be exclusive.
+            if !cents.is_finite() || !(i64::MIN as f64..-(i64::MIN as f64)).contains(&cents) {
+                return Err(CursorPlatformReportError::NumericOverflow);
+            }
             spend_cents = spend_cents
-                .checked_add(cents)
+                .checked_add(cents as i64)
                 .ok_or(CursorPlatformReportError::NumericOverflow)?;
         }
     }
@@ -97,7 +122,7 @@ pub fn cursor_platform_snapshot_from_report_json(
                 output_tokens: None,
                 cached_tokens: None,
                 total_tokens: None,
-                requests: Some(requests),
+                requests,
                 model: None,
                 project: None,
                 user: None,
@@ -105,7 +130,7 @@ pub fn cursor_platform_snapshot_from_report_json(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let spent = Some(Money::minor_units(spend_cents, "USD"));
+    let spent = complete_spend.then(|| Money::minor_units(spend_cents, "USD"));
     // `/teams/spend` is billing-cycle scoped, not day/week. Leave shorter periods unknown.
     let unknown = |period| calculate_budget_state(period, None, None, None);
 
@@ -114,6 +139,7 @@ pub fn cursor_platform_snapshot_from_report_json(
         provider_snapshot: ProviderSnapshot {
             account_id: report.account_id,
             provider: ProviderKind::Cursor,
+            connection: Some(connection::CURSOR_PLATFORM.to_string()),
             status: ProviderStatus::Ok,
             today: unknown(BudgetPeriod::Today),
             week: unknown(BudgetPeriod::Week),
@@ -192,24 +218,18 @@ struct RawDailyUsageRow {
     #[serde(default)]
     day: Option<String>,
     #[serde(default)]
-    subscription_included_reqs: u64,
+    subscription_included_reqs: Option<u64>,
     #[serde(default)]
-    usage_based_reqs: u64,
+    usage_based_reqs: Option<u64>,
     #[serde(default)]
-    api_key_reqs: u64,
-    #[serde(default)]
-    composer_requests: u64,
-    #[serde(default)]
-    chat_requests: u64,
-    #[serde(default)]
-    agent_requests: u64,
+    api_key_reqs: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RawSpendPage {
     #[serde(default, alias = "teamMembers")]
-    team_member_spend: Vec<RawSpendMember>,
+    team_member_spend: Option<Vec<RawSpendMember>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -217,6 +237,10 @@ struct RawSpendPage {
 struct RawSpendMember {
     #[serde(default)]
     overall_spend_cents: Option<f64>,
+    #[serde(default)]
+    included_spend_cents: Option<f64>,
+    #[serde(default)]
+    spend_cents: Option<f64>,
 }
 
 #[cfg(test)]
@@ -243,6 +267,241 @@ mod tests {
             Some(Money::minor_units(4326, "USD"))
         );
         assert!(snapshot.provider_snapshot.today.spent.is_none());
-        assert!(!snapshot.provider_snapshot.buckets.is_empty());
+        assert!(snapshot.provider_snapshot.week.spent.is_none());
+        assert_eq!(
+            snapshot
+                .provider_snapshot
+                .buckets
+                .iter()
+                .map(|bucket| bucket.requests)
+                .collect::<Vec<_>>(),
+            vec![Some(45), Some(64)]
+        );
+    }
+
+    #[test]
+    fn normalizes_complete_spend_shapes() {
+        for collection in ["teamMemberSpend", "teamMembers"] {
+            for (members, expected) in [
+                (serde_json::json!([]), 0),
+                (
+                    serde_json::json!([{"includedSpendCents": 12.25, "spendCents": 7.25}]),
+                    20,
+                ),
+                (
+                    serde_json::json!([
+                        {"overallSpendCents": 8.5, "includedSpendCents": 100, "spendCents": 200},
+                        {"overallSpendCents": 0, "includedSpendCents": 100, "spendCents": 200}
+                    ]),
+                    9,
+                ),
+                (
+                    serde_json::json!([{"includedSpendCents": 0, "spendCents": 0}]),
+                    0,
+                ),
+                (
+                    serde_json::json!([
+                        {"overallSpendCents": 0.5},
+                        {"overallSpendCents": null, "includedSpendCents": 0.25, "spendCents": 0.25}
+                    ]),
+                    2,
+                ),
+                (
+                    serde_json::json!([{"includedSpendCents": -0.25, "spendCents": -0.25}]),
+                    -1,
+                ),
+            ] {
+                let mut page = serde_json::json!({});
+                page[collection] = members;
+                let report = serde_json::json!({
+                    "accountId": "team-local",
+                    "generatedAt": "2026-07-19T12:00:00Z",
+                    "dailyUsagePages": [],
+                    "spendPages": [page.to_string()]
+                })
+                .to_string();
+                let snapshot = cursor_platform_snapshot_from_report_json(&report)
+                    .expect("normalize complete spend");
+                assert_eq!(
+                    snapshot.provider_snapshot.month.spent,
+                    Some(Money::minor_units(expected, "USD")),
+                    "{page}"
+                );
+                assert!(snapshot.provider_snapshot.today.spent.is_none());
+                assert!(snapshot.provider_snapshot.week.spent.is_none());
+            }
+        }
+    }
+
+    #[test]
+    fn preserves_unknown_spend_across_members_and_pages() {
+        let known = r#"{"teamMemberSpend":[{"overallSpendCents":5}]}"#;
+        for pages in [
+            vec![],
+            vec![known, "{}", known],
+            vec![known, r#"{"teamMemberSpend":null}"#, known],
+            vec![known, r#"{"teamMembers":null}"#, known],
+            vec![r#"{"teamMemberSpend":[{"overallSpendCents":5},{}]}"#],
+            vec![r#"{"teamMemberSpend":[{"overallSpendCents":null}]}"#],
+            vec![r#"{"teamMemberSpend":[{"includedSpendCents":5}]}"#],
+            vec![r#"{"teamMemberSpend":[{"spendCents":5}]}"#],
+            vec![r#"{"teamMemberSpend":[{"includedSpendCents":null,"spendCents":0}]}"#],
+            vec![known, r#"{"teamMembers":[{}]}"#, known],
+        ] {
+            let report = serde_json::json!({
+                "accountId": "team-local",
+                "generatedAt": "2026-07-19T12:00:00Z",
+                "dailyUsagePages": [],
+                "spendPages": pages
+            })
+            .to_string();
+            let snapshot = cursor_platform_snapshot_from_report_json(&report)
+                .expect("normalize incomplete spend");
+            assert!(snapshot.provider_snapshot.month.spent.is_none(), "{report}");
+        }
+    }
+
+    #[test]
+    fn rejects_malformed_spend_collections() {
+        for page in [
+            r#"{"teamMemberSpend":{}}"#,
+            r#"{"teamMembers":1}"#,
+            r#"{"teamMemberSpend":[null]}"#,
+        ] {
+            let report = serde_json::json!({
+                "accountId": "team-local",
+                "generatedAt": "2026-07-19T12:00:00Z",
+                "dailyUsagePages": [],
+                "spendPages": [page]
+            })
+            .to_string();
+            assert!(matches!(
+                cursor_platform_snapshot_from_report_json(&report),
+                Err(CursorPlatformReportError::Json(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn checks_spend_conversion_and_aggregate_bounds() {
+        // The largest f64 below 2^63 is 2^63 - 1024; -2^63 is exactly representable.
+        for cents in [9_223_372_036_854_774_784_i64, i64::MIN] {
+            let report = serde_json::json!({
+                "accountId": "team-local",
+                "generatedAt": "2026-07-19T12:00:00Z",
+                "dailyUsagePages": [],
+                "spendPages": [serde_json::json!({
+                    "teamMemberSpend": [{"overallSpendCents": cents}]
+                }).to_string()]
+            })
+            .to_string();
+            let snapshot = cursor_platform_snapshot_from_report_json(&report)
+                .expect("normalize representable spend boundary");
+            assert_eq!(
+                snapshot.provider_snapshot.month.spent,
+                Some(Money::minor_units(cents, "USD"))
+            );
+        }
+
+        for pages in [
+            vec![r#"{"teamMemberSpend":[{"overallSpendCents":9223372036854775808}]}"#],
+            vec![r#"{"teamMemberSpend":[{"overallSpendCents":-9223372036854777856}]}"#],
+            vec![
+                r#"{"teamMemberSpend":[{"includedSpendCents":4611686018427387904,"spendCents":4611686018427387904}]}"#,
+            ],
+            vec![r#"{"teamMemberSpend":[{"includedSpendCents":1e308,"spendCents":1e308}]}"#],
+            vec![
+                r#"{"teamMemberSpend":[{"overallSpendCents":9223372036854774784},{"overallSpendCents":1024}]}"#,
+            ],
+            vec![
+                r#"{"teamMemberSpend":[{"overallSpendCents":-9223372036854775808}]}"#,
+                r#"{"teamMemberSpend":[{"overallSpendCents":-1}]}"#,
+            ],
+        ] {
+            let report = serde_json::json!({
+                "accountId": "team-local",
+                "generatedAt": "2026-07-19T12:00:00Z",
+                "dailyUsagePages": [],
+                "spendPages": pages
+            })
+            .to_string();
+            assert!(
+                matches!(
+                    cursor_platform_snapshot_from_report_json(&report),
+                    Err(CursorPlatformReportError::NumericOverflow)
+                ),
+                "{report}"
+            );
+        }
+    }
+
+    #[test]
+    fn preserves_canonical_zero_and_saturates_raw_event_counts() {
+        let report = serde_json::json!({
+            "accountId": "team-local",
+            "generatedAt": "2027-01-01T12:00:00Z",
+            "dailyUsagePages": [
+                serde_json::json!({"data": [
+                    {"day": "2026-12-31", "subscriptionIncludedReqs": 0,
+                     "usageBasedReqs": 0, "apiKeyReqs": 0,
+                     "composerRequests": 2, "chatRequests": 3, "agentRequests": 4},
+                    {"day": "2027-01-01", "subscriptionIncludedReqs": u64::MAX,
+                     "usageBasedReqs": 1, "apiKeyReqs": 1}
+                ]}).to_string(),
+                serde_json::json!({"data": [
+                    {"day": "2027-01-01", "subscriptionIncludedReqs": 1,
+                     "usageBasedReqs": 0, "apiKeyReqs": 0}
+                ]}).to_string()
+            ],
+            "spendPages": []
+        })
+        .to_string();
+        let snapshot = cursor_platform_snapshot_from_report_json(&report)
+            .expect("normalize funding-channel counts");
+        let buckets = snapshot.provider_snapshot.buckets;
+        assert_eq!(buckets.len(), 2);
+        assert_eq!(buckets[0].requests, Some(0));
+        assert_eq!(buckets[0].start_at.as_str(), "2026-12-31T00:00:00Z");
+        assert_eq!(buckets[0].end_at.as_str(), "2027-01-01T00:00:00Z");
+        assert_eq!(buckets[1].requests, Some(u64::MAX));
+    }
+
+    #[test]
+    fn preserves_unknown_daily_counts_across_rows_and_pages() {
+        for mut incomplete in [
+            serde_json::json!({}),
+            serde_json::json!({"composerRequests": 2, "chatRequests": 3, "agentRequests": 4}),
+            serde_json::json!({"subscriptionIncludedReqs": 2, "usageBasedReqs": 3}),
+            serde_json::json!({"subscriptionIncludedReqs": 2, "apiKeyReqs": 4}),
+            serde_json::json!({"usageBasedReqs": 3, "apiKeyReqs": 4}),
+            serde_json::json!({"subscriptionIncludedReqs": null, "usageBasedReqs": 0, "apiKeyReqs": 0}),
+        ] {
+            incomplete["day"] = serde_json::json!("2026-07-18");
+            let complete = serde_json::json!({
+                "day": "2026-07-18", "subscriptionIncludedReqs": 2,
+                "usageBasedReqs": 3, "apiKeyReqs": 4
+            });
+            let report = serde_json::json!({
+                "accountId": "team-local",
+                "generatedAt": "2026-07-19T12:00:00Z",
+                "dailyUsagePages": [
+                    serde_json::json!({"data": [complete]}).to_string(),
+                    serde_json::json!({"data": [incomplete, complete,
+                        {"day": "2026-07-19", "subscriptionIncludedReqs": 1,
+                         "usageBasedReqs": 0, "apiKeyReqs": 0}
+                    ]}).to_string()
+                ],
+                "spendPages": []
+            })
+            .to_string();
+            let snapshot = cursor_platform_snapshot_from_report_json(&report)
+                .expect("normalize incomplete funding-channel counts");
+            assert_eq!(snapshot.provider_snapshot.buckets.len(), 2);
+            assert_eq!(
+                snapshot.provider_snapshot.buckets[0].requests, None,
+                "{report}"
+            );
+            assert_eq!(snapshot.provider_snapshot.buckets[1].requests, Some(1));
+        }
     }
 }
