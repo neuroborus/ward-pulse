@@ -20,7 +20,10 @@ The host's affected complication services trust only these two own face packages
 
 ## Signing inputs
 
-The Owner provisions local identities. At the repository root, supply ignored
+Root provisions/reuses authorized local identities after the Owner resolves existing keys
+and release history, Runner reaches DONE and ownership retires; see
+[Signing](../../../docs/product/RELEASE_CHECKLIST.md#signing). Runner and its operator must
+not inspect private signing inputs. At the repository root, Root supplies ignored
 `watchface-push-debug.properties` for development and `watchface-push-release.properties`
 for release. Each contains the property names `storeFile`, `storePassword`, `keyAlias`, and
 `keyPassword`, with real values supplied privately. `storeFile` must be an absolute path
@@ -41,14 +44,17 @@ a certificate matching the selected host certificate, including debug. AGP's hos
 validation runs first so a fresh host debug keystore is available for this comparison.
 
 The existing host `key.properties` and `wardpulseRequireReleaseKey` publishability guard
-remain unchanged. Phone and Wear still share their host signing identity. Push release
-signing is an additional independently required identity, never permission to publish a
-debug-signed host. See [Signing](../../../docs/product/RELEASE_CHECKLIST.md#signing) for
-the existing phone/Wear release requirements.
+remain unchanged. Phone and Wear share `app.wardpulse` and their delivered app-signing
+identity. The independently signed `app.wardpulse.watchfacepush.main` APK is embedded in
+the Wear host, not a separate Play listing. Local upload-key equality does not establish
+Play's delivered APK signer. Push release signing is an additional required identity,
+never permission to publish a debug-signed host. See the central
+[acceptance gates](../../../docs/product/RELEASE_CHECKLIST.md#acceptance-gates).
 
 ## Ordinary builds and versions
 
-From `apps/wear_android/`, after private signing setup:
+From `apps/wear_android/`, after private development signing setup, these debug commands
+illustrate N/N+1 upgrade acceptance:
 
 ```sh
 ./gradlew :app:assembleDebug -PwardpulsePushVersionCode=1
@@ -56,11 +62,15 @@ From `apps/wear_android/`, after private signing setup:
 ```
 
 `wardpulsePushVersionCode` defaults to 1 and accepts a positive Kotlin/Android integer.
-Increase it when distributing a newer face. Both commands build the same Push package;
-keep its certificate stable. For a publishable host release, use the existing release guard:
+It controls the Push package's independent version history, not the Wear host version.
+Increase it when distributing a newer face and keep the package/certificate stable. These
+development examples do not require Push code 2 for the RC: the central
+[0.1.0 version table](../../../docs/product/RELEASE_CHECKLIST.md#release-versions) retains
+Push code 1 while the Wear host uses code 2; every versionName remains 0.1.0.
+For a release artifact, Root uses the existing guarded recipe from the repository root:
 
 ```sh
-./gradlew :app:bundleRelease -PwardpulseRequireReleaseKey=true -PwardpulsePushVersionCode=2
+just bundle-wear
 ```
 
 Provide both host release signing and separate Push release signing before that build.
@@ -112,4 +122,9 @@ for final artifact/device evidence and limitations. Production signing, actual P
 app-signing/delivery, API35, physical hardware and unobserved platform-failure/capacity
 scenarios remain open. Development signer/token proof does not close them. The dated
 baseline and approved manual-selection PNG are integrated; post-DONE Owner documentation
-build/browser verification follows the procedure in that record.
+build/browser verification in that record belongs to the dated 2026-10-16 Push task.
+Current release work follows the separate
+[source, local signed-RC and Play gates](../../../docs/product/RELEASE_CHECKLIST.md#acceptance-gates):
+fresh release artifact/certificate and exact embedded APK/token inspection must be recorded
+privately before local RC acceptance. Historical debug proof establishes neither those
+release results nor Play delivery or the remaining runtime gates.

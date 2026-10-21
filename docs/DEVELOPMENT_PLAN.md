@@ -759,11 +759,12 @@ actual canonical measurements and the approved
 [500×500 fixed-dark manual-selection PNG](assets/README.md#watch-face-utility-provenance-and-wear-freshness-2026-10-16)
 with the Watch guide and component guidance. The image retains its original UI08 capture
 identity, bound to the unchanged final UI owner; existing screenshots and Glance geometry
-are preserved. After distinct terminal approval, quiescent DONE and Source/output ownership
-release, Root must perform the full docs build/browser/output review and restore the agreed
-share as specified in the acceptance record. Record the actual result in a separate Owner
-receipt and final handoff, without a second status-only Source commit. Whole-task closure
-requires that Owner ZERO; this status makes no documentation-build acceptance claim.
+are preserved. For that 2026-10-16 task, after distinct terminal approval, quiescent DONE and
+Source/output ownership release, Root's required full docs build/browser/output review and
+restoration of the agreed share follow the acceptance record. Actual results belong in a
+separate Owner receipt and final handoff, without a second status-only Source commit.
+Closure of that task requires Owner ZERO; this status makes no documentation-build
+acceptance claim.
 
 Original working inputs remain `LOCAL_ARTIFACTS/business-model/WATCH_FACE_PUSH_TASK.md`,
 `LOCAL_ARTIFACTS/business-model/PLAY_RELEASE.md` sections “Автоматическая установка
@@ -1515,20 +1516,22 @@ Deliverables that remain:
 
 - error states, empty states, offline states — partly covered by the Completed slice above, not
   yet reviewed as a whole;
-- **Play Store internal testing build — the local upload key remains.** As of **2026-10-13** all
-  three packages carry a release signing configuration that reads an ignored `key.properties`
-  from the repository root, and `just bundle-phone`, `just bundle-wear` and
-  `just bundle-watchface` produce the artefacts. Each one **fails** when the key is absent rather
-  than falling back to the debug key, so a bundle that builds is a bundle that is signed; a plain
-  `assembleRelease` still works for local use and warns that it is not publishable. What remains
-  is the owner's local upload key, stored outside this repository. With Play App Signing it
-  signs AAB uploads; Google holds the app signing key used for APKs delivered to devices. A
-  lost upload key can be reset through Play Console without ending the listing, as described
-  in [Play App Signing](https://support.google.com/googleplay/android-developer/answer/9842756?hl=en).
-  The setup and the distinction from a self-managed distribution key are in
-  `docs/product/RELEASE_CHECKLIST.md` under Signing. Until the local key exists the AAB cannot
-  be built through the publishable path; installing an internal testing release also requires
-  the owner to upload and configure that release in Play Console.
+- **Play Store internal testing build — source, local signed RC and Play acceptance are
+  separate.** The existing `just bundle-phone`, `just bundle-wear` and `just bundle-watchface`
+  recipes require ignored root `key.properties` and refuse a missing host/legacy release
+  key; Wear additionally requires separate Push release signing. Root owns authorized
+  private setup after Runner DONE and retired ownership, first resolving whether this is
+  a first publication or existing signing/uploaded-version history must be reused. Keep
+  keys outside the repository and build outputs. The central
+  [version table and allocation policy](product/RELEASE_CHECKLIST.md#release-versions),
+  [Signing](product/RELEASE_CHECKLIST.md#signing) and
+  [acceptance gates](product/RELEASE_CHECKLIST.md#acceptance-gates) own the requirements.
+  Reviewed metadata and preserved guards do not prove fresh signed artifacts exist;
+  inspected local artifacts do not establish Play's delivered app-signing identity or
+  internal-testing installation. Record actual host artifact and Play results separately,
+  leaving each unexecuted gate pending. Historical debug/emulator evidence above and in
+  the [Push record](product/RELEASE_CHECKLIST.md#watch-face-push-acceptance) retains its dated
+  scope, including open API35, hardware and unobserved recovery acceptance.
 - real device smoke tests — every verification so far has been on emulators.
 
 Acceptance:

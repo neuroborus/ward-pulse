@@ -722,17 +722,20 @@ APK certificate differs from the selected host certificate, including debug. The
 host `key.properties` / `wardpulseRequireReleaseKey` guard and shared phone/Wear identity
 still apply; Push release signing is additional. See [Signing](product/RELEASE_CHECKLIST.md#signing).
 
-From `apps/wear_android/`, after private signing setup, use ordinary builds:
+From `apps/wear_android/`, after private development signing setup, these ordinary debug
+builds illustrate N/N+1 upgrade acceptance:
 
 ```sh
 ./gradlew :app:assembleDebug -PwardpulsePushVersionCode=1
 ./gradlew :app:assembleDebug -PwardpulsePushVersionCode=2
-./gradlew :app:bundleRelease -PwardpulseRequireReleaseKey=true -PwardpulsePushVersionCode=2
 ```
 
-`wardpulsePushVersionCode` defaults to 1 and accepts a positive Android integer. Choose N
-and N+1 for upgrade acceptance, keeping the Push package and certificate identical.
-Release needs both host release configuration and separate Push release configuration.
+`wardpulsePushVersionCode` defaults to 1 and accepts a positive Android integer. Keep the
+Push package and certificate identical for N/N+1 development builds. This input belongs to
+the independent Push package; it does not set the Wear host version or require Push code 2
+for the 0.1.0 RC. Follow the central [release version scheme](product/RELEASE_CHECKLIST.md#release-versions)
+and [ordinary release flow](#release-artifact-builds). Release needs both host release
+configuration and separate Push release configuration.
 The normal variant graph consumes a signed APK artifact from `:watchface_push`, validates
 it, generates variant assets/resources and packages the host. There is no nested Gradle
 invocation, manual APK copy step, token substitution or source edit.
@@ -759,8 +762,41 @@ failed validation leaves no published pair. No APK or token belongs in source co
 See [the acceptance record](product/RELEASE_CHECKLIST.md#watch-face-push-acceptance) for
 completed cold/warm validation, final signed-artifact inspection, real N1-to-N2 upgrade,
 API33/API34/canonical observations and their remaining release/platform boundaries.
-The injected-manager tests do not establish unobserved platform scenarios. That record also
-owns the mandatory post-DONE Owner documentation build/browser and output-handoff procedure.
+The injected-manager tests do not establish unobserved platform scenarios. That record's
+post-DONE Owner documentation build/browser and output-handoff procedure belongs to the
+dated 2026-10-16 Push task.
+
+## Release artifact builds
+
+The [release checklist](product/RELEASE_CHECKLIST.md#release-versions) owns the package and
+version table and WardPulse's odd-phone/next-even-Wear code convention. All 0.1.0 RC
+versionNames remain 0.1.0. Root resolves first-publication versus existing signing and
+uploaded-version history, then supplies authorized private configuration only after Runner
+DONE and retired ownership, as required by [Signing](product/RELEASE_CHECKLIST.md#signing).
+Runner and its operator do not inspect those private inputs.
+
+From the repository root, use the unchanged guarded recipes:
+
+```sh
+just bundle-phone
+just bundle-wear
+just bundle-watchface
+```
+
+These produce separate phone and Wear AABs for `app.wardpulse` and a legacy WFF AAB for
+`app.wardpulse.watchface`. Each requires the existing ignored root `key.properties` through
+`wardpulseRequireReleaseKey`. Phone includes the Android Rust build. Wear additionally
+requires separate Push release configuration; its ordinary graph signs and validates the
+Push APK, then embeds the exact APK/token pair. The independent Push version defaults to
+1 for this RC; the debug N/N+1 examples above do not change release metadata. Do not bypass
+the guards or override build-name/build-number to conceal source versions.
+
+Follow [local signed-RC acceptance](product/RELEASE_CHECKLIST.md#local-signed-rc) for fresh
+artifacts, manifest/version/ABI/certificate inspection, exact APK/token binding, native ELF
+and packaging alignment, and private receipts. Reviewed source, locally inspected signed
+artifacts and [Play distribution acceptance](product/RELEASE_CHECKLIST.md#play-distribution)
+are separate gates. A successful local build does not verify Play's delivered signer or
+close runtime, API35, physical-device or unobserved Push recovery acceptance.
 
 ## Routine Verification
 

@@ -2,6 +2,39 @@
 
 This checklist is a gate, not a schedule.
 
+## Release versions
+
+The 0.1.0 RC source versions are:
+
+| Artifact | Package | versionName | versionCode | Source |
+| --- | --- | --- | --- | --- |
+| Phone AAB | `app.wardpulse` | `0.1.0` | `1` | `version` in [pubspec.yaml](../../apps/phone_flutter/pubspec.yaml) (`0.1.0+1`) |
+| Wear host AAB | `app.wardpulse` | `0.1.0` | `2` | `defaultConfig` in [Wear build.gradle.kts](../../apps/wear_android/app/build.gradle.kts) |
+| Legacy WFF AAB | `app.wardpulse.watchface` | `0.1.0` | `1` | `defaultConfig` in [WFF build.gradle.kts](../../apps/watchface_wff/build.gradle.kts) |
+| Bundled Push APK | `app.wardpulse.watchfacepush.main` | `0.1.0` | `1` | `pushVersionCode` / `defaultConfig` in [Push build.gradle.kts](../../apps/wear_android/watchface_push/build.gradle.kts) |
+
+Phone and Wear share a package and delivered app-signing identity, but need distinct
+versionCodes. WardPulse allocates coordinated pairs as **odd phone / next even Wear**:
+1/2, then 3/4, 5/6. The paired Wear code is higher by this project convention; Google
+requires [unique Wear/form-factor codes](https://developer.android.com/training/wearables/packaging#unique_version_code),
+not this odd/even scheme or a universal ordering across independently managed dedicated
+tracks. A build for only one form factor may leave the other reserved code unused.
+
+Before a later publication, consult the actual app's uploaded version history, including
+testing tracks. Allocate a fresh unused pair above previously used codes and preserve
+monotonic updates for each form factor. Never reuse an uploaded code, including for a
+rebuild after a consumed upload. The user-facing `versionName` does not determine the
+internal positive `versionCode`; see Android's
+[version settings](https://developer.android.com/studio/publish/versioning#version-settings).
+
+Both face packages have independent version histories. Push's positive
+`wardpulsePushVersionCode` input defaults to 1; its N/N+1 development upgrade examples do
+not set the Wear host code or require Push code 2 for this RC. Root must resolve first
+publication versus existing signing and uploaded-version history before provisioning
+credentials or treating these versions as publishable. If actual history conflicts with
+this RC, return the material decision to Root before release execution; do not silently
+reallocate versions or invent a Play state.
+
 ## Core
 
 - Rust workspace builds.
@@ -148,10 +181,11 @@ are integrated with the [Watch guide](user-guide/WATCH.md#select-and-customize-t
 The PNG retains its original UI08/explicit-decline identity, bound to the unchanged final
 UI owner; existing screenshot bytes and Glance geometry are preserved.
 
-**Mandatory post-DONE documentation procedure:** after independent candidate review,
+**Historical post-DONE documentation procedure (2026-10-16 Push task):** the following
+requirements belong to that task's Source/output handoff. After independent candidate review,
 Native gates, distinct terminal approval, quiescent DONE and explicit Source/output
-ownership release, Root stops only its existing `share9090.DubOhm` share and runs full
-`just check-docs`. Preserve the original docs output/share during Native ownership: no
+ownership release, Root was required to stop only its existing `share9090.DubOhm` share
+and run full `just check-docs`. Preserve the original docs output/share during Native ownership: no
 docs build, preview or publication runs there. Root reviews Source, all 12 existing user
 pages and plain Markdown exports, old anchors, internal/original links, both themes,
 unchanged galleries and keyboard Skip to content. Verify the new image's original regular
@@ -162,6 +196,14 @@ closure requires Owner ZERO. This procedure does not predict Docs GREEN or requi
 second status-only Source commit. Concrete findings return through supported Runner repair.
 
 ## Signing
+
+Root owns private signing setup after the Owner answers whether existing keys must be
+reused or first-publication credentials may be created, Runner reaches DONE, its owned
+processes retire and Source/output ownership is released. Resolve the
+[actual signing/version history](#release-versions) first. Runner and its operator must
+not inspect private `.env`, `key.properties`, `watchface-push-*.properties`, keystores,
+alias/password values or provider stores. No key creation, import or rotation belongs to
+source preparation.
 
 Local release builds for the phone, Wear app and legacy face read the root `key.properties`.
 With Play App Signing, this configures the **upload key**: it signs the AAB submitted to Play,
@@ -193,8 +235,10 @@ Push identity. See [Push signing inputs](../../apps/wear_android/watchface_push/
   The Wear host retains that warning/fallback, but its bundled Push APK still needs separate
   valid release signing. Missing Push release configuration fails instead of reusing a key.
 
-Creating the shared local upload key is a one-time setup, not a gate. It belongs to whoever
-publishes the app:
+Only when the Owner authorizes new credentials after resolving existing history may Root
+create the shared local upload key. This private setup is separate from Runner's source
+checks; reuse the authorized existing identity for an established release history.
+For an authorized new key, the existing setup command is:
 
 ```sh
 keytool -genkeypair -v \
@@ -232,13 +276,74 @@ self-managed signing identity.
 
 ## Artefacts
 
-- `just bundle-phone` produces the phone bundle; `app.wardpulse` carries the Wear app alongside
-  it, from `just bundle-wear`.
-- `just bundle-watchface` produces the watch face bundle, its own listing.
+- `just bundle-phone` and `just bundle-wear` produce separate phone and Wear AABs for
+  `app.wardpulse`. Wear distribution uses its
+  [dedicated form-factor track](https://support.google.com/googleplay/android-developer/answer/13295490?hl=en).
+- `just bundle-watchface` produces the legacy face AAB for its separate listing.
+- These unchanged recipes require root `key.properties` through the existing
+  `wardpulseRequireReleaseKey` guard. Phone also builds the Android Rust library; Wear
+  additionally requires separate Push release signing.
 - The Wear artifact embeds the separately signed Push APK and matching validation token.
-  Set `wardpulsePushVersionCode` to a positive integer for the intended face release; its
-  default is 1. Preserve the package/certificate and increase the face version for an update.
-- Each bundle's `versionCode` is higher than the one already on the track.
+  Use the independent [release versions](#release-versions); preserve the Push package and
+  certificate and increase its code for a face update.
+
+## Acceptance gates
+
+### Reviewed source
+
+- Review the version metadata, exact change scope and preserved signing/Push guards, and
+  complete independent semantic review and applicable source checks.
+- Record only executed checks as passed. Reviewed source and green CI establish source
+  readiness; they do not prove a signed RC exists or establish Play acceptance.
+
+### Local signed RC
+
+Root performs this acceptance after Runner DONE and retired ownership. Keep every item
+pending until actually executed against the exact candidate source commit.
+
+- Record that commit and fresh results from the complete unchanged `just check-phone`,
+  `just check-wear`, `just check-watchface`, `just validate-fixtures`, `just check-designs`
+  and host `just check-docs`. `check-watchface` already includes canonical WFF drift.
+- Produce fresh signed phone, Wear and legacy WFF AABs through `just bundle-phone`,
+  `just bundle-wear` and `just bundle-watchface`, including the separately signed,
+  officially validated release Push APK. Preserve the signing guards and ordinary producer
+  graph; never seed/substitute an APK or token, or use build-name/build-number overrides
+  to conceal incorrect source metadata.
+- Inspect actual signed artifacts with installed standard tooling: manifest package,
+  versionName/code, SDK and ABI targets, signing validity and certificates. Phone/Wear
+  upload signers must agree. The release Push signer must differ from the host and
+  configured Push development signers; local upload certificates do not establish the
+  APK signer selected by Play.
+- Confirm the Wear AAB embeds exactly the validated release Push APK bytes. Confirm the
+  generated token, compiled resource and manifest token binding match that exact APK,
+  without exposing raw tokens or validator output.
+- Inspect the packaged phone native libraries' ELF load and RELRO segment alignment,
+  bundle packaging settings and resulting APK ZIP alignment as applicable against the
+  official [16 KB page-size guidance](https://developer.android.com/guide/practices/page-sizes).
+  Record native-library applicability for the other artifacts, including resource-only
+  faces. A source declaration or successful compilation is not packaged-library or runtime
+  evidence; runtime 16 KB acceptance remains a separate gate.
+- Preserve original artifact bytes. In a private ignored local receipt, record source
+  commit, artifact paths and hashes, inspection/check commands and actual results,
+  including certificate comparisons and APK/token binding. Keep credentials, key material,
+  alias/password values and raw validation tokens out of receipts, docs and logs. Complete
+  Root and peer full final review; concrete code or packaging defects return through
+  reviewed Runner repair.
+
+### Play distribution
+
+- Resolve actual app history and verify the delivered phone/Wear app-signing identity in
+  Play. Confirm the embedded Push signer's separation from that delivered host certificate.
+  Equality of upload keys does not prove the signer of Google-delivered APKs. The legacy
+  face listing has its own app-signing identity and version history.
+- Verify form-factor tracks, store/policy requirements and internal-testing installation
+  and delivery. Local signed artifacts and green CI do not imply publication or authorize
+  an upload, merge or release.
+- Record physical-device and remaining runtime acceptance separately. The dated
+  [Push evidence and open limitations](#watch-face-push-acceptance) preserve the API35,
+  hardware and unobserved recovery gates; other emulator results do not close them or
+  runtime 16 KB acceptance. Preserve existing devices and signing identities during host
+  acceptance; do not reset them or reinstall canonical apps under a different certificate.
 
 ## Privacy And Legal
 
