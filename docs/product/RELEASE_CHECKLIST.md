@@ -292,11 +292,12 @@ self-managed signing identity.
 
 ## Manual Android release build (Stage A)
 
-[release-android.yml](../../.github/workflows/release-android.yml), job `build`, implements
-the build half only. Hosted permissions, secrets, failure/cancellation cleanup and artifact
-transfer acceptance remain pending. Stage B received-artifact verification and GitHub draft
-publication/retry are **unfinished**. A successful upload creates neither a tag nor a release
-and does not establish Play delivery or runtime acceptance. Normal PR test CI stays separate.
+[release-android.yml](../../.github/workflows/release-android.yml) implements Stage A in job
+`build` and Stage B in dependent job `publish`: independent transfer verification followed
+by GitHub draft creation. Hosted end-to-end acceptance remains pending, including permissions,
+secrets, failure/cancellation cleanup, transfer, draft creation and rerun/partial-state behavior.
+Local source checks do not establish hosted behavior, Play delivery or runtime acceptance.
+Normal PR test CI stays separate.
 
 Before a future dispatch, the Owner configures an `android-release` GitHub Environment
 restricted to the `main` branch and supplies the eight Environment secrets below. Required
@@ -338,7 +339,10 @@ rejects other refs and checks out the original full dispatch SHA without persist
 credentials. Before setup it checks all four source versionNames against the tag and enforces
 positive odd phone / next-even Wear codes and independent positive face codes. It never
 overrides versions or resolves a moving source ref. Build permission is only `contents: read`;
-runs are serialized with cancellation disabled.
+runs are serialized with cancellation disabled. The dependent publication job has only
+`contents: write`, receives no signing secrets and uses the current repository's workflow
+token, without a PAT, broader-token fallback or alternate repository. Repository policy must
+permit that token to create drafts and upload release assets; refusal fails the job.
 
 The unchanged guarded `just bundle-phone`, `just bundle-wear`, `just bundle-watchface`
 and guarded ordinary release APK builds produce these seven files for the current sources:
@@ -374,8 +378,49 @@ the artifact from the successful run's summary within its 14-day retention perio
 is `wardpulse-android-<tag>-<run-id>-attempt-<build-attempt>`. Keep that originating attempt
 with the bytes when retrying later work. Job outputs expose the exact upload `artifact_id`,
 `artifact_name`, `source_sha`, `tag`, `version`, `build_run_id` and `build_run_attempt` for
-Stage B. This producer receipt and upload do not implement received-artifact verification
-or draft publication. No build tree, logs, signing configuration or raw tokens are uploaded.
+Stage B. No build tree, logs, signing configuration or raw tokens are uploaded.
+
+### Verified transfer and draft publication (Stage B)
+
+Job `publish` runs only after successful `build`. It binds all seven outputs to the original
+`main` workflow dispatch, full source SHA, tag/version, run ID and expected artifact name.
+A publication-only rerun retains `build_run_attempt` from the successful build rather than
+substituting the newer workflow attempt. The pinned current-run download action receives
+only the exact artifact ID; it does not select a name or a latest artifact. No separate
+Actions run/job/artifact metadata API or whole-workflow success is required.
+
+The receiver re-reads version/code declarations at the exact source commit, derives the
+seven binary names and requires exactly those files plus `SHA256SUMS` and `provenance.json`
+as regular root files. Unsafe, nested, unexpected or missing files, duplicate receipt keys
+or records, conflicting identities, incomplete/extra hashes and hash mismatches fail closed.
+It recomputes every binary hash and checks provenance source/tag/version/run/origin-attempt,
+signer pins and completed producer checks. A download digest warning is not verification.
+The receiver does not duplicate the producer's APK/token parsing or signature tooling.
+
+Before any release mutation, authenticated paginated List releases includes drafts and rejects
+every existing release for the exact tag. GET-by-tag absence is not used. An existing tag is
+independently resolved, peeling annotated tags to the exact source commit; conflicting or
+unresolvable refs fail. Both conflict checks repeat immediately before creation. This precheck
+is not atomic and cannot prevent arbitrary future external mutation.
+
+Creation requests only a draft targeting the full immutable source SHA, with `draft: true`
+and `make_latest: "false"`. A correctly bound existing tag is retained; `target_commitish`
+cannot override a tag. The returned release ID, draft state, full-SHA target and tag name are
+checked and freshly re-observed immediately after creation and after upload. A draft may
+have no Git tag ref yet; absence is allowed, while every observed ref must peel to the source.
+The workflow never separately creates, moves or deletes a tag, and does not claim a returned
+nonlatest field. It uploads exactly the verified nine local files without clobbering, then
+confirms paginated asset names, count and sizes, comparing API digests when supplied. Optional
+digests are not required and assets are not downloaded again.
+
+Observed races, mutation, network/auth/API ambiguity or permission refusal fail the job.
+Failures preserve all existing and partial releases and assets: the workflow never edits,
+publishes or deletes a release, overwrites assets or retries with broader credentials. A rerun
+may proceed only if creation has not occurred and no release exists for the tag. Any partial
+draft, complete draft or public release causes the next attempt to refuse publication; the
+Owner must inspect the retained state and deliberately resolve it before retrying. A failed
+create request may already have created a draft, so inspect state even when no ID was returned.
+These instructions authorize no remote operation during local source preparation.
 
 ## Acceptance gates
 

@@ -87,13 +87,32 @@ The ordinary variant dependency graph packages and signs the face, validates it,
 the variant bundle, and packages the Wear app. No recursive Gradle, manual APK copy, token
 substitution, or source edit is needed. `clean` removes the generated bundle, not keys.
 
-Stage A also builds the ordinary guarded Wear release installer, verifies the fixed public
-signer pins and compares the producer Push bytes with the generated asset, embedded Wear
-AAB, embedded installer and staged Push APK. Its single Actions artifact contains seven
-signed binaries plus checksums and sanitized provenance, as listed in the release checklist.
+The manual release workflow's Stage A builds the ordinary guarded Wear release installer,
+verifies the fixed public signer pins and compares the producer Push bytes with the generated
+asset, embedded Wear AAB, embedded installer and staged Push APK. Its single Actions artifact contains seven
+signed binaries: phone/Wear/legacy each supply an AAB and direct APK, and Push supplies its
+separately signed APK, plus `SHA256SUMS` and sanitized `provenance.json`. The
+[manual release instructions](../../../docs/product/RELEASE_CHECKLIST.md#manual-android-release-build-stage-a)
+own the exact filenames, main-restricted Environment/eight signing secrets and manual dispatch.
+Signing state is removed before artifact upload; publication receives no signing secrets.
 Direct host installers use the upload key, which does not promise debug/Play install update
-compatibility. Received-artifact verification and GitHub draft publication remain unfinished
-Stage B work; neither a successful upload nor historical debug acceptance closes those gates.
+compatibility.
+
+Stage B's dependent `publish` job downloads only the successful build's exact artifact ID,
+binding its name/source/tag/version/run and originating build attempt to the original main
+dispatch. A publication-only rerun retains that build attempt. It derives expected filenames
+from immutable source metadata, verifies the exact nine regular root files, receipt identities,
+signer pins and every binary SHA-256, then uses only `contents: write` to create a full-SHA
+GitHub draft requesting `make_latest: "false"`. Authenticated paginated release discovery
+refuses any existing release for the tag, including drafts; existing tags must independently
+peel to the source. Conflict checks repeat before creation, without claiming atomic exclusion.
+Release ID/draft/target/tag and any tag ref are re-observed after creation and upload; all nine
+asset names/count/sizes and any supplied API digests are checked. An absent draft tag ref is
+valid; no separate tag is created. Failures preserve partial drafts/assets and never overwrite,
+edit, publish or delete them. Retry before creation is allowed only with no existing release;
+after creation the Owner must inspect and deliberately resolve partial state. Hosted transfer,
+permissions, cleanup, draft/rerun/cancellation and partial-state acceptance remain pending,
+as do separate Play/runtime gates; local checks and historical debug acceptance do not close them.
 
 ## Official validation and generated outputs
 

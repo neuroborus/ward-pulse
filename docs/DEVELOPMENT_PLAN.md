@@ -1441,9 +1441,10 @@ and verify the live phone/watch UI
 
 ### Phase 8 — MVP hardening
 
-Status: in progress as of 2026-10-21. Manual release Stage A build automation is implemented;
-hosted acceptance and Stage B GitHub draft publication remain pending. Release acceptance,
-real-device testing and the remaining error/offline acceptance review remain open.
+Status: in progress as of 2026-10-22. Manual release Stage A build automation and Stage B
+verified-transfer GitHub draft publication are implemented; hosted end-to-end acceptance
+remains pending. Release acceptance, real-device testing and the remaining error/offline
+acceptance review remain open.
 Persistent per-connection recovery is implemented and covered by host regressions and
 final-APK emulator acceptance below. Phase 7 live acceptance remains a separate
 provider-integration gate.
@@ -3059,8 +3060,8 @@ Every workflow that can reach a shared contract also runs
 `tools/validate-fixtures/validate_json.py`: it validates the golden fixtures and checks that the
 watch payload version agrees across the schema, the phone, and the Wear store.
 
-Manual release Stage A is implemented in
-[release-android.yml](../.github/workflows/release-android.yml), job `build`:
+Manual release Stages A and B are implemented in
+[release-android.yml](../.github/workflows/release-android.yml), jobs `build` and `publish`:
 
 ```text
 release-android.yml
@@ -3070,13 +3071,24 @@ release-android.yml
   verify seven signatures, fixed certificate pins and exact embedded Push bytes
   separate import/build/verification steps; remove private signing state before upload
   upload seven binaries, SHA256SUMS and sanitized provenance under an attempt identity
+  download the exact successful build artifact ID, retaining its originating attempt
+  re-read immutable source metadata; independently verify the exact nine files and receipts
+  authenticate and paginate release conflicts; independently peel any existing tag
+  repeat conflicts; create only a full-SHA draft requesting make_latest: "false"
+  re-observe release/tag bindings after creation and upload; confirm all nine assets
 ```
 
 The [manual build instructions](product/RELEASE_CHECKLIST.md#manual-android-release-build-stage-a)
-own Environment/secrets setup and artifact download. Hosted permissions, secret provisioning,
-cleanup and transfer acceptance remain pending. Stage B received-artifact verification and
-GitHub draft publication/retry are unfinished; Stage A creates no tag or release. This source
-implementation does not close local signed-artifact, Play delivery or runtime acceptance.
+own Environment/manual invocation, the seven installer/bundle outputs plus receipts, exact
+artifact/origin identities and signing cleanup. Build retains `contents: read`; publication
+uses only `contents: write` without signing secrets or broader credentials. Upload-signed
+installers do not promise debug/Play update compatibility. Publication preserves partial
+state on failure, refuses every preexisting release for the tag and requires deliberate Owner
+resolution before retrying after creation. It never separately creates or moves a tag, edits
+or publishes a release, or overwrites assets. Prechecks do not provide atomic exclusion or
+protection from future external mutation. Hosted permissions, provisioning/cleanup, transfer,
+draft creation, rerun/cancellation and partial-state acceptance remain pending. This source
+implementation does not close separate local signed-artifact, Play delivery or runtime gates.
 
 ---
 
