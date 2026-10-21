@@ -136,8 +136,8 @@ comments, and are the single source of truth for cadence:
 - watch summary re-sent after each successful automatic sync;
 - a failed sync keeps the last successful snapshot visible and retries on the next tick, so a
   launch without connectivity still recovers without a manual refresh;
-- the Cursor Team Admin API row shows a freshness note that usage may lag about an hour (documented
-  provider-side hourly aggregation); that note does not clamp the cadence and is not shown on the
+- the Cursor Team Admin API row notes hourly provider-side aggregation and that refreshed values
+  may lag; it does not promise publication within an hour, clamp the cadence or appear on the
   experimental Cursor plan row;
 - existing `429` / `Retry-After` / backoff handling still applies on top of the cadence;
   waits longer than five seconds are not slept in-process — the sync fails as rate-limited and
@@ -474,8 +474,12 @@ Reporting outcomes:
 An explicit missing-reporting-scope response is **access denial**, distinct from an
 authentication rejection. A successful ordinary empty daily report can have no history;
 paginated inactive days containing only zero counts are not evidence of usage. Connected
-does not promise activity or immediate changes to the history. Provider-side hourly
-aggregation is not an exact publication deadline. The phone's `CursorPlatformClient.fetchReports`
+does not promise activity or immediate changes to the history. Cursor Team Admin API request
+history and spend may take several hours or longer to appear. When Connected but recent
+activity is missing, the user guide recommends waiting a few hours before another refresh;
+this is a practical retry interval, not a measured minimum or publication guarantee. Provider-side
+hourly aggregation is not an exact publication deadline. These observations do not measure
+the freshness of the separate Cursor plan percentages. The phone's `CursorPlatformClient.fetchReports`
 in `apps/phone_flutter/lib/sync/provider_reporting_clients.dart` owns retrieval;
 `_isMissingCursorReportingScope` in `apps/phone_flutter/lib/sync/provider_reporting.dart`
 identifies the explicit missing-scope response for error mapping;
@@ -519,6 +523,14 @@ face after fresh sync. These checks do not establish positive Team ledger activi
 team paid for the personal CLI test. The owner subsequently confirmed a current paid seat;
 the exact tier and seat state during the earlier test were not independently verified. The
 installed CLI computes team selectability locally from direct membership, billing metadata
-and a positive seat count; its listed team remains unselectable despite that owner report.
-This metadata discrepancy, the empty live Team ledger and the earlier test's billed context
-remain unresolved. No publication deadline, current Free seat or billing cause is inferred.
+and a positive seat count; its listed team was unselectable despite that owner report.
+The live Team ledger was still empty at that check, and the earlier test's billed context
+was unresolved. No publication deadline, current Free seat or billing cause was inferred.
+
+Verified 2026-10-21: the reporting API returned 15 daily rows with one included request and
+zero usage-based or API-key requests. Complete reported spend components totalled USD 0.00.
+The actual phone Team Admin API history showed 15 buckets, **1 request** and a visible nonzero
+bar. This verifies positive Team reporting through the Dashboard. Empty reporting on
+2026-10-20 and a positive result on 2026-10-21 do not establish the exact delay, its cause or
+which earlier request produced the entry. Legacy-team identity, billing attribution and CLI
+team-selection support questions remain separate and unresolved by this check.

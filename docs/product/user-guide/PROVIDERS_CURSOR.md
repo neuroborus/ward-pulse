@@ -136,12 +136,19 @@ Team key, not a personal User key. See [connection status](/guide/providers#chec
 
 ### Read the history
 
-Request counts are raw usage events, not billed request units.
+Team Admin API history counts requests, not tokens. These are raw usage events, not billed
+request units. If no team activity is reported, **Usage history** may be absent.
 
-Connected can appear before the team has usage to report. If no team activity is reported,
-Usage history may be absent. Cursor aggregates team usage by the hour, so a refresh can
-succeed without changing the figures. This note applies to Team Admin API, separately from
-the Cursor plan row.
+Recent request history and spend from **Cursor Team Admin API may take several hours or
+longer to appear**. If the row shows **Connected** but recent activity is missing, wait a few
+hours, then refresh again. Repeated **Refresh** taps cannot make Cursor publish reports sooner.
+
+Cursor documents [hourly aggregation](https://cursor.com/docs/api), not a guarantee that
+every request appears within an hour. **Updated** reflects WardPulse's report snapshot;
+it does not mean Cursor has included all recent activity.
+
+**Cursor plan** percentages come from a separate dashboard connection. The reporting delay
+described here applies to **Team Admin API**.
 
 ## Reconnect, change or remove a connection
 
