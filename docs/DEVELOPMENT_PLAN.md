@@ -1441,10 +1441,15 @@ and verify the live phone/watch UI
 
 ### Phase 8 — MVP hardening
 
-Status: in progress as of 2026-10-13. Release signing, real-device testing and the remaining
-error/offline acceptance review remain open. Persistent per-connection recovery is implemented
-and covered by host regressions and final-APK emulator acceptance below. Phase 7 live
-acceptance remains a separate provider-integration gate.
+Status: in progress as of 2026-10-22. Manual release Stage A build automation and Stage B
+verified-transfer GitHub draft publication, plus the independent manual Google Play
+preparation/apply workflow, are implemented in source; hosted end-to-end acceptance
+remains pending, including Google auth/upload/commit/review/delivery. Release acceptance,
+real-device testing and the remaining error/offline
+acceptance review remain open.
+Persistent per-connection recovery is implemented and covered by host regressions and
+final-APK emulator acceptance below. Phase 7 live acceptance remains a separate
+provider-integration gate.
 
 Completed slice:
 
@@ -1526,6 +1531,16 @@ Deliverables that remain:
   [version table and allocation policy](product/RELEASE_CHECKLIST.md#release-versions),
   [Signing](product/RELEASE_CHECKLIST.md#signing) and
   [acceptance gates](product/RELEASE_CHECKLIST.md#acceptance-gates) own the requirements.
+  The two release Actions are independently manual: a human publishes the GitHub draft
+  before selecting its explicit stable tag for Play. The isolated `google-play` Environment
+  uses only service-account JSON, separate from Android signing. Existing track/status
+  defaults are `qa`/`wear:qa`/`draft`; completed internal testing does not imply production.
+  The helper reuses exact existing bundles or uploads only phone/Wear in one edit,
+  preserving retention and refusing rollback, conflicts and review-cancellation fallback.
+  Legacy distribution remains optional/separate and Push stays embedded. Follow
+  [Play setup and recovery](product/RELEASE_CHECKLIST.md#manual-google-play-release):
+  uncertain outcomes require actual server reconciliation before further mutation,
+  including fresh dispatches/reruns, whose new directories do not preserve the marker.
   Reviewed metadata and preserved guards do not prove fresh signed artifacts exist;
   inspected local artifacts do not establish Play's delivered app-signing identity or
   internal-testing installation. Record actual host artifact and Play results separately,
@@ -3057,15 +3072,73 @@ Every workflow that can reach a shared contract also runs
 `tools/validate-fixtures/validate_json.py`: it validates the golden fixtures and checks that the
 watch payload version agrees across the schema, the phone, and the Wear store.
 
-Release CI can be added later:
+Manual release Stages A and B are implemented in
+[release-github.yml](../.github/workflows/release-github.yml), jobs `build` and `publish`:
 
 ```text
-release-android.yml
-  build signed phone AAB
-  build signed wear AAB
-  build signed watch face AAB
-  upload artifacts
+release-github.yml
+  workflow_dispatch on main; original exact source SHA and source versions
+  import persistent upload and separate Push signing after public tooling setup
+  guarded phone/Wear/legacy AABs and direct installers plus producer Push APK
+  verify seven signatures, fixed certificate pins and exact embedded Push bytes
+  separate import/build/verification steps; remove private signing state before upload
+  upload seven binaries, SHA256SUMS and sanitized provenance under an attempt identity
+  download the exact successful build artifact ID, retaining its originating attempt
+  re-read immutable source metadata; independently verify the exact nine files and receipts
+  authenticate and paginate release conflicts; independently peel any existing tag
+  repeat conflicts; create only a full-SHA draft requesting make_latest: "false"
+  re-observe release/tag bindings after creation and upload; confirm all nine assets
 ```
+
+The [manual build instructions](product/RELEASE_CHECKLIST.md#manual-android-release-build-stage-a)
+own Environment/manual invocation, the seven installer/bundle outputs plus receipts, exact
+artifact/origin identities and signing cleanup. Build retains `contents: read`; publication
+uses only `contents: write` without signing secrets or broader credentials. Upload-signed
+installers do not promise debug/Play update compatibility. Publication preserves partial
+state on failure, refuses every preexisting release for the tag and requires deliberate Owner
+resolution before retrying after creation. It never separately creates or moves a tag, edits
+or publishes a release, or overwrites assets. Prechecks do not provide atomic exclusion or
+protection from future external mutation. Hosted permissions, provisioning/cleanup, transfer,
+draft creation, rerun/cancellation and partial-state acceptance remain pending. This source
+implementation does not close separate local signed-artifact, Play delivery or runtime gates.
+
+The independent [release-google-play.yml](../.github/workflows/release-google-play.yml)
+workflow, **Google Play Release**, implements manual preparation and apply:
+
+```text
+release-google-play.yml
+  workflow_dispatch only on main; explicit stable published GitHub release tag
+  checkout original dispatch SHA with full history and no persisted credentials
+  prepare via that clean checkout's helper into a fresh directory outside checkout
+  authenticate only after preparation, with the isolated google-play service account
+  apply the same dispatch-bound preparation with explicit phone/Wear tracks and status
+  re-observe release/receipts/exact bytes; reuse matching bundles or upload only two AABs
+  preserve serving/retained state; validate one edit and commit with ERROR_IF_IN_REVIEW
+```
+
+The Owner explicitly publishes the GitHub draft before separately dispatching Play; neither
+release workflow triggers the other. Play grants only `contents: read`, serializes dispatches
+without cancellation and bounds execution. Its only secret is `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`
+in the main-restricted `google-play` Environment, separate from Android signing. The pinned
+official auth action infers `client_email`, requests only androidpublisher scope, creates no
+credential file and exports no ambient credentials. Its masked token is environment-only in
+apply, with environment-only `GH_TOKEN` available to both helper phases. Selected releases
+provide data, never executable tooling; saved schema-1 preparation remains dispatch-bound.
+
+Actual existing tracks must be discovered; defaults are `qa`/`wear:qa` and `draft`, with
+explicit `completed` available. Production is never selected automatically, and completed
+internal testing is not production or evidence of delivery. Exact bundle reuse/promotion,
+retention, no rollback/downgrade and uncertainty barriers belong to the helper; the workflow
+adds no verifier or Play logic. Legacy remains optional/separate; Push is embedded in Wear.
+The [tool README](../tools/release-google-play/README.md) owns exact commands and offline
+test ownership/proof limits, while
+[manual Play release](product/RELEASE_CHECKLIST.md#manual-google-play-release) owns service-account
+self Token Creator/API/app-scoped permissions, existing app/first upload/App Signing/Wear
+prerequisites and recovery. After uncertainty, actual server/Console reconciliation must
+precede further mutation, including a fresh dispatch or rerun: hosted runners do not
+preserve a retained-directory `.play-operation` marker across runs. Hosted auth/upload/
+validation/commit/review/delivery remains unexecuted, as do the separate signed-RC and
+remaining runtime gates; source and offline results cannot substitute for them.
 
 ---
 

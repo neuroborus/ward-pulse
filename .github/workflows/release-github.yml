@@ -1,0 +1,794 @@
+name: GitHub Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Stable release tag matching the source versions for a GitHub draft
+        required: true
+        default: v0.1.0
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and verify signed binaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: android-release
+    defaults:
+      run:
+        shell: bash
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      SOURCE_SHA: ${{ github.sha }}
+      UPLOAD_CERT_SHA256: d02f85820e60d6cf49e939a1af72a84c17d3ce107c840b4e9d3ac0f3946f078e
+      PUSH_CERT_SHA256: 04fa77a4feabb08e8c71fb1ddc32000c63f18e6ff5967e3b5b8acbd5b36d4950
+      JAVA_TOOL_OPTIONS: -Duser.language=en -Duser.country=US
+      # Release configuration must never enter Gradle build/configuration caches.
+      GRADLE_OPTS: -Dorg.gradle.configuration-cache=false -Dorg.gradle.caching=false -Dorg.gradle.daemon=false
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_name: ${{ steps.versions.outputs.artifact_name }}
+      source_sha: ${{ steps.versions.outputs.source_sha }}
+      tag: ${{ steps.versions.outputs.tag }}
+      version: ${{ steps.versions.outputs.version }}
+      build_run_id: ${{ steps.versions.outputs.build_run_id }}
+      build_run_attempt: ${{ steps.versions.outputs.build_run_attempt }}
+    steps:
+      - name: Require an immutable main dispatch
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          [[ "$DISPATCH_REF" == refs/heads/main ]]
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Validate source versions and allocation before setup
+        id: versions
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+
+          def one(pattern, text):
+              matches = re.findall(pattern, text, re.MULTILINE)
+              if len(matches) != 1:
+                  raise SystemExit("Expected exactly one source version declaration.")
+              return matches[0]
+
+          tag = os.environ["RELEASE_TAG"]
+          stable = r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
+          if not re.fullmatch("v" + stable, tag):
+              raise SystemExit("Release tag must be stable vMAJOR.MINOR.PATCH.")
+          version = tag[1:]
+          sha = os.environ["SOURCE_SHA"]
+          if subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip() != sha:
+              raise SystemExit("Checkout does not match the original dispatch SHA.")
+          if Path(os.environ["RUNNER_TEMP"]).resolve().is_relative_to(Path.cwd().resolve()):
+              raise SystemExit("Release temporary storage must be outside the checkout.")
+          phone = Path("apps/phone_flutter/pubspec.yaml").read_text()
+          phone_version, phone_code = one(r"^version: ([0-9.]+)\+([0-9]+)$", phone)
+          versions = {"phone": phone_version}
+          codes = {"phone": int(phone_code)}
+          for surface, path in (
+              ("wear", "apps/wear_android/app/build.gradle.kts"),
+              ("legacy", "apps/watchface_wff/build.gradle.kts"),
+              ("push", "apps/wear_android/watchface_push/build.gradle.kts"),
+          ):
+              source = Path(path).read_text()
+              versions[surface] = one(r'^\s*versionName = "([0-9.]+)"$', source)
+              pattern = r"^\s*versionCode = ([0-9]+)$"
+              if surface == "push":
+                  pattern = r"^\s*\}\s*\.orElse\(([0-9]+)\)$"
+              codes[surface] = int(one(pattern, source))
+          if any(value != version for value in versions.values()):
+              raise SystemExit("Tag must match all four source versionNames.")
+          if (any(not 0 < code <= 2147483647 for code in codes.values())
+                  or codes["phone"] % 2 != 1 or codes["wear"] != codes["phone"] + 1):
+              raise SystemExit("Expected positive odd phone / next-even Wear and positive face codes.")
+          metadata = {
+              "source_sha": sha, "tag": tag, "version": version,
+              "build_run_id": os.environ["GITHUB_RUN_ID"],
+              "build_run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "artifact_name": f"wardpulse-android-{tag}-{os.environ['GITHUB_RUN_ID']}"
+                               f"-attempt-{os.environ['GITHUB_RUN_ATTEMPT']}",
+          }
+          metadata.update({f"{surface}_code": str(code) for surface, code in codes.items()})
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              for key, value in metadata.items():
+                  output.write(f"{key}={value}\n")
+          PY
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+        with:
+          packages: >-
+            platforms;android-35 platforms;android-36 platforms;android-37.1
+            build-tools;36.0.0 ndk;28.2.13676358 ndk;29.0.14206865 cmake;3.22.1
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: stable
+          flutter-version: 3.44.6
+          cache: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+      - name: Install public build tools
+        timeout-minutes: 20
+        run: |
+          set -euo pipefail
+          cargo install cargo-ndk --version 4.1.2 --locked
+          cargo install just --version 1.54.0 --locked
+          just --version
+          flutter precache --android
+
+      - name: Preflight shared contracts and canonical watch face
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          just validate-fixtures
+          node tools/render-watchface.mjs --check
+          just validate-watchface
+
+      - name: Reserve private signing storage
+        run: |
+          set -euo pipefail
+          umask 077
+          # Refuse to replace existing private configuration, even on a reused runner.
+          test ! -e key.properties
+          test ! -L key.properties
+          test ! -e watchface-push-release.properties
+          test ! -L watchface-push-release.properties
+          test ! -e watchface-push-debug.properties
+          test ! -L watchface-push-debug.properties
+          release_private_dir=$(mktemp -d "$RUNNER_TEMP/wardpulse-release.XXXXXX")
+          printf 'RELEASE_PRIVATE_DIR=%s\n' "$release_private_dir" >> "$GITHUB_ENV"
+
+      - name: Import and validate persistent signing identities
+        timeout-minutes: 5
+        env:
+          ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          ANDROID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+          ANDROID_PUSH_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_PUSH_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_PUSH_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_PUSH_RELEASE_STORE_PASSWORD }}
+          ANDROID_PUSH_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_PUSH_RELEASE_KEY_ALIAS }}
+          ANDROID_PUSH_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_PUSH_RELEASE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          cleanup() {
+            rm -f -- "$GITHUB_WORKSPACE/key.properties" "$GITHUB_WORKSPACE/watchface-push-release.properties"
+            rm -rf -- "$RELEASE_PRIVATE_DIR"
+          }
+          # Keep successful imports for the guarded builds and AAB trust checks.
+          trap 'if [[ $? -ne 0 ]]; then cleanup; fi' EXIT
+          trap 'exit 1' HUP INT TERM
+
+          # Inline Java uses the same KeyStore/Properties APIs as Gradle. No private
+          # values enter argv, and Properties.store escapes all Java property values.
+          cat > "$RELEASE_PRIVATE_DIR/ImportSigning.java" <<'JAVA'
+          import java.io.OutputStream;
+          import java.nio.file.Files;
+          import java.nio.file.Path;
+          import java.security.KeyStore;
+          import java.security.MessageDigest;
+          import java.security.PrivateKey;
+          import java.security.cert.X509Certificate;
+          import java.util.Base64;
+          import java.util.HexFormat;
+          import java.util.Properties;
+
+          class ImportSigning {
+              static String required(String name) {
+                  String value = System.getenv(name);
+                  if (value == null || value.isBlank()) throw new IllegalArgumentException();
+                  return value;
+              }
+
+              static void provision(String prefix, String filename, String pin) throws Exception {
+                  Path store = Path.of(required("RELEASE_PRIVATE_DIR"), prefix + ".keystore");
+                  Files.write(store, Base64.getDecoder().decode(required(prefix + "KEYSTORE_BASE64")));
+                  String storePassword = required(prefix + "STORE_PASSWORD");
+                  String keyPassword = required(prefix + "KEY_PASSWORD");
+                  String alias = required(prefix + "KEY_ALIAS");
+                  KeyStore keys = KeyStore.getInstance(store.toFile(), storePassword.toCharArray());
+                  if (!(keys.getKey(alias, keyPassword.toCharArray()) instanceof PrivateKey)) {
+                      throw new IllegalArgumentException();
+                  }
+                  X509Certificate certificate = (X509Certificate) keys.getCertificate(alias);
+                  certificate.checkValidity();
+                  String fingerprint = HexFormat.of().formatHex(
+                      MessageDigest.getInstance("SHA-256").digest(certificate.getEncoded()));
+                  if (!fingerprint.equals(required(pin))) throw new IllegalArgumentException();
+                  Properties properties = new Properties();
+                  properties.setProperty("storeFile", store.toString());
+                  properties.setProperty("storePassword", storePassword);
+                  properties.setProperty("keyAlias", alias);
+                  properties.setProperty("keyPassword", keyPassword);
+                  try (OutputStream output = Files.newOutputStream(Path.of(filename))) {
+                      properties.store(output, null);
+                  }
+              }
+
+              public static void main(String[] args) {
+                  try {
+                      provision("ANDROID_UPLOAD_", "key.properties", "UPLOAD_CERT_SHA256");
+                      provision("ANDROID_PUSH_RELEASE_", "watchface-push-release.properties", "PUSH_CERT_SHA256");
+                  } catch (Exception failure) {
+                      System.exit(1);
+                  }
+              }
+          }
+          JAVA
+          if ! java "$RELEASE_PRIVATE_DIR/ImportSigning.java" > "$RELEASE_PRIVATE_DIR/import.log" 2>&1; then
+            echo 'Signing import failed: check both persistent identities, credentials, and certificate pins.'
+            exit 1
+          fi
+          rm -f -- "$RELEASE_PRIVATE_DIR/ImportSigning.java" "$RELEASE_PRIVATE_DIR/import.log"
+
+      - name: Build guarded release bundles and installers
+        timeout-minutes: 50
+        run: |
+          set -euo pipefail
+          umask 077
+          cleanup() {
+            rm -f -- "$GITHUB_WORKSPACE/key.properties" "$GITHUB_WORKSPACE/watchface-push-release.properties"
+            rm -rf -- "$RELEASE_PRIVATE_DIR"
+          }
+          trap 'if [[ $? -ne 0 ]]; then cleanup; fi' EXIT
+          trap 'exit 1' HUP INT TERM
+
+          # Gradle/Flutter failures can quote signing inputs. Keep all raw diagnostics
+          # private and ephemeral, including dependency and official-validator output.
+          export ORG_GRADLE_PROJECT_wardpulseRequireReleaseKey=1
+          build_release() {
+            if ! "$@" >> "$RELEASE_PRIVATE_DIR/build.log" 2>&1; then
+              echo 'Guarded release build failed; private diagnostics will be removed.'
+              return 1
+            fi
+          }
+          build_release just bundle-phone
+          build_release just bundle-wear
+          build_release just bundle-watchface
+          (cd apps/phone_flutter && build_release flutter build apk --release)
+          (cd apps/wear_android && build_release ./gradlew --no-daemon :app:assembleRelease)
+          (cd apps/watchface_wff && build_release ./gradlew --no-daemon assembleRelease)
+          # Only upload-keystore trust is still needed by signature verification.
+          rm -f -- "$GITHUB_WORKSPACE/key.properties" "$GITHUB_WORKSPACE/watchface-push-release.properties"
+          rm -f -- "$RELEASE_PRIVATE_DIR/ANDROID_PUSH_RELEASE_.keystore" "$RELEASE_PRIVATE_DIR/build.log"
+
+      - name: Verify signatures and stage the explicit allowlist
+        timeout-minutes: 5
+        env:
+          ANDROID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          RELEASE_VERSION: ${{ steps.versions.outputs.version }}
+          PHONE_CODE: ${{ steps.versions.outputs.phone_code }}
+          WEAR_CODE: ${{ steps.versions.outputs.wear_code }}
+          LEGACY_CODE: ${{ steps.versions.outputs.legacy_code }}
+          PUSH_CODE: ${{ steps.versions.outputs.push_code }}
+        run: |
+          set -euo pipefail
+          umask 077
+          cleanup() {
+            rm -f -- "$GITHUB_WORKSPACE/key.properties" "$GITHUB_WORKSPACE/watchface-push-release.properties"
+            rm -rf -- "$RELEASE_PRIVATE_DIR"
+          }
+          trap cleanup EXIT
+          trap 'exit 1' HUP INT TERM
+
+          if ! python3 - > "$RELEASE_PRIVATE_DIR/verification.log" 2>&1 <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import shutil
+          import subprocess
+          import zipfile
+          from pathlib import Path
+
+          def require(condition):
+              if not condition:
+                  raise ValueError("Release artifact verification failed.")
+
+          def run(arguments):
+              return subprocess.run(arguments, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    text=True, check=False)
+
+          def sha256(path):
+              with path.open("rb") as stream:
+                  return hashlib.file_digest(stream, "sha256").hexdigest()
+
+          def installer(directory):
+              # Inspect the actual producer outputs; do not guess legacy filename casing.
+              candidates = list(Path(directory).glob("*.apk"))
+              require(len(candidates) == 1)
+              return candidates[0]
+
+          version = os.environ["RELEASE_VERSION"]
+          upload_pin = os.environ["UPLOAD_CERT_SHA256"]
+          push_pin = os.environ["PUSH_CERT_SHA256"]
+          private = Path(os.environ["RELEASE_PRIVATE_DIR"])
+          apksigner = str(Path(os.environ["ANDROID_HOME"]) / "build-tools/36.0.0/apksigner")
+          push = Path("apps/wear_android/watchface_push/build/outputs/apk/release/watchface_push-release.apk")
+          wear_aab = Path("apps/wear_android/app/build/outputs/bundle/release/app-release.aab")
+          wear_apk = installer("apps/wear_android/app/build/outputs/apk/release")
+          binaries = [
+              ("phone", "aab", Path("apps/phone_flutter/build/app/outputs/bundle/release/app-release.aab")),
+              ("phone", "apk", installer("apps/phone_flutter/build/app/outputs/flutter-apk")),
+              ("wear", "aab", wear_aab),
+              ("wear", "apk", wear_apk),
+              ("legacy", "aab", Path("apps/watchface_wff/build/outputs/bundle/release/WardPulseWatchFace-release.aab")),
+              ("legacy", "apk", installer("apps/watchface_wff/build/outputs/apk/release")),
+              ("push", "apk", push),
+          ]
+          stage = Path(os.environ["RUNNER_TEMP"]) / "wardpulse-android-release-artifacts"
+          stage.mkdir(mode=0o700)  # A reused/stale staging directory is a failure.
+          records = []
+          for surface, extension, binary in binaries:
+              require(binary.is_file() and not binary.is_symlink() and binary.stat().st_size > 0)
+              pin = push_pin if surface == "push" else upload_pin
+              if extension == "aab":
+                  # Trust the already pinned import: expected self-signed certificates
+                  # need no public CA. Missing timestamps are permitted, unsigned entries
+                  # and other strict signer errors are not.
+                  result = run(["jarsigner", "-verify", "-strict", "-keystore",
+                                str(private / "ANDROID_UPLOAD_.keystore"),
+                                "-storepass:env", "ANDROID_UPLOAD_STORE_PASSWORD", str(binary)])
+                  require(result.returncode == 0 and re.search(r"^jar verified\.$", result.stdout, re.M))
+                  certificates = run(["keytool", "-printcert", "-jarfile", str(binary)])
+                  require(certificates.returncode == 0)
+                  fingerprints = re.findall(r"^\s*SHA256: ([0-9A-Fa-f:]+)\s*$", certificates.stdout, re.M)
+                  fingerprints = [value.replace(":", "").lower() for value in fingerprints]
+              else:
+                  result = run([apksigner, "verify", "--verbose", "--print-certs", str(binary)])
+                  require(result.returncode == 0 and re.search(r"^Verifies\s*$", result.stdout, re.M))
+                  fingerprints = re.findall(r"^Signer #[0-9]+ certificate SHA-256 digest: ([0-9a-fA-F]+)\s*$",
+                                            result.stdout, re.M)
+                  fingerprints = [value.lower() for value in fingerprints]
+              require(fingerprints == [pin])
+              code = os.environ[f"{surface.upper()}_CODE"]
+              name = f"wardpulse-{surface}-{version}-code{code}.{extension}"
+              destination = stage / name
+              shutil.copyfile(binary, destination)
+              digest = sha256(binary)
+              require(sha256(destination) == digest)
+              records.append({"file": name, "sha256": digest, "signer_sha256": pin})
+
+          push_bytes = push.read_bytes()
+          generated = Path("apps/wear_android/app/build/generated/defaultWatchFace/release/assets/default_watchface.apk")
+          require(generated.read_bytes() == push_bytes)
+          for host, entry in ((wear_aab, "base/assets/default_watchface.apk"),
+                              (wear_apk, "assets/default_watchface.apk")):
+              with zipfile.ZipFile(host) as archive:
+                  require(archive.namelist().count(entry) == 1)
+                  require(archive.read(entry) == push_bytes)
+          require((stage / records[-1]["file"]).read_bytes() == push_bytes)
+          (stage / "SHA256SUMS").write_text("".join(f"{item['sha256']}  {item['file']}\n" for item in records))
+          provenance = {
+              "source_sha": os.environ["SOURCE_SHA"], "tag": os.environ["RELEASE_TAG"],
+              "version": version, "build_run_id": os.environ["GITHUB_RUN_ID"],
+              "build_run_attempt": os.environ["GITHUB_RUN_ATTEMPT"], "binaries": records,
+              "checks_completed": [
+                  "Immutable checkout and four source versions/code allocation",
+                  "Shared fixtures and watch payload contract",
+                  "Canonical WFF drift and official XML validator",
+                  "Both imported private keys/passwords and fixed public certificate pins",
+                  "Guarded AAB and direct release APK producers",
+                  "PrepareDefaultWatchFace official Push validation and AGP embedding",
+                  "Three jarsigner strict AAB verifications and keytool certificate pins",
+                  "Four apksigner APK verifications and certificate pins",
+                  "Exact Push producer/generated/Wear AAB/Wear installer/staged byte equality",
+                  "Seven staged binary SHA-256 comparisons",
+              ],
+          }
+          (stage / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
+          require(len(list(stage.iterdir())) == 9)
+          PY
+          then
+            echo 'Release signature, certificate, staging, or Push byte verification failed.'
+            exit 1
+          fi
+          echo 'Seven signed binaries verified and staged; private signing state is being removed.'
+
+      - name: Always remove workflow-created sensitive state
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${RELEASE_PRIVATE_DIR:-}" ]]; then
+            rm -f -- "$GITHUB_WORKSPACE/key.properties" "$GITHUB_WORKSPACE/watchface-push-release.properties"
+            rm -rf -- "$RELEASE_PRIVATE_DIR"
+          fi
+
+      - name: Upload only verified binaries and sanitized receipts
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ steps.versions.outputs.artifact_name }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/wardpulse-android-release-artifacts/wardpulse-phone-${{ steps.versions.outputs.version }}-code${{ steps.versions.outputs.phone_code }}.aab
+            ${{ runner.temp }}/wardpulse-android-release-artifacts/wardpulse-phone-${{ steps.versions.outputs.version }}-code${{ steps.versions.outputs.phone_code }}.apk
+            ${{ runner.temp }}/wardpulse-android-release-artifacts/wardpulse-wear-${{ steps.versions.outputs.version }}-code${{ steps.versions.outputs.wear_code }}.aab
+            ${{ runner.temp }}/wardpulse-android-release-artifacts/wardpulse-wear-${{ steps.versions.outputs.version }}-code${{ steps.versions.outputs.wear_code }}.apk
+            ${{ runner.temp }}/wardpulse-android-release-artifacts/wardpulse-legacy-${{ steps.versions.outputs.version }}-code${{ steps.versions.outputs.legacy_code }}.aab
+            ${{ runner.temp }}/wardpulse-android-release-artifacts/wardpulse-legacy-${{ steps.versions.outputs.version }}-code${{ steps.versions.outputs.legacy_code }}.apk
+            ${{ runner.temp }}/wardpulse-android-release-artifacts/wardpulse-push-${{ steps.versions.outputs.version }}-code${{ steps.versions.outputs.push_code }}.apk
+            ${{ runner.temp }}/wardpulse-android-release-artifacts/SHA256SUMS
+            ${{ runner.temp }}/wardpulse-android-release-artifacts/provenance.json
+
+  publish:
+    name: Verify transfer and create a draft
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      BUILD_ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
+      BUILD_ARTIFACT_NAME: ${{ needs.build.outputs.artifact_name }}
+      SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
+      RELEASE_TAG: ${{ needs.build.outputs.tag }}
+      RELEASE_VERSION: ${{ needs.build.outputs.version }}
+      BUILD_RUN_ID: ${{ needs.build.outputs.build_run_id }}
+      BUILD_RUN_ATTEMPT: ${{ needs.build.outputs.build_run_attempt }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Bind successful build outputs to the original dispatch and source
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          DISPATCH_SHA: ${{ github.sha }}
+          DISPATCH_TAG: ${{ inputs.tag }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+
+          def require(condition):
+              if not condition:
+                  raise SystemExit("Build identity or immutable source metadata is invalid.")
+
+          def one(pattern, source):
+              matches = re.findall(pattern, source, re.MULTILINE)
+              require(len(matches) == 1)
+              return matches[0]
+
+          def source(path):
+              return subprocess.check_output(["git", "show", f"{sha}:{path}"], text=True)
+
+          require(os.environ["BUILD_RESULT"] == "success")
+          require(os.environ["GITHUB_EVENT_NAME"] == "workflow_dispatch")
+          require(os.environ["GITHUB_REF"] == "refs/heads/main")
+          sha = os.environ["SOURCE_SHA"]
+          tag = os.environ["RELEASE_TAG"]
+          version = os.environ["RELEASE_VERSION"]
+          require(re.fullmatch(r"[0-9a-f]{40}", sha))
+          require(sha == os.environ["DISPATCH_SHA"])
+          require(subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip() == sha)
+          require(re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", tag))
+          require(tag == os.environ["DISPATCH_TAG"] and version == tag[1:])
+          for key in ("BUILD_ARTIFACT_ID", "BUILD_RUN_ID", "BUILD_RUN_ATTEMPT", "GITHUB_RUN_ATTEMPT"):
+              require(re.fullmatch(r"[1-9][0-9]*", os.environ[key]))
+          run_id = os.environ["BUILD_RUN_ID"]
+          attempt = os.environ["BUILD_RUN_ATTEMPT"]
+          require(run_id == os.environ["GITHUB_RUN_ID"])
+          # A publish-only rerun keeps the successful build's originating attempt.
+          require(int(attempt) <= int(os.environ["GITHUB_RUN_ATTEMPT"]))
+          require(os.environ["BUILD_ARTIFACT_NAME"] == f"wardpulse-android-{tag}-{run_id}-attempt-{attempt}")
+          phone_version, phone_code = one(r"^version: ([0-9.]+)\+([0-9]+)$",
+                                          source("apps/phone_flutter/pubspec.yaml"))
+          require(phone_version == version)
+          codes = {"phone": int(phone_code)}
+          for surface, path in (
+              ("wear", "apps/wear_android/app/build.gradle.kts"),
+              ("legacy", "apps/watchface_wff/build.gradle.kts"),
+              ("push", "apps/wear_android/watchface_push/build.gradle.kts"),
+          ):
+              text = source(path)
+              require(one(r'^\s*versionName = "([0-9.]+)"$', text) == version)
+              pattern = r"^\s*versionCode = ([0-9]+)$"
+              if surface == "push":
+                  pattern = r"^\s*\}\s*\.orElse\(([0-9]+)\)$"
+              codes[surface] = int(one(pattern, text))
+          require(all(0 < code <= 2147483647 for code in codes.values()))
+          require(codes["phone"] % 2 == 1 and codes["wear"] == codes["phone"] + 1)
+          upload_pin = "d02f85820e60d6cf49e939a1af72a84c17d3ce107c840b4e9d3ac0f3946f078e"
+          push_pin = "04fa77a4feabb08e8c71fb1ddc32000c63f18e6ff5967e3b5b8acbd5b36d4950"
+          binaries = {
+              f"wardpulse-{surface}-{version}-code{code}.{extension}":
+                  push_pin if surface == "push" else upload_pin
+              for surface, code in codes.items()
+              for extension in (("apk",) if surface == "push" else ("aab", "apk"))
+          }
+          expected = {
+              "source_sha": sha, "tag": tag, "version": version,
+              "build_run_id": run_id, "build_run_attempt": attempt, "binaries": binaries,
+          }
+          temporary = Path(os.environ["RUNNER_TEMP"])
+          require(not temporary.resolve().is_relative_to(Path.cwd().resolve()))
+          paths = {
+              "TRANSFER_DIR": str(temporary / "wardpulse-release-transfer"),
+              "EXPECTED_TRANSFER": str(temporary / "wardpulse-release-expected.json"),
+              "VERIFIED_TRANSFER": str(temporary / "wardpulse-release-verified.json"),
+          }
+          Path(paths["TRANSFER_DIR"]).mkdir(mode=0o700)
+          with open(paths["EXPECTED_TRANSFER"], "x") as output:
+              json.dump(expected, output)
+          with open(os.environ["GITHUB_ENV"], "a") as output:
+              for key, value in paths.items():
+                  output.write(f"{key}={value}\n")
+          PY
+
+      - name: Download only the successful build's exact artifact ID
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact_id }}
+          path: ${{ env.TRANSFER_DIR }}
+          merge-multiple: true
+
+      - name: Independently verify the nine received files and receipts
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import stat
+          from pathlib import Path
+
+          def require(condition):
+              if not condition:
+                  raise SystemExit("Received release files or receipts failed verification.")
+
+          def unique_object(pairs):
+              result = {}
+              for key, value in pairs:
+                  require(key not in result)
+                  result[key] = value
+              return result
+
+          def reject_constant(value):
+              raise SystemExit("Nonfinite JSON value in release receipt.")
+
+          def read_json(path):
+              return json.loads(path.read_text(), object_pairs_hook=unique_object,
+                                parse_constant=reject_constant)
+
+          expected = read_json(Path(os.environ["EXPECTED_TRANSFER"]))
+          binaries = expected.pop("binaries")
+          directory = Path(os.environ["TRANSFER_DIR"])
+          require(stat.S_ISDIR(directory.lstat().st_mode))
+          files = list(directory.iterdir())
+          names = set(binaries) | {"SHA256SUMS", "provenance.json"}
+          require(len(files) == 9 and {path.name for path in files} == names)
+          manifest = {}
+          for path in files:
+              require(re.fullmatch(r"[A-Za-z0-9_.-]+", path.name))
+              require(stat.S_ISREG(path.lstat().st_mode) and path.stat().st_size > 0)
+              with path.open("rb") as stream:
+                  digest = hashlib.file_digest(stream, "sha256").hexdigest()
+              manifest[path.name] = {"sha256": digest, "size": path.stat().st_size}
+          hashes = {}
+          for line in (directory / "SHA256SUMS").read_text().splitlines():
+              match = re.fullmatch(r"([0-9a-f]{64})  ([A-Za-z0-9_.-]+)", line)
+              require(match is not None)
+              digest, name = match.groups()
+              require(name in binaries and name not in hashes)
+              require(digest == manifest[name]["sha256"])
+              hashes[name] = digest
+          require(hashes.keys() == binaries.keys())
+          provenance = read_json(directory / "provenance.json")
+          require(type(provenance) is dict)
+          require(provenance.keys() == expected.keys() | {"binaries", "checks_completed"})
+          require(all(provenance[key] == value for key, value in expected.items()))
+          records = provenance["binaries"]
+          require(type(records) is list and len(records) == 7)
+          recorded = set()
+          for record in records:
+              require(type(record) is dict and record.keys() == {"file", "sha256", "signer_sha256"})
+              name = record["file"]
+              require(type(name) is str and name in binaries and name not in recorded)
+              require(record["sha256"] == hashes[name] and record["signer_sha256"] == binaries[name])
+              recorded.add(name)
+          require(recorded == binaries.keys())
+          require(provenance["checks_completed"] == [
+              "Immutable checkout and four source versions/code allocation",
+              "Shared fixtures and watch payload contract",
+              "Canonical WFF drift and official XML validator",
+              "Both imported private keys/passwords and fixed public certificate pins",
+              "Guarded AAB and direct release APK producers",
+              "PrepareDefaultWatchFace official Push validation and AGP embedding",
+              "Three jarsigner strict AAB verifications and keytool certificate pins",
+              "Four apksigner APK verifications and certificate pins",
+              "Exact Push producer/generated/Wear AAB/Wear installer/staged byte equality",
+              "Seven staged binary SHA-256 comparisons",
+          ])
+          with open(os.environ["VERIFIED_TRANSFER"], "x") as output:
+              json.dump(manifest, output)
+          print("Exact nine-file transfer, hashes, signer receipts and originating identity verified.")
+          PY
+
+      - name: Fail closed on conflicts and create only a verified draft
+        timeout-minutes: 10
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import stat
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          def require(condition):
+              if not condition:
+                  raise ValueError("Release publication invariant failed.")
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+          def api(path, method="GET", payload=None, missing=False, upload=None):
+              url = base + path
+              headers = {"Authorization": "Bearer " + token, "Accept": "application/vnd.github+json",
+                         "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "WardPulse-release"}
+              data = None if payload is None else json.dumps(payload).encode()
+              if payload is not None:
+                  headers["Content-Type"] = "application/json"
+              if upload is not None:
+                  url = "https://uploads.github.com/repos/" + repository + path
+                  data, size = upload
+                  headers.update({"Content-Type": "application/octet-stream", "Content-Length": str(size)})
+              request = urllib.request.Request(url, data=data, headers=headers, method=method)
+              try:
+                  with opener.open(request, timeout=60) as response:
+                      require(response.status == (201 if method == "POST" else 200))
+                      return json.load(response)
+              except urllib.error.HTTPError as error:
+                  if missing and error.code == 404:
+                      return None
+                  raise
+
+          def pages(path):
+              seen = set()
+              for page in range(1, 1001):
+                  items = api(f"{path}?per_page=100&page={page}")
+                  require(type(items) is list and len(items) <= 100)
+                  for item in items:
+                      require(type(item) is dict and type(item.get("id")) is int and item["id"] > 0)
+                      require(item["id"] not in seen)
+                      seen.add(item["id"])
+                      yield item
+                  if len(items) < 100:
+                      return
+              raise ValueError("Pagination did not finish.")
+
+          def conflicts(allowed=None):
+              matches = []
+              for release in pages("/releases"):
+                  require(type(release.get("tag_name")) is str)
+                  if release["tag_name"] == tag:
+                      require(release["id"] == allowed)
+                      binding(release, allowed)
+                      matches.append(release["id"])
+              require(matches == ([] if allowed is None else [allowed]))
+
+          def tag_binding():
+              ref = api("/git/ref/tags/" + urllib.parse.quote(tag, safe=""), missing=True)
+              if ref is None:  # An unpublished draft need not have a Git ref.
+                  return
+              require(ref.get("ref") == "refs/tags/" + tag)
+              obj = ref["object"]
+              seen = set()
+              for _ in range(16):
+                  target = obj["sha"]
+                  require(re.fullmatch(r"[0-9a-f]{40}", target) and target not in seen)
+                  seen.add(target)
+                  if obj["type"] == "commit":
+                      require(target == sha)
+                      return
+                  require(obj["type"] == "tag")
+                  annotation = api("/git/tags/" + target)
+                  require(annotation["sha"] == target)
+                  obj = annotation["object"]
+              raise ValueError("Tag could not be peeled.")
+
+          def binding(release, release_id):
+              require(type(release.get("id")) is int and release["id"] == release_id)
+              require(release.get("draft") is True and release.get("tag_name") == tag)
+              require(release.get("target_commitish") == sha)
+
+          def observe(release_id):
+              binding(api(f"/releases/{release_id}"), release_id)
+              conflicts(release_id)
+              tag_binding()
+
+          def asset_binding(asset, name):
+              expected = manifest[name]
+              require(asset.get("name") == name and asset.get("state") == "uploaded")
+              require(type(asset.get("size")) is int and asset["size"] == expected["size"])
+              digest = asset.get("digest")
+              if digest is not None and digest != "":
+                  require(digest == "sha256:" + expected["sha256"])
+
+          try:
+              token = os.environ["GH_TOKEN"]
+              repository = os.environ["GITHUB_REPOSITORY"]
+              require(token and re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository))
+              base = "https://api.github.com/repos/" + repository
+              opener = urllib.request.build_opener(NoRedirect())
+              sha, tag = os.environ["SOURCE_SHA"], os.environ["RELEASE_TAG"]
+              manifest = json.loads(Path(os.environ["VERIFIED_TRANSFER"]).read_text())
+              conflicts()  # Authenticated, draft-inclusive listing; never GET-by-tag absence.
+              tag_binding()
+              # Recheck immediately before POST; this is not an atomic exclusion lock.
+              conflicts()
+              tag_binding()
+              created = api("/releases", "POST", {
+                  "tag_name": tag, "target_commitish": sha, "name": tag,
+                  "draft": True, "make_latest": "false",
+              })
+              release_id = created["id"]
+              require(type(release_id) is int and release_id > 0)
+              binding(created, release_id)
+              observe(release_id)
+              uploaded = set()
+              for name, expected in sorted(manifest.items()):
+                  path = Path(os.environ["TRANSFER_DIR"]) / name
+                  require(stat.S_ISREG(path.lstat().st_mode))
+                  with path.open("rb") as stream:
+                      require(os.fstat(stream.fileno()).st_size == expected["size"])
+                      require(hashlib.file_digest(stream, "sha256").hexdigest() == expected["sha256"])
+                      stream.seek(0)
+                      asset = api(f"/releases/{release_id}/assets?name=" + urllib.parse.quote(name, safe=""),
+                                  "POST", upload=(stream, expected["size"]))
+                  asset_binding(asset, name)
+                  require(type(asset.get("id")) is int and asset["id"] > 0 and asset["id"] not in uploaded)
+                  uploaded.add(asset["id"])
+              observe(release_id)
+              assets = list(pages(f"/releases/{release_id}/assets"))
+              require(len(assets) == 9 and {asset["name"] for asset in assets} == manifest.keys())
+              require({asset["id"] for asset in assets} == uploaded)
+              for asset in assets:
+                  asset_binding(asset, asset["name"])
+              print(f"Draft {release_id} bound to source; all nine assets confirmed.")
+          except Exception:
+              raise SystemExit("Draft publication failed; preserve all release/tag/asset state for Owner resolution.")
+          PY

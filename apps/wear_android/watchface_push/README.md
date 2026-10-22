@@ -32,8 +32,17 @@ credentials in examples, logs, notes, Source, or command-line Gradle properties.
 
 Keep the development keystore in a persistent private location outside all build outputs:
 `clean` must not delete it. Reuse that same certificate for version N and N+1. A different
-development key on each local build prevents a normal face upgrade. CI creates its own
-temporary development identity for its debug build; it never provisions a release key.
+development key on each local build prevents a normal face upgrade. Pull-request Wear CI
+generates its own temporary development identity for debug builds. The manual
+[Stage A release workflow](../../../docs/product/RELEASE_CHECKLIST.md#manual-android-release-build-stage-a)
+imports the existing persistent shared upload and separate Push release identities from
+eight Environment secrets; it generates no keys. Public tooling setup precedes secret
+exposure. Separate import, build and verification steps retain imported keys in restricted
+temporary storage outside checkout only while needed. Successful builds remove escaped
+ignored signing properties and the Push keystore; AAB verification retains upload-keystore
+trust until it exits. Failure/signal traps and unconditional pre-upload cleanup remove
+workflow-created signing state and private diagnostics. Hosted cleanup/transfer acceptance
+remains pending.
 
 `RequirePushSigning` rejects absent/incomplete configuration and unusable private keys.
 Neither Push build type falls back to the host signing configuration or the conventional
@@ -77,6 +86,49 @@ Provide both host release signing and separate Push release signing before that 
 The ordinary variant dependency graph packages and signs the face, validates it, generates
 the variant bundle, and packages the Wear app. No recursive Gradle, manual APK copy, token
 substitution, or source edit is needed. `clean` removes the generated bundle, not keys.
+
+The manual release workflow's Stage A builds the ordinary guarded Wear release installer,
+verifies the fixed public signer pins and compares the producer Push bytes with the generated
+asset, embedded Wear AAB, embedded installer and staged Push APK. Its single Actions artifact contains seven
+signed binaries: phone/Wear/legacy each supply an AAB and direct APK, and Push supplies its
+separately signed APK, plus `SHA256SUMS` and sanitized `provenance.json`. The
+[manual release instructions](../../../docs/product/RELEASE_CHECKLIST.md#manual-android-release-build-stage-a)
+own the exact filenames, main-restricted Environment/eight signing secrets and manual dispatch.
+Signing state is removed before artifact upload; publication receives no signing secrets.
+Direct host installers use the upload key, which does not promise debug/Play install update
+compatibility.
+
+Stage B's dependent `publish` job downloads only the successful build's exact artifact ID,
+binding its name/source/tag/version/run and originating build attempt to the original main
+dispatch. A publication-only rerun retains that build attempt. It derives expected filenames
+from immutable source metadata, verifies the exact nine regular root files, receipt identities,
+signer pins and every binary SHA-256, then uses only `contents: write` to create a full-SHA
+GitHub draft requesting `make_latest: "false"`. Authenticated paginated release discovery
+refuses any existing release for the tag, including drafts; existing tags must independently
+peel to the source. Conflict checks repeat before creation, without claiming atomic exclusion.
+Release ID/draft/target/tag and any tag ref are re-observed after creation and upload; all nine
+asset names/count/sizes and any supplied API digests are checked. An absent draft tag ref is
+valid; no separate tag is created. Failures preserve partial drafts/assets and never overwrite,
+edit, publish or delete them. Retry before creation is allowed only with no existing release;
+after creation the Owner must inspect and deliberately resolve partial state. Hosted transfer,
+permissions, cleanup, draft/rerun/cancellation and partial-state acceptance remain pending,
+as do separate Play/runtime gates; local checks and historical debug acceptance do not close them.
+
+The separate **Google Play Release** Action in
+[release-google-play.yml](../../../.github/workflows/release-google-play.yml) is independently
+manual: a human must publish the GitHub draft before selecting its explicit stable tag.
+From the original main dispatch checkout, it prepares and re-observes the exact released
+phone/Wear AABs, then applies them to existing tracks (defaults `qa`/`wear:qa`, status
+`draft`) in one edit. It neither rebuilds nor re-signs. Only the isolated `google-play`
+Environment's service-account JSON is used; the Play job receives no Android signing secrets.
+Legacy WFF remains an optional separate listing. Push is already embedded in Wear and is
+never uploaded separately. Completed internal testing does not imply production or delivery.
+An uncertain apply requires actual Play server/Console reconciliation before any further
+mutation, including a fresh dispatch or job rerun: `.play-operation` protects only its
+retained directory, which ephemeral hosted runners do not preserve across runs. See
+[Play setup and recovery](../../../docs/product/RELEASE_CHECKLIST.md#manual-google-play-release)
+and the [helper interfaces](../../../tools/release-google-play/README.md#apply-interface).
+Hosted auth/upload/commit/review/delivery acceptance remains pending.
 
 ## Official validation and generated outputs
 
