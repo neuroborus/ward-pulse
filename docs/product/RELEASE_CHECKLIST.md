@@ -292,7 +292,7 @@ self-managed signing identity.
 
 ## Manual Android release build (Stage A)
 
-[release-android.yml](../../.github/workflows/release-android.yml) implements Stage A in job
+[release-github.yml](../../.github/workflows/release-github.yml) implements Stage A in job
 `build` and Stage B in dependent job `publish`: independent transfer verification followed
 by GitHub draft creation. Hosted end-to-end acceptance remains pending, including permissions,
 secrets, failure/cancellation cleanup, transfer, draft creation and rerun/partial-state behavior.
@@ -333,7 +333,7 @@ failure or cancellation before upload. No release configuration is cached or upl
 Hosted behavior still needs the acceptance above; private signing material must never enter
 logs or receipts.
 
-For a future authorized invocation, open **Actions → Android release artifacts → Run
+For a future authorized invocation, open **Actions → GitHub Release → Run
 workflow**, select branch `main`, and enter the stable tag (default `v0.1.0`). The workflow
 rejects other refs and checks out the original full dispatch SHA without persisted Git
 credentials. Before setup it checks all four source versionNames against the tag and enforces

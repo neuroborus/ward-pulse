@@ -3061,10 +3061,10 @@ Every workflow that can reach a shared contract also runs
 watch payload version agrees across the schema, the phone, and the Wear store.
 
 Manual release Stages A and B are implemented in
-[release-android.yml](../.github/workflows/release-android.yml), jobs `build` and `publish`:
+[release-github.yml](../.github/workflows/release-github.yml), jobs `build` and `publish`:
 
 ```text
-release-android.yml
+release-github.yml
   workflow_dispatch on main; original exact source SHA and source versions
   import persistent upload and separate Push signing after public tooling setup
   guarded phone/Wear/legacy AABs and direct installers plus producer Push APK
