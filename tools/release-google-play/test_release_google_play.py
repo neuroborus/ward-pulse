@@ -401,6 +401,7 @@ class PlayServer:
                 assert result["track"] == track_id
                 for release in result["releases"]:
                     release.setdefault("name", "Version " + ", ".join(release["versionCodes"]))
+                    release.setdefault("inAppUpdatePriority", 0)
                 tracks[tracks.index(next(track for track in tracks if track["track"] == track_id))] = result
             elif path.endswith(":validate") and method == "POST":
                 result = {"id": edit_id}
@@ -442,7 +443,7 @@ class ApplyTests(unittest.TestCase):
     def sequence(self):
         return [(method, path) for method, path, _ in self.server.calls]
 
-    def test_generated_release_names_allow_both_track_updates_validation_and_commit(self):
+    def test_generated_names_and_default_priority_allow_both_updates_validation_and_commit(self):
         original = json.loads(json.dumps(self.server.tracks))
         self.execute()
         self.assertEqual(self.sequence(), [
@@ -456,24 +457,65 @@ class ApplyTests(unittest.TestCase):
         updates = [json.loads(body) for method, _, body in self.server.calls if method == "PUT"]
         self.assertEqual(len(updates), 2)
         self.assertTrue(all("name" not in update["releases"][-1] for update in updates))
+        self.assertTrue(all("inAppUpdatePriority" not in release
+                            for update in updates for release in update["releases"]))
         for index, code in ((0, "9"), (1, "10")):
-            self.assertEqual(self.server.tracks[index]["releases"], original[index]["releases"] + [
-                {"versionCodes": [code], "status": "draft", "name": "Version " + code}])
+            self.assertEqual(self.server.tracks[index]["releases"], [
+                dict(release, inAppUpdatePriority=0) for release in original[index]["releases"]] + [
+                {"versionCodes": [code], "status": "draft", "name": "Version " + code, "inAppUpdatePriority": 0}])
         self.assertEqual(self.server.tracks[2], original[2])
         self.assertFalse((self.output / play.OPERATION_MARKER).exists())
         self.assertFalse(any("/releases/assets/" in url for url, _, _ in self.release.calls))
         self.assertEqual(len(self.server.edits), 1)
 
+    def test_explicit_nondefault_priorities_survive_promotion_and_commit(self):
+        self.server.reuse()
+        for index, code, priority in ((0, "9", 3), (1, "10", 5)):
+            self.server.tracks[index]["releases"].append({
+                "versionCodes": [code], "status": "draft", "inAppUpdatePriority": priority,
+                "name": "Version " + code, "releaseNotes": [{"language": "en-US", "text": "neutral notes"}],
+            })
+        original = json.loads(json.dumps(self.server.tracks))
+        self.execute("completed")
+        self.assertEqual(self.sequence(), [
+            ("POST", ""), ("GET", "/edit1/tracks"), ("GET", "/edit1/bundles"),
+            ("PUT", "/edit1/tracks/qa"), ("PUT", "/edit1/tracks/wear%3Aqa"),
+            ("POST", "/edit1:validate"), ("POST", "/edit1:commit?changesInReviewBehavior=ERROR_IF_IN_REVIEW"),
+        ])
+        updates = [json.loads(body) for method, _, body in self.server.calls if method == "PUT"]
+        for index in (0, 1):
+            expected = [dict(original[index]["releases"][-1], status="completed")]
+            self.assertEqual(updates[index]["releases"], expected)
+            self.assertEqual(self.server.tracks[index]["releases"], expected)
+        self.assertEqual(self.server.tracks[2], original[2])
+        self.assertFalse((self.output / play.OPERATION_MARKER).exists())
+        self.assertEqual(len(self.server.edits), 1)
+
     def test_track_response_mismatches_stop_before_further_mutation(self):
-        changes = [lambda track: track.update(track="other"),
-                   lambda track: track["releases"][-1].update(status="completed"),
-                   lambda track: track["releases"][-1].update(versionCodes=["11"]),
-                   lambda track: track["releases"][0].update(versionCodes=["5"]),
-                   lambda track: track["releases"][0].update(name="changed serving name"),
-                   lambda track: track["releases"].pop(0)]
-        for change in changes:
+        cases = [(None, lambda track: track.update(track="other")),
+                 (None, lambda track: track["releases"][-1].update(status="completed")),
+                 (None, lambda track: track["releases"][-1].update(versionCodes=["11"])),
+                 (None, lambda track: track["releases"][0].update(versionCodes=["5"])),
+                 (None, lambda track: track["releases"][0].update(name="changed serving name")),
+                 (None, lambda track: track["releases"].pop(0)),
+                 (None, lambda track: track["releases"][-1].update(inAppUpdatePriority=1)),
+                 (None, lambda track: track["releases"][-1].update(inAppUpdatePriority=False)),
+                 (None, lambda track: track["releases"][-1].update(inAppUpdatePriority=0.0)),
+                 (None, lambda track: track["releases"][-1].update(inAppUpdatePriority="0")),
+                 (None, lambda track: track["releases"][-1].update(inAppUpdatePriority=None)),
+                 (3, lambda track: track["releases"][0].update(inAppUpdatePriority=4)),
+                 (3, lambda track: track["releases"][0].update(inAppUpdatePriority=3.0)),
+                 (3, lambda track: track["releases"][0].update(inAppUpdatePriority="3")),
+                 (3, lambda track: track["releases"][0].pop("inAppUpdatePriority")),
+                 (0, lambda track: track["releases"][0].update(inAppUpdatePriority=False)),
+                 (0, lambda track: track["releases"][0].update(inAppUpdatePriority=0.0)),
+                 (0, lambda track: track["releases"][0].pop("inAppUpdatePriority")),
+                 (1, lambda track: track["releases"][0].update(inAppUpdatePriority=True))]
+        for priority, change in cases:
             self.server = PlayServer(self.release)
             self.server.reuse()
+            if priority is not None:
+                self.server.tracks[0]["releases"][0]["inAppUpdatePriority"] = priority
             transport = self.server.transport
 
             def changed_response(method, url, headers, body, limit):
@@ -485,13 +527,19 @@ class ApplyTests(unittest.TestCase):
                 return status, response
 
             self.server.transport = changed_response
-            with self.subTest(change=change), self.assertRaisesRegex(play.PreparationError, "track update response"):
+            with self.subTest(priority=priority, change=change), self.assertRaisesRegex(
+                    play.PreparationError, "track update response"):
                 self.execute()
             self.assertEqual(self.sequence(), [("POST", ""), ("GET", "/edit1/tracks"),
                                               ("GET", "/edit1/bundles"), ("PUT", "/edit1/tracks/qa")])
             self.assertEqual(self.server.tracks[0]["releases"][0]["versionCodes"], ["7"])
             self.assertTrue((self.output / play.OPERATION_MARKER).exists())
-            (self.output / play.OPERATION_MARKER).unlink()
+            before = list(self.server.calls)
+            with self.assertRaisesRegex(play.PreparationError, "Unreconciled"):
+                self.execute()
+            self.assertEqual(self.server.calls, before)
+            self.assertTrue((self.output / play.OPERATION_MARKER).exists())
+            (self.output / play.OPERATION_MARKER).unlink()  # Independent scenarios, never tool recovery.
 
     def test_changed_metadata_remote_identity_and_local_bytes_reject_before_play(self):
         identity_path = self.output / "preparation.json"
@@ -565,9 +613,9 @@ class ApplyTests(unittest.TestCase):
         self.execute("completed")
         self.assertEqual(self.server.tracks[0]["releases"], [
             {"versionCodes": ["9"], "status": "completed", "name": "Version 9",
-             "releaseNotes": [{"language": "en-US", "text": "neutral notes"}]}])
+             "inAppUpdatePriority": 0, "releaseNotes": [{"language": "en-US", "text": "neutral notes"}]}])
         self.assertEqual(self.server.tracks[1]["releases"], [
-            {"versionCodes": ["10"], "status": "completed", "name": "Version 10"}])
+            {"versionCodes": ["10"], "status": "completed", "name": "Version 10", "inAppUpdatePriority": 0}])
         self.assertFalse(any("uploadType" in path for _, path, _ in self.server.calls))
         self.server.calls.clear()
         self.execute("completed")
@@ -585,7 +633,7 @@ class ApplyTests(unittest.TestCase):
         self.execute("completed")
         for index, code in ((0, "9"), (1, "10")):
             self.assertEqual(self.server.tracks[index]["releases"], [
-                {"versionCodes": [code], "status": "completed", "name": "Version " + code}])
+                {"versionCodes": [code], "status": "completed", "name": "Version " + code, "inAppUpdatePriority": 0}])
         self.assertFalse(any("uploadType" in path for _, path, _ in self.server.calls))
 
     def test_draft_retains_multiple_serving_codes_but_completed_requires_console_retention(self):

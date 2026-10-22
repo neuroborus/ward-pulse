@@ -114,6 +114,22 @@ after creation the Owner must inspect and deliberately resolve partial state. Ho
 permissions, cleanup, draft/rerun/cancellation and partial-state acceptance remain pending,
 as do separate Play/runtime gates; local checks and historical debug acceptance do not close them.
 
+The separate **Google Play Release** Action in
+[release-google-play.yml](../../../.github/workflows/release-google-play.yml) is independently
+manual: a human must publish the GitHub draft before selecting its explicit stable tag.
+From the original main dispatch checkout, it prepares and re-observes the exact released
+phone/Wear AABs, then applies them to existing tracks (defaults `qa`/`wear:qa`, status
+`draft`) in one edit. It neither rebuilds nor re-signs. Only the isolated `google-play`
+Environment's service-account JSON is used; the Play job receives no Android signing secrets.
+Legacy WFF remains an optional separate listing. Push is already embedded in Wear and is
+never uploaded separately. Completed internal testing does not imply production or delivery.
+An uncertain apply requires actual Play server/Console reconciliation before any further
+mutation, including a fresh dispatch or job rerun: `.play-operation` protects only its
+retained directory, which ephemeral hosted runners do not preserve across runs. See
+[Play setup and recovery](../../../docs/product/RELEASE_CHECKLIST.md#manual-google-play-release)
+and the [helper interfaces](../../../tools/release-google-play/README.md#apply-interface).
+Hosted auth/upload/commit/review/delivery acceptance remains pending.
+
 ## Official validation and generated outputs
 
 The host build owns the nontransitive build-time dependency

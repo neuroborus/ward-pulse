@@ -422,6 +422,113 @@ Owner must inspect the retained state and deliberately resolve it before retryin
 create request may already have created a draft, so inspect state even when no ID was returned.
 These instructions authorize no remote operation during local source preparation.
 
+## Manual Google Play release
+
+There are two independent manual Actions: **GitHub Release** builds and creates the
+verified draft described above; **Google Play Release**, in
+[release-google-play.yml](../../.github/workflows/release-google-play.yml), consumes a
+stable published release. Both use only their own `workflow_dispatch`; no push, tag,
+release event or completion chains them. A human must inspect and explicitly publish
+the GitHub draft before selecting its tag for Play. There is no latest/tag fallback.
+The [tool README](../../tools/release-google-play/README.md#preparation-interface) owns
+the exact preparation and apply commands and their proof limits.
+
+### Play prerequisites and credentials
+
+Before an authorized dispatch, the Owner must complete setup outside this source task:
+
+- Resolve actual app/version/signing history. `app.wardpulse` must already exist in Play
+  Console, have its first bundle uploaded manually and have Play App Signing configured.
+  Configure the Wear OS form factor and its dedicated tracks; confirm the shared
+  phone/Wear delivered app-signing identity. Source defaults do not establish Console state.
+- Enable the IAM, Service Account Credentials and Google Play Android Developer APIs in
+  the service account's Cloud project. Grant the service account
+  `roles/iam.serviceAccountTokenCreator` on **itself**, as required by the pinned auth
+  action to mint an access token from service-account JSON. Invite its `client_email`
+  to Play Console with app-scoped access to `app.wardpulse`: view app information and
+  release apps to the intended testing tracks. Production release permission is a
+  separate requirement for an explicitly selected production track. Routine testing
+  releases need no finance/orders/account Admin access. See
+  [API setup](https://developers.google.com/android-publisher/getting_started) and the
+  [pinned auth action](https://github.com/google-github-actions/auth/blob/7c6bc770dae815cd3e89ee6cdf493a5fab2cc093/README.md).
+- Configure a separate GitHub Environment named `google-play`, restricted to `main`,
+  with only `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`. Keep the eight signing secrets in
+  `android-release`; the Play job has none of them. No PAT, `id-token` permission,
+  additional identity secret/variable or custom OAuth setup is used. The action infers
+  the service account from JSON `client_email`, disables credential-file creation and
+  ambient credential export, and requests only the
+  `https://www.googleapis.com/auth/androidpublisher` scope.
+- Discover actual mobile/Wear IDs using
+  [edits.tracks.list](https://developers.google.com/android-publisher/api-ref/rest/v3/edits.tracks/list)
+  and Console. Existing tracks are required. `qa` and `wear:qa` are workflow defaults,
+  not a promise that those tracks exist; use discovered IDs for other closed tracks.
+  No track is created and production is never selected automatically.
+
+For a future authorized invocation, open **Actions → Google Play Release → Run workflow**,
+select `main` and enter the explicit stable published tag. Phone/Wear tracks default to
+`qa`/`wear:qa`; status offers `draft` (default) or `completed`. Check the actual selected
+track before choosing completed: completed internal testing is still internal testing,
+not production. Review, processing and tester availability remain separate Play gates.
+
+### Dispatch binding and application
+
+The Play job grants only `contents: read`, serializes dispatches without cancellation
+and bounds job/step execution. It checks out the original immutable main dispatch SHA
+with full history and no persisted Git credentials. Only that checkout's final helper
+runs from its clean root; selected releases supply data, never executable tooling.
+Trusted repository/SHA/event/ref context remains unchanged. Inputs pass through quoted
+environment variables, not interpolation into shell source.
+
+Public GitHub preparation completes before Google authentication. It requires a stable,
+published, non-prerelease tag in original-main ancestry, the seven-record receipt and
+all nine asset identities, fixed signer pins and exact downloaded hashes. Historical
+producer run/attempt IDs remain receipt identities, not current Play dispatch IDs.
+Preparation retains two AABs, two receipts and dispatch-bound schema-1 metadata in a
+fresh absolute directory outside checkout. Apply uses the same directory and checkout,
+re-observing current GitHub identities and retained bytes before any Play mutation.
+Saved metadata is not reusable across unrelated runs; consistency checks are not fresh
+cryptographic attestation. `GH_TOKEN` is environment-only in both phases. Only apply
+receives the auth action's masked access-token step output as `PLAY_ACCESS_TOKEN`.
+No credentials enter argv, job outputs, artifacts, receipts or logs.
+
+The helper applies only the exact phone and Wear AABs to `app.wardpulse` on the selected
+separate form-factor tracks in one edit. It never rebuilds or re-signs. Existing bundles
+are reused only for the same code and SHA-256; matching drafts can be promoted. Conflicting
+or consumed-but-unlisted codes, newer versions, conflicting drafts and active/halted
+rollouts require Console resolution. Drafts preserve completed serving releases and
+retained codes; replacing multiple retained completed codes requires an explicit Console
+retention decision. A completed bundle cannot be downgraded to draft. Track responses
+must preserve requested/retained state, allowing only documented generated names and
+an omitted priority returned as exact integer zero. Explicit priorities remain unchanged.
+Validation precedes commit with `ERROR_IF_IN_REVIEW`, without review cancellation,
+blind retry, alternate authentication or automatic rollback. Commit success does not
+prove review completion or delivery. See [Play edits](https://developers.google.com/android-publisher/edits)
+and [commit behavior](https://developers.google.com/android-publisher/api-ref/rest/v3/edits/commit).
+
+Legacy `app.wardpulse.watchface` distribution remains optional and separate; this workflow
+does not upload it. Push is already embedded in the Wear AAB and is never uploaded
+separately. The GitHub workflow still supplies all seven signed binaries and two receipts.
+Direct upload-signed installers do not promise updates over debug or Play app-signing
+identities.
+
+### Uncertain outcomes and pending acceptance
+
+On a failed/uncertain mutation or mismatched response, stop. The helper's `.play-operation`
+marker protects only its retained directory and prevents further automatic mutation there.
+A fresh hosted dispatch or job rerun gets another directory; ephemeral hosted runners do
+not preserve the marker across runs. Inspect and reconcile actual Play server/Console
+bundle hashes/codes and both track states, including whether commit took effect, **before
+any fresh dispatch or job rerun**. A new edit and read-only queries may be necessary;
+reconciliation must precede further upload, track update or commit. Preserve any available
+retained directory while investigating. Do not automatically remove markers or replay
+an unresolved operation. Follow the tool's
+[recovery guidance](../../tools/release-google-play/README.md#interrupted-or-uncertain-apply).
+
+Hosted credential/authentication, exact upload/reuse, validation/commit, review and delivery
+remain unexecuted acceptance gates. Offline checks and source review do not close them,
+the local signed-RC gate or the device/runtime gates below. No credential provisioning,
+dispatch or remote release operation is authorized by source preparation alone.
+
 ## Acceptance gates
 
 ### Reviewed source

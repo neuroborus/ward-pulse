@@ -543,6 +543,13 @@ def verify_track_response(result, desired):
         # Play generates a release name when the request omits it.
         if "name" not in expected and "name" in actual:
             require(type(actual.pop("name")) is str, message)
+        # Play may return the integer default for an omitted update priority.
+        if "inAppUpdatePriority" in actual:
+            require(type(actual["inAppUpdatePriority"]) is int, message)
+            if "inAppUpdatePriority" not in expected:
+                require(actual.pop("inAppUpdatePriority") == 0, message)
+        if "inAppUpdatePriority" in expected:
+            require(type(expected["inAppUpdatePriority"]) is int, message)
         normalized.append(actual)
     require(dict(result, releases=normalized) == desired, message)
 
