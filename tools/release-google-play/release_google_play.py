@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Read-only preparation of published WardPulse phone/Wear bundles for later Play apply."""
+"""Prepare published WardPulse bundles, or apply verified bytes in one Play edit."""
 
 import argparse
+from contextlib import contextmanager
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
+import stat
 import subprocess
 import sys
 import urllib.error
@@ -41,6 +43,9 @@ STABLE = r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
 JSON_LIMIT = 2 * 1024 * 1024
 RECEIPT_LIMIT = 1024 * 1024
 BUNDLE_LIMIT = 512 * 1024 * 1024
+PLAY_BASE = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/app.wardpulse/edits"
+PLAY_UPLOAD = "https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/app.wardpulse/edits"
+OPERATION_MARKER = ".play-operation"
 
 
 class PreparationError(ValueError):
@@ -338,23 +343,33 @@ def retain(output, checkout_root, files):
         os.close(parent_fd)
 
 
-def prepare(tag, checkout, github, output):
+def preparation_identity(tag, checkout, github):
     require(type(tag) is str and len(tag) <= 100 and matches(STABLE, tag), "Explicit stable tag required.")
     release, chain = observe(github, tag)
     sha = chain[-1]["sha"]
     checkout.ancestor(sha)
     binaries = binary_contract(checkout, sha, tag)
     assets = asset_contract(github, release["id"], binaries)
-    files = {name: github.download(assets[name]) for name in ("SHA256SUMS", "provenance.json")}
-    hashes = verify_receipts(files["SHA256SUMS"], files["provenance.json"], binaries, assets, sha, tag)
-    for name in binaries:
-        if name.startswith(("wardpulse-phone-", "wardpulse-wear-")) and name.endswith(".aab"):
-            files[name] = github.download(assets[name])
-            require(sha256(files[name]) == hashes[name], "Bundle bytes differ from receipts.")
     identity = {"schema_version": 1, "repository": github.base.removeprefix("https://api.github.com/repos/"),
                 "dispatch_sha": checkout.dispatch_sha, "dispatch_ref": "refs/heads/main",
                 "release_id": release["id"], "published_at": release["published_at"], "tag": tag,
                 "source_sha": sha, "tag_chain": chain, "assets": assets}
+    return identity, binaries
+
+
+def bundle_names(binaries):
+    return [name for name in binaries
+            if name.startswith(("wardpulse-phone-", "wardpulse-wear-")) and name.endswith(".aab")]
+
+
+def prepare(tag, checkout, github, output):
+    identity, binaries = preparation_identity(tag, checkout, github)
+    assets = identity["assets"]
+    files = {name: github.download(assets[name]) for name in ("SHA256SUMS", "provenance.json")}
+    hashes = verify_receipts(files["SHA256SUMS"], files["provenance.json"], binaries, assets, identity["source_sha"], tag)
+    for name in bundle_names(binaries):
+        files[name] = github.download(assets[name])
+        require(sha256(files[name]) == hashes[name], "Bundle bytes differ from receipts.")
     for name, data in files.items():
         assets[name]["verified_sha256"] = sha256(data)
     files["preparation.json"] = (json.dumps(identity, indent=2) + "\n").encode()
@@ -362,20 +377,276 @@ def prepare(tag, checkout, github, output):
     return identity
 
 
+@contextmanager
+def preparation_directory(path, checkout_root):
+    """Hold the retained directory by FD, rejecting symlink components and traversal."""
+    path = Path(path)
+    require(path.anchor == "/" and ".." not in path.parts and not path.is_relative_to(checkout_root),
+            "Preparation must be an absolute directory outside the checkout.")
+    fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for component in path.parts[1:]:
+            next_fd = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            os.close(fd)
+            fd = next_fd
+        yield fd
+    except OSError:
+        raise PreparationError("Could not access retained preparation safely.") from None
+    finally:
+        os.close(fd)
+
+
+def retained_read(directory, name, limit):
+    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+    with os.fdopen(fd, "rb") as stream:
+        info = os.fstat(stream.fileno())
+        require(stat.S_ISREG(info.st_mode) and 0 < info.st_size <= limit, "Invalid retained file.")
+        data = stream.read(limit + 1)
+    require(0 < len(data) <= limit, "Invalid retained file size.")
+    return data
+
+
+def verified_preparation(directory, checkout, github):
+    saved = read_json(retained_read(directory, "preparation.json", JSON_LIMIT))
+    require(type(saved) is dict, "Invalid preparation identity.")
+    identity, binaries = preparation_identity(saved.get("tag"), checkout, github)
+    names = bundle_names(binaries)
+    retained = names + ["SHA256SUMS", "provenance.json"]
+    require(set(os.listdir(directory)) - {OPERATION_MARKER} == set(retained + ["preparation.json"]),
+            "Unexpected retained preparation contents.")
+    files = {name: retained_read(directory, name, BUNDLE_LIMIT if name in names else RECEIPT_LIMIT)
+             for name in retained}
+    assets = identity["assets"]
+    hashes = verify_receipts(files["SHA256SUMS"], files["provenance.json"], binaries, assets,
+                             identity["source_sha"], identity["tag"])
+    for name, data in files.items():
+        digest = sha256(data)
+        require(len(data) == assets[name]["size"] and (not assets[name]["digest"]
+                or assets[name]["digest"] == "sha256:" + digest), "Retained size or digest mismatch.")
+        require(name not in names or digest == hashes[name], "Retained bundle differs from receipts.")
+        assets[name]["verified_sha256"] = digest
+    require(json.dumps(saved, sort_keys=True) == json.dumps(identity, sort_keys=True),
+            "Preparation or published GitHub identity changed.")
+    return [(int(one(r"-code([0-9]+)\.aab$", name)), files[name], hashes[name]) for name in names]
+
+
+class PlayError(PreparationError):
+    """Only fixed diagnostics, never tokens or remote response bodies."""
+
+
+def play_http(method, url, headers, body, limit):
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+    request = urllib.request.Request(url, data=body, headers=headers, method=method)
+    try:
+        response = opener.open(request, timeout=60)
+    except urllib.error.HTTPError as error:
+        response = error
+    with response:
+        return response.status, response.read(limit + 1) if response.status == 200 else b""
+
+
+class Play:
+    def __init__(self, transport=play_http):
+        token = os.environ.get("PLAY_ACCESS_TOKEN", "")
+        require(matches(r"[!-~]{1,4096}", token), "PLAY_ACCESS_TOKEN must be supplied through the environment.")
+        self._token, self.transport, self.attempted = token, transport, False
+        self.directory = None
+
+    def request(self, method, path="", body=None, upload=False):
+        mutation = method != "GET"
+        if mutation:
+            # Exclusive, durable intent survives interruption; a fresh run cannot replay it.
+            fd = os.open(OPERATION_MARKER, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                         0o600, dir_fd=self.directory)
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(b"Unreconciled Play operation. Inspect server state before removing this marker.\n")
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.fsync(self.directory)
+            self.attempted = True
+        headers = {"Authorization": "Bearer " + self._token,
+                   "Content-Type": "application/octet-stream" if upload else "application/json"}
+        data = body if upload else (json.dumps(body).encode() if body is not None else None)
+        try:
+            url = (PLAY_UPLOAD if upload else PLAY_BASE) + path
+            status, response = self.transport(method, url, headers, data, JSON_LIMIT)
+            require(type(status) is int and 100 <= status <= 599)
+            if status != 200:
+                # A failed mutation may have reached the service; retain the reconciliation barrier.
+                message = "Play HTTP " + str(status) + "; check Console bootstrap, permissions and Wear setup."
+                if mutation:
+                    message += " Operation failed or is uncertain; reconcile server state before retrying."
+                raise PlayError(message)
+            require(type(response) is bytes and len(response) <= JSON_LIMIT)
+            result = read_json(response)
+            require(type(result) is dict)
+            return result
+        except PlayError:
+            raise
+        except Exception:
+            if mutation:
+                raise PlayError("Play operation failed or is uncertain; reconcile server state before retrying.") from None
+            raise PlayError("Play state unavailable; check Console bootstrap, permissions and Wear setup.") from None
+
+    def confirmed(self):
+        os.unlink(OPERATION_MARKER, dir_fd=self.directory)
+        os.fsync(self.directory)
+
+
+def release_codes(release):
+    require(type(release) is dict, "Invalid Play release.")
+    codes = release.get("versionCodes")
+    require(type(codes) is list and 0 < len(codes) <= 10000
+            and all(matches(r"[1-9][0-9]{0,9}", code) and int(code) <= 2147483647 for code in codes)
+            and len(set(codes)) == len(codes), "Ambiguous Play version codes; resolve in Console.")
+    return {int(code) for code in codes}
+
+
+def track_state(track, code, status):
+    """Conservative read-modify-write: retain state or demand an explicit Console decision."""
+    releases = track.get("releases", [])
+    require(type(releases) is list and len(releases) <= 2, "Ambiguous track releases; resolve in Console.")
+    by_status, seen = {}, set()
+    for release in releases:
+        codes = release_codes(release)
+        state = release.get("status")
+        require(state in ("draft", "completed") and state not in by_status and not seen.intersection(codes),
+                "Conflicting draft or rollout; resolve in Console.")
+        require(max(codes) <= code, "Refusing to roll back a newer version.")
+        by_status[state] = release
+        seen.update(codes)
+    completed, draft = by_status.get("completed"), by_status.get("draft")
+    if completed and code in release_codes(completed):
+        require(status == "completed", "Requested bundle is already completed; cannot save a draft.")
+        require(draft is None, "Conflicting draft; resolve in Console.")
+        return track
+    if draft:
+        require(release_codes(draft) == {code}, "Conflicting draft or retained codes; resolve in Console.")
+        if status == "draft":
+            return track
+    desired = dict(draft, status=status) if draft else {"versionCodes": [str(code)], "status": status}
+    if status == "draft":
+        return dict(track, releases=releases + [desired])
+    require(completed is None or len(release_codes(completed)) == 1,
+            "Completed release retains multiple codes; resolve retention in Console.")
+    return dict(track, releases=[desired])
+
+
+def verify_track_response(result, desired):
+    message = "Uncertain Play track update response."
+    releases = result.get("releases")
+    require(type(releases) is list and len(releases) == len(desired["releases"]), message)
+    normalized = []
+    for actual, expected in zip(releases, desired["releases"]):
+        require(type(actual) is dict, message)
+        actual = dict(actual)
+        # Play generates a release name when the request omits it.
+        if "name" not in expected and "name" in actual:
+            require(type(actual.pop("name")) is str, message)
+        normalized.append(actual)
+    require(dict(result, releases=normalized) == desired, message)
+
+
+def apply(preparation, checkout, github, play, phone_track, wear_track, status):
+    require(matches(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", phone_track)
+            and matches(r"wear:[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", wear_track)
+            and status in ("draft", "completed"), "Explicit mobile/Wear track IDs and status required.")
+    with preparation_directory(preparation, checkout.root) as directory:
+        bundles = verified_preparation(directory, checkout, github)
+        require(OPERATION_MARKER not in os.listdir(directory),
+                "Unreconciled Play operation marker exists; inspect server state before retrying.")
+        play.directory = directory
+        edit = play.request("POST", body={})
+        require(matches(r"[A-Za-z0-9_-]{1,200}", edit.get("id")), "Uncertain Play edit creation.")
+        edit = "/" + edit["id"]
+        play.confirmed()
+        tracks_response = play.request("GET", edit + "/tracks")
+        bundle_response = play.request("GET", edit + "/bundles")
+        tracks, listed = {}, {}
+        items = tracks_response.get("tracks")
+        require(type(items) is list and len(items) <= 1000, "Invalid Play track listing.")
+        consumed = set()
+        for track in items:
+            require(type(track) is dict and type(track.get("track")) is str
+                    and track["track"] not in tracks, "Ambiguous Play tracks.")
+            tracks[track["track"]] = track
+            releases = track.get("releases", [])
+            require(type(releases) is list and len(releases) <= 1000, "Invalid Play track state.")
+            for release in releases:
+                consumed.update(release_codes(release))
+        require(phone_track in tracks and wear_track in tracks,
+                "Selected mobile/Wear tracks must already exist; configure them in Console.")
+        items = bundle_response.get("bundles", [])
+        require(type(items) is list and len(items) <= 10000, "Invalid Play bundle listing.")
+        for bundle in items:
+            require(type(bundle) is dict and positive(bundle.get("versionCode"))
+                    and bundle["versionCode"] <= 2147483647 and matches(HASH, bundle.get("sha256"))
+                    and bundle["versionCode"] not in listed, "Ambiguous Play bundles.")
+            listed[bundle["versionCode"]] = bundle["sha256"]
+        updates = []
+        for track_id, (code, _, digest) in zip((phone_track, wear_track), bundles):
+            require(code not in listed or listed[code] == digest, "Version code has conflicting Play bytes.")
+            require(code in listed or code not in consumed,
+                    "Consumed code is absent from bundle listing; resolve in Console.")
+            updates.append(track_state(tracks[track_id], code, status))
+        for code, data, digest in bundles:
+            if code not in listed:
+                result = play.request("POST", edit + "/bundles?uploadType=media", data, upload=True)
+                require(type(result.get("versionCode")) is int and result["versionCode"] == code
+                        and result.get("sha256") == digest, "Uncertain upload: Play code/hash mismatch.")
+                play.confirmed()
+        for desired in updates:
+            track_id = desired["track"]
+            if desired != tracks[track_id]:
+                result = play.request("PUT", edit + "/tracks/" + urllib.parse.quote(track_id, safe=""), desired)
+                verify_track_response(result, desired)
+                play.confirmed()
+        for action in (":validate", ":commit?changesInReviewBehavior=ERROR_IF_IN_REVIEW"):
+            result = play.request("POST", edit + action)
+            require(result.get("id") == edit[1:], "Uncertain Play validation or commit response.")
+            play.confirmed()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tag", required=True)
-    parser.add_argument("--output", required=True, help="Fresh absolute directory outside the checkout")
+    parser.add_argument("--tag", help="Stable release tag for read-only preparation")
+    parser.add_argument("--output", help="Fresh absolute directory outside the checkout")
+    commands = parser.add_subparsers(dest="command")
+    applying_parser = commands.add_parser("apply", help="Apply retained verified bundles in one Play edit")
+    applying_parser.add_argument("--preparation", required=True)
+    applying_parser.add_argument("--phone-track", required=True)
+    applying_parser.add_argument("--wear-track", required=True)
+    applying_parser.add_argument("--status", required=True, choices=("draft", "completed"))
     args = parser.parse_args()
+    applying = args.command == "apply"
+    if applying and (args.tag is not None or args.output is not None):
+        parser.error("apply cannot be combined with preparation options")
+    if not applying and (args.tag is None or args.output is None):
+        parser.error("preparation requires --tag and --output")
+    play = None
     try:
         repository = os.environ["GITHUB_REPOSITORY"]
         checkout = Checkout(repository, os.environ["GITHUB_SHA"], os.environ["GITHUB_EVENT_NAME"], os.environ["GITHUB_REF"])
         github = GitHub(repository)
-        prepare(args.tag, checkout, github, args.output)
-    except Exception:
-        print("GitHub release preparation failed; no Play operation was attempted.", file=sys.stderr)
+        if applying:
+            play = Play()
+            apply(args.preparation, checkout, github, play, args.phone_track, args.wear_track, args.status)
+        else:
+            prepare(args.tag, checkout, github, args.output)
+    except Exception as error:
+        if applying:
+            attempted = play is not None and play.attempted
+            print("Play apply failed after a Play operation was attempted." if attempted
+                  else "Apply verification failed; no Play operation was attempted.", file=sys.stderr)
+            if isinstance(error, PreparationError):
+                print(str(error), file=sys.stderr)
+            if attempted:
+                print("Inspect server state and any .play-operation marker before retrying.", file=sys.stderr)
+        else:
+            print("GitHub release preparation failed; no Play operation was attempted.", file=sys.stderr)
         return 1
-    print("Verified phone/Wear bundles and sanitized identities retained for later re-observation.")
+    print("Play edit committed with requested " + args.status + " tracks; review and delivery remain unverified."
+          if applying else "Verified phone/Wear bundles and sanitized identities retained for later re-observation.")
     return 0
 
 

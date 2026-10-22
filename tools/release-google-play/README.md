@@ -1,11 +1,13 @@
-# Published GitHub bundle preparation
+# Published GitHub bundles and Play apply
 
-`release_google_play.py` implements a stdlib-only, read-only preparation phase for
+`release_google_play.py` implements stdlib-only preparation and explicit Play apply for
 phone and Wear AABs produced by the `build` and `publish` jobs in
-[`release-github.yml`](../../.github/workflows/release-github.yml). Play apply,
-Google authentication and a consuming manual workflow remain pending.
+[`release-github.yml`](../../.github/workflows/release-github.yml). Preparation is
+read-only. Apply targets the fixed `app.wardpulse` application in one Play edit.
+Google authentication setup, a consuming manual Play workflow and hosted acceptance
+remain pending.
 
-## Interface
+## Preparation interface
 
 Run Python 3.10+ on Linux from the trusted original main dispatch checkout, using
 the helper from that checkout. The consuming process supplies `GITHUB_REPOSITORY`,
@@ -13,9 +15,10 @@ the helper from that checkout. The consuming process supplies `GITHUB_REPOSITORY
 and `GITHUB_REF=refs/heads/main`. These values are trusted caller context, not
 proof that an arbitrary caller is main. The checkout must be clean, its origin
 must identify that GitHub repository, and its HEAD and helper bytes must match
-the dispatch commit. Git objects for the selected release and its ancestry must
-already be available; preparation never fetches, changes HEAD or executes release
-source. Older releases may predate this helper and current-main versions may differ.
+the dispatch commit. Full Git history, including the selected release and its ancestry,
+must already be available (no shallow checkout); the helper never fetches, changes HEAD
+or executes release source. Older releases may predate this helper and current-main
+versions may differ.
 
 Supply a token with only `contents:read` through the `GH_TOKEN` process environment,
 never command arguments or files. No credentials are provisioned by this tool.
@@ -52,10 +55,78 @@ Actions-run attestation. Tokens, signed redirect URLs and raw remote diagnostics
 are excluded from retained metadata and CLI output.
 
 Preparation establishes repository receipt/byte consistency, not independent
-signature attestation or Play Console readiness. It does not rebuild, re-sign,
-parse signatures or Push tokens, download unused APKs, call Play or perform Google
-auth. A later apply phase must re-observe release/tag/source/asset identities and
-verify retained local bytes before any Play mutation: remote state can change.
+signature attestation or Play Console readiness. Preparation does not rebuild, re-sign,
+parse signatures or Push tokens, download unused APKs, call Play or perform Google auth.
+
+## Apply interface
+
+Use the same trusted original-main dispatch context and full Git history described
+above. `verified_preparation` requires the saved repository and dispatch identity
+to match that context. Keep `GH_TOKEN` available for fresh read-only GitHub observation.
+Supply the externally obtained androidpublisher-scoped access token only through
+`PLAY_ACCESS_TOKEN` in the consuming step environment. Never put tokens in arguments,
+credential files or retained artifacts. This helper neither generates tokens nor
+reads service-account JSON or Android signing secrets.
+
+```sh
+python3 tools/release-google-play/release_google_play.py apply \
+  --preparation /absolute/existing-parent/fresh-preparation \
+  --phone-track qa --wear-track wear:qa --status draft
+```
+
+All four apply options are required; the example selects existing tracks and supplies
+no defaults. `--status` accepts `draft` or `completed`. Mobile track IDs have no form
+factor prefix; Wear IDs start with `wear:`. The application, first manual Console
+upload, Play App Signing, Wear form-factor setup and appropriate Play permissions
+must already exist. The helper discovers actual tracks and bundles, creates no tracks
+and substitutes no destinations.
+
+Before opening an edit, `verified_preparation` reuses the preparation contracts to
+revalidate `preparation.json`, both AABs, `SHA256SUMS` and `provenance.json`, including
+local sizes/hashes and the newly observed published release, peeled tag/source and
+all nine asset identities. It rejects symlinks, missing or unexpected retained files.
+This observation provides no atomic exclusion from later external changes.
+
+`apply` checks both selected track states before uploading. A listed bundle is reused
+only on an exact versionCode/SHA-256 match; otherwise the retained bytes are uploaded
+and the returned code/hash must match. A conflicting code, duplicate listing or code
+referenced by a track but absent from the bundle listing requires Console resolution.
+An absent listing cannot establish that a historically consumed code is available:
+Play may reject the upload. Versions are never bumped, rebuilt or re-signed. Legacy
+WFF and the Push APK already embedded in Wear are never separately uploaded.
+
+Saving a draft preserves the completed release and its retained codes. Exact drafts
+can be promoted to completed, and matching states are idempotent. A completed request
+may replace one older completed code; multiple retained completed codes require a
+Console retention decision. Newer versions, conflicting drafts and inProgress/halted
+rollouts are rejected. An already completed bundle cannot be saved as a draft. Only
+the two selected tracks are updated, preserving unrelated tracks. The single edit is
+validated, then committed with `changesInReviewBehavior=ERROR_IF_IN_REVIEW`; there is
+no review-cancellation or `changesNotSentForReview` fallback. Commit success proves
+neither review completion nor tester availability.
+
+Each Play request has a 60-second socket timeout and a bounded 2 MiB response;
+automatic redirects, ambient proxies and automatic retries are disabled. Diagnostics
+distinguish preparation-only failure from an attempted Play operation and exclude
+tokens, authorization headers and raw response bodies.
+
+## Interrupted or uncertain apply
+
+Before each mutation, `Play.request` exclusively creates and syncs `.play-operation`
+inside the retained directory. Only a confirmed response clears it. A failed request,
+lost response, mismatched upload/track response or process interruption leaves this
+barrier; no subsequent mutation is replayed automatically. A fresh invocation rejects
+an existing marker. The marker contains only fixed recovery guidance, no credentials
+or remote response data. Retain this directory when investigating a failure.
+
+Inspect actual Play server state in Console before removing the marker manually and
+retrying. A new edit and read-only queries may be necessary to inspect state after an
+uncertain commit; that inspection does not authorize replay. Reconcile exact bundle
+hashes/codes and both track states, including whether the commit took effect. If the
+outcome remains ambiguous, leave the marker and resolve it in Console. Removal is an
+operator recovery action, not a claim that a missing bundle listing proves upload
+availability. Ordinary reruns always discover current bundles/tracks and revalidate
+GitHub and retained input; no previous local apply result is trusted.
 
 ## Offline tests
 
@@ -66,6 +137,7 @@ python3 -m unittest discover -s tools/release-google-play -p 'test_*.py'
 Tests inject in-memory transport and neutral synthetic releases; they use no
 sockets, HTTP services, credentials, sleeps or external test framework. Real
 filesystem tests need temporary scratch and clean it deterministically. All focused
-Python runtime (including timing) and the full documentation build belong to HOST
-acceptance; Native review of this source supplies no runtime pass. HOST must measure
-the focused suite under 60 seconds, without a timing assertion in tests.
+Python runtime (including timing) remains pending HOST acceptance; Native review of
+this source supplies no runtime pass. HOST must measure the focused suite under 60
+seconds, without a timing assertion in tests. The unchanged `just check-docs` is a
+separate pending HOST acceptance check.

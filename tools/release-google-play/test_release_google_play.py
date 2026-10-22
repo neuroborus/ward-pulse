@@ -1,6 +1,7 @@
 """Neutral offline contract tests; all HTTP is injected, filesystem tests use real scratch."""
 
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -352,6 +353,363 @@ class PreparationTests(unittest.TestCase):
                 checkout.ancestor(SOURCE)
         self.assertEqual(run.call_args.kwargs["env"]["GIT_NO_REPLACE_OBJECTS"], "1")
         self.assertNotIn("GH_TOKEN", run.call_args.kwargs["env"])
+
+
+class PlayServer:
+    """In-memory published state and edit staging; failures can occur after an effect."""
+
+    def __init__(self, release):
+        self.release, self.calls, self.edits = release, [], {}
+        self.tracks = [
+            {"track": "qa", "releases": [{"status": "completed", "versionCodes": ["7"], "name": "serving phone"}]},
+            {"track": "wear:qa", "releases": [{"status": "completed", "versionCodes": ["8"], "name": "serving Wear"}]},
+            {"track": "production", "releases": [{"status": "completed", "versionCodes": ["5"]}]},
+        ]
+        self.bundles, self.failure, self.upload_override = [], None, None
+
+    def reuse(self):
+        self.bundles = [{"versionCode": code, "sha256": self.release.hashes[name]}
+                        for code, name in ((9, NAMES[0]), (10, NAMES[2]))]
+
+    def transport(self, method, url, headers, body, limit):
+        assert headers["Authorization"] == "Bearer offline-play-token"
+        assert limit == play.JSON_LIMIT
+        assert url.startswith((play.PLAY_BASE, play.PLAY_UPLOAD))
+        path = url.split("/edits", 1)[1]
+        self.calls.append((method, path, body))
+        if path == "" and method == "POST":
+            edit_id = "edit" + str(len(self.edits) + 1)
+            self.edits[edit_id] = json.loads(json.dumps(self.tracks))
+            result = {"id": edit_id}
+        else:
+            edit_id = path.split("/", 2)[1].split(":", 1)[0]
+            tracks = self.edits[edit_id]
+            if path.endswith("/tracks") and method == "GET":
+                result = {"tracks": tracks}
+            elif path.endswith("/bundles") and method == "GET":
+                result = {"bundles": self.bundles}
+            elif path.endswith("/bundles?uploadType=media") and method == "POST":
+                name = next(name for name in (NAMES[0], NAMES[2]) if body == self.release.blobs[name])
+                code = 9 if name == NAMES[0] else 10
+                result = {"versionCode": code, "sha256": hashlib.sha256(body).hexdigest()}
+                self.bundles.append(dict(result))
+                if self.upload_override:
+                    result.update(self.upload_override)
+            elif "/tracks/" in path and method == "PUT":
+                result = json.loads(body)
+                track_id = play.urllib.parse.unquote(path.rsplit("/", 1)[1])
+                assert result["track"] == track_id
+                for release in result["releases"]:
+                    release.setdefault("name", "Version " + ", ".join(release["versionCodes"]))
+                tracks[tracks.index(next(track for track in tracks if track["track"] == track_id))] = result
+            elif path.endswith(":validate") and method == "POST":
+                result = {"id": edit_id}
+            elif path.endswith(":commit?changesInReviewBehavior=ERROR_IF_IN_REVIEW") and method == "POST":
+                self.tracks = json.loads(json.dumps(tracks))
+                result = {"id": edit_id}
+            else:
+                raise AssertionError("Unexpected offline Play request")
+        if self.failure and self.failure[0] == path:
+            if self.failure[1] == "disconnect":
+                raise OSError("offline-play-token sensitive response")
+            if self.failure[1] == "malformed":
+                return 200, b'{"id":'
+            return self.failure[1], b"offline-play-token sensitive response"
+        return 200, encoded(result)
+
+
+class ApplyTests(unittest.TestCase):
+    def setUp(self):
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        self.root = Path(scratch.name).resolve()
+        self.checkout = self.root / "checkout"
+        self.checkout.mkdir()
+        self.output = self.root / "prepared"
+        environment = patch.dict(os.environ, {"GH_TOKEN": "offline-token", "PLAY_ACCESS_TOKEN": "offline-play-token"})
+        environment.start()
+        self.addCleanup(environment.stop)
+        self.release = Release(self.checkout)
+        self.github = play.GitHub("example/project", self.release.transport)
+        self.identity = play.prepare(TAG, self.release.checkout, self.github, self.output)
+        self.release.calls.clear()
+        self.server = PlayServer(self.release)
+
+    def execute(self, status="draft", phone="qa", wear="wear:qa"):
+        self.client = play.Play(self.server.transport)
+        play.apply(self.output, self.release.checkout, self.github, self.client, phone, wear, status)
+
+    def sequence(self):
+        return [(method, path) for method, path, _ in self.server.calls]
+
+    def test_generated_release_names_allow_both_track_updates_validation_and_commit(self):
+        original = json.loads(json.dumps(self.server.tracks))
+        self.execute()
+        self.assertEqual(self.sequence(), [
+            ("POST", ""), ("GET", "/edit1/tracks"), ("GET", "/edit1/bundles"),
+            ("POST", "/edit1/bundles?uploadType=media"), ("POST", "/edit1/bundles?uploadType=media"),
+            ("PUT", "/edit1/tracks/qa"), ("PUT", "/edit1/tracks/wear%3Aqa"),
+            ("POST", "/edit1:validate"), ("POST", "/edit1:commit?changesInReviewBehavior=ERROR_IF_IN_REVIEW"),
+        ])
+        uploaded = [body for _, path, body in self.server.calls if "uploadType" in path]
+        self.assertEqual(uploaded, [self.release.blobs[NAMES[0]], self.release.blobs[NAMES[2]]])
+        updates = [json.loads(body) for method, _, body in self.server.calls if method == "PUT"]
+        self.assertEqual(len(updates), 2)
+        self.assertTrue(all("name" not in update["releases"][-1] for update in updates))
+        for index, code in ((0, "9"), (1, "10")):
+            self.assertEqual(self.server.tracks[index]["releases"], original[index]["releases"] + [
+                {"versionCodes": [code], "status": "draft", "name": "Version " + code}])
+        self.assertEqual(self.server.tracks[2], original[2])
+        self.assertFalse((self.output / play.OPERATION_MARKER).exists())
+        self.assertFalse(any("/releases/assets/" in url for url, _, _ in self.release.calls))
+        self.assertEqual(len(self.server.edits), 1)
+
+    def test_track_response_mismatches_stop_before_further_mutation(self):
+        changes = [lambda track: track.update(track="other"),
+                   lambda track: track["releases"][-1].update(status="completed"),
+                   lambda track: track["releases"][-1].update(versionCodes=["11"]),
+                   lambda track: track["releases"][0].update(versionCodes=["5"]),
+                   lambda track: track["releases"][0].update(name="changed serving name"),
+                   lambda track: track["releases"].pop(0)]
+        for change in changes:
+            self.server = PlayServer(self.release)
+            self.server.reuse()
+            transport = self.server.transport
+
+            def changed_response(method, url, headers, body, limit):
+                status, response = transport(method, url, headers, body, limit)
+                if method == "PUT":
+                    result = json.loads(response)
+                    change(result)
+                    response = encoded(result)
+                return status, response
+
+            self.server.transport = changed_response
+            with self.subTest(change=change), self.assertRaisesRegex(play.PreparationError, "track update response"):
+                self.execute()
+            self.assertEqual(self.sequence(), [("POST", ""), ("GET", "/edit1/tracks"),
+                                              ("GET", "/edit1/bundles"), ("PUT", "/edit1/tracks/qa")])
+            self.assertEqual(self.server.tracks[0]["releases"][0]["versionCodes"], ["7"])
+            self.assertTrue((self.output / play.OPERATION_MARKER).exists())
+            (self.output / play.OPERATION_MARKER).unlink()
+
+    def test_changed_metadata_remote_identity_and_local_bytes_reject_before_play(self):
+        identity_path = self.output / "preparation.json"
+        original_identity = identity_path.read_bytes()
+        changes = [lambda: self.identity.update(dispatch_sha="d" * 40),
+                   lambda: self.identity.update(schema_version=True),
+                   lambda: self.identity["assets"][NAMES[0]].update(verified_sha256="0" * 64)]
+        for change in changes:
+            self.identity = json.loads(original_identity)
+            change()
+            identity_path.write_bytes(encoded(self.identity))
+            with self.subTest(change=change), self.assertRaises(play.PreparationError):
+                self.execute()
+            self.assertEqual(self.server.calls, [])
+        identity_path.write_bytes(original_identity)
+        for name in (NAMES[0], NAMES[2], "SHA256SUMS", "provenance.json"):
+            path = self.output / name
+            original = path.read_bytes()
+            path.write_bytes(b"x" * len(original))
+            with self.subTest(name=name), self.assertRaises(play.PreparationError):
+                self.execute()
+            self.assertEqual(self.server.calls, [])
+            path.write_bytes(original)
+        for target, key, value in [(self.release.release, "published_at", "2026-01-03T03:04:05Z"),
+                                   (self.release.annotation, "object", {"type": "commit", "sha": "d" * 40}),
+                                   (self.release.assets[0], "id", 50),
+                                   (self.release.assets[1], "digest", "sha256:" + "0" * 64)]:
+            original = target[key]
+            target[key] = value
+            with self.subTest(key=key), self.assertRaises(play.PreparationError):
+                self.execute()
+            self.assertEqual(self.server.calls, [])
+            target[key] = original
+        asset = self.release.assets[0]
+        asset.update(id=50, url=BASE + "/releases/assets/50")
+        with self.assertRaisesRegex(play.PreparationError, "identity changed"):
+            self.execute()
+        self.assertEqual(self.server.calls, [])
+        self.release.assets.pop()
+        with self.assertRaises(play.PreparationError):
+            self.execute()
+        self.assertEqual(self.server.calls, [])
+
+    def test_retained_symlinks_missing_files_and_extra_files_are_rejected(self):
+        bundle = self.output / NAMES[0]
+        moved = self.root / "bundle"
+        bundle.rename(moved)
+        with self.assertRaises(play.PreparationError):
+            self.execute()
+        bundle.symlink_to(moved)
+        with self.assertRaises(play.PreparationError):
+            self.execute()
+        bundle.unlink()
+        moved.rename(bundle)
+        alias = self.root / "alias"
+        alias.symlink_to(self.output, target_is_directory=True)
+        with self.assertRaises(play.PreparationError):
+            play.apply(alias, self.release.checkout, self.github, play.Play(self.server.transport),
+                       "qa", "wear:qa", "draft")
+        (self.output / "unexpected").write_bytes(b"neutral")
+        with self.assertRaises(play.PreparationError):
+            self.execute()
+        self.assertEqual(self.server.calls, [])
+
+    def test_exact_reuse_draft_promotion_and_matching_state_rerun(self):
+        self.server.reuse()
+        self.execute()
+        self.assertFalse(any("uploadType" in path for _, path, _ in self.server.calls))
+        self.server.tracks[0]["releases"][1]["releaseNotes"] = [{"language": "en-US", "text": "neutral notes"}]
+        self.server.calls.clear()
+        self.execute("completed")
+        self.assertEqual(self.server.tracks[0]["releases"], [
+            {"versionCodes": ["9"], "status": "completed", "name": "Version 9",
+             "releaseNotes": [{"language": "en-US", "text": "neutral notes"}]}])
+        self.assertEqual(self.server.tracks[1]["releases"], [
+            {"versionCodes": ["10"], "status": "completed", "name": "Version 10"}])
+        self.assertFalse(any("uploadType" in path for _, path, _ in self.server.calls))
+        self.server.calls.clear()
+        self.execute("completed")
+        self.assertEqual(self.sequence(), [("POST", ""), ("GET", "/edit3/tracks"), ("GET", "/edit3/bundles"),
+                                         ("POST", "/edit3:validate"),
+                                         ("POST", "/edit3:commit?changesInReviewBehavior=ERROR_IF_IN_REVIEW")])
+        self.server.calls.clear()
+        with self.assertRaisesRegex(play.PreparationError, "already completed"):
+            self.execute("draft")
+        self.assertEqual([method for method, _ in self.sequence()], ["POST", "GET", "GET"])
+
+    def test_explicit_completed_can_replace_one_older_code_or_fill_empty_tracks(self):
+        self.server.reuse()
+        self.server.tracks[1]["releases"] = []
+        self.execute("completed")
+        for index, code in ((0, "9"), (1, "10")):
+            self.assertEqual(self.server.tracks[index]["releases"], [
+                {"versionCodes": [code], "status": "completed", "name": "Version " + code}])
+        self.assertFalse(any("uploadType" in path for _, path, _ in self.server.calls))
+
+    def test_draft_retains_multiple_serving_codes_but_completed_requires_console_retention(self):
+        self.server.reuse()
+        self.server.tracks[0]["releases"][0]["versionCodes"] = ["5", "7"]
+        self.execute()
+        self.assertEqual(self.server.tracks[0]["releases"][0]["versionCodes"], ["5", "7"])
+        self.server.calls.clear()
+        with self.assertRaisesRegex(play.PreparationError, "retention"):
+            self.execute("completed")
+        self.assertEqual([method for method, _ in self.sequence()], ["POST", "GET", "GET"])
+
+    def test_bundle_conflicts_duplicates_and_consumed_but_unlisted_codes_fail_before_upload(self):
+        cases = [[{"versionCode": 9, "sha256": "0" * 64}],
+                 [{"versionCode": 9, "sha256": self.release.hashes[NAMES[0]]}] * 2,
+                 []]
+        for index, bundles in enumerate(cases):
+            self.server.bundles = bundles
+            self.server.calls.clear()
+            if index == 2:
+                self.server.tracks[0]["releases"] = [{"status": "draft", "versionCodes": ["9"]}]
+            with self.subTest(case=index), self.assertRaises(play.PreparationError):
+                self.execute()
+            self.assertEqual([method for method, _ in self.sequence()], ["POST", "GET", "GET"])
+
+    def test_missing_tracks_rollouts_newer_versions_and_other_drafts_fail_before_upload(self):
+        original = json.loads(json.dumps(self.server.tracks))
+        for release in [{"status": "draft", "versionCodes": ["7"]},
+                        {"status": "inProgress", "versionCodes": ["7"], "userFraction": 0.5},
+                        {"status": "halted", "versionCodes": ["7"]},
+                        {"status": "completed", "versionCodes": ["11"]},
+                        {"status": "draft", "versionCodes": ["7", "9"]}]:
+            self.server.calls.clear()
+            self.server.tracks[1]["releases"] = [release]
+            with self.subTest(release=release), self.assertRaises(play.PreparationError):
+                self.execute()
+            self.assertEqual([method for method, _ in self.sequence()], ["POST", "GET", "GET"])
+            self.assertEqual(self.server.bundles, [])
+        self.server.tracks = original[:1]
+        self.server.calls.clear()
+        with self.assertRaisesRegex(play.PreparationError, "already exist"):
+            self.execute()
+        self.assertEqual([method for method, _ in self.sequence()], ["POST", "GET", "GET"])
+
+    def test_uncertain_mutations_stop_without_replay_and_leave_reconciliation_barrier(self):
+        cases = [("", "disconnect"),
+                 ("/edit1/bundles?uploadType=media", "disconnect"),
+                 ("/edit1/bundles?uploadType=media", "malformed"),
+                 ("/edit1/tracks/qa", "disconnect"),
+                 ("/edit1:validate", 403),
+                 ("/edit1:commit?changesInReviewBehavior=ERROR_IF_IN_REVIEW", "disconnect"),
+                 ("/edit1:commit?changesInReviewBehavior=ERROR_IF_IN_REVIEW", 503)]
+        for failure in cases:
+            self.server = PlayServer(self.release)
+            self.server.failure = failure
+            with self.subTest(failure=failure), self.assertRaisesRegex(play.PlayError, "uncertain") as caught:
+                self.execute()
+            self.assertNotIn("offline-play-token", str(caught.exception))
+            self.assertEqual(self.sequence()[-1][1], failure[0])
+            before = len(self.server.calls)
+            self.assertEqual(sum(path == failure[0] for _, path in self.sequence()), 1)
+            marker = self.output / play.OPERATION_MARKER
+            self.assertTrue(marker.exists())
+            self.assertNotIn(b"offline-play-token", marker.read_bytes())
+            with self.assertRaisesRegex(play.PreparationError, "Unreconciled"):
+                self.execute()
+            self.assertEqual(len(self.server.calls), before)
+            if "bundles?" in failure[0]:
+                self.assertEqual(len(self.server.bundles), 1)
+            if ":commit" in failure[0]:
+                self.assertEqual(self.server.tracks[0]["releases"][-1]["status"], "draft")
+            marker.unlink()  # Independent test scenarios, never automatic tool recovery.
+
+    def test_upload_response_code_and_hash_are_checked_before_any_track_update(self):
+        for override in ({"versionCode": 11}, {"sha256": "0" * 64}):
+            self.server = PlayServer(self.release)
+            self.server.upload_override = override
+            with self.subTest(override=override), self.assertRaisesRegex(play.PreparationError, "code/hash"):
+                self.execute()
+            self.assertEqual([method for method, _ in self.sequence()], ["POST", "GET", "GET", "POST"])
+            self.assertTrue((self.output / play.OPERATION_MARKER).exists())
+            (self.output / play.OPERATION_MARKER).unlink()
+
+    def test_apply_requires_environment_token_before_any_play_request(self):
+        with patch.dict(os.environ, {"PLAY_ACCESS_TOKEN": ""}), self.assertRaisesRegex(
+                play.PreparationError, "PLAY_ACCESS_TOKEN"):
+            self.execute()
+        self.assertEqual(self.server.calls, [])
+
+    def test_cli_sanitizes_attempted_apply_failures_and_retains_preparation_interface(self):
+        environment = {"GITHUB_REPOSITORY": "example/project", "GITHUB_SHA": DISPATCH,
+                       "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REF": "refs/heads/main"}
+        args = [play.TOOL, "apply", "--preparation", str(self.output), "--phone-track", "qa",
+                "--wear-track", "wear:qa", "--status", "draft"]
+        self.server.failure = ("/edit1/bundles?uploadType=media", "disconnect")
+        client = play.Play(self.server.transport)
+        stderr = io.StringIO()
+        with patch.dict(os.environ, environment), patch.object(play, "Checkout", return_value=self.release.checkout), \
+                patch.object(play, "GitHub", return_value=self.github), patch.object(play, "Play", return_value=client), \
+                patch.object(play.sys, "argv", args), patch.object(play.sys, "stderr", stderr):
+            self.assertEqual(play.main(), 1)
+        self.assertIn("after a Play operation was attempted", stderr.getvalue())
+        self.assertNotIn("no Play operation was attempted", stderr.getvalue())
+        self.assertNotIn("offline-play-token", stderr.getvalue())
+        self.assertNotIn("sensitive response", stderr.getvalue())
+        with patch.dict(os.environ, environment), patch.object(play, "Checkout", return_value=self.release.checkout), \
+                patch.object(play, "GitHub", return_value=self.github), patch.object(play, "prepare") as prepare, \
+                patch.object(play.sys, "argv", [play.TOOL, "--tag", TAG, "--output", str(self.output)]), \
+                patch.object(play.sys, "stdout", io.StringIO()):
+            self.assertEqual(play.main(), 0)
+        prepare.assert_called_once_with(TAG, self.release.checkout, self.github, str(self.output))
+
+    def test_play_http_is_bounded_and_disables_redirects_and_ambient_proxies(self):
+        response = Mock(status=200)
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        response.read.return_value = b"{}"
+        with patch.object(play.urllib.request, "build_opener") as build:
+            build.return_value.open.return_value = response
+            self.assertEqual(play.play_http("POST", play.PLAY_BASE, {}, b"{}", 10), (200, b"{}"))
+        self.assertEqual(build.return_value.open.call_args.kwargs, {"timeout": 60})
+        response.read.assert_called_once_with(11)
+        self.assertIsInstance(build.call_args.args[0], play.urllib.request.ProxyHandler)
+        self.assertIsInstance(build.call_args.args[1], play.NoRedirect)
 
 
 if __name__ == "__main__":
