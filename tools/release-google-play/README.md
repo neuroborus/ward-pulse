@@ -7,8 +7,11 @@ read-only. Apply targets the fixed `app.wardpulse` application in one Play edit.
 The independently dispatched
 [`release-google-play.yml`](../../.github/workflows/release-google-play.yml), named
 **Google Play Release**, runs both phases from the immutable original main dispatch.
-The Owner must explicitly publish the GitHub workflow's draft before selecting its
-stable tag for Play. Neither workflow starts the other. Credential provisioning and
+If draft was selected in the GitHub workflow, the Owner must inspect and explicitly publish
+it before selecting its stable non-prerelease tag for Play. The
+[GitHub release owner](../release/README.md#publication-boundary) owns those state options;
+Play still accepts historical published sources without a Changesets ledger.
+Neither workflow starts the other. Credential provisioning and
 hosted auth/upload/commit/review/delivery acceptance remain pending; see the
 [manual Play setup and operation](../../docs/product/RELEASE_CHECKLIST.md#manual-google-play-release).
 

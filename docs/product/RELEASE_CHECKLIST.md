@@ -310,8 +310,9 @@ self-managed signing identity.
 
 [release-github.yml](../../.github/workflows/release-github.yml) implements Stage A in job
 `build` and Stage B in dependent job `publish`: independent transfer verification followed
-by GitHub draft creation. Hosted end-to-end acceptance remains pending, including permissions,
-secrets, failure/cancellation cleanup, transfer, draft creation and rerun/partial-state behavior.
+by draft staging and the selected GitHub release state. Hosted acceptance of the new notes
+and state options remains pending, alongside permissions, secrets, failure/cancellation
+cleanup, transfer and rerun/partial-state behavior.
 Local source checks do not establish hosted behavior, Play delivery or runtime acceptance.
 Normal PR test CI stays separate.
 
@@ -350,8 +351,17 @@ Hosted behavior still needs the acceptance above; private signing material must 
 logs or receipts.
 
 For a future authorized invocation, open **Actions → GitHub Release → Run
-workflow**, select branch `main`, and enter the stable tag (default `v0.1.0`). The workflow
-rejects other refs and checks out the original full dispatch SHA without persisted Git
+workflow**, select branch `main`, and enter an already prepared stable tag (default `v0.1.0`).
+Inputs default to `draft=true`, `prerelease=false`, `latest=false`. Latest offers `true`,
+`false` and `automatic`: `true` with draft or prerelease is rejected before setup. Automatic
+requests GitHub's legacy latest policy only for a published normal release; drafts and
+prereleases stay nonlatest. Draft/prerelease are independent markers and still use stable tags.
+The [release owner](../../tools/release/README.md#publication-boundary) describes readiness:
+the ledger/tag/native versions must agree, the exact generated notes must be nonempty and
+pending Changesets input must be consumed by an explicitly prepared cut before dispatch.
+The current pending tooling patch therefore requires a future version cut. Notes are literal
+Markdown from the original immutable checkout; no npm setup or PR-list fallback is used.
+The workflow rejects other refs and checks out the original full dispatch SHA without persisted Git
 credentials. Before setup it checks all four source versionNames against the tag and enforces
 positive odd phone / next-even Wear codes and independent positive face codes. It never
 overrides versions or resolves a moving source ref. Build permission is only `contents: read`;
@@ -419,33 +429,36 @@ independently resolved, peeling annotated tags to the exact source commit; confl
 unresolvable refs fail. Both conflict checks repeat immediately before creation. This precheck
 is not atomic and cannot prevent arbitrary future external mutation.
 
-Creation requests only a draft targeting the full immutable source SHA, with `draft: true`
-and `make_latest: "false"`. A correctly bound existing tag is retained; `target_commitish`
-cannot override a tag. The returned release ID, draft state, full-SHA target and tag name are
-checked and freshly re-observed immediately after creation and after upload. A draft may
-have no Git tag ref yet; absence is allowed, while every observed ref must peel to the source.
-The workflow never separately creates, moves or deletes a tag, and does not claim a returned
-nonlatest field. It uploads exactly the verified nine local files without clobbering, then
-confirms paginated asset names, count and sizes, comparing API digests when supplied. Optional
-digests are not required and assets are not downloaded again.
+The single [publisher](../../tools/release/release_github.py), `Publisher.publish`, always
+creates a draft targeting the full immutable source SHA, requesting `make_latest: "false"`
+with the exact Changesets body and selected prerelease marker. It re-observes ID, body,
+markers, source/tag and conflicts after creation and upload. All nine names, IDs, sizes and
+supplied digests must match before any requested transition to public state; only this
+invocation's newly created bound ID can be transitioned. Final observations require the exact
+body, prerelease marker, requested draft state and assets. Optional digests are not required.
+A draft may lack a tag ref; a public release requires a real ref peeled to the source.
+The workflow never separately creates, moves or deletes tags and cannot override an existing
+tag via `target_commitish`. Latest policy is requested without claiming a response echo field.
 
 Observed races, mutation, network/auth/API ambiguity or permission refusal fail the job.
-Failures preserve all existing and partial releases and assets: the workflow never edits,
-publishes or deletes a release, overwrites assets or retries with broader credentials. A rerun
+Failures preserve all existing, partial and newly public releases and assets: the workflow
+never resumes or edits a preexisting release, deletes state, overwrites assets, blindly retries
+uncertain effects or broadens credentials. A rerun
 may proceed only if creation has not occurred and no release exists for the tag. Any partial
 draft, complete draft or public release causes the next attempt to refuse publication; the
 Owner must inspect the retained state and deliberately resolve it before retrying. A failed
-create request may already have created a draft, so inspect state even when no ID was returned.
+create or publication request may already have taken effect, so inspect actual state even
+when no response was received.
 These instructions authorize no remote operation during local source preparation.
 
 ## Manual Google Play release
 
 There are two independent manual Actions: **GitHub Release** builds and creates the
-verified draft described above; **Google Play Release**, in
+verified release in the selected state described above; **Google Play Release**, in
 [release-google-play.yml](../../.github/workflows/release-google-play.yml), consumes a
-stable published release. Both use only their own `workflow_dispatch`; no push, tag,
-release event or completion chains them. A human must inspect and explicitly publish
-the GitHub draft before selecting its tag for Play. There is no latest/tag fallback.
+stable published non-prerelease release. Both use only their own `workflow_dispatch`; no push,
+tag, release event or completion chains them. If draft was selected, a human must inspect and
+explicitly publish it before selecting its tag for Play. There is no latest/tag fallback.
 The [tool README](../../tools/release-google-play/README.md#preparation-interface) owns
 the exact preparation and apply commands and their proof limits.
 

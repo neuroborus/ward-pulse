@@ -85,6 +85,8 @@ Git and that populated cache; missing prerequisites fail rather than skip. Measu
 runtime separately from dependency/build setup. Independent skill evaluation must use raw
 partial/complete coverage cases without seeding the expected answer. Runtime and full docs
 acceptance remain pending until HOST executes them; Source review is not a runtime pass.
+Injected publisher tests also cover state options, draft staging before publication, exact
+notes/identity/assets, conflicts, tag peeling and preservation of uncertain effects.
 
 ## Initial candidate
 
@@ -105,3 +107,27 @@ artifact verification and the independent manual GitHub and Google Play workflow
 release preparation does not authorize remote mutations, tags, credentials or publication.
 The [Google Play owner](../release-google-play/README.md) retains its historical published
 artifact contract.
+
+The GitHub workflow defaults to `draft=true`, `prerelease=false`, `latest=false`. Draft and
+prerelease are independent markers; tags remain stable `vMAJOR.MINOR.PATCH`. Latest accepts
+`true`, `false` or `automatic`; `true` requires a published normal release. Automatic requests
+GitHub's `legacy` policy only for a published normal release and requests nonlatest otherwise.
+
+Before build setup, `prepare_release.py readiness TAG` checks ledger/tag/native agreement,
+nonempty exact-version generated notes and absence of pending Changesets input, without npm.
+It reads Markdown literally from the original immutable dispatch checkout. This fail-closed
+presence guard proves publication readiness, not semantic coverage. Development status still
+permits pending fragments. The pending tooling patch plans `0.1.1`; current ledger/native
+versions remain `0.1.0`, so a future version cut is required before a new publication dispatch.
+
+[`release_github.py`](release_github.py) is the single publisher, downstream of the independent
+nine-file receipt verifier. It refuses every existing matching release, including drafts,
+and repeatedly checks conflicts and tag refs. It always creates a nonlatest draft with the
+exact notes and prerelease marker, uploads and verifies all nine asset identities/sizes and
+supplied digests, then applies any requested publication transition only to its newly created
+bound ID. Fresh final observations check body, markers and assets; public releases require a
+real tag ref peeled to the source. Latest is a request policy, not an echoed Release field.
+Failures preserve partial or public state for Owner reconciliation without retry, overwrite,
+resume, deletion or tag movement. If draft was selected, inspect and manually publish it
+before Play; Play continues to require a published normal release, including historical
+sources without this ledger. Hosted new-mode acceptance remains pending.

@@ -224,6 +224,24 @@ def release_notes(root, version):
     return "".join(sections[0]).strip()
 
 
+def readiness(root, tag):
+    """Read an already prepared immutable release without npm or fragment parsing."""
+    if not isinstance(tag, str) or not tag.startswith("v"):
+        raise ValueError("Expected a stable vMAJOR.MINOR.PATCH tag")
+    version = tag[1:]
+    stable(version)
+    validate_config(root)
+    if ledger(root) != version:
+        raise ValueError("Tag differs from the prepared product ledger")
+    sources = native_state(root, version)
+    # Fail closed on all extra inputs, including normal fragments and pre-mode state.
+    # This presence guard is not a semantic coverage audit.
+    if any(path.name not in ("config.json", "README.md") for path in (root / ".changeset").iterdir()):
+        raise ValueError("Pending Changesets input; prepare the immutable release before publication")
+    return {"version": version, "codes": {name: item.code for name, item in sources.items()},
+            "notes": release_notes(root, version)}
+
+
 def status(root, stock):
     validate_config(root)
     current = ledger(root)
@@ -279,11 +297,15 @@ def main():
     commands.add_parser("status")
     cut = commands.add_parser("prepare")
     cut.add_argument("version")
+    ready = commands.add_parser("readiness", help="Read prepared version/notes without running npm")
+    ready.add_argument("tag")
     args = parser.parse_args()
     stock = Stock(args.root, args.cache)
     try:
         if args.command == "status":
             print(json.dumps(status(args.root, stock), indent=2))
+        elif args.command == "readiness":
+            print(json.dumps(readiness(args.root, args.tag), indent=2))
         else:
             print("Prepared " + args.version if prepare(args.root, args.version, stock) else "Already prepared; no files changed")
     except (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError) as error:

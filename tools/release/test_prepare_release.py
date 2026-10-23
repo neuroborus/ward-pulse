@@ -262,6 +262,49 @@ class PreparationTests(ReleaseFixture):
                 release.release_notes(self.root, "0.1.1")
 
 
+class ReadinessTests(ReleaseFixture):
+    def setUp(self):
+        super().setUp()
+        (self.root / ".changeset/change.md").unlink()
+
+    def test_prepared_notes_are_literal_and_read_only_without_stock(self):
+        body = '### Minor Changes\n\n- Keep $(command), `$value`, and [links](https://example.invalid) literal.'
+        self.write("tools/release/CHANGELOG.md", "# Product\n\n## 0.1.0\n\n" + body + "\n")
+        before = self.snapshot()
+        with patch.object(release.Stock, "run", side_effect=AssertionError("npm must not run")):
+            ready = release.readiness(self.root, "v0.1.0")
+        self.assertEqual(ready, {"version": "0.1.0", "codes": {"phone": 1, "wear": 2, "legacy": 1, "push": 1}, "notes": body})
+        self.assertEqual(before, self.snapshot())
+
+    def test_pending_or_pre_mode_inputs_fail_without_parsing_or_writes(self):
+        for name in ("pending.md", "pre.json", "legacy-directory"):
+            with self.subTest(name=name):
+                path = self.write(".changeset/" + name, "unparsed input")
+                before = self.snapshot()
+                with self.assertRaisesRegex(ValueError, "Pending Changesets"):
+                    release.readiness(self.root, "v0.1.0")
+                self.assertEqual(before, self.snapshot())
+                path.unlink()
+
+    def test_tag_ledger_native_and_nonempty_exact_notes_must_agree(self):
+        for tag in ("0.1.0", "v0.1.0-beta.1", "v0.1.1", "v01.1.0"):
+            with self.subTest(tag=tag), self.assertRaises(ValueError):
+                release.readiness(self.root, tag)
+        path = self.root / release.SOURCES["wear"]
+        original = path.read_bytes()
+        path.write_bytes(original.replace(b"0.1.0", b"0.1.1"))
+        with self.assertRaisesRegex(ValueError, "Mixed"):
+            release.readiness(self.root, "v0.1.0")
+        path.write_bytes(original)
+        for notes in ("## 0.1.1\n- Other.\n", "## 0.1.0\n\n### Minor Changes\n"):
+            self.write("tools/release/CHANGELOG.md", notes)
+            with self.assertRaisesRegex(ValueError, "notes"):
+                release.readiness(self.root, "v0.1.0")
+        (self.root / "tools/release/CHANGELOG.md").unlink()
+        with self.assertRaises(FileNotFoundError):
+            release.readiness(self.root, "v0.1.0")
+
+
 class StockIntegrationTests(ReleaseFixture):
     def test_pinned_bootstrap_lock_discovery_and_future_transition(self):
         stock = release.Stock(self.root, CACHE)
