@@ -1,7 +1,9 @@
 """HOST-only bridge contracts and isolated, pinned stock-CLI integration."""
 
 import json
+import os
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -10,7 +12,6 @@ import prepare_release as release
 
 
 REPO = Path(__file__).resolve().parents[2]
-CACHE = REPO / "LOCAL_ARTIFACTS/changesets-release-2026-10-23/npm-cache"
 INTEGRITY = "sha512-L1i67bMfkK6iC/kDejuNO4pFgTRcWIObsD6Qof2woP1I4M8tj17DGlcpRaTzTv1DYSP5EMwWdEtR8X0Pj5Jg3Q=="
 PUSH = '''val pushVersionCode = providers.gradleProperty("wardpulsePushVersionCode").map { value ->
     value.toIntOrNull()?.takeIf { it > 0 }
@@ -19,10 +20,10 @@ PUSH = '''val pushVersionCode = providers.gradleProperty("wardpulsePushVersionCo
 '''
 
 
-def plan(current="0.1.0", target="0.1.1", package=release.PRODUCT):
+def plan(current="0.1.0", target="0.1.1", package=release.PRODUCT, bump="patch"):
     return {"changesets": [{"id": "change", "summary": "Correct the summary display.",
-                            "releases": [{"name": package, "type": "patch"}]}],
-            "releases": [{"name": package, "type": "patch", "oldVersion": current,
+                            "releases": [{"name": package, "type": bump}]}],
+            "releases": [{"name": package, "type": bump, "oldVersion": current,
                           "newVersion": target, "changesets": ["change"]}]}
 
 
@@ -184,13 +185,70 @@ class PreparationTests(ReleaseFixture):
         self.assertTrue(release.prepare(self.root, "0.1.1", self.stock))
         for name, code in (("phone", 3), ("wear", 4), ("legacy", 2), ("push", 2)):
             self.assertEqual(before[name].path.read_bytes(), before[name].updated("0.1.1", code).encode())
-        self.fragment("later", "minor", "Add a new summary view.")
         snapshot = self.snapshot()
         self.stock.reset_mock()
         self.assertFalse(release.prepare(self.root, "0.1.1", self.stock))
         self.assertEqual(snapshot, self.snapshot())
         self.stock.plan.assert_not_called()
         self.stock.version.assert_not_called()
+        self.stock.reconcile_lock.assert_not_called()
+
+        self.fragment("change", "minor", "Add a new summary view.")
+        self.stock.plan.return_value = plan("0.1.1", "0.2.0", bump="minor")
+        snapshot = self.snapshot()
+        self.assertFalse(release.prepare(self.root, "0.1.1", self.stock))
+        self.assertEqual(snapshot, self.snapshot())
+        self.stock.plan.assert_called_once_with()
+        self.stock.version.assert_not_called()
+        self.stock.reconcile_lock.assert_not_called()
+
+    def test_same_target_without_fragments_retains_preflight_guards(self):
+        (self.root / ".changeset/change.md").unlink()
+        for relative, old, new in (
+                (".changeset/config.json", '"commit": false', '"commit": true'),
+                ("package.json", release.CLI_VERSION, "3.0.2"),
+                ("tools/release/package.json", '"private": true', '"private": false'),
+                (release.SOURCES["wear"], "0.1.0", "0.1.1"),
+                (release.SOURCES["wear"], "versionCode = 2", "versionCode = 4")):
+            path = self.root / relative
+            original = path.read_bytes()
+            with self.subTest(path=relative, replacement=new):
+                self.assertIn(old, original.decode("utf-8"))
+                path.write_bytes(original.replace(old.encode(), new.encode()))
+                self.refused("0.1.0")
+                self.stock.plan.assert_not_called()
+            path.write_bytes(original)
+        for name in ("pre.json", "unexpected.json", ".hidden.md"):
+            with self.subTest(input=name):
+                path = self.write(".changeset/" + name, "unparsed input")
+                self.refused("0.1.0")
+                self.stock.plan.assert_not_called()
+                path.unlink()
+        directory = self.root / ".changeset/legacy"
+        directory.mkdir()
+        self.refused("0.1.0")
+        self.stock.plan.assert_not_called()
+
+    def test_same_target_pending_fragments_require_valid_official_ownership(self):
+        foreign = plan()
+        foreign["changesets"].append({"id": "foreign", "releases": [{"name": "release-test", "type": "none"}]})
+        for proposed in (foreign, {**plan(), "preState": {"mode": "pre"}},
+                         {**plan(), "changesets": None}, {**plan(), "changesets": [{}]},
+                         {**plan(), "releases": []}):
+            with self.subTest(plan=proposed):
+                self.stock.plan.return_value = proposed
+                self.refused("0.1.0")
+        self.assertEqual(self.stock.plan.call_count, 5)
+
+        error = subprocess.CalledProcessError(1, ["npm", "exec"])
+        self.stock.plan.side_effect = error
+        before = self.snapshot()
+        with self.assertRaises(subprocess.CalledProcessError) as raised:
+            release.prepare(self.root, "0.1.0", self.stock)
+        self.assertIs(raised.exception, error)
+        self.assertEqual(before, self.snapshot())
+        self.stock.version.assert_not_called()
+        self.stock.reconcile_lock.assert_not_called()
 
     def test_generation_and_lock_failures_preserve_partial_state(self):
         for stage in ("version", "reconcile_lock"):
@@ -305,9 +363,31 @@ class ReadinessTests(ReleaseFixture):
             release.readiness(self.root, "v0.1.0")
 
 
+class StockCommandTests(unittest.TestCase):
+    def test_cache_override_and_npm_default_apply_to_cli_and_lock(self):
+        root = Path("fixture")
+        for cache in (None, Path("selected-cache")):
+            with (self.subTest(cache=cache),
+                  patch.dict(os.environ, {"npm_config_cache": "configured-cache"}),
+                  patch.object(release.subprocess, "run") as run):
+                stock = release.Stock(root, cache)
+                stock.changeset("status")
+                stock.reconcile_lock()
+                self.assertEqual(run.call_count, 2)
+                for call in run.call_args_list:
+                    command = call.args[0]
+                    self.assertIn("--offline", command)
+                    self.assertIn("--ignore-scripts", command)
+                    self.assertEqual([arg for arg in command if arg.startswith("--cache=")],
+                                     [] if cache is None else ["--cache=selected-cache"])
+                    self.assertEqual(call.kwargs, {"cwd": root, "check": True})
+                self.assertIn(f"--package=@changesets/cli@{release.CLI_VERSION}", run.call_args_list[0].args[0])
+                self.assertEqual(os.environ["npm_config_cache"], "configured-cache")
+
+
 class StockIntegrationTests(ReleaseFixture):
     def test_pinned_bootstrap_lock_discovery_and_future_transition(self):
-        stock = release.Stock(self.root, CACHE)
+        stock = release.Stock(self.root)
         self.write("tools/release/package.json", json.dumps({"name": release.PRODUCT, "private": True, "version": "0.0.0"}))
         (self.root / "tools/release/CHANGELOG.md").unlink()
         (self.root / ".changeset/change.md").unlink()
@@ -333,10 +413,36 @@ class StockIntegrationTests(ReleaseFixture):
         self.assertEqual({name: source.code for name, source in release.native_state(self.root, "0.1.1").items()},
                          {"phone": 3, "wear": 4, "legacy": 2, "push": 2})
         self.assertFalse((self.root / ".changeset/change.md").exists())
+        before = self.snapshot()
+        with (patch.object(stock, "plan", wraps=stock.plan) as planning,
+              patch.object(stock, "version", wraps=stock.version) as generation,
+              patch.object(stock, "reconcile_lock", wraps=stock.reconcile_lock) as locking):
+            self.assertFalse(release.prepare(self.root, "0.1.1", stock))
+            planning.assert_not_called()
+            generation.assert_not_called()
+            locking.assert_not_called()
+        self.assertEqual(before, self.snapshot())
         self.fragment("pending", "patch", "Improve release preparation diagnostics.")
         self.assertEqual(release.status(self.root, stock)["target"], "0.1.2")
         before = self.snapshot()
-        self.assertFalse(release.prepare(self.root, "0.1.1", stock))
+        with (patch.object(stock, "plan", wraps=stock.plan) as planning,
+              patch.object(stock, "version", wraps=stock.version) as generation,
+              patch.object(stock, "reconcile_lock", wraps=stock.reconcile_lock) as locking):
+            self.assertFalse(release.prepare(self.root, "0.1.1", stock))
+            planning.assert_called_once_with()
+            generation.assert_not_called()
+            locking.assert_not_called()
+        self.assertEqual(before, self.snapshot())
+        self.write(".changeset/foreign.md", '---\n"@wardpulse/docs": patch\n---\n\nChange documentation.\n')
+        before = self.snapshot()
+        with (patch.object(stock, "plan", wraps=stock.plan) as planning,
+              patch.object(stock, "version", wraps=stock.version) as generation,
+              patch.object(stock, "reconcile_lock", wraps=stock.reconcile_lock) as locking):
+            with self.assertRaisesRegex(ValueError, "must target only"):
+                release.prepare(self.root, "0.1.1", stock)
+            planning.assert_called_once_with()
+            generation.assert_not_called()
+            locking.assert_not_called()
         self.assertEqual(before, self.snapshot())
         for relative in ("package.json", "docs/site/package.json"):
             self.assertEqual(release.read_json(self.root / relative)["version"], "0.0.0")

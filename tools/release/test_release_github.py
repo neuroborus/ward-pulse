@@ -35,6 +35,8 @@ class FakeGitHub:
             result = self.release
         elif url.path == "/releases/31" and method == "PATCH":
             self.release.update({key: value for key, value in payload.items() if key != "make_latest"})
+            # Model the observed omitted-tag reset; the public-transition risk is inferred.
+            self.release["tag_name"] = payload.get("tag_name", "untagged-default")
             if self.create_ref:
                 self.ref = {"ref": "refs/tags/" + TAG, "object": {"type": "commit", "sha": SHA}}
             result = self.release
@@ -100,9 +102,17 @@ class PublicationTests(unittest.TestCase):
                 else:
                     self.assertEqual(effects[-1][0:2], ("/releases/31", "PATCH"))
                     policy = "legacy" if latest == "automatic" and prerelease == "false" else "false" if latest == "automatic" else latest
-                    self.assertEqual(effects[-1][2], {"draft": False, "prerelease": prerelease == "true", "make_latest": policy})
+                    self.assertEqual(effects[-1][2], {"tag_name": TAG, "target_commitish": SHA, "name": TAG,
+                                                    "body": NOTES, "draft": False,
+                                                    "prerelease": prerelease == "true", "make_latest": policy})
                     before_patch = self.api.calls[:self.api.calls.index(effects[-1])]
                     self.assertTrue(any(path.startswith("/releases/31/assets?") and method == "GET" for path, method, _ in before_patch))
+                    after_patch = self.api.calls[self.api.calls.index(effects[-1]) + 1:]
+                    self.assertIn(("/releases/31", "GET", None), after_patch)
+                self.assertEqual(self.api.release["id"], 31)
+                self.assertEqual(self.api.release["tag_name"], TAG)
+                self.assertEqual(self.api.release["name"], TAG)
+                self.assertEqual(self.api.release["target_commitish"], SHA)
                 self.assertIs(self.api.release["draft"], draft == "true")
                 self.assertIs(self.api.release["prerelease"], prerelease == "true")
                 self.assertEqual(self.api.release["body"], NOTES)
@@ -161,7 +171,8 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(self.mutations()[-1][1], "PATCH")
 
     def test_final_observation_refuses_changed_body_markers_or_identity(self):
-        for key, value in (("body", "changed"), ("draft", True), ("prerelease", True),
+        for key, value in (("body", "changed"), ("tag_name", "untagged-default"), ("name", "changed"),
+                           ("draft", True), ("prerelease", True),
                            ("target_commitish", "c" * 40), ("id", 32)):
             self.api = FakeGitHub()
             def corrupt(path, method, result):

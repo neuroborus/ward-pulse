@@ -50,14 +50,22 @@ consumes fragments; actual npm reconciles the workspace lock. The bridge then mi
 target into only the four Android versionNames, advancing phone by 2, Wear to the next even
 code, and legacy/Push independently by 1. Formatting and non-version content are retained;
 Cargo and Dart metadata are independent. A target already matching the ledger and all native
-owners is a no-op, retaining pending fragments without running generation or incrementing codes.
-Status permits pending fragments and makes no Source changes; stock's missing-changeset or
-comparison-ref errors remain errors rather than invented empty plans.
+owners is read-only after the same configuration, prerelease-state and coherence guards.
+With pending normal fragments, it validates their individual product-only ownership through
+the official stock plan; a valid future product target need not equal the already prepared
+version. Fragments are retained, generation and lock reconciliation do not run, and codes do
+not increment. With no pending normal fragment, a fail-closed presence guard permits repeat
+success without stock status, which can fail for a changed package after a cut consumes its
+fragments. The guard does not parse Markdown or prove semantic coverage. Unsupported inputs
+are refused. Status always uses stock planning; needed stock errors remain errors rather than
+invented empty plans.
 
-Commands use CLI 3.0.3 offline with lifecycle scripts disabled. For an explicit public cache,
-use `python3 tools/release/prepare_release.py --cache PATH status` or replace `status` with
-`prepare VERSION`. Missing offline dependencies must be acquired through the supported
-dependency route; do not upgrade packages or hand-edit generated files to bypass a failure.
+Commands use CLI 3.0.3 offline with lifecycle scripts disabled. CLI and lock commands both
+default to npm's configured cache (including `npm_config_cache`); the helper's `--cache PATH`
+overrides that selection for both. Run
+`python3 tools/release/prepare_release.py --cache PATH status` or replace `status` with
+`prepare VERSION`. Missing offline dependencies must be
+acquired separately; do not upgrade packages or hand-edit generated files to bypass a failure.
 
 Preparation replaces several files sequentially, not atomically. Generation, lock or I/O
 failure preserves partial output and reports that reconciliation is required. Inspect the
@@ -69,20 +77,40 @@ checking actual uploaded history separately before distribution.
 
 ## HOST acceptance
 
-After Runner DONE and separate ownership retirement, run:
+After Runner DONE and separate ownership retirement, acquire the pinned public CLI separately
+from validation. This supported npm install uses an isolated, initially empty prefix and
+cache, so it populates the selected cache even if the repository already has a local CLI:
 
 ```bash
+release_cache=$(mktemp -d)
+release_prefix=$(mktemp -d)
+npm install --prefix "$release_prefix" --cache "$release_cache" \
+  --registry=https://registry.npmjs.org --ignore-scripts --no-audit --no-fund \
+  --save-exact @changesets/cli@3.0.3
+```
+
+Then validate offline using that same cache, from the repository root:
+
+```bash
+npm_config_cache="$release_cache" \
 python3 -m unittest discover -s tools/release -p 'test_*.py'
 ```
 
+Remove the two temporary directories after acceptance. Alternatively, select an already
+populated public cache with `npm_config_cache=PATH` for ordinary offline tests, or omit it to
+use npm's configured/default cache. No historical task directory is required. A root
+`npm exec` version response may use the local CLI and does not prove cache population; the
+isolated stock integration after acquisition is the proof. Tests never acquire dependencies,
+copy installations or silently switch caches.
+
 Injected unit contracts cover ownership, preflight, bounded allocation, formatting,
 idempotence, literal exact-version notes and preserved partial failures. The stock integration
-test uses minimal isolated temporary Git/workspace/native data and the pinned public cache at
-`LOCAL_ARTIFACTS/changesets-release-2026-10-23/npm-cache`; it actually reproduces discovery,
-bootstrap, changelog and lock generation, then exercises future transitions without touching
-real native sources. Its lock asserts CLI version and registry integrity. It needs Node/npm,
-Git and that populated cache; missing prerequisites fail rather than skip. Measure warm
-runtime separately from dependency/build setup. Independent skill evaluation must use raw
+test uses minimal isolated temporary Git/workspace/native data; it actually reproduces
+discovery, bootstrap, changelog and lock generation, then exercises immediate no-fragment
+repetition, retained future fragments and foreign-fragment refusal without writes or changes
+to real native sources. Its lock asserts CLI version and registry integrity. It needs Node/npm,
+Git and the selected populated cache; missing prerequisites fail rather than skip. Measure
+warm runtime separately from dependency/build setup. Independent skill evaluation must use raw
 partial/complete coverage cases without seeding the expected answer. Runtime and full docs
 acceptance remain pending until HOST executes them; Source review is not a runtime pass.
 Injected publisher tests also cover state options, draft staging before publication, exact
@@ -125,8 +153,11 @@ nine-file receipt verifier. It refuses every existing matching release, includin
 and repeatedly checks conflicts and tag refs. It always creates a nonlatest draft with the
 exact notes and prerelease marker, uploads and verifies all nine asset identities/sizes and
 supplied digests, then applies any requested publication transition only to its newly created
-bound ID. Fresh final observations check body, markers and assets; public releases require a
-real tag ref peeled to the source. Latest is a request policy, not an echoed Release field.
+bound ID. The final PATCH explicitly resends the verified tag, full source SHA, name and exact
+literal Changesets body with the selected state markers and latest policy, so binding does
+not depend on omitted-field preservation. Notes remain untrusted data. Response and fresh
+final observations check identity, tag, source, name, body, markers and assets; public releases
+require a real tag ref peeled to the source. Latest is a request policy, not an echoed Release field.
 Failures preserve partial or public state for Owner reconciliation without retry, overwrite,
 resume, deletion or tag movement. If draft was selected, inspect and manually publish it
 before Play; Play continues to require a published normal release, including historical

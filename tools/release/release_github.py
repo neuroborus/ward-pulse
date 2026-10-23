@@ -177,6 +177,8 @@ class Publisher:
         if not self.draft:
             self.observe(release_id, True)
             final = self.api(f"/releases/{release_id}", "PATCH", {
+                "tag_name": self.tag, "target_commitish": self.sha, "name": self.tag,
+                "body": self.notes,
                 "draft": False, "prerelease": self.prerelease, "make_latest": self.latest,
             })
             self.binding(final, release_id, False)

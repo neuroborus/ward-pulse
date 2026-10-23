@@ -68,26 +68,49 @@ class Stock:
 
 
 def validate_plan(plan, current):
+    if (not isinstance(plan, dict) or not isinstance(plan.get("changesets"), list)
+            or not isinstance(plan.get("releases"), list)):
+        raise ValueError("Malformed official release plan")
     if plan.get("preState") is not None:
         raise ValueError("Changesets prerelease mode is not supported")
     fragments = plan["changesets"]
     for fragment in fragments:
+        if (not isinstance(fragment, dict) or not isinstance(fragment.get("id"), str)
+                or not isinstance(fragment.get("releases"), list)):
+            raise ValueError("Malformed official changeset")
         targets = fragment["releases"]
-        if targets and (len(targets) != 1 or targets[0]["name"] != PRODUCT
-                        or targets[0]["type"] not in ("major", "minor", "patch")):
+        if targets and (len(targets) != 1 or not isinstance(targets[0], dict)
+                        or targets[0].get("name") != PRODUCT
+                        or targets[0].get("type") not in ("major", "minor", "patch")):
             raise ValueError(f"Changeset {fragment['id']} must target only {PRODUCT}")
     releases = plan["releases"]
     if not releases:
         if any(fragment["releases"] for fragment in fragments):
             raise ValueError("Product fragments have no official release")
         return current
-    if len(releases) != 1 or releases[0]["name"] != PRODUCT:
+    if len(releases) != 1 or not isinstance(releases[0], dict) or releases[0].get("name") != PRODUCT:
         raise ValueError("Official plan must release only the logical product")
     release = releases[0]
     target = release["newVersion"]
     if release["oldVersion"] != current or stable(target) <= stable(current):
         raise ValueError("Official plan disagrees with the current stable ledger")
     return target
+
+
+def pending_fragments(root):
+    """Check presence only; stock status owns fragment parsing and planning."""
+    pending = False
+    for path in (root / ".changeset").iterdir():
+        if path.name == "pre.json":
+            raise ValueError("Changesets prerelease mode is not supported")
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("Unsupported Changesets input")
+        if path.name in ("config.json", "README.md"):
+            continue
+        if path.suffix != ".md" or path.name.startswith("."):
+            raise ValueError("Unsupported Changesets input")
+        pending = True
+    return pending
 
 
 def validate_config(root):
@@ -258,7 +281,10 @@ def prepare(root, target, stock):
     sources = native_state(root, current)
     if stable(target) < stable(current):
         raise ValueError("Refusing a version rollback")
+    pending = pending_fragments(root)
     if target == current:
+        if pending:
+            validate_plan(stock.plan(), current)
         return False
     plan = stock.plan()
     if validate_plan(plan, current) != target:
@@ -292,7 +318,7 @@ def prepare(root, target, stock):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
-    parser.add_argument("--cache", type=Path, help="Public npm cache for offline stock commands")
+    parser.add_argument("--cache", type=Path, help="Public npm cache for offline stock commands (default: npm configuration)")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("status")
     cut = commands.add_parser("prepare")
