@@ -1441,8 +1441,8 @@ and verify the live phone/watch UI
 
 ### Phase 8 — MVP hardening
 
-Status: in progress as of 2026-10-22. Manual release Stage A build automation and Stage B
-verified-transfer GitHub draft publication, plus the independent manual Google Play
+Status: in progress as of 2026-10-23. Manual release Stage A build automation and Stage B
+verified-transfer GitHub draft staging and selectable publication, plus the independent manual Google Play
 preparation/apply workflow, are implemented in source; hosted end-to-end acceptance
 remains pending, including Google auth/upload/commit/review/delivery. Release acceptance,
 real-device testing and the remaining error/offline
@@ -1450,6 +1450,27 @@ acceptance review remain open.
 Persistent per-connection recovery is implemented and covered by host regressions and
 final-APK emulator acceptance below. Phase 7 live acceptance remains a separate
 provider-integration gate.
+
+The [logical Changesets ledger](../tools/release/README.md#product-ledger) records candidate
+features and release tooling in one unpublished initial `0.1.0` entry. Stock generation
+consumed the initial and tooling fragments for the explicitly selected version, without a
+native version transition. The guarded local version bridge and
+[prepare-release skill](../.agents/skills/prepare-release/SKILL.md) add explicit version cuts
+and repository-wide semantic coverage review; current native versions/codes stay 0.1.0 and
+1/2/1/1. Earlier local HOST acceptance on **2026-10-23** passed 33 tooling tests, including
+real pinned CLI/bootstrap/bridge integration in isolated fixtures. Separate verification passed
+initially empty-cache acquisition and offline tests with a root CLI already installed, plus
+independent raw partial/complete coverage skill scenarios. Fresh local checks of `df23ee9`
+passed 33 tests, canonical `v0.1.0` readiness, byte-preserving same-target preparation and
+the full docs/citation/skill-validation gates. Raw partial, complete and unpublished-initial
+skill scenarios separately supported the skill's reasoning, without project execution by
+the evaluator. These local results do not establish whole-candidate acceptance. Root verified
+and removed the old unpublished GitHub draft. Preparation, generated notes, tags alone and drafts do not
+establish publication or Play delivery.
+GitHub state inputs and exact generated Changesets notes are implemented in source, with
+readiness checked before build setup; the initial entry includes the tooling notes without
+requiring a first `0.1.1` cut. Local injected publication regressions passed; hosted new-mode
+and failure-path acceptance remains pending.
 
 Completed slice:
 
@@ -1531,8 +1552,8 @@ Deliverables that remain:
   [version table and allocation policy](product/RELEASE_CHECKLIST.md#release-versions),
   [Signing](product/RELEASE_CHECKLIST.md#signing) and
   [acceptance gates](product/RELEASE_CHECKLIST.md#acceptance-gates) own the requirements.
-  The two release Actions are independently manual: a human publishes the GitHub draft
-  before selecting its explicit stable tag for Play. The isolated `google-play` Environment
+  The two release Actions are independently manual: if draft was selected, a human publishes
+  it before selecting its explicit stable non-prerelease tag for Play. The isolated `google-play` Environment
   uses only service-account JSON, separate from Android signing. Existing track/status
   defaults are `qa`/`wear:qa`/`draft`; completed internal testing does not imply production.
   The helper reuses exact existing bundles or uploads only phone/Wear in one edit,
@@ -3078,6 +3099,8 @@ Manual release Stages A and B are implemented in
 ```text
 release-github.yml
   workflow_dispatch on main; original exact source SHA and source versions
+  validate selected draft/prerelease/latest options and prepared ledger/native/tag/notes
+  refuse pending Changesets input before setup; read exact notes without npm
   import persistent upload and separate Push signing after public tooling setup
   guarded phone/Wear/legacy AABs and direct installers plus producer Push APK
   verify seven signatures, fixed certificate pins and exact embedded Push bytes
@@ -3086,8 +3109,9 @@ release-github.yml
   download the exact successful build artifact ID, retaining its originating attempt
   re-read immutable source metadata; independently verify the exact nine files and receipts
   authenticate and paginate release conflicts; independently peel any existing tag
-  repeat conflicts; create only a full-SHA draft requesting make_latest: "false"
-  re-observe release/tag bindings after creation and upload; confirm all nine assets
+  repeat conflicts; create a full-SHA nonlatest draft with exact body/prerelease marker
+  re-observe bindings; confirm all nine asset names/IDs/sizes and supplied digests
+  apply selected publication only to that new ID; observe final state/body/assets/tag ref
 ```
 
 The [manual build instructions](product/RELEASE_CHECKLIST.md#manual-android-release-build-stage-a)
@@ -3096,11 +3120,24 @@ artifact/origin identities and signing cleanup. Build retains `contents: read`; 
 uses only `contents: write` without signing secrets or broader credentials. Upload-signed
 installers do not promise debug/Play update compatibility. Publication preserves partial
 state on failure, refuses every preexisting release for the tag and requires deliberate Owner
-resolution before retrying after creation. It never separately creates or moves a tag, edits
-or publishes a release, or overwrites assets. Prechecks do not provide atomic exclusion or
+resolution after uncertain effects. The single [publisher](../tools/release/release_github.py),
+`Publisher.publish`, transitions only its own newly created bound draft after asset verification;
+it never resumes preexisting releases, separately creates/moves tags or overwrites assets.
+Defaults remain draft/non-prerelease/nonlatest; automatic latest uses legacy policy only for
+published normal releases. Local release-tooling acceptance on **2026-10-23** passed 33 tests,
+real pinned stock CLI integration, empty-cache acquisition/offline execution with a root CLI
+installed, and independent raw partial/complete coverage skill scenarios.
+Fresh local checks on `df23ee9` passed the 33-test suite, `v0.1.0` readiness, byte-preserving
+same-target preparation and full docs/citation/skill validation. The regenerated unpublished
+initial `0.1.0` includes the tooling notes with no pending normal fragment. Official stock
+status retained its changed-package/no-fragment error; no empty-plan success was substituted.
+Local runtime checks do not establish whole-candidate acceptance or release-note content review.
+Local preparation and generated notes do not establish publication.
+Prechecks do not provide atomic exclusion or
 protection from future external mutation. Hosted permissions, provisioning/cleanup, transfer,
 draft creation, rerun/cancellation and partial-state acceptance remain pending. This source
-implementation does not close separate local signed-artifact, Play delivery or runtime gates.
+and local tooling acceptance do not close separate local signed-artifact, Play delivery or
+device runtime gates.
 
 The independent [release-google-play.yml](../.github/workflows/release-google-play.yml)
 workflow, **Google Play Release**, implements manual preparation and apply:
@@ -3116,7 +3153,8 @@ release-google-play.yml
   preserve serving/retained state; validate one edit and commit with ERROR_IF_IN_REVIEW
 ```
 
-The Owner explicitly publishes the GitHub draft before separately dispatching Play; neither
+If draft was selected, the Owner explicitly publishes it before separately dispatching Play;
+Play accepts only published non-prerelease releases. Neither
 release workflow triggers the other. Play grants only `contents: read`, serializes dispatches
 without cancellation and bounds execution. Its only secret is `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`
 in the main-restricted `google-play` Environment, separate from Android signing. The pinned
@@ -3217,3 +3255,17 @@ This future service does not change the Android product's current local-first pr
 credential model. It does not authorize uploading provider credentials or usage data to a
 WardPulse backend. Any later service design must define its own data and security boundaries
 before implementation and update the applicable privacy guidance.
+
+### Deferred watch-face refinement
+
+**Status: deferred, excluded from 0.1.0.** Adaptive radial ring widths are future work
+after 0.1.0, without a promised release or date.
+
+- Automatically choose fixed layouts for one, two or three occupied bands, retaining the
+  current three-band outer boundary and central clearance: three unchanged, two widened,
+  one filling the available annulus.
+- A supported half-ring pair occupies one band; one full ring plus two halves occupies two.
+  Known 0% remains occupied. Preserve ordering and remaining-percent semantics; add no setting.
+- Future implementation owners: WFF generator, Wear complication band-count metadata and
+  matching review-art generators; retain the current phone-to-watch schema. Review halves,
+  0%/near-0%/100%, ambient rendering and budget textures.

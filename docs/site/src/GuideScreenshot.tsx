@@ -1,7 +1,7 @@
 import * as React from 'react'
 
 const approvedScreenshot =
-  /^\/screenshots\/(?:phone-(?:alert-thresholds|budget-limits|cursor-(?:paste-token|sign-in-help)|dashboard(?:-overview)?|home-widget|providers|openai-reporting-key|reporting-key|watch-settings|widget-settings)-(?:light|dark)|wear-(?:glance(?:-overview)?|plan-windows|watch-face|watch-face-utility))\.png$/
+  /^\/screenshots\/(?:phone-(?:alert-thresholds|budget-limits|cursor-(?:paste-token|sign-in-help)|dashboard(?:-overview)?|home-widget(?:-(?:percent-only|with-label|short))?|providers|openai-reporting-key|reporting-key|watch-settings|widget-settings)-(?:light|dark)|wear-(?:glance(?:-overview)?|plan-windows|watch-face|watch-face-utility))\.png$/
 
 const providerActionsScreenshot =
   /^\/screenshots\/phone-providers-(?:light|dark)\.png$/

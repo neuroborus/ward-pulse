@@ -42,6 +42,7 @@ ownership or layout changes. `justfile` at the root is the command index (`just 
 | Schemas | `schemas/` | JSON Schemas for snapshots, accounts, usage buckets, budgets, watch summary |
 | Fixtures | `fixtures/` | Sanitized provider payloads + cross-language golden snapshots |
 | Tools | `tools/` | Review-art generators, icon export, Rust-for-Android build, validators |
+| Product release ledger | `tools/release/`, `.changeset/` | One private `@wardpulse/app` Changesets ledger and generated notes; [release ownership](tools/release/README.md) |
 | Brand assets | `brand/` | WardPulse identity sources and locked previews (ownership: `docs/DESIGN_ASSETS.md`) |
 | Docs | `docs/` | Durable documentation; `docs/product/user-guide/` owns user guidance and `docs/product/` holds locked design baselines |
 | UI screenshots | `docs/assets/` | Public PNGs; `docs/assets/README.md` owns the screenshot index and freshness rules |
@@ -131,6 +132,14 @@ rules are locked in `docs/product/WATCH_RING_DESIGN.md` — read it before chang
 - Android toolchain and device workflow: `docs/ANDROID_TOOLCHAIN.md`.
 
 ## Task → first files
+
+### Product release notes and version ownership
+Start with:
+- `tools/release/README.md`
+- `.agents/skills/prepare-release/SKILL.md` (repository-wide coverage and local preparation)
+- `tools/release/prepare_release.py` (`status`, `prepare`; native version bridge)
+- `.changeset/README.md`
+- `docs/product/RELEASE_CHECKLIST.md` (Release versions)
 
 ### Provider parsing or a new provider capability
 Start with:

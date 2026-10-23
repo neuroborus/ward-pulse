@@ -4,10 +4,26 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Stable release tag matching the source versions for a GitHub draft
+        description: Stable release tag matching the prepared source versions
         required: true
         default: v0.1.0
         type: string
+      draft:
+        description: Keep the verified release as a draft
+        required: true
+        default: true
+        type: boolean
+      prerelease:
+        description: Mark the release as a prerelease (stable tag still required)
+        required: true
+        default: false
+        type: boolean
+      latest:
+        description: Latest policy (true requires published normal release)
+        required: true
+        default: "false"
+        type: choice
+        options: ["true", "false", automatic]
 
 permissions:
   contents: read
@@ -27,6 +43,9 @@ jobs:
         shell: bash
     env:
       RELEASE_TAG: ${{ inputs.tag }}
+      RELEASE_DRAFT: ${{ inputs.draft }}
+      RELEASE_PRERELEASE: ${{ inputs.prerelease }}
+      RELEASE_LATEST: ${{ inputs.latest }}
       SOURCE_SHA: ${{ github.sha }}
       UPLOAD_CERT_SHA256: d02f85820e60d6cf49e939a1af72a84c17d3ce107c840b4e9d3ac0f3946f078e
       PUSH_CERT_SHA256: 04fa77a4feabb08e8c71fb1ddc32000c63f18e6ff5967e3b5b8acbd5b36d4950
@@ -55,59 +74,35 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      - name: Validate source versions and allocation before setup
+      - name: Validate prepared notes, versions and publication options before setup
         id: versions
         run: |
           python3 - <<'PY'
           import os
-          import re
           import subprocess
+          import sys
           from pathlib import Path
 
-          def one(pattern, text):
-              matches = re.findall(pattern, text, re.MULTILINE)
-              if len(matches) != 1:
-                  raise SystemExit("Expected exactly one source version declaration.")
-              return matches[0]
+          sys.path.insert(0, "tools/release")
+          from prepare_release import readiness
+          from release_github import options
 
+          options(os.environ["RELEASE_DRAFT"], os.environ["RELEASE_PRERELEASE"], os.environ["RELEASE_LATEST"])
           tag = os.environ["RELEASE_TAG"]
-          stable = r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
-          if not re.fullmatch("v" + stable, tag):
-              raise SystemExit("Release tag must be stable vMAJOR.MINOR.PATCH.")
-          version = tag[1:]
+          ready = readiness(Path.cwd(), tag)
           sha = os.environ["SOURCE_SHA"]
           if subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip() != sha:
               raise SystemExit("Checkout does not match the original dispatch SHA.")
           if Path(os.environ["RUNNER_TEMP"]).resolve().is_relative_to(Path.cwd().resolve()):
               raise SystemExit("Release temporary storage must be outside the checkout.")
-          phone = Path("apps/phone_flutter/pubspec.yaml").read_text()
-          phone_version, phone_code = one(r"^version: ([0-9.]+)\+([0-9]+)$", phone)
-          versions = {"phone": phone_version}
-          codes = {"phone": int(phone_code)}
-          for surface, path in (
-              ("wear", "apps/wear_android/app/build.gradle.kts"),
-              ("legacy", "apps/watchface_wff/build.gradle.kts"),
-              ("push", "apps/wear_android/watchface_push/build.gradle.kts"),
-          ):
-              source = Path(path).read_text()
-              versions[surface] = one(r'^\s*versionName = "([0-9.]+)"$', source)
-              pattern = r"^\s*versionCode = ([0-9]+)$"
-              if surface == "push":
-                  pattern = r"^\s*\}\s*\.orElse\(([0-9]+)\)$"
-              codes[surface] = int(one(pattern, source))
-          if any(value != version for value in versions.values()):
-              raise SystemExit("Tag must match all four source versionNames.")
-          if (any(not 0 < code <= 2147483647 for code in codes.values())
-                  or codes["phone"] % 2 != 1 or codes["wear"] != codes["phone"] + 1):
-              raise SystemExit("Expected positive odd phone / next-even Wear and positive face codes.")
           metadata = {
-              "source_sha": sha, "tag": tag, "version": version,
+              "source_sha": sha, "tag": tag, "version": ready["version"],
               "build_run_id": os.environ["GITHUB_RUN_ID"],
               "build_run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
               "artifact_name": f"wardpulse-android-{tag}-{os.environ['GITHUB_RUN_ID']}"
                                f"-attempt-{os.environ['GITHUB_RUN_ATTEMPT']}",
           }
-          metadata.update({f"{surface}_code": str(code) for surface, code in codes.items()})
+          metadata.update({f"{surface}_code": str(code) for surface, code in ready["codes"].items()})
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               for key, value in metadata.items():
                   output.write(f"{key}={value}\n")
@@ -441,7 +436,7 @@ jobs:
             ${{ runner.temp }}/wardpulse-android-release-artifacts/provenance.json
 
   publish:
-    name: Verify transfer and create a draft
+    name: Verify transfer and apply requested release state
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -456,6 +451,9 @@ jobs:
       SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
       RELEASE_TAG: ${{ needs.build.outputs.tag }}
       RELEASE_VERSION: ${{ needs.build.outputs.version }}
+      RELEASE_DRAFT: ${{ inputs.draft }}
+      RELEASE_PRERELEASE: ${{ inputs.prerelease }}
+      RELEASE_LATEST: ${{ inputs.latest }}
       BUILD_RUN_ID: ${{ needs.build.outputs.build_run_id }}
       BUILD_RUN_ATTEMPT: ${{ needs.build.outputs.build_run_attempt }}
     steps:
@@ -641,154 +639,8 @@ jobs:
           print("Exact nine-file transfer, hashes, signer receipts and originating identity verified.")
           PY
 
-      - name: Fail closed on conflicts and create only a verified draft
+      - name: Stage verified assets and apply requested release state
         timeout-minutes: 10
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          python3 - <<'PY'
-          import hashlib
-          import json
-          import os
-          import re
-          import stat
-          import urllib.error
-          import urllib.parse
-          import urllib.request
-          from pathlib import Path
-
-          def require(condition):
-              if not condition:
-                  raise ValueError("Release publication invariant failed.")
-
-          class NoRedirect(urllib.request.HTTPRedirectHandler):
-              def redirect_request(self, req, fp, code, msg, headers, newurl):
-                  return None
-
-          def api(path, method="GET", payload=None, missing=False, upload=None):
-              url = base + path
-              headers = {"Authorization": "Bearer " + token, "Accept": "application/vnd.github+json",
-                         "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "WardPulse-release"}
-              data = None if payload is None else json.dumps(payload).encode()
-              if payload is not None:
-                  headers["Content-Type"] = "application/json"
-              if upload is not None:
-                  url = "https://uploads.github.com/repos/" + repository + path
-                  data, size = upload
-                  headers.update({"Content-Type": "application/octet-stream", "Content-Length": str(size)})
-              request = urllib.request.Request(url, data=data, headers=headers, method=method)
-              try:
-                  with opener.open(request, timeout=60) as response:
-                      require(response.status == (201 if method == "POST" else 200))
-                      return json.load(response)
-              except urllib.error.HTTPError as error:
-                  if missing and error.code == 404:
-                      return None
-                  raise
-
-          def pages(path):
-              seen = set()
-              for page in range(1, 1001):
-                  items = api(f"{path}?per_page=100&page={page}")
-                  require(type(items) is list and len(items) <= 100)
-                  for item in items:
-                      require(type(item) is dict and type(item.get("id")) is int and item["id"] > 0)
-                      require(item["id"] not in seen)
-                      seen.add(item["id"])
-                      yield item
-                  if len(items) < 100:
-                      return
-              raise ValueError("Pagination did not finish.")
-
-          def conflicts(allowed=None):
-              matches = []
-              for release in pages("/releases"):
-                  require(type(release.get("tag_name")) is str)
-                  if release["tag_name"] == tag:
-                      require(release["id"] == allowed)
-                      binding(release, allowed)
-                      matches.append(release["id"])
-              require(matches == ([] if allowed is None else [allowed]))
-
-          def tag_binding():
-              ref = api("/git/ref/tags/" + urllib.parse.quote(tag, safe=""), missing=True)
-              if ref is None:  # An unpublished draft need not have a Git ref.
-                  return
-              require(ref.get("ref") == "refs/tags/" + tag)
-              obj = ref["object"]
-              seen = set()
-              for _ in range(16):
-                  target = obj["sha"]
-                  require(re.fullmatch(r"[0-9a-f]{40}", target) and target not in seen)
-                  seen.add(target)
-                  if obj["type"] == "commit":
-                      require(target == sha)
-                      return
-                  require(obj["type"] == "tag")
-                  annotation = api("/git/tags/" + target)
-                  require(annotation["sha"] == target)
-                  obj = annotation["object"]
-              raise ValueError("Tag could not be peeled.")
-
-          def binding(release, release_id):
-              require(type(release.get("id")) is int and release["id"] == release_id)
-              require(release.get("draft") is True and release.get("tag_name") == tag)
-              require(release.get("target_commitish") == sha)
-
-          def observe(release_id):
-              binding(api(f"/releases/{release_id}"), release_id)
-              conflicts(release_id)
-              tag_binding()
-
-          def asset_binding(asset, name):
-              expected = manifest[name]
-              require(asset.get("name") == name and asset.get("state") == "uploaded")
-              require(type(asset.get("size")) is int and asset["size"] == expected["size"])
-              digest = asset.get("digest")
-              if digest is not None and digest != "":
-                  require(digest == "sha256:" + expected["sha256"])
-
-          try:
-              token = os.environ["GH_TOKEN"]
-              repository = os.environ["GITHUB_REPOSITORY"]
-              require(token and re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository))
-              base = "https://api.github.com/repos/" + repository
-              opener = urllib.request.build_opener(NoRedirect())
-              sha, tag = os.environ["SOURCE_SHA"], os.environ["RELEASE_TAG"]
-              manifest = json.loads(Path(os.environ["VERIFIED_TRANSFER"]).read_text())
-              conflicts()  # Authenticated, draft-inclusive listing; never GET-by-tag absence.
-              tag_binding()
-              # Recheck immediately before POST; this is not an atomic exclusion lock.
-              conflicts()
-              tag_binding()
-              created = api("/releases", "POST", {
-                  "tag_name": tag, "target_commitish": sha, "name": tag,
-                  "draft": True, "make_latest": "false",
-              })
-              release_id = created["id"]
-              require(type(release_id) is int and release_id > 0)
-              binding(created, release_id)
-              observe(release_id)
-              uploaded = set()
-              for name, expected in sorted(manifest.items()):
-                  path = Path(os.environ["TRANSFER_DIR"]) / name
-                  require(stat.S_ISREG(path.lstat().st_mode))
-                  with path.open("rb") as stream:
-                      require(os.fstat(stream.fileno()).st_size == expected["size"])
-                      require(hashlib.file_digest(stream, "sha256").hexdigest() == expected["sha256"])
-                      stream.seek(0)
-                      asset = api(f"/releases/{release_id}/assets?name=" + urllib.parse.quote(name, safe=""),
-                                  "POST", upload=(stream, expected["size"]))
-                  asset_binding(asset, name)
-                  require(type(asset.get("id")) is int and asset["id"] > 0 and asset["id"] not in uploaded)
-                  uploaded.add(asset["id"])
-              observe(release_id)
-              assets = list(pages(f"/releases/{release_id}/assets"))
-              require(len(assets) == 9 and {asset["name"] for asset in assets} == manifest.keys())
-              require({asset["id"] for asset in assets} == uploaded)
-              for asset in assets:
-                  asset_binding(asset, asset["name"])
-              print(f"Draft {release_id} bound to source; all nine assets confirmed.")
-          except Exception:
-              raise SystemExit("Draft publication failed; preserve all release/tag/asset state for Owner resolution.")
-          PY
+        run: python3 tools/release/release_github.py

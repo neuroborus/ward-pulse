@@ -70,9 +70,12 @@ illustrate N/N+1 upgrade acceptance:
 ./gradlew :app:assembleDebug -PwardpulsePushVersionCode=2
 ```
 
-`wardpulsePushVersionCode` defaults to 1 and accepts a positive Kotlin/Android integer.
+`wardpulsePushVersionCode` currently defaults to 1 and accepts a positive Kotlin/Android integer.
 It controls the Push package's independent version history, not the Wear host version.
-Increase it when distributing a newer face and keep the package/certificate stable. These
+The [local product bridge](../../../tools/release/README.md#local-version-preparation) advances
+its default by 1 for a genuine product transition, independently of legacy face codes, and
+mirrors the stable product versionName. An unchanged target does not increment it. Keep the
+package/certificate stable and check actual uploaded history before distribution. These
 development examples do not require Push code 2 for the RC: the central
 [0.1.0 version table](../../../docs/product/RELEASE_CHECKLIST.md#release-versions) retains
 Push code 1 while the Wear host uses code 2; every versionName remains 0.1.0.
@@ -102,21 +105,25 @@ Stage B's dependent `publish` job downloads only the successful build's exact ar
 binding its name/source/tag/version/run and originating build attempt to the original main
 dispatch. A publication-only rerun retains that build attempt. It derives expected filenames
 from immutable source metadata, verifies the exact nine regular root files, receipt identities,
-signer pins and every binary SHA-256, then uses only `contents: write` to create a full-SHA
-GitHub draft requesting `make_latest: "false"`. Authenticated paginated release discovery
+signer pins and every binary SHA-256, then uses only `contents: write` to stage a full-SHA
+nonlatest GitHub draft with exact generated notes and the selected prerelease marker.
+The [release owner](../../../tools/release/README.md#publication-boundary) defines typed
+draft/prerelease/latest options, early prepared-version readiness and the single publisher.
+Authenticated paginated release discovery
 refuses any existing release for the tag, including drafts; existing tags must independently
 peel to the source. Conflict checks repeat before creation, without claiming atomic exclusion.
-Release ID/draft/target/tag and any tag ref are re-observed after creation and upload; all nine
-asset names/count/sizes and any supplied API digests are checked. An absent draft tag ref is
-valid; no separate tag is created. Failures preserve partial drafts/assets and never overwrite,
-edit, publish or delete them. Retry before creation is allowed only with no existing release;
-after creation the Owner must inspect and deliberately resolve partial state. Hosted transfer,
-permissions, cleanup, draft/rerun/cancellation and partial-state acceptance remain pending,
+Release ID/body/markers/target/tag are re-observed after creation and upload; all nine asset
+names/IDs/sizes and supplied digests must match before this invocation's new draft can become
+public. Final state is re-observed; public releases require a tag ref peeled to source.
+Failures preserve partial/public state without overwrite, resume, deletion or blind retry.
+Uncertain effects require Owner reconciliation. Hosted transfer, new publication modes,
+permissions, cleanup, rerun/cancellation and partial-state acceptance remain pending,
 as do separate Play/runtime gates; local checks and historical debug acceptance do not close them.
 
 The separate **Google Play Release** Action in
 [release-google-play.yml](../../../.github/workflows/release-google-play.yml) is independently
-manual: a human must publish the GitHub draft before selecting its explicit stable tag.
+manual: if draft was selected, a human must publish it before selecting its explicit stable
+non-prerelease tag.
 From the original main dispatch checkout, it prepares and re-observes the exact released
 phone/Wear AABs, then applies them to existing tracks (defaults `qa`/`wear:qa`, status
 `draft`) in one edit. It neither rebuilds nor re-signs. Only the isolated `google-play`
