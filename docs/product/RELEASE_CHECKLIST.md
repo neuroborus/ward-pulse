@@ -4,6 +4,13 @@ This checklist is a gate, not a schedule.
 
 ## Release versions
 
+The [product release ledger](../../tools/release/README.md#product-ledger) is the private
+`@wardpulse/app` workspace. Stock Changesets owns its version, generated changelog and
+consumed fragments. [Pending fragments](../../.changeset/README.md) must target only that
+product; root tooling and docs remain `0.0.0`, while Cargo and Dart metadata are independent.
+The initial stock-generated `0.1.0` entry records the existing candidate. It does not mean
+the existing GitHub draft is publicly published or authorize a new release operation.
+
 The 0.1.0 RC source versions are:
 
 | Artifact | Package | versionName | versionCode | Source |
