@@ -1455,11 +1455,15 @@ The [logical Changesets ledger](../tools/release/README.md#product-ledger) recor
 0.1.0 candidate. The guarded local version bridge and
 [prepare-release skill](../.agents/skills/prepare-release/SKILL.md) add explicit version cuts
 and repository-wide semantic coverage review; current native versions/codes stay 0.1.0 and
-1/2/1/1. Their HOST integration, independent skill evaluation and documentation acceptance
-remain pending; neither source implementation nor the existing GitHub draft proves publication.
+1/2/1/1. Local HOST acceptance on **2026-10-23** passed 33 tooling tests, including real pinned
+CLI/bootstrap/bridge integration in isolated fixtures. Separate verification passed initially
+empty-cache acquisition and offline tests with a root CLI already installed, plus independent
+raw partial/complete coverage skill scenarios. These local checks and the existing GitHub
+draft do not establish publication.
 GitHub state inputs and exact generated Changesets notes are implemented in source, with
 readiness checked before build setup. The tooling patch remains pending for a future `0.1.1`
-cut; the new publication modes and failure paths still require HOST and hosted acceptance.
+cut. Local injected publication regressions passed; hosted new-mode and failure-path
+acceptance remains pending.
 
 Completed slice:
 
@@ -3113,10 +3117,14 @@ resolution after uncertain effects. The single [publisher](../tools/release/rele
 `Publisher.publish`, transitions only its own newly created bound draft after asset verification;
 it never resumes preexisting releases, separately creates/moves tags or overwrites assets.
 Defaults remain draft/non-prerelease/nonlatest; automatic latest uses legacy policy only for
-published normal releases. Prechecks do not provide atomic exclusion or
+published normal releases. Local release-tooling acceptance on **2026-10-23** passed 33 tests,
+real pinned stock CLI integration, empty-cache acquisition/offline execution with a root CLI
+installed, and independent raw partial/complete coverage skill scenarios.
+Prechecks do not provide atomic exclusion or
 protection from future external mutation. Hosted permissions, provisioning/cleanup, transfer,
 draft creation, rerun/cancellation and partial-state acceptance remain pending. This source
-implementation does not close separate local signed-artifact, Play delivery or runtime gates.
+and local tooling acceptance do not close separate local signed-artifact, Play delivery or
+device runtime gates.
 
 The independent [release-google-play.yml](../.github/workflows/release-google-play.yml)
 workflow, **Google Play Release**, implements manual preparation and apply:

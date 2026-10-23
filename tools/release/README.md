@@ -78,15 +78,16 @@ checking actual uploaded history separately before distribution.
 ## HOST acceptance
 
 After Runner DONE and separate ownership retirement, acquire the pinned public CLI separately
-from validation. This supported npm install uses an isolated, initially empty prefix and
-cache, so it populates the selected cache even if the repository already has a local CLI:
+from validation. Use npm exec with an isolated, initially empty prefix and cache, even if
+the repository already has a local CLI. Installing the package alone can leave npm exec's
+cache metadata unavailable to the isolated offline integration:
 
 ```bash
 release_cache=$(mktemp -d)
 release_prefix=$(mktemp -d)
-npm install --prefix "$release_prefix" --cache "$release_cache" \
-  --registry=https://registry.npmjs.org --ignore-scripts --no-audit --no-fund \
-  --save-exact @changesets/cli@3.0.3
+npm exec --prefix "$release_prefix" --cache "$release_cache" \
+  --registry=https://registry.npmjs.org --ignore-scripts --yes \
+  --package=@changesets/cli@3.0.3 -- changeset --version
 ```
 
 Then validate offline using that same cache, from the repository root:
@@ -111,8 +112,11 @@ repetition, retained future fragments and foreign-fragment refusal without write
 to real native sources. Its lock asserts CLI version and registry integrity. It needs Node/npm,
 Git and the selected populated cache; missing prerequisites fail rather than skip. Measure
 warm runtime separately from dependency/build setup. Independent skill evaluation must use raw
-partial/complete coverage cases without seeding the expected answer. Runtime and full docs
-acceptance remain pending until HOST executes them; Source review is not a runtime pass.
+partial/complete coverage cases without seeding the expected answer. Required operator gates
+also include `actionlint .github/workflows/*.yml`, `just check-doc-citations`,
+`git diff --check HEAD`, `just check-docs`, and the local skill validator for `prepare-release`
+documented in [AGENTS.md](../../AGENTS.md#required-checks). Record actual outcomes and any
+unexecuted gates; Source review is not a runtime pass.
 Injected publisher tests also cover state options, draft staging before publication, exact
 notes/identity/assets, conflicts, tag peeling and preservation of uncertain effects.
 
