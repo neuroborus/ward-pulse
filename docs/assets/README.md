@@ -12,10 +12,11 @@ watch PNGs are 500×500px with transparent corners outside the circular screen.
 
 ## Screenshot index
 
-The library contains 29 screenshots. On 2026-10-21, the eleven related Dashboard, Watch
-and Widget images were refreshed from one shared live state. The original Dashboard
-warning pair and stale Glance remain available only for explanations of those exact
-states. Date added is unchanged by a refresh.
+The library contains 35 screenshots. The current Widget selection and resize examples
+were captured as a separate shared-state group on 2026-10-23. The Dashboard and Watch
+showcase group remains from 2026-10-21. The original Dashboard warning pair and stale
+Glance remain available only for explanations of those exact states. Date added is
+unchanged by a refresh.
 
 The Used in column records the source placements for each image. Last verified records
 actual-frame review on the stated date; the dated capture sections describe its scope.
@@ -43,10 +44,16 @@ image or its placement changes.
 | [phone-budget-limits-dark.png](phone-budget-limits-dark.png) | Organization reporting Budget: unsaved Today 25.00; Week/Month empty. | Dark | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Dark Dashboard guide |
 | [phone-alert-thresholds-light.png](phone-alert-thresholds-light.png) | Claude plan Alerts: unsaved Plan 20% left; Purchased Off. | Light | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Light Dashboard guide |
 | [phone-alert-thresholds-dark.png](phone-alert-thresholds-dark.png) | Claude plan Alerts: unsaved Plan 20% left; Purchased Off. | Dark | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Dark Dashboard guide |
-| [phone-widget-settings-light.png](phone-widget-settings-light.png) | Five selected metrics: Claude 100%/100%, Cursor 100%/64%, Codex 47%, all OK. | Light | 2026-10-14 | 2026-10-21 | 2026-10-21 | 864×1920 | WardPulse phone | Light Widget guide |
-| [phone-widget-settings-dark.png](phone-widget-settings-dark.png) | Five selected metrics: Claude 100%/100%, Cursor 100%/64%, Codex 47%, all OK. | Dark | 2026-10-14 | 2026-10-21 | 2026-10-21 | 864×1920 | WardPulse phone | Dark Widget guide |
-| [phone-home-widget-light.png](phone-home-widget-light.png) | The same five selected metrics in the launcher widget, with Codex 61.8K credits. | Light | 2026-10-14 | 2026-10-21 | 2026-10-21 | 864×1920 | WardPulse phone | Light Widget guide |
-| [phone-home-widget-dark.png](phone-home-widget-dark.png) | The same five selected metrics in the launcher widget, with Codex 61.8K credits. | Dark | 2026-10-14 | 2026-10-21 | 2026-10-21 | 864×1920 | WardPulse phone | Dark Widget guide |
+| [phone-widget-settings-light.png](phone-widget-settings-light.png) | Five selected metrics: Claude 100%/100%, Cursor 100%/64%, Codex 97%, all OK. | Light | 2026-10-14 | 2026-10-23 | 2026-10-23 | 864×1920 | WardPulse phone | Light Widget guide |
+| [phone-widget-settings-dark.png](phone-widget-settings-dark.png) | Five selected metrics: Claude 100%/100%, Cursor 100%/64%, Codex 97%, all OK. | Dark | 2026-10-14 | 2026-10-23 | 2026-10-23 | 864×1920 | WardPulse phone | Dark Widget guide |
+| [phone-home-widget-light.png](phone-home-widget-light.png) | Wide widget: the same five selected metrics, with Codex 59.5K purchased credits. | Light | 2026-10-14 | 2026-10-23 | 2026-10-23 | 864×1920 | WardPulse phone | Light Widget guide, width example |
+| [phone-home-widget-dark.png](phone-home-widget-dark.png) | Wide widget: the same five selected metrics, with Codex 59.5K purchased credits. | Dark | 2026-10-14 | 2026-10-23 | 2026-10-23 | 864×1920 | WardPulse phone | Dark Widget guide, width example |
+| [phone-home-widget-percent-only-light.png](phone-home-widget-percent-only-light.png) | Narrow widget: the same five rows with percentage-only columns. | Light | 2026-10-23 | 2026-10-23 | 2026-10-23 | 864×1920 | WardPulse phone | Light Widget guide, width example |
+| [phone-home-widget-percent-only-dark.png](phone-home-widget-percent-only-dark.png) | Narrow widget: the same five rows with percentage-only columns. | Dark | 2026-10-23 | 2026-10-23 | 2026-10-23 | 864×1920 | WardPulse phone | Dark Widget guide, width example |
+| [phone-home-widget-with-label-light.png](phone-home-widget-with-label-light.png) | Medium widget: the same five rows with percentages and provider/metric labels. | Light | 2026-10-23 | 2026-10-23 | 2026-10-23 | 864×1920 | WardPulse phone | Light Widget guide, width example |
+| [phone-home-widget-with-label-dark.png](phone-home-widget-with-label-dark.png) | Medium widget: the same five rows with percentages and provider/metric labels. | Dark | 2026-10-23 | 2026-10-23 | 2026-10-23 | 864×1920 | WardPulse phone | Dark Widget guide, width example |
+| [phone-home-widget-short-light.png](phone-home-widget-short-light.png) | Short wide widget: only the first row, Cursor Other Models at 64% left, fits. | Light | 2026-10-23 | 2026-10-23 | 2026-10-23 | 864×1920 | WardPulse phone | Light Widget guide, height example |
+| [phone-home-widget-short-dark.png](phone-home-widget-short-dark.png) | Short wide widget: only the first row, Cursor Other Models at 64% left, fits. | Dark | 2026-10-23 | 2026-10-23 | 2026-10-23 | 864×1920 | WardPulse phone | Dark Widget guide, height example |
 | [phone-watch-settings-light.png](phone-watch-settings-light.png) | Selected Claude 5h 100%, Cursor 100%/64% and Codex Weekly 47%; three bands used. | Light | 2026-10-14 | 2026-10-21 | 2026-10-21 | 864×1920 | WardPulse phone | Light Watch guide |
 | [phone-watch-settings-dark.png](phone-watch-settings-dark.png) | Selected Claude 5h 100%, Cursor 100%/64% and Codex Weekly 47%; three bands used. | Dark | 2026-10-14 | 2026-10-21 | 2026-10-21 | 864×1920 | WardPulse phone | Dark Watch guide |
 | [wear-glance-overview.png](wear-glance-overview.png) | Shared-state Codex 47% / 61.8K credits, Cursor 100%/64%, Claude 5h 100%; gray OK. | Fixed dark | 2026-10-20 | 2026-10-21 | 2026-10-21 | 500×500 | WardPulse Wear | Both landing/README themes and general Watch guide |
@@ -55,7 +62,39 @@ image or its placement changes.
 | [wear-watch-face.png](wear-watch-face.png) | Actual selected WardPulse face with the same Codex 47%, Cursor 100%/64%, Claude 100% and 61.8K credits. | Fixed dark | 2026-10-14 | 2026-10-21 | 2026-10-21 | 500×500 | WardPulse watch face | Both landing/README themes and Watch guide |
 | [wear-watch-face-utility.png](wear-watch-face-utility.png) | Historical manual-selection guidance after Don’t allow; Source-backed UI reuse. | Fixed dark | 2026-10-16 | 2026-10-16 | 2026-10-18 | 500×500 | WardPulse Wear | Watch guide in both themes |
 
+## Widget resize capture refresh, 2026-10-23
+
+These ten phone captures form a separate shared-state Widget guide group. They supersede
+the Widget selection and launcher-widget theme pairs described in earlier capture sections;
+the Dashboard and Watch showcase group remains unchanged. The real anonymous app data
+shows Claude 5h/Weekly at 100%/100%, Cursor Models/Other Models at 100%/64% and Codex Weekly
+at 97% with 59.5K purchased credits. Mock data was off. Overlapping readings and the five
+selected metrics match across both themes and every size. Full, medium and narrow examples
+show five rows; the short wide example fits only the first row, Cursor Other Models at
+64% left.
+
+Captures came from canonical `wardpulse_phone_play_api36`, discovered as `emulator-5554`,
+at native 1080×2400 and font scale 1.0. Each PNG was resized proportionally to 864×1920.
+The six new resize PNGs use relative symlinks in `docs/site/public/screenshots/`, following
+the existing screenshot mirror.
+The measured installed phone package `app.wardpulse` was versionName 1.0/versionCode 1,
+last updated 2026-10-20 16:44:11. No APK hash or compiled-source identity was measured.
+
+Every launcher view uses the same cleaned home page and real WardPulse shortcut at the
+far-right fixed dock position. Light/dark variants show the actual corresponding UI.
+Frames were reviewed for matching readings, theme, privacy, ordinary status indicators
+and absence of errors or Stale labels. UI was not retouched or data injected.
+
+The full widget size and baseline light appearance were restored after capture, together
+with the prior status-bar settings. Notifications were hidden, not dismissed. The cleaned
+page and rightmost WardPulse dock shortcut were intentionally preserved at the Owner's
+request. Widget selections, app settings, cadence, pairing and installed packages were
+not changed; no inference requests were made for these captures.
+
 ## Shared-state capture refresh, 2026-10-21
+
+This section records the October 21 image bytes. Its four Widget image files were refreshed
+on October 23 as described above; the Dashboard and Watch group remains unchanged.
 
 The eleven refreshed images form one related group: the Dashboard theme pair, Glance,
 watch face, Plan windows, Watchface selection theme pair, Widget selection theme pair
@@ -93,8 +132,9 @@ installed packages were not changed; no inference requests were made.
 
 ## Capture refresh, 2026-10-20
 
-This section records the October 20 image bytes and review. For the eleven files refreshed
-on October 21, the shared-state capture section above supersedes its values and provenance.
+This section records the October 20 image bytes and review. For files refreshed on
+October 21 or 23, the corresponding capture section above supersedes these values and
+provenance.
 
 The 22 phone images are actual anonymous captures from canonical
 `wardpulse_phone_play_api36`, discovered as `emulator-5554`, at native 1080×2400 and font
