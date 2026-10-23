@@ -1460,9 +1460,12 @@ and repository-wide semantic coverage review; current native versions/codes stay
 1/2/1/1. Earlier local HOST acceptance on **2026-10-23** passed 33 tooling tests, including
 real pinned CLI/bootstrap/bridge integration in isolated fixtures. Separate verification passed
 initially empty-cache acquisition and offline tests with a root CLI already installed, plus
-independent raw partial/complete coverage skill scenarios. Those historical checks predate the regenerated
-initial entry; fresh candidate acceptance remains pending. Root verified and removed the
-old unpublished GitHub draft. Preparation, generated notes, tags alone and drafts do not
+independent raw partial/complete coverage skill scenarios. Fresh local checks of `df23ee9`
+passed 33 tests, canonical `v0.1.0` readiness, byte-preserving same-target preparation and
+the full docs/citation/skill-validation gates. Raw partial, complete and unpublished-initial
+skill scenarios separately supported the skill's reasoning, without project execution by
+the evaluator. These local results do not establish whole-candidate acceptance. Root verified
+and removed the old unpublished GitHub draft. Preparation, generated notes, tags alone and drafts do not
 establish publication or Play delivery.
 GitHub state inputs and exact generated Changesets notes are implemented in source, with
 readiness checked before build setup; the initial entry includes the tooling notes without
@@ -3124,8 +3127,11 @@ Defaults remain draft/non-prerelease/nonlatest; automatic latest uses legacy pol
 published normal releases. Local release-tooling acceptance on **2026-10-23** passed 33 tests,
 real pinned stock CLI integration, empty-cache acquisition/offline execution with a root CLI
 installed, and independent raw partial/complete coverage skill scenarios.
-Those historical checks do not establish fresh acceptance of the regenerated unpublished
-initial `0.1.0` entry, which includes the tooling notes with no pending normal fragment.
+Fresh local checks on `df23ee9` passed the 33-test suite, `v0.1.0` readiness, byte-preserving
+same-target preparation and full docs/citation/skill validation. The regenerated unpublished
+initial `0.1.0` includes the tooling notes with no pending normal fragment. Official stock
+status retained its changed-package/no-fragment error; no empty-plan success was substituted.
+Local runtime checks do not establish whole-candidate acceptance or release-note content review.
 Local preparation and generated notes do not establish publication.
 Prechecks do not provide atomic exclusion or
 protection from future external mutation. Hosted permissions, provisioning/cleanup, transfer,

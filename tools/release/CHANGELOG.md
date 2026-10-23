@@ -4,7 +4,7 @@
 
 ### Minor Changes
 
-- Introduce WardPulse, a local-first Android usage dashboard backed by a shared Rust core. Report OpenAI API, Anthropic organization and Cursor Enterprise usage, with experimental Codex, Claude and Cursor plan connections. Group connections by provider and show available usage, spend, credits, plan windows, model breakdowns and history.
+- Introduce WardPulse, a local-first Android usage dashboard backed by a shared Rust core. Report OpenAI API, Anthropic organization and Cursor team Admin API usage, with experimental Codex, Claude and Cursor plan connections. Group connections by provider and show available usage, spend, credits, plan windows, model breakdowns and history.
   Add per-connection budgets and alert thresholds, optional plan-recovery notifications, configurable polling and manual refresh. Persist last successful connection data for foreground and background sync, marking recovered data stale. Keep credentials encrypted on the phone and send only compact credential-free summaries to the watch.
   Add optional Wear OS Glance, plan-window and alert views, complications, and configurable Watch Face Format rings with editable upper cells. Include legacy and bundled Watch Face Push packages and a configurable phone home-screen widget.
   Link phone Settings to public setup and troubleshooting guides, including provider, sync and privacy guidance, and identify WardPulse as an independent product.
