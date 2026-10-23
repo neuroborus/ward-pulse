@@ -3255,3 +3255,17 @@ This future service does not change the Android product's current local-first pr
 credential model. It does not authorize uploading provider credentials or usage data to a
 WardPulse backend. Any later service design must define its own data and security boundaries
 before implementation and update the applicable privacy guidance.
+
+### Deferred watch-face refinement
+
+**Status: deferred, excluded from 0.1.0.** Adaptive radial ring widths are future work
+after 0.1.0, without a promised release or date.
+
+- Automatically choose fixed layouts for one, two or three occupied bands, retaining the
+  current three-band outer boundary and central clearance: three unchanged, two widened,
+  one filling the available annulus.
+- A supported half-ring pair occupies one band; one full ring plus two halves occupies two.
+  Known 0% remains occupied. Preserve ordering and remaining-percent semantics; add no setting.
+- Future implementation owners: WFF generator, Wear complication band-count metadata and
+  matching review-art generators; retain the current phone-to-watch schema. Review halves,
+  0%/near-0%/100%, ambient rendering and budget textures.
