@@ -1451,19 +1451,23 @@ Persistent per-connection recovery is implemented and covered by host regression
 final-APK emulator acceptance below. Phase 7 live acceptance remains a separate
 provider-integration gate.
 
-The [logical Changesets ledger](../tools/release/README.md#product-ledger) records the existing
-0.1.0 candidate. The guarded local version bridge and
+The [logical Changesets ledger](../tools/release/README.md#product-ledger) records candidate
+features and release tooling in one unpublished initial `0.1.0` entry. Stock generation
+consumed the initial and tooling fragments for the explicitly selected version, without a
+native version transition. The guarded local version bridge and
 [prepare-release skill](../.agents/skills/prepare-release/SKILL.md) add explicit version cuts
 and repository-wide semantic coverage review; current native versions/codes stay 0.1.0 and
-1/2/1/1. Local HOST acceptance on **2026-10-23** passed 33 tooling tests, including real pinned
-CLI/bootstrap/bridge integration in isolated fixtures. Separate verification passed initially
-empty-cache acquisition and offline tests with a root CLI already installed, plus independent
-raw partial/complete coverage skill scenarios. These local checks and the existing GitHub
-draft do not establish publication.
+1/2/1/1. Earlier local HOST acceptance on **2026-10-23** passed 33 tooling tests, including
+real pinned CLI/bootstrap/bridge integration in isolated fixtures. Separate verification passed
+initially empty-cache acquisition and offline tests with a root CLI already installed, plus
+independent raw partial/complete coverage skill scenarios. Those historical checks predate the regenerated
+initial entry; fresh candidate acceptance remains pending. Root verified and removed the
+old unpublished GitHub draft. Preparation, generated notes, tags alone and drafts do not
+establish publication or Play delivery.
 GitHub state inputs and exact generated Changesets notes are implemented in source, with
-readiness checked before build setup. The tooling patch remains pending for a future `0.1.1`
-cut. Local injected publication regressions passed; hosted new-mode and failure-path
-acceptance remains pending.
+readiness checked before build setup; the initial entry includes the tooling notes without
+requiring a first `0.1.1` cut. Local injected publication regressions passed; hosted new-mode
+and failure-path acceptance remains pending.
 
 Completed slice:
 
@@ -3120,6 +3124,9 @@ Defaults remain draft/non-prerelease/nonlatest; automatic latest uses legacy pol
 published normal releases. Local release-tooling acceptance on **2026-10-23** passed 33 tests,
 real pinned stock CLI integration, empty-cache acquisition/offline execution with a root CLI
 installed, and independent raw partial/complete coverage skill scenarios.
+Those historical checks do not establish fresh acceptance of the regenerated unpublished
+initial `0.1.0` entry, which includes the tooling notes with no pending normal fragment.
+Local preparation and generated notes do not establish publication.
 Prechecks do not provide atomic exclusion or
 protection from future external mutation. Hosted permissions, provisioning/cleanup, transfer,
 draft creation, rerun/cancellation and partial-state acceptance remain pending. This source

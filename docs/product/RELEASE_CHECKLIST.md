@@ -8,8 +8,12 @@ The [product release ledger](../../tools/release/README.md#product-ledger) is th
 `@wardpulse/app` workspace. Stock Changesets owns its version, generated changelog and
 consumed fragments. [Pending fragments](../../.changeset/README.md) must target only that
 product; root tooling and docs remain `0.0.0`, while Cargo and Dart metadata are independent.
-The initial stock-generated `0.1.0` entry records the existing candidate. It does not mean
-the existing GitHub draft is publicly published or authorize a new release operation.
+The complete stock-generated initial `0.1.0` entry covers the candidate and release tooling,
+with no pending normal fragment. The Owner explicitly selected this unpublished initial
+version; Root verified and removed the old unpublished GitHub draft. Local preparation,
+generated notes, tags alone and drafts do not prove publication or authorize a new release
+operation. Verify actual publication records before correcting unpublished notes, stop on
+conflicting evidence and preserve published history and delivered artifacts.
 
 Use the [prepare-release skill](../../.agents/skills/prepare-release/SKILL.md) to audit the
 actual repository-wide release range against pending fragments and generated notes. Inspect
@@ -359,8 +363,10 @@ prereleases stay nonlatest. Draft/prerelease are independent markers and still u
 The [release owner](../../tools/release/README.md#publication-boundary) describes readiness:
 the ledger/tag/native versions must agree, the exact generated notes must be nonempty and
 pending Changesets input must be consumed by an explicitly prepared cut before dispatch.
-The current pending tooling patch therefore requires a future version cut. Notes are literal
-Markdown from the original immutable checkout; no npm setup or PR-list fallback is used.
+The complete unpublished initial `0.1.0` entry includes the tooling notes without requiring
+a first `0.1.1` cut or a native version transition. This source readiness is separate from
+publication and hosted acceptance. Notes are literal Markdown from the original immutable
+checkout; no npm setup or PR-list fallback is used.
 The workflow rejects other refs and checks out the original full dispatch SHA without persisted Git
 credentials. Before setup it checks all four source versionNames against the tag and enforces
 positive odd phone / next-even Wear codes and independent positive face codes. It never

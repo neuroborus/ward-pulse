@@ -122,15 +122,27 @@ notes/identity/assets, conflicts, tag peeling and preservation of uncertain effe
 
 ## Initial candidate
 
-The ledger was bootstrapped from `0.0.0` with an initial minor fragment. Actual stock
-`changeset version` generated the `0.1.0` manifest/changelog and consumed that fragment;
-actual npm lock generation reconciled workspace metadata. The standard configuration and
-fragment were authored directly, without claiming an interactive `init` generated them.
+The Owner selected one complete unpublished initial `0.1.0`, covering the repository-wide
+candidate through `f7da9b3` and the release tooling added after `54f9b2e`. On 2026-10-23,
+Root verified that GitHub release `421214319` for `v0.1.0` was a draft with no publication
+timestamp, deleted that exact draft and observed an empty release list. No `v0.1.0` tag
+existed. These observations do not establish Google Play upload or delivery history.
 
-The initial entry records only existing candidate features. All four Android versionNames
-remain `0.1.0`, with phone/Wear/legacy/Push codes `1/2/1/1`. As recorded on 2026-10-23, the
-existing GitHub release was a draft, not evidence of public publication. Bootstrap does
-not authorize publication or change native, Cargo or Dart versions.
+To correct the incomplete initial notes, the verified unpublished ledger input was reset
+to `0.0.0` and the incomplete changelog removed. A standard initial minor fragment supplied
+candidate coverage; the existing tooling patch retained its meaningful notes. Actual stock
+Changesets CLI 3.0.3 generated one complete `0.1.0` manifest/changelog and consumed both
+fragments. The existing workspace lock already matched the resulting version, so no lock
+reconciliation was needed. Generated output was not edited by hand.
+
+All four Android versionNames remain `0.1.0`, with phone/Wear/legacy/Push codes `1/2/1/1`;
+their source files are unchanged. This was unpublished ledger regeneration, without a native
+version transition. Root/docs remain `0.0.0`; Cargo and Dart metadata are independent.
+Local preparation, generated notes, a tag alone or a draft do not prove publication. Verify
+actual publication records before correcting an initial candidate; preserve published
+notes, tags and delivered artifacts. Conflicting publication evidence requires stopping and
+reporting the finding, not rewriting history. Meaningful tooling notes belong in an explicitly
+selected unpublished initial version rather than forcing its first publication to `0.1.1`.
 
 ## Publication boundary
 
@@ -148,9 +160,12 @@ GitHub's `legacy` policy only for a published normal release and requests nonlat
 Before build setup, `prepare_release.py readiness TAG` checks ledger/tag/native agreement,
 nonempty exact-version generated notes and absence of pending Changesets input, without npm.
 It reads Markdown literally from the original immutable dispatch checkout. This fail-closed
-presence guard proves publication readiness, not semantic coverage. Development status still
-permits pending fragments. The pending tooling patch plans `0.1.1`; current ledger/native
-versions remain `0.1.0`, so a future version cut is required before a new publication dispatch.
+presence guard checks source readiness; it does not prove semantic coverage or publication.
+Development status still permits pending fragments and retains actual stock errors, including
+the changed-package/no-fragment error after a cut. The complete unpublished initial `0.1.0`
+entry includes the tooling notes with no pending normal fragment; a later version cut is not
+a prerequisite for its first publication. Fresh acceptance and an authorized manual dispatch
+remain separate from preparation.
 
 [`release_github.py`](release_github.py) is the single publisher, downstream of the independent
 nine-file receipt verifier. It refuses every existing matching release, including drafts,

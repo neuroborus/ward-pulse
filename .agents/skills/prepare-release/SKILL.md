@@ -16,6 +16,14 @@ repository history and existing release records. Respect explicit Owner version/
 and preserve existing work. If no range was supplied, establish the last relevant prepared
 product version/source and explain the selected comparison; do not assume a tag is published.
 
+Verify actual publication records separately from local preparation: generated notes, a tag
+alone or a draft do not prove publication. Honor an explicitly selected unpublished initial
+version, including meaningful pending tooling coverage in its complete stock-generated entry
+instead of automatically requiring a later patch for the first publication. Follow the release
+owner's [unpublished regeneration boundary](../../../tools/release/README.md#initial-candidate);
+preserve published notes, tags and delivered artifacts. Stop and report evidence conflicting
+with the claimed unpublished state.
+
 Inspect the actual repository-wide diff and affected behavior, including apps, core, bindings,
 tooling and documentation. Verify implementation before making a release claim. Read pending
 standard fragments and the generated changelog sections covering that range. Match each
