@@ -136,6 +136,8 @@ rules are locked in `docs/product/WATCH_RING_DESIGN.md` — read it before chang
 ### Product release notes and version ownership
 Start with:
 - `tools/release/README.md`
+- `.agents/skills/prepare-release/SKILL.md` (repository-wide coverage and local preparation)
+- `tools/release/prepare_release.py` (`status`, `prepare`; native version bridge)
 - `.changeset/README.md`
 - `docs/product/RELEASE_CHECKLIST.md` (Release versions)
 

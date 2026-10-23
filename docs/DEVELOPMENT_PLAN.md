@@ -1451,6 +1451,13 @@ Persistent per-connection recovery is implemented and covered by host regression
 final-APK emulator acceptance below. Phase 7 live acceptance remains a separate
 provider-integration gate.
 
+The [logical Changesets ledger](../tools/release/README.md#product-ledger) records the existing
+0.1.0 candidate. The guarded local version bridge and
+[prepare-release skill](../.agents/skills/prepare-release/SKILL.md) add explicit version cuts
+and repository-wide semantic coverage review; current native versions/codes stay 0.1.0 and
+1/2/1/1. Their HOST integration, independent skill evaluation and documentation acceptance
+remain pending; neither source implementation nor the existing GitHub draft proves publication.
+
 Completed slice:
 
 - each live connection keeps its own normalized last successful snapshot in phone-private

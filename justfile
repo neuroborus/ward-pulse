@@ -147,6 +147,13 @@ run-watchface:
     cd apps/watchface_wff && ./gradlew --no-daemon installDebug
     adb -s "$ANDROID_SERIAL" shell am broadcast -a com.google.android.wearable.app.DEBUG_SURFACE --es operation set-watchface --es watchFaceId app.wardpulse.watchface
 
+# Local product planning and explicit version cuts; tools/release/README.md owns recovery.
+release-status:
+    python3 tools/release/prepare_release.py status
+
+prepare-release version:
+    python3 tools/release/prepare_release.py prepare {{quote(version)}}
+
 # Publishable artefacts, one per Play listing: `app.wardpulse` carries the phone
 # and the Wear app, `app.wardpulse.watchface` is its own. Each refuses to build
 # without the release key instead of handing back a debug-signed bundle that

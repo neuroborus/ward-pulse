@@ -21,10 +21,10 @@ operation. There is no npm publication step.
 ## Stock commands and coverage
 
 After installing the pinned root dependencies with `npm ci --ignore-scripts`, inspect the
-official release plan from the repository root:
+official release plan and native state from the repository root:
 
 ```bash
-npm exec -- changeset status
+just release-status
 ```
 
 Status reports pending fragments; it does not audit their semantic coverage. Resolve the
@@ -32,13 +32,59 @@ requested baseline/range and inspect actual changes across the whole repository,
 apps and core, against both pending fragments and generated notes. Stock `--since` detects
 changed package directories and can miss product changes outside `tools/release`. Supply
 meaningful missing notes with a justified bump; complete coverage needs no extra fragment.
+The [prepare-release skill](../../.agents/skills/prepare-release/SKILL.md) owns this audit.
+The helper validates each fragment's targets in stock `status --output` JSON, including
+fragments excluded from an aggregate product bump. It does not parse fragment Markdown.
 
-An explicitly requested version cut uses stock `changeset version` to update the ledger,
-generate notes and consume fragments. This command writes Source; status does not. Native
-versions and codes must be prepared coherently under the
-[release version policy](../../docs/product/RELEASE_CHECKLIST.md#release-versions). Do not
-publish, tag or treat a partial preparation as ready. Preserve unexpected partial output
-for reconciliation rather than silently retrying or incrementing again.
+## Local version preparation
+
+For an explicitly requested stable cut, run `just prepare-release VERSION`. The stdlib
+[`prepare_release.py`](prepare_release.py) owner checks the selected target against the
+official stock plan. Before stock generation or native writes it validates product-only
+fragment targets, the ledger/configuration, coherent unambiguous native declarations, odd
+phone/next even Wear allocation and positive 32-bit bounds, including the complete next
+allocation. Mixed versions, rollback, unsafe declaration forms and overflow fail preflight.
+
+For a genuine transition, stock `changeset version` changes the ledger, generates notes and
+consumes fragments; actual npm reconciles the workspace lock. The bridge then mirrors the
+target into only the four Android versionNames, advancing phone by 2, Wear to the next even
+code, and legacy/Push independently by 1. Formatting and non-version content are retained;
+Cargo and Dart metadata are independent. A target already matching the ledger and all native
+owners is a no-op, retaining pending fragments without running generation or incrementing codes.
+Status permits pending fragments and makes no Source changes; stock's missing-changeset or
+comparison-ref errors remain errors rather than invented empty plans.
+
+Commands use CLI 3.0.3 offline with lifecycle scripts disabled. For an explicit public cache,
+use `python3 tools/release/prepare_release.py --cache PATH status` or replace `status` with
+`prepare VERSION`. Missing offline dependencies must be acquired through the supported
+dependency route; do not upgrade packages or hand-edit generated files to bypass a failure.
+
+Preparation replaces several files sequentially, not atomically. Generation, lock or I/O
+failure preserves partial output and reports that reconciliation is required. Inspect the
+ledger, consumed/pending fragments, changelog, lock and all native declarations before
+retrying; mixed state refuses further increments. Do not publish, tag, delete evidence or
+blindly rerun through uncertain state. The
+[version policy](../../docs/product/RELEASE_CHECKLIST.md#release-versions) also requires
+checking actual uploaded history separately before distribution.
+
+## HOST acceptance
+
+After Runner DONE and separate ownership retirement, run:
+
+```bash
+python3 -m unittest discover -s tools/release -p 'test_*.py'
+```
+
+Injected unit contracts cover ownership, preflight, bounded allocation, formatting,
+idempotence, literal exact-version notes and preserved partial failures. The stock integration
+test uses minimal isolated temporary Git/workspace/native data and the pinned public cache at
+`LOCAL_ARTIFACTS/changesets-release-2026-10-23/npm-cache`; it actually reproduces discovery,
+bootstrap, changelog and lock generation, then exercises future transitions without touching
+real native sources. Its lock asserts CLI version and registry integrity. It needs Node/npm,
+Git and that populated cache; missing prerequisites fail rather than skip. Measure warm
+runtime separately from dependency/build setup. Independent skill evaluation must use raw
+partial/complete coverage cases without seeding the expected answer. Runtime and full docs
+acceptance remain pending until HOST executes them; Source review is not a runtime pass.
 
 ## Initial candidate
 

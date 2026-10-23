@@ -11,6 +11,15 @@ product; root tooling and docs remain `0.0.0`, while Cargo and Dart metadata are
 The initial stock-generated `0.1.0` entry records the existing candidate. It does not mean
 the existing GitHub draft is publicly published or authorize a new release operation.
 
+Use the [prepare-release skill](../../.agents/skills/prepare-release/SKILL.md) to audit the
+actual repository-wide release range against pending fragments and generated notes. Inspect
+`just release-status`; for an explicitly requested cut, use `just prepare-release VERSION`.
+The [local bridge](../../tools/release/README.md#local-version-preparation) preflights the
+official plan and all native declarations before stock generation or native writes, then
+mirrors a genuine transition with phone +2, next even Wear and independent legacy/Push +1.
+A fully matching target changes nothing and preserves pending fragments. Partial generation
+or I/O requires reconciliation, not an automatic retry. This setup retains 0.1.0 and 1/2/1/1.
+
 The 0.1.0 RC source versions are:
 
 | Artifact | Package | versionName | versionCode | Source |
@@ -35,7 +44,7 @@ internal positive `versionCode`; see Android's
 [version settings](https://developer.android.com/studio/publish/versioning#version-settings).
 
 Both face packages have independent version histories. Push's positive
-`wardpulsePushVersionCode` input defaults to 1; its N/N+1 development upgrade examples do
+`wardpulsePushVersionCode` input currently defaults to 1; its N/N+1 development upgrade examples do
 not set the Wear host code or require Push code 2 for this RC. Root must resolve first
 publication versus existing signing and uploaded-version history before provisioning
 credentials or treating these versions as publishable. If actual history conflicts with

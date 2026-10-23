@@ -21,6 +21,10 @@ adding a fragment. Add only missing coverage; an existing fragment or a successf
 status does not prove complete coverage. Apps and core live outside the logical workspace,
 so stock `--since` package detection can miss their changes.
 
+Use the [prepare-release skill](../.agents/skills/prepare-release/SKILL.md) for that audit.
+`just release-status` validates every fragment's targets through the official release plan;
+use `just prepare-release VERSION` only for an explicitly requested cut, after coverage review.
+
 See the [release owner](../tools/release/README.md) for stock commands, version ownership and
 manual publication boundaries. Changesets consumes fragments during a version cut; do not
 edit its generated changelog by hand.
