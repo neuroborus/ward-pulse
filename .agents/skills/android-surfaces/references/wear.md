@@ -14,9 +14,18 @@ services and build work.
   tracks and both percentages; only true exhausted `0%` tokens use `#FFB4AB`. Titles,
   separators, credits and family identity stay unchanged; a tiny positive fraction rounded
   to `0%` stays ordinary. Unknown/unavailable (including non-finite or negative usage) remains
-  absent; selected entries with no known percentage say `Ring data unavailable`. Keep typography, 54-unit row
-  pitch and 12-unit Alerts clearance. Paired-row fit/clipping was verified under injected load
-  on round/notround devices on 2026-10-01; a live Codex/Spark payload remains unverified.
+  absent; selected entries with no known percentage say `Ring data unavailable`.
+  **2026-10-24 readability revision:** title/subtitle target 20/18, bounded measured fitting
+  at 18–20/16–18, maximum centered width 370 and scaled 62-unit pitch. Measure every row's
+  complete height independently of width overflow, with the unchanged 39-unit arc floor.
+  Supported overflow wraps fully with original numeric coloring; keep system font scaling.
+  Height overflow scrolls only the legend, ending at y=346 with six units reserved for its
+  position indicator. Keep vertical drags/flings local at both limits, horizontal back,
+  outside paging, accessibility page/local-scroll actions, focused rotary input and retained/
+  clamped position. Preserve fixed refresh/status and Alerts, empty-state type/placement and
+  at least 12-unit Alerts clearance. New art/build/device acceptance is Pending. The
+  2026-10-01 injected round/notround fit readings apply only to their older builds;
+  a live Codex/Spark payload remains unverified.
   Refresh: `OK`/`!OK` inside dual-arrow glyph; cadence = gray `OK`+disabled; provider limit =
   gray `!OK`+`Rate limited`+disabled; `Stale` = orange `!OK`+enabled. `Alerts: N` when `N > 0`.
   Phone owns allowance (`manualRefreshAllowed` / `manualRefreshAvailableAt` on schema v7)

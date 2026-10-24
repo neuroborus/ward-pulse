@@ -5,6 +5,10 @@
 watch-face baseline in [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md): this screen is a
 **text legend** for face ring colors, not a face clone.
 
+The operative legend typography and overflow rules are in
+[Revision 2026-10-24 — larger Glance legend](#revision-2026-10-24--larger-glance-legend).
+Earlier measurements and acceptance records below describe only their dated builds.
+
 **Selected-zero revision 2026-10-13.** The owner's two screenshots taken at 11:36 and 11:38
 showed Claude's 5-hour window at **0% left** on the phone while the watch chose **Weekly,
 23% left**. Select the tightest known window including zero and retain exhausted selected
@@ -266,8 +270,9 @@ suffixes or duplicate family/plan wording.
 
 Phone selection and band order, including known zero and ties, remain unchanged, as do
 values, pools, colours, exhaustion styling, credits, refresh, Alerts and navigation.
-Typography, mini-arcs, 54-unit row pitch, 12-unit Alerts clearance and the three-row ceiling
-stay fixed; no font shrink, Clip workaround or geometry change is accepted.
+For that revision, typography, mini-arcs, 54-unit row pitch, 12-unit Alerts clearance and the
+three-row ceiling stayed fixed. The October 24 revision below supersedes only its legend
+typography, pitch and fit rules; clipping supported values remains unacceptable.
 
 **Acceptance: Pending.** The revised SVG boards and their PNG previews must be regenerated
 together after this Source work and the separate sync correction finish. The full board must
@@ -301,6 +306,77 @@ new native scene proof remain Pending on both shapes. Historical measurements an
 above remain evidence only for their recorded builds. Renderer/review-variant alignment,
 paired SVG/PNG regeneration and integrated acceptance belong to the separate second task;
 this native correction alone does not complete the 4% fix.
+
+## Revision 2026-10-24 — larger Glance legend
+
+At design diameter 450 and default font scale, titles target **20**, secondary values **18**
+and row pitch **62**, replacing 16/14 and 54. The centered block is at most **370 units** wide,
+inside the existing horizontal content area. Each unchanged mini-arc occupies 39 units,
+followed by a 12-unit gap: ordinary text has 319 units; paired text has 268. Short content
+may use a narrower centered block. The target title/subtitle line boxes are 28/26 units,
+with a 2-unit interline gap and no platform font padding.
+
+Native measurement fits only the affected line, choosing the largest fitting size in
+**title 18–20 / subtitle 16–18**. A complete paired maximum-credit subtitle
+`100% · 100% left · 999.9T credits` measures 279 at 18 and 266 at 17 in the accepted
+Noto Sans Bold host measurements; these are design inputs, not Android ink measurements.
+Never change a value, remove a token or lower the fitting floor to manufacture fit.
+If supported text still overflows, restart at the preferred size and wrap completely within
+the same bounded range. Titles wrap at words; a paired subtitle first keeps its percentage
+pair together and places purchased credits on the next line, replacing that separator with
+the break. If the pair cannot fit at the floor, split between pools, inner first. An unusually
+wide token may wrap by grapheme. Original numeric spans retain exhaustion coloring. Full
+titles and original subtitle text remain accessible, including externally supplied titles;
+the implementation wraps those titles too, without ellipsis or suffix removal.
+
+Measure **every** complete row independently of width overflow. At system scale `s`, its
+height is the maximum of 62×s, complete measured title/subtitle height plus their gap and
+6×s breathing room, and the unchanged **39-unit arc floor**. Mini-arcs remain vertically
+centered with their own labels. Preserve system font scaling. A width-fitting short row may
+still require more height; do not wrap it merely to trigger the height fallback.
+
+If the complete stack exceeds the actual weighted region, only the legend scrolls. Its top
+stays below the actual header; its bottom ends at normalized **y=346**, 14 units inside the
+region ending at y=360 and 26 above Alerts at y=372. Reserve six units inside the block's
+right edge for the actual local-position indicator and clearance, leaving 313 ordinary /
+262 paired text units. All selected rows remain reachable. Vertical drags/flings beginning
+inside this viewport stay local even at both limits; outside gestures still page. Horizontal
+back gestures and Pager accessibility page actions remain. Expose standard local forward/back
+scroll actions and rotary scrolling when the legend owns focus, without requesting control
+focus. Ordinary recomposition/status changes retain scroll position; shrinking content clamps
+it, and a fitting stack returns to the centered presentation.
+
+Refresh/status and Alerts retain their existing native/review-art control differences,
+sizes, typography, anchors, hit areas, colors, cadence and navigation. Native metrics remain:
+refresh 68, top clearance 62, detail 11 with gap 8, bottom clearance 42; Alerts height 36,
+min/max width 128/200, font 16, padding/radius 18 and minimum clearance 12. Empty-state type
+and placement remain unchanged. Three rows, tightest-first bands, pool order, known-zero and
+low-positive behavior, names, credits meaning and unavailable-data handling are unchanged.
+This revision does not address the separate double-back issue.
+
+**Acceptance: Pending.** `GlanceLegendLayoutTest` adds native-font measurement assertions for
+long titles, full paired credits, default refresh-detail clearance, bounded fitting, complete
+wrapping with preserved exhaustion spans, short scaled rows that overflow by height alone,
+and the sub-1.0 arc floor. It does not establish screen or gesture acceptance. Kotlin runtime
+execution, review-art SVG/PNG regeneration and preview-to-board correspondence, full builds,
+and actual consistent-state device review remain pending. The ordinary Runner generation
+attempt completed real async Pillow measurement and SVG writes, then shared PNG export failed
+with `spawnSync convert EPERM`. Its incomplete generated outputs were discarded; existing art
+has not been refreshed for this revision. HOST must regenerate complete pairs with the unchanged
+updated tool. Historical passes above do not establish any new pass.
+
+HOST acceptance must cover round and nonround 360/384 scenes and the supplied OnePlus Watch 2
+configuration (466×466, density 320, font scale 1.0, Wear OS 5; supplied facts, not a new device
+observation). Compare fixed controls to the pre-change build at the **same** system scale.
+At scales 1.0/1.5/2.0, cover one/two/three rows, both paired families, long Claude and Spark
+titles, maximum/zero/absent credits, 100/100, 0/0, mixed 0/41 and positive-rounded-zero values,
+unknown/unavailable/empty data, all refresh details and enabled/disabled multi-digit Alerts.
+At 1.0, supported dense scenes must retain complete single lines and all three rows. At
+1.5/2.0, verify both short single-line and wrapped rows, reach the final credit value and
+return to the first row, and measure actual header, glyph/overhang, arc and circular bounds.
+Include a scale below 1.0. Exercise drag/fling at each local limit, outside paging, horizontal
+back, accessibility page/local-scroll actions, rotary focus, and retained/clamped position
+through status updates and content changes. No build, generation or physical pass is claimed.
 
 ## Goal
 
@@ -375,8 +451,9 @@ Rules:
   never reach the row, and the number never differs from the one the face shows for the same
   band (revision 2026-10-11 above). A balance the provider denominates in anything but credits
   is not shown at all — the suffix is omitted as for an unavailable one, never relabelled.
-- Rows are laid out on a **54-unit pitch** with nothing added between them: the pitch already
-  covers the mini arcs and both lines.
+- Rows target **62 units × system font scale**, with independently measured complete height
+  and the 39-unit mini-arc floor, following the October 24 revision above. Titles target 20,
+  subtitles 18, with bounded fitting and complete supported-token wrapping.
 - The block keeps **12 units clear of the Alerts pill**. Three rows is the ceiling, one per
   band, regardless of how many bands are paired. The 2026-10-01 round/notround measurement
   records the earlier three-row fit; fit and glyph bounds for the revised titles remain
@@ -470,8 +547,11 @@ xdg-open apps/wear_android/design/preview-glance-legend-3.png
 ```
 
 The table describes the current generator variants. Regeneration of all affected SVG/PNG
-pairs and preview-to-board review for the 2026-10-17 titles are **Pending**; existing art and
-historical device readings do not establish acceptance of the revised titles.
+pairs and preview-to-board review for the October 17/19/24 revisions are **Pending**; existing
+art and historical device readings do not establish acceptance of the revised legend.
+The synthetic 1.5×/2× boards model legend text scaling and local scroll positions only;
+they retain the existing review-control rendering and are not native full-screen font-scale
+or gesture evidence. Real native controls must be compared at the same system scale.
 
 **2026-10-19 renderer correspondence:** `miniArc` now follows the native proportional
 Butt/compensated Round cap policy above, including track-only zero. The two low-positive
@@ -481,6 +561,8 @@ integrated acceptance remains **Pending**.
 
 | File | Meaning |
 |------|---------|
+| `glance-legend-max-credits.svg` | Synthetic default-scale ceiling with both paired families, long Claude title and complete `100% · 100% left · 999.9T credits` |
+| `glance-legend-text-scale-150.svg` / `glance-legend-text-scale-200.svg` | Synthetic legend-only text scaling with wrapping, actual modeled local-position indicator at start/end, fixed review controls; generation and native acceptance Pending |
 | `glance-legend-3.svg` | **Primary** — three providers, `OK` refresh enabled, Alerts disabled |
 | `glance-legend-1.svg` | Single provider with credits |
 | `glance-legend-pair.svg` | One Cursor pair — one row, two coloured arcs, inner-first percentages and credits once |
@@ -511,8 +593,14 @@ one row per band, at most three rows; band order matches the phone/face
 paired arcs and percentages: inner first, outer second; each retains its own colour
 paired title = family + " plan"; Cursor plan and Codex plan exactly
 paired subtitle = "82% · 41% left · 320 credits" (omit credits suffix when unavailable)
-fixed typography and mini-arcs; 54-unit row pitch; 12-unit Alerts clearance; no font shrink or Clip workaround
-revised-title glyph/bounds proof with build/date on round 384 / notround 360: Pending
+legend target 20/18, bounded title 18–20 / subtitle 16–18 fitting; maximum centered width 370
+scaled 62-unit pitch; every row measured independently; unchanged 39-unit mini-arc floor
+supported overflow wraps completely, preserving original numeric colors and accessibility text
+height overflow scrolls only the legend, ending at y=346 with six units reserved for its indicator
+local vertical drag/fling isolation at both limits; outside paging and horizontal back preserved
+standard local accessibility scroll actions and focused rotary scrolling; retained/clamped position
+fixed refresh/status and Alerts; minimum 12-unit Alerts clearance; unchanged empty-state presentation
+revised glyph/bounds and interaction proof with build/date on round/nonround 360/384 and hardware: Pending
 per-provider credits with explicit credits label (no footer sum)
 credit balance compact, as the face strip renders it: 62.5K credits / 1K credits / 320 credits / 0 credits
 a purchased balance in any unit but credits is omitted, never shown bare or relabelled

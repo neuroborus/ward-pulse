@@ -140,6 +140,13 @@ the production mini-arc painter at 384/450 and 360/450 scales. It distinguishes 
 bounded raster tolerance, and covers both paired palettes, ordinary round ends and the
 near-full usage gap. It does not establish screen fit or native scene acceptance.
 
+`GlanceLegendLayoutTest`, also included in `just test-wear-device`, measures native text at
+360/384/466 target sizes. It covers default dense rows with every refresh detail, bounded
+title/subtitle fitting, scaled wrapping and exhaustion spans, height-only overflow for short
+rows, and the small-font mini-arc floor. Its runtime result and actual round/nonround screen,
+scroll/gesture, rotary and accessibility acceptance remain Pending under the
+[readability revision](../../docs/product/WEAR_GLANCE_DESIGN.md#revision-2026-10-24--larger-glance-legend).
+
 HOST only, from `apps/wear_android`, after the whole Runner run is DONE and all owned
 processes/leases have retired:
 

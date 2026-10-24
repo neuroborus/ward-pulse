@@ -226,13 +226,102 @@ function rowSubLine(row) {
 }
 
 /** Keep only true exhausted percentage tokens red; separators and credits stay ordinary. */
-function zeroLabelMarkup(text, row) {
-  return text.split(' · ').map((part, index) => {
-    const exhausted = index === 0 ? row.used >= 1 : index === 1 && row.split?.used >= 1
-    return exhausted && part.startsWith('0%')
-      ? `<tspan fill="#FFB4AB">0%</tspan>${esc(part.slice(2))}`
-      : esc(part)
-  }).join(' · ')
+function zeroLabelMarkup(text, row, start = 0) {
+  const exhaustedStarts = [...rowSubLine(row).matchAll(/\d+%/g)]
+    .filter((match, index) => index === 0 ? row.used >= 1 : row.split?.used >= 1)
+    .map((match) => match.index)
+  let cursor = 0
+  let markup = ''
+  for (const match of text.matchAll(/\d+%/g)) {
+    markup += esc(text.slice(cursor, match.index))
+    markup += exhaustedStarts.includes(start + match.index)
+      ? `<tspan fill="#FFB4AB">${esc(match[0])}</tspan>`
+      : esc(match[0])
+    cursor = match.index + match[0].length
+  }
+  return markup + esc(text.slice(cursor))
+}
+
+/** Real font bounds for fitting, word wrapping and the final grapheme fallback. */
+async function legendFontMetrics(texts) {
+  const candidates = new Set([''])
+  const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' })
+  for (const text of texts) {
+    const boundaries = [...segmenter.segment(text)].map(({ index }) => index)
+    boundaries.push(text.length)
+    for (let i = 0; i < boundaries.length; i++) {
+      for (let j = i + 1; j < boundaries.length; j++) {
+        candidates.add(text.slice(boundaries[i], boundaries[j]))
+      }
+    }
+  }
+  return new Map(await Promise.all([16, 17, 18, 19, 20].map(async (size) => [
+    size, await loadFontMetrics(size, [...candidates]),
+  ])))
+}
+
+function fitLegendText(text, preferred, floor, lineHeight, width, scale, metrics, subtitle) {
+  const fits = (value, size) => metrics.get(size).widths[value] * scale <= width
+  let size = preferred
+  let segments = [{ text, start: 0 }]
+  let singleLine = false
+  for (size = preferred; size >= floor; size--) {
+    if (fits(text, size)) { singleLine = true; break }
+  }
+  if (!singleLine) {
+    const separators = [...text.matchAll(/ · /g)]
+    const split = (allPools) => {
+      const result = []
+      let start = 0
+      for (const separator of separators) {
+        const suffix = text.slice(separator.index + separator[0].length)
+        if (allPools || (suffix.endsWith(' credits') && !suffix.includes(' · '))) {
+          result.push({ text: text.slice(start, separator.index), start })
+          start = separator.index + separator[0].length
+        }
+      }
+      result.push({ text: text.slice(start), start })
+      return result
+    }
+    const candidates = subtitle ? [split(false), split(true)] : [segments]
+    let found = false
+    for (const candidate of candidates) {
+      segments = candidate
+      for (size = preferred; size >= floor; size--) {
+        const tokens = subtitle ? segments.map(({ text }) => text) : text.split(' ')
+        if (tokens.every((token) => fits(token, size))) { found = true; break }
+      }
+      if (found) break
+    }
+    if (!found) size = floor
+  }
+  const lines = []
+  for (const segment of segments) {
+    let remaining = segment.text
+    let start = segment.start
+    while (!fits(remaining, size)) {
+      const breaks = [...remaining.matchAll(/ /g)].map(({ index }) => index)
+      let end = breaks.filter((index) => fits(remaining.slice(0, index), size)).at(-1)
+      if (end == null) {
+        const graphemes = [...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(remaining)]
+        end = graphemes.map(({ index, segment }) => index + segment.length)
+          .filter((index) => fits(remaining.slice(0, index), size)).at(-1)
+        if (!end) throw new Error(`A grapheme cannot fit the legend at its ${floor}-unit floor`)
+      }
+      lines.push({ text: remaining.slice(0, end), start })
+      const consumed = end + (remaining[end] === ' ' ? 1 : 0)
+      remaining = remaining.slice(consumed)
+      start += consumed
+    }
+    lines.push({ text: remaining, start })
+  }
+  const font = metrics.get(size)
+  const pitch = Math.max(lineHeight, font.ascent + font.descent) * scale
+  return {
+    size: size * scale, lines, font, pitch,
+    height: lines.length * pitch,
+    width: Math.max(...lines.map(({ text }) => font.widths[text] * scale)),
+  }
 }
 
 async function glanceSvg({
@@ -243,19 +332,19 @@ async function glanceSvg({
   rows = [],
   emptyMessage = null,
   alerts = 0,
+  fontScale = 1,
+  scrollFraction = 0,
 }) {
   const cx = SIZE / 2
   const clipId = 'roundClip'
   const timeSize = 16
   const refreshLabelSize = 13
-  const titleSize = 16
-  const subSize = 14
+  const emptySize = 16
   const detailSize = 11
   const alertsSize = 16
-  const rowH = 54
   const miniR = 17
   const miniT = 5
-  const arcColW = 44
+  const arcColW = 39
   const textGap = 12
   const secondArcOffset = miniR * 2 + miniT + textGap
   const alertsLabel = `Alerts: ${alerts}`
@@ -267,21 +356,8 @@ async function glanceSvg({
   const ordered = sortByRemaining(rows)
   const titles = ordered.map(rowTitle)
   const subs = ordered.map((row) => rowSubLine(row))
-  const titleMetrics = await loadFontMetrics(titleSize, titles)
-  const subMetrics = await loadFontMetrics(subSize, [...subs, alertsLabel])
+  const legendMetrics = await legendFontMetrics([...titles, ...subs])
   const alertsMetrics = await loadFontMetrics(alertsSize, [alertsLabel])
-  const maxTitleW = Math.max(0, ...titles.map((t) => titleMetrics.widths[t] ?? 0))
-  const maxSubW = Math.max(0, ...subs.map((t) => subMetrics.widths[t] ?? 0))
-  const textColW = Math.max(maxTitleW, maxSubW)
-  const blockW = Math.max(
-    arcColW + textGap + textColW,
-    ...ordered.map((row, i) =>
-      arcColW + (row.split ? secondArcOffset : 0) + textGap +
-        Math.max(titleMetrics.widths[titles[i]], subMetrics.widths[subs[i]]),
-    ),
-  )
-  const blockLeft = Math.max(42, Math.min(cx - blockW / 2, SIZE - 42 - blockW))
-  const arcX = blockLeft + arcColW / 2
 
   const refreshCy = 96
   const refreshR = 34
@@ -328,7 +404,7 @@ async function glanceSvg({
 
   if (emptyMessage) {
     const lines = emptyMessage.split('\n')
-    const emptyMetrics = await loadFontMetrics(titleSize, lines)
+    const emptyMetrics = await loadFontMetrics(emptySize, lines)
     const lineGap = 22
     const blockH =
       (lines.length - 1) * lineGap +
@@ -342,25 +418,40 @@ async function glanceSvg({
     for (const line of lines) {
       body += `
     <text x="${cx}" y="${lineY.toFixed(1)}" text-anchor="middle"
-      font-family="${FONT}, sans-serif" font-size="${titleSize}"
+      font-family="${FONT}, sans-serif" font-size="${emptySize}"
       font-weight="700" fill="${MUTED}">${esc(line)}</text>`
       lineY += lineGap
     }
   } else {
-    const stackH = ordered.length * rowH
-    const availableTop = headerBottom
+    const detailMetrics = statusDetail ? await loadFontMetrics(detailSize, [statusDetail]) : null
+    const availableTop = detailY == null ? refreshCy + refresh.plateR : detailY + detailMetrics.descent
     const availableBottom = alertsBtnY - 12
-    const opticalLift = 6
-    let y = Math.max(
-      availableTop,
-      availableTop + (availableBottom - availableTop - stackH) / 2 - opticalLift,
-    )
+    const measureRows = (indicator) => ordered.map((row, i) => {
+      const arcWidth = arcColW + (row.split ? secondArcOffset : 0) + textGap
+      const width = 370 - indicator - arcWidth
+      const title = fitLegendText(titles[i], 20, 18, 28, width, fontScale, legendMetrics, false)
+      const sub = fitLegendText(subs[i], 18, 16, 26, width, fontScale, legendMetrics, true)
+      return { row, title, sub, arcWidth, height: Math.max(
+        39, 62 * fontScale, title.height + sub.height + 8 * fontScale,
+      ) }
+    })
+    let measured = measureRows(0)
+    const scrolling = measured.reduce((sum, row) => sum + row.height, 0) > availableBottom - availableTop
+    if (scrolling) measured = measureRows(6)
+    const stackH = measured.reduce((sum, row) => sum + row.height, 0)
+    const blockW = scrolling ? 370 : Math.min(370, Math.max(0,
+      ...measured.map(({ arcWidth, title, sub }) => arcWidth + Math.max(title.width, sub.width)),
+    ))
+    const blockLeft = cx - blockW / 2
+    const arcX = blockLeft + arcColW / 2
+    const viewportH = (scrolling ? 346 : availableBottom) - availableTop
+    const scroll = scrolling ? (stackH - viewportH) * scrollFraction : 0
+    let y = scrolling ? availableTop - scroll : availableTop + (viewportH - stackH) / 2
+    if (scrolling) body += `<defs><clipPath id="legendClip"><rect x="${blockLeft}" y="${availableTop}" width="${blockW - 6}" height="${viewportH}"/></clipPath></defs><g clip-path="url(#legendClip)">`
 
-    for (const row of ordered) {
+    for (const { row, title, sub, height } of measured) {
       const remaining = 1 - row.used
-      const title = rowTitle(row)
-      const sub = rowSubLine(row)
-      const rowMid = y + rowH / 2
+      const rowMid = y + height / 2
       body += miniArc({
         cx: arcX,
         cy: rowMid,
@@ -380,18 +471,24 @@ async function glanceSvg({
         })
       }
       const contentLeft = blockLeft + arcColW + (row.split ? secondArcOffset : 0) + textGap
-      const titleBaseline =
-        rowMid - 8 + (titleMetrics.ascent - titleMetrics.descent) / 2
-      const subBaseline =
-        rowMid + 13 + (subMetrics.ascent - subMetrics.descent) / 2
-      body += `
-    <text x="${contentLeft}" y="${titleBaseline.toFixed(1)}"
-      font-family="${FONT}, sans-serif" font-size="${titleSize}"
-      font-weight="700" fill="${LABEL}">${esc(title)}</text>
-    <text x="${contentLeft}" y="${subBaseline.toFixed(1)}"
-      font-family="${FONT}, sans-serif" font-size="${subSize}"
-      font-weight="700" fill="${MUTED}">${zeroLabelMarkup(sub, row)}</text>`
-      y += rowH
+      let textTop = rowMid - (title.height + sub.height + 2 * fontScale) / 2
+      for (const [text, fill] of [[title, LABEL], [sub, MUTED]]) {
+        for (const line of text.lines) {
+          const baseline = textTop + text.pitch / 2 + (text.font.ascent - text.font.descent) * fontScale / 2
+          body += `
+    <text x="${contentLeft}" y="${baseline.toFixed(1)}"
+      font-family="${FONT}, sans-serif" font-size="${text.size}"
+      font-weight="700" fill="${fill}">${text === sub ? zeroLabelMarkup(line.text, row, line.start) : esc(line.text)}</text>`
+          textTop += text.pitch
+        }
+        if (text === title) textTop += 2 * fontScale
+      }
+      y += height
+    }
+    if (scrolling) {
+      const thumb = viewportH * viewportH / stackH
+      const top = availableTop + (viewportH - thumb) * scrollFraction
+      body += `</g><path d="M ${blockLeft + blockW - 3} ${top} v ${thumb}" stroke="${MUTED}" stroke-width="2"/>`
     }
   }
 
@@ -444,8 +541,36 @@ const liveCursor = {
 const cursorInnerZero = { ...liveCursor, used: 1 }
 const cursorOuterZero = { ...liveCursor, split: { ...liveCursor.split, used: 1 } }
 const cursorBothZero = { ...cursorInnerZero, split: { ...liveCursor.split, used: 1 } }
+// Synthetic layout inputs, never presented as live provider usage.
+const maximumCreditRows = [
+  { family: FAMILY.claude, metric: 'Sonnet weekly', used: 0, credits: '999.9T' },
+  { ...liveCursor, credits: '999.9T', split: { ...liveCursor.split, used: 0 } },
+  { ...liveCodex, used: 0, credits: '999.9T', split: { family: FAMILY.codexSpark, used: 0 } },
+]
 
 const variants = [
+  {
+    file: 'glance-legend-max-credits.svg',
+    name: 'Synthetic layout: three bands with maximum compact credits',
+    rows: maximumCreditRows,
+  },
+  {
+    file: 'glance-legend-text-scale-150.svg',
+    name: 'Synthetic legend-only 1.5x text model; fixed review controls; scroll start',
+    rows: maximumCreditRows,
+    fontScale: 1.5,
+    statusDetail: 'Stale',
+    ok: false,
+  },
+  {
+    file: 'glance-legend-text-scale-200.svg',
+    name: 'Synthetic legend-only 2x text model; fixed review controls; scroll end',
+    rows: maximumCreditRows,
+    fontScale: 2,
+    scrollFraction: 1,
+    statusDetail: 'Stale',
+    ok: false,
+  },
   {
     file: 'glance-legend-3.svg',
     name: 'Glance · legend · 3 providers · OK refresh',

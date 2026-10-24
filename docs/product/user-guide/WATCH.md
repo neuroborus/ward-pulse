@@ -32,6 +32,9 @@ Swipe upward to the second page, **Plan windows**, to see reported windows and w
 return. Exhausted windows appear first. Within each group, upcoming resets appear soonest
 first; missing or overdue reset times follow. Reset times may be unavailable.
 
+With larger text, the Glance legend may scroll. Swipe within the legend to reach its remaining
+rows; start outside the legend to change pages. Refresh and Alerts stay in place.
+
 ![Plan windows showing Claude Weekly plan and its reported reset time.](/screenshots/wear-plan-windows.png)
 
 The first window here is **Claude · Weekly plan**, with **100% left · back Oct 25, 09:00**.

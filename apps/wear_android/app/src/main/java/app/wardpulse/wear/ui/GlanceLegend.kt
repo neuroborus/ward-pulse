@@ -5,6 +5,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -17,19 +19,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -38,28 +43,42 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.rotary.onRotaryScrollEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material3.Text
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.sync.PhoneRefreshRequester
 import java.time.Duration
 import java.time.Instant
+import kotlin.math.ceil
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.sin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private val GlanceTextStyle =
     TextStyle(
@@ -130,8 +149,8 @@ private fun glanceMetricsFor(diameter: Dp): GlanceMetrics {
     fun artSp(px: Float) = (diameter.value * (px / GlanceArtSizePx)).sp
     // refreshCy=96, r=34 → plate top at 62; clears AppScaffold StraightAppTimeText.
     return GlanceMetrics(
-        title = glanceTextStyle(artSp(16f), LabelBright),
-        subtitle = glanceTextStyle(artSp(14f), LabelMuted),
+        title = glanceTextStyle(artSp(20f), LabelBright),
+        subtitle = glanceTextStyle(artSp(18f), LabelMuted),
         refreshLabel = glanceTextStyle(artSp(13f), LabelBright),
         detail = glanceTextStyle(artSp(11f), DetailMuted),
         alerts = glanceTextStyle(artSp(16f), LabelBright),
@@ -140,9 +159,7 @@ private fun glanceMetricsFor(diameter: Dp): GlanceMetrics {
         miniArcSize = art(39f),
         miniStroke = art(5f),
         textGap = art(12f),
-        // Row pitch, as the art lays it out: 54 covers the mini arc and both
-        // lines, and rows sit one after another with no gap added on top.
-        rowHeight = art(54f),
+        rowHeight = art(62f),
         // The art keeps the block clear of the pill by 12 (`alertsBtnY - 12`).
         alertsGap = art(12f),
         timeClearance = art(62f),
@@ -244,16 +261,14 @@ internal fun GlanceLegendPage(
                 contentAlignment = Alignment.Center,
             ) {
                 if (rows.isEmpty()) {
-                    GlanceEmptyCopy(summary = summary, titleStyle = metrics.title)
+                    GlanceEmptyCopy(
+                        summary = summary,
+                        titleStyle = metrics.title.copy(
+                            fontSize = (diameter.value * (16f / GlanceArtSizePx)).sp,
+                        ),
+                    )
                 } else {
-                    // Wrap-content block (review art blockLeft), not full-bleed rows.
-                    Column(modifier = Modifier.wrapContentWidth()) {
-                        rows.forEach { row ->
-                            key(row.title, row.subtitle) {
-                                GlanceLegendRow(row = row, metrics = metrics)
-                            }
-                        }
-                    }
+                    GlanceLegend(rows = rows, metrics = metrics, diameter = diameter)
                 }
             }
 
@@ -294,22 +309,245 @@ internal fun glanceEmptyLines(summary: WatchDashboardSummary): List<String> =
         else -> listOf("Ring data unavailable")
     }
 
+internal data class GlanceMeasuredText(
+    val text: AnnotatedString,
+    val style: TextStyle,
+    val layout: TextLayoutResult,
+    val height: Int,
+)
+
+internal data class GlanceMeasuredRow(
+    val model: GlanceLegendRowModel,
+    val title: GlanceMeasuredText,
+    val subtitle: GlanceMeasuredText,
+    val height: Int,
+)
+
+internal data class GlanceLegendLayout(
+    val rows: List<GlanceMeasuredRow>,
+    val width: Int,
+    val viewportHeight: Int,
+    val scrolling: Boolean,
+)
+
+/** Replace only separator ranges, appending annotated slices to retain numeric colours. */
+private fun glanceSubtitleSegments(text: AnnotatedString, splitPools: Boolean): AnnotatedString {
+    val separators = Regex(" · ").findAll(text.text).toList()
+    return buildAnnotatedString {
+        var start = 0
+        separators.forEach { separator ->
+            val suffix = text.text.substring(separator.range.last + 1)
+            val isCredits = suffix.endsWith(" credits") && " · " !in suffix
+            if (splitPools || isCredits) {
+                append(text.subSequence(start, separator.range.first))
+                append("\n")
+                start = separator.range.last + 1
+            }
+        }
+        append(text.subSequence(start, text.length))
+    }
+}
+
+private fun measureGlanceText(
+    text: AnnotatedString,
+    preferred: Int,
+    floorSize: Int,
+    lineHeight: Float,
+    baseStyle: TextStyle,
+    width: Int,
+    diameter: Dp,
+    density: Density,
+    measurer: TextMeasurer,
+    subtitle: Boolean = false,
+): GlanceMeasuredText {
+    fun style(size: Int) = baseStyle.copy(
+        fontSize = (diameter.value * size / GlanceArtSizePx).sp,
+        lineHeight = (diameter.value * lineHeight / GlanceArtSizePx).sp,
+    )
+
+    fun measure(value: AnnotatedString, size: Int, wrap: Boolean) = measurer.measure(
+        text = value,
+        style = style(size),
+        softWrap = wrap,
+        constraints = if (wrap) Constraints(maxWidth = width) else Constraints(),
+    )
+
+    fun result(value: AnnotatedString, size: Int, layout: TextLayoutResult): GlanceMeasuredText {
+        val reservedLineHeight = with(density) { style(size).lineHeight.toPx() }
+        return GlanceMeasuredText(
+            value,
+            style(size),
+            layout,
+            ceil(maxOf(layout.size.height.toFloat(), reservedLineHeight * layout.lineCount)).toInt(),
+        )
+    }
+
+    for (size in preferred downTo floorSize) {
+        val layout = measure(text, size, wrap = false)
+        if (layout.size.width <= width) return result(text, size, layout)
+    }
+
+    // Try a percentage pair together, then separate pools if even the floor cannot fit it.
+    // Titles use ordinary word boundaries; a remaining oversized token wraps by grapheme.
+    val candidates = if (subtitle) {
+        listOf(glanceSubtitleSegments(text, false), glanceSubtitleSegments(text, true))
+    } else {
+        listOf(text)
+    }
+    for (candidate in candidates) {
+        for (size in preferred downTo floorSize) {
+            val segments = if (subtitle) candidate.text.split('\n') else candidate.text.split(' ')
+            if (segments.all { measure(AnnotatedString(it), size, false).size.width <= width }) {
+                return result(candidate, size, measure(candidate, size, wrap = true))
+            }
+        }
+    }
+    val candidate = candidates.last()
+    return result(candidate, floorSize, measure(candidate, floorSize, wrap = true))
+}
+
+/** Native text measurement is independent of overflow: short scaled rows also gain height. */
+internal fun measureGlanceLegend(
+    rows: List<GlanceLegendRowModel>,
+    diameter: Dp,
+    availableWidth: Int,
+    availableHeight: Int,
+    density: Density,
+    measurer: TextMeasurer,
+): GlanceLegendLayout {
+    fun art(value: Float) = with(density) { (diameter * (value / GlanceArtSizePx)).toPx() }
+    val metrics = glanceMetricsFor(diameter)
+    val blockWidth = minOf(floor(art(370f)).toInt(), availableWidth).coerceAtLeast(1)
+    val gap = art(2f) * density.fontScale
+    fun arcColumns(row: GlanceLegendRowModel): Int = with(density) {
+        val columns = if (row.secondaryArc == null) 1 else 2
+        columns * ((diameter * (39f / GlanceArtSizePx)).roundToPx() +
+            (diameter * (12f / GlanceArtSizePx)).roundToPx())
+    }
+    fun measuredRows(indicator: Int) = rows.map { row ->
+        val textWidth = (blockWidth - indicator - arcColumns(row)).coerceAtLeast(1)
+        val title = measureGlanceText(
+            AnnotatedString(row.title), 20, 18, 28f, metrics.title,
+            textWidth, diameter, density, measurer,
+        )
+        val subtitle = measureGlanceText(
+            glanceSubtitleText(row), 18, 16, 26f, metrics.subtitle,
+            textWidth, diameter, density, measurer, subtitle = true,
+        )
+        GlanceMeasuredRow(
+            row, title, subtitle,
+            ceil(maxOf(
+                art(39f),
+                with(density) { metrics.rowHeight.toPx() } * density.fontScale,
+                title.height + subtitle.height + gap + art(6f) * density.fontScale,
+            )).toInt(),
+        )
+    }
+    val initial = measuredRows(0)
+    val scrolling = initial.sumOf { it.height } > availableHeight
+    val indicator = if (scrolling) ceil(art(6f)).toInt() else 0
+    val measured = if (scrolling) measuredRows(indicator) else initial
+    val contentWidth = measured.maxOfOrNull { row ->
+        arcColumns(row.model) +
+            maxOf(row.title.layout.size.width, row.subtitle.layout.size.width)
+    } ?: 0
+    return GlanceLegendLayout(
+        measured,
+        if (scrolling) blockWidth else minOf(blockWidth, contentWidth),
+        if (scrolling) (availableHeight - ceil(art(14f)).toInt()).coerceAtLeast(1) else availableHeight,
+        scrolling,
+    )
+}
+
 @Composable
-private fun GlanceLegendRow(
-    row: GlanceLegendRowModel,
-    metrics: GlanceMetrics,
-) {
+private fun GlanceLegend(rows: List<GlanceLegendRowModel>, metrics: GlanceMetrics, diameter: Dp) {
+    val density = LocalDensity.current
+    val measurer = rememberTextMeasurer()
+    val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    // Consume only the unused vertical motion/velocity, including at both limits. The
+    // parent Home Pager keeps gestures outside this viewport and horizontal back swipes.
+    val boundary = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ) = Offset(0f, available.y)
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity) =
+                Velocity(0f, available.y)
+        }
+    }
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        val layout = remember(rows, diameter, constraints, density, measurer) {
+            measureGlanceLegend(
+                rows, diameter, constraints.maxWidth, constraints.maxHeight, density, measurer,
+            )
+        }
+        LaunchedEffect(layout.scrolling) {
+            if (!layout.scrolling) scroll.scrollTo(0)
+        }
+        val blockWidth = with(density) { layout.width.toDp() }
+        val gap = diameter * (2f / GlanceArtSizePx) * density.fontScale
+        val indicatorWidth = diameter * (6f / GlanceArtSizePx)
+        Box(
+            modifier = Modifier
+                .align(if (layout.scrolling) Alignment.TopCenter else Alignment.Center)
+                .width(blockWidth)
+                .then(if (layout.scrolling) {
+                    Modifier.height(with(density) { layout.viewportHeight.toDp() }).clipToBounds()
+                } else Modifier),
+        ) {
+            val scrolling = if (layout.scrolling) {
+                Modifier
+                    .nestedScroll(boundary)
+                    .onRotaryScrollEvent {
+                        scope.launch { scroll.scrollBy(it.verticalScrollPixels) }
+                        true
+                    }
+                    .verticalScroll(scroll)
+                    .focusable()
+                    .padding(end = indicatorWidth)
+            } else Modifier
+            Column(modifier = Modifier.fillMaxWidth().then(scrolling)) {
+                layout.rows.forEach { row -> GlanceLegendRow(row, metrics, gap) }
+            }
+            if (layout.scrolling) {
+                Canvas(Modifier.align(Alignment.CenterEnd).width(indicatorWidth).height(
+                    with(density) { layout.viewportHeight.toDp() },
+                )) {
+                    val contentHeight = size.height + scroll.maxValue
+                    val thumb = (size.height * size.height / contentHeight).coerceAtMost(size.height)
+                    val top = if (scroll.maxValue == 0) 0f else {
+                        (size.height - thumb) * scroll.value / scroll.maxValue
+                    }
+                    drawLine(
+                        LabelMuted, Offset(size.width / 2f, top),
+                        Offset(size.width / 2f, top + thumb),
+                        strokeWidth = size.width / 3f,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GlanceLegendRow(row: GlanceMeasuredRow, metrics: GlanceMetrics, gap: Dp) {
+    val density = LocalDensity.current
+    val model = row.model
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.height(metrics.rowHeight),
+        modifier = Modifier.fillMaxWidth().height(with(density) { row.height.toDp() }),
     ) {
         MiniRemainingArc(
-            remainingFraction = row.remainingFraction,
-            color = Color(row.colorArgb),
+            remainingFraction = model.remainingFraction,
+            color = Color(model.colorArgb),
             stroke = metrics.miniStroke,
             modifier = Modifier.size(metrics.miniArcSize),
         )
-        row.secondaryArc?.let { arc ->
+        model.secondaryArc?.let { arc ->
             Spacer(modifier = Modifier.width(metrics.textGap))
             MiniRemainingArc(
                 remainingFraction = arc.remainingFraction,
@@ -319,24 +557,25 @@ private fun GlanceLegendRow(
             )
         }
         Spacer(modifier = Modifier.width(metrics.textGap))
-        Column {
-            Text(
-                row.title,
-                style = metrics.title,
-                color = LabelBright,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Clip,
-            )
-            Text(
-                glanceSubtitleText(row),
-                style = metrics.subtitle,
-                color = LabelMuted,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Clip,
+        Column(modifier = Modifier.weight(1f)) {
+            GlanceLegendText(row.title)
+            Spacer(Modifier.height(gap))
+            GlanceLegendText(
+                row.subtitle,
+                Modifier.clearAndSetSemantics { text = glanceSubtitleText(model) },
             )
         }
+    }
+}
+
+@Composable
+private fun GlanceLegendText(text: GlanceMeasuredText, modifier: Modifier = Modifier) {
+    val density = LocalDensity.current
+    Box(
+        modifier = Modifier.fillMaxWidth().height(with(density) { text.height.toDp() }),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        BasicText(text.text, style = text.style, modifier = modifier)
     }
 }
 
