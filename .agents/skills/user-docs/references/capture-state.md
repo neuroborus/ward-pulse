@@ -21,6 +21,11 @@ for actual device operations and persisted-state preservation.
   ordinary clock, battery and network indicators may remain. Do not dismiss notifications
   or erase data. Restore temporary OS/device state after capture, and review both phone
   theme variants for private or identifying data before publication.
+- General watch-face examples must show every upper cell populated by its expected default
+  complication with actual rendered data. Verify all cells before capture; empty wells
+  require a separate example whose nearby text explicitly explains that state. If default
+  data is unavailable, keep the showcase capture pending; do not fabricate a filled cell
+  or substitute an arbitrary complication to make the image look complete.
 
 ## Clean home screen and dock
 
