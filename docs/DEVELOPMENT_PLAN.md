@@ -1989,7 +1989,7 @@ Large (6-slot) prefs unlocked; launcher hugs complete rows/columns (1–6 by hei
 credits→label drop by width); Claude windows stay expanded on the phone widget;
 exhausted pools render as `0%` under the 2026-10-24 compact numeric revision.
 
-**Compact numeric columns — Native implementation 2026-10-25; HOST acceptance Pending.**
+**Compact numeric columns — implementation and bounded HOST/capture acceptance 2026-10-25.**
 The native presentation removes only terminal ` left` / ` credits` from the two numeric
 fields, preserving exact tokens and descriptive Dart storage/Widget-tab wording. Old and
 bare cache forms share the same rendering path without a new sync or widget replacement.
@@ -1999,14 +1999,26 @@ speech. Runtime 12sp, picker 11sp, geometry, fit, selection, eligibility, states
 remain unchanged. The existing JVM harness has presentation regressions alongside its fit,
 empty-state and navigation cases; the owning generator has regenerated its eight exports.
 
-Pending after Native execution retirement: complete unchanged `just check-phone`, current
-Android host compilation and compiled RemoteViews/cache/accessibility proof at actual font
-scale 1.5 (both cache forms, no-sync redraw, zero/missing values, full/label/percent-only and
-short/stale/empty layouts), art drift, citations/full docs validation and validation of the
-affected Android skill. The coherent ten-PNG light/dark Widget cohort and actual capture/index
-receipt also remain Pending, followed by Root's full independent final review. The older
-measurements and October 23 captures remain historical; this Source change does not close
-item 2's runtime, capture or documentation acceptance.
+After execution retirement, `just check-phone` passed **51 JVM widget assertions** and
+**472 Flutter tests**, format and analysis. The current compiled APK was installed byte-exact.
+At actual system font scale **1.5** on the canonical phone, existing widget **2** redrew from
+unchanged descriptive cache without re-add or provider sync. Full/label/percentage widths,
+zero/stale/hidden rows, empty/Resize and normal short cases were inspected. Bare-cache proof
+is limited to the separately evidenced label and full zero/stale cases; no blanket later-width
+or no-sync result is inferred. The compiled compressed hierarchy exposed one meaningful
+widget description with remaining/purchased units and no hidden or duplicate metric entries;
+audio/TalkBack playback remains untested. Art drift, citations/full docs and the affected
+Android skill validation passed.
+
+The ten healthy light/dark public captures use baseline font scale **1.0**, five unchanged
+selections and a shared actual Live cache. Their capture/export and restored original
+cache/span/OS state are recorded in the [screenshot index](assets/README.md#widget-numeric-column-capture-refresh-2026-10-25).
+The Widget guide passed browser review in both real themes at 1280px desktop and 390px
+mobile viewports: all 20 current-theme image observations confirmed loading and natural
+dimensions 864×1920 without horizontal overflow, original-image links were correct, and all ten served PNGs matched
+canonical bytes. These bounded emulator and browser cases do not establish every launcher,
+hardware or font combination, or resolve central-label truncation. Older measurements and
+October 23 captures remain historical.
 
 Read on a launcher for the first time on **2026-10-11**, on the canonical phone AVD: the locked
 composition held on every rule a home screen can show — the hug and the credits drop by width,

@@ -67,6 +67,14 @@ active instance/binding evidence and capture times. Separate emulator, physical-
 review-art, fixture and public-image claims. Anonymous display measurements are sufficient;
 do not retain credentials, raw provider payloads or unlock/authentication material.
 
+Derive a capture group's window from minimum/maximum measured per-image timestamps,
+not filenames, array order or a selected first frame. Retain the actual timestamp source
+and timezone; distinguish capture-time observations from file-mtime/export-time evidence.
+
+For web images, scroll each intended current-theme image into the actual viewport and
+confirm its load and dimensions with bounded observation. Do not await hidden/offscreen
+lazy variants or infer breakage from their unrequested/incomplete state.
+
 Record healthy demonstration data as a separate case without erasing the incident. Verify
 shared public capture state through user-docs. A valid fixture cannot compensate for an
 unproved live binding or establish that a reported incident was fixed.
