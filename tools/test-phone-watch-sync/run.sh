@@ -73,6 +73,13 @@ prepare() {
 bounded() {
   local seconds=$1
   shift
+  if (( PRE_DEATH_DEADLINE )); then
+    # Keep the existing five-second kill grace inside this phase's total bound,
+    # with one additional tick for the integral SECONDS clock.
+    local remaining=$((PRE_DEATH_DEADLINE - SECONDS - 6))
+    (( remaining > 0 )) || hold 'Post-update PRE-DEATH evidence deadline expired; quiescence is unproved.'
+    (( seconds <= remaining )) || seconds=$remaining
+  fi
   if (( OBSERVING )); then
     local remaining=$((OBS_LIMIT - SECONDS))
     (( remaining > 0 )) || hold 'Observation deadline expired.'
@@ -362,6 +369,7 @@ barrier() {
   adb_on "$serial" shell -n log -p i -t WardPulseGate "$marker" || hold 'Cannot place monitoring boundary.'
   deadline=$((SECONDS + 5))
   if (( OBSERVING && deadline > OBS_LIMIT )); then deadline=$OBS_LIMIT; fi
+  if (( PRE_DEATH_DEADLINE && deadline >= PRE_DEATH_DEADLINE )); then deadline=$((PRE_DEATH_DEADLINE - 1)); fi
   while (( SECONDS < deadline )); do
     [[ $(wc -c <"$SCRATCH/$role.events") -le 262144 ]] || hold 'Event observation exceeded its safe bound.'
     line=$(awk -v marker="$marker" -v tag="$tag" '$0 == tag " " marker { print NR }' "$SCRATCH/$role.events")
@@ -447,12 +455,19 @@ wait_for_stable_summary() {
 
 # Native correlation remains supplementary; WorkSpec determines periodicity.
 native_jobs() {
-  local label=$1 phone_live=$2 metadata uid
+  local label=$1 phone_live=$2 metadata uid phase=0 ids states
+  (( ! PRE_DEATH_DEADLINE )) || phase=1
   uid=$(package_uid "$PHONE_SERIAL")
   [[ "$uid" == "${UIDS[phone]}" ]] || hold 'Native scheduling package UID changed.'
   metadata=$(adb_on "$PHONE_SERIAL" shell -n '
     set -o pipefail || exit 1
-    (dumpsys jobscheduler app.wardpulse 2>&1 && printf "\nWP_DONE\n") | awk -v uid='"$uid"' '\''
+    (
+      if [ '"$phase"' = 1 ]; then
+        printf "WP_CLOCK %s %s %s\n" "$(cat /proc/sys/kernel/random/boot_id)" \
+          "$(cut -d " " -f1 /proc/uptime)" "$(date +%s%3N)" || exit 1
+      fi
+      dumpsys jobscheduler app.wardpulse 2>&1 && printf "\nWP_DONE\n"
+    ) | awk -v uid='"$uid"' -v quiet='"$phase"' -v boot='"${BOOT[phone]}"' '\''
     function fail() { bad=1; exit 1 }
     function number(value, limit) {
       return value ~ /^(0|[1-9][0-9]*)$/ && length(value) <= 10 && value+0 <= limit
@@ -469,14 +484,44 @@ native_jobs() {
       }
       return result
     }
+    function duration(value, sign, result, digits, unit, scale, last) {
+      if (value == "none" || value == "0") return 0
+      if (length(value) > 64 || value !~ /^[+-]/) fail()
+      sign=substr(value, 1, 1); value=substr(value, 2); last=86400001
+      if (!length(value)) fail()
+      while (length(value)) {
+        if (!match(value, /^[0-9]+/)) fail()
+        digits=substr(value, 1, RLENGTH); value=substr(value, RLENGTH+1)
+        if (!number(digits, 2147483647)) fail()
+        unit=substr(value, 1, 1)
+        if (substr(value, 1, 2) == "ms") { scale=1; value=substr(value, 3) }
+        else {
+          if (unit == "d") scale=86400000
+          else if (unit == "h") scale=3600000
+          else if (unit == "m") scale=60000
+          else if (unit == "s") scale=1000
+          else fail()
+          value=substr(value, 2)
+        }
+        if (scale >= last) fail()
+        last=scale; result+=digits*scale
+        if (result > 9007199254740991) fail()
+      }
+      return sign == "+" ? result : 0
+    }
     function flush() {
       if (block && (services != 1 || constraints != 1)) fail()
       if (block && relevant) {
         if (!owned || !tagged || !wm || network != 1 ||
             seen_job[id]++ || ++jobs > 64) fail()
         inventory[jobs]="native-job " id " 1 1"
+        if (quiet) {
+          if (readiness != 1 || runtime != 1) fail()
+          eligibility[jobs]="native-ready " id " " (safe && timing == 1) " " delay
+        }
       }
       block=relevant=owned=tagged=services=wm=constraints=network=0
+      readiness=runtime=safe=timing=delay=0
     }
     BEGIN {
       if (!number(uid, 2147483647) || uid%100000 < 10000 || uid%100000 >= 99000) fail()
@@ -512,7 +557,39 @@ native_jobs() {
     }
     /^WP_DONE$/ {
       if (block || !registered || !closed || !footer || blocks > registered_count) fail()
+      if (quiet && (clock != 1 || pending_header != 1 || active_header != 1 || idle_header != 1)) fail()
       complete=1; next
+    }
+    quiet && /^WP_CLOCK / {
+      if (NR != 1 || NF != 4 || $2 != boot || $3 !~ /^[0-9]+[.][0-9][0-9]$/ ||
+          length($3) > 16 || $4 !~ /^[0-9]+$/ || length($4) != 13 || clock++) fail()
+      clock_line="native-clock begin " $3 " " $4; next
+    }
+    quiet && /^Pending queue:$/ {
+      if (!closed || pending_header++ || active_header || idle_header) fail()
+      section="pending"; next
+    }
+    quiet && /^Active jobs:$/ {
+      if (pending_header != 1 || active_header++ || idle_header) fail()
+      section="active"; next
+    }
+    quiet && /^Idle contexts \([0-9]+\):$/ {
+      if (active_header != 1 || idle_header++) fail()
+      section=""; next
+    }
+    quiet && section == "pending" {
+      if (NF) {
+        if ($0 == "  None") { if (pending_none++ || pending_body) fail() }
+        else { if (pending_none) fail(); pending_body++ }
+      }
+      next
+    }
+    quiet && section == "active" {
+      if (NF) {
+        if ($0 == "  N/A") { if (active_none++ || active_body) fail() }
+        else { if (active_none) fail(); active_body++ }
+      }
+      next
     }
     /^[[:space:]]*Registered/ {
       if (registered++ || NF != 3 || $1 != "Registered" || $3 != "jobs:" ||
@@ -583,8 +660,25 @@ native_jobs() {
         if (!($i in constraint_bit) || seen_constraint[blocks, $i]++) fail()
         expected_mask+=constraint_bit[$i]
         if ($i == "CONNECTIVITY") network++
+        if ($i == "TIMING_DELAY") timing++
       }
       if (hex_mask($NF) != expected_mask) fail()
+      next
+    }
+    quiet && block && relevant && $1 == "Run" && $2 == "time:" {
+      if (runtime++ || NF != 6 || $3 !~ /^earliest=.+,$/ || $4 != "latest=none," ||
+          $5 != "original" || $6 != "latest=none") fail()
+      value=$3; sub(/^earliest=/, "", value); sub(/,$/, "", value)
+      delay=duration(value); next
+    }
+    quiet && block && relevant && $1 == "Ready:" {
+      if (readiness++ || NF != 9 || $2 !~ /^(true|false)$/ || $3 !~ /^\(job=(true|false)$/ ||
+          $4 !~ /^user=(true|false)$/ || $5 !~ /^!restricted=(true|false)$/ ||
+          $6 !~ /^!pending=(true|false)$/ || $7 !~ /^!active=(true|false)$/ ||
+          $8 !~ /^!backingup=(true|false)$/ || $9 !~ /^comp=(true|false)\)$/) fail()
+      safe=($2 == "false" && $3 == "(job=false" && $4 == "user=true" &&
+        $5 == "!restricted=true" && $6 == "!pending=true" && $7 == "!active=true" &&
+        $8 == "!backingup=true" && $9 == "comp=true)")
       next
     }
     /^[[:space:]]*(Service|Required[[:space:]]+constraints)/ {
@@ -592,15 +686,57 @@ native_jobs() {
     }
     END {
       if (bad || !complete || !jobs) exit 1
-      for (i=1; i<=jobs; i++) print inventory[i]
+      for (i=1; i<=jobs; i++) {
+        print inventory[i]
+        if (quiet) print eligibility[i]
+      }
       print "native-count", jobs
+      if (quiet) {
+        # A complete UID-filtered active section may be blank or contain only N/A.
+        print "native-queues", (pending_none == 1 && !pending_body && !active_body)
+        print clock_line
+      }
     }
-  '\''') || hold 'Cannot obtain bounded native scheduling metadata.'
+  '\''' 2>/dev/null) || hold 'Cannot obtain bounded native scheduling metadata.'
   [[ $(printf '%s' "$metadata" | wc -c) -le 8192 ]] || hold 'Native scheduling metadata exceeds its safe bound.'
+  if (( phase )); then
+    ids=$(awk '$1 == "native-job" { printf "%s ", $2 }' <<< "$metadata")
+    # One bounded shell queries every registered ID in its verified user/namespace.
+    # The command can report combinations; only the exclusive waiting state is quiet.
+    states=$(adb_on "$PHONE_SERIAL" shell -n '
+      set -eu
+      for id in '"$ids"'; do
+        state=$(cmd jobscheduler get-job-state -u '"$((uid / 100000))"' \
+          -n androidx.work.systemjobscheduler app.wardpulse "$id") || exit 1
+        printf "WP_STATE %s %s\n" "$id" "$state"
+      done
+      printf "WP_CLOCK %s %s %s\n" "$(cat /proc/sys/kernel/random/boot_id)" \
+        "$(cut -d " " -f1 /proc/uptime)" "$(date +%s%3N)"
+    ' 2>/dev/null | tr -d '\r' | awk -v boot="${BOOT[phone]}" '
+      function fail() { bad=1; exit 1 }
+      $1 == "WP_STATE" {
+        if (complete || NF < 3 || NF > 8 || $2 !~ /^[0-9]+$/ || length($2) > 10 ||
+            $2+0 > 2147483647 || seen[$2]++ || ++rows > 64) fail()
+        for (i=3; i<=NF; i++) {
+          if ($i !~ /^(pending|active|user-stopped|backing-up|no-component|ready|waiting)$/ ||
+              token[$2, $i]++ || ($i == "waiting" && NF != 3)) fail()
+        }
+        print "native-state", $2, (NF == 3 && $3 == "waiting"); next
+      }
+      $1 == "WP_CLOCK" {
+        if (NF != 4 || $2 != boot || $3 !~ /^[0-9]+[.][0-9][0-9]$/ || length($3) > 16 ||
+            $4 !~ /^[0-9]+$/ || length($4) != 13 || complete++) fail()
+        print "native-clock end", $3, $4; next
+      }
+      { fail() }
+      END { if (bad || !complete || !rows) exit 1 }
+    ') || hold 'Current native execution state is unknown or raced.'
+    metadata+=$'\n'"$states"
+  fi
   printf '%s\n' "$metadata" >"$SCRATCH/native.current"
   awk -v previous_native="$SCRATCH/native.previous" -v previous_work="$SCRATCH/work.previous" \
     -v current_native="$SCRATCH/native.current" -v activity="$((PHONE_ACTIVITY - WORK_ACTIVITY))" \
-    -v phone_live="$phone_live" -v stage="$label" '
+    -v phone_live="$phone_live" -v stage="$label" -v phase="$phase" '
     function fail() { bad=1; exit 1 }
     function same(x, y) { return ("x" x) == ("x" y) }
     function active(state) { return state == 0 || state == 1 || state == 4 }
@@ -623,6 +759,15 @@ native_jobs() {
       } else if ($1 == "native-count") {
         if (NF != 2 || $2 !~ /^[0-9]+$/ || count++) fail()
         expected=$2
+      } else if (phase && ($1 == "native-ready" || $1 == "native-state")) {
+        if (($1 == "native-ready" ? NF != 4 : NF != 3) || $2 !~ /^[0-9]+$/ ||
+            $3 !~ /^[01]$/ || detail[$1, $2]++ ||
+            ($1 == "native-ready" && $4 !~ /^[0-9]+$/)) fail()
+      } else if (phase && $1 == "native-queues") {
+        if (NF != 2 || $2 !~ /^[01]$/ || queues++) fail()
+      } else if (phase && $1 == "native-clock") {
+        if (NF != 4 || $2 !~ /^(begin|end)$/ || clock[$2]++ ||
+            $3 !~ /^[0-9]+[.][0-9][0-9]$/ || $4 !~ /^[0-9]+$/ || length($4) != 13) fail()
       } else fail()
       next
     }
@@ -651,7 +796,17 @@ native_jobs() {
         fail()
       }
     }
-    END { if (bad || count != 1 || jobs+0 != expected) exit 1 }
+    END {
+      if (bad || count != 1 || jobs+0 != expected) exit 1
+      if (phase) {
+        if (queues != 1 || clock["begin"] != 1 || clock["end"] != 1) exit 1
+        for (id in job) if (detail["native-ready", id] != 1 || detail["native-state", id] != 1) exit 1
+        for (key in detail) {
+          split(key, pair, SUBSEP)
+          if (!(pair[2] in job)) exit 1
+        }
+      }
+    }
   ' "$SCRATCH/native.previous" "$SCRATCH/work.previous" "$SCRATCH/native.current" \
     "$SCRATCH/work.current" || hold 'Native work correspondence was lost or changed without compatible execution/rescheduling evidence.'
   printf '%s\n' "$metadata" >&2
@@ -665,6 +820,7 @@ record_sync_events() {
       key="$role,${pid:-}"
       case "$type" in
         START)
+          (( ! INITIAL_DEATHS )) || hold 'Replacement/background process started after PRE-DEATH handoff.'
           [[ "$LIFECYCLE_ACTION" != "$role:death" ]] \
             || hold 'Replacement/background process started during intended death.'
           (( ! RETAINING )) || [[ "$LIFECYCLE_ACTION" == "$role:start" ]] \
@@ -843,25 +999,126 @@ prepare_reader() {
   [[ "$built" == "$staged" ]] || hold 'Staged reader differs from the current bounded build.'
 }
 
+reader_diagnostic() {
+  # A synchronous owned timeout reaps each small writer. A blocked diagnostic
+  # sink must neither stall the reader/cleanup nor silently turn evidence into PASS.
+  timeout --kill-after=0.1s 0.1s "$BASH" -c 'printf "$@" >&2' bash "$@" \
+    || READER_DIAG_OUTPUT_FAILED=1
+}
+
+reader_stderr_collect() {
+  local LC_ALL=C chunk status remaining deadline=$((SECONDS + 7)) stderr_seen=0 run_as=0 load=0 line_start=1
+  # Drain continuously in bounded chunks, including after a category is found.
+  # Only these three fixed tokens can reach the diagnostic file; raw bytes stay
+  # in the FIFO and this child's bounded memory. Its lifetime matches the wrapper.
+  while :; do
+    remaining=$((deadline - SECONDS))
+    (( remaining > 0 )) || return 1
+    chunk='' status=0
+    IFS= read -r -t "$remaining" -n 256 chunk || status=$?
+    if [[ -n "$chunk" ]] || (( status == 0 )); then
+      if (( ! stderr_seen )); then printf 'OBSERVED\n'; stderr_seen=1; fi
+      if (( line_start )); then
+        case "$chunk" in
+          'run-as: '*)
+            if (( ! run_as )); then printf 'RUN_AS_REPORTED\n'; run_as=1; fi ;;
+          'Error: Could not find class '*|'Error: Could not find or load main class '*|'CANNOT LINK EXECUTABLE '*)
+            if (( ! load )); then printf 'LOAD_REPORTED\n'; load=1; fi ;;
+        esac
+      fi
+      line_start=$(( ${#chunk} < 256 ))
+    fi
+    if (( status != 0 )); then
+      (( status == 1 ))
+      return
+    fi
+  done
+}
+
+reader_stderr() {
+  local phase=$1 token record stderr_seen=0 run_as=0 load=0 category=UNOBSERVED
+  # The owned collector writes at most three fixed lines. Read only that bound,
+  # and never forward even an unexpected token from the private scratch file.
+  for record in 1 2 3; do
+    IFS= read -r -n 32 token || break
+    case "$token" in
+      OBSERVED) stderr_seen=1 ;;
+      RUN_AS_REPORTED) run_as=1 ;;
+      LOAD_REPORTED) load=1 ;;
+    esac
+  done <"$SCRATCH/reader.stderr.categories"
+  if (( run_as && load )); then category=RUN_AS_AND_LOAD_REPORTED
+  elif (( run_as )); then category=RUN_AS_REPORTED
+  elif (( load )); then category=LOAD_REPORTED
+  elif (( stderr_seen )); then category=UNCLASSIFIED; fi
+  reader_diagnostic 'Reader stderr: phase=%s category=%s\n' "$phase" "$category"
+}
+
 work_snapshot() {
   local label=$1 apk pid ticks name header line output= end= reader_in reader_out reader_host
   local before_phone before_wear current phone_live=0 deadline=$((SECONDS + 8))
+  local started read_status=0 read_outcome=line header_shape=complete wrapper_status diagnostic_status
+  if (( RETAINING )); then check_separation "$label-entry"; fi
   barrier phone "$PHONE_SERIAL"
   barrier wear "$WEAR_SERIAL"
   before_phone=$(app_processes "$PHONE_SERIAL" phone) || hold 'Pre-reader phone identity raced.'
   [[ -z "$before_phone" ]] || phone_live=1
   before_wear=$(app_processes "$WEAR_SERIAL" wear) || hold 'Pre-reader Wear identity raced.'
   apk=$(installed_apk "$PHONE_SERIAL")
+  if (( RETAINING )); then check_separation "$label-before-reader"; fi
+  # The existing reader/watchdog limits stay unchanged. Do not start a capture
+  # that cannot fit inside the enclosing PRE-DEATH phase, including kill grace.
+  if (( PRE_DEATH_DEADLINE )); then
+    (( SECONDS + 9 < PRE_DEATH_DEADLINE )) \
+      || hold 'Post-update PRE-DEATH evidence deadline cannot admit a complete Reader capture.'
+  fi
   name="wardpulse-work-snapshot-$$"
   READER_STAGE_ACTIVE=1 READER_BEFORE_PHONE=$before_phone
+  mkfifo "$SCRATCH/reader.stderr" 2>/dev/null || hold 'Cannot allocate reader diagnostic pipe.'
+  # Open both ends before unlinking, so asynchronous startup cannot race path removal.
+  if ! { exec {READER_STDERR_FD}<>"$SCRATCH/reader.stderr" \
+      {READER_STDERR_DRAIN_FD}<"$SCRATCH/reader.stderr"; } 2>/dev/null; then
+    hold 'Cannot open reader diagnostic descriptors.'
+  fi
+  rm -- "$SCRATCH/reader.stderr" 2>/dev/null || hold 'Cannot unlink reader diagnostic pipe.'
+  if ! { : >"$SCRATCH/reader.stderr.categories"; } 2>/dev/null; then
+    hold 'Cannot allocate sanitized reader diagnostics.'
+  fi
+  reader_stderr_collect <&"$READER_STDERR_DRAIN_FD" >"$SCRATCH/reader.stderr.categories" \
+    {READER_STDERR_FD}>&- {READER_STDERR_DRAIN_FD}<&- &
+  READER_DIAG_HOST=$!
   # This one ADB shell intentionally consumes GO from stdin, after identity verification.
   coproc WORK_READER { exec timeout --kill-after=1s 7s "$ADB" -s "$PHONE_SERIAL" shell -T \
-    "run-as app.wardpulse env CLASSPATH=$DEVICE_SCRATCH/reader.dex app_process /system/bin --nice-name=$name WorkSnapshot ${UIDS[phone]} $apk" 2>/dev/null; }
-  reader_host=${WORK_READER_PID:-}
+    "run-as app.wardpulse env CLASSPATH=$DEVICE_SCRATCH/reader.dex app_process /system/bin --nice-name=$name WorkSnapshot ${UIDS[phone]} $apk" \
+    2>&"$READER_STDERR_FD" {READER_STDERR_FD}>&- {READER_STDERR_DRAIN_FD}<&-; }
+  reader_host=$! READER_HOST=$!
   [[ "$reader_host" =~ ^[0-9]+$ ]] || hold 'Reader host process is unavailable.'
-  READER_HOST=$reader_host
-  exec {reader_out}<&"${WORK_READER[0]}" {reader_in}>&"${WORK_READER[1]}"
-  IFS= read -r -t 2 header <&"$reader_out" || hold 'Reader DEX loading/UID/security handshake unavailable.'
+  if [[ ! -v WORK_READER[0] || ! -v WORK_READER[1] ]]; then
+    reader_stderr startup
+    reader_diagnostic 'Reader header: outcome=unavailable elapsed_seconds=unknown content=unknown status=unknown\n'
+    (( ! READER_DIAG_OUTPUT_FAILED )) || exit 1
+    hold 'Reader host descriptors are unavailable.'
+  fi
+  exec {READER_OUTPUT_FD}<&"${WORK_READER[0]}" {READER_INPUT_FD}>&"${WORK_READER[1]}"
+  reader_out=$READER_OUTPUT_FD reader_in=$READER_INPUT_FD
+  exec {READER_STDERR_FD}>&- {READER_STDERR_DRAIN_FD}<&-
+  READER_STDERR_FD='' READER_STDERR_DRAIN_FD=''
+  started=$SECONDS
+  IFS= read -r -t 2 -n 256 header <&"$reader_out" || read_status=$?
+  if (( read_status != 0 )); then
+    if (( read_status > 128 )); then read_outcome=timeout
+    elif (( read_status == 1 )); then read_outcome=eof
+    else read_outcome=error; fi
+    header_shape=empty
+    [[ -z "$header" ]] || header_shape=partial
+  elif (( ${#header} == 256 )); then
+    read_outcome=limit header_shape=bounded
+  fi
+  reader_diagnostic 'Reader header: outcome=%s elapsed_seconds=%s content=%s status=%s\n' \
+    "$read_outcome" "$((SECONDS - started))" "$header_shape" "$read_status"
+  reader_stderr startup
+  (( ! READER_DIAG_OUTPUT_FAILED )) || exit 1
+  [[ "$read_outcome" == line ]] || hold 'Reader DEX loading/UID/security handshake unavailable.'
   header=${header//$'\r'/}
   if [[ "$header" =~ ^HOLD\ [A-Z_]+$ ]]; then hold "Work reader: ${header#HOLD }"; fi
   [[ "$header" =~ ^READER\ ([0-9]+)\ ([0-9]+)$ ]] || hold 'Malformed reader handshake.'
@@ -873,6 +1130,9 @@ work_snapshot() {
   printf 'Reader identity: %s\n' "$OBSERVER"
   printf 'GO\n' >&"$reader_in"
   exec {reader_in}>&-
+  READER_INPUT_FD=
+  # Only the exact, separately verified reader identity is excluded by app_processes.
+  if (( RETAINING )); then check_separation "$label-reader-released"; fi
   while IFS= read -r -t 2 line <&"$reader_out"; do
     line=${line//$'\r'/}
     (( SECONDS < deadline && ${#output} < 16384 )) || hold 'Reader exceeded output/time bounds.'
@@ -887,11 +1147,23 @@ work_snapshot() {
   [[ "$end" == 1 ]] || hold 'Partial reader evidence.'
   if IFS= read -r -t 1 line <&"$reader_out"; then hold 'Unexpected trailing reader output.'; fi
   exec {reader_out}<&-
-  wait "$reader_host" || hold 'Reader process failed or did not retire normally.'
+  READER_OUTPUT_FD=
+  wrapper_status=0
+  wait "$reader_host" || wrapper_status=$?
   READER_HOST=
+  reader_diagnostic 'Reader wrapper: phase=completion exit=%s\n' "$wrapper_status"
+  diagnostic_status=0
+  wait "$READER_DIAG_HOST" || diagnostic_status=$?
+  READER_DIAG_HOST=
+  reader_diagnostic 'Reader stderr collector: phase=completion exit=%s\n' "$diagnostic_status"
+  reader_stderr completion
+  (( ! READER_DIAG_OUTPUT_FAILED )) || exit 1
+  (( wrapper_status == 0 )) || hold 'Reader process failed or did not retire normally.'
+  (( diagnostic_status == 0 )) || hold 'Reader stderr collector failed or did not retire normally.'
   adb_on "$PHONE_SERIAL" shell -n "test ! -e /proc/$pid" || hold 'Reader PID is still live or reused.'
   READER_DEVICE_PID= OBSERVER=
   READER_STAGE_ACTIVE=0
+  if (( RETAINING )); then check_separation "$label-reader-retired"; fi
   current=$(app_processes "$PHONE_SERIAL" phone) || hold 'Post-reader phone identity raced.'
   [[ "$current" == "$before_phone" ]] || hold 'Reader interval included phone activity.'
   current=$(app_processes "$WEAR_SERIAL" wear) || hold 'Post-reader Wear identity raced.'
@@ -902,7 +1174,22 @@ work_snapshot() {
   [[ -z "$EVENTS" ]] || hold 'Wear activity raced work observation.'
   printf '%s' "$output" >"$SCRATCH/work.current"
   reconcile_work "$label"
+  if (( RETAINING )); then check_separation "$label-before-native"; fi
   native_jobs "$label" "$phone_live"
+  if (( PRE_DEATH_DEADLINE )); then
+    # Native queries are inside the same identity/event proof as the Reader.
+    [[ $(package_uid "$PHONE_SERIAL") == "${UIDS[phone]}" &&
+       $(package_uid "$WEAR_SERIAL") == "${UIDS[wear]}" ]] || hold 'PRE-DEATH package UID changed.'
+    current=$(app_processes "$PHONE_SERIAL" phone) || hold 'Post-native phone identity raced.'
+    [[ "$current" == "$before_phone" ]] || hold 'Phone identity changed across native observation.'
+    current=$(app_processes "$WEAR_SERIAL" wear) || hold 'Post-native Wear identity raced.'
+    [[ "$current" == "$before_wear" ]] || hold 'Wear identity changed across native observation.'
+    barrier phone "$PHONE_SERIAL"
+    [[ -z "$EVENTS" ]] || hold 'Phone activity raced native observation.'
+    barrier wear "$WEAR_SERIAL"
+    [[ -z "$EVENTS" ]] || hold 'Wear activity raced native observation.'
+    (( SECONDS < PRE_DEATH_DEADLINE )) || hold 'Post-update PRE-DEATH evidence deadline expired.'
+  fi
   if [[ "$label" == preflight ]]; then
     # Keep the narrow installed tuple visible for HOST binding after scratch cleanup.
     awk '$1 == "SCHEMA" || $1 == "SQLITE"' "$SCRATCH/work.current"
@@ -1019,17 +1306,29 @@ require_no_receipts() {
 }
 
 check_separation() {
-  (( SECONDS < RETENTION_DEADLINE && SECONDS - LAST_OBSERVATION < 3 )) || hold 'Retention deadline or observation gap.'
+  local phase=$1 started=$SECONDS finished current metadata phone
+  [[ "$phase" =~ ^[a-z][a-z-]{0,63}$ ]] || hold 'Invalid retention observation phase.'
+  if (( started >= RETENTION_DEADLINE || started - LAST_OBSERVATION >= 3 )); then
+    hold "Retention timing: phase=$phase boundary=entry" \
+      "total_expired=$((started >= RETENTION_DEADLINE)) gap_expired=$((started - LAST_OBSERVATION >= 3))" \
+      "elapsed_seconds=$((started + 60 - RETENTION_DEADLINE)) remaining_seconds=$((RETENTION_DEADLINE - started))" \
+      "age_seconds=$((started - LAST_OBSERVATION)) work_seconds=0."
+  fi
   barrier phone "$PHONE_SERIAL"
   [[ -z "$EVENTS" ]] || hold 'Phone activity/publication invalidated separation.'
-  local current metadata phone
   phone=$(app_processes "$PHONE_SERIAL" phone) || hold 'Phone process observation failed.'
   [[ -z "$phone" ]] || hold 'Phone app is no longer absent.'
   current=$(summary_hash) || hold 'Retention summary hash read failed.'
   metadata=$(summary_metadata) || hold 'Retention summary stat failed.'
   [[ "$current" == "$BASELINE" && "$metadata" == "$BASELINE_METADATA" ]] || hold 'Saved summary changed or was replaced during retention.'
-  (( SECONDS < RETENTION_DEADLINE && SECONDS - LAST_OBSERVATION < 3 )) || hold 'Retention observation was too slow to reconcile.'
-  LAST_OBSERVATION=$SECONDS
+  finished=$SECONDS
+  if (( finished >= RETENTION_DEADLINE || finished - LAST_OBSERVATION >= 3 )); then
+    hold "Retention timing: phase=$phase boundary=observation-work" \
+      "total_expired=$((finished >= RETENTION_DEADLINE)) gap_expired=$((finished - LAST_OBSERVATION >= 3))" \
+      "elapsed_seconds=$((finished + 60 - RETENTION_DEADLINE)) remaining_seconds=$((RETENTION_DEADLINE - finished))" \
+      "age_seconds=$((finished - LAST_OBSERVATION)) entry_age_seconds=$((started - LAST_OBSERVATION)) work_seconds=$((finished - started))."
+  fi
+  LAST_OBSERVATION=$finished
 }
 
 stop_app() {
@@ -1037,6 +1336,11 @@ stop_app() {
   local deadline=$((SECONDS + 15))
   # The foreground STOP owns one budget, including its surrounding boundaries.
   if (( OBSERVING && deadline > OBS_LIMIT )); then deadline=$OBS_LIMIT; fi
+  if (( INITIAL_DEATHS )); then
+    # The fresh scheduling exclusion must cover this entire original death budget,
+    # including after the intervening Reader. Never reuse an expired quiet proof.
+    (( deadline < INITIAL_DEATH_UNTIL )) || hold 'PRE-DEATH scheduling exclusion expired before intended death.'
+  fi
   barrier "$role" "$serial"
   (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
   if (( RETAINING )); then
@@ -1058,7 +1362,7 @@ stop_app() {
   adb_on "$serial" shell -n input keyevent KEYCODE_HOME || hold 'Cannot background the app.'
   (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
   while (( SECONDS < deadline )); do
-    if (( RETAINING )) && [[ "$role" == wear ]]; then check_separation; fi
+    if (( RETAINING )) && [[ "$role" == wear ]]; then check_separation wear-death-loop; fi
     (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
     barrier "$role" "$serial"
     (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
@@ -1081,6 +1385,7 @@ stop_app() {
       (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
       [[ -z "$EVENTS" ]] || hold 'Activity raced the observed absence.'
       reconcile_role "$role" "$serial" ""
+      if (( RETAINING )) && [[ "$role" == wear ]]; then check_separation wear-death-complete; fi
       (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
       OLD[$role]=$old
       LIFECYCLE_ACTION=
@@ -1157,7 +1462,7 @@ launch_app() {
     adb_on "$serial" shell -n am start -W -n "$component" >/dev/null || hold 'Activity launch failed.'
   fi
   while (( SECONDS < deadline )); do
-    if (( RETAINING )); then check_separation; fi
+    if (( RETAINING )); then check_separation "$role-launch-loop"; fi
     barrier "$role" "$serial"
     if (( RETAINING )); then require_no_receipts "$EVENTS"; fi
     events+="${EVENTS}"$'\n'
@@ -1685,11 +1990,59 @@ observe() {
 
 cleanup() {
   local result=$? pid deadline retired=1 current identity unknown
+  # Preserve the failure status and the Reader's existing cleanup budgets.
+  local PRE_DEATH_DEADLINE=0
+  local running stopped wrapper_state=unowned wrapper_exit=unknown wrapper_action=none cleanup_exit=unknown
+  local device_retirement=unobserved uid_retirement=unobserved staging=absent descriptors=closed
+  local diagnostic_action=none diagnostic_exit=unknown
   trap - EXIT
   if [[ -n "$READER_HOST" ]]; then
-    kill "$READER_HOST" 2>/dev/null || :
-    wait "$READER_HOST" 2>/dev/null || :
+    # Inspect the owned job before any cleanup action. Only an already completed
+    # child can supply an original exit status; a later TERM result is cleanup.
+    running=$(jobs -pr) stopped=$(jobs -ps)
+    if [[ $'\n'"$running"$'\n' == *$'\n'"$READER_HOST"$'\n'* ]]; then
+      wrapper_state=active
+    elif [[ $'\n'"$stopped"$'\n' == *$'\n'"$READER_HOST"$'\n'* ]]; then
+      wrapper_state=stopped
+    else
+      wrapper_exit=0
+      wait "$READER_HOST" 2>/dev/null || wrapper_exit=$?
+      if (( wrapper_exit == 127 )); then wrapper_state=unknown wrapper_exit=unknown
+      else wrapper_state=exited; fi
+    fi
   fi
+  reader_diagnostic 'Reader wrapper: phase=pre_cleanup state=%s exit=%s\n' "$wrapper_state" "$wrapper_exit"
+  if [[ -n "$READER_DIAG_HOST" ]]; then reader_stderr pre_cleanup; fi
+  if [[ "$wrapper_state" == active || "$wrapper_state" == stopped ]]; then
+    wrapper_action=term_requested
+    # Without job control, Bash may still list a stopped child as active. Resume
+    # only this owned job so its timeout can forward TERM and retire its children.
+    kill -CONT "$READER_HOST" 2>/dev/null || :
+    kill "$READER_HOST" 2>/dev/null || wrapper_action=term_unavailable
+    cleanup_exit=0
+    wait "$READER_HOST" 2>/dev/null || cleanup_exit=$?
+  fi
+  READER_HOST=
+  reader_diagnostic 'Reader wrapper: phase=cleanup action=%s wait_status=%s\n' "$wrapper_action" "$cleanup_exit"
+  if [[ -n "$READER_INPUT_FD" ]] && ! exec {READER_INPUT_FD}>&-; then result=1 descriptors=failed; fi
+  if [[ -n "$READER_OUTPUT_FD" ]] && ! exec {READER_OUTPUT_FD}<&-; then result=1 descriptors=failed; fi
+  if [[ -n "$READER_STDERR_FD" ]] && ! exec {READER_STDERR_FD}>&-; then result=1 descriptors=failed; fi
+  if [[ -n "$READER_STDERR_DRAIN_FD" ]] && ! exec {READER_STDERR_DRAIN_FD}<&-; then result=1 descriptors=failed; fi
+  if [[ -n "$READER_DIAG_HOST" ]]; then
+    running=$(jobs -pr) stopped=$(jobs -ps)
+    if [[ $'\n'"$running"$'\n' == *$'\n'"$READER_DIAG_HOST"$'\n'* || \
+          $'\n'"$stopped"$'\n' == *$'\n'"$READER_DIAG_HOST"$'\n'* ]]; then
+      diagnostic_action=term_requested
+      kill -CONT "$READER_DIAG_HOST" 2>/dev/null || :
+      kill "$READER_DIAG_HOST" 2>/dev/null || diagnostic_action=term_unavailable
+    fi
+    diagnostic_exit=0
+    wait "$READER_DIAG_HOST" 2>/dev/null || diagnostic_exit=$?
+    READER_DIAG_HOST=
+    reader_stderr post_cleanup
+  fi
+  reader_diagnostic 'Reader stderr collector: phase=cleanup action=%s wait_status=%s\n' \
+    "$diagnostic_action" "$diagnostic_exit"
   # The standalone reader also has its own six-second watchdog. Never kill an
   # application PID to hide a surviving observer, or call its lifetime absence.
   if [[ -n "$READER_DEVICE_PID" ]]; then
@@ -1702,6 +2055,7 @@ cleanup() {
       fi
       sleep 0.2
     done
+    if (( retired )); then device_retirement=absent; else device_retirement=unproved; fi
   fi
   if (( READER_STAGE_ACTIVE && retired )); then
     # Loading can fail before the handshake/watchdog. Reconcile the whole UID,
@@ -1720,15 +2074,28 @@ cleanup() {
     done
     if (( ! retired )); then
       printf 'HOLD: Failed reader loading left unreconciled UID processes; staging retained.\n' >&2
+      uid_retirement=unproved
+    else
+      uid_retirement=reconciled
     fi
   fi
-  if (( retired )) && [[ -n "$DEVICE_SCRATCH" ]] && ! remove_reader_staging; then
-    printf 'HOLD: Owned device reader staging could not be removed.\n' >&2
-    result=1
+  if [[ -n "$DEVICE_SCRATCH" ]]; then
+    staging=retained
+    if (( retired )); then
+      if remove_reader_staging; then staging=removed
+      else
+        printf 'HOLD: Owned device reader staging could not be removed.\n' >&2
+        result=1 staging=failed
+      fi
+    fi
   fi
+  (( ! READER_DIAG_OUTPUT_FAILED )) || result=1
+  reader_diagnostic 'Reader cleanup: descriptors=%s device_pid=%s uid=%s staging=%s result=%s\n' \
+    "$descriptors" "$device_retirement" "$uid_retirement" "$staging" "$result"
   for pid in "${MONITORS[@]}"; do kill "$pid" 2>/dev/null || :; done
   for pid in "${MONITORS[@]}"; do wait "$pid" 2>/dev/null || :; done
   [[ -z "$SCRATCH" ]] || rm -rf -- "$SCRATCH"
+  (( ! READER_DIAG_OUTPUT_FAILED )) || result=1
   exit "$result"
 }
 
@@ -1808,6 +2175,113 @@ verify() {
   work_snapshot after-wear-update
   sender_coverage "$phone_apk"
 
+  # One settling phase, never renewed. Failed/raced captures still HOLD; pacing
+  # only separates fresh complete observations, without resetting either ledger.
+  # Three matching quiet proofs over >=2 integral ticks corroborate stability.
+  # Quiet also needs a current native timing exclusion of five minutes, covering
+  # both 15s initial deaths and their intervening bounded Reader/native proof.
+  # This is prospective evidence, not an explanation of the historical dispatch.
+  PRE_DEATH_DEADLINE=$((SECONDS + 30))
+  reader_diagnostic 'Post-update PRE-DEATH: phase=evidence bound_seconds=30\n'
+  (( ! READER_DIAG_OUTPUT_FAILED )) || exit 1
+  local predeath_phone predeath_wear predeath_phone_cursor predeath_wear_cursor predeath_counts
+  local quiet_samples=0 quiet_since=0 quiet_work= quiet_native= quiet_phone= quiet_wear=
+  local quiet_phone_cursor=0 quiet_wear_cursor=0 sample_work sample_native sample_started continuous
+  while :; do
+    sample_started=$SECONDS
+    predeath_phone=$(app_processes "$PHONE_SERIAL" phone) || hold 'Post-update phone identity is unproved.'
+    reconcile_role phone "$PHONE_SERIAL" "$predeath_phone"
+    predeath_phone_cursor=${CURSOR[phone]}
+    predeath_wear=$(app_processes "$WEAR_SERIAL" wear) || hold 'Post-update Wear identity is unproved.'
+    reconcile_role wear "$WEAR_SERIAL" "$predeath_wear"
+    predeath_wear_cursor=${CURSOR[wear]}
+    work_snapshot post-update-pre-death
+    reconcile_role phone "$PHONE_SERIAL" "$predeath_phone"
+    reconcile_role wear "$WEAR_SERIAL" "$predeath_wear"
+    continuous=1
+    for role in phone wear; do
+      if [[ "$role" == phone ]]; then snapshot=$predeath_phone_cursor; else snapshot=$predeath_wear_cursor; fi
+      awk -v lo="$snapshot" -v hi="${CURSOR[$role]}" '
+        NR > lo && NR <= hi && $1 != "MARK" { activity=1 }
+        END { exit activity }
+      ' "$SCRATCH/$role.events" || hold 'Activity crossed PRE-DEATH evidence; quiescence is unproved.'
+      if (( quiet_samples )); then
+        if [[ "$role" == phone ]]; then snapshot=$quiet_phone_cursor; else snapshot=$quiet_wear_cursor; fi
+        if ! awk -v lo="$snapshot" -v hi="${CURSOR[$role]}" '
+          NR > lo && NR <= hi && $1 != "MARK" { activity=1 }
+          END { exit activity }
+        ' "$SCRATCH/$role.events"; then continuous=0; fi
+      fi
+    done
+    predeath_counts=$(awk -v native="$SCRATCH/native.current" -v age="$((SECONDS - sample_started + 1))" '
+      FILENAME == native {
+        if ($1 == "native-job") { jobs[$2]=1; count++ }
+        if ($1 == "native-ready") { safe[$2]=$3; delay[$2]=$4 }
+        if ($1 == "native-state") waiting[$2]=$3
+        if ($1 == "native-queues") queues=$2
+        if ($1 == "native-clock") { uptime[$2]=$3*1000; epoch[$2]=$4 }
+        next
+      }
+      $1 == "TIME" { worktime=$2 }
+      $1 == "WORK" {
+        if ($4 == 1) running++
+        if ($4 == 4) blocked++
+        if ($4 == 0 || $4 == 1 || $4 == 4) {
+          active++
+          if ($15 >= 0 && ($15 in jobs)) matched[$15]++
+          else unmatched_work++
+          if ($17 == -1) unscheduled++
+        }
+      }
+      END {
+        elapsed=uptime["end"]-uptime["begin"]
+        wall=epoch["end"]-epoch["begin"]
+        skew=wall-elapsed; if (skew < 0) skew=-skew
+        if (elapsed < 0 || elapsed > 30000 || wall < 0 || wall > 30000 || skew >= 1000 ||
+            worktime > epoch["begin"] || epoch["begin"]-worktime > 30000) exit 1
+        for (id in jobs) {
+          if (matched[id] != 1) unmatched++
+          # Subtract the complete same-device query interval and a conservative
+          # host capture age; a Ready:false flag alone is never a quiet proof.
+          if (safe[id] != 1 || waiting[id] != 1 || delay[id]-elapsed < 300000+age*1000) eligible++
+        }
+        quiet=queues == 1 && active > 0 && !running && !blocked && !unscheduled &&
+          !unmatched_work && !unmatched && !eligible
+        printf "quiet=%d owned_running=%d owned_blocked=%d owned_unscheduled=%d native_jobs=%d unmatched_native=%d unsafe_native=%d", \
+          quiet, running, blocked, unscheduled, count, unmatched, eligible
+      }
+    ' "$SCRATCH/native.current" "$SCRATCH/work.current") || hold 'PRE-DEATH scheduling clocks are unknown or inconsistent.'
+    sample_work=$(awk '$1 == "WORK"' "$SCRATCH/work.current")
+    sample_native=$(awk '$1 == "native-job"' "$SCRATCH/native.current" | sort)
+    (( SECONDS < PRE_DEATH_DEADLINE )) || hold 'Post-update PRE-DEATH evidence deadline expired; quiescence is unproved.'
+    if [[ "$predeath_counts" == quiet=1\ * ]]; then
+      if (( quiet_samples && continuous )) && [[ "$sample_work" == "$quiet_work" && "$sample_native" == "$quiet_native" &&
+          "$predeath_phone" == "$quiet_phone" && "$predeath_wear" == "$quiet_wear" ]]; then
+        quiet_samples=$((quiet_samples + 1))
+      else
+        quiet_samples=1 quiet_since=$SECONDS
+      fi
+      quiet_work=$sample_work quiet_native=$sample_native quiet_phone=$predeath_phone quiet_wear=$predeath_wear
+      quiet_phone_cursor=${CURSOR[phone]} quiet_wear_cursor=${CURSOR[wear]}
+      if (( quiet_samples >= 3 && SECONDS - quiet_since >= 2 )); then
+        reader_diagnostic 'Post-update PRE-DEATH: phase=quiet-handoff samples=%s window_seconds=%s %s\n' \
+          "$quiet_samples" "$((SECONDS - quiet_since))" "$predeath_counts"
+        (( ! READER_DIAG_OUTPUT_FAILED )) || exit 1
+        (( SECONDS < PRE_DEATH_DEADLINE )) || hold 'Post-update PRE-DEATH handoff deadline expired.'
+        INITIAL_DEATH_UNTIL=$((sample_started + 300))
+        INITIAL_DEATHS=1 PRE_DEATH_DEADLINE=0
+        break
+      fi
+    else
+      quiet_samples=0
+    fi
+    reader_diagnostic 'Post-update PRE-DEATH: phase=settling samples=%s %s\n' "$quiet_samples" "$predeath_counts"
+    (( ! READER_DIAG_OUTPUT_FAILED )) || exit 1
+    # Pacing is not evidence. Every next iteration repeats all logical, native,
+    # identity and event proofs within the original thirty-second phase.
+    sleep 1
+  done
+
   stop_app wear "$WEAR_SERIAL" optional
   work_snapshot after-initial-wear-death
   stop_app phone "$PHONE_SERIAL" optional
@@ -1816,7 +2290,7 @@ verify() {
   # distinct from the REQUIRED fresh Wear TYPE_CHANGED/save callback.
   barrier phone "$PHONE_SERIAL"
   barrier wear "$WEAR_SERIAL"
-  FRESH_RECEIPT=0 FRESH_PUBLICATION=0 DELIVERING=1
+  FRESH_RECEIPT=0 FRESH_PUBLICATION=0 DELIVERING=1 INITIAL_DEATHS=0
   launch_app wear "$WEAR_SERIAL" "$APP_ID/app.wardpulse.wear.MainActivity"
   work_snapshot after-delivery-wear-launch
   launch_app phone "$PHONE_SERIAL" "$APP_ID/.MainActivity"
@@ -1838,19 +2312,19 @@ verify() {
   barrier phone "$PHONE_SERIAL"
   [[ -z "$EVENTS" ]] || hold 'Phone activity raced separation.'
   LAST_OBSERVATION=$SECONDS
-  check_separation
+  check_separation retention-start
   work_snapshot after-retention-phone-death
-  check_separation
+  check_separation after-retention-phone-death
   stop_app wear "$WEAR_SERIAL" required
   work_snapshot after-retention-wear-death
-  check_separation
+  check_separation after-retention-wear-death
   launch_app wear "$WEAR_SERIAL" "$APP_ID/app.wardpulse.wear.MainActivity"
   work_snapshot after-retention-wear-launch
-  check_separation
+  check_separation after-retention-wear-launch
   # SECONDS is integral: eleven ticks guarantee at least ten elapsed seconds.
   local until=$((SECONDS + 11)) after
   while (( SECONDS < until )); do
-    check_separation
+    check_separation retention-window
     barrier wear "$WEAR_SERIAL"
     [[ -z "$EVENTS" ]] || hold 'New Wear process/callback invalidated retention.'
     snapshot=$(app_processes "$WEAR_SERIAL" wear) || hold 'Cannot observe retained Wear process.'
@@ -1858,15 +2332,15 @@ verify() {
     sleep 0.2
   done
   after=$(wait_for_stable_summary)
-  check_separation
+  check_separation retention-stable-summary
   barrier wear "$WEAR_SERIAL"
   [[ -z "$EVENTS" ]] || hold 'Late callback/process activity invalidated retention.'
   [[ "$BASELINE" == "$after" ]] || hold 'Saved Wear summary changed after actual restart.'
   work_snapshot final
-  check_separation
+  check_separation final-work
   verify_sender_identity
   remove_reader_staging || hold 'Owned reader staging cleanup failed.'
-  check_separation
+  check_separation final-reader-cleanup
   reconcile_role phone "$PHONE_SERIAL"
   barrier phone "$PHONE_SERIAL"
   [[ -z "$EVENTS" ]] || hold 'Phone activity raced final preservation evidence.'
@@ -1875,7 +2349,7 @@ verify() {
   [[ -z "$EVENTS" ]] || hold 'Wear activity raced final preservation evidence.'
   snapshot=$(app_processes "$WEAR_SERIAL" wear) || hold 'Final Wear process observation failed.'
   [[ "$snapshot" == "${RUNNING[wear]}" ]] || hold 'Wear identity changed before completion.'
-  check_separation
+  check_separation retention-complete
   barrier wear "$WEAR_SERIAL"
   [[ -z "$EVENTS" ]] || hold 'Wear activity raced completion.'
   printf '%s\n' 'Phone-to-watch acceptance passed.' \
@@ -1889,11 +2363,16 @@ MONITORS=()
 SCRATCH= DEVICE_SCRATCH= EVENTS= BASELINE= BASELINE_METADATA= OBSERVER=
 READER_HOST= READER_DEVICE_PID=
 READER_STAGE_ACTIVE=0 READER_BEFORE_PHONE=
+READER_INPUT_FD='' READER_OUTPUT_FD='' READER_STDERR_FD='' READER_STDERR_DRAIN_FD=''
+READER_DIAG_HOST=
+READER_DIAG_OUTPUT_FAILED=0
 LIFECYCLE_ACTION=
 PHONE_APK_PATH= PHONE_APK_HASH= PHONE_UPDATE_TIME=
 SEQUENCE=0 RETAINING=0 DELIVERING=0 FRESH_RECEIPT=0 FRESH_PUBLICATION=0
+INITIAL_DEATHS=0 INITIAL_DEATH_UNTIL=0
 RETENTION_DEADLINE=0 LAST_OBSERVATION=0 LEDGER_READY=0 SENDER_COVERED=0
 PHONE_ACTIVITY=0 WORK_ACTIVITY=0
+PRE_DEATH_DEADLINE=0
 OBSERVING=0 OBS_REQUEST=0 OBS_COMPLETE=0 OBS_LIMIT=0 OBS_EXPIRES=0
 OBS_OUTPUT_FAILED=0 OBS_PROTOCOL=1
 OBS_LAUNCHING=0 OBS_PENDING_SIGNAL=0

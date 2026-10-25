@@ -31,9 +31,13 @@ services and build work.
   empty selection); retain it on settled Plan windows, Alerts, Watch face utility and
   pre-summary Empty Dashboard, restoring it through navigation/back/summary/recomposition.
   Ordinary default three-row/detail content must fit fully at 27/23 without local scrolling;
-  report native failure to fit. New art/build/device and actual separately targeted local/
-  Pager accessibility-action acceptance is Pending. Historical first-iteration passes do
-  not validate this Source. Follow the complete
+  report native failure to fit. The 2026-10-25 HOST record covers Round's 32 native tests
+  and 12 navigation tests each on Square and API 34, including local/Pager actions.
+  Physical 466 active Glance/Face were verified while charging and securely unlocked.
+  Public browser placement passed; unchanged generators produced 136 byte-matching outputs
+  in a throwaway HOST checkout without canonical writes. Round Face AOD does not prove
+  Glance/physical AOD; full variant/interaction remains open. The complete canonical paired
+  HOST gate passed after fresh builds and renewed Wear native tests. Follow the dated
   [clock-free revision](../../../../docs/product/WEAR_GLANCE_DESIGN.md#revision-2026-10-24--clock-free-glance-and-larger-legend).
   The 2026-10-01 injected round/notround fit readings apply only to their older builds;
   a live Codex/Spark payload remains unverified.

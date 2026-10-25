@@ -2323,6 +2323,32 @@ changing watch, Glance, or widget surface order
 
 ### Phase 17 — the watch's second page
 
+**Integration status 2026-10-25 — bounded HOST proof, full acceptance open.** The
+[clock-free Glance revision](product/WEAR_GLANCE_DESIGN.md#revision-2026-10-24--clock-free-glance-and-larger-legend)
+keeps the preferred 27/23 legend, measured fitting/wrapping and local scrolling, with clocks
+retained on Plan windows, Alerts and the setup utility. Its admitted Source, twelve navigation
+cases and Glance artwork are preserved alongside the separate-face guidance and release APK
+naming changes. External return, re-entry and saved-state reconstruction during an old
+separate-face query retain a refresh in the controller's ViewModel-owned call until that
+query settles. Additive deterministic navigation coverage uses the real retained controller
+and a held old absence across each boundary; a queued supported observation does not repeat
+Push inventory or activity reads. Round's 32 native tests and Square/API34's 12 navigation
+tests each passed on the unchanged reviewed product Source. Physical 466 active Glance/Face were verified
+while securely unlocked and charging; the seven-frame healthy public cohort is refreshed.
+Public browser review passed 15 routes in both themes, all 35 served PNGs matched canonical
+bytes, and 147 local links/anchors had no outstanding issues. Unchanged runtime-face,
+face-review and Glance-review generators exited normally in a throwaway checkout; all 136
+outputs matched the reviewed checkout without canonical regeneration.
+Injected lifecycle/installer callbacks do not prove actual Activity recreation or every
+physical gesture. The pre-upgrade witness and remaining interaction matrix stay open.
+The bounded Reader and gate corrections completed through their owning executions. The
+complete canonical paired `just test-phone-watch-sync` HOST gate passed after fresh Reader
+Java/DEX and Flutter builds and a renewed 32-test Wear suite, covering quiet handoff,
+initial process deaths, delivery/relaunch, retention and final saved-summary preservation.
+The earlier post-update WorkManager service start was observed, but its exact job/worker
+trigger and attribution to job1969 remain unproved. This closes that canonical pair's gate,
+not the broader physical or interaction/variant acceptance above.
+
 Status: completed as of 2026-08-17. Replaces the Today, Week, and Providers screens delivered by
 Phase 4, together with the Usage and Last sync screens and the menu that led to them; Phase 4
 stays as written, as the record of what the watch was before the Glance.

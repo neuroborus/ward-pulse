@@ -262,6 +262,13 @@ public final class WorkSnapshot {
     private static String project(SQLiteDatabase db) {
         // No input, output, progress, tags, preferences or payload contents are queried.
         // The two blob-derived booleans only reject unsupported constraint encodings.
+        // Start from every owned WorkSpec, including unnamed/unsupported workers.
+        // Reject unsupported names before emitting them; the allowlist is not a filter.
+        require(scalar(db, "SELECT count(*) FROM WorkName n LEFT JOIN WorkSpec w "
+                + "ON w.id=n.work_spec_id WHERE w.id IS NULL").equals("0"), "ORPHAN_WORK_NAME");
+        require(scalar(db, "SELECT count(*) FROM SystemIdInfo s LEFT JOIN WorkSpec w "
+                + "ON w.id=s.work_spec_id AND w.generation=s.generation WHERE w.id IS NULL")
+                .equals("0"), "ORPHAN_SYSTEM_ID");
         String sql = "SELECT n.name,w.id,w.state,w.worker_class_name,"
                 + "w.interval_duration,w.flex_duration,w.initial_delay,w.required_network_type,"
                 + "w.requires_charging,w.requires_device_idle,w.requires_battery_not_low,"
@@ -275,9 +282,8 @@ public final class WorkSnapshot {
                 + "AND length(w.content_uri_triggers)=0 THEN 0 ELSE 1 END,"
                 + "w.trigger_content_update_delay,w.trigger_max_content_delay,"
                 + "w.backoff_on_system_interruptions "
-                + "FROM WorkName n LEFT JOIN WorkSpec w ON w.id=n.work_spec_id "
+                + "FROM WorkSpec w LEFT JOIN WorkName n ON n.work_spec_id=w.id "
                 + "LEFT JOIN SystemIdInfo s ON s.work_spec_id=w.id AND s.generation=w.generation "
-                + "WHERE n.name IN ('wardpulse.providerSync','wardpulse.recoveryWake') "
                 + "ORDER BY n.name,w.id LIMIT 33";
         StringBuilder out = new StringBuilder();
         Set<String> ids = new HashSet<>();
@@ -286,6 +292,8 @@ public final class WorkSnapshot {
             while (c.moveToNext()) {
                 require(++rows <= 32, "WORK_ROW_BOUND");
                 String name = c.getString(0), id = c.getString(1);
+                require("wardpulse.providerSync".equals(name) || "wardpulse.recoveryWake".equals(name),
+                        "UNSUPPORTED_WORK_NAME");
                 require(id != null && id.matches("[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}")
                         && ids.add(id), "WORK_ID_OR_JOIN");
                 long state = integer(c, 2, 0);
