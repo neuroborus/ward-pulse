@@ -382,18 +382,21 @@ and guarded ordinary release APK builds produce these seven files for the curren
 | File in the Actions artifact | Purpose |
 | --- | --- |
 | `wardpulse-phone-0.1.0-code1.aab` | Phone Play upload bundle |
-| `wardpulse-phone-0.1.0-code1.apk` | Direct phone installer |
+| `WardPulse-0.1.0-Android.apk` | Direct phone installer |
 | `wardpulse-wear-0.1.0-code2.aab` | Wear Play upload bundle |
-| `wardpulse-wear-0.1.0-code2.apk` | Direct Wear installer |
+| `WardPulse-0.1.0-WearOS.apk` | Direct Wear installer |
 | `wardpulse-legacy-0.1.0-code1.aab` | Legacy WFF Play upload bundle |
-| `wardpulse-legacy-0.1.0-code1.apk` | Direct legacy WFF installer |
+| `WardPulse-0.1.0-WatchFace-WearOS5Plus.apk` | Separate Wear OS 5+ face installer |
 | `wardpulse-push-0.1.0-code1.apk` | Separate Push identity, embedded by the Wear producer |
 
 The three direct installers are signed with the **upload key**. This does not promise update
 compatibility with debug installs or Play-delivered installs, whose app-signing certificates
 may differ. Push retains its separate persistent signer. These are direct release producer
 APKs; no debug or bundletool universal substitute is used. Installer basenames are discovered
-from the actual producer output directories, including legacy filename casing.
+from the actual producer output directories, including legacy filename casing. Only their
+staged copies receive the friendly names above, interpolating the coherent source version;
+no binary is repacked or re-signed to rename it. Technical AAB and Push names, embedded
+Push paths and the exact nine-file payload stay unchanged; no old-name aliases are added.
 
 Standard `jarsigner`/`keytool` verify the three AABs; `apksigner` verifies all four APKs.
 Positive verification evidence and fixed signer pins are required. The pinned imported
@@ -422,12 +425,23 @@ only the exact artifact ID; it does not select a name or a latest artifact. No s
 Actions run/job/artifact metadata API or whole-workflow success is required.
 
 The receiver re-reads version/code declarations at the exact source commit, derives the
-seven binary names and requires exactly those files plus `SHA256SUMS` and `provenance.json`
-as regular root files. Unsafe, nested, unexpected or missing files, duplicate receipt keys
+same seven binary names from that producer's convention and requires exactly those files
+plus `SHA256SUMS` and `provenance.json` as regular root files. Unsafe, nested, unexpected or
+missing files, duplicate receipt keys
 or records, conflicting identities, incomplete/extra hashes and hash mismatches fail closed.
 It recomputes every binary hash and checks provenance source/tag/version/run/origin-attempt,
 signer pins and completed producer checks. A download digest warning is not verification.
 The receiver does not duplicate the producer's APK/token parsing or signature tooling.
+
+The producer records `WARDPULSE_APK_NAMING: friendly-v1` in its workflow. The newer Play
+receiver reads this immutable source declaration as data under its existing tag/ancestry
+checks. Historical producer source without the marker retains the old names, even when
+version/codes equal a newer source's declarations. Unknown, malformed, duplicate or unreadable
+evidence fails closed; no asset-name inference, mixed convention, historical execution,
+retroactive rename or receipt rewrite is permitted. See
+[Play preparation](../../tools/release-google-play/README.md#preparation-interface).
+Source consistency review and synthetic tests do not establish an actual production signed
+staging run or delivery; those acceptance gates remain pending.
 
 Before any release mutation, authenticated paginated List releases includes drafts and rejects
 every existing release for the exact tag. GET-by-tag absence is not used. An existing tag is

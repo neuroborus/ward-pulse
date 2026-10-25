@@ -8,6 +8,10 @@ You can use the phone without either optional surface.
 
 The WardPulse watch face is a separate package and requires **Wear OS 5 or later**.
 
+For direct APK downloads, choose `WardPulse-V-Android.apk` for your phone and
+`WardPulse-V-WearOS.apk` for the watch app; V is the release version. The optional face uses
+`WardPulse-V-WatchFace-WearOS5Plus.apk`. See [watch setup](/guide/watch#select-and-customize-the-face).
+
 Have an account or reporting credential for at least one supported provider. Connect the
 phone to the internet for sign-in and fresh reporting. WardPulse stores credentials encrypted
 on the phone and uses them directly with their provider; you do not enter them on the watch.

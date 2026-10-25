@@ -21,6 +21,12 @@ NAMES = [
     "wardpulse-legacy-1.2.3-code4.aab", "wardpulse-legacy-1.2.3-code4.apk",
     "wardpulse-push-1.2.3-code6.apk",
 ]
+FRIENDLY_NAMES = [
+    NAMES[0], "WardPulse-1.2.3-Android.apk",
+    NAMES[2], "WardPulse-1.2.3-WearOS.apk",
+    NAMES[4], "WardPulse-1.2.3-WatchFace-WearOS5Plus.apk", NAMES[6],
+]
+FRIENDLY_PRODUCER = "name: GitHub Release\nenv:\n  WARDPULSE_APK_NAMING: friendly-v1\n"
 
 
 def encoded(value):
@@ -30,8 +36,9 @@ def encoded(value):
 class HistoricalCheckout:
     dispatch_sha = DISPATCH
 
-    def __init__(self, root):
+    def __init__(self, root, friendly=False):
         self.root, self.allowed, self.reads = root, True, []
+        self.producer = FRIENDLY_PRODUCER if friendly else "name: GitHub Release\n"
         self.sources = {
             "phone": "version: 1.2.3+9\n",
             "wear": 'versionCode = 10\nversionName = "1.2.3"\n',
@@ -47,19 +54,22 @@ class HistoricalCheckout:
     def source(self, sha, path):
         play.require(sha == SOURCE)  # Current-main versions must never be consulted.
         self.reads.append((sha, path))
+        if path == play.PRODUCER:
+            return self.producer
         return self.sources[next(key for key, value in play.SOURCES.items() if value == path)]
 
 
 class Release:
-    def __init__(self, root):
-        self.checkout, self.calls, self.responses = HistoricalCheckout(root), [], {}
-        self.blobs = {name: ("neutral bytes " + name).encode() for name in NAMES}
+    def __init__(self, root, friendly=False):
+        self.checkout, self.calls, self.responses = HistoricalCheckout(root, friendly), [], {}
+        names = FRIENDLY_NAMES if friendly else NAMES
+        self.blobs = {name: ("neutral bytes " + name).encode() for name in names}
         self.hashes = {name: hashlib.sha256(data).hexdigest() for name, data in self.blobs.items()}
         self.provenance = {
             "source_sha": SOURCE, "tag": TAG, "version": "1.2.3", "build_run_id": "123", "build_run_attempt": "2",
             "binaries": [{"file": name, "sha256": self.hashes[name], "signer_sha256":
                 "04fa77a4feabb08e8c71fb1ddc32000c63f18e6ff5967e3b5b8acbd5b36d4950" if "-push-" in name else
-                "d02f85820e60d6cf49e939a1af72a84c17d3ce107c840b4e9d3ac0f3946f078e"} for name in NAMES],
+                "d02f85820e60d6cf49e939a1af72a84c17d3ce107c840b4e9d3ac0f3946f078e"} for name in names],
             "checks_completed": [
                 "Immutable checkout and four source versions/code allocation",
                 "Shared fixtures and watch payload contract",
@@ -76,7 +86,7 @@ class Release:
         self.sums = "".join(f"{digest}  {name}\n" for name, digest in self.hashes.items()).encode()
         self.assets = [{"id": index, "name": name, "state": "uploaded", "size": len(self.body(name)),
                         "digest": None, "url": BASE + f"/releases/assets/{index}"}
-                       for index, name in enumerate(NAMES + ["SHA256SUMS", "provenance.json"], 1)]
+                       for index, name in enumerate(names + ["SHA256SUMS", "provenance.json"], 1)]
         self.release = {"id": 40, "tag_name": TAG, "draft": False, "prerelease": False,
                         "published_at": "2026-01-02T03:04:05Z", "url": BASE + "/releases/40",
                         "target_commitish": "untrusted-branch"}
@@ -149,12 +159,89 @@ class PreparationTests(unittest.TestCase):
                 self.assertEqual(asset["verified_sha256"], hashlib.sha256((self.output / name).read_bytes()).hexdigest())
         downloads = [url for url, _, _ in fixture.calls if "/releases/assets/" in url]
         self.assertEqual(downloads, [BASE + f"/releases/assets/{i}" for i in (8, 9, 1, 3)])
-        self.assertEqual(len(fixture.checkout.reads), 4)
+        self.assertEqual(fixture.checkout.reads, [(SOURCE, path) for path in (*play.SOURCES.values(), play.PRODUCER)])
         self.assertEqual(self.output.stat().st_mode & 0o777, 0o700)
         for path in self.output.iterdir():
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             self.assertNotIn(b"offline-token", path.read_bytes())
             self.assertNotIn(b"https://", path.read_bytes())
+
+    def test_source_evidence_selects_exact_names_with_identical_versions_and_codes(self):
+        old, new = HistoricalCheckout(self.checkout), HistoricalCheckout(self.checkout, friendly=True)
+        self.assertEqual(old.sources, new.sources)
+        self.assertEqual(set(play.binary_contract(old, SOURCE, TAG)), set(NAMES))
+        new.producer = (Path(__file__).resolve().parents[2] / play.PRODUCER).read_text()
+        contract = play.binary_contract(new, SOURCE, TAG)
+        self.assertEqual(set(contract), set(FRIENDLY_NAMES))
+        self.assertEqual(contract, {name: play.PUSH_PIN if name == NAMES[6] else play.UPLOAD_PIN
+                                    for name in FRIENDLY_NAMES})
+        self.assertEqual(play.bundle_names(contract), [NAMES[0], NAMES[2]])
+
+    def test_friendly_preparation_verifies_seven_identities_and_retains_only_two_bundles(self):
+        fixture = Release(self.checkout, friendly=True)
+        for asset in fixture.assets:
+            asset["digest"] = "sha256:" + hashlib.sha256(fixture.body(asset["name"])).hexdigest()
+        identity = self.execute(fixture)
+        self.assertEqual(set(identity["assets"]), set(FRIENDLY_NAMES) | {"SHA256SUMS", "provenance.json"})
+        self.assertEqual({p.name for p in self.output.iterdir()},
+                         {NAMES[0], NAMES[2], "SHA256SUMS", "provenance.json", "preparation.json"})
+        for name in (NAMES[0], NAMES[2], "SHA256SUMS", "provenance.json"):
+            self.assertEqual((self.output / name).read_bytes(), fixture.body(name))
+        self.assertEqual([url for url, _, _ in fixture.calls if "/releases/assets/" in url],
+                         [BASE + f"/releases/assets/{i}" for i in (8, 9, 1, 3)])
+
+    def test_malformed_duplicate_unknown_or_unavailable_naming_evidence_fails_closed(self):
+        for declaration in ("WARDPULSE_APK_NAMING: unknown", "WARDPULSE_APK_NAMING = friendly-v1",
+                            '"WARDPULSE_APK_NAMING": friendly-v1', "WARDPULSE_APK_NAMING:",
+                            "WARDPULSE_APK_NAMING: friendly-v1\n  WARDPULSE_APK_NAMING: friendly-v1"):
+            fixture = Release(self.checkout, friendly=True)
+            fixture.checkout.producer = "env:\n  " + declaration + "\n"
+            with self.subTest(declaration=declaration), self.assertRaises(play.PreparationError):
+                self.execute(fixture)
+            self.assertFalse(self.output.exists())
+            self.assertFalse(any("/releases/assets/" in url for url, _, _ in fixture.calls))
+        fixture = Release(self.checkout)
+        source = fixture.checkout.source
+        def unavailable(sha, path):
+            if path == play.PRODUCER:
+                raise play.PreparationError("Required immutable Git data unavailable.")
+            return source(sha, path)
+        with patch.object(fixture.checkout, "source", side_effect=unavailable), self.assertRaises(play.PreparationError):
+            self.execute(fixture)
+        self.assertFalse(self.output.exists())
+
+    def test_mixtures_aliases_and_wrong_source_conventions_are_rejected(self):
+        for friendly in (False, True):
+            other = NAMES if friendly else FRIENDLY_NAMES
+            for change in (lambda f: f.assets[1].update(name=other[1]),
+                           lambda f: f.assets.append(dict(f.assets[1], id=10, name=other[1],
+                                                         url=BASE + "/releases/assets/10")),
+                           lambda f: setattr(f.checkout, "producer", "name: GitHub Release\n"
+                                             if friendly else FRIENDLY_PRODUCER)):
+                fixture = Release(self.checkout, friendly)
+                change(fixture)
+                with self.subTest(friendly=friendly, change=change), self.assertRaises(play.PreparationError):
+                    self.execute(fixture)
+                self.assertFalse(self.output.exists())
+
+    def test_friendly_receipts_reject_missing_extra_aliased_and_tampered_records(self):
+        changes = [lambda f: f.provenance["binaries"].pop(),
+                   lambda f: f.provenance["binaries"].append(dict(f.provenance["binaries"][1], file=NAMES[1])),
+                   lambda f: f.provenance["binaries"][1].update(file=NAMES[1]),
+                   lambda f: f.provenance["binaries"][1].update(sha256="0" * 64),
+                   lambda f: f.provenance["binaries"][1].update(signer_sha256=play.PUSH_PIN),
+                   lambda f: setattr(f, "sums", b"".join(f.sums.splitlines(keepends=True)[1:])),
+                   lambda f: setattr(f, "sums", f.sums + f.sums.splitlines(keepends=True)[1]),
+                   lambda f: setattr(f, "sums", f.sums + ("0" * 64 + "  " + NAMES[1] + "\n").encode()),
+                   lambda f: setattr(f, "sums", f.sums.replace(FRIENDLY_NAMES[1].encode(), NAMES[1].encode())),
+                   lambda f: f.assets[1].update(digest="sha256:" + "0" * 64)]
+        for index, change in enumerate(changes):
+            fixture = Release(self.checkout, friendly=True)
+            change(fixture)
+            fixture.refresh()
+            with self.subTest(case=index), self.assertRaises(play.PreparationError):
+                self.execute(fixture)
+            self.assertFalse(self.output.exists())
 
     def test_missing_and_empty_optional_digests_and_lightweight_tag_are_supported(self):
         fixture = Release(self.checkout)
@@ -344,6 +431,12 @@ class PreparationTests(unittest.TestCase):
                 play.Checkout("example/project", DISPATCH, "workflow_dispatch", "refs/heads/main")
         checkout = play.Checkout.__new__(play.Checkout)
         checkout.root, checkout.dispatch_sha = self.checkout, DISPATCH
+        with patch.object(checkout, "git", return_value=FRIENDLY_PRODUCER) as git:
+            self.assertEqual(checkout.source(SOURCE, play.PRODUCER), FRIENDLY_PRODUCER)
+            git.assert_called_once_with("show", SOURCE + ":" + play.PRODUCER)
+        with patch.object(checkout, "git") as git, self.assertRaises(play.PreparationError):
+            checkout.source(SOURCE, ".github/workflows/other.yml")
+        git.assert_not_called()
         with patch.object(checkout, "git", side_effect=[SOURCE, ""]) as git:
             checkout.ancestor(SOURCE)
         self.assertEqual(git.call_args_list, [call("rev-parse", "--verify", SOURCE + "^{commit}"),
@@ -467,6 +560,27 @@ class ApplyTests(unittest.TestCase):
         self.assertFalse((self.output / play.OPERATION_MARKER).exists())
         self.assertFalse(any("/releases/assets/" in url for url, _, _ in self.release.calls))
         self.assertEqual(len(self.server.edits), 1)
+
+    def test_friendly_release_applies_only_phone_and_wear_with_original_receipts(self):
+        fixture = Release(self.checkout, friendly=True)
+        github = play.GitHub("example/project", fixture.transport)
+        output = self.root / "friendly-prepared"
+        play.prepare(TAG, fixture.checkout, github, output)
+        server = PlayServer(fixture)
+        fixture.calls.clear()
+        play.apply(output, fixture.checkout, github, play.Play(server.transport), "qa", "wear:qa", "draft")
+        self.assertEqual([body for _, path, body in server.calls if "uploadType" in path],
+                         [fixture.blobs[NAMES[0]], fixture.blobs[NAMES[2]]])
+        self.assertEqual((output / "provenance.json").read_bytes(), fixture.body("provenance.json"))
+        self.assertFalse(any("/releases/assets/" in url for url, _, _ in fixture.calls))
+        self.assertEqual({item["name"] for item in json.loads((output / "preparation.json").read_bytes())["assets"].values()},
+                         set(FRIENDLY_NAMES) | {"SHA256SUMS", "provenance.json"})
+
+    def test_changed_source_naming_convention_rejects_before_play(self):
+        self.release.checkout.producer = FRIENDLY_PRODUCER
+        with self.assertRaises(play.PreparationError):
+            self.execute()
+        self.assertEqual(self.server.calls, [])
 
     def test_explicit_nondefault_priorities_survive_promotion_and_commit(self):
         self.server.reuse()

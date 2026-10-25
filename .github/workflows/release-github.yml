@@ -28,6 +28,10 @@ on:
 permissions:
   contents: read
 
+# APK naming contract, read as data by the Play receiver at source_sha.
+env:
+  WARDPULSE_APK_NAMING: friendly-v1
+
 concurrency:
   group: android-release
   cancel-in-progress: false
@@ -322,6 +326,7 @@ jobs:
               return candidates[0]
 
           version = os.environ["RELEASE_VERSION"]
+          installers = {"phone": "Android", "wear": "WearOS", "legacy": "WatchFace-WearOS5Plus"}
           upload_pin = os.environ["UPLOAD_CERT_SHA256"]
           push_pin = os.environ["PUSH_CERT_SHA256"]
           private = Path(os.environ["RELEASE_PRIVATE_DIR"])
@@ -364,7 +369,9 @@ jobs:
                   fingerprints = [value.lower() for value in fingerprints]
               require(fingerprints == [pin])
               code = os.environ[f"{surface.upper()}_CODE"]
-              name = f"wardpulse-{surface}-{version}-code{code}.{extension}"
+              name = (f"WardPulse-{version}-{installers[surface]}.apk"
+                      if extension == "apk" and surface in installers else
+                      f"wardpulse-{surface}-{version}-code{code}.{extension}")
               destination = stage / name
               shutil.copyfile(binary, destination)
               digest = sha256(binary)
@@ -426,11 +433,11 @@ jobs:
           retention-days: 14
           path: |
             ${{ runner.temp }}/wardpulse-android-release-artifacts/wardpulse-phone-${{ steps.versions.outputs.version }}-code${{ steps.versions.outputs.phone_code }}.aab
-            ${{ runner.temp }}/wardpulse-android-release-artifacts/wardpulse-phone-${{ steps.versions.outputs.version }}-code${{ steps.versions.outputs.phone_code }}.apk
+            ${{ runner.temp }}/wardpulse-android-release-artifacts/WardPulse-${{ steps.versions.outputs.version }}-Android.apk
             ${{ runner.temp }}/wardpulse-android-release-artifacts/wardpulse-wear-${{ steps.versions.outputs.version }}-code${{ steps.versions.outputs.wear_code }}.aab
-            ${{ runner.temp }}/wardpulse-android-release-artifacts/wardpulse-wear-${{ steps.versions.outputs.version }}-code${{ steps.versions.outputs.wear_code }}.apk
+            ${{ runner.temp }}/wardpulse-android-release-artifacts/WardPulse-${{ steps.versions.outputs.version }}-WearOS.apk
             ${{ runner.temp }}/wardpulse-android-release-artifacts/wardpulse-legacy-${{ steps.versions.outputs.version }}-code${{ steps.versions.outputs.legacy_code }}.aab
-            ${{ runner.temp }}/wardpulse-android-release-artifacts/wardpulse-legacy-${{ steps.versions.outputs.version }}-code${{ steps.versions.outputs.legacy_code }}.apk
+            ${{ runner.temp }}/wardpulse-android-release-artifacts/WardPulse-${{ steps.versions.outputs.version }}-WatchFace-WearOS5Plus.apk
             ${{ runner.temp }}/wardpulse-android-release-artifacts/wardpulse-push-${{ steps.versions.outputs.version }}-code${{ steps.versions.outputs.push_code }}.apk
             ${{ runner.temp }}/wardpulse-android-release-artifacts/SHA256SUMS
             ${{ runner.temp }}/wardpulse-android-release-artifacts/provenance.json
@@ -525,8 +532,11 @@ jobs:
           require(codes["phone"] % 2 == 1 and codes["wear"] == codes["phone"] + 1)
           upload_pin = "d02f85820e60d6cf49e939a1af72a84c17d3ce107c840b4e9d3ac0f3946f078e"
           push_pin = "04fa77a4feabb08e8c71fb1ddc32000c63f18e6ff5967e3b5b8acbd5b36d4950"
+          installers = {"phone": "Android", "wear": "WearOS", "legacy": "WatchFace-WearOS5Plus"}
           binaries = {
-              f"wardpulse-{surface}-{version}-code{code}.{extension}":
+              (f"WardPulse-{version}-{installers[surface]}.apk"
+               if extension == "apk" and surface in installers else
+               f"wardpulse-{surface}-{version}-code{code}.{extension}"):
                   push_pin if surface == "push" else upload_pin
               for surface, code in codes.items()
               for extension in (("apk",) if surface == "push" else ("aab", "apk"))

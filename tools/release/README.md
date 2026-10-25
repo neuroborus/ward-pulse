@@ -118,7 +118,10 @@ also include `actionlint .github/workflows/*.yml`, `just check-doc-citations`,
 documented in [AGENTS.md](../../AGENTS.md#required-checks). Record actual outcomes and any
 unexecuted gates; Source review is not a runtime pass.
 Injected publisher tests also cover state options, draft staging before publication, exact
-notes/identity/assets, conflicts, tag peeling and preservation of uncertain effects.
+notes/identity/assets, friendly-name transfers with exact sizes/hashes, conflicts, tag peeling
+and preservation of uncertain effects. Synthetic workflow tests cover staging, the upload
+allowlist and both transfer receipts with injected signer/Git responses. They establish source
+contract consistency, not an actual production signed staging run; hosted acceptance stays pending.
 
 ## Initial candidate
 
@@ -151,6 +154,21 @@ artifact verification and the independent manual GitHub and Google Play workflow
 release preparation does not authorize remote mutations, tags, credentials or publication.
 The [Google Play owner](../release-google-play/README.md) retains its historical published
 artifact contract.
+
+The producer stages three direct installers as `WardPulse-V-Android.apk`,
+`WardPulse-V-WearOS.apk` and `WardPulse-V-WatchFace-WearOS5Plus.apk`, where V is the
+coherent version from the immutable dispatch source. These are byte-identical copies of
+verified producer outputs, with no repacking or re-signing. The three AABs and standalone
+technical Push APK retain `wardpulse-<surface>-<version>-code<code>` names. Push remains
+embedded in the Wear app, not a fourth direct installer. The artifact envelope and originating
+run/attempt identity are unchanged: exactly seven binaries plus two receipts, without aliases.
+
+The workflow's `WARDPULSE_APK_NAMING: friendly-v1` declaration records its naming contract.
+The current Play helper reads that declaration as data at the trusted release `source_sha`;
+historical producer source without a declaration keeps its old filenames, even at the same
+version and codes. It never infers names from the executing checkout or published assets,
+executes historical code, renames historical assets or rewrites receipts. See the
+[Play preparation contract](../release-google-play/README.md#preparation-interface).
 
 The GitHub workflow defaults to `draft=true`, `prerelease=false`, `latest=false`. Draft and
 prerelease are independent markers; tags remain stable `vMAJOR.MINOR.PATCH`. Latest accepts

@@ -120,6 +120,11 @@ Ring choices are independent of the phone's [home-widget selection](/guide/widge
 The WardPulse face requires **Wear OS 5 or later**. The dashboard app can run on Wear OS 4;
 the face cannot be installed there.
 
+For direct APK downloads, `WardPulse-V-WearOS.apk` installs the watch app;
+`WardPulse-V-WatchFace-WearOS5Plus.apk` installs the separate face. V is the release version.
+The technical `wardpulse-push-…apk` is bundled with the watch app, not another direct
+installer to choose.
+
 Open WardPulse on the watch. From **Glance**, swipe up to **Plan windows**, scroll past the
 windows and tap **Watch face**. Before the first phone summary, the same entry is below
 **Sync from phone**. Swipe back to return to the previous screen.
