@@ -54,10 +54,20 @@ three complete cells move three units lower and the fade follows the true shorte
 path to the band, derived from each cell's integer centre); selected-zero revision
 **2026-10-13** (known exhausted selected metrics retain their grey tracks and legend rows,
 with only exhausted `0%` tokens in the existing pale error red; paired pools retain both
-identities) — accepted visual target for
+identities); readability revision **2026-10-25** (104×22 legend wells with finite 15/14/12
+fonts; initially 48-unit upper cells with 16/14/12 readings); outward-preserving refinement
+**2026-10-25** (50-unit cells with 17/14/12 readings; retain all outward fades and add only
+the lateral bottom treatment); combined composition revision **2026-10-25** (raise clock
+and watermark; 120×26 legend with 18/16/14 labels)
+— accepted visual target for
 Wear OS and Watch Face Format until the next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
 wireframes, large remaining-% heroes, or bordered strip cards.
+
+The operative layout is
+[combined face readability](#revision-2026-10-25--combined-face-readability), retaining the
+[outward-preserving cell contract](#revision-2026-10-25--preserved-outward-fade-and-50-unit-cells).
+The earlier bottom-only/uniform-centre candidate below is superseded, not accepted intent.
 
 Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 13). Asset ownership: `docs/DESIGN_ASSETS.md`.
 
@@ -65,6 +75,234 @@ Canonical review generator: `tools/render-watch-ring-designs.mjs`
 Canonical face generator: `tools/render-watchface.mjs` — it writes the shipped `watchface.xml`
 and the ring-type drawables beside it.  
 Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and sibling variants).
+
+## Revision 2026-10-25 — larger face legend and cells
+
+This initial iteration applies the 2026-10-24 design in the existing **450×450** language.
+Its 104×22 legend and 48-unit cells are superseded by the combined revision below.
+Dated measurements cover only their own builds.
+
+| Element | Initial target, in design units |
+| --- | --- |
+| Equal legend wells | **104×22**, x=173, corner radius 6; tops **271 / 294 / 317**, bottom 339 |
+| Shorter stacks | Two rows at 294/317; one ring or credits-only at 317; tightest row first |
+| Legend label | Centred **92-unit** region at inset 6; one size for the complete mixed-run label |
+| Label font | **15** through 10 characters, **14** at 11, **12** at 12 or more |
+| Upper cells 201/202/203 | **48×48** at **(149,112) / (201,98) / (253,112)** |
+| Cell text | Centred **42×22** box at **(3,13)**; ordinary font **16** |
+| Third-party cell text | Font **14** at 5–6 characters, **12** at 7 or more |
+| Weather font | UV≥10: **14**; temperature<0 or ≥100: **14**, except ≤−100: **12** |
+| Monochrome icons | **24×24**, centred at integer inset **12**; same tint and source |
+| Occupied border | Path diameter **46.5**, stroke **1.5**, radii **22.5–24.0** |
+
+All font branches use literal sizes and WFF2 `Condition` expressions. They do not use
+autosizing or font minimums from later format versions. Character count is a conservative
+rule for the bounded numeric/compact grammar, not a glyph-width measurement. Each label's
+mixed runs share the chosen size and one centre/baseline; only true exhausted percentage
+tokens change colour. Full numbers, currency, denominator, credits and separators remain.
+The existing single-line ellipsis remains for out-of-envelope strings. For example
+`$92233.7T/92233.7T` is wider than 92 units even at host font 10: this revision does not claim
+universal money/credits fit or shrink such readings indefinitely. The phone carries the
+complete reading. Arbitrary third-party strings and unusually verbose weather formatting
+have the same explicit limitation; values and device-provided units are never rewritten.
+
+**Initial border candidate, superseded by the clarification below.** Its axis was
+`u=(cellCentre−faceCentre)/distance`. From `C−23.25u` to `C+23.25u`,
+every occupied border keeps its outward alphas **170 / 145 / 90 / 35 / 10** at positions
+**0.5 / 0.625 / 0.75 / 0.875 / 1**. Only the left/right cells mirror these onto the inward
+half: positions **0 / 0.125 / 0.25 / 0.375 / 0.5** carry **10 / 35 / 90 / 145 / 170**.
+The raised central cell keeps **170 throughout its inward half**, with no inward fade.
+RGB, peak alpha and the ambient **140/255** multiplier remain unchanged. Only the occupied
+border fades; wells, readings and icons do not. Empty cells keep their graded recess without
+an occupied border. Legend rows retain whole-row alpha **255 active / 90 ambient**.
+
+Calculated clearance to the unchanged **133.8-unit aperture** is approximately **8.50** at
+the worst legend corner (173,339), **6.72** at the lateral cell edges and **6.80** at the
+central edge. Adjacent wells retain **5.85** units; lateral wells end exactly at the clock
+box's y=160 boundary. The watermark's historically recorded ink ends at y=268, three units
+above the first well. These are design calculations and older ink observations, not new
+native measurements. Clock, watermark, ring count/radii/widths/joins/caps/textures/melt,
+TITLE vocabulary, payload/source/order/zero semantics, defaults, units, five lower services,
+three upper slots, eight-slot budget, navigation and both packaging paths are unchanged.
+
+**Exports generated; acceptance pending.** On 2026-10-25, writable Runner polishing ran
+both ordinary owning generators successfully after replacing synchronous subprocess calls
+with awaited asynchronous execution of the same tools. It produced canonical XML, the shipped
+picker PNG, all 26 face boards/previews and 23 WFF mirrors from their existing maps. The full
+runtime path also rasterized all nine texture PNGs with unchanged inputs and identical bytes.
+The earlier failed attempts remain historical failures, not generation evidence for this set.
+Official WFF2 validation, full native builds and design/docs gates remain separate HOST
+acceptance conditions; Native workspace checks belong to the Runner FINALIZE gate.
+
+Inspect every board/preview, then actual native ink in active/ambient on round, small
+nonround and physical **466×466** targets: one/two/three bands, ordinary and paired/mixed/all
+known zero, tiny positive, no bands/credits-only; empty/default-weather/user-overridden
+cells, day, C/F/unsupported unit, negative/three-digit temperatures, UV10+, unavailable
+weather, SHORT_TEXT, RANGED_VALUE-as-text and monochrome icons. The complete-label corpus
+includes `100% · 64%`, `82% · 59.5K`, `100% · 100%`, `100% · 999.9T`, `$999.99/999`,
+`$999.99/999.9T`, `$999.9T/999.9T`, signed day/week/month budgets and a separately recorded
+extreme overflow. Check markers, ordering, mixed-run centring/baseline, actual ink/clearance
+and the separate outward and added lateral-bottom treatments below. A host-font fit or board
+is not physical readability proof.
+After fit approval, refresh public face imagery and the screenshot index; Overview/README
+cohorts need one healthy shared state and actual themes. Public captures and later integration
+remain pending. Seam, temperature-source, adaptive-band and navigation fixes stay excluded.
+
+## Revision 2026-10-25 — bottom-only cell borders and artifact review
+
+**Historical rejected interpretation, superseded by the operative revision below.** Root
+misread the requested added bottom treatment as replacing the existing outward fade.
+That candidate made the left/right borders fade only toward 6 o'clock and the central
+border uniform everywhere, keeping the then-current 48-unit geometry and typography.
+
+That candidate used the vertical axis from `C−(0,23.25)` to `C+(0,23.25)` on each lateral
+border. Its top half retained alpha **170**; its bottom ramp was **170 / 145 / 90 / 35 / 10**
+at positions **0.5 / 0.625 / 0.75 / 0.875 / 1**. The central occupied border was uniformly
+**170**. RGB and the ambient **140/255** multiplier were preserved, but the existing outward
+fade was removed against the Owner's intent. Wells, text, icons and usage bands were unchanged.
+
+**Historical c96 execution and workmanship record, 2026-10-25.** The owning Runner run
+finished DONE, exited with code 0 and was separately retired. The new 384×384 round native
+interactive frame and Sun-cell zoom show a continuous rim without the two reported flecks,
+and the selected Cursor halves remain together on their correct band. Independent forward
+review found no issue in that interactive case, but did not establish the Owner's lighting
+intent. A native ambient PNG was also obtained with
+power observed as Dozing, then the watch was awakened; that frame was visually inspected.
+`just check-wear`, `just check-watchface` (including official WFF2 validation),
+`just check-designs` and `just validate-fixtures` passed after the correction.
+
+Preserve the original fleck incident without asserting an unproved cause. These frames do
+not complete the variant/fit matrix above. Both new release packages are installed on the
+physical watch with their existing signers, but physical native verification remains Pending.
+The seven-frame public candidate still requires a fresh coherent capture session; the
+existing face image is not approved by its earlier populated-cell review. These results
+do not accept the outward-preserving refinement below.
+
+## Revision 2026-10-25 — preserved outward fade and 50-unit cells
+
+**Cell geometry and lighting retained; interim composition superseded below.** The first
+50-unit proposal held the clock, watermark and legend fixed. The Owner then authorized
+their combined refinement; those earlier fixed-layout restrictions no longer apply.
+
+The Owner clarified that the original darkening **toward the large usage arcs must remain**
+on all three occupied rims. The requested change adds a strictly vertical **6 o'clock**
+fade only on the two lateral rims. **No added bottom fade on the centre** does not mean
+removing its existing outward fade. This supersedes the mistaken bottom-only candidate.
+
+Grow modestly downward/inward while keeping the current top edges and lateral outer edges:
+
+| Element | Operative target, in 450×450 design units |
+| --- | --- |
+| Upper cells 201/202/203 | **50×50** at **(149,112) / (200,98) / (251,112)** |
+| Cell centres | **(174,137) / (225,123) / (276,137)** |
+| Complete text box | **44×24**, centred at **(3,13)**; ordinary font **17** |
+| Existing finite fallbacks | **14** for 5–6 characters/long weather; **12** for 7+ or extreme weather; thresholds unchanged |
+| Monochrome icon | Unchanged **24×24**, centred at inset **13** |
+| Occupied border | Path **48.5**, stroke **1.5**, radii **23.5–25.0** |
+
+For each occupied rim, derive `u=(C−F)/distance`, with actual cell centre C and face centre
+F=(225,225). Preserve the original outward gradient from `C−24.25u` to `C+24.25u`: alpha
+**170** through the inward half, then **170 / 145 / 90 / 35 / 10** at normalized positions
+**0.5 / 0.625 / 0.75 / 0.875 / 1**. Its arc-facing direction remains radial, not vertical.
+
+Only lateral rims add a vertical bottom mask from `C−(0,24.25)` to `C+(0,24.25)`.
+Its multiplier is **1 throughout the upper half**, then **1 / 145÷170 / 90÷170 / 35÷170 /
+10÷170** at the same positions. The visual contract is the normalized product:
+**result alpha = outward alpha × bottom multiplier**. The centre uses outward alpha alone.
+This preserves the original upper lighting exactly and never brightens either faded region.
+Keep RGB and apply the **140/255 ambient multiplier once** to the composed rim.
+
+Use a small isolated group containing ONLY each affected border's source and alpha mask;
+do not mask its well, text, icon, sibling cell or scene. WFF supports parent-group-scoped
+`renderMode="MASK"` from version 1; general `blendMode` starts at version 3 and is excluded
+from this WFF2 target. A complication can contain a Group. These constraints permit the
+two small border masks without new assets, dependencies or complication slots; the actual
+generated form still requires official WFF2 validation and native rendering checks.
+[Official mask guidance](https://developer.android.com/training/wearables/wff/effects),
+[Complication reference](https://developer.android.com/reference/wear-os/wff/complication/complication).
+
+At these anchors the adjacent well gap is **2.8867**; the aperture gaps are **7.0896** at
+the sides and **6.8000** centrally. Tops remain y=112/98/112 and outside edges x=149/301.
+The lowest wells end at y=162. In the interim y160 clock layout, they overlapped two units
+of the clock's empty text-box bounds, not its measured ink. The then-measured active clock
+ink began at **179.30** on the 384 AVD and **179.61** on the 466 physical frame, leaving
+interim projected vertical gaps **17.30 / 17.61**. The combined y152 shift below supersedes
+these clock inputs; they do not establish new native time-string or scale acceptance.
+At the same anchors, 52-unit cells overlap by about **0.077**; 50 is the deliberate next step.
+
+Host Noto Sans Bold corpus measurements for the proposed sizes include `Sun`32×13,
+`Wed`37×14, `18°C`38×14 and `48°F`36×14 at 17; `-10°C`36×11, `100°F`38×11 and `UV 11`39×10
+at 14; and `-100°C`38×10 at 12. They fit 44×24 as host design inputs, not Android ink proof.
+The interim proposal retained the 104×22 legend and clock/watermark positions; their
+operative replacements follow below. Bands, payload semantics, defaults, units, RGB,
+navigation and normalized empty-cell treatments remain unchanged.
+
+The combined record below owns current implementation and native acceptance. Keep the full
+corpus/variant matrix and complete contour checks, including the original Sun fleck case;
+restoring a radial stroke alone is not proof against recurrence. No causal diagnosis is
+asserted. All three outward/upper treatments and the separate lower fades require actual
+native comparison, not just a mathematical or generated-board result.
+
+## Revision 2026-10-25 — combined face readability
+
+The Owner authorized lifting the clock and watermark to give the legend more readable
+space. Retain the 50-unit cells, font 17/14/12 and outward-plus-lateral-bottom product-mask
+contract above. This supersedes only the interim clock/watermark/legend restrictions.
+
+| Element | Operative target, in 450×450 design units |
+| --- | --- |
+| Active clock | TimeText **y=152**, height 90; unchanged 70 Bold, format and alignment |
+| Ambient clock | TimeText **y=152**, height 90; unchanged 81 Thin and mode switch |
+| Watermark centre | **(225,247)**; both images lifted 13, with source PNG unchanged |
+| Active watermark | **66×66 at (192,214)**, alpha 95 |
+| Ambient watermark | **54×54 at (198,220)**, alpha 70 |
+| Legend wells | **120×26 at x=165**, radius 6; rows **259 / 286 / 313**, pitch 27, bottom 339 |
+| Whole mixed-run label | **108×26 at inset 6**; **18** at ≤10 characters, **16** at 11, **14** at 12+ |
+| Family/paired markers | Left accent: unchanged declared 3×14 Arc/stroke 3, visible ink about 4.5×17 as its SVG rectangle represents; far marker: unchanged 3×14. Both recentered in the 26-unit row; colors/semantics preserved |
+
+Both clock variants move upward 8 without resizing their type. The legend grows into the
+freed region while keeping its lowest bottom 339 and contiguous bottom anchoring: two rows
+use 286/313; a single ring or credits-only uses 313. Preserve complete mixed-run centring,
+true-zero coloring, values and existing ellipsis policy. Legend alpha remains 255 active/
+90 ambient; existing colors, slot budget, defaults, units and usage arcs do not change.
+
+The conservative rectangle corner (165,339) clears the unchanged 133.8 aperture by
+**4.9745 units**. Host Noto Sans Bold corpus measurements at 18/16/14 reach at most
+**102×13**, within 108×26; arbitrary overflow is not claimed to fit. A 112-wide alternative
+would provide only 100 text units and miss that bounded long-budget corpus.
+
+The actual 192×192 watermark PNG has nonzero-alpha bounds (4,46)–(186,120), right/bottom
+exclusive. At the new positions its mapped active ink spans **y=229.8125–255.25** and
+ambient ink **232.9375–253.75**, leaving **3.75 / 5.25** units before the first well.
+These bounds use actual source alpha, not the image's padded square; native sampling still
+requires verification. Opacity, size, bottom dissolve and tap action are unchanged.
+
+Clock-only native ROIs at neutral minRGB 30, excluding bands and watermark, give projected
+clock-to-mark gaps after the lifts of **6.953** on 384 active, **6.563** on 384 ambient and
+**6.053** on 466 active. Projected nearest 50-rim/clock-ink gaps, including pixel-footprint
+margin, are **8.603 / 8.525 / 10.320** respectively. These are existing glyphs translated
+into the candidate geometry, not a new-render pass or proof for every time string/scale.
+The broader earlier ambient ROI included band pixels and is not clock evidence.
+
+**Bounded acceptance, 2026-10-25.** The actual combined-layout and shared-Group-name repair
+runs completed and were separately retired. Current legacy WFF2 and strict Push validation
+and builds passed through `just check-watchface` and `just check-wear`. Canonical XML SHA-256
+is `47e1149d819a91e0e6b4b8d9b5bde864dd03006578ddd55c2efb77a67f582a86`.
+It is bound to the actual legacy resource package `app.wardpulse.watchface`, Round instance
+`wfId-15` and physical instance `wfId-21`. Round 384 original frames passed independent
+review with actual renderer `AMBIENT`, visibility and Dozing confirmed, followed by
+`INTERACTIVE`/Awake after wake. Physical 466 active Face and Glance were verified with secure unlock
+and actual AC power/FULL 100%. Physical diagnostic data is separate from the healthy public
+cohort recaptured at 13:36:53–13:36:58 UTC; see the [screenshot index](../assets/README.md#shared-state-capture-refresh-2026-10-25).
+Independent review of the API 34 ten-fixture, twenty-frame set covered mapping, legend fit,
+zero/one/two/three bands, paired zero values, long credits and budgets, using the clean
+settled case-06 supplement. Cases 02–10 retain actual `AMBIENT` mode evidence. Case 01's
+original thin-clock frame retains only a mode boolean; its actual-mode supplement held
+before any fixture write because peer isolation was unconfirmed. Data and radios were restored.
+Square 360 was observed only in `MUTE` with NoData upper cells; populated defaults and true
+`AMBIENT` remain unproved, with original DND and stored summary restored. These bounded
+cases do not establish every variant or physical AOD. Public browser placement passed the
+screenshot index's recorded review. Earlier c96 checks remain historical.
 
 **Selected-zero revision 2026-10-13 — exhaustion stays visible.** The owner's screenshots
 `Screenshot_20261013_113638.png` and `Screenshot_20261013_113830.png` showed the phone's
@@ -250,8 +488,9 @@ Rules:
 - **Time is the hero** — optically centered; not a large remaining %.
 - **Upper cells** — three customizable complication cells in the band the baseline reserved for
   a weather glance until **2026-10-09**. They retain a curved row, with the middle one higher
-  than the outer two; since **2026-10-13** the whole row sits three units lower than the
-  original concentric layout. Their borders fade along the shortest radial path to the band.
+  than the outer two; the operative **2026-10-25** origins and 50-unit wells are listed above.
+  All occupied borders retain their outward radial fade; only lateral borders add the
+  strictly bottom-directed fade. The central border keeps its original outward treatment.
   The wearer chooses what each one holds. A fresh install shows the day of the week, the
   temperature and the UV index, but only the day is a complication: the two weather readings are
   the face's own chrome, so all three cells stay free for the wearer. A cell showing nothing is
@@ -263,9 +502,9 @@ Rules:
   - sunk into the surface (dark well, no high-contrast border card);
   - thin left **family accent** bar (same ColorRamp / `ring.id` family as the matching arc);
     WFF strip slots are `RANGED_VALUE` so accents use `[COMPLICATION.RANGED_VALUE_COLORS]`;
-  - **equal width** for every strip in the stack, sized for the worst-case center
-    label `100% · 10.0M` (compact `K`/`M`/`B`/`T` credits) so wells stay inside the
-    clear aperture and do not cover arcs;
+  - **equal 120-unit width** for every strip, with the finite 18/16/14 label sizes above
+    (compact `K`/`M`/`B`/`T` credits); wells stay inside the clear aperture. Extreme
+    values retain the explicit ellipsis limitation;
   - measured horizontal padding so Bold labels clear the well edges;
   - strip order = tightest remaining on top (nearest center) when plan rings exist; since
     **2026-10-09** each strip is drawn by its own ring's slot and the stack fills from its
@@ -277,13 +516,14 @@ Rules:
   - **budget strips are the one exception to the remaining language** — they read spend of
     limit (`$12.34/100`), because a budget ceiling is a number the wearer typed and money is
     how the product already names it everywhere else; the arc above still melts by remaining.
-    Spend keeps cents, the limit is whole (rounded to nearest): cents on both halves
-    (`$999.99/999.99`) are 14 % wider than the worst credits label and would force the strip
-    geometry open, while the worst budget label `$999.99/999` still fits. Currency travels as
+    Spend keeps cents, the limit is whole (rounded to nearest). The earlier fit comparison
+    recorded cents on both halves (`$999.99/999.99`) as 14 % wider than the then-worst credits
+    label; that ratio belongs to the older font/strip geometry. The current finite-size
+    corpus includes `$999.99/999`, with explicit ellipsis for extreme values. Currency travels as
     a code in the payload and Wear spells the symbol — a `$` baked into the watch would be a
     lie the day a connection bills in something else. A currency with no one-glyph symbol on
     the watch falls back to the plain `%` label rather than a spelled code: `EUR 999.99/999`
-    is 118 % of the locked width, worse than the form the rule already rejects;
+    was 118 % of the earlier locked width. The currency fallback rule is unchanged;
   - credits text is compact (`500`, `1.2K`) — never a `TOK` suffix;
   - a **split** strip is the exception to the accent rule and to credits alike: a marker at each
     end in the two pool colours, two percentages, no credits (see Split band);
@@ -415,27 +655,26 @@ aperture** for the circular region inside the innermost band that the strip well
 within, and that meaning is load-bearing in the strip-width rule. The earlier composition
 called this band the "upper aperture"; it is the same band.
 
-1. **Three cells of 42 units in a curved row, lowered together on 2026-10-13.** The owner
-   asked for a small downward move after the border revision. All three complete cells —
-   wells, borders, text and complication slots — move **three units down**, about **2.56 px**
-   on the 384-pixel screen. Horizontal origins, size, type and the clock remain unchanged.
-   The integer coordinates below are the same in the WFF and review generators:
+1. **Three cells of 50 units in a curved row, refined on 2026-10-25.** Each complete
+   well/border/text/icon/slot moves together. The integer coordinates below must match
+   in the WFF and review generators. Clock font/format stay unchanged; its position follows
+   the combined revision:
 
    | Cell | Centre | Box origin, integer | Radius from face centre |
    |---|---|---|---:|
-   | left | 173, 135 | `152, 114` | 103.9423 |
-   | middle | 225, 121 | `204, 100` | 104.0000 |
-   | right | 277, 135 | `256, 114` | 103.9423 |
+   | left | 174, 137 | `149, 112` | 101.7104 |
+   | middle | 225, 123 | `200, 98` | 102.0000 |
+   | right | 276, 137 | `251, 112` | 101.7104 |
 
    The derived clearances, against the clear aperture of **133.8** (the innermost band's
-   outer edge at 154, less the 20.2 the band renders inward) and the `TimeText` box at `y=160`:
+   outer edge at 154, less the 20.2 the band renders inward) and the `TimeText` box at `y=152`:
 
    | | Value |
    |---|---:|
-   | Left/right cell to inner band | **8.8577** |
-   | Middle cell to inner band | **8.8000** |
-   | Lowest cell to the clock box | **4.00** |
-   | Between neighbouring cells | 11.8516 |
+   | Left/right cell to inner band | **7.0896** |
+   | Middle cell to inner band | **6.8000** |
+   | Lowest cell to the clock box | **−10.00** (box overlap; projected ink gaps recorded above) |
+   | Between neighbouring cells | 2.8867 |
    | Middle cell above the outer two | 14.00 |
 
    **The former concentricity is historical.** The 2026-10-09 layout was derived from a
@@ -463,7 +702,10 @@ called this band the "upper aperture"; it is the same band.
    wedge of empty space between them and the band, narrowing towards the outer two — the row
    looked uneven because it was, and the measurement came after the owner said so, not before.
 
-   The square `BoundingBox` remains distinct from what is painted. At the lowered integer
+   **Historical 42-unit placement, 2026-10-13.** The complete cells moved three units down
+   to origins `(152,114) / (204,100) / (256,114)`. The following measurements belong to
+   that older build and do not validate the enlarged wells above.
+   The square `BoundingBox` remains distinct from what is painted. At that lowered integer
    placement its furthest corner reaches **132.8533**, now inside the 133.8 aperture. The
    well's furthest edge is **125.0**, and the inset text box's furthest corner is **121.8277**.
    These are derived bounds. A bounding box is where taps land (rule 9); the cell still draws
@@ -509,23 +751,23 @@ called this band the "upper aperture"; it is the same band.
    nothing, since neither id survives the update without a reinstall.
 
 3. **The strip stack anchors to its bottom row.** Each ring slot paints its strip at a fixed
-   height — 105 at `y=283`, 102 at `y=304`, 101 at `y=325` — and nothing in the markup varies
+   height — 105 at `y=259`, 102 at `y=286`, 101 at `y=313` — and nothing in the markup varies
    with how many rings are active. That is sound because arc slots always fill from the outside
    (`RingSurfaceOrder` maps slot *k* counted from the outside to payload `n-1-k`), so the
-   occupied rows are always contiguous and always end at `y=325`:
+   occupied rows are always contiguous and always end at `y=313`:
 
    | Rings | Bands drawn | Strip rows | Tightest |
    |---|---|---|---|
-   | 3 | 101, 102, 105 | 283 / 304 / 325 | `y=283` |
-   | 2 | 101, 102 | 304 / 325 | `y=304` |
-   | 1 | 101 | 325 | `y=325` |
-   | 0 | none | 325 — credits only | — |
+   | 3 | 101, 102, 105 | 259 / 286 / 313 | `y=259` |
+   | 2 | 101, 102 | 286 / 313 | `y=286` |
+   | 1 | 101 | 313 | `y=313` |
+   | 0 | none | 313 — credits only | — |
 
    **The zero row is a shipped state, not an edge case.** A payload may carry purchased
    credits and no plan ring at all, and the face has always shown that as a lone strip; before
    the fold it was strip 0's job, by the branch in `stripLabel` that falls back to
    `creditsGlance` when no ring sits at that index. The row follows the rule rather than the
-   old numbering: one row that is contiguous and ends at `y=325` **is** the row at `y=325`, so
+   old numbering: one row that is contiguous and ends at `y=313` **is** the row at `y=313`, so
    the bottom row carries it and slot 101 paints it. Putting it on `y=283`, where strip 0 used
    to live, would open under it exactly the hole this anchoring exists to prevent.
 
@@ -655,16 +897,16 @@ called this band the "upper aperture"; it is the same band.
    invented element in the metadata file compiles into the APK and passes every gate in this
    repository in silence.
 
-6. **A cell holds about four glyphs.** 42 design units is 36 px at 384 — an icon, or a short
-   label such as `72%`, `$12`, `2h`, `UV 7`. This is why the budget label stays on a strip: the
-   locked worst case `$999.99/999` is a strip-width number and has no reading at cell scale.
+6. **A cell holds about four ordinary-size glyphs.** 50 design units is about 43 px at 384 —
+   an icon, or a short label such as `72%`, `$12`, `2h`, `UV 7`. This is why the budget label
+   stays on a strip: `$999.99/999` is a strip-width number and has no reading at cell scale.
    A cell never carries a value that only makes sense at full strip width.
 
-   The ink measurements behind "about four" were taken in the **48-unit** cell this revision
-   replaced: `Tue` 23 units, `18°` 18, `UV 7` 27, against a widest label of 27 in 48. At 42 the
+   The historical ink measurements behind "about four" were taken in the original **48-unit**
+   cell, before 2026-10-09: `Tue` 23 units, `18°` 18, `UV 7` 27. At the subsequent 42 units the
    same three labels were rendered on the AVD in the 37-unit line box of rule 7 and read
-   cleanly, but their ink was not remeasured, so the headroom at the new size is seen rather
-   than counted.
+   cleanly, but their ink was not remeasured. That observed fit belongs to the old font/box;
+   the current 50-unit cells and font17 still require native measurements.
 
 7. **A complication has no appearance of its own; the face draws all of it.** WFF gives a
    provider no say in how its data looks. What arrives is data — `TEXT`, an optional `TITLE`, an
@@ -672,20 +914,16 @@ called this band the "upper aperture"; it is the same band.
    the face's: font, size, weight, colour, alignment, and what to draw at all. A cell cannot
    inherit a system style, and nothing stops three cells fed by three unrelated providers from
    reading as one row. `SHORT_TEXT` draws `TEXT` alone, centred on one line, in the face's own
-   label voice: Bold, `#fff4fbf8`, size 14 in the 450-unit language, ellipsised. It sits in the
-   same 18-unit line box the strips use, centred in the 42-unit cell at `y=12` by
-   `(42 - 18) / 2`, and inset horizontally to where the well still admits that box's full
-   height: a circle of radius 21 has a half-width of `sqrt(441 - 81)` = 18.97 at 9 units off its
-   midline, so the box is **37 units wide at `x=2`**. Without the inset a glyph's corner would
-   cross the rim, since the well is only as wide as 42 units on its midline and narrower
-   everywhere else. The provider's `TITLE` and its icon are both dropped. At four glyphs there
-   is no second line to put a title on, and a cell's own position is the label the wearer
+   label voice: Bold, `#fff4fbf8`, size **17**, **14** at 5–6 characters and **12** at 7 or more,
+   ellipsised for arbitrary overflow. The **44×24** text box is centred in the 50-unit well at
+   **x=3/y=13**, giving an integer centre on both axes. The provider's `TITLE` and its icon
+   are both dropped. At four ordinary-size glyphs there is no second line to put a title on,
+   and a cell's own position is the label the wearer
    learned when they chose it; an icon beside the text would halve the text, and the value is
-   what the cell was filled for. Size 14 is what the 2026-10-09 spike rendered — `Tue`, `0` and
-   `UV0` all read at 384 px — not an optimum; this revision fixes the rule, and the kerned fit
-   is measured when the generator changes.
+   what the cell was filled for. The 2026-10-09 spike rendered size14 — `Tue`, `0` and `UV0`
+   all read at 384 px. That older observation does not establish fit for the new font branches.
 
-   **`x=2` carries one unit of asymmetry, and it is the grid's, not a choice.** WFF coordinates
+   **Historical 37-unit box: `x=2` carried one unit of asymmetry.** WFF coordinates
    are integers: the validator rejects a fractional one outright, `'152.2' is not a valid value
    for 'integer'`. The exact inset is `(42 - 37) / 2` = 2.5, so the box runs 2..39 inside 42 and
    sits half a unit left of the cell's own centre. An even leftover — a 36-unit box at `x=3` —
@@ -694,8 +932,8 @@ called this band the "upper aperture"; it is the same band.
 
    **The complete reading is centred, including its scale (revision 2026-10-13).** The
    temperature now reads `18°C` or `51°F`, so the scale is part of the label. Its whole string
-   uses the same `x=2`, 37-unit box as `UV 7`, with no horizontal correction. This leaves the
-   same clearance on both sides without assuming an advance for the device's own font.
+   uses the same unshifted box as `UV 7`; the operative revision uses **x=3/width44**. This leaves
+   the same clearance on both sides without assuming an advance for the device's own font.
 
    **The former correction centred the digits of a degree-only reading.** Measured
    2026-10-09, `18°` sat with its string centre at 224.5 against a cell centre of 225, while its
@@ -707,19 +945,17 @@ called this band the "upper aperture"; it is the same band.
    template drew a bare number; the historical readings in rule 11 record that mismatch.
 
 8. **The other accepted types, and the two that are refused.** `MONOCHROMATIC_IMAGE` is the one
-   type whose whole content is an icon. It is drawn at 21 units in the 42-unit cell and
+   type whose whole content is an icon. It is drawn at **24 units in the 50-unit cell** and
    tinted `#fff4fbf8`, the same colour as the text, so an icon reads as face text rather than as
-   a foreign mark; half the diameter leaves the well's rim clear on a round recess. Like the
-   line box of rule 7 it cannot be centred exactly: 21 in 42 leaves 10.5 a side on an integer
-   grid, so the icon sits at `x=10` and half a unit in from centre — the same remainder, in the
-   same direction, and the grid's rather than a choice. The tint goes on a group of its own
+   a foreign mark; half the diameter leaves the well's rim clear on a round recess. The
+   integer inset **13** centres both axes exactly. The tint goes on a group of its own
    rather than on the slot, since tinting the slot would take the well with it. It is
    deliberately not tinted a family colour: on this face a family colour means *this ring's
    provider*, and a cell is not a ring. `RANGED_VALUE` is drawn as **text, never as an arc** —
    `TEXT` when the provider sends it, the value itself otherwise. A small arc in a cell would
    put a second arc language on a face whose arcs already mean one thing, layer rule 1's *one
    ring = one metric of one connection*, and it would say it a few units from the real ones —
-   rule 1 puts every cell's far edge six units from the innermost band.
+   rule 1 records the clearances of every cell's far edge from the innermost band.
    The ramp colour goes unused for the same reason the icon tint does. What a provider that
    sends no `TEXT` renders is declared here, not measured.
 
@@ -827,18 +1063,23 @@ called this band the "upper aperture"; it is the same band.
     | nothing at all | graded, below | no | scene chrome |
 
     **The ring is what says a cell is occupied (revision 2026-10-10; border revised 2026-10-13).**
-    A stroke of **1.5** on a path of **40.5** — radius **19.5 to 21.0**, inscribed in a well
-    whose own edge is at 21 — in the face's own text colour. Its inward half keeps alpha
-    `0xaa`, `#aaf4fbf8`; its outward half dissolves as described below. It goes on whatever the cell is showing,
-    the wearer's complication and the face's own weather reading alike, and never on an empty
+    The operative revision uses a stroke of **1.5** on a path of **48.5** — radius **23.5 to 25.0**,
+    inscribed in a well whose edge is at 25, in the face's own text colour. All three borders
+    retain the outward radial fade from peak alpha `0xaa`; only lateral borders add the
+    vertical 6 o'clock treatment. The centre has no ADDED bottom fade, not a uniform rim.
+    It goes on the wearer's
+    complication and the face's own weather reading alike, and never on an empty
     one. That is the whole of the language: **a ring means occupied, a recess means free**, and
     a cell is never both.
 
-    **Directional border revision 2026-10-13 — fade along the shortest path to the band.**
+    **Historical directional border revision 2026-10-13 — fade towards the band.**
+    The geometry and device readings in the following account belong to the older 42-unit
+    wells. The current 50-unit rule retains their outward radial language at its new centres
+    and adds a separate bottom-only lateral treatment; these old coordinates are historical.
     The owner chose the same soft dissolve the watermark uses towards the legend, then asked
     that it follow the shortest path to the adjacent band after the initial fixed directions
     looked asymmetric. The original **10:30 / 12:00 / 1:30** treatment is superseded. The
-    current direction is derived from the actual cell centre `C` and face centre `F=(225,225)`:
+    direction then used was derived from the actual cell centre `C` and face centre `F=(225,225)`:
     `u=(C-F)/|C-F|`. The nearest point on the circular boundary of radius 133.8 is `F+133.8u`,
     and the cell's nearest outer border point is `C+21u`. The directions are therefore
     **329.9816° / 0° / 30.0184°**, about **11:00 / 12:00 / 1:00**, with exactly mirrored side
@@ -941,7 +1182,8 @@ called this band the "upper aperture"; it is the same band.
     is a decision, not a carry-over: without it the face would have three kinds of cell instead
     of two, and the wearer would have to learn which of two dark discs was theirs to fill.
 
-    The third is a radial gradient centred on the cell at radius 21, running
+    The third is a radial gradient centred on the cell at radius **25** (previously 24/21),
+    running
     `#ff0b0e0c #ff0b0e0c #ff242a27` at positions `0.0 0.55 1.0`: opaque, and lightening only
     across the outer 45 % of the radius. It reads because the rim `#242a27` is `36, 42, 39`
     against a surrounding lift of `19, 24, 22`. Branching between the second and third is
@@ -1139,9 +1381,9 @@ called this band the "upper aperture"; it is the same band.
     **37.72**, just beyond it, and `UV 11` was **39.34**. These are host-font advances, not
     device ink measurements: the face uses `SYNC_TO_DEVICE`, so those host advances prove
     neither a live overflow nor a live fit. The separate device readings above confirm only
-    `50°F` before lowering and `49°F` after it. Keep size 14 and the existing ellipsis; the suffixed
-    three-digit case and `UV 11` remain device checks. If either ellipsises, record the actual
-    string and device before changing its type size or spacing.
+    `50°F` before lowering and `49°F` after it. Those measurements do not validate the new
+    17/14/12 weather branches in the operative readability revision. Negative/three-digit temperatures
+    and `UV 11` remain device checks, with explicit ellipsis for unexpectedly verbose values.
 
 12. **Ambient: the wells stay, the values dim.** Three things make up a cell across its two
     states — a filled one has a value over an occluder, an empty one has a recess and whatever
@@ -1164,7 +1406,7 @@ called this band the "upper aperture"; it is the same band.
     chrome under it, and nothing else can do that job — the chrome is declared outside the slot,
     and no expression in the scene can ask whether a slot is filled. Switch it off in ambient
     and the weather reading comes back out from under the complication, with two values drawn
-    over each other in the same 42 units, which is exactly what rule 11 says a filled cell puts
+    over each other in the same cell, which is exactly what rule 11 says a filled cell puts
     an end to.
 
     **The recess stays too**, in both of the forms rule 10 gives it, and this overturns the rule
@@ -1239,7 +1481,7 @@ type texture for the one feature that tempted it and why it no longer does.
 | Ring pitch (outer edge to outer edge) | 24 units |
 | Outer edges, outer to inner | 202 / 178 / 154 / 130 |
 | Gap between bands | 3.5–4.8 units |
-| Strip clearance to the inner band | 8.4 units |
+| Strip clearance to the inner band | 4.9745 units calculated for the combined120×26 target; older104×22 calculation8.50 and measured8.4 |
 
 Widening the band alone is not enough: at the original 18-unit pitch a thickness of 40 made
 neighbouring bands touch, and a first attempt at pitch 21 still left a 0.8-unit hairline
@@ -1274,8 +1516,8 @@ against its own generator, never against the face. The two agree as of the melt-
 correction below, to within the 0.1 unit between the art's measured 20.2 and the face's
 declared 20.
 
-**The clock sits above the centre, and the number is measured, not declared.** `watchface.xml`
-gives `TimeText` a box at `y=160, height=90`, whose centre is 20 units above the canvas centre;
+**Historical clock measurement; the combined revision lifts both variants8 more units.**
+At that measured baseline, `TimeText` used `y=160, height=90`, its centre20 above the canvas centre;
 measured 2026-08-13, WFF renders the digits **21.7** up. That is the optical centre the hero rule
 asks for — the strip stack below pulls the eye down. Review art centred the clock geometrically
 and disagreed with the face by that much; it now carries the measured lift (`TIME_LIFT` in
@@ -1496,8 +1738,8 @@ takes the straight-ended branch.
 So this is not a change the face absorbs invisibly. A partially spent band now shows the
 remainder it always meant to, and the boards have been showing that all along.
 
-The strip stack was resized with the rings — 88x18 boxes stepping 21 units from y=283, a
-stack pitch of its own that has nothing to do with the 24-unit ring pitch. The previous 96x20
+The strip stack was originally resized with the rings — 88x18 boxes stepping 21 units from
+y=283, a stack pitch of its own that has nothing to do with the 24-unit ring pitch. The previous 96x20
 stack reached radius 142.3 and would have cut into the widened inner band.
 
 Only three strips render, matching the three-ring cap. As of **2026-09-16**, the former fourth
@@ -1509,9 +1751,11 @@ eight-slot budget is spare now.
 
 As of **2026-10-09** the strips no longer hold slots of their own: each one is drawn by its own
 band's slot at a fixed row, and the three slots this frees are spent on upper cells under new
-ids (Upper cells, rule 2). The stack geometry above is unchanged — the same 88x18 boxes at the
-same 21-unit pitch from `y=283` — but which slot paints which row is now fixed rather than
-following the payload index, which is why the stack anchors to its bottom row.
+ids (Upper cells, rule 2). That revision retained the 88x18 boxes at 21-unit pitch from
+`y=283`, but fixed which slot paints which row rather than following the payload index.
+The initial **2026-10-25** readability revision used104×22 at23-unit pitch fromy271.
+The operative combined target is **120×26**, pitch **27** from **y=259**, preserving the
+same bottom339, bottom anchoring and all ring geometry.
 
 The historical **2026-08-16** reading is the "before": the shared marker landed at x 265–268 of
 the 181–269 strip, on the paired row only. That is evidence for the previous rendering, taken
@@ -1537,8 +1781,8 @@ the box edge is inside that tolerance, not a measured overhang.
 what the watch shows. Before that revision the generator drew the nominal 26, roughly 2.3x
 the real band; it also sized each strip box to its own label until **2026-08-09**, which drew
 the retired 96-unit stack in a 12pt-face world. The stack is now a constant there too, and the
-generator refuses any label wider than the 78-unit text region instead of letting it overhang —
-the face would ellipsize it.
+generator must reject a supported review label wider than the operative **108-unit** text
+region at its selected18/16/14 size rather than let it overhang; the face would ellipsize it.
 
 The family accent bar is the band trap again at strip scale: its 3x14 arc carries a 3-thick
 stroke, so it paints 17 units tall and 6 wide with the left half clipped by the box edge —
@@ -1652,8 +1896,8 @@ other side.
 Dimming only the rows that carry something unique is possible and still wrong. Format version 2
 has `subText(,,)` and `textLength()` (`arithmeticExpressionType.xsd`, lines 58–59), so a face
 can branch on what `TEXT` holds. But with three rings, where only the bottom row carries
-credits, ambient would light one row at `y=325` and leave two dark gaps above it. The stack is
-anchored to its bottom row precisely so that it never opens a gap (Upper cells, rule 3), and
+credits, ambient would light one bottom row (operative target `y=313`) and leave two dark gaps above it.
+The stack is anchored to its bottom row precisely so it never opens a gap (Upper cells, rule 3), and
 selective survival puts that gap back. The zero-ring case needs no special handling either: a
 lone credits row dims like any other row.
 
@@ -1706,7 +1950,7 @@ follows the same division: what restates something else on the face can go, and 
 only carrier of its own value cannot. A complication in a cell repeats nothing, and neither
 does the weather chrome showing through an empty one, so both dim. The wells go the other way
 for two reasons. A filled cell's well is the only thing hiding the weather chrome beneath it,
-so it has to survive ambient or two readings land in the same 42 units. And a well darkens the
+so it has to survive ambient or two readings land in the same cell. And a well darkens the
 lift rather than lighting it, so switching one off would raise ambient luminance instead of
 lowering it. The dimmed level is to be measured when the generator changes, in the proportion
 the face already uses for the ring type — see Upper cells, rule 12.
@@ -1778,11 +2022,11 @@ OpenPencil `rings.fig` is a frame inventory only (`.fig` write drops ellipse `ar
   **2026-10-10**: this refuses chrome that frames content which is already legible without it,
   and a filled cell was not — an opaque well on the lift is a step of eight to eleven levels,
   which reads as depth under a recess but leaves a filled cell edgeless, so only its glyphs
-  registered. Since **2026-10-13** the ring is a 1.5-unit line in the face's own text colour,
-  dissolving along the shortest radial path to the nearest band, about 11:00, noon and 1:00.
-  It remains inscribed, its outer
-  edge meeting the well's own at 21 (geometry corrected **2026-10-11**; Upper cells, rule 10),
-  carrying no fill, no shadow and no colour of its own, and it is what makes
+  registered. The ring remains a 1.5-unit line in the face's own text colour. The
+  operative **2026-10-25** clarification preserves its outward radial fade on all cells and
+  adds a strictly bottom-directed fade only to lateral borders. It remains inscribed, its outer
+  edge meeting the well's own at **25** after the refinement (previously 24/21;
+  Upper cells, rule 10), carrying no fill, no shadow and no colour of its own. It makes
   *occupied* and *free* distinct at a glance.
 - Time-based rotation of which metric is “on top” in the first iteration.
 - Brand/marketing chrome, floating badges, or dense face captions.
@@ -1953,7 +2197,8 @@ the face shows a wearer a face they will not get.
 
 So the asset is **composed** rather than only rasterized: the Primary board at 450, then the
 faded mono drawable `apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png` at the box
-`watchface.xml` gives the mark — 66×66 at (192, 227), alpha 95 — read out of that file at
+`watchface.xml` gives the mark — originally66×66 at(192,227), alpha95; the combined target
+is(192,214) at the same size/alpha — read out of that file at
 render time rather than copied into the generator, so the portrait cannot disagree with the face
 about where the mark sits. The ambient mark is not drawn: this is the active portrait, and the
 smaller 54×54 at alpha 70 only appears under an ambient variant (Upper cells, rule 12, and

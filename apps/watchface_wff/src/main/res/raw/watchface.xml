@@ -4,8 +4,8 @@
   (docs/product/WATCH_RING_DESIGN.md, baseline 2026-07-25).
 
   Visual target: apps/wear_android/design/round-*-plan*.svg
-  — radial lift background, 40-unit ring stroke (WFF paints about half of it), equal-width
-  sunk strips (88, rx=6) sized for "100% · 10.0M". Strip slots are RANGED_VALUE so accents
+  — radial lift background, 20-unit ring stroke, equal-width sunk strips (120x26,
+  rx=6) with bounded 18/16/14-unit labels. Ring slots are RANGED_VALUE so accents
   use the same ColorRamp as arcs ([COMPLICATION.RANGED_VALUE_COLORS]).
 
   Ring type: the budget period from COMPLICATION.TITLE (D / 7D / M) repeated around the
@@ -40,18 +40,18 @@
             </Ellipse>
         </PartDraw>
         <!-- What lies under the cells, declared ahead of every slot so a filled
-             cell's own opaque well covers it: 152,114  204,100  256,114 at 42 units, centres on a
-             curved row translated three units below its original concentric layout.
+             cell's own opaque well covers it: 149,112  200,98  251,112 at 50 units, centres on a
+             curved row with the middle cell raised fourteen units.
              The middle and right cells
              carry the default weather, which costs no complication slot. -->
-        <Group x="152" y="114" width="42" height="42" name="cell1Chrome">
-            <PartDraw x="0" y="0" width="42" height="42">
-                <Ellipse x="0" y="0" width="42" height="42">
+        <Group x="149" y="112" width="50" height="50" name="cell1Chrome">
+            <PartDraw x="0" y="0" width="50" height="50">
+                <Ellipse x="0" y="0" width="50" height="50">
                     <Fill color="#ff0b0e0c">
                         <RadialGradient
-                            centerX="21"
-                            centerY="21"
-                            radius="21"
+                            centerX="25"
+                            centerY="25"
+                            radius="25"
                             colors="#ff0b0e0c #ff0b0e0c #ff242a27"
                             positions="0.0 0.55 1.0" />
                     </Fill>
@@ -59,32 +59,32 @@
             </PartDraw>
         </Group>
 
-        <Group x="204" y="100" width="42" height="42" name="cell2Chrome">
+        <Group x="200" y="98" width="50" height="50" name="cell2Chrome">
             <Condition>
                 <Expressions>
                     <Expression name="hasWeather"><![CDATA[[WEATHER.IS_AVAILABLE]]]></Expression>
                 </Expressions>
                 <Compare expression="hasWeather">
-                    <Group x="0" y="0" width="42" height="42" name="cell2Reading">
-                        <PartDraw x="0" y="0" width="42" height="42">
-                            <Ellipse x="0" y="0" width="42" height="42">
+                    <Group x="0" y="0" width="50" height="50" name="cell2Reading">
+                        <PartDraw x="0" y="0" width="50" height="50">
+                            <Ellipse x="0" y="0" width="50" height="50">
                                 <Fill color="#eb0b0e0c" />
                             </Ellipse>
                         </PartDraw>
-                        <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <PartDraw x="0" y="0" width="50" height="50" alpha="255">
                             <Variant mode="AMBIENT" target="alpha" value="140" />
                             <Arc
-                                centerX="21"
-                                centerY="21"
-                                width="40.5"
-                                height="40.5"
+                                centerX="25"
+                                centerY="25"
+                                width="48.5"
+                                height="48.5"
                                 startAngle="0"
                                 endAngle="359.9">
                                 <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
                                     <LinearGradient
-                                        startX="21"
-                                        startY="41.25"
-                                        endX="21"
+                                        startX="25"
+                                        startY="49.25"
+                                        endX="25"
                                         endY="0.75"
                                         colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
                                         positions="0 0.5 0.625 0.75 0.875 1" />
@@ -97,53 +97,149 @@
                                 <Expression name="isFahrenheit"><![CDATA[[WEATHER.TEMPERATURE_UNIT] == 2]]></Expression>
                             </Expressions>
                             <Compare expression="isCelsius">
-                                <PartText x="2" y="12" width="37" height="18" alpha="255">
-                                    <Variant mode="AMBIENT" target="alpha" value="140" />
-                                    <Text align="CENTER" ellipsis="TRUE">
-                                        <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                            <Template>%s°C
-                                                <Parameter expression="[WEATHER.TEMPERATURE]" />
-                                            </Template>
-                                        </Font>
-                                    </Text>
-                                </PartText>
+                                <Condition>
+                                    <Expressions>
+                                        <Expression name="smallText"><![CDATA[[WEATHER.TEMPERATURE] <= -100]]></Expression>
+                                        <Expression name="mediumText"><![CDATA[!([WEATHER.TEMPERATURE] <= -100) && ([WEATHER.TEMPERATURE] < 0 || [WEATHER.TEMPERATURE] >= 100)]]></Expression>
+                                    </Expressions>
+                                    <Compare expression="smallText">
+                                        <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                                            <Text align="CENTER" ellipsis="TRUE">
+                                                <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                                    <Template>%s°C
+                                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                                    </Template>
+                                                </Font>
+                                            </Text>
+                                        </PartText>
+                                    </Compare>
+                                    <Compare expression="mediumText">
+                                        <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                                            <Text align="CENTER" ellipsis="TRUE">
+                                                <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                    <Template>%s°C
+                                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                                    </Template>
+                                                </Font>
+                                            </Text>
+                                        </PartText>
+                                    </Compare>
+                                    <Default>
+                                        <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                                            <Text align="CENTER" ellipsis="TRUE">
+                                                <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                                    <Template>%s°C
+                                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                                    </Template>
+                                                </Font>
+                                            </Text>
+                                        </PartText>
+                                    </Default>
+                                </Condition>
                             </Compare>
                             <Compare expression="isFahrenheit">
-                                <PartText x="2" y="12" width="37" height="18" alpha="255">
-                                    <Variant mode="AMBIENT" target="alpha" value="140" />
-                                    <Text align="CENTER" ellipsis="TRUE">
-                                        <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                            <Template>%s°F
-                                                <Parameter expression="[WEATHER.TEMPERATURE]" />
-                                            </Template>
-                                        </Font>
-                                    </Text>
-                                </PartText>
+                                <Condition>
+                                    <Expressions>
+                                        <Expression name="smallText"><![CDATA[[WEATHER.TEMPERATURE] <= -100]]></Expression>
+                                        <Expression name="mediumText"><![CDATA[!([WEATHER.TEMPERATURE] <= -100) && ([WEATHER.TEMPERATURE] < 0 || [WEATHER.TEMPERATURE] >= 100)]]></Expression>
+                                    </Expressions>
+                                    <Compare expression="smallText">
+                                        <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                                            <Text align="CENTER" ellipsis="TRUE">
+                                                <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                                    <Template>%s°F
+                                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                                    </Template>
+                                                </Font>
+                                            </Text>
+                                        </PartText>
+                                    </Compare>
+                                    <Compare expression="mediumText">
+                                        <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                                            <Text align="CENTER" ellipsis="TRUE">
+                                                <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                    <Template>%s°F
+                                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                                    </Template>
+                                                </Font>
+                                            </Text>
+                                        </PartText>
+                                    </Compare>
+                                    <Default>
+                                        <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                                            <Text align="CENTER" ellipsis="TRUE">
+                                                <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                                    <Template>%s°F
+                                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                                    </Template>
+                                                </Font>
+                                            </Text>
+                                        </PartText>
+                                    </Default>
+                                </Condition>
                             </Compare>
                             <Default>
-                                <PartText x="2" y="12" width="37" height="18" alpha="255">
-                                    <Variant mode="AMBIENT" target="alpha" value="140" />
-                                    <Text align="CENTER" ellipsis="TRUE">
-                                        <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                            <Template>%s°
-                                                <Parameter expression="[WEATHER.TEMPERATURE]" />
-                                            </Template>
-                                        </Font>
-                                    </Text>
-                                </PartText>
+                                <Condition>
+                                    <Expressions>
+                                        <Expression name="smallText"><![CDATA[[WEATHER.TEMPERATURE] <= -100]]></Expression>
+                                        <Expression name="mediumText"><![CDATA[!([WEATHER.TEMPERATURE] <= -100) && ([WEATHER.TEMPERATURE] < 0 || [WEATHER.TEMPERATURE] >= 100)]]></Expression>
+                                    </Expressions>
+                                    <Compare expression="smallText">
+                                        <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                                            <Text align="CENTER" ellipsis="TRUE">
+                                                <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                                    <Template>%s°
+                                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                                    </Template>
+                                                </Font>
+                                            </Text>
+                                        </PartText>
+                                    </Compare>
+                                    <Compare expression="mediumText">
+                                        <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                                            <Text align="CENTER" ellipsis="TRUE">
+                                                <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                    <Template>%s°
+                                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                                    </Template>
+                                                </Font>
+                                            </Text>
+                                        </PartText>
+                                    </Compare>
+                                    <Default>
+                                        <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                                            <Text align="CENTER" ellipsis="TRUE">
+                                                <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                                    <Template>%s°
+                                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                                    </Template>
+                                                </Font>
+                                            </Text>
+                                        </PartText>
+                                    </Default>
+                                </Condition>
                             </Default>
                         </Condition>
                     </Group>
                 </Compare>
                 <Default>
-                    <Group x="0" y="0" width="42" height="42" name="cell2Bare">
-                        <PartDraw x="0" y="0" width="42" height="42">
-                            <Ellipse x="0" y="0" width="42" height="42">
+                    <Group x="0" y="0" width="50" height="50" name="cell2Bare">
+                        <PartDraw x="0" y="0" width="50" height="50">
+                            <Ellipse x="0" y="0" width="50" height="50">
                                 <Fill color="#ff0b0e0c">
                                     <RadialGradient
-                                        centerX="21"
-                                        centerY="21"
-                                        radius="21"
+                                        centerX="25"
+                                        centerY="25"
+                                        radius="25"
                                         colors="#ff0b0e0c #ff0b0e0c #ff242a27"
                                         positions="0.0 0.55 1.0" />
                                 </Fill>
@@ -154,59 +250,106 @@
             </Condition>
         </Group>
 
-        <Group x="256" y="114" width="42" height="42" name="cell3Chrome">
+        <Group x="251" y="112" width="50" height="50" name="cell3Chrome">
             <Condition>
                 <Expressions>
                     <Expression name="hasWeather"><![CDATA[[WEATHER.IS_AVAILABLE]]]></Expression>
                 </Expressions>
                 <Compare expression="hasWeather">
-                    <Group x="0" y="0" width="42" height="42" name="cell3Reading">
-                        <PartDraw x="0" y="0" width="42" height="42">
-                            <Ellipse x="0" y="0" width="42" height="42">
+                    <Group x="0" y="0" width="50" height="50" name="cell3Reading">
+                        <PartDraw x="0" y="0" width="50" height="50">
+                            <Ellipse x="0" y="0" width="50" height="50">
                                 <Fill color="#eb0b0e0c" />
                             </Ellipse>
                         </PartDraw>
-                        <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                        <Group x="0" y="0" width="50" height="50" name="cell3ReadingBorder" alpha="255">
                             <Variant mode="AMBIENT" target="alpha" value="140" />
-                            <Arc
-                                centerX="21"
-                                centerY="21"
-                                width="40.5"
-                                height="40.5"
-                                startAngle="0"
-                                endAngle="359.9">
-                                <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
-                                    <LinearGradient
-                                        startX="10.869379"
-                                        startY="38.533768"
-                                        endX="31.130621"
-                                        endY="3.466232"
-                                        colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
-                                        positions="0 0.5 0.625 0.75 0.875 1" />
-                                </Stroke>
-                            </Arc>
-                        </PartDraw>
-                        <PartText x="2" y="12" width="37" height="18" alpha="255">
-                            <Variant mode="AMBIENT" target="alpha" value="140" />
-                            <Text align="CENTER" ellipsis="TRUE">
-                                <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                    <Template>UV %s
-                                        <Parameter expression="[WEATHER.UV_INDEX]" />
-                                    </Template>
-                                </Font>
-                            </Text>
-                        </PartText>
+                            <PartDraw x="0" y="0" width="50" height="50" alpha="255">
+                                <Arc
+                                    centerX="25"
+                                    centerY="25"
+                                    width="48.5"
+                                    height="48.5"
+                                    startAngle="0"
+                                    endAngle="359.9">
+                                    <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                        <LinearGradient
+                                            startX="12.840473"
+                                            startY="45.981144"
+                                            endX="37.159527"
+                                            endY="4.018856"
+                                            colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                            positions="0 0.5 0.625 0.75 0.875 1" />
+                                    </Stroke>
+                                </Arc>
+                            </PartDraw>
+                            <PartDraw x="0" y="0" width="50" height="50" renderMode="MASK">
+                                <Rectangle x="0" y="0" width="50" height="50">
+                                    <Fill color="#ffffffff">
+                                        <LinearGradient
+                                            startX="25"
+                                            startY="0.75"
+                                            endX="25"
+                                            endY="49.25"
+                                            colors="#ffffffff #ffffffff #daffffff #87ffffff #35ffffff #0fffffff"
+                                            positions="0 0.5 0.625 0.75 0.875 1" />
+                                    </Fill>
+                                </Rectangle>
+                            </PartDraw>
+                        </Group>
+                        <Condition>
+                            <Expressions>
+                                <Expression name="smallText"><![CDATA[false]]></Expression>
+                                <Expression name="mediumText"><![CDATA[!(false) && ([WEATHER.UV_INDEX] >= 10)]]></Expression>
+                            </Expressions>
+                            <Compare expression="smallText">
+                                <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                    <Variant mode="AMBIENT" target="alpha" value="140" />
+                                    <Text align="CENTER" ellipsis="TRUE">
+                                        <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                            <Template>UV %s
+                                                <Parameter expression="[WEATHER.UV_INDEX]" />
+                                            </Template>
+                                        </Font>
+                                    </Text>
+                                </PartText>
+                            </Compare>
+                            <Compare expression="mediumText">
+                                <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                    <Variant mode="AMBIENT" target="alpha" value="140" />
+                                    <Text align="CENTER" ellipsis="TRUE">
+                                        <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                            <Template>UV %s
+                                                <Parameter expression="[WEATHER.UV_INDEX]" />
+                                            </Template>
+                                        </Font>
+                                    </Text>
+                                </PartText>
+                            </Compare>
+                            <Default>
+                                <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                    <Variant mode="AMBIENT" target="alpha" value="140" />
+                                    <Text align="CENTER" ellipsis="TRUE">
+                                        <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                            <Template>UV %s
+                                                <Parameter expression="[WEATHER.UV_INDEX]" />
+                                            </Template>
+                                        </Font>
+                                    </Text>
+                                </PartText>
+                            </Default>
+                        </Condition>
                     </Group>
                 </Compare>
                 <Default>
-                    <Group x="0" y="0" width="42" height="42" name="cell3Bare">
-                        <PartDraw x="0" y="0" width="42" height="42">
-                            <Ellipse x="0" y="0" width="42" height="42">
+                    <Group x="0" y="0" width="50" height="50" name="cell3Bare">
+                        <PartDraw x="0" y="0" width="50" height="50">
+                            <Ellipse x="0" y="0" width="50" height="50">
                                 <Fill color="#ff0b0e0c">
                                     <RadialGradient
-                                        centerX="21"
-                                        centerY="21"
-                                        radius="21"
+                                        centerX="25"
+                                        centerY="25"
+                                        radius="25"
                                         colors="#ff0b0e0c #ff0b0e0c #ff242a27"
                                         positions="0.0 0.55 1.0" />
                                 </Fill>
@@ -465,16 +608,16 @@
                 </Condition>
                 <!-- The legend row this ring owns. Its own slot since 2026-10-09:
                      the three the strips held are the three the cells took. -->
-                <Group x="181" y="325" width="88" height="18" name="ring1_strip" alpha="255">
+                <Group x="165" y="313" width="120" height="26" name="ring1_strip" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="90" />
-                    <PartDraw x="0" y="0" width="88" height="18">
-                        <RoundRectangle x="0" y="0" width="88" height="18" cornerRadiusX="6" cornerRadiusY="6">
+                    <PartDraw x="0" y="0" width="120" height="26">
+                        <RoundRectangle x="0" y="0" width="120" height="26" cornerRadiusX="6" cornerRadiusY="6">
                             <Fill color="#eb0b0e0c" />
                         </RoundRectangle>
                         <!-- Family accent from ColorRamp (same path as matching ring). -->
                         <Arc
                             centerX="1.5"
-                            centerY="9"
+                            centerY="13"
                             width="3"
                             height="14"
                             startAngle="0"
@@ -491,10 +634,10 @@
                             <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
                         </Expressions>
                         <Compare expression="isPool0">
-                            <PartDraw x="0" y="0" width="88" height="18">
+                            <PartDraw x="0" y="0" width="120" height="26">
                                 <Arc
-                                    centerX="86.5"
-                                    centerY="9"
+                                    centerX="118.5"
+                                    centerY="13"
                                     width="3"
                                     height="14"
                                     startAngle="0"
@@ -504,10 +647,10 @@
                             </PartDraw>
                         </Compare>
                         <Compare expression="isPool1">
-                            <PartDraw x="0" y="0" width="88" height="18">
+                            <PartDraw x="0" y="0" width="120" height="26">
                                 <Arc
-                                    centerX="86.5"
-                                    centerY="9"
+                                    centerX="118.5"
+                                    centerY="13"
                                     width="3"
                                     height="14"
                                     startAngle="0"
@@ -524,68 +667,228 @@
                             <Expression name="zeroBoth"><![CDATA[[COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
                         </Expressions>
                         <Compare expression="zeroInner">
-                            <PartText x="6" y="0" width="78" height="18">
-                                <Text align="CENTER" ellipsis="TRUE">
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
-                                        </Template>
-                                    </Font>
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
-                                        </Template>
-                                    </Font>
-                                </Text>
-                            </PartText>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="longLabel"><![CDATA[textLength([COMPLICATION.TEXT]) == 11]]></Expression>
+                                    <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
+                                </Expressions>
+                                <Compare expression="longLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Default>
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Default>
+                            </Condition>
                         </Compare>
                         <Compare expression="zeroOuter">
-                            <PartText x="6" y="0" width="78" height="18">
-                                <Text align="CENTER" ellipsis="TRUE">
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
-                                        </Template>
-                                    </Font>
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
-                                        </Template>
-                                    </Font>
-                                </Text>
-                            </PartText>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="longLabel"><![CDATA[textLength([COMPLICATION.TEXT]) == 11]]></Expression>
+                                    <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
+                                </Expressions>
+                                <Compare expression="longLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Default>
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Default>
+                            </Condition>
                         </Compare>
                         <Compare expression="zeroBoth">
-                            <PartText x="6" y="0" width="78" height="18">
-                                <Text align="CENTER" ellipsis="TRUE">
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
-                                        </Template>
-                                    </Font>
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
-                                        </Template>
-                                    </Font>
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
-                                        </Template>
-                                    </Font>
-                                </Text>
-                            </PartText>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="longLabel"><![CDATA[textLength([COMPLICATION.TEXT]) == 11]]></Expression>
+                                    <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
+                                </Expressions>
+                                <Compare expression="longLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Default>
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Default>
+                            </Condition>
                         </Compare>
                         <Default>
-                            <PartText x="6" y="0" width="78" height="18">
-                                <Text align="CENTER" ellipsis="TRUE">
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                        <Template>%s
-                                            <Parameter expression="[COMPLICATION.TEXT]" />
-                                        </Template>
-                                    </Font>
-                                </Text>
-                            </PartText>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="longLabel"><![CDATA[textLength([COMPLICATION.TEXT]) == 11]]></Expression>
+                                    <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
+                                </Expressions>
+                                <Compare expression="longLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Default>
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Default>
+                            </Condition>
                         </Default>
                     </Condition>
                 </Group>
@@ -841,16 +1144,16 @@
                 </Condition>
                 <!-- The legend row this ring owns. Its own slot since 2026-10-09:
                      the three the strips held are the three the cells took. -->
-                <Group x="181" y="304" width="88" height="18" name="ring2_strip" alpha="255">
+                <Group x="165" y="286" width="120" height="26" name="ring2_strip" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="90" />
-                    <PartDraw x="0" y="0" width="88" height="18">
-                        <RoundRectangle x="0" y="0" width="88" height="18" cornerRadiusX="6" cornerRadiusY="6">
+                    <PartDraw x="0" y="0" width="120" height="26">
+                        <RoundRectangle x="0" y="0" width="120" height="26" cornerRadiusX="6" cornerRadiusY="6">
                             <Fill color="#eb0b0e0c" />
                         </RoundRectangle>
                         <!-- Family accent from ColorRamp (same path as matching ring). -->
                         <Arc
                             centerX="1.5"
-                            centerY="9"
+                            centerY="13"
                             width="3"
                             height="14"
                             startAngle="0"
@@ -867,10 +1170,10 @@
                             <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
                         </Expressions>
                         <Compare expression="isPool0">
-                            <PartDraw x="0" y="0" width="88" height="18">
+                            <PartDraw x="0" y="0" width="120" height="26">
                                 <Arc
-                                    centerX="86.5"
-                                    centerY="9"
+                                    centerX="118.5"
+                                    centerY="13"
                                     width="3"
                                     height="14"
                                     startAngle="0"
@@ -880,10 +1183,10 @@
                             </PartDraw>
                         </Compare>
                         <Compare expression="isPool1">
-                            <PartDraw x="0" y="0" width="88" height="18">
+                            <PartDraw x="0" y="0" width="120" height="26">
                                 <Arc
-                                    centerX="86.5"
-                                    centerY="9"
+                                    centerX="118.5"
+                                    centerY="13"
                                     width="3"
                                     height="14"
                                     startAngle="0"
@@ -900,68 +1203,228 @@
                             <Expression name="zeroBoth"><![CDATA[[COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
                         </Expressions>
                         <Compare expression="zeroInner">
-                            <PartText x="6" y="0" width="78" height="18">
-                                <Text align="CENTER" ellipsis="TRUE">
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
-                                        </Template>
-                                    </Font>
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
-                                        </Template>
-                                    </Font>
-                                </Text>
-                            </PartText>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="longLabel"><![CDATA[textLength([COMPLICATION.TEXT]) == 11]]></Expression>
+                                    <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
+                                </Expressions>
+                                <Compare expression="longLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Default>
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Default>
+                            </Condition>
                         </Compare>
                         <Compare expression="zeroOuter">
-                            <PartText x="6" y="0" width="78" height="18">
-                                <Text align="CENTER" ellipsis="TRUE">
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
-                                        </Template>
-                                    </Font>
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
-                                        </Template>
-                                    </Font>
-                                </Text>
-                            </PartText>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="longLabel"><![CDATA[textLength([COMPLICATION.TEXT]) == 11]]></Expression>
+                                    <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
+                                </Expressions>
+                                <Compare expression="longLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Default>
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Default>
+                            </Condition>
                         </Compare>
                         <Compare expression="zeroBoth">
-                            <PartText x="6" y="0" width="78" height="18">
-                                <Text align="CENTER" ellipsis="TRUE">
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
-                                        </Template>
-                                    </Font>
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
-                                        </Template>
-                                    </Font>
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
-                                        </Template>
-                                    </Font>
-                                </Text>
-                            </PartText>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="longLabel"><![CDATA[textLength([COMPLICATION.TEXT]) == 11]]></Expression>
+                                    <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
+                                </Expressions>
+                                <Compare expression="longLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Default>
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Default>
+                            </Condition>
                         </Compare>
                         <Default>
-                            <PartText x="6" y="0" width="78" height="18">
-                                <Text align="CENTER" ellipsis="TRUE">
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                        <Template>%s
-                                            <Parameter expression="[COMPLICATION.TEXT]" />
-                                        </Template>
-                                    </Font>
-                                </Text>
-                            </PartText>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="longLabel"><![CDATA[textLength([COMPLICATION.TEXT]) == 11]]></Expression>
+                                    <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
+                                </Expressions>
+                                <Compare expression="longLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Default>
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Default>
+                            </Condition>
                         </Default>
                     </Condition>
                 </Group>
@@ -1217,16 +1680,16 @@
                 </Condition>
                 <!-- The legend row this ring owns. Its own slot since 2026-10-09:
                      the three the strips held are the three the cells took. -->
-                <Group x="181" y="283" width="88" height="18" name="ring3_strip" alpha="255">
+                <Group x="165" y="259" width="120" height="26" name="ring3_strip" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="90" />
-                    <PartDraw x="0" y="0" width="88" height="18">
-                        <RoundRectangle x="0" y="0" width="88" height="18" cornerRadiusX="6" cornerRadiusY="6">
+                    <PartDraw x="0" y="0" width="120" height="26">
+                        <RoundRectangle x="0" y="0" width="120" height="26" cornerRadiusX="6" cornerRadiusY="6">
                             <Fill color="#eb0b0e0c" />
                         </RoundRectangle>
                         <!-- Family accent from ColorRamp (same path as matching ring). -->
                         <Arc
                             centerX="1.5"
-                            centerY="9"
+                            centerY="13"
                             width="3"
                             height="14"
                             startAngle="0"
@@ -1243,10 +1706,10 @@
                             <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
                         </Expressions>
                         <Compare expression="isPool0">
-                            <PartDraw x="0" y="0" width="88" height="18">
+                            <PartDraw x="0" y="0" width="120" height="26">
                                 <Arc
-                                    centerX="86.5"
-                                    centerY="9"
+                                    centerX="118.5"
+                                    centerY="13"
                                     width="3"
                                     height="14"
                                     startAngle="0"
@@ -1256,10 +1719,10 @@
                             </PartDraw>
                         </Compare>
                         <Compare expression="isPool1">
-                            <PartDraw x="0" y="0" width="88" height="18">
+                            <PartDraw x="0" y="0" width="120" height="26">
                                 <Arc
-                                    centerX="86.5"
-                                    centerY="9"
+                                    centerX="118.5"
+                                    centerY="13"
                                     width="3"
                                     height="14"
                                     startAngle="0"
@@ -1276,68 +1739,228 @@
                             <Expression name="zeroBoth"><![CDATA[[COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
                         </Expressions>
                         <Compare expression="zeroInner">
-                            <PartText x="6" y="0" width="78" height="18">
-                                <Text align="CENTER" ellipsis="TRUE">
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
-                                        </Template>
-                                    </Font>
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
-                                        </Template>
-                                    </Font>
-                                </Text>
-                            </PartText>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="longLabel"><![CDATA[textLength([COMPLICATION.TEXT]) == 11]]></Expression>
+                                    <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
+                                </Expressions>
+                                <Compare expression="longLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Default>
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Default>
+                            </Condition>
                         </Compare>
                         <Compare expression="zeroOuter">
-                            <PartText x="6" y="0" width="78" height="18">
-                                <Text align="CENTER" ellipsis="TRUE">
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
-                                        </Template>
-                                    </Font>
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
-                                        </Template>
-                                    </Font>
-                                </Text>
-                            </PartText>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="longLabel"><![CDATA[textLength([COMPLICATION.TEXT]) == 11]]></Expression>
+                                    <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
+                                </Expressions>
+                                <Compare expression="longLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Default>
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Default>
+                            </Condition>
                         </Compare>
                         <Compare expression="zeroBoth">
-                            <PartText x="6" y="0" width="78" height="18">
-                                <Text align="CENTER" ellipsis="TRUE">
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
-                                        </Template>
-                                    </Font>
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
-                                        </Template>
-                                    </Font>
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#ffffb4ab">
-                                        <Template>%s
-                                            <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
-                                        </Template>
-                                    </Font>
-                                </Text>
-                            </PartText>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="longLabel"><![CDATA[textLength([COMPLICATION.TEXT]) == 11]]></Expression>
+                                    <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
+                                </Expressions>
+                                <Compare expression="longLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Default>
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Default>
+                            </Condition>
                         </Compare>
                         <Default>
-                            <PartText x="6" y="0" width="78" height="18">
-                                <Text align="CENTER" ellipsis="TRUE">
-                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                        <Template>%s
-                                            <Parameter expression="[COMPLICATION.TEXT]" />
-                                        </Template>
-                                    </Font>
-                                </Text>
-                            </PartText>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="longLabel"><![CDATA[textLength([COMPLICATION.TEXT]) == 11]]></Expression>
+                                    <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
+                                </Expressions>
+                                <Compare expression="longLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Default>
+                                    <PartText x="6" y="0" width="108" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Default>
+                            </Condition>
                         </Default>
                     </Condition>
                 </Group>
@@ -1976,7 +2599,7 @@
         <DigitalClock x="0" y="0" width="450" height="450">
             <TimeText
                 x="0"
-                y="160"
+                y="152"
                 width="450"
                 height="90"
                 alpha="255"
@@ -1993,7 +2616,7 @@
             </TimeText>
             <TimeText
                 x="0"
-                y="160"
+                y="152"
                 width="450"
                 height="90"
                 alpha="0"
@@ -2012,12 +2635,12 @@
 
         <Group x="0" y="0" width="450" height="450" name="wardpulse">
             <Launch target="app.wardpulse/app.wardpulse.wear.MainActivity" />
-            <!-- The asset is padded: the box runs to 293, the ink stops at 268. -->
-            <PartImage x="192" y="227" width="66" height="66" alpha="95">
+            <!-- The asset is padded: active ink ends at 255.25, before row 1 at 259. -->
+            <PartImage x="192" y="214" width="66" height="66" alpha="95">
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <Image resource="wardpulse_mono" />
             </PartImage>
-            <PartImage x="198" y="233" width="54" height="54" alpha="0">
+            <PartImage x="198" y="220" width="54" height="54" alpha="0">
                 <Variant mode="AMBIENT" target="alpha" value="70" />
                 <Image resource="wardpulse_mono" />
             </PartImage>
@@ -2027,10 +2650,10 @@
              in them; this face owns only the declaration and how it is drawn.
              (docs/product/WATCH_RING_DESIGN.md, Upper cells, revision 2026-10-09) -->
         <ComplicationSlot
-            x="152"
-            y="114"
-            width="42"
-            height="42"
+            x="149"
+            y="112"
+            width="50"
+            height="50"
             slotId="201"
             displayName="@string/cell1_complication"
             supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
@@ -2038,114 +2661,223 @@
             <DefaultProviderPolicy
                 defaultSystemProvider="DAY_OF_WEEK"
                 defaultSystemProviderType="SHORT_TEXT" />
-            <BoundingBox x="0" y="0" width="42" height="42" />
+            <BoundingBox x="0" y="0" width="50" height="50" />
             <Complication type="SHORT_TEXT">
-            <Group x="0" y="0" width="42" height="42" name="cell1">
-                    <PartDraw x="0" y="0" width="42" height="42">
-                        <Ellipse x="0" y="0" width="42" height="42">
+            <Group x="0" y="0" width="50" height="50" name="cell1">
+                    <PartDraw x="0" y="0" width="50" height="50">
+                        <Ellipse x="0" y="0" width="50" height="50">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
-                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                    <Group x="0" y="0" width="50" height="50" name="cell1TextBorder" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
-                        <Arc
-                            centerX="21"
-                            centerY="21"
-                            width="40.5"
-                            height="40.5"
-                            startAngle="0"
-                            endAngle="359.9">
-                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
-                                <LinearGradient
-                                    startX="31.130621"
-                                    startY="38.533768"
-                                    endX="10.869379"
-                                    endY="3.466232"
-                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
-                                    positions="0 0.5 0.625 0.75 0.875 1" />
-                            </Stroke>
-                        </Arc>
-                    </PartDraw>
-                    <PartText x="2" y="12" width="37" height="18" alpha="255">
-                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                        <Text align="CENTER" ellipsis="TRUE">
-                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                <Template>%s
-                                    <Parameter expression="[COMPLICATION.TEXT]" />
-                                </Template>
-                            </Font>
-                        </Text>
-                    </PartText>
+                        <PartDraw x="0" y="0" width="50" height="50" alpha="255">
+                            <Arc
+                                centerX="25"
+                                centerY="25"
+                                width="48.5"
+                                height="48.5"
+                                startAngle="0"
+                                endAngle="359.9">
+                                <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                    <LinearGradient
+                                        startX="37.159527"
+                                        startY="45.981144"
+                                        endX="12.840473"
+                                        endY="4.018856"
+                                        colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                        positions="0 0.5 0.625 0.75 0.875 1" />
+                                </Stroke>
+                            </Arc>
+                        </PartDraw>
+                        <PartDraw x="0" y="0" width="50" height="50" renderMode="MASK">
+                            <Rectangle x="0" y="0" width="50" height="50">
+                                <Fill color="#ffffffff">
+                                    <LinearGradient
+                                        startX="25"
+                                        startY="0.75"
+                                        endX="25"
+                                        endY="49.25"
+                                        colors="#ffffffff #ffffffff #daffffff #87ffffff #35ffffff #0fffffff"
+                                        positions="0 0.5 0.625 0.75 0.875 1" />
+                                </Fill>
+                            </Rectangle>
+                        </PartDraw>
+                    </Group>
+                    <Condition>
+                        <Expressions>
+                            <Expression name="smallText"><![CDATA[textLength([COMPLICATION.TEXT]) >= 7]]></Expression>
+                            <Expression name="mediumText"><![CDATA[!(textLength([COMPLICATION.TEXT]) >= 7) && (textLength([COMPLICATION.TEXT]) >= 5)]]></Expression>
+                        </Expressions>
+                        <Compare expression="smallText">
+                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Compare expression="mediumText">
+                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Default>
+                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Default>
+                    </Condition>
             </Group>
             </Complication>
             <Complication type="RANGED_VALUE">
-            <Group x="0" y="0" width="42" height="42" name="cell1">
-                    <PartDraw x="0" y="0" width="42" height="42">
-                        <Ellipse x="0" y="0" width="42" height="42">
+            <Group x="0" y="0" width="50" height="50" name="cell1">
+                    <PartDraw x="0" y="0" width="50" height="50">
+                        <Ellipse x="0" y="0" width="50" height="50">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
-                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                    <Group x="0" y="0" width="50" height="50" name="cell1RangedBorder" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
-                        <Arc
-                            centerX="21"
-                            centerY="21"
-                            width="40.5"
-                            height="40.5"
-                            startAngle="0"
-                            endAngle="359.9">
-                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
-                                <LinearGradient
-                                    startX="31.130621"
-                                    startY="38.533768"
-                                    endX="10.869379"
-                                    endY="3.466232"
-                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
-                                    positions="0 0.5 0.625 0.75 0.875 1" />
-                            </Stroke>
-                        </Arc>
-                    </PartDraw>
-                    <PartText x="2" y="12" width="37" height="18" alpha="255">
-                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                        <Text align="CENTER" ellipsis="TRUE">
-                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                <Template>%s
-                                    <Parameter expression="[COMPLICATION.TEXT]" />
-                                </Template>
-                            </Font>
-                        </Text>
-                    </PartText>
+                        <PartDraw x="0" y="0" width="50" height="50" alpha="255">
+                            <Arc
+                                centerX="25"
+                                centerY="25"
+                                width="48.5"
+                                height="48.5"
+                                startAngle="0"
+                                endAngle="359.9">
+                                <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                    <LinearGradient
+                                        startX="37.159527"
+                                        startY="45.981144"
+                                        endX="12.840473"
+                                        endY="4.018856"
+                                        colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                        positions="0 0.5 0.625 0.75 0.875 1" />
+                                </Stroke>
+                            </Arc>
+                        </PartDraw>
+                        <PartDraw x="0" y="0" width="50" height="50" renderMode="MASK">
+                            <Rectangle x="0" y="0" width="50" height="50">
+                                <Fill color="#ffffffff">
+                                    <LinearGradient
+                                        startX="25"
+                                        startY="0.75"
+                                        endX="25"
+                                        endY="49.25"
+                                        colors="#ffffffff #ffffffff #daffffff #87ffffff #35ffffff #0fffffff"
+                                        positions="0 0.5 0.625 0.75 0.875 1" />
+                                </Fill>
+                            </Rectangle>
+                        </PartDraw>
+                    </Group>
+                    <Condition>
+                        <Expressions>
+                            <Expression name="smallText"><![CDATA[textLength([COMPLICATION.TEXT]) >= 7]]></Expression>
+                            <Expression name="mediumText"><![CDATA[!(textLength([COMPLICATION.TEXT]) >= 7) && (textLength([COMPLICATION.TEXT]) >= 5)]]></Expression>
+                        </Expressions>
+                        <Compare expression="smallText">
+                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Compare expression="mediumText">
+                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Default>
+                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Default>
+                    </Condition>
             </Group>
             </Complication>
             <Complication type="MONOCHROMATIC_IMAGE">
-            <Group x="0" y="0" width="42" height="42" name="cell1Icon">
-                    <PartDraw x="0" y="0" width="42" height="42">
-                        <Ellipse x="0" y="0" width="42" height="42">
+            <Group x="0" y="0" width="50" height="50" name="cell1Icon">
+                    <PartDraw x="0" y="0" width="50" height="50">
+                        <Ellipse x="0" y="0" width="50" height="50">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
-                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                    <Group x="0" y="0" width="50" height="50" name="cell1IconBorder" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
-                        <Arc
-                            centerX="21"
-                            centerY="21"
-                            width="40.5"
-                            height="40.5"
-                            startAngle="0"
-                            endAngle="359.9">
-                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
-                                <LinearGradient
-                                    startX="31.130621"
-                                    startY="38.533768"
-                                    endX="10.869379"
-                                    endY="3.466232"
-                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
-                                    positions="0 0.5 0.625 0.75 0.875 1" />
-                            </Stroke>
-                        </Arc>
-                    </PartDraw>
-                <Group x="10" y="10" width="21" height="21" name="cell1Tint" tintColor="#fff4fbf8">
-                    <PartImage x="0" y="0" width="21" height="21" alpha="255">
+                        <PartDraw x="0" y="0" width="50" height="50" alpha="255">
+                            <Arc
+                                centerX="25"
+                                centerY="25"
+                                width="48.5"
+                                height="48.5"
+                                startAngle="0"
+                                endAngle="359.9">
+                                <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                    <LinearGradient
+                                        startX="37.159527"
+                                        startY="45.981144"
+                                        endX="12.840473"
+                                        endY="4.018856"
+                                        colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                        positions="0 0.5 0.625 0.75 0.875 1" />
+                                </Stroke>
+                            </Arc>
+                        </PartDraw>
+                        <PartDraw x="0" y="0" width="50" height="50" renderMode="MASK">
+                            <Rectangle x="0" y="0" width="50" height="50">
+                                <Fill color="#ffffffff">
+                                    <LinearGradient
+                                        startX="25"
+                                        startY="0.75"
+                                        endX="25"
+                                        endY="49.25"
+                                        colors="#ffffffff #ffffffff #daffffff #87ffffff #35ffffff #0fffffff"
+                                        positions="0 0.5 0.625 0.75 0.875 1" />
+                                </Fill>
+                            </Rectangle>
+                        </PartDraw>
+                    </Group>
+                <Group x="13" y="13" width="24" height="24" name="cell1Tint" tintColor="#fff4fbf8">
+                    <PartImage x="0" y="0" width="24" height="24" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
                     </PartImage>
@@ -2156,10 +2888,10 @@
         </ComplicationSlot>
 
         <ComplicationSlot
-            x="204"
-            y="100"
-            width="42"
-            height="42"
+            x="200"
+            y="98"
+            width="50"
+            height="50"
             slotId="202"
             displayName="@string/cell2_complication"
             supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
@@ -2167,114 +2899,178 @@
             <DefaultProviderPolicy
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="42" height="42" />
+            <BoundingBox x="0" y="0" width="50" height="50" />
             <Complication type="SHORT_TEXT">
-            <Group x="0" y="0" width="42" height="42" name="cell2">
-                    <PartDraw x="0" y="0" width="42" height="42">
-                        <Ellipse x="0" y="0" width="42" height="42">
+            <Group x="0" y="0" width="50" height="50" name="cell2">
+                    <PartDraw x="0" y="0" width="50" height="50">
+                        <Ellipse x="0" y="0" width="50" height="50">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
-                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                    <PartDraw x="0" y="0" width="50" height="50" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Arc
-                            centerX="21"
-                            centerY="21"
-                            width="40.5"
-                            height="40.5"
+                            centerX="25"
+                            centerY="25"
+                            width="48.5"
+                            height="48.5"
                             startAngle="0"
                             endAngle="359.9">
                             <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
                                 <LinearGradient
-                                    startX="21"
-                                    startY="41.25"
-                                    endX="21"
+                                    startX="25"
+                                    startY="49.25"
+                                    endX="25"
                                     endY="0.75"
                                     colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
                                     positions="0 0.5 0.625 0.75 0.875 1" />
                             </Stroke>
                         </Arc>
                     </PartDraw>
-                    <PartText x="2" y="12" width="37" height="18" alpha="255">
-                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                        <Text align="CENTER" ellipsis="TRUE">
-                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                <Template>%s
-                                    <Parameter expression="[COMPLICATION.TEXT]" />
-                                </Template>
-                            </Font>
-                        </Text>
-                    </PartText>
+                    <Condition>
+                        <Expressions>
+                            <Expression name="smallText"><![CDATA[textLength([COMPLICATION.TEXT]) >= 7]]></Expression>
+                            <Expression name="mediumText"><![CDATA[!(textLength([COMPLICATION.TEXT]) >= 7) && (textLength([COMPLICATION.TEXT]) >= 5)]]></Expression>
+                        </Expressions>
+                        <Compare expression="smallText">
+                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Compare expression="mediumText">
+                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Default>
+                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Default>
+                    </Condition>
             </Group>
             </Complication>
             <Complication type="RANGED_VALUE">
-            <Group x="0" y="0" width="42" height="42" name="cell2">
-                    <PartDraw x="0" y="0" width="42" height="42">
-                        <Ellipse x="0" y="0" width="42" height="42">
+            <Group x="0" y="0" width="50" height="50" name="cell2">
+                    <PartDraw x="0" y="0" width="50" height="50">
+                        <Ellipse x="0" y="0" width="50" height="50">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
-                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                    <PartDraw x="0" y="0" width="50" height="50" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Arc
-                            centerX="21"
-                            centerY="21"
-                            width="40.5"
-                            height="40.5"
+                            centerX="25"
+                            centerY="25"
+                            width="48.5"
+                            height="48.5"
                             startAngle="0"
                             endAngle="359.9">
                             <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
                                 <LinearGradient
-                                    startX="21"
-                                    startY="41.25"
-                                    endX="21"
+                                    startX="25"
+                                    startY="49.25"
+                                    endX="25"
                                     endY="0.75"
                                     colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
                                     positions="0 0.5 0.625 0.75 0.875 1" />
                             </Stroke>
                         </Arc>
                     </PartDraw>
-                    <PartText x="2" y="12" width="37" height="18" alpha="255">
-                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                        <Text align="CENTER" ellipsis="TRUE">
-                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                <Template>%s
-                                    <Parameter expression="[COMPLICATION.TEXT]" />
-                                </Template>
-                            </Font>
-                        </Text>
-                    </PartText>
+                    <Condition>
+                        <Expressions>
+                            <Expression name="smallText"><![CDATA[textLength([COMPLICATION.TEXT]) >= 7]]></Expression>
+                            <Expression name="mediumText"><![CDATA[!(textLength([COMPLICATION.TEXT]) >= 7) && (textLength([COMPLICATION.TEXT]) >= 5)]]></Expression>
+                        </Expressions>
+                        <Compare expression="smallText">
+                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Compare expression="mediumText">
+                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Default>
+                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Default>
+                    </Condition>
             </Group>
             </Complication>
             <Complication type="MONOCHROMATIC_IMAGE">
-            <Group x="0" y="0" width="42" height="42" name="cell2Icon">
-                    <PartDraw x="0" y="0" width="42" height="42">
-                        <Ellipse x="0" y="0" width="42" height="42">
+            <Group x="0" y="0" width="50" height="50" name="cell2Icon">
+                    <PartDraw x="0" y="0" width="50" height="50">
+                        <Ellipse x="0" y="0" width="50" height="50">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
-                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                    <PartDraw x="0" y="0" width="50" height="50" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Arc
-                            centerX="21"
-                            centerY="21"
-                            width="40.5"
-                            height="40.5"
+                            centerX="25"
+                            centerY="25"
+                            width="48.5"
+                            height="48.5"
                             startAngle="0"
                             endAngle="359.9">
                             <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
                                 <LinearGradient
-                                    startX="21"
-                                    startY="41.25"
-                                    endX="21"
+                                    startX="25"
+                                    startY="49.25"
+                                    endX="25"
                                     endY="0.75"
                                     colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
                                     positions="0 0.5 0.625 0.75 0.875 1" />
                             </Stroke>
                         </Arc>
                     </PartDraw>
-                <Group x="10" y="10" width="21" height="21" name="cell2Tint" tintColor="#fff4fbf8">
-                    <PartImage x="0" y="0" width="21" height="21" alpha="255">
+                <Group x="13" y="13" width="24" height="24" name="cell2Tint" tintColor="#fff4fbf8">
+                    <PartImage x="0" y="0" width="24" height="24" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
                     </PartImage>
@@ -2285,10 +3081,10 @@
         </ComplicationSlot>
 
         <ComplicationSlot
-            x="256"
-            y="114"
-            width="42"
-            height="42"
+            x="251"
+            y="112"
+            width="50"
+            height="50"
             slotId="203"
             displayName="@string/cell3_complication"
             supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
@@ -2296,114 +3092,223 @@
             <DefaultProviderPolicy
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="42" height="42" />
+            <BoundingBox x="0" y="0" width="50" height="50" />
             <Complication type="SHORT_TEXT">
-            <Group x="0" y="0" width="42" height="42" name="cell3">
-                    <PartDraw x="0" y="0" width="42" height="42">
-                        <Ellipse x="0" y="0" width="42" height="42">
+            <Group x="0" y="0" width="50" height="50" name="cell3">
+                    <PartDraw x="0" y="0" width="50" height="50">
+                        <Ellipse x="0" y="0" width="50" height="50">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
-                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                    <Group x="0" y="0" width="50" height="50" name="cell3TextBorder" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
-                        <Arc
-                            centerX="21"
-                            centerY="21"
-                            width="40.5"
-                            height="40.5"
-                            startAngle="0"
-                            endAngle="359.9">
-                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
-                                <LinearGradient
-                                    startX="10.869379"
-                                    startY="38.533768"
-                                    endX="31.130621"
-                                    endY="3.466232"
-                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
-                                    positions="0 0.5 0.625 0.75 0.875 1" />
-                            </Stroke>
-                        </Arc>
-                    </PartDraw>
-                    <PartText x="2" y="12" width="37" height="18" alpha="255">
-                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                        <Text align="CENTER" ellipsis="TRUE">
-                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                <Template>%s
-                                    <Parameter expression="[COMPLICATION.TEXT]" />
-                                </Template>
-                            </Font>
-                        </Text>
-                    </PartText>
+                        <PartDraw x="0" y="0" width="50" height="50" alpha="255">
+                            <Arc
+                                centerX="25"
+                                centerY="25"
+                                width="48.5"
+                                height="48.5"
+                                startAngle="0"
+                                endAngle="359.9">
+                                <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                    <LinearGradient
+                                        startX="12.840473"
+                                        startY="45.981144"
+                                        endX="37.159527"
+                                        endY="4.018856"
+                                        colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                        positions="0 0.5 0.625 0.75 0.875 1" />
+                                </Stroke>
+                            </Arc>
+                        </PartDraw>
+                        <PartDraw x="0" y="0" width="50" height="50" renderMode="MASK">
+                            <Rectangle x="0" y="0" width="50" height="50">
+                                <Fill color="#ffffffff">
+                                    <LinearGradient
+                                        startX="25"
+                                        startY="0.75"
+                                        endX="25"
+                                        endY="49.25"
+                                        colors="#ffffffff #ffffffff #daffffff #87ffffff #35ffffff #0fffffff"
+                                        positions="0 0.5 0.625 0.75 0.875 1" />
+                                </Fill>
+                            </Rectangle>
+                        </PartDraw>
+                    </Group>
+                    <Condition>
+                        <Expressions>
+                            <Expression name="smallText"><![CDATA[textLength([COMPLICATION.TEXT]) >= 7]]></Expression>
+                            <Expression name="mediumText"><![CDATA[!(textLength([COMPLICATION.TEXT]) >= 7) && (textLength([COMPLICATION.TEXT]) >= 5)]]></Expression>
+                        </Expressions>
+                        <Compare expression="smallText">
+                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Compare expression="mediumText">
+                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Default>
+                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Default>
+                    </Condition>
             </Group>
             </Complication>
             <Complication type="RANGED_VALUE">
-            <Group x="0" y="0" width="42" height="42" name="cell3">
-                    <PartDraw x="0" y="0" width="42" height="42">
-                        <Ellipse x="0" y="0" width="42" height="42">
+            <Group x="0" y="0" width="50" height="50" name="cell3">
+                    <PartDraw x="0" y="0" width="50" height="50">
+                        <Ellipse x="0" y="0" width="50" height="50">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
-                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                    <Group x="0" y="0" width="50" height="50" name="cell3RangedBorder" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
-                        <Arc
-                            centerX="21"
-                            centerY="21"
-                            width="40.5"
-                            height="40.5"
-                            startAngle="0"
-                            endAngle="359.9">
-                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
-                                <LinearGradient
-                                    startX="10.869379"
-                                    startY="38.533768"
-                                    endX="31.130621"
-                                    endY="3.466232"
-                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
-                                    positions="0 0.5 0.625 0.75 0.875 1" />
-                            </Stroke>
-                        </Arc>
-                    </PartDraw>
-                    <PartText x="2" y="12" width="37" height="18" alpha="255">
-                        <Variant mode="AMBIENT" target="alpha" value="140" />
-                        <Text align="CENTER" ellipsis="TRUE">
-                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                <Template>%s
-                                    <Parameter expression="[COMPLICATION.TEXT]" />
-                                </Template>
-                            </Font>
-                        </Text>
-                    </PartText>
+                        <PartDraw x="0" y="0" width="50" height="50" alpha="255">
+                            <Arc
+                                centerX="25"
+                                centerY="25"
+                                width="48.5"
+                                height="48.5"
+                                startAngle="0"
+                                endAngle="359.9">
+                                <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                    <LinearGradient
+                                        startX="12.840473"
+                                        startY="45.981144"
+                                        endX="37.159527"
+                                        endY="4.018856"
+                                        colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                        positions="0 0.5 0.625 0.75 0.875 1" />
+                                </Stroke>
+                            </Arc>
+                        </PartDraw>
+                        <PartDraw x="0" y="0" width="50" height="50" renderMode="MASK">
+                            <Rectangle x="0" y="0" width="50" height="50">
+                                <Fill color="#ffffffff">
+                                    <LinearGradient
+                                        startX="25"
+                                        startY="0.75"
+                                        endX="25"
+                                        endY="49.25"
+                                        colors="#ffffffff #ffffffff #daffffff #87ffffff #35ffffff #0fffffff"
+                                        positions="0 0.5 0.625 0.75 0.875 1" />
+                                </Fill>
+                            </Rectangle>
+                        </PartDraw>
+                    </Group>
+                    <Condition>
+                        <Expressions>
+                            <Expression name="smallText"><![CDATA[textLength([COMPLICATION.TEXT]) >= 7]]></Expression>
+                            <Expression name="mediumText"><![CDATA[!(textLength([COMPLICATION.TEXT]) >= 7) && (textLength([COMPLICATION.TEXT]) >= 5)]]></Expression>
+                        </Expressions>
+                        <Compare expression="smallText">
+                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Compare expression="mediumText">
+                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Compare>
+                        <Default>
+                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <Text align="CENTER" ellipsis="TRUE">
+                                    <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                        <Template>%s
+                                            <Parameter expression="[COMPLICATION.TEXT]" />
+                                        </Template>
+                                    </Font>
+                                </Text>
+                            </PartText>
+                        </Default>
+                    </Condition>
             </Group>
             </Complication>
             <Complication type="MONOCHROMATIC_IMAGE">
-            <Group x="0" y="0" width="42" height="42" name="cell3Icon">
-                    <PartDraw x="0" y="0" width="42" height="42">
-                        <Ellipse x="0" y="0" width="42" height="42">
+            <Group x="0" y="0" width="50" height="50" name="cell3Icon">
+                    <PartDraw x="0" y="0" width="50" height="50">
+                        <Ellipse x="0" y="0" width="50" height="50">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
-                    <PartDraw x="0" y="0" width="42" height="42" alpha="255">
+                    <Group x="0" y="0" width="50" height="50" name="cell3IconBorder" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
-                        <Arc
-                            centerX="21"
-                            centerY="21"
-                            width="40.5"
-                            height="40.5"
-                            startAngle="0"
-                            endAngle="359.9">
-                            <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
-                                <LinearGradient
-                                    startX="10.869379"
-                                    startY="38.533768"
-                                    endX="31.130621"
-                                    endY="3.466232"
-                                    colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
-                                    positions="0 0.5 0.625 0.75 0.875 1" />
-                            </Stroke>
-                        </Arc>
-                    </PartDraw>
-                <Group x="10" y="10" width="21" height="21" name="cell3Tint" tintColor="#fff4fbf8">
-                    <PartImage x="0" y="0" width="21" height="21" alpha="255">
+                        <PartDraw x="0" y="0" width="50" height="50" alpha="255">
+                            <Arc
+                                centerX="25"
+                                centerY="25"
+                                width="48.5"
+                                height="48.5"
+                                startAngle="0"
+                                endAngle="359.9">
+                                <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                    <LinearGradient
+                                        startX="12.840473"
+                                        startY="45.981144"
+                                        endX="37.159527"
+                                        endY="4.018856"
+                                        colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                        positions="0 0.5 0.625 0.75 0.875 1" />
+                                </Stroke>
+                            </Arc>
+                        </PartDraw>
+                        <PartDraw x="0" y="0" width="50" height="50" renderMode="MASK">
+                            <Rectangle x="0" y="0" width="50" height="50">
+                                <Fill color="#ffffffff">
+                                    <LinearGradient
+                                        startX="25"
+                                        startY="0.75"
+                                        endX="25"
+                                        endY="49.25"
+                                        colors="#ffffffff #ffffffff #daffffff #87ffffff #35ffffff #0fffffff"
+                                        positions="0 0.5 0.625 0.75 0.875 1" />
+                                </Fill>
+                            </Rectangle>
+                        </PartDraw>
+                    </Group>
+                <Group x="13" y="13" width="24" height="24" name="cell3Tint" tintColor="#fff4fbf8">
+                    <PartImage x="0" y="0" width="24" height="24" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
                     </PartImage>

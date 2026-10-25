@@ -21,13 +21,16 @@
  * drift. A missing one still stops the build — the face names each by resource.
  */
 
-import { execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 
 import { emit } from './design-output.mjs'
+
+const runFile = promisify(execFile)
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const target = join(root, 'apps/watchface_wff/src/main/res/raw/watchface.xml')
@@ -259,31 +262,29 @@ if (TOKENS.some(({ repeats }) => repeats.length !== TEXTURE_RINGS)) {
 
 /**
  * Strips, one per ring, stacked below the wordmark. Measured off the face, not
- * sized to content: 88x18 boxes stepping 21 from y=283, wide enough for
- * "100% · 10.0M" and kept inside the inner ring aperture.
+ * sized to content: 120x26 boxes stepping 27 from y=259, inside the unchanged
+ * inner ring aperture. Literal WFF2 font branches fit the bounded label grammar.
  */
 const STRIP = {
-  x: 181,
-  top: 283,
-  pitch: 21,
-  width: 88,
-  height: 18,
+  x: 165,
+  top: 259,
+  pitch: 27,
+  width: 120,
+  height: 26,
   radius: 6,
   textInset: 6,
-  // Its own measured value, not `width - 2 * textInset`: the label box is
-  // pulled off the accent bar on the left and runs closer to the right edge.
-  textWidth: 78,
-  fontSize: 12,
+  textWidth: 108,
+  fontSize: 18,
 }
 
 /**
  * The wordmark, centred between the clock and the strip stack. Both boxes are
  * square because the asset is — WFF stretches the image to fill its box, and
  * the earlier 66x55 / 54x45 boxes flattened the mark by 17%. The PNG carries
- * its own padding, so the ink lands at 243-268: clear of the clock, which ends
- * at 229, and of the strips, which start at 283.
+ * its own padding, so the active ink lands at y=229.8125-255.25, leaving
+ * 3.75 units before the first strip at y=259.
  */
-const WORDMARK = { centerX: FACE.center, centerY: 260, size: 66, ambientSize: 54 }
+const WORDMARK = { centerX: FACE.center, centerY: 247, size: 66, ambientSize: 54 }
 
 /**
  * Which row of the stack a ring's own slot paints, counted from the top.
@@ -291,7 +292,7 @@ const WORDMARK = { centerX: FACE.center, centerY: 260, size: 66, ambientSize: 54
  * The stack anchors to its **bottom** row, so the outermost ring — which binds
  * the loosest payload when several are active — takes the lowest row, and the
  * innermost takes the highest. Arc slots fill from the outside, so the occupied
- * rows are always contiguous and always end at y=325, whatever the ring count
+ * rows are always contiguous and always end at y=313, whatever the ring count
  * (`WATCH_RING_DESIGN.md`, Upper cells, rule 3). A top-anchored stack could not
  * be folded at all: the row a slot paints would move with the ring count, and
  * one slot has one height.
@@ -305,35 +306,24 @@ const CREDITS_RING_INDEX = 0
 
 /**
  * The three cells above the clock retain the original curved row. Since
- * 2026-10-13 the whole row sits three units lower, so it is no longer exactly
- * concentric with the face. Origins are the integers `WATCH_RING_DESIGN.md`
- * rule 1 locks; the middle cell remains fourteen units above the outer two.
+ * 2026-10-25 the wells are 50 units. Origins are the integers
+ * `WATCH_RING_DESIGN.md` rule 1 locks; the middle remains fourteen units raised.
  */
 const CELL = {
-  size: 42,
-  /** The 18-unit line box the strips use, centred by `(42 - 18) / 2`. */
-  textY: 12,
+  size: 50,
+  /** Both the 44x24 text box and the 24-unit icon centre on the integer grid. */
+  textY: 13,
+  textX: 3,
+  textWidth: 44,
+  textHeight: 24,
+  fontSize: 17,
+  iconSize: 24,
   /**
-   * Inset to where the well still admits that box's full height: a circle of
-   * radius 21 is `sqrt(441 - 81)` = 18.97 wide at 9 units off its midline. The
-   * exact inset is 2.5 and the grid is integral, so the box sits half a unit
-   * left of the cell's own centre.
+   * The border that says a cell is holding something. Its 1.5-unit stroke,
+   * retained from 2026-10-13, now follows a 48.5 path: radius 23.5 to 25.0,
+   * inscribed in the enlarged well.
    */
-  textX: 2,
-  textWidth: 37,
-  fontSize: 14,
-  /**
-   * Half the diameter, so an icon leaves the rim of a round recess clear. It
-   * cannot sit exactly centred for the same reason the line box cannot: 21 in
-   * 42 leaves 10.5 a side and the grid is integral.
-   */
-  iconSize: 21,
-  /**
-   * The border that says a cell is holding something. Since 2026-10-13 a
-   * stroke of 1.5 on a path of 40.5 runs from radius 19.5 to 21.0. Widening
-   * inward keeps it inscribed in the well and leaves the band clearance alone.
-   */
-  ringDiameter: 40.5,
+  ringDiameter: 48.5,
   ringThickness: 1.5,
   /**
    * The ring dims in ambient with everything else a cell carries. Rule 12 keeps
@@ -346,12 +336,12 @@ const CELL = {
 }
 
 const CELLS = [
-  { slotId: 201, x: 152, y: 114, label: 'cell1', provider: 'DAY_OF_WEEK', type: 'SHORT_TEXT' },
-  { slotId: 202, x: 204, y: 100, label: 'cell2', provider: 'EMPTY', type: 'EMPTY' },
-  { slotId: 203, x: 256, y: 114, label: 'cell3', provider: 'EMPTY', type: 'EMPTY' },
+  { slotId: 201, x: 149, y: 112, label: 'cell1', provider: 'DAY_OF_WEEK', type: 'SHORT_TEXT' },
+  { slotId: 202, x: 200, y: 98, label: 'cell2', provider: 'EMPTY', type: 'EMPTY' },
+  { slotId: 203, x: 251, y: 112, label: 'cell3', provider: 'EMPTY', type: 'EMPTY' },
 ]
 
-/** Smoothstep on the outward half, with the watermark's six-percent floor. */
+/** Outward-half dissolve, also normalized for the lateral bottom masks. */
 const CELL_RING_FADE = [
   { position: 0, alpha: 0xaa },
   { position: 0.5, alpha: 0xaa },
@@ -426,8 +416,8 @@ const HEADER = `<?xml version="1.0" encoding="utf-8"?>
   (docs/product/WATCH_RING_DESIGN.md, baseline 2026-07-25).
 
   Visual target: apps/wear_android/design/round-*-plan*.svg
-  — radial lift background, 40-unit ring stroke (WFF paints about half of it), equal-width
-  sunk strips (88, rx=6) sized for "100% · 10.0M". Strip slots are RANGED_VALUE so accents
+  — radial lift background, 20-unit ring stroke, equal-width sunk strips (120x26,
+  rx=6) with bounded 18/16/14-unit labels. Ring slots are RANGED_VALUE so accents
   use the same ColorRamp as arcs ([COMPLICATION.RANGED_VALUE_COLORS]).
 
   Ring type: the budget period from COMPLICATION.TITLE (D / 7D / M) repeated around the
@@ -465,7 +455,7 @@ function cellChromeComment() {
   const rows = CELLS.map(({ x, y }) => `${x},${y}`).join('  ')
   return `        <!-- What lies under the cells, declared ahead of every slot so a filled
              cell's own opaque well covers it: ${rows} at ${CELL.size} units, centres on a
-             curved row translated three units below its original concentric layout.
+             curved row with the middle cell raised fourteen units.
              The middle and right cells
              carry the default weather, which costs no complication slot. -->`
 }
@@ -483,11 +473,11 @@ function cellComment() {
  * complication, whose text arrives ready to read, and carries the mark or the
  * name for a weather reading, which arrives as a bare number (`CELL_CHROME`).
  */
-function cellText(template, parameter, pad) {
-  return `${pad}<PartText x="${CELL.textX}" y="${CELL.textY}" width="${CELL.textWidth}" height="18" alpha="255">
+function cellText(template, parameter, pad, fontSize = CELL.fontSize) {
+  return `${pad}<PartText x="${CELL.textX}" y="${CELL.textY}" width="${CELL.textWidth}" height="${CELL.textHeight}" alpha="255">
 ${pad}    <Variant mode="AMBIENT" target="alpha" value="140" />
 ${pad}    <Text align="CENTER" ellipsis="TRUE">
-${pad}        <Font family="SYNC_TO_DEVICE" size="${CELL.fontSize}" weight="BOLD" color="${COLOR.text}">
+${pad}        <Font family="SYNC_TO_DEVICE" size="${fontSize}" weight="BOLD" color="${COLOR.text}">
 ${pad}            <Template>${template}
 ${pad}                <Parameter expression="${parameter}" />
 ${pad}            </Template>
@@ -498,8 +488,13 @@ ${pad}</PartText>`
 
 /** Select the scale from the weather source, whose unit is an integer enum. */
 function cellReadingText({ template, expression, unit }, pad) {
+  const reading = (template, pad) => cellSizedText(
+    template, expression, pad,
+    unit ? `${expression} < 0 || ${expression} >= 100` : `${expression} >= 10`,
+    unit ? `${expression} <= -100` : 'false',
+  )
   if (!unit) {
-    return cellText(template, expression, pad)
+    return reading(template, pad)
   }
   return `${pad}<Condition>
 ${pad}    <Expressions>
@@ -507,13 +502,32 @@ ${pad}        <Expression name="isCelsius"><![CDATA[${unit} == 1]]></Expression>
 ${pad}        <Expression name="isFahrenheit"><![CDATA[${unit} == 2]]></Expression>
 ${pad}    </Expressions>
 ${pad}    <Compare expression="isCelsius">
-${cellText('%s°C', expression, `${pad}        `)}
+${reading('%s°C', `${pad}        `)}
 ${pad}    </Compare>
 ${pad}    <Compare expression="isFahrenheit">
-${cellText('%s°F', expression, `${pad}        `)}
+${reading('%s°F', `${pad}        `)}
 ${pad}    </Compare>
 ${pad}    <Default>
-${cellText(template, expression, `${pad}        `)}
+${reading(template, `${pad}        `)}
+${pad}    </Default>
+${pad}</Condition>`
+}
+
+/** Finite WFF2 sizes; the narrowest branch takes precedence without changing data. */
+function cellSizedText(template, parameter, pad, medium, small) {
+  return `${pad}<Condition>
+${pad}    <Expressions>
+${pad}        <Expression name="smallText"><![CDATA[${small}]]></Expression>
+${pad}        <Expression name="mediumText"><![CDATA[!(${small}) && (${medium})]]></Expression>
+${pad}    </Expressions>
+${pad}    <Compare expression="smallText">
+${cellText(template, parameter, `${pad}        `, 12)}
+${pad}    </Compare>
+${pad}    <Compare expression="mediumText">
+${cellText(template, parameter, `${pad}        `, 14)}
+${pad}    </Compare>
+${pad}    <Default>
+${cellText(template, parameter, `${pad}        `)}
 ${pad}    </Default>
 ${pad}</Condition>`
 }
@@ -533,12 +547,10 @@ ${pad}</PartDraw>`
  * cell is a dark disc on a dark field and only the glyphs read, so the cell
  * itself goes unseen. An empty cell does not wear one: its recess already says
  * what it is, and the two together make the language exact — ring means
- * occupied, recess means free. Its outward half dissolves along the radial
- * vector from the face centre through the cell's actual integer centre: the
- * shortest path to the nearest band's circular boundary, independent of its
- * current value or end angle.
+ * occupied, recess means free. Every border retains its radial outward fade;
+ * only lateral borders multiply it by an additional vertical bottom fade.
  */
-function cellRing({ x, y }, pad) {
+function cellRing({ x, y, name }, pad) {
   const centre = CELL.size / 2
   const radius = CELL.ringDiameter / 2
   const vx = x + centre - FACE.center
@@ -547,8 +559,6 @@ function cellRing({ x, y }, pad) {
   if ([centre, radius, CELL.ringThickness, distance].some((value) => !Number.isFinite(value) || value <= 0)) {
     throw new Error('Cell border geometry requires finite positive size, radius, stroke and distance from the face centre')
   }
-  const dx = (radius * vx) / distance
-  const dy = (radius * vy) / distance
   const coordinate = (value) => {
     if (!Number.isFinite(value)) {
       throw new Error('Cell border gradient coordinates must be finite')
@@ -559,8 +569,12 @@ function cellRing({ x, y }, pad) {
     .map(({ alpha }) => `#${alpha.toString(16).padStart(2, '0')}${COLOR.cellRing.slice(3)}`)
     .join(' ')
   const positions = CELL_RING_FADE.map(({ position }) => position).join(' ')
-  return `${pad}<PartDraw x="0" y="0" width="${CELL.size}" height="${CELL.size}" alpha="255">
-${pad}    <Variant mode="AMBIENT" target="alpha" value="${CELL.ringAmbientAlpha}" />
+  // WFF gradient colours encode alpha on the eight-bit grid. Normalize before
+  // encoding so the mask's upper half is opaque, preserving outward lighting.
+  const maskColors = CELL_RING_FADE
+    .map(({ alpha }) => `#${Math.round(alpha * 255 / 0xaa).toString(16).padStart(2, '0')}ffffff`)
+    .join(' ')
+  const border = (pad, ambient = '') => `${pad}<PartDraw x="0" y="0" width="${CELL.size}" height="${CELL.size}" alpha="255">${ambient}
 ${pad}    <Arc
 ${pad}        centerX="${centre}"
 ${pad}        centerY="${centre}"
@@ -570,15 +584,37 @@ ${pad}        startAngle="${SWEEP.start}"
 ${pad}        endAngle="${SWEEP.end}">
 ${pad}        <Stroke thickness="${CELL.ringThickness}" color="${COLOR.text}" cap="BUTT">
 ${pad}            <LinearGradient
-${pad}                startX="${coordinate(centre - dx)}"
-${pad}                startY="${coordinate(centre - dy)}"
-${pad}                endX="${coordinate(centre + dx)}"
-${pad}                endY="${coordinate(centre + dy)}"
+${pad}                startX="${coordinate(centre - radius * vx / distance)}"
+${pad}                startY="${coordinate(centre - radius * vy / distance)}"
+${pad}                endX="${coordinate(centre + radius * vx / distance)}"
+${pad}                endY="${coordinate(centre + radius * vy / distance)}"
 ${pad}                colors="${colors}"
 ${pad}                positions="${positions}" />
 ${pad}        </Stroke>
 ${pad}    </Arc>
 ${pad}</PartDraw>`
+  if (vx === 0) {
+    return border(pad, `\n${pad}    <Variant mode="AMBIENT" target="alpha" value="${CELL.ringAmbientAlpha}" />`)
+  }
+  // MASK affects only its parent group. The well and content remain siblings;
+  // ambient dims the composed border once, outside the source and mask.
+  return `${pad}<Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${name}" alpha="255">
+${pad}    <Variant mode="AMBIENT" target="alpha" value="${CELL.ringAmbientAlpha}" />
+${border(pad + ' '.repeat(4))}
+${pad}    <PartDraw x="0" y="0" width="${CELL.size}" height="${CELL.size}" renderMode="MASK">
+${pad}        <Rectangle x="0" y="0" width="${CELL.size}" height="${CELL.size}">
+${pad}            <Fill color="#ffffffff">
+${pad}                <LinearGradient
+${pad}                    startX="${centre}"
+${pad}                    startY="${coordinate(centre - radius)}"
+${pad}                    endX="${centre}"
+${pad}                    endY="${coordinate(centre + radius)}"
+${pad}                    colors="${maskColors}"
+${pad}                    positions="${positions}" />
+${pad}            </Fill>
+${pad}        </Rectangle>
+${pad}    </PartDraw>
+${pad}</Group>`
 }
 
 /**
@@ -623,7 +659,7 @@ function cellChrome({ x, y, label }, index) {
                 <Compare expression="hasWeather">
                     <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}Reading">
 ${cellWellFlat(COLOR.strip, ' '.repeat(24))}
-${cellRing({ x, y }, ' '.repeat(24))}
+${cellRing({ x, y, name: `${label}ReadingBorder` }, ' '.repeat(24))}
 ${cellReadingText(chrome, ' '.repeat(24))}
                     </Group>
                 </Compare>
@@ -651,27 +687,24 @@ ${body}
  *
  * The well inside the slot is the occluder, and it is opaque for that reason.
  * It carries no ambient variant: switching it off would let the chrome back out
- * from under the complication, with two values in the same 42 units.
+ * from under the complication, with two values in the same 50 units.
  */
 function cellSlot({ slotId, x, y, label, provider: systemProvider, type }) {
   const pad = ' '.repeat(20)
-  const well = `${cellWellFlat(COLOR.cellWell, pad)}
-${cellRing({ x, y }, pad)}`
-  const body = (parameter) => `            <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}">
-${well}
-${cellText('%s', parameter, pad)}
+  const well = (name) => `${cellWellFlat(COLOR.cellWell, pad)}
+${cellRing({ x, y, name }, pad)}`
+  const body = (parameter, name) => `            <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}">
+${well(name)}
+${cellSizedText('%s', parameter, pad, `textLength(${parameter}) >= 5`, `textLength(${parameter}) >= 7`)}
             </Group>`
-  // 21 in 42 leaves 10.5 a side and the grid is integral, so the icon sits half
-  // a unit in from centre — the same rounding, in the same direction, that
-  // rule 7 records for the line box.
-  const inset = Math.floor((CELL.size - CELL.iconSize) / 2)
+  const inset = (CELL.size - CELL.iconSize) / 2
   // The tint goes on a group of its own, not on the slot: tinting the slot
   // would take the well with it. It is the text colour rather than a family
   // colour — on this face a family colour means *this ring's provider*, and a
   // cell is not a ring — so an icon reads as face text rather than as a
   // foreign mark.
   const icon = `            <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}Icon">
-${well}
+${well(`${label}IconBorder`)}
                 <Group x="${inset}" y="${inset}" width="${CELL.iconSize}" height="${CELL.iconSize}" name="${label}Tint" tintColor="${COLOR.text}">
                     <PartImage x="0" y="0" width="${CELL.iconSize}" height="${CELL.iconSize}" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
@@ -693,10 +726,10 @@ ${well}
                 defaultSystemProviderType="${type}" />
             <BoundingBox x="0" y="0" width="${CELL.size}" height="${CELL.size}" />
             <Complication type="SHORT_TEXT">
-${body('[COMPLICATION.TEXT]')}
+${body('[COMPLICATION.TEXT]', `${label}TextBorder`)}
             </Complication>
             <Complication type="RANGED_VALUE">
-${body('[COMPLICATION.TEXT]')}
+${body('[COMPLICATION.TEXT]', `${label}RangedBorder`)}
             </Complication>
             <Complication type="MONOCHROMATIC_IMAGE">
 ${icon}
@@ -753,8 +786,15 @@ function textureImage(diameter, title, repeats) {
  * `-strip` for the sake of the diff: it drops the render timestamp, without which
  * every run rewrites nine committed binaries whose pixels did not change.
  */
-function rasterize(file, png) {
-  execFileSync('convert', ['-background', 'none', '-density', '96', '-strip', file, `png32:${png}`])
+async function rasterize(file, png, signal) {
+  const render = runFile('convert', ['-background', 'none', '-density', '96', '-strip', file, `png32:${png}`], { signal })
+  const closed = new Promise((resolve) => render.child.once('close', resolve))
+  try {
+    await render
+  } finally {
+    // Abort rejects before close; the caller must not remove the SVG yet.
+    await closed
+  }
 }
 
 /** One drawable per ring and period: what the face draws instead of setting type. */
@@ -763,18 +803,30 @@ async function writeTextures() {
     throw new Error(`${FONT_FILE} is missing; ring type would bake in a substituted font`)
   })
   await mkdir(drawables, { recursive: true })
-  const scratch = await mkdtemp(join(tmpdir(), 'wardpulse-type-'))
+  const controller = new AbortController()
+  const interrupt = () => controller.abort()
+  process.on('SIGINT', interrupt)
+  process.on('SIGTERM', interrupt)
+  let scratch
   try {
+    scratch = await mkdtemp(join(tmpdir(), 'wardpulse-type-'))
+    controller.signal.throwIfAborted()
     for (const [index, { diameter }] of RINGS.slice(0, TEXTURE_RINGS).entries()) {
       for (const { period, title, repeats } of TOKENS) {
         const name = textureResource(index, period)
         const svg = join(scratch, `${name}.svg`)
         await writeFile(svg, textureImage(diameter, title, repeats[index]))
-        rasterize(svg, join(drawables, `${name}.png`))
+        await rasterize(svg, join(drawables, `${name}.png`), controller.signal)
       }
     }
+    controller.signal.throwIfAborted()
   } finally {
-    await rm(scratch, { recursive: true, force: true })
+    try {
+      if (scratch) await rm(scratch, { recursive: true, force: true })
+    } finally {
+      process.off('SIGINT', interrupt)
+      process.off('SIGTERM', interrupt)
+    }
   }
 }
 
@@ -1145,7 +1197,7 @@ function clock() {
   return `        <DigitalClock x="0" y="0" width="${FACE.size}" height="${FACE.size}">
             <TimeText
                 x="0"
-                y="160"
+                y="152"
                 width="${FACE.size}"
                 height="90"
                 alpha="255"
@@ -1162,7 +1214,7 @@ function clock() {
             </TimeText>
             <TimeText
                 x="0"
-                y="160"
+                y="152"
                 width="${FACE.size}"
                 height="90"
                 alpha="0"
@@ -1186,7 +1238,7 @@ function wordmark() {
     `x="${WORDMARK.centerX - size / 2}" y="${WORDMARK.centerY - size / 2}" width="${size}" height="${size}"`
   return `        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="wardpulse">
             <Launch target="app.wardpulse/app.wardpulse.wear.MainActivity" />
-            <!-- The asset is padded: the box runs to 293, the ink stops at 268. -->
+            <!-- The asset is padded: active ink ends at 255.25, before row 1 at 259. -->
             <PartImage ${box(WORDMARK.size)} alpha="95">
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <Image resource="wardpulse_mono" />
@@ -1244,7 +1296,7 @@ function stripText(pad) {
   // WFF may evaluate inactive branches; keep both cut points ordered inside TEXT.
   const innerEnd = `clamp(2, 0, ${length})`
   const outerStart = `clamp(${length} - 2, ${innerEnd}, ${length})`
-  const part = (runs, innerPad) => `${innerPad}<PartText x="${textInset}" y="0" width="${textWidth}" height="${height}">
+  const partAtSize = (runs, fontSize, innerPad) => `${innerPad}<PartText x="${textInset}" y="0" width="${textWidth}" height="${height}">
 ${innerPad}    <Text align="CENTER" ellipsis="TRUE">
 ${runs.map(([expression, exhausted]) => `${innerPad}        <Font family="SYNC_TO_DEVICE" size="${fontSize}" weight="BOLD" color="${exhausted ? COLOR.exhaustedPercent : COLOR.text}">
 ${innerPad}            <Template>%s
@@ -1253,6 +1305,22 @@ ${innerPad}            </Template>
 ${innerPad}        </Font>`).join('\n')}
 ${innerPad}    </Text>
 ${innerPad}</PartText>`
+  // Size the complete mixed-run label together, preserving its centre and baseline.
+  const part = (runs, innerPad) => `${innerPad}<Condition>
+${innerPad}    <Expressions>
+${innerPad}        <Expression name="longLabel"><![CDATA[${length} == 11]]></Expression>
+${innerPad}        <Expression name="longestLabel"><![CDATA[${length} >= 12]]></Expression>
+${innerPad}    </Expressions>
+${innerPad}    <Compare expression="longLabel">
+${partAtSize(runs, 16, `${innerPad}        `)}
+${innerPad}    </Compare>
+${innerPad}    <Compare expression="longestLabel">
+${partAtSize(runs, 14, `${innerPad}        `)}
+${innerPad}    </Compare>
+${innerPad}    <Default>
+${partAtSize(runs, fontSize, `${innerPad}        `)}
+${innerPad}    </Default>
+${innerPad}</Condition>`
   const zeroTitles = (state) => SPLIT_BASE_TITLES.map((base) => `${base}${TOKEN_SEPARATOR}${state}`)
   const states = [
     {

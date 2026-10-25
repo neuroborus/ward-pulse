@@ -6,13 +6,16 @@
  * Usage: node tools/render-watch-ring-designs.mjs [--check]
  */
 
-import { execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 
 import { FONT_FILE, emit, renderPreviews } from './design-output.mjs'
+
+const runFile = promisify(execFile)
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const checking = process.argv.includes('--check')
@@ -38,14 +41,14 @@ const CELL_RIM = '#242A27'
  * the UV index are the face's own chrome and cost no slot.
  */
 const CELL = {
-  size: 42,
-  fontSize: 14,
+  size: 50,
+  fontSize: 17,
   /**
-   * The occupied-cell border widens inward: a stroke of 1.5 on a path of 40.5
-   * spans radius 19.5 to 21.0, preserving the well's edge and band clearance.
+   * The occupied-cell border is inscribed: a stroke of 1.5 on a path of 48.5
+   * spans radius 23.5 to 25.0.
    * An empty cell wears none, so a ring means occupied and a recess means free.
    */
-  ringDiameter: 40.5,
+  ringDiameter: 48.5,
   ringThickness: 1.5,
   /** `0xaa` of the face's text colour, and the arcs' own ambient proportion. */
   ringAmbientAlpha: 140,
@@ -60,13 +63,13 @@ const CELL = {
    * too — a preview draws what the face draws.
    */
   readings: [
-    { x: 152, y: 114, text: 'Tue', wellOpacity: 1 },
-    { x: 204, y: 100, text: '18°C', wellOpacity: 0xeb / 255 },
-    { x: 256, y: 114, text: 'UV 7', wellOpacity: 0xeb / 255 },
+    { x: 149, y: 112, text: 'Tue', wellOpacity: 1 },
+    { x: 200, y: 98, text: '18°C', temperature: 18, wellOpacity: 0xeb / 255 },
+    { x: 251, y: 112, text: 'UV 7', uv: 7, wellOpacity: 0xeb / 255 },
   ],
 }
 
-/** The WFF border's smoothstep stops, including the watermark's six-percent floor. */
+/** The WFF outward fade, also normalized for the lateral bottom masks. */
 const CELL_RING_FADE = [
   { position: 0, alpha: 0xaa },
   { position: 0.5, alpha: 0xaa },
@@ -91,8 +94,8 @@ const FONT = 'Noto Sans'
 const FACE = 450
 
 /**
- * Measured off the face, never derived from the canvas: `watchface.xml` fixes 88x18 boxes
- * stepping 21 from y=283, with a 12pt label inside a 78-unit text region. Sizing a box to
+ * Fixed in the 450-unit language: 120x26 boxes stepping 27 from y=259,
+ * with 18/16/14-unit labels inside a centred 108-unit text region. Sizing a box to
  * its content instead is what let review art drift a stack wider than the watch draws.
  *
  * The accent is what the face paints, not what its markup declares: a 3x14 arc under a
@@ -100,27 +103,26 @@ const FACE = 450
  * box edge. Same path-versus-paint trap the design document flags for the ring bands.
  */
 const STRIP = {
-  x: 181,
+  x: 165,
   /** The top row of a full stack; a shorter one starts further down. */
-  y: 283,
-  width: 88,
-  height: 18,
-  pitch: 21,
+  y: 259,
+  width: 120,
+  height: 26,
+  pitch: 27,
   radius: 6,
   accentWidth: 4.5,
   accentHeight: 17,
   textInset: 6,
-  textWidth: 78,
-  fontSize: 12,
+  textWidth: 108,
+  fontSize: 18,
 }
 
 /**
  * How far above the canvas centre the clock sits, measured off the face: `watchface.xml`
- * declares a `TimeText` box 20 up, and WFF renders the digits 21.7 up. The measured number is
- * the one that counts, here as everywhere in `WATCH_RING_DESIGN.md` — a board that centred the
- * time geometrically argued for a screen nobody ships.
+ * originally rendered the digits 21.7 up. The combined composition lifts that
+ * measured position another eight units without changing either clock's type.
  */
-const TIME_LIFT = 21.7
+const TIME_LIFT = 29.7
 
 /**
  * The ring type drawn as texture: the budget period repeated round the band and punched out in
@@ -232,31 +234,49 @@ const CATALOG = {
 /** Aggregate remaining purchased credits on the center (first) strip (not LLM tokens). */
 const CREDITS_GLANCE = '500'
 
+function stripFontSize(text) {
+  return text.length >= 12 ? 14 : text.length === 11 ? 16 : STRIP.fontSize
+}
+
 /**
- * Widths now guard the labels instead of placing them: the box is a measured constant, so a
- * label that outgrows the text region has to fail here rather than silently overhang, the way
- * the face would ellipsize it. A missing font or Pillow fails too — the old silent fallback
- * shifted baselines by 0.3 and made committed art depend on the machine that rendered it.
+ * Widths guard the labels instead of placing them: a supported label that
+ * outgrows the fixed region must fail rather than silently overhang. A missing
+ * font or Pillow fails too; substituted metrics would change the review art.
  */
-function assertLabelsFit(texts) {
-  const out = execFileSync(
+async function assertLabelsFit(texts, { fontSize = stripFontSize, width = STRIP.textWidth } = {}) {
+  const controller = new AbortController()
+  const interrupt = () => controller.abort()
+  process.on('SIGINT', interrupt)
+  process.on('SIGTERM', interrupt)
+  const metrics = runFile(
     'python3',
     [
       '-c',
       [
         'import json',
         'from PIL import ImageFont',
-        `font = ImageFont.truetype(${JSON.stringify(FONT_FILE)}, ${STRIP.fontSize})`,
-        `texts = ${JSON.stringify(texts)}`,
-        'print(json.dumps({t: font.getbbox(t)[2] - font.getbbox(t)[0] for t in texts}))',
+        `font_file = ${JSON.stringify(FONT_FILE)}`,
+        `labels = ${JSON.stringify(texts.map((text) => [text, fontSize(text)]))}`,
+        'fonts = {size: ImageFont.truetype(font_file, size) for _, size in labels}',
+        'print(json.dumps({t: fonts[size].getbbox(t)[2] - fonts[size].getbbox(t)[0] for t, size in labels}))',
       ].join('\n'),
     ],
-    { encoding: 'utf8' },
+    { encoding: 'utf8', signal: controller.signal },
   )
-  for (const [text, width] of Object.entries(JSON.parse(out))) {
-    if (width > STRIP.textWidth) {
+  const closed = new Promise((resolve) => metrics.child.once('close', resolve))
+  let stdout
+  try {
+    stdout = (await metrics).stdout
+    controller.signal.throwIfAborted()
+  } finally {
+    await closed
+    process.off('SIGINT', interrupt)
+    process.off('SIGTERM', interrupt)
+  }
+  for (const [text, measuredWidth] of Object.entries(JSON.parse(stdout))) {
+    if (measuredWidth > width) {
       throw new Error(
-        `strip label "${text}" is ${width} units wide, past the ${STRIP.textWidth}-unit region`,
+        `label "${text}" is ${measuredWidth} units wide, past the ${width}-unit region`,
       )
     }
   }
@@ -458,17 +478,20 @@ function zeroLabelMarkup(text, layer) {
   }).join(' · ')
 }
 
+function cellFontSize({ text, temperature, uv }) {
+  if (temperature !== undefined) {
+    if (temperature <= -100) return 12
+    return temperature < 0 || temperature >= 100 ? 14 : CELL.fontSize
+  }
+  if (uv !== undefined) return uv >= 10 ? 14 : CELL.fontSize
+  return text.length >= 7 ? 12 : text.length >= 5 ? 14 : CELL.fontSize
+}
+
 /**
- * The three cells above the clock, as a fresh install shows them: the left one
- * bound to the day of the week, the other two left empty over the face's own
- * weather chrome. The same integer origins as WFF keep both the translated
- * curved row and its radial fade directions identical to the installed face
- * (`WATCH_RING_DESIGN.md`, Upper cells, rules 1 and 11).
- *
- * Most boards show the shipped default, which is the state a wearer meets first.
- * A cell the wearer cleared shows the graded recess of rule 10 instead — the one
- * thing that tells an empty cell from a broken one — so one board carries that
- * state and `just check-designs` gates it with the rest.
+ * The three cells as a fresh install shows them when weather is available: a
+ * day-of-week complication, then the face's own temperature and UV chrome.
+ * Integer origins, outward fades and border-only lateral bottom masks match WFF.
+ * A cleared cell shows the graded recess instead.
  */
 function upperCells({ size, ambient, clearedCells = [] }) {
   const k = size / FACE
@@ -483,7 +506,7 @@ function upperCells({ size, ambient, clearedCells = [] }) {
   // Gradient stops carry the original `0xaa`; ambient dims the whole part.
   const ringOpacity = ambient ? CELL.ringAmbientAlpha / 255 : 1
   return CELL.readings
-    .map(({ x, y, text, wellOpacity }, index) => {
+    .map(({ x, y, text, temperature, uv, wellOpacity }, index) => {
       const cellX = x + CELL.size / 2
       const cellY = y + CELL.size / 2
       const cx = cellX * k
@@ -501,9 +524,7 @@ function upperCells({ size, ambient, clearedCells = [] }) {
       if ([r, ringRadius, ringWidth, distance].some((value) => !Number.isFinite(value) || value <= 0)) {
         throw new Error('Cell border geometry requires finite positive size, radius, stroke and distance from the face centre')
       }
-      const dx = (ringRadius * vx) / distance
-      const dy = (ringRadius * vy) / distance
-      // Match the rounded circle centre, so the darkest point lies on its axis.
+      // Match the rounded circle centre for both independent gradient axes.
       const gradientX = Number(cx.toFixed(1))
       const gradientY = Number(cy.toFixed(1))
       const coordinate = (value) => {
@@ -512,27 +533,38 @@ function upperCells({ size, ambient, clearedCells = [] }) {
         }
         return Number(value.toFixed(6))
       }
+      const bottomMask = vx === 0 ? '' : `
+      <linearGradient id="cellBottom${index}" gradientUnits="userSpaceOnUse"
+        x1="${coordinate(gradientX)}" y1="${coordinate(gradientY - ringRadius)}"
+        x2="${coordinate(gradientX)}" y2="${coordinate(gradientY + ringRadius)}">
+${CELL_RING_FADE.map(({ position, alpha }) => `        <stop offset="${position}" stop-color="white" stop-opacity="${Math.round(alpha * 255 / 0xaa) / 255}" />`).join('\n')}
+      </linearGradient>
+      <mask id="cellBottomMask${index}" maskUnits="userSpaceOnUse"
+        x="${coordinate(cx - r)}" y="${coordinate(cy - r)}" width="${coordinate(2 * r)}" height="${coordinate(2 * r)}">
+        <rect x="${coordinate(cx - r)}" y="${coordinate(cy - r)}" width="${coordinate(2 * r)}" height="${coordinate(2 * r)}" fill="url(#cellBottom${index})" />
+      </mask>`
       const gradient = `
     <defs>
       <linearGradient id="cellRing${index}" gradientUnits="userSpaceOnUse"
-        x1="${coordinate(gradientX - dx)}" y1="${coordinate(gradientY - dy)}"
-        x2="${coordinate(gradientX + dx)}" y2="${coordinate(gradientY + dy)}">
+        x1="${coordinate(gradientX - ringRadius * vx / distance)}" y1="${coordinate(gradientY - ringRadius * vy / distance)}"
+        x2="${coordinate(gradientX + ringRadius * vx / distance)}" y2="${coordinate(gradientY + ringRadius * vy / distance)}">
 ${CELL_RING_FADE.map(({ position, alpha }) => `        <stop offset="${position}" stop-color="${LABEL}" stop-opacity="${alpha / 255}" />`).join('\n')}
-      </linearGradient>
+      </linearGradient>${bottomMask}
     </defs>`
+      const fontSize = cellFontSize({ text, temperature, uv })
       return `${disc(WELL, wellOpacity)}
 ${gradient}
     <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${ringRadius.toFixed(2)}" fill="none"
       stroke="url(#cellRing${index})" stroke-width="${ringWidth.toFixed(2)}"
-      stroke-opacity="${ringOpacity}" />
+      stroke-opacity="${ringOpacity}"${vx === 0 ? '' : ` mask="url(#cellBottomMask${index})"`} />
     <text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" text-anchor="middle" dominant-baseline="central"
-      font-family="${FONT}, sans-serif" font-size="${(CELL.fontSize * k).toFixed(1)}"
+      font-family="${FONT}, sans-serif" font-size="${(fontSize * k).toFixed(1)}"
       font-weight="700" fill="${LABEL}" fill-opacity="${textOpacity}">${esc(text)}</text>`
     })
     .join('')
 }
 
-function providerBars({ layers, showPlan, showCredits, size, ambient }) {
+async function providerBars({ layers, showPlan, showCredits, size, ambient }) {
   const ordered = showPlan ? sortByRemaining(layers) : layers.slice(0, 1)
   const rows = ordered
     .map((layer) => ({
@@ -546,7 +578,7 @@ function providerBars({ layers, showPlan, showCredits, size, ambient }) {
   if (rows.length === 0) {
     return ''
   }
-  assertLabelsFit(rows.map((row) => row.text))
+  await assertLabelsFit(rows.map((row) => row.text))
 
   // The face lays the stack out in its own 450 units; only the canvas scale differs here.
   const k = size / FACE
@@ -578,7 +610,7 @@ function providerBars({ layers, showPlan, showCredits, size, ambient }) {
       rx="${((STRIP.accentWidth / 2) * k).toFixed(1)}" fill="${layer.color}" />
     <text x="${textX.toFixed(1)}" y="${(y + (STRIP.height / 2) * k).toFixed(1)}"
       text-anchor="middle" dominant-baseline="central"
-      font-family="${FONT}, sans-serif" font-size="${(STRIP.fontSize * k).toFixed(1)}"
+      font-family="${FONT}, sans-serif" font-size="${(stripFontSize(text) * k).toFixed(1)}"
       font-weight="700" fill="${LABEL}">${zeroLabelMarkup(text, layer)}</text>`
     if (layer.split) {
       // The far end names the second pool; its colour can only come from a slot
@@ -598,7 +630,7 @@ function providerBars({ layers, showPlan, showCredits, size, ambient }) {
   return out
 }
 
-function faceSvg({
+async function faceSvg({
   name,
   size,
   layers = [],
@@ -680,14 +712,14 @@ function faceSvg({
       stroke="${TRACK}" stroke-width="${(size * 0.018).toFixed(1)}" />`
   }
 
-  const timeSize = ambient ? size * 0.18 : size * 0.155
+  const timeSize = (ambient ? 81 : 70) * size / FACE
   const timeY = cy - TIME_LIFT * (size / FACE) + timeSize * 0.36
   let content = upperCells({ size, ambient, clearedCells })
   content += `
     <text x="${cx}" y="${timeY.toFixed(1)}" text-anchor="middle"
       font-family="${FONT}, sans-serif" font-size="${timeSize.toFixed(1)}"
-      font-weight="700" fill="${LABEL}">10:08</text>`
-  content += providerBars({
+      font-weight="${ambient ? 100 : 700}" fill="${LABEL}">10:08</text>`
+  content += await providerBars({
     layers: stripLayers,
     showPlan,
     showCredits,
@@ -982,8 +1014,29 @@ const pickerPreview = {
 
 assertNearExhaustedArcs()
 
+// Common and compact-bound labels must remain complete at the selected size.
+// Extreme signed money and arbitrary provider text retain runtime ellipsis.
+await assertLabelsFit([
+  '100% · 64%', '82% · 59.5K', '100% · 100%', '100% · 999.9T',
+  '$999.99/999', '$999.99/999.9T', '$999.9T/999.9T', '$-12.34/100',
+  '0% · 0%', '0% · 0',
+])
+
+// Weather branches use the original numeric value and device-provided scale.
+const cellFitReadings = [
+  { text: 'Sat' }, { text: 'Wed' },
+  { text: '18°C', temperature: 18 }, { text: '48°F', temperature: 48 },
+  { text: '-10°C', temperature: -10 }, { text: '100°F', temperature: 100 },
+  { text: '-100°C', temperature: -100 },
+  { text: 'UV 7', uv: 7 }, { text: 'UV 11', uv: 11 },
+]
+await assertLabelsFit(cellFitReadings.map(({ text }) => text), {
+  fontSize: (text) => cellFontSize(cellFitReadings.find((reading) => reading.text === text)),
+  width: 44,
+})
+
 for (const variant of variants) {
-  const svg = faceSvg({
+  const svg = await faceSvg({
     name: variant.name,
     size: 450,
     layers: variant.layers,

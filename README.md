@@ -7,19 +7,19 @@ Wear OS summary, watch face and home-screen widget.
 <table width="100%">
   <tr>
     <td width="50%" rowspan="2" align="center">
-      <a href="docs/assets/phone-dashboard-overview-light.png#gh-light-mode-only"><img src="docs/assets/phone-dashboard-overview-light.png#gh-light-mode-only" width="216" alt="WardPulse phone Dashboard showing Claude plan windows at 100% left and organization usage history of 39 tokens in the light theme."></a>
-      <a href="docs/assets/phone-dashboard-overview-dark.png#gh-dark-mode-only"><img src="docs/assets/phone-dashboard-overview-dark.png#gh-dark-mode-only" width="216" alt="WardPulse phone Dashboard showing Claude plan windows at 100% left and organization usage history of 39 tokens in the dark theme."></a><br>
-      <strong>Phone Dashboard · Plan windows and usage history</strong>
+      <a href="docs/assets/phone-dashboard-overview-light.png#gh-light-mode-only"><img src="docs/assets/phone-dashboard-overview-light.png#gh-light-mode-only" width="216" alt="WardPulse phone Dashboard showing plan capacity and usage history in the light theme."></a>
+      <a href="docs/assets/phone-dashboard-overview-dark.png#gh-dark-mode-only"><img src="docs/assets/phone-dashboard-overview-dark.png#gh-dark-mode-only" width="216" alt="WardPulse phone Dashboard showing plan capacity and usage history in the dark theme."></a><br>
+      <strong>Phone Dashboard · Plan capacity and usage history</strong>
     </td>
     <td width="50%" align="center">
-      <a href="docs/assets/wear-glance-overview.png"><img src="docs/assets/wear-glance-overview.png" width="200" alt="WardPulse Watch Glance showing Codex Weekly at 47% left with 61.8K purchased credits, Cursor at 100% / 64% left and Claude 5h at 100% left."></a><br>
-      <strong>Watch Glance · Selected plan capacity and credits</strong>
+      <a href="docs/assets/wear-glance-overview.png"><img src="docs/assets/wear-glance-overview.png" width="200" alt="WardPulse Watch Glance showing selected plan capacity and purchased credits."></a><br>
+      <strong>Watch Glance · Selected plan capacity and purchased credits</strong>
     </td>
   </tr>
   <tr>
     <td width="50%" align="center">
-      <a href="docs/assets/wear-watch-face.png"><img src="docs/assets/wear-watch-face.png" width="200" alt="WardPulse watch face showing Codex Weekly at 47%, Cursor at 100% / 64% and Claude 5h at 100% left, with upper complications."></a><br>
-      <strong>WardPulse face · Selected usage bands and upper complications</strong>
+      <a href="docs/assets/wear-watch-face.png"><img src="docs/assets/wear-watch-face.png" width="200" alt="WardPulse watch face showing remaining-capacity rings, time and upper cells."></a><br>
+      <strong>WardPulse face · Capacity rings, time and upper cells</strong>
     </td>
   </tr>
 </table>

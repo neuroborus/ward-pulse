@@ -12,11 +12,20 @@ watch PNGs are 500×500px with transparent corners outside the circular screen.
 
 ## Screenshot index
 
-The library contains 35 screenshots. The current Widget selection and resize examples
-were captured as a separate shared-state group on 2026-10-23. The Dashboard and Watch
-showcase group remains from 2026-10-21. The original Dashboard warning pair and stale
-Glance remain available only for explanations of those exact states. Date added is
-unchanged by a refresh.
+The library contains 35 screenshots. The Dashboard theme pair, Watchface-selection theme
+pair, healthy Glance, Plan windows and watch face form one shared-state group captured on
+2026-10-25. Widget selection and resize examples remain a separate 2026-10-23 group.
+The Dashboard warning pair, clock-free Stale Glance and historical manual-selection setup
+image illustrate their explicitly explained states. Date added is unchanged by a refresh.
+
+This group shows the current Dashboard, ring selection, Glance, Plan windows and selected
+face. All three expected default upper face cells contain actual data. Capture verification
+is separate from unpictured setup-utility, physical-device,
+remaining-backlog and release acceptance.
+
+These seven frames were recaptured after the combined face update. Their actual routes,
+themes, shared data, filled default cells and native rim contours were reviewed. Browser
+placement passed the review recorded below; remaining fixture/device acceptance stays separate.
 
 The Used in column records the source placements for each image. Last verified records
 actual-frame review on the stated date; the dated capture sections describe its scope.
@@ -26,8 +35,8 @@ image or its placement changes.
 
 | File | Description | Theme | Date added | Captured | Last verified | Dimensions | App | Used in |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| [phone-dashboard-overview-light.png](phone-dashboard-overview-light.png) | Shared-state Dashboard: Claude windows 100% left and organization history 39 tokens. | Light | 2026-10-20 | 2026-10-21 | 2026-10-21 | 864×1920 | WardPulse phone | Light landing/README and Dashboard guide |
-| [phone-dashboard-overview-dark.png](phone-dashboard-overview-dark.png) | Shared-state Dashboard: Claude windows 100% left and organization history 39 tokens. | Dark | 2026-10-20 | 2026-10-21 | 2026-10-21 | 864×1920 | WardPulse phone | Dark landing/README and Dashboard guide |
+| [phone-dashboard-overview-light.png](phone-dashboard-overview-light.png) | Shared-state Dashboard: Claude windows 100% left and organization history 39 tokens across 25 buckets. | Light | 2026-10-20 | 2026-10-25 | 2026-10-25 | 864×1920 | WardPulse phone | Light landing/README and Dashboard guide |
+| [phone-dashboard-overview-dark.png](phone-dashboard-overview-dark.png) | Shared-state Dashboard: Claude windows 100% left and organization history 39 tokens across 25 buckets. | Dark | 2026-10-20 | 2026-10-25 | 2026-10-25 | 864×1920 | WardPulse phone | Dark landing/README and Dashboard guide |
 | [phone-dashboard-light.png](phone-dashboard-light.png) | Claude unsupported-response warning and previous data. | Light | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Light Troubleshooting guide, warning / previous-data example only |
 | [phone-dashboard-dark.png](phone-dashboard-dark.png) | Claude unsupported-response warning and previous data. | Dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Dark Troubleshooting guide, warning / previous-data example only |
 | [phone-providers-light.png](phone-providers-light.png) | Four visible Connected rows and independent actions, without a warning badge. | Light | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Providers overview; Anthropic/Cursor connection examples; Getting started; Dashboard actions |
@@ -54,19 +63,121 @@ image or its placement changes.
 | [phone-home-widget-with-label-dark.png](phone-home-widget-with-label-dark.png) | Medium widget: the same five rows with percentages and provider/metric labels. | Dark | 2026-10-23 | 2026-10-23 | 2026-10-23 | 864×1920 | WardPulse phone | Dark Widget guide, width example |
 | [phone-home-widget-short-light.png](phone-home-widget-short-light.png) | Short wide widget: only the first row, Cursor Other Models at 64% left, fits. | Light | 2026-10-23 | 2026-10-23 | 2026-10-23 | 864×1920 | WardPulse phone | Light Widget guide, height example |
 | [phone-home-widget-short-dark.png](phone-home-widget-short-dark.png) | Short wide widget: only the first row, Cursor Other Models at 64% left, fits. | Dark | 2026-10-23 | 2026-10-23 | 2026-10-23 | 864×1920 | WardPulse phone | Dark Widget guide, height example |
-| [phone-watch-settings-light.png](phone-watch-settings-light.png) | Selected Claude 5h 100%, Cursor 100%/64% and Codex Weekly 47%; three bands used. | Light | 2026-10-14 | 2026-10-21 | 2026-10-21 | 864×1920 | WardPulse phone | Light Watch guide |
-| [phone-watch-settings-dark.png](phone-watch-settings-dark.png) | Selected Claude 5h 100%, Cursor 100%/64% and Codex Weekly 47%; three bands used. | Dark | 2026-10-14 | 2026-10-21 | 2026-10-21 | 864×1920 | WardPulse phone | Dark Watch guide |
-| [wear-glance-overview.png](wear-glance-overview.png) | Shared-state Codex 47% / 61.8K credits, Cursor 100%/64%, Claude 5h 100%; gray OK. | Fixed dark | 2026-10-20 | 2026-10-21 | 2026-10-21 | 500×500 | WardPulse Wear | Both landing/README themes and general Watch guide |
-| [wear-glance.png](wear-glance.png) | Plan/window titles and credits; amber !OK / Stale, Alerts 0 disabled. | Fixed dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 500×500 | WardPulse Wear | Watch guide, refresh-status explanation of Stale / !OK only |
-| [wear-plan-windows.png](wear-plan-windows.png) | Shared-state first window: Claude Weekly plan, 100% left, back Oct 25 at 09:00. | Fixed dark | 2026-10-14 | 2026-10-21 | 2026-10-21 | 500×500 | WardPulse Wear | Watch guide in both themes |
-| [wear-watch-face.png](wear-watch-face.png) | Actual selected WardPulse face with the same Codex 47%, Cursor 100%/64%, Claude 100% and 61.8K credits. | Fixed dark | 2026-10-14 | 2026-10-21 | 2026-10-21 | 500×500 | WardPulse watch face | Both landing/README themes and Watch guide |
+| [phone-watch-settings-light.png](phone-watch-settings-light.png) | Shared-state selection: Claude 5h 100%, Cursor 100%/64% and Codex Weekly 86%; three bands used. | Light | 2026-10-14 | 2026-10-25 | 2026-10-25 | 864×1920 | WardPulse phone | Light Watch guide |
+| [phone-watch-settings-dark.png](phone-watch-settings-dark.png) | Shared-state selection: Claude 5h 100%, Cursor 100%/64% and Codex Weekly 86%; three bands used. | Dark | 2026-10-14 | 2026-10-25 | 2026-10-25 | 864×1920 | WardPulse phone | Dark Watch guide |
+| [wear-glance-overview.png](wear-glance-overview.png) | Clock-free Glance: Cursor 100%/64%, Codex Weekly 86% / 59.5K credits, Claude 5h 100%; gray disabled OK. | Fixed dark | 2026-10-20 | 2026-10-25 | 2026-10-25 | 500×500 | WardPulse Wear | Both landing/README themes and general Watch guide |
+| [wear-glance.png](wear-glance.png) | Clock-free Stale example: Claude Weekly 1%, Codex Weekly 4%, Cursor Models 50%; amber !OK, Alerts 0 disabled. | Fixed dark | 2026-10-14 | 2026-10-24 | 2026-10-24 | 500×500 | WardPulse Wear | Watch guide, refresh-status explanation of Stale / !OK only |
+| [wear-plan-windows.png](wear-plan-windows.png) | Shared-state first window: Codex Weekly plan, 86% left, back Nov 1 at 07:10. | Fixed dark | 2026-10-14 | 2026-10-25 | 2026-10-25 | 500×500 | WardPulse Wear | Watch guide in both themes |
+| [wear-watch-face.png](wear-watch-face.png) | Combined-layout face: Cursor 100%/64% inner band, Codex 86% / 59.5K credits middle, Claude 100% outer; default day, temperature and UV cells filled. | Fixed dark | 2026-10-14 | 2026-10-25 | 2026-10-25 | 500×500 | WardPulse watch face | Both landing/README themes and Watch guide |
 | [wear-watch-face-utility.png](wear-watch-face-utility.png) | Historical manual-selection guidance after Don’t allow; Source-backed UI reuse. | Fixed dark | 2026-10-16 | 2026-10-16 | 2026-10-18 | 500×500 | WardPulse Wear | Watch guide in both themes |
+
+## Shared-state capture refresh, 2026-10-25
+
+These seven PNGs were captured on the canonical phone and round Wear AVDs in one session,
+**13:36:53–13:36:58 UTC**. The same schema-9/live summary was present before and after,
+generated at **13:35:33 UTC**, overall OK and not stale. Summary SHA-256:
+`5712858f76644f607440cbe5fcf950167321cdd509a7fc0a2ef37e065f7f3991`.
+This session replaces the earlier 08:18 candidate, which predated the final combined layout.
+
+Dashboard shows Claude 5h/Weekly at 100%/100% and organization usage of 39 tokens across
+25 buckets. The selection pair, Glance and face agree on Cursor Models/Other Models
+100%/64%, Codex Weekly 86%, and Claude 5h 100%. Glance and the face also show Codex's
+59.5K purchased credits. Both Cursor halves share the face's inner band; Codex is middle
+and Claude outer. The upper default cells render Sun, 49°F and UV 0. Glance's gray OK
+and disabled Alerts: 0 match the refresh state. Plan windows starts with Codex Weekly,
+86% left, back Nov 1 at 07:10.
+
+The actual active legacy resource package was `app.wardpulse.watchface`, instance `wfId-15`.
+Its installed canonical XML SHA-256 was
+`47e1149d819a91e0e6b4b8d9b5bde864dd03006578ddd55c2efb77a67f582a86`.
+The operator bound this to the completed shared-resource name repair and current combined
+layout. These are canonical AVD captures; physical diagnostic frames and the broader
+fixture/device matrix remain separate evidence.
+
+Phone frames were proportionally resized from 1080×2400 to opaque 864×1920 PNGs. Round
+Wear frames were resized from 384×384 to 500×500 with only the approved outside-circle
+alpha applied. All seven 8-bit RGB streams exactly match an independent proportional
+resize; all three Wear alpha streams match the approved mask. No UI was retouched.
+Originals and exports were reviewed for actual themes, consistent values and privacy.
+Stale/manual-selection examples and Widget captures are separate existing cases.
+
+The final browser review covered all 15 public routes in both themes, matching previews
+and original-image links, the mobile menu and direct section anchors. All 35 HTTP-served
+PNGs matched their canonical bytes; 147 local links/anchors had no outstanding issues.
+The coordinator also viewed the original light/dark Overview browser captures.
+
+| Current shared-state file | SHA-256 |
+| --- | --- |
+| `phone-dashboard-overview-light.png` | `d2d204797ea574e4347d2d555bb43ee4ac49bdc2d1b9592c59ac4fe363289049` |
+| `phone-dashboard-overview-dark.png` | `bd7d13f829e7bce9e68c7a66af477e27d8d5c063b420553ebaadd003ac457212` |
+| `phone-watch-settings-light.png` | `6997dfc19a431e2e054295afe65525d4da66a47247da910dff08c3f3da88de89` |
+| `phone-watch-settings-dark.png` | `f74e4cba355085e28ce6b631ec36e1c506dd96ae6f20d65d88145f6f7d6411cd` |
+| `wear-glance-overview.png` | `ff99a3c30c98fca39a42584fb236cbd6cea5de39a87429496b2f8ccff2967cc6` |
+| `wear-plan-windows.png` | `3ce5c9fb3289e7aa567b70ade1f79d9bb4b9b4365060dda9e84b407930f593c7` |
+| `wear-watch-face.png` | `156ab2b1c4f3be48035c5183dbc18f06768a03a32d10bf07fb31c97ccdfdf4d3` |
+
+## Showcase capture refresh, 2026-10-24
+
+**Historical capture record, superseded by the 2026-10-25 session above.** These four
+showcase PNGs replaced their October 21 captures at the time. They were captured
+on the canonical phone and round Wear AVDs in one session, **19:23:26–19:23:29 UTC**.
+The delivered watch summary was byte-identical before and after capture: schema 9,
+live data, generated at **19:22:34 UTC**, overall OK and not stale. Its SHA-256 was
+`954a1a0989a0a3a658a83de7eb4c88cbfec958ada9356658bc6098d338c8654e`.
+
+The phone theme pair shows Claude 5h/Weekly at 100%/100% and organization reporting
+with 39 tokens across 24 buckets. Glance and the face show the same selected Codex
+Weekly 64% and 59.5K purchased credits, Cursor Models/Other Models 100%/64%, and Claude
+5h 100%. Glance uses the larger clock-free legend; its gray OK and disabled Alerts: 0
+match the captured summary. Each raw and exported frame was reviewed for consistent
+readings, actual themes, privacy and absence of error or Stale indicators.
+
+The phone app was version 0.1.0/code 1; the Wear app was 0.1.0/code 2. The installed legacy
+face package `app.wardpulse.watchface` was 0.1.0/code 1; the captured selected face was
+visually confirmed as WardPulse. These showcase captures use the canonical AVD builds,
+not the separately signed physical-watch build.
+Phone PNGs are opaque proportional resizes from 1080×2400 to 864×1920. Round Wear PNGs
+are proportional resizes from 384×384 to 500×500 with only the existing approved circular
+alpha mask applied outside the screen. Their 8-bit RGB bytes match an independent
+proportional resize; no UI was retouched. Existing relative public-mirror symlinks remain
+in place. Image review does not certify the separate final publication/browser checks.
+
+These four captures predated the new requirement to populate every upper face cell with
+its actual expected default complication. The face showed a day cell and two empty wells,
+so this group had not met that requirement; the current session above supersedes it.
+The purpose-specific Stale capture below is separate. Widget, Plan windows, Watchface
+selection and setup-utility images were not recaptured by this session.
+
+| Historical showcase file | SHA-256 |
+| --- | --- |
+| `phone-dashboard-overview-light.png` | `9edf411682c90a923a8e10b753dc876844eff9e5893c687c89d415bff41f51e1` |
+| `phone-dashboard-overview-dark.png` | `0576224d01d21492b4920865cd78766f4a9fc47398ef18f4121d33dd58333707` |
+| `wear-glance-overview.png` | `97da8905b94dc64602a9f7e882f02cf35043cf01f4ee441bfa759e88ccf581f2` |
+| `wear-watch-face.png` | `baa42b10909264571619d854f7092933ed58bf608fe48b129b6e7860d9d07e47` |
+
+## Stale Glance capture refresh, 2026-10-24
+
+The purpose-specific `wear-glance.png` was captured at **19:35:12 UTC** on the canonical
+round AVD running Wear 0.1.0/code 2. An already-existing sanitized schema-9/live saved
+summary from the Square AVD was temporarily loaded on Round. Its old report time caused
+the model to derive Stale; summary fields, schema and timestamps were not fabricated.
+The actual clock-free UI shows Claude Weekly 1% left, Codex Weekly 4% and Cursor Models
+50%, with amber !OK / Stale, disabled Alerts: 0 and no purchased-credit line.
+
+The original Round preferences were restored byte-for-byte, a fresh process loaded them,
+and the healthy UI was rechecked. Square was unchanged; no force-stop, storage clear or
+reboot was used. The fresh 384×384 raw PNG was proportionally resized to 500×500 with only
+the approved outside-circle alpha mask. Its 8-bit RGB matches an independent resize.
+The raw SHA-256 is `a5a3bba5656673913d994febcb6c9446a1aabc383d8a88a501754086743483f3`;
+the public PNG SHA-256 is `55a7dbb87e2bfef2f5c521e88ca6ef7739b9ba72ad35c4fa755c30b0a171f763`.
+Both frames were visually reviewed. This controlled error-state illustration is used only
+beside the Watch guide's explicit Stale explanation, not in the showcase cohort above.
 
 ## Widget resize capture refresh, 2026-10-23
 
 These ten phone captures form a separate shared-state Widget guide group. They supersede
 the Widget selection and launcher-widget theme pairs described in earlier capture sections;
-the Dashboard and Watch showcase group remains unchanged. The real anonymous app data
+the Dashboard and Watch showcase group was not part of that refresh. The real anonymous app data
 shows Claude 5h/Weekly at 100%/100%, Cursor Models/Other Models at 100%/64% and Codex Weekly
 at 97% with 59.5K purchased credits. Mock data was off. Overlapping readings and the five
 selected metrics match across both themes and every size. Full, medium and narrow examples
@@ -94,7 +205,9 @@ not changed; no inference requests were made for these captures.
 ## Shared-state capture refresh, 2026-10-21
 
 This section records the October 21 image bytes. Its four Widget image files were refreshed
-on October 23 as described above; the Dashboard and Watch group remains unchanged.
+on October 23; the Dashboard theme pair, healthy Glance and face were refreshed on October 24.
+The seven-image session above superseded the Dashboard, Watchface selection, Glance,
+Plan windows and face captures on October 25.
 
 The eleven refreshed images form one related group: the Dashboard theme pair, Glance,
 watch face, Plan windows, Watchface selection theme pair, Widget selection theme pair

@@ -19,8 +19,10 @@ sign in to providers on the watch. If the phone has data but the watch does not,
 **Glance** shows remaining capacity with provider labels, compact tracks, optional purchased
 credits and refresh status. A title such as **Claude plan · Weekly** names the plan and its
 selected window. Paired **Cursor plan** or **Codex plan** rows show two pool percentages.
+Glance hides the clock to make room for larger labels. The clock remains on **Plan windows**,
+**Alerts**, the **Watch face** setup screen and the prompt shown before the first summary.
 
-![Wear Glance showing Cursor, Codex and Claude plan capacity with purchased credits in a circular screen.](/screenshots/wear-glance-overview.png)
+![Clock-free Wear Glance showing Cursor, Codex and Claude plan capacity with purchased credits in a circular screen.](/screenshots/wear-glance-overview.png)
 
 The selected metric with the lowest remaining percentage appears first.
 This example shows plan capacity and Codex purchased credits. Its grey **OK** control is
@@ -35,9 +37,9 @@ first; missing or overdue reset times follow. Reset times may be unavailable.
 With larger text, the Glance legend may scroll. Swipe within the legend to reach its remaining
 rows; start outside the legend to change pages. Refresh and Alerts stay in place.
 
-![Plan windows showing Claude Weekly plan and its reported reset time.](/screenshots/wear-plan-windows.png)
+![Plan windows showing Codex Weekly plan and its reported reset time.](/screenshots/wear-plan-windows.png)
 
-The first window here is **Claude · Weekly plan**, with **100% left · back Oct 25, 09:00**.
+The first window here is **Codex · Weekly plan**, with **86% left · back Nov 1, 07:10**.
 
 ### Alerts and refresh
 
@@ -68,9 +70,9 @@ that every provider is current or that a refresh reached the phone.
 | **Error** | A reporting attempt failed. Open the phone's Dashboard for details and recovery. |
 | **Unknown** | The summary's status is unavailable. Check reporting on the phone. |
 
-![Wear Glance showing amber !OK, Stale and disabled Alerts: 0 in a circular screen.](/screenshots/wear-glance.png)
+![Clock-free Wear Glance showing amber !OK, Stale and disabled Alerts: 0 in a circular screen.](/screenshots/wear-glance.png)
 
-This earlier capture shows amber **!OK** with **Stale**: the summary needs a newer report.
+This example shows amber **!OK** with **Stale**: the saved summary needs a newer report.
 **Alerts: 0** is disabled because there are no active alerts.
 
 If **Ring data unavailable** replaces the rows, none of the selected rings has displayable
@@ -154,14 +156,23 @@ face. The face update does not request activation permission. **Try again** afte
 installation or update error repeats only that operation.
 
 On Wear OS 5, or another compatible watch without bundled installation, install WardPulse
-Watch Face separately and select it from your watch-face list. The existing separate
-installation and its settings are preserved.
+Watch Face separately only if needed. The **Watch face** utility confirms when the separate
+face is installed, explains when installation is needed, or says it could not check. Tap
+**Check again** for a fresh result. Returning from an external installation or reopening the
+utility also refreshes the result; you do not need to clear data or reinstall the Wear app.
 
-![WardPulse circular watch face with the selected Codex, Cursor and Claude usage bands and upper complications.](/screenshots/wear-watch-face.png)
+Select WardPulse through your watch's available system or companion watch-face selector.
+On OnePlus Watch 2, select WardPulse in OHealth. Other brands may use a different selector.
+Installation alone does not confirm the face is in use or that an update
+is available. The existing face, settings and data are preserved. The historical
+permission-decline image above does not illustrate this separate-installation check.
 
-The same selected metrics appear on Glance and the face. Here, Codex has **47% left**,
-Cursor has **100% / 64% left**, and Claude has **100% left**. Codex fills the innermost
-band; the upper cells show watch complications.
+![WardPulse circular watch face with the selected Cursor, Codex and Claude usage bands and upper complications.](/screenshots/wear-watch-face.png)
+
+The same selected metrics appear on Glance and the face. Here, Cursor has **100% / 64%
+left**, Codex has **86% left** and **59.5K purchased credits**, and Claude has **100% left**.
+Cursor's paired pools share the innermost band; Codex occupies the middle band and Claude
+the outer band. The upper cells show watch complications.
 
 The three upper complication cells are customized in the **system watch-face editor**. Open
 the watch's edit/customize action for WardPulse and select an upper cell to choose an available

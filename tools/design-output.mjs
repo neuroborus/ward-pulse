@@ -1,6 +1,9 @@
-import { execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { rmSync } from 'node:fs'
 import { access, readFile, writeFile } from 'node:fs/promises'
+import { promisify } from 'node:util'
+
+const runFile = promisify(execFile)
 
 const checking = process.argv.includes('--check')
 
@@ -86,18 +89,34 @@ export async function renderPreviews(previews) {
     })
   }
 
-  for (const { svg, png, density, overlay } of previews) {
-    execFileSync('convert', [
-      '-background',
-      'none',
-      '-density',
-      String(density),
-      '-strip',
-      svg,
-      `png32:${png}`,
-    ])
-    if (overlay) composeOverlay(png, overlay)
-    console.log(`wrote ${png}`)
+  const controller = new AbortController()
+  const interrupt = () => controller.abort()
+  process.on('SIGINT', interrupt)
+  process.on('SIGTERM', interrupt)
+  let closed = Promise.resolve()
+  try {
+    for (const { svg, png, density, overlay } of previews) {
+      const render = runFile('convert', [
+        '-background',
+        'none',
+        '-density',
+        String(density),
+        '-strip',
+        svg,
+        `png32:${png}`,
+      ], { signal: controller.signal })
+      closed = new Promise((resolve) => render.child.once('close', resolve))
+      await render
+      await closed
+      if (overlay) await composeOverlay(png, overlay, controller.signal)
+      controller.signal.throwIfAborted()
+      console.log(`wrote ${png}`)
+    }
+  } finally {
+    // An aborted execFile rejects before close; keep inputs alive until it retires.
+    await closed
+    process.off('SIGINT', interrupt)
+    process.off('SIGTERM', interrupt)
   }
 }
 
@@ -108,10 +127,11 @@ export async function renderPreviews(previews) {
  * composed, because `-evaluate multiply` on the alpha channel has to see the
  * mark alone: run against the page it would fade the preview under it too.
  */
-function composeOverlay(png, { image, x, y, width, height, alpha }) {
+async function composeOverlay(png, { image, x, y, width, height, alpha }, signal) {
   const mark = `${png.replace(/\.png$/, '')}.overlay.tmp.png`
+  let closed = Promise.resolve()
   try {
-    execFileSync('convert', [
+    const resize = runFile('convert', [
       image,
       '-resize',
       `${width}x${height}`,
@@ -124,8 +144,11 @@ function composeOverlay(png, { image, x, y, width, height, alpha }) {
       alpha.toFixed(6),
       '+channel',
       mark,
-    ])
-    execFileSync('convert', [
+    ], { signal })
+    closed = new Promise((resolve) => resize.child.once('close', resolve))
+    await resize
+    await closed
+    const compose = runFile('convert', [
       png,
       mark,
       '-geometry',
@@ -135,8 +158,11 @@ function composeOverlay(png, { image, x, y, width, height, alpha }) {
       '-composite',
       '-strip',
       `png32:${png}`,
-    ])
+    ], { signal })
+    closed = new Promise((resolve) => compose.child.once('close', resolve))
+    await compose
   } finally {
+    await closed
     rmSync(mark, { force: true })
   }
 }

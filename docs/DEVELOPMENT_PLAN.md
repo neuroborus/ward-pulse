@@ -2505,11 +2505,33 @@ the mono wordmark remains reserved for watermark use and is not duplicated besid
 
 ### Phase 20 — three upper cells on the watch face
 
+**Readability revision 2026-10-25 — current composition verified in bounded native cases.**
+The operative [combined face target](product/WATCH_RING_DESIGN.md#revision-2026-10-25--combined-face-readability)
+uses 50-unit cells at (149,112)/(200,98)/(251,112), 17/14/12 readings and a 120×26 legend at
+x165/y259,286,313 with 18/16/14 labels. Both clock variants move to y152; watermark centre
+is 247. All rims preserve the original outward fade; only lateral rims add the vertical
+bottom treatment through isolated WFF2 masks. Sources, slots, units and usage arcs stay.
+Actual combined-layout 415f and name-repair 88 executions completed and retired; current
+strict Push and legacy WFF2 validation/builds passed. Round 384 active/AOD passed independent
+review with actual visible `AMBIENT`/Dozing and later `INTERACTIVE`/Awake confirmed;
+physical 466 active charging/unlocked Face/Glance were verified, and the coherent
+seven-frame public group and its final browser placement passed review. Independent
+API 34 ten-fixture/twenty-frame review covered mapping, fit, zero/one/two/three bands,
+paired zero values, long credits and budgets, using the settled case-06 supplement.
+Cases 02–10 prove actual `AMBIENT`; case 01's original thin-clock frame has only the
+mode boolean and its supplement held before any fixture write. Square 360 proves only
+`MUTE` with NoData upper cells; true ambient, populated Square defaults, physical AOD and
+unobserved variants remain unproved. Fixture data/radios and original Square DND/summary
+were restored. The owning revision records the bounded acceptance, and all 136 outputs
+matched unchanged generators in the separate throwaway HOST correspondence check.
+Earlier failed generation/candidate records and measurements below apply to their dated
+builds. This face refinement adds no widget feature and does not close Phase 17's paired gate.
+
 **Selected-zero revision 2026-10-13.** The retained-zero ring and legend treatment changes
-no upper-cell geometry. The current `WATCH_RING_DESIGN.md` revisions own the complete cells
+no upper-cell geometry. That build used the complete cells
 at integer origins `(152,114)`, `(204,100)`, `(256,114)`, the three-unit downward move, full
 temperature labels and shortest radial border fades. The acceptance below follows those
-current revisions; new exhausted-state review art must use the same geometry.
+dated revisions; new exhausted-state review art follows the readability target above.
 
 Status: design locked 2026-10-09 in `docs/product/WATCH_RING_DESIGN.md` (upper-cell revision,
 with the melt-length and cell-layout corrections of the same day), and the first implementation
