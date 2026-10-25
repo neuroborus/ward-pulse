@@ -41,6 +41,20 @@ After an authorized install/update, inspect the whole affected native UI again. 
 only the Wear APK does not establish that the separately installed face changed, that its
 active instance refreshed or that old slot bindings were migrated.
 
+After an app/face handoff, prove current full-window focus and settled native content.
+UIAutomator idle or a visible WFF runtime alone does not prove completed compositor handoff;
+inspect actual frames for previous-page residue. Use bounded successive observations of
+the intended settled content, allowing real clock/live-value changes rather than requiring
+universal byte-identical frames. Keep mixed/transient frames Pending as diagnostic evidence;
+clean reobservation does not establish a Source cause or product fix. Fixed sleep alone is
+insufficient; input/charging procedures stay with android-devices/android-emulators.
+
+For AMBIENT acceptance, prove the actual renderer drawMode and intended visible variant.
+Dozing or `isAmbient=true` alone does not distinguish MUTE from AMBIENT; preserve MUTE as
+a separate valid case. Do not infer absolute part alpha from Doze screenshot RGB. Use the
+owning emulator/device workflow for normal-mode observations without data reset and for
+restoring temporary DND state; keep operational commands outside this reference.
+
 After restoring preferences/summary bytes, request the owning normal refresh/reload and
 verify the rendered result plus derived caches that can retain data independently. Do
 not end restoration at a successful file copy. Preserve existing data and incident proof;
