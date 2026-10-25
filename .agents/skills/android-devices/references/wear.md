@@ -12,8 +12,9 @@ A visible face, resumed WardPulse Activity or battery percentage does not establ
 the watch is unlocked or its app visible. Inspect actual keyguard/foreground state and
 the rendered frame immediately before the scenario. Charging SystemUI can cover the app;
 verify actual charging and visible UI rather than assuming that placement on the charger
-or a foreground record proves the test state. Ask the owner to move/unlock it only when
-necessary for the remaining physical check.
+or a foreground record proves the test state. Follow the state-dependent
+[charging workflow](charging.md) before treating charging as a blocker or asking the owner
+to remove the watch from its charger.
 
 Use only the owner's explicitly authorized pattern/PIN; store it only if the owner
 requested storage. Keep the secure lock enabled. Recheck the current unlock grid/UI
