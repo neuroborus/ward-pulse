@@ -6,6 +6,8 @@ description: WardPulse Android ecosystem surface guidance. Use when implementing
 # Android Surfaces — WardPulse
 
 Use this skill for `apps/phone_flutter/`, `apps/wear_android/`, and `apps/watchface_wff/`.
+For rendered/runtime UI acceptance, also apply
+[ui-verification](../ui-verification/SKILL.md).
 
 ## Surface Responsibilities
 

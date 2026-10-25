@@ -48,6 +48,8 @@ just check-docs
 
 Automated gates do not exercise the app. Unit tests use fakes, so they never load
 `libward_pulse_ffi.so`, never resolve an exported symbol, and never render a screen.
+Apply [ui-verification](../../ui-verification/SKILL.md) for actual UI acceptance, including
+logical metric mapping, active artifact/state identity and original native-frame review.
 
 Run the app on an emulator when the change could only fail there:
 

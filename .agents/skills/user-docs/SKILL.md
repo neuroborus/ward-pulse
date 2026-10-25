@@ -33,6 +33,8 @@ Before capturing, selecting, presenting or reviewing screenshots, read BOTH comp
 
 These rules apply to guide pages as well as the Overview/README showcase; related captures
 must share one application state. Use real UI controls, never retouch app UI to clean a capture.
+Apply [ui-verification](../ui-verification/SKILL.md) before accepting pictured UI meaning
+or its running-artifact/state evidence; the references above own public capture policy.
 
 ### Theme matching
 
