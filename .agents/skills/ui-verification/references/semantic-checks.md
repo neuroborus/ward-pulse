@@ -38,6 +38,15 @@ units, clipping, default cells, status controls and navigation context relevant 
 case. Do not infer that uninspected neighboring elements are correct because one detail
 passed. Verify real circle/screen boundaries before measuring or cropping.
 
+For upper face cells, inspect EVERY rim's full contour and its clearance to neighboring
+cells, time and bands in the original native frame, with a magnified view when needed.
+Compare each border's gradient direction and the central border's uniformity with the
+current owning design. Populated default cells do not prove clean rendering: look for
+unexpected pale flecks, stray strokes and broken contours around them. Keep border fades,
+unexpected artifacts and usage-progress arcs as separate checks. If a missed artifact is
+reported after acceptance, preserve the incident frame, reopen the review and keep the
+public capture candidate Pending until actual repair and matched native verification.
+
 Use the actual unclipped native viewport and intended gesture region for interaction
 measurements. Accessibility semantics may expose a clipped child rather than the full
 page; a gesture sized from those bounds can fail without proving a navigation defect.
