@@ -25,6 +25,9 @@ helper remains code even when placed in Markdown or `LOCAL_ARTIFACTS/`.
 
 ## Code goes through the runner
 
+Before scoping a task or plan, apply [Focused Commit Boundaries](../finalization/references/commit-boundaries.md).
+That reference owns cohesive commit planning and the coordinating worktree's integration order.
+
 Before choosing or operating a Runner route, read the complete
 [Runner operation contract](references/runner-operation.md). It preserves actual execution
 and independent review, default pipelines, commit boundaries, explicit Native/HOST gates,

@@ -45,6 +45,9 @@ Complete [Documentation Review](references/review.md#6-documentation-review).
 
 ## 7. Staging And Commit Boundary
 
+Apply [Focused Commit Boundaries](references/commit-boundaries.md) before integration or
+staging; it owns backlog-item ordering, cohesive plans and isolated implementation streams.
+
 Follow the standing commit authorization in [AGENTS.md](../../../AGENTS.md#working-agreements).
 For a coordinator commit, finish all applicable checks and the full independent zero-findings
 pass after the last correction, then stage only the files belonging to this change set.
