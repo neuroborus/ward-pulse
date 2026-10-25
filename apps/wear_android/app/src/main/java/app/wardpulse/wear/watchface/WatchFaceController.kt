@@ -13,7 +13,9 @@ enum class WatchFaceStatus {
     Checking,
     CheckFailed,
     FaceUnsupported,
-    SeparateInstall,
+    SeparateInstalled,
+    SeparateMissing,
+    SeparateCheckFailed,
     Missing,
     NoCapacity,
     Installed,
@@ -21,6 +23,10 @@ enum class WatchFaceStatus {
     InstallFailed,
     UpdateFailed,
 }
+
+internal val WatchFaceStatus.isSeparateFace: Boolean
+    get() = this == WatchFaceStatus.SeparateInstalled || this == WatchFaceStatus.SeparateMissing ||
+        this == WatchFaceStatus.SeparateCheckFailed
 
 enum class WatchFaceManualSelection { PermissionDeclined, ActivationUnavailable }
 
@@ -42,7 +48,7 @@ class WatchFaceController(
     private val mutableState = MutableStateFlow(WatchFaceState())
     val state: StateFlow<WatchFaceState> = mutableState.asStateFlow()
 
-    suspend fun check() = operation(WatchFaceStatus.CheckFailed) {
+    suspend fun check() = operation(WatchFaceStatus.CheckFailed, refreshSeparateAfterBusy = true) {
         mutableState.value = WatchFaceState(WatchFaceStatus.Checking, busy = true)
         withFace(observeActive = true) { _, _, _ -> }
     }
@@ -152,7 +158,19 @@ class WatchFaceController(
             return@withContext
         }
         if (!reading { client.isSupported() }) {
-            mutableState.value = WatchFaceState(WatchFaceStatus.SeparateInstall, busy = true)
+            val status = try {
+                if (client.isSeparateFaceInstalled()) {
+                    WatchFaceStatus.SeparateInstalled
+                } else {
+                    WatchFaceStatus.SeparateMissing
+                }
+            } catch (failure: Exception) {
+                if (failure is CancellationException) throw failure
+                WatchFaceStatus.SeparateCheckFailed
+            } catch (_: LinkageError) {
+                WatchFaceStatus.SeparateCheckFailed
+            }
+            mutableState.value = WatchFaceState(status, busy = true)
             return@withContext
         }
         reading { client.openBundle() }.use { bundle ->
@@ -208,11 +226,24 @@ class WatchFaceController(
         failureStatus: WatchFaceStatus,
         permissionResult: Boolean = false,
         preserveActivationOnCancellation: Boolean = false,
+        refreshSeparateAfterBusy: Boolean = false,
         action: suspend () -> Unit,
     ) {
         // A permission result is completion of an existing action, not a duplicate tap.
-        if (permissionResult) mutex.lock() else if (!mutex.tryLock()) return
+        var deferredSeparateCheck = false
+        if (permissionResult) {
+            mutex.lock()
+        } else if (!mutex.tryLock()) {
+            if (!refreshSeparateAfterBusy ||
+                (state.value.status != WatchFaceStatus.Checking && !state.value.status.isSeparateFace)
+            ) return
+            // The ViewModel owns this request across navigation and recreation. Only a
+            // separate-face result may be refreshed; never reobserve supported Push activity.
+            mutex.lock()
+            deferredSeparateCheck = true
+        }
         try {
+            if (deferredSeparateCheck && !state.value.status.isSeparateFace) return
             if (state.value.busy && !(permissionResult && state.value.awaitingPermission)) return
             mutableState.value = state.value.copy(busy = true)
             try {

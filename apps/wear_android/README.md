@@ -106,9 +106,19 @@ an **In use** face can offer an update. Installation/update completion reports *
 it does not check current activity immediately after an update. **Try again** repeats only
 the failed installation or update. Busy actions are disabled.
 
-Wear OS 5 and other WFF 2 devices without Push receive separate-install/manual-selection
-guidance. On Wear OS 4 / API 33 the dashboard remains usable, but the face requires Wear OS 5
-or later. The legacy `app.wardpulse.watchface` package and its settings remain separate.
+On compatible API 34+ devices without Push, the utility checks only the separate
+`app.wardpulse.watchface` package. Presence confirms installation and offers manual selection;
+absence explains separate installation followed by selection. An unavailable/failed query
+says installation could not be checked. **Check again**, revisiting the utility and returning
+from an external installation refresh this observation. No Push inventory, installation,
+activation or permission operation is used on this path. Package presence proves neither
+current selection nor update availability.
+
+Install the separate face only if needed, then choose WardPulse through the watch's available
+system or companion selector. OHealth was the owner's observed route on one physical Wear OS 5
+watch, not a guarantee for other brands. The installed face, settings and data are preserved.
+On Wear OS 4 / API 33 the dashboard remains usable; the utility reports the face as unsupported
+without querying packages or attempting installation/activation.
 
 Local development acceptance on **2026-10-16** covers final debug artifacts, API33/API34/API36
 emulators, real summary delivery, explicit consent and N1-to-N2 customization/selection
@@ -117,12 +127,26 @@ for exact evidence, observed system/scroll limitations and remaining production 
 Play, API35 and hardware gates. The
 [dated baseline](../../docs/product/WEAR_GLANCE_DESIGN.md#revision-2026-10-16--watch-face-utility-entry)
 and [indexed manual-selection capture](../../docs/assets/README.md#watch-face-utility-provenance-and-wear-freshness-2026-10-16)
-are integrated; existing screenshot bytes and Glance geometry are preserved.
+are integrated. The setup-route change preserves Glance geometry; screenshots have their
+own dated capture records.
 
 The durable-consent device tests in `WatchFaceConsentStoreTest`, included in
 `just test-wear-device`, verify synchronous on-disk history. The retained-navigation UI
 tests use synthetic summary availability; the controller tests use injected effects.
 Actual platform consent/data observations are recorded separately in the acceptance record.
+Current `just check-wear` passed, including the newly validated Push bundle. An actual
+API 34 native frame confirms the separately installed face's **Installed. Select WardPulse
+from your watch-face list** guidance. Historical consent captures are not that evidence.
+`WardPulseNavigationStateTest` holds an old absence across pause/resume, navigation re-entry
+and rebuilding the utility from its saved state. Each case simulates external installation
+and requires a fresh installed result from the retained controller without Push or consent
+effects. Busy refresh requests live in the ViewModel's controller calls rather than a
+composition-local flag. `WatchFaceControllerTest` also guards that a queued request after a
+supported observation repeats neither inventory nor activity reads. These deterministic
+cases ran in the HOST suites: Round's full suite passed 32 tests; Square and API 34 each
+passed 12 navigation tests. The controller/navigation/manifest sources match the reviewed
+preparatory hashes. These use injected lifecycle/installation events; actual Activity
+recreation and real external-installer return remain separate, unverified cases.
 
 ## Commands
 

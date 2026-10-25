@@ -19,10 +19,13 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.onFocusedBoundsChanged
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
+import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
@@ -41,6 +44,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.wear.compose.material3.AppScaffold
 import app.wardpulse.wear.MainActivity
 import app.wardpulse.wear.model.AlertSummary
 import app.wardpulse.wear.model.AllowanceSummary
@@ -51,19 +55,33 @@ import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.model.WatchDataMode
 import app.wardpulse.wear.ui.theme.WardPulseTheme
+import app.wardpulse.wear.watchface.InstalledWatchFace
+import app.wardpulse.wear.watchface.WatchFaceBundle
+import app.wardpulse.wear.watchface.WatchFaceConsent
+import app.wardpulse.wear.watchface.WatchFaceConsentHistory
+import app.wardpulse.wear.watchface.WatchFaceController
+import app.wardpulse.wear.watchface.WatchFaceInventory
+import app.wardpulse.wear.watchface.WatchFacePushClient
+import app.wardpulse.wear.watchface.WatchFaceScreen
 import app.wardpulse.wear.watchface.WatchFaceState
 import app.wardpulse.wear.watchface.WatchFaceStatus
 import java.io.File
+import java.util.Collections
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -197,6 +215,220 @@ class WardPulseNavigationStateTest {
         assertVisible("Watch face")
         assertAbsent("In use", anchor = "Watch face", anchorIsAction = true)
         assertAbsent("Alerts: 1", anchor = "Watch face", anchorIsAction = true)
+    }
+
+    @Test
+    fun separateFaceGuidanceRefreshesOnRecheckExternalReturnAndRevisit() {
+        var nextStatus = WatchFaceStatus.SeparateMissing
+        instrumentation.runOnMainSync {
+            callbacks = callbacksFor("manual").copy(onCheck = {
+                calls += "manual.check"
+                watchFaceState = WatchFaceState(nextStatus)
+            })
+        }
+        launchApp()
+        click("Watch face")
+        val missing = "Install WardPulse Watch Face separately, then select it from your watch-face list."
+        val unknown = "Could not check whether the separate watch face is installed."
+        val installed = "Installed. Select WardPulse from your watch-face list."
+        assertVisible(missing)
+        assertAction("Check again", enabled = true)
+        assertCalls("manual.check")
+
+        change {
+            nextStatus = WatchFaceStatus.SeparateCheckFailed
+            callbacks = callbacks.copy(onCheck = {
+                calls += "latest.check"
+                watchFaceState = WatchFaceState(nextStatus)
+            })
+        }
+        click("Check again")
+        scrollToStart()
+        assertVisible(unknown)
+        assertAbsent(missing, anchor = unknown)
+        assertCalls("manual.check", "latest.check")
+
+        // Model leaving for an external installation without modifying any package/data.
+        scenario.moveToState(Lifecycle.State.CREATED)
+        instrumentation.runOnMainSync { nextStatus = WatchFaceStatus.SeparateInstalled }
+        scenario.moveToState(Lifecycle.State.RESUMED)
+        awaitUi()
+        assertVisible(installed)
+        assertAbsent(unknown, anchor = installed)
+        assertAbsent("In use", anchor = installed)
+        assertAbsent("Use watch face", anchor = installed)
+        assertAction("Check again", enabled = true)
+        assertCalls("manual.check", "latest.check", "latest.check")
+
+        back()
+        assertVisible("Sync from phone")
+        change { nextStatus = WatchFaceStatus.SeparateMissing }
+        click("Watch face")
+        assertVisible(missing)
+        assertAbsent(installed, anchor = missing)
+        assertCalls("manual.check", "latest.check", "latest.check", "latest.check")
+    }
+
+    @Test
+    fun supportedFaceResumeKeepsPostUpdateActivityUnobserved() {
+        launchApp()
+        click("Watch face")
+        assertCalls("initial.check")
+        change { watchFaceState = WatchFaceState(WatchFaceStatus.Installed, updateAvailable = true) }
+        click("Update watch face")
+        change { watchFaceState = WatchFaceState(WatchFaceStatus.Installed, useAvailable = true) }
+        scenario.moveToState(Lifecycle.State.CREATED)
+        scenario.moveToState(Lifecycle.State.RESUMED)
+        awaitUi()
+        scrollToStart()
+        assertVisible("Installed")
+        assertAbsent("In use", anchor = "Installed")
+        assertCalls("initial.check", "initial.update")
+    }
+
+    @Test
+    fun separateFaceReturnDuringOldObservationRefreshesAfterItSettles() {
+        assertFreshSeparateFaceAfterOldObservation { install ->
+            scenario.moveToState(Lifecycle.State.CREATED)
+            install()
+            scenario.moveToState(Lifecycle.State.RESUMED)
+            awaitUi()
+        }
+    }
+
+    @Test
+    fun separateFaceRevisitDuringOldObservationRefreshesAfterItSettles() {
+        assertFreshSeparateFaceAfterOldObservation { install ->
+            back()
+            assertVisible("Sync from phone")
+            install()
+            click("Watch face")
+        }
+    }
+
+    @Test
+    fun separateFaceRestoredCompositionDuringOldObservationRefreshesAfterItSettles() {
+        var visible by mutableStateOf(false)
+        var registry by mutableStateOf(SaveableStateRegistry(null) { true })
+        assertFreshSeparateFaceAfterOldObservation(
+            launchContent = {
+                launchApp(content = {
+                    AppScaffold {
+                        if (visible) {
+                            CompositionLocalProvider(LocalSaveableStateRegistry provides registry) {
+                                WatchFaceScreen(
+                                    state = watchFaceState,
+                                    onCheck = callbacks.onCheck,
+                                    onInstall = callbacks.onInstall,
+                                    onUpdate = callbacks.onUpdate,
+                                    onUse = callbacks.onUse,
+                                )
+                            }
+                        }
+                    }
+                })
+            },
+            openUtility = { change { visible = true } },
+        ) { install ->
+            var saved = emptyMap<String, List<Any?>>()
+            // Rebuild the screen from its actual saved values, retaining the controller
+            // as the ViewModel does. The new observer receives only its initial resume.
+            change {
+                saved = registry.performSave()
+                visible = false
+            }
+            install()
+            change {
+                registry = SaveableStateRegistry(saved) { true }
+                visible = true
+            }
+        }
+    }
+
+    private fun assertFreshSeparateFaceAfterOldObservation(
+        launchContent: () -> Unit = { launchApp() },
+        openUtility: () -> Unit = { click("Watch face") },
+        leaveAndReturn: (() -> Unit) -> Unit,
+    ) {
+        val oldObservationEntered = CompletableDeferred<Unit>()
+        val releaseOldObservation = CompletableDeferred<Unit>()
+        val installed = AtomicBoolean(false)
+        val effects = Collections.synchronizedList(mutableListOf<String>())
+        fun unexpected(effect: String): Nothing {
+            effects += effect
+            error("Unexpected separate-face effect: $effect")
+        }
+        val client = object : WatchFacePushClient {
+            override val sdkInt = 34
+            override fun isSupported(): Boolean {
+                effects += "support"
+                return false
+            }
+            override fun isSeparateFaceInstalled(): Boolean {
+                effects += "separate"
+                val observed = installed.get()
+                if (oldObservationEntered.complete(Unit)) {
+                    runBlocking { releaseOldObservation.await() }
+                }
+                return observed
+            }
+            override fun openBundle(): WatchFaceBundle = unexpected("bundle")
+            override suspend fun list(): WatchFaceInventory = unexpected("inventory")
+            override suspend fun isActive(packageName: String): Boolean = unexpected("active")
+            override suspend fun install(bundle: WatchFaceBundle): InstalledWatchFace = unexpected("install")
+            override suspend fun update(slotId: String, bundle: WatchFaceBundle): InstalledWatchFace =
+                unexpected("update")
+            override fun hasActivationPermission(): Boolean = unexpected("permission")
+            override suspend fun activate(slotId: String): Unit = unexpected("activate")
+        }
+        val consent = object : WatchFaceConsentHistory {
+            override fun read(): WatchFaceConsent = unexpected("consent.read")
+            override fun compareAndSet(expected: WatchFaceConsent, consent: WatchFaceConsent): Boolean =
+                unexpected("consent.write")
+        }
+        val controller = WatchFaceController(client, consent)
+        launchContent()
+        val observation = Job(compositionScope.coroutineContext[Job])
+        val scope = CoroutineScope(compositionScope.coroutineContext + observation)
+        val checks = mutableListOf<Job>()
+        scenario.onActivity {
+            callbacks = callbacksFor("separate").copy(onCheck = {
+                calls += "separate.check"
+                checks += scope.launch(start = CoroutineStart.UNDISPATCHED) { controller.check() }
+            })
+            scope.launch {
+                controller.state.collect { watchFaceState = it }
+            }
+        }
+        try {
+            openUtility()
+            runBlocking { withTimeout(5_000) { oldObservationEntered.await() } }
+            assertVisible("Checking watch face…")
+            // Model an external installation after the old query captured absence.
+            leaveAndReturn { installed.set(true) }
+            assertCalls("separate.check", "separate.check")
+            scenario.onActivity {
+                assertEquals(2, checks.size)
+                checks.forEach { assertFalse(it.isCompleted) }
+            }
+            assertEquals(WatchFaceState(WatchFaceStatus.Checking, busy = true), controller.state.value)
+            assertEquals(listOf("support", "separate"), effects.toList())
+
+            releaseOldObservation.complete(Unit)
+            val guidance = "Installed. Select WardPulse from your watch-face list."
+            assertVisible(guidance)
+            assertAction("Check again", enabled = true)
+            assertAbsent("In use", anchor = guidance)
+            assertAbsent("Use watch face", anchor = guidance)
+            assertCalls("separate.check", "separate.check")
+            assertEquals(WatchFaceState(WatchFaceStatus.SeparateInstalled), controller.state.value)
+            assertEquals(listOf("support", "separate", "support", "separate"), effects.toList())
+        } finally {
+            releaseOldObservation.complete(Unit)
+            runBlocking {
+                withTimeout(5_000) { observation.cancelAndJoin() }
+            }
+        }
     }
 
     @Test
@@ -954,7 +1186,11 @@ class WardPulseNavigationStateTest {
         }
     }
 
-    private fun launchApp(initialSummary: WatchDashboardSummary? = null, fontScale: Float? = null) {
+    private fun launchApp(
+        initialSummary: WatchDashboardSummary? = null,
+        fontScale: Float? = null,
+        content: (@Composable () -> Unit)? = null,
+    ) {
         instrumentation.runOnMainSync { summary = initialSummary }
         scenario = ActivityScenario.launch(MainActivity::class.java)
         scenario.onActivity { activity ->
@@ -973,14 +1209,18 @@ class WardPulseNavigationStateTest {
                 ) {
                     WardPulseTheme {
                         Box(Modifier.fillMaxSize().onFocusedBoundsChanged { focusedCoordinates = it }) {
-                            WardPulseApp(
-                                summary = summary,
-                                watchFaceState = watchFaceState,
-                                onCheckWatchFace = callbacks.onCheck,
-                                onInstallWatchFace = callbacks.onInstall,
-                                onUpdateWatchFace = callbacks.onUpdate,
-                                onUseWatchFace = callbacks.onUse,
-                            )
+                            if (content != null) {
+                                content()
+                            } else {
+                                WardPulseApp(
+                                    summary = summary,
+                                    watchFaceState = watchFaceState,
+                                    onCheckWatchFace = callbacks.onCheck,
+                                    onInstallWatchFace = callbacks.onInstall,
+                                    onUpdateWatchFace = callbacks.onUpdate,
+                                    onUseWatchFace = callbacks.onUse,
+                                )
+                            }
                         }
                     }
                 }
