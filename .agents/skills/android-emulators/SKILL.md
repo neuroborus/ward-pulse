@@ -1,11 +1,13 @@
 ---
 name: android-emulators
-description: Operate WardPulse Android phone and Wear OS emulators safely. Use for isolated Android Studio work, AVD input or screenshots, phone-watch pairing or bridge recovery, snapshots, restarts, and actions that could risk emulator state; not for ordinary app implementation or build configuration.
+description: Operate WardPulse Android phone and Wear OS emulators safely. Use for isolated Android Studio work, AVD input or screenshots, emulator phone-watch pairing or bridge recovery, snapshots and restarts; not for physical devices, ordinary app implementation or build configuration.
 ---
 
 # Android Emulators — WardPulse
 
 Use this skill for operational work on the project's configured phone and Wear OS AVDs.
+For physical phones and watches over USB/wireless ADB, use
+[android-devices](../android-devices/SKILL.md); its device-preservation rules differ.
 
 ## Source Of Truth
 
