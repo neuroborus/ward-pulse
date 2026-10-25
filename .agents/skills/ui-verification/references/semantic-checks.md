@@ -51,10 +51,12 @@ unexpected artifacts and usage-progress arcs as separate checks. If a missed art
 reported after acceptance, preserve the incident frame, reopen the review and keep the
 public capture candidate Pending until actual repair and matched native verification.
 
-Use the actual unclipped native viewport and intended gesture region for interaction
-measurements. Accessibility semantics may expose a clipped child rather than the full
-page; a gesture sized from those bounds can fail without proving a navigation defect.
-Distinguish actual system font/DPI state from an injected test density or animation scale.
+Choose gesture extent and commit requirements for the actual component being navigated,
+using its real unclipped viewport and intended gesture region. Neighboring legend bounds,
+clipped accessibility children and another component's remembered successful gesture are
+not substitutes. After settlement, verify the actual destination or reached limit before
+accepting success or treating an uncommitted gesture as a navigation defect. Distinguish
+actual system font/DPI state from an injected test density or animation scale.
 
 ## Match the case after changes
 
