@@ -40,8 +40,12 @@ passed. Verify real circle/screen boundaries before measuring or cropping.
 
 For upper face cells, inspect EVERY rim's full contour and its clearance to neighboring
 cells, time and bands in the original native frame, with a magnified view when needed.
-Compare each border's gradient direction and the central border's uniformity with the
-current owning design. Populated default cells do not prove clean rendering: look for
+Compare original outward lighting and each explicitly added treatment with the current
+owning design. A request to change one side's fade does not remove the other side's fade;
+**no added bottom fade** does not mean **no fade anywhere**. Record unchanged lighting
+regions and compare matched before/after native upper/arc-facing regions separately from
+the new lower treatment on EVERY cell before PASS. Direction on the new side alone is
+insufficient. Populated default cells do not prove clean rendering: look for
 unexpected pale flecks, stray strokes and broken contours around them. Keep border fades,
 unexpected artifacts and usage-progress arcs as separate checks. If a missed artifact is
 reported after acceptance, preserve the incident frame, reopen the review and keep the
