@@ -12,13 +12,15 @@ AC true with FULL is valid powered-state evidence; status **2 (CHARGING)** is no
 This proves access while on the charger, not fresh provider data or face/AOD acceptance.
 The exact dismissal route was observed on this watch; other brands' normal controls may vary.
 
-1. Reconfirm identity, wake with key 224, then inspect actual wakefulness, focus and UI.
-   Key 224 can leave `mWakefulness=Asleep` with the charging/offload UI visible. In that
-   observed state, ONE normal primary-stem key 264 woke it to Awake/keyguard. Observe the
-   actual focus/UI transition before a lock tap; this is not an unconditional key chain.
-   If charging UI still covers the app while Awake, use a normal horizontal Back swipe
-   **from the left edge**, sized from the CURRENT viewport. Wait for observable UI idle
-   and inspect the result; the verified route exposed the locked WardPulse face.
+1. Reconfirm identity, wake with key 224 and wait for observable UI idle. Reobserve actual
+   wakefulness, focus and rendered page before choosing the next action; immediate power
+   reads can be premature. Key 224 has left `mWakefulness=Asleep` with charging/offload UI;
+   ONE normal primary-stem key 264 then woke it to Awake/keyguard. Stem 264 also exposed
+   the locked selected face from settled Awake with `SysUI.Charging` focused. A normal
+   horizontal Back swipe **from the left edge** has also worked in charging scenes, but
+   has not dismissed every such scene. Size it from the CURRENT viewport. Choose one normal
+   route from the observed state, then wait for UI idle and inspect the actual transition
+   before a lock tap; these observations do not prescribe an unconditional key chain.
 2. Tap its currently visible lock control at verified current bounds. Wait for the settled
    UNENTERED unlock grid and inspect its geometry privately. A visible face is not unlock
    proof. Do not reuse remembered coordinates or capture an entered authentication path.
