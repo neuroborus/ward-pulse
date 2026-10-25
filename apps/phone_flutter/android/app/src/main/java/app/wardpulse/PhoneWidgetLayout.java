@@ -1,6 +1,8 @@
 package app.wardpulse;
 
-/** Shared launcher fitting and fallback rules, independent from Android rendering. */
+import java.util.StringJoiner;
+
+/** Launcher presentation and fitting rules, independent from Android rendering. */
 public final class PhoneWidgetLayout {
     public static final int MAX_ROWS = 6;
     private static final int CHROME_PAD_V_DP = 12;
@@ -11,6 +13,27 @@ public final class PhoneWidgetLayout {
     public enum EmptyState { NONE, NO_METRICS, RESIZE }
 
     private PhoneWidgetLayout() {}
+
+    /** Accept both descriptive and compact caches without reformatting the numeric token. */
+    public static String percentText(String cached) {
+        return cached.endsWith(" left")
+                ? cached.substring(0, cached.length() - " left".length()) : cached;
+    }
+
+    public static String creditsText(String cached) {
+        return cached.endsWith(" credits")
+                ? cached.substring(0, cached.length() - " credits".length()) : cached;
+    }
+
+    /** Metric identity accompanies its visible values even in percentage-only layouts. */
+    public static String rowDescription(
+            String label, String remainingPercent, String purchasedCredits, boolean showCredits) {
+        StringJoiner description = new StringJoiner(", ");
+        if (!label.isEmpty()) description.add(label);
+        if (!remainingPercent.isEmpty()) description.add(remainingPercent);
+        if (showCredits && !purchasedCredits.isEmpty()) description.add(purchasedCredits);
+        return description.toString();
+    }
 
     /** Two-line rows keep their existing geometry; the measured badge inset is pixels. */
     public static int completeRows(int availableHeightDp, float density, int staleInsetPx) {

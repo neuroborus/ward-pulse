@@ -3,7 +3,7 @@
 **Status: locked 2026-07-27** (revised **2026-07-28** — hug rows/columns, label-center /
 credits-end, picker preview sample, day/night olive chrome; revised **2026-08-02** —
 two-line label carrying the provider family; revised **2026-10-13** — stale badge clearance
-and reliable Dashboard navigation). Review art:
+and reliable Dashboard navigation; revised **2026-10-24** — compact numeric columns). Review art:
 `apps/phone_flutter/design/` (`widget-small.svg` / `widget-medium.svg` / `widget-dark.svg`).
 
 **Revision 2026-09-16 — Codex windows:** Codex and Spark remain per-window metrics on
@@ -49,6 +49,15 @@ the native widget harness passed **28** assertions. The existing 31dp body-row e
 remains unchanged. Very short hosts, the `Resize widget` fallback on a launcher and text
 scales above 1.5 remain separate device-fit checks; no hardware-device coverage is claimed.
 
+**Revision 2026-10-24 — compact numeric columns.** The phone home widget displays a
+remaining percentage as `N%` and an eligible purchased balance as its existing compact
+number, without the visible words `left` or `credits` in those two columns. Accessible
+descriptions retain remaining and purchased-credit meaning. Native runtime text remains
+12sp; geometry, ordering, row/column fit, credit eligibility and known-zero/unknown rules
+are unchanged. Previously saved descriptive strings render correctly without a new sync.
+This revision does not change Dashboard, Wear or watch-face formatting, and does not
+promise to resolve central metric-label truncation.
+
 Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 14). Asset ownership: `docs/DESIGN_ASSETS.md`.
 Do **not** copy [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md) layouts onto the phone launcher.
 
@@ -76,12 +85,12 @@ Configuration lives on the phone **Widget** tab and is **independent** of Watchf
    colors since 2026-08-13. A budget row takes the family color of its connection; the neutral
    grey is a fallback for an unresolved family, not a product color.
 5. **Purchased credits** — on **plan** rows, when that provider family reports finite purchased
-   remaining credits, show Glance-style columns: `N% left` · label · `N credits` (compact
-   count + `credits` unit). Same per-provider rule as Wear Glance / face strips — not a
-   footer sum, not `creditsGlance`, never LLM `TOK`. Skip on purchased-meter rows (Extra
+   remaining credits, show columns: `N%` · label · compact balance (for example `59.5K`).
+   Accessible descriptions retain the units. Same per-provider rule as Wear Glance / face
+   strips — not a footer sum, not `creditsGlance`, never LLM `TOK`. Skip on purchased-meter rows (Extra
    usage / on-demand are the credit pool), budgets, and missing/unlimited balances.
 6. **Omit** unavailable metrics (no percent). Exhausted plan/purchased meters (`usedPercent >= 100`)
-   stay on the phone widget as **`0% left`** so sibling pools remain visible. Watch/WFF likewise
+   stay on the phone widget as **`0%`** so sibling pools remain visible. Watch/WFF likewise
    retain known selected exhausted metrics under their 2026-10-13 revision. The Widget tab
    states unavailability rather than hiding it: a metric with no
    percentage lists as unselectable under its own reason — *This allowance has no percentage to
@@ -99,7 +108,7 @@ Configuration lives on the phone **Widget** tab and is **independent** of Watchf
 Prefs select up to **six** metrics; the olive card shows as many **complete** resolved
 rows as fit the host cell, and as many **complete** columns as fit the width
 (`wrap_content` hug). Trailing rows / right-hand columns that would clip are omitted —
-never half-cut text. Horizontal drop order: **credits → label → `% left`**. Vertical /
+never half-cut text. Horizontal drop order: **credits → label → `%`**. Vertical /
 horizontal resize changes the launcher span; drag handles to the card to reclaim empty
 cells. Newly placed widgets default to ~3 cells tall; **remove and re-add** if an old
 tall span stays stale. Unused slots stay omitted, not filled.
@@ -113,26 +122,30 @@ limit for that period, so an unconfigured install defaults to plan windows.
 
 ```text
 ┌─ olive card hugs complete rows + columns ──────┐
-│  ▌ 22% left     Claude       80 credits   ⌇wm  │  ← tightest remaining first
+│  ▌ 22%          Claude       80           ⌇wm  │  ← tightest remaining first
 │  ▌            Weekly plan                      │
-│  ▌ 46% left     Claude      320 credits        │
+│  ▌ 46%          Claude      320                │
 │  ▌           5-hour session                    │
-│  ▌ 71% left  Cursor Models  2.1K credits       │
+│  ▌ 71%       Cursor Models  2.1K               │
 └────────────────────────────────────────────────┘
 ┌─ mid (credits dropped) ────────────────────────┐
-│  ▌ 22% left    Weekly                     ⌇wm  │
-│  ▌ 46% left      5h                            │
+│  ▌ 22%         Weekly                     ⌇wm  │
+│  ▌ 46%           5h                            │
 └────────────────────────────────────────────────┘
 ┌─ narrow (% only) ──┐
-│  ▌ 22% left   ⌇wm  │
-│  ▌ 46% left        │
+│  ▌ 22%        ⌇wm  │
+│  ▌ 46%             │
 └────────────────────┘
      (transparent cell beyond the card if the span is larger)
 ```
 
 - Rows, not concentric arcs.
 - Family accent bar (▌) on each metric row.
-- **Columns** — `% left` · centered label · credits (end-aligned). Width hide order:
+- **Columns** — remaining `%` · centered label · compact purchased balance (end-aligned).
+  Only the numeric columns omit visible `left` / `credits`; the Widget tab stays descriptive.
+  One widget accessibility description names each visible metric and its remaining percentage,
+  plus purchased credits only when that column and balance are present; child cells do not
+  speak again. Hidden rows contribute nothing. Width hide order:
   credits first, then label; missing credits still reserve the credits column when that
   column is shown (label stays centered).
 - **Label is two lines** (revised **2026-08-02**) — family on top, pool below. The provider

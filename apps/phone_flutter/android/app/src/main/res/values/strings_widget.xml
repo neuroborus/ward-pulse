@@ -5,4 +5,7 @@
     <string name="ward_pulse_widget_stale">Stale</string>
     <string name="ward_pulse_widget_empty">No metrics</string>
     <string name="ward_pulse_widget_resize">Resize widget</string>
+    <string name="ward_pulse_widget_percent_remaining">%1$s remaining</string>
+    <string name="ward_pulse_widget_purchased_credits">%1$s purchased credits</string>
+    <string name="ward_pulse_widget_preview_description" formatted="false">Widget preview. Claude, Weekly plan, 22% remaining, 80 purchased credits. Claude, 5-hour session, 46% remaining, 320 purchased credits. Cursor Models, 71% remaining, 2.1K purchased credits.</string>
 </resources>

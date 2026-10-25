@@ -6,11 +6,12 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:contentDescription="@string/ward_pulse_widget_description">
+    android:contentDescription="@string/ward_pulse_widget_preview_description">
 
     <FrameLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:importantForAccessibility="noHideDescendants"
         android:layout_gravity="center"
         android:background="@drawable/ward_pulse_widget_background"
         android:paddingStart="8dp"
@@ -53,7 +54,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="6dp"
                     android:minWidth="58dp"
-                    android:text="22% left"
+                    android:text="22%"
                     android:textSize="11sp"
                     android:textColor="@color/ward_pulse_widget_on_surface"
                     android:maxLines="1" />
@@ -71,7 +72,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:gravity="end"
-                    android:text="80 credits"
+                    android:text="80"
                     android:textSize="11sp"
                     android:textColor="@color/ward_pulse_widget_muted"
                     android:maxLines="1" />
@@ -94,7 +95,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="6dp"
                     android:minWidth="58dp"
-                    android:text="46% left"
+                    android:text="46%"
                     android:textSize="11sp"
                     android:textColor="@color/ward_pulse_widget_on_surface"
                     android:maxLines="1" />
@@ -112,7 +113,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:gravity="end"
-                    android:text="320 credits"
+                    android:text="320"
                     android:textSize="11sp"
                     android:textColor="@color/ward_pulse_widget_muted"
                     android:maxLines="1" />
@@ -135,7 +136,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="6dp"
                     android:minWidth="58dp"
-                    android:text="71% left"
+                    android:text="71%"
                     android:textSize="11sp"
                     android:textColor="@color/ward_pulse_widget_on_surface"
                     android:maxLines="1" />
@@ -153,7 +154,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:gravity="end"
-                    android:text="2.1K credits"
+                    android:text="2.1K"
                     android:textSize="11sp"
                     android:textColor="@color/ward_pulse_widget_muted"
                     android:maxLines="1" />

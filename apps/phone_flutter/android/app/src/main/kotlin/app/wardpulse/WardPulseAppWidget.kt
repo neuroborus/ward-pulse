@@ -20,7 +20,7 @@ import kotlin.math.roundToInt
  * `HomeWidgetPhoneWidgetSyncService`.
  *
  * Shows only **complete** prefs rows and **complete** columns that fit the host
- * cell (card hugs). Columns drop from the right: credits → label → % left.
+ * cell (card hugs). Columns drop from the right: credits → label → %.
  * Do not write OPTION_APPWIDGET_SIZES — host-owned.
  */
 class WardPulseAppWidget : AppWidgetProvider() {
@@ -143,6 +143,8 @@ class WardPulseAppWidget : AppWidgetProvider() {
             R.id.widget_stale,
             if (stale) View.VISIBLE else View.GONE,
         )
+        val descriptions = mutableListOf(context.getString(R.string.ward_pulse_widget_description))
+        if (stale) descriptions.add(context.getString(R.string.ward_pulse_widget_stale))
 
         val storedCount = data.getInt("row_count", 0).coerceIn(0, MAX_ROW_COUNT)
         val rowCount = storedCount.coerceAtMost(maxRows)
@@ -153,14 +155,14 @@ class WardPulseAppWidget : AppWidgetProvider() {
                 rowCount,
             )
         val empty = emptyState != PhoneWidgetLayout.EmptyState.NONE
-        views.setTextViewText(
-            R.id.widget_empty,
+        val emptyText =
             context.getString(
                 if (emptyState == PhoneWidgetLayout.EmptyState.RESIZE)
                     R.string.ward_pulse_widget_resize
                 else R.string.ward_pulse_widget_empty,
-            ),
-        )
+            )
+        views.setTextViewText(R.id.widget_empty, emptyText)
+        if (empty) descriptions.add(emptyText)
         views.setViewVisibility(
             R.id.widget_empty,
             if (empty) View.VISIBLE else View.GONE,
@@ -217,8 +219,10 @@ class WardPulseAppWidget : AppWidgetProvider() {
 
         for (i in 0 until MAX_ROW_COUNT) {
             if (!empty && i < rowCount) {
-                val percent = data.getString("row_${i}_percent", "") ?: ""
-                val credits = data.getString("row_${i}_credits", "") ?: ""
+                val percent =
+                    PhoneWidgetLayout.percentText(data.getString("row_${i}_percent", "") ?: "")
+                val credits =
+                    PhoneWidgetLayout.creditsText(data.getString("row_${i}_credits", "") ?: "")
                 val label = data.getString("row_${i}_label", "") ?: ""
                 // Colourless on purpose: a row whose accent did not arrive names no
                 // family, and blue is a product colour again since 2026-08-13.
@@ -238,11 +242,28 @@ class WardPulseAppWidget : AppWidgetProvider() {
                     creditsIds[i],
                     if (showCredits) View.VISIBLE else View.GONE,
                 )
+                descriptions.add(
+                    PhoneWidgetLayout.rowDescription(
+                        label,
+                        if (percent.isEmpty()) {
+                            ""
+                        } else {
+                            context.getString(R.string.ward_pulse_widget_percent_remaining, percent)
+                        },
+                        if (credits.isEmpty()) {
+                            ""
+                        } else {
+                            context.getString(R.string.ward_pulse_widget_purchased_credits, credits)
+                        },
+                        showCredits,
+                    ),
+                )
                 views.setInt(accentIds[i], "setBackgroundColor", color)
             } else {
                 views.setViewVisibility(rowIds[i], View.GONE)
             }
         }
+        views.setContentDescription(R.id.widget_root, descriptions.joinToString(". "))
 
         val launchIntent =
             Intent(context, MainActivity::class.java).apply {
@@ -281,14 +302,14 @@ class WardPulseAppWidget : AppWidgetProvider() {
         const val COL_GAP_DP = 6
         const val FIT_SLACK_DP = 6
 
-        /** % left only. */
+        /** % only. */
         const val WIDTH_PERCENT_DP =
             CHROME_PAD_H_DP + ACCENT_DP + PERCENT_COL_DP + FIT_SLACK_DP
 
-        /** % left + label. */
+        /** % + label. */
         const val WIDTH_LABEL_DP = WIDTH_PERCENT_DP + COL_GAP_DP + LABEL_COL_DP
 
-        /** % left + label + credits. */
+        /** % + label + credits. */
         const val WIDTH_FULL_DP = WIDTH_LABEL_DP + COL_GAP_DP + CREDITS_COL_DP
     }
 }

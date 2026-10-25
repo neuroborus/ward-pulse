@@ -2,7 +2,7 @@
 <!--
   Olive card hugs complete rows and complete columns (wrap_content). Root stays
   match_parent/transparent so unused cell area shows wallpaper. Columns drop from
-  the right as width shrinks: credits → label → % left. Watermark overlays top-end.
+  the right as width shrinks: credits → label → %. Watermark overlays top-end.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
@@ -14,6 +14,7 @@
         android:id="@+id/widget_card"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:importantForAccessibility="noHideDescendants"
         android:layout_gravity="top|start"
         android:background="@drawable/ward_pulse_widget_background"
         android:paddingStart="10dp"

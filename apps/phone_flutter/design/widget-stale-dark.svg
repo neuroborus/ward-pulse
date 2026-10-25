@@ -7,11 +7,11 @@
   </g>
   <text x="14" y="22" font-family="Noto Sans, sans-serif" font-size="11" font-weight="700" letter-spacing="1" fill="#E8915A" text-anchor="start">STALE</text>
   <rect x="14" y="43" width="3" height="21" rx="1" fill="#E8915A"/>
-  <text x="24" y="58" font-family="Noto Sans, sans-serif" font-size="11" fill="#F4FBF8">22% left</text>
+  <text x="24" y="58" font-family="Noto Sans, sans-serif" font-size="11" fill="#F4FBF8">22%</text>
   <text x="120" y="51" font-family="Noto Sans, sans-serif" font-size="11" fill="#F4FBF8" text-anchor="middle">Claude</text>
   <text x="120" y="65" font-family="Noto Sans, sans-serif" font-size="11" fill="#F4FBF8" text-anchor="middle">Weekly plan</text>
   <rect x="14" y="77" width="3" height="21" rx="1" fill="#65D78A"/>
-  <text x="24" y="92" font-family="Noto Sans, sans-serif" font-size="11" fill="#F4FBF8">46% left</text>
+  <text x="24" y="92" font-family="Noto Sans, sans-serif" font-size="11" fill="#F4FBF8">46%</text>
   <text x="120" y="85" font-family="Noto Sans, sans-serif" font-size="11" fill="#F4FBF8" text-anchor="middle">Codex</text>
   <text x="120" y="99" font-family="Noto Sans, sans-serif" font-size="11" fill="#F4FBF8" text-anchor="middle">Weekly plan</text>
 </svg>

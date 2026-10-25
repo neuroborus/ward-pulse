@@ -1,7 +1,7 @@
 # Phone widget review art
 
-**Baseline locked 2026-07-27**, revised **2026-08-02** (two-line label) and **2026-10-13**
-(stale clearance) — see
+**Baseline locked 2026-07-27**, revised **2026-08-02** (two-line label), **2026-10-13**
+(stale clearance) and **2026-10-24** (compact numeric columns) — see
 [`docs/product/PHONE_WIDGET_DESIGN.md`](../../../docs/product/PHONE_WIDGET_DESIGN.md).
 
 Primary preview: `widget-medium.svg` (light). Dark: `widget-dark.svg`.

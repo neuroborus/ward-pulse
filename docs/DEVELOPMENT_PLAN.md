@@ -1987,7 +1987,26 @@ Status: largely landed (2026-07-27). Primary nav, Watchface + Widget tabs, locke
 `PHONE_WIDGET_DESIGN.md` review art, and the Android App Widget surface are in tree.
 Large (6-slot) prefs unlocked; launcher hugs complete rows/columns (1–6 by height;
 credits→label drop by width); Claude windows stay expanded on the phone widget;
-exhausted pools render as `0% left`.
+exhausted pools render as `0%` under the 2026-10-24 compact numeric revision.
+
+**Compact numeric columns — Native implementation 2026-10-25; HOST acceptance Pending.**
+The native presentation removes only terminal ` left` / ` credits` from the two numeric
+fields, preserving exact tokens and descriptive Dart storage/Widget-tab wording. Old and
+bare cache forms share the same rendering path without a new sync or widget replacement.
+The widget's single accessibility description retains metric identity and remaining/purchased
+credit meaning, omitting hidden rows and hidden or absent balances without duplicate cell
+speech. Runtime 12sp, picker 11sp, geometry, fit, selection, eligibility, states and navigation
+remain unchanged. The existing JVM harness has presentation regressions alongside its fit,
+empty-state and navigation cases; the owning generator has regenerated its eight exports.
+
+Pending after Native execution retirement: complete unchanged `just check-phone`, current
+Android host compilation and compiled RemoteViews/cache/accessibility proof at actual font
+scale 1.5 (both cache forms, no-sync redraw, zero/missing values, full/label/percent-only and
+short/stale/empty layouts), art drift, citations/full docs validation and validation of the
+affected Android skill. The coherent ten-PNG light/dark Widget cohort and actual capture/index
+receipt also remain Pending, followed by Root's full independent final review. The older
+measurements and October 23 captures remain historical; this Source change does not close
+item 2's runtime, capture or documentation acceptance.
 
 Read on a launcher for the first time on **2026-10-11**, on the canonical phone AVD: the locked
 composition held on every rule a home screen can show — the hug and the credits drop by width,
@@ -2050,8 +2069,8 @@ Deliverables:
 - small→tall resize shows 1–6 complete column-rows by allocated height (olive card hugs
   rows/columns; width drops credits→label→%); day/night chrome + overlay face watermark;
   prefs cap `phoneWidgetSlotCount = 6`; Claude windows stay expanded; exhausted pools as
-  `0% left`; Glance-style credits end-aligned (label centered);
-- render only configured, available metrics (exhausted stay as `0% left`); omit empty
+  `0%`; compact purchased balances end-aligned (label centered), with spoken units retained;
+- render only configured, available metrics (exhausted stay as `0%`); omit empty
   slots rather than inventing `Unknown` filler;
 - **remaining** language for percent metrics (same meaning as watch rings); family colors from
   the shared palette in `WATCH_RING_DESIGN.md`, with a budget row taking its connection's family
@@ -2073,7 +2092,7 @@ Providers owns connection catalog, credentials, and connection alert thresholds
 Settings is systemic only (polling, diagnostics, legal)
 Widget tab owns widget prefs independently of Watchface
 PHONE_WIDGET_DESIGN.md baseline locked with review art for small/medium
-widget shows configured available metrics (exhausted as 0% left); hugs complete rows/columns
+widget shows configured available metrics (exhausted as 0%); hugs complete rows/columns
 remaining-% / family colors match the product palette
 tap opens the phone app; no credential UI on the widget
 failed refresh retains existing widget data and marks it stale; no age-based window is defined

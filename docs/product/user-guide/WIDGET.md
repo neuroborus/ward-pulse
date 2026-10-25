@@ -20,7 +20,7 @@ This example has five metrics selected under **Home screen widget**; choices sav
 
 You can select up to **six** metrics. Widget selection is independent of Watchface; changing
 one does not change the other. Claude windows remain separate widget choices, and Cursor
-Models/Other Models can be separate rows. Selected exhausted pools stay as **0% left**.
+Models/Other Models can be separate rows. Selected exhausted pools stay as **0%** on the widget.
 With all six slots used, deselect a metric before adding another.
 
 The displayed ordering puts lower remaining percentages first. The phone's metric selection is
@@ -41,6 +41,11 @@ than placing more metrics side by side.
 | Narrow | Remaining percentage |
 | Medium | Remaining percentage and provider/metric label |
 | Wide | Remaining percentage, provider/metric label and applicable purchased credits |
+
+The first column shows the percentage remaining. The last column, when visible, shows
+applicable purchased credits as a compact balance, such as `59.5K`. `K` and `M` mean
+thousands and millions. Wider layouts add the provider/metric label and credit balance;
+height determines how many complete metric rows fit.
 
 At a narrow width, the same five selected metrics show only their percentages:
 

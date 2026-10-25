@@ -19,7 +19,10 @@ background sync, transport, storage, diagnostics and build work.
   would clip — credits → label → `%`; unused cell area is wallpaper until the user shrinks
   the span), vertical+horizontal resize (default ~3 cells), day/night chrome, overlay face
   watermark (no header band), expands Claude windows, keeps exhausted plan pools as
-  `0% left`, and appends per-provider purchased credits end-aligned (label centered).
+  `0%`, and appends per-provider purchased credits as bare compact balances end-aligned
+  (label centered). Native numeric columns omit visible `left` / `credits`; accessibility
+  retains remaining and purchased-credit meaning. Descriptive cached strings and Widget-tab
+  language stay unchanged.
   Watchface still collapses Claude, choosing the tightest known window including zero;
   exhausted selected watch metrics remain visible after the 2026-10-13 revision. Do not keep
   those controls in Settings.

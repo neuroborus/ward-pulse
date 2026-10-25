@@ -3,10 +3,10 @@
  * SVG review exports for the phone home-screen widget
  * (`docs/product/PHONE_WIDGET_DESIGN.md`).
  *
- * Rows, not arcs: family accent bar, `% left`, a two-line label carrying the
- * provider family over the pool name, and end-aligned credits. Colours mirror
- * `res/values{,-night}/colors_widget.xml` so the art cannot drift from the app
- * without the resource changing too.
+ * Rows, not arcs: family accent bar, `%`, a two-line label carrying the
+ * provider family over the pool name, and end-aligned compact credit balances.
+ * Colours mirror `res/values{,-night}/colors_widget.xml` so the art cannot drift
+ * from the app without the resource changing too.
  *
  * Usage: node tools/render-phone-widget-designs.mjs
  */
@@ -189,24 +189,24 @@ function geometryFor(width, fontSize) {
  */
 const MEDIUM_ROWS = [
   {
-    percent: '22% left',
+    percent: '22%',
     family: 'Claude',
     pool: 'Weekly plan',
-    credits: '80 credits',
+    credits: '80',
     color: FAMILY.claude,
   },
   {
-    percent: '46% left',
+    percent: '46%',
     family: 'Codex',
     pool: 'Weekly plan',
-    credits: '320 credits',
+    credits: '320',
     color: FAMILY.codex,
   },
   {
-    percent: '71% left',
+    percent: '71%',
     family: null,
     pool: 'Cursor Models',
-    credits: '2.1K credits',
+    credits: '2.1K',
     color: FAMILY.cursorOwn,
   },
 ]

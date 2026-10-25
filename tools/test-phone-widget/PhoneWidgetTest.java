@@ -1,6 +1,6 @@
 package app.wardpulse;
 
-/** Exercises the production fit and navigation state without an Android dependency. */
+/** Exercises production presentation, fit and navigation without an Android dependency. */
 public final class PhoneWidgetTest {
     private static int assertions;
 
@@ -10,6 +10,43 @@ public final class PhoneWidgetTest {
     }
 
     public static void main(String[] ignored) {
+        for (String percent : new String[] {"85%", "0%", "001.20%"}) {
+            String compact = PhoneWidgetLayout.percentText(percent + " left");
+            check(compact.equals(percent), "Legacy percent keeps its exact token: " + percent);
+            check(PhoneWidgetLayout.percentText(compact).equals(percent),
+                    "Bare percent cache is idempotent: " + percent);
+        }
+        for (String credits : new String[] {"59.5K", "1.20M", "7B", "0"}) {
+            String compact = PhoneWidgetLayout.creditsText(credits + " credits");
+            check(compact.equals(credits), "Legacy credits keep their exact token: " + credits);
+            check(PhoneWidgetLayout.creditsText(compact).equals(credits),
+                    "Bare credit cache is idempotent: " + credits);
+        }
+        check(PhoneWidgetLayout.percentText("").isEmpty(), "Missing percent stays missing.");
+        check(PhoneWidgetLayout.creditsText("").isEmpty(), "Missing credits do not invent zero.");
+        check(PhoneWidgetLayout.percentText("85% left unchanged").equals("85% left unchanged"),
+                "Only a terminal percent suffix is omitted.");
+        check(PhoneWidgetLayout.creditsText("59.5K credits unchanged")
+                        .equals("59.5K credits unchanged"),
+                "Only a terminal credit suffix is omitted.");
+
+        check(PhoneWidgetLayout.rowDescription(
+                        "Plan left · purchased credits", "85% remaining", "59.5K purchased credits", true)
+                        .equals("Plan left · purchased credits, 85% remaining, 59.5K purchased credits"),
+                "Full-row speech keeps metric identity verbatim and announces each value once.");
+        check(PhoneWidgetLayout.rowDescription(
+                        "Plan left · purchased credits", "85% remaining", "59.5K purchased credits", false)
+                        .equals("Plan left · purchased credits, 85% remaining"),
+                "Narrow layouts keep metric identity and remaining meaning without hidden credits.");
+        check(PhoneWidgetLayout.rowDescription("Plan", "0% remaining", "", true)
+                        .equals("Plan, 0% remaining"),
+                "Known exhausted rows retain meaning without inventing absent credits.");
+        check(PhoneWidgetLayout.rowDescription("Plan", "85% remaining", "0 purchased credits", true)
+                        .equals("Plan, 85% remaining, 0 purchased credits"),
+                "A known zero purchased balance remains distinct from an absent balance.");
+        check(PhoneWidgetLayout.rowDescription("Plan", "", "", true).equals("Plan"),
+                "Empty values do not acquire spoken units or invented numbers.");
+
         check(PhoneWidgetLayout.completeRows(0, 1, 0) == 0, "No forced clipped row.");
         check(PhoneWidgetLayout.completeRows(48, 1, 0) == 0, "Fresh lower boundary.");
         check(PhoneWidgetLayout.completeRows(49, 1, 0) == 1, "Fresh complete row.");
