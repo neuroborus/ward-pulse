@@ -12,11 +12,14 @@ AC true with FULL is valid powered-state evidence; status **2 (CHARGING)** is no
 This proves access while on the charger, not fresh provider data or face/AOD acceptance.
 The exact dismissal route was observed on this watch; other brands' normal controls may vary.
 
-1. Reconfirm identity, wake with key 224, and inspect the actual charging/offload UI.
-   When the observed charging overlay covers the app, use a normal horizontal Back swipe
-   **from the left edge**, sized from the CURRENT visible viewport. Wait for observable UI
-   idle and inspect the result; in the verified case this exposed the locked WardPulse face.
-2. Tap its currently visible lock control at verified current bounds. Wait for the ordinary
+1. Reconfirm identity, wake with key 224, then inspect actual wakefulness, focus and UI.
+   Key 224 can leave `mWakefulness=Asleep` with the charging/offload UI visible. In that
+   observed state, ONE normal primary-stem key 264 woke it to Awake/keyguard. Observe the
+   actual focus/UI transition before a lock tap; this is not an unconditional key chain.
+   If charging UI still covers the app while Awake, use a normal horizontal Back swipe
+   **from the left edge**, sized from the CURRENT viewport. Wait for observable UI idle
+   and inspect the result; the verified route exposed the locked WardPulse face.
+2. Tap its currently visible lock control at verified current bounds. Wait for the settled
    UNENTERED unlock grid and inspect its geometry privately. A visible face is not unlock
    proof. Do not reuse remembered coordinates or capture an entered authentication path.
 3. Prepare the owner's authorized continuous pattern from the private profile, with DOWN
@@ -32,7 +35,9 @@ The exact dismissal route was observed on this watch; other brands' normal contr
 5. Immediately enter the app with `am start -W` only if the actual launcher/face entry path
    is not itself under test. Observe the intended native page, keyguard, external power and
    full-window focus in the SAME bounded batch. Model/tool round trips can outlast unlock.
-   Save a diagnostic app frame only AFTER keyguard is confirmed not showing; no auth frame.
+   Wait for observed UI idle before input/capture; fixed 0.3/0.6-second assumptions proved
+   inadequate. Save an app frame only after keyguard is not showing AND the page is settled;
+   elapsed sleep time alone is not a PASS. Never save an authentication frame.
 6. Accept this scenario only when the intended visible page, unlocked state, correct focus
    and actual external power coexist. If the screen relocks or the overlay returns, classify
    the new state instead of treating a resumed Activity or successful command as a PASS.
@@ -49,11 +54,13 @@ in-memory credential commands on stdin; do not persist or print that input.
 
 ```sh
 adb -s "$DEVICE_SERIAL" shell input keyevent 224
+adb -s "$DEVICE_SERIAL" shell input keyevent 264
 adb -s "$DEVICE_SERIAL" shell input touchscreen swipe "$LEFT_EDGE_X" "$BACK_Y" "$INNER_X" "$BACK_Y" "$SWIPE_MS"
 adb -s "$DEVICE_SERIAL" shell -T
 adb -s "$DEVICE_SERIAL" shell am start -W -n "$APP_COMPONENT"
 adb -s "$DEVICE_SERIAL" shell dumpsys window policy
 adb -s "$DEVICE_SERIAL" shell dumpsys window
+adb -s "$DEVICE_SERIAL" shell dumpsys power
 adb -s "$DEVICE_SERIAL" shell dumpsys battery
 ```
 
@@ -67,6 +74,9 @@ The older successful charging record had AC true, status 2 and unlocked Glance, 
 exact dismissal key was not preserved. Keep that historical distinction; the route above
 was separately observed on October 25. Wake/Back-key/app-start alone had left the overlay
 visible; a primary-stem package transition alone had not confirmed an unlock grid.
+A later complete observation confirmed the asleep-charging primary-stem recovery, current
+grid, authorized unlock, bounded keyguard wait and settled face/Glance access with AC true,
+FULL at 100% and security enabled. It does not retroactively validate the earlier transition.
 
 An early immediate keyguard check misclassified a successful gesture as unconfirmed:
 later state recorded unlock, then automatic relock about a minute later. Another successful
