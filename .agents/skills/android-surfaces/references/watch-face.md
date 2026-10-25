@@ -13,6 +13,14 @@ Read for WFF, its generator/resources, complication metadata or face-like previe
   the screen, so raising it softens every edge on the face. Do not raise it to sharpen type:
   WFF rounds each glyph of a `TextCircular` to a whole canvas unit, and the answer to that is
   baking, not resolution.
+- Every `Group` in the shared canonical resources, including nested border/mask groups,
+  needs a valid stable `name`. Preserve compatibility with both legacy and Push packaging.
+  A standalone official WFF2 validator PASS does not replace the actual pinned Push
+  validator's semantic result or `just check-wear`; a Java/process exit code 0 can accompany
+  an unsuccessful validation result. Inspect the nested cause and repair the owning
+  generator through Runner; do not bypass validation or change format to hide the error.
+  Keep raw validation tokens out of logs, notes and agent packets. Existing Native/HOST
+  check and retirement boundaries still apply.
 - Keep WFF declarative and minimal; follow the same concentric language as Wear (not
   side-by-side `RING 1` / `RING 2` placeholders).
 - **A scene holds at most eight `ComplicationSlot` elements** — the same in format versions 2, 4
