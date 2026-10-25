@@ -6,7 +6,7 @@ watch-face baseline in [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md): this scre
 **text legend** for face ring colors, not a face clone.
 
 The operative legend typography and overflow rules are in
-[Revision 2026-10-24 — larger Glance legend](#revision-2026-10-24--larger-glance-legend).
+[Revision 2026-10-24 — clock-free Glance and larger legend](#revision-2026-10-24--clock-free-glance-and-larger-legend).
 Earlier measurements and acceptance records below describe only their dated builds.
 
 **Selected-zero revision 2026-10-13.** The owner's two screenshots taken at 11:36 and 11:38
@@ -309,6 +309,10 @@ this native correction alone does not complete the 4% fix.
 
 ## Revision 2026-10-24 — larger Glance legend
 
+**Historical first iteration, superseded below.** Runner commit `ff7cd209` and its later
+reported HOST passes cover this 20/18 iteration only. Its measurements and execution-stage
+Pending record below remain historical evidence, not acceptance of the clock-free refinement.
+
 At design diameter 450 and default font scale, titles target **20**, secondary values **18**
 and row pitch **62**, replacing 16/14 and 54. The centered block is at most **370 units** wide,
 inside the existing horizontal content area. Each unchanged mini-arc occupies 39 units,
@@ -317,9 +321,10 @@ may use a narrower centered block. The target title/subtitle line boxes are 28/2
 with a 2-unit interline gap and no platform font padding.
 
 Native measurement fits only the affected line, choosing the largest fitting size in
-**title 18–20 / subtitle 16–18**. A complete paired maximum-credit subtitle
+**title 18–20 / subtitle 16–18**. For the large compact credit example, the complete paired subtitle
 `100% · 100% left · 999.9T credits` measures 279 at 18 and 266 at 17 in the accepted
 Noto Sans Bold host measurements; these are design inputs, not Android ink measurements.
+This test scene is not an upper bound: the compact formatter also permits larger T values.
 Never change a value, remove a token or lower the fitting floor to manufacture fit.
 If supported text still overflows, restart at the preferred size and wrap completely within
 the same bounded range. Titles wrap at words; a paired subtitle first keeps its percentage
@@ -369,7 +374,7 @@ HOST acceptance must cover round and nonround 360/384 scenes and the supplied On
 configuration (466×466, density 320, font scale 1.0, Wear OS 5; supplied facts, not a new device
 observation). Compare fixed controls to the pre-change build at the **same** system scale.
 At scales 1.0/1.5/2.0, cover one/two/three rows, both paired families, long Claude and Spark
-titles, maximum/zero/absent credits, 100/100, 0/0, mixed 0/41 and positive-rounded-zero values,
+titles, large/zero/absent credit balances, 100/100, 0/0, mixed 0/41 and positive-rounded-zero values,
 unknown/unavailable/empty data, all refresh details and enabled/disabled multi-digit Alerts.
 At 1.0, supported dense scenes must retain complete single lines and all three rows. At
 1.5/2.0, verify both short single-line and wrapped rows, reach the final credit value and
@@ -377,6 +382,123 @@ return to the first row, and measure actual header, glyph/overhang, arc and circ
 Include a scale below 1.0. Exercise drag/fling at each local limit, outside paging, horizontal
 back, accessibility page/local-scroll actions, rotary focus, and retained/clamped position
 through status updates and content changes. No build, generation or physical pass is claimed.
+
+## Revision 2026-10-24 — clock-free Glance and larger legend
+
+The Owner approved removing the clock from Glance and lifting its unchanged refresh control
+to make room for larger, balanced text. This supersedes the preceding 20/18/62 targets,
+370-unit width and top-62/clock constraint. The accepted design SHA-256 is
+`fdc8ed44c8b344e64f2c30b76ac774a59aa2709ec74d1e1a32b45754ed822a12`.
+It is design input, not native acceptance.
+
+At design diameter 450, titles prefer **27**, values **23**, and rows **75 × system font
+scale**. Keep bold type, contrast, palette and no platform font padding. Reserve full
+**37/32-unit line boxes**, even when fitting reduces a line's font size, with **2 scaled
+units between lines and 4 scaled units of total breathing room**. Measure every complete
+row independently of wrapping: its height is the maximum of 75×s, the actual complete
+title/subtitle reservations plus that gap/breathing, and the unchanged **39-unit arc floor**.
+Independently round each full line reservation upward in pixels, then round the maximum
+complete row upward; rounding only their combined height understates the stack.
+
+The centered block is at most **360 units** wide. Each arc still occupies 39, with a 12-unit
+gap, leaving **309 ordinary / 258 paired** text units. Shorter complete content may form a
+narrower centered block. Fit only the affected line to the largest measured single-line
+size in **title 18–27 / subtitle 16–23**. The host Noto Sans Bold input measures the usual
+`Codex plan · Weekly` at 270 units (27) and `80% left · 59.5K credits` at 258 (23).
+`Claude plan · Sonnet weekly` reaches 309 at 22, and the paired
+`100% · 100% left · 999.9T credits` needs 16 (247 units). These are host metrics, not Android
+ink proof or a universal credit limit; larger T values remain supported through fallback.
+Preserve complete strings, unknown suffixes, credits, numeric values and exhaustion spans.
+If single-line fitting fails at its floor, restart at the preferred size and use the existing
+bounded complete wrapping strategy: words/graphemes for titles; keep paired percentages
+together where possible, move credits to the next line, then split pools inner first if
+necessary. Never ellipsize or lower the floors to manufacture fit.
+
+The refresh plate remains **68 units**, centered at **(225,54)**, spanning **y=20–88**.
+Only its top anchor moves. Preserve label typography, arrows, border, circle, actual native
+hit region, colors, enablement, refresh action and phone-owned cadence. Native detail remains
+type 11 with its existing 8-unit gap. Start the legend **10 units below the actual measured
+header bottom**, including any detail; do not infer detail height from its font size.
+The non-scrolling region ends at **y=360** and centers the complete stack. Empty/no-selection/
+unavailable Glance retains its copy and type 16, centered in this newly available region.
+Alerts stays exactly at **top 372, height 36**, with 42 bottom clearance, font 16,
+min/max width 128/200, padding/radius 18, the existing border/colors/hit region/actions, and
+its 12-unit gap after the weighted region. Preserve native/review-control style differences.
+
+Without detail, the nominal region is y=98–360. With a conservative 16-unit native detail
+line, it is y=122–360: three 75-unit rows center at y=166/241/316, with their final text
+ending y=351.5. The 360-unit block has about 6.072 units of horizontal circular clearance
+there. The moved refresh circle has 20 units of radial clearance. These are design bounds,
+not proof of glyph overhang or an expanded touch rectangle. At diameter 360/384/466, the
+independently rounded modeled rows are respectively **61/66/80 pixels**, with three-row
+stacks **183/198/240** against conservative detail heights **190.40/203.09/246.46**.
+Actual native header, line bounds and constraints are authoritative. The ordinary default
+Cursor 100/64, Codex 80 with 59.5K credits, Claude 100 three-row scene must show the full
+strings at 27/23 without local scrolling, both with and without detail. Report any native
+failure to fit; clipping or scrolling does not replace that acceptance requirement.
+
+Preserve system scaling, including below 1.0. Arbitrarily long or enlarged rows may overflow
+by height even when their widths fit. Scroll **only the legend**, from actual header-plus-10
+to normalized **y=346**, reserving the same six units for its actual position indicator:
+**303 ordinary / 252 paired** text units. Keep every row/value reachable; no control moves
+with scrolling. Retain local vertical drag/fling consumption at both limits, outside paging,
+horizontal back, standard local accessibility scroll actions, Pager page actions, focused
+rotary input without control focus stealing, stable-identity position retention and
+clamping/reset when content shrinks or fits. The separate double-back defect is unchanged.
+
+Clock visibility follows the actual destination, home Pager and summary state. Hide it on
+summary-backed Glance in every refresh, known-zero, no-selection and unavailable-row state.
+Keep it on Plan windows, Alerts, Watch face utility and pre-summary Empty Dashboard,
+including when another route retains Glance underneath. Cold start, summary arrival/loss,
+navigation/back, paging, restoration and recomposition must not leave a stale clock over
+the raised control or hide it globally. Hide it while the Home Pager moves so an in-flight
+Glance cannot receive an overlay; restore it on settled Plan windows. WFF and other-page
+clock typography/layout are unchanged. Each destination owns its clock inside its own
+`AppScaffold` within the navigation host. Back dismissal therefore moves/clips the foreground
+clock with that page, rather than leaving a shared overlay on the Glance revealed underneath;
+cancelled dismissal restores the foreground clock with its page. This applies to both legacy
+horizontal swipes and API 36+ predictive-back previews without tracking private host state.
+
+**Fresh acceptance: Pending.** `GlanceLegendLayoutTest` now reserves independently rounded
+37/32 lines and complete rows, checks the ordinary preferred-size scene and dense fitted
+examples against the measured-detail model at 360/384/466, and retains wrapping, exhaustion,
+height-only overflow and small-scale arc coverage. `WardPulseNavigationStateTest` adds one
+bounded integration case using synthetic in-memory summaries and composition-local 2×
+text scaling. It identifies the local legend separately from the Home Pager, invokes real
+`AccessibilityNodeInfo.ACTION_SCROLL_FORWARD` / `ACTION_SCROLL_BACKWARD`, checks visible
+content movement both ways and Glance isolation, then invokes Pager `ACTION_PAGE_DOWN` /
+`ACTION_PAGE_UP` and checks page changes/return. It also checks meaningful clock visibility
+through summary/recomposition,
+empty selection, Alerts/utility/back and retained Pager transitions, without exact times,
+device setting changes or sleeps. A focused case in that same harness additionally holds a
+back preview from Alerts over Glance, verifies that the clock moves/clips with the dismissing
+page, then checks cancellation restoration and completed dismissal. It injects horizontal
+touch events on legacy hosts and uses the Activity's predictive-back dispatcher on API 36+;
+frames and accessibility publication synchronize assertions. Only actual HOST execution can
+establish these results.
+
+The refinement's **2026-10-24 authoring generation attempt** completed async Pillow metrics
+and SVG writes, then failed at shared PNG export with `spawnSync convert EPERM`. The exact
+complete entry artwork was restored, preserving the real prior delegated SVG/PNG delta.
+That cohort still illustrates the earlier 20/18 iteration; it does not validate this Source.
+After DONE, CLI exit and separate public retirement, HOST must regenerate all pairs using
+the unchanged updated owning tool and inspect every preview/board correspondence and drift.
+
+Rerun complete Wear/phone/docs gates, relevant skill validation, measurement/navigation and
+the actual local/Pager accessibility-action case after that boundary. Measure actual header,
+line ink/overhang, complete rows, circle and control click/accessibility bounds on 360/384
+round/nonround targets and the supplied physical OnePlus 466×466/density 320/font scale 1.0/
+Wear OS 5 watch. Compare the unchanged control styles/actions at the same system scale;
+refresh position intentionally differs. Cover matched ordinary detail/no-detail scenes,
+long Claude/Spark and external labels, paired large/larger-T/zero/absent credits, 100/100,
+0/0, 0/41, positive-rounded-zero, budgets, empty/unavailable and every refresh detail.
+At 1.5/2.0 and below 1.0, exercise complete reachability, drag/fling at both limits,
+outside paging, back, actual accessibility actions and focused rotary input, with controls
+stationary. Verify the clock matrix and safe state restoration. Preserve the pre-upgrade
+failure-witness prerequisite and all conditional project gates. Root owns healthy same-state
+screenshot cohorts/index and final website/browser description review. Record real build/date
+results; no new runtime, physical, action, generation or visual pass is claimed here.
+Widget, WFF, version 0.1.0 and all other backlog work remain outside this refinement.
 
 ## Goal
 
@@ -387,7 +509,6 @@ user can map face colors to providers.
 ## Composition
 
 ```text
-        9:06
       (↻ OK )                ← OK / !OK inside dual-arrow refresh glyph
       [detail]               ← optional; only for problems (Stale, Rate limited, …)
 
@@ -451,9 +572,9 @@ Rules:
   never reach the row, and the number never differs from the one the face shows for the same
   band (revision 2026-10-11 above). A balance the provider denominates in anything but credits
   is not shown at all — the suffix is omitted as for an unavailable one, never relabelled.
-- Rows target **62 units × system font scale**, with independently measured complete height
-  and the 39-unit mini-arc floor, following the October 24 revision above. Titles target 20,
-  subtitles 18, with bounded fitting and complete supported-token wrapping.
+- Rows target **75 units × system font scale**, with independently rounded complete height
+  and the 39-unit mini-arc floor, following the clock-free October 24 revision above. Titles
+  target 27, subtitles 23, with bounded fitting and complete supported-token wrapping.
 - The block keeps **12 units clear of the Alerts pill**. Three rows is the ceiling, one per
   band, regardless of how many bands are paired. The 2026-10-01 round/notround measurement
   records the earlier three-row fit; fit and glyph bounds for the revised titles remain
@@ -561,7 +682,7 @@ integrated acceptance remains **Pending**.
 
 | File | Meaning |
 |------|---------|
-| `glance-legend-max-credits.svg` | Synthetic default-scale ceiling with both paired families, long Claude title and complete `100% · 100% left · 999.9T credits` |
+| `glance-legend-max-credits.svg` | Synthetic default-scale example with both paired families, long Claude title and complete `100% · 100% left · 999.9T credits`; this large compact credit balance is not an upper bound |
 | `glance-legend-text-scale-150.svg` / `glance-legend-text-scale-200.svg` | Synthetic legend-only text scaling with wrapping, actual modeled local-position indicator at start/end, fixed review controls; generation and native acceptance Pending |
 | `glance-legend-3.svg` | **Primary** — three providers, `OK` refresh enabled, Alerts disabled |
 | `glance-legend-1.svg` | Single provider with credits |
@@ -593,13 +714,16 @@ one row per band, at most three rows; band order matches the phone/face
 paired arcs and percentages: inner first, outer second; each retains its own colour
 paired title = family + " plan"; Cursor plan and Codex plan exactly
 paired subtitle = "82% · 41% left · 320 credits" (omit credits suffix when unavailable)
-legend target 20/18, bounded title 18–20 / subtitle 16–18 fitting; maximum centered width 370
-scaled 62-unit pitch; every row measured independently; unchanged 39-unit mini-arc floor
+legend target 27/23, bounded title 18–27 / subtitle 16–23 fitting; maximum centered width 360
+scaled 75-unit pitch; independently rounded 37/32 line reservations and complete rows; 39-unit arc floor
 supported overflow wraps completely, preserving original numeric colors and accessibility text
 height overflow scrolls only the legend, ending at y=346 with six units reserved for its indicator
 local vertical drag/fling isolation at both limits; outside paging and horizontal back preserved
 standard local accessibility scroll actions and focused rotary scrolling; retained/clamped position
-fixed refresh/status and Alerts; minimum 12-unit Alerts clearance; unchanged empty-state presentation
+refresh/status size/style/actions unchanged, top 20; Alerts unchanged at y=372; minimum 12-unit clearance
+legend begins 10 below actual header; empty-state copy/type unchanged, centered in the new region
+clock absent only on summary-backed Glance, including empty selection; other-page clocks retained
+ordinary default three-row/detail scene must fit fully at 27/23 without local scrolling: Pending
 revised glyph/bounds and interaction proof with build/date on round/nonround 360/384 and hardware: Pending
 per-provider credits with explicit credits label (no footer sum)
 credit balance compact, as the face strip renders it: 62.5K credits / 1K credits / 320 credits / 0 credits

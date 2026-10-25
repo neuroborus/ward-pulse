@@ -15,16 +15,27 @@ services and build work.
   separators, credits and family identity stay unchanged; a tiny positive fraction rounded
   to `0%` stays ordinary. Unknown/unavailable (including non-finite or negative usage) remains
   absent; selected entries with no known percentage say `Ring data unavailable`.
-  **2026-10-24 readability revision:** title/subtitle target 20/18, bounded measured fitting
-  at 18–20/16–18, maximum centered width 370 and scaled 62-unit pitch. Measure every row's
-  complete height independently of width overflow, with the unchanged 39-unit arc floor.
+  **2026-10-24 clock-free refinement:** supersedes the historical 20/18/62 iteration.
+  Title/subtitle prefer 27/23, bounded measured fitting at 18–27/16–23, maximum centered
+  width 360 and scaled 75-unit pitch. Independently round each full 37/32 line reservation,
+  then the complete row including its 2-scaled interline gap and 4-scaled breathing room;
+  measure every row independently of width overflow, with the unchanged 39-unit arc floor.
   Supported overflow wraps fully with original numeric coloring; keep system font scaling.
   Height overflow scrolls only the legend, ending at y=346 with six units reserved for its
   position indicator. Keep vertical drags/flings local at both limits, horizontal back,
   outside paging, accessibility page/local-scroll actions, focused rotary input and retained/
-  clamped position. Preserve fixed refresh/status and Alerts, empty-state type/placement and
-  at least 12-unit Alerts clearance. New art/build/device acceptance is Pending. The
-  2026-10-01 injected round/notround fit readings apply only to their older builds;
+  clamped position. Start the legend 10 below the actual measured header. The unchanged
+  68-unit refresh control moves to top 20; Alerts stays at top 372 with all dimensions,
+  styles, actions and at least 12-unit clearance unchanged. Empty copy/type stays 16 and
+  centers in the new region. Hide the shared clock only on summary-backed Glance (including
+  empty selection); retain it on settled Plan windows, Alerts, Watch face utility and
+  pre-summary Empty Dashboard, restoring it through navigation/back/summary/recomposition.
+  Ordinary default three-row/detail content must fit fully at 27/23 without local scrolling;
+  report native failure to fit. New art/build/device and actual separately targeted local/
+  Pager accessibility-action acceptance is Pending. Historical first-iteration passes do
+  not validate this Source. Follow the complete
+  [clock-free revision](../../../../docs/product/WEAR_GLANCE_DESIGN.md#revision-2026-10-24--clock-free-glance-and-larger-legend).
+  The 2026-10-01 injected round/notround fit readings apply only to their older builds;
   a live Codex/Spark payload remains unverified.
   Refresh: `OK`/`!OK` inside dual-arrow glyph; cadence = gray `OK`+disabled; provider limit =
   gray `!OK`+`Rate limited`+disabled; `Stale` = orange `!OK`+enabled. `Alerts: N` when `N > 0`.
@@ -66,3 +77,13 @@ services and build work.
 - Make stale data explicit.
 - Do not enter, display, or store provider credentials.
 - Keep screens glanceable; avoid long tables and cheap floating caption stacks.
+
+## Navigation test geometry
+
+`AccessibilityNodeInfo` bounds can be clipped by a sibling clock; they are not the native viewport.
+Follow [`WardPulseNavigationStateTest.nativeSurface`](../../../../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/ui/WardPulseNavigationStateTest.kt):
+use public `ViewRootForTest` layout and standard scroll ranges for geometry and settlement,
+while real accessibility actions continue to prove behavior. Calibrate ordinary touch gestures
+against the measured viewport, touch slop and paging threshold, preserving real input.
+Keep bounded observable-state predicates and useful diagnostics when their deadline expires;
+do not substitute sleeps, repeated gestures or state resets for the required failure.

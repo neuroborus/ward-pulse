@@ -2,17 +2,42 @@ package app.wardpulse.wear.ui
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Rect
+import android.graphics.RectF
+import android.os.Build
 import android.os.SystemClock
+import android.util.Log
 import android.view.Choreographer
+import android.view.InputDevice
 import android.view.KeyEvent
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
+import androidx.activity.BackEventCompat
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.onFocusedBoundsChanged
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.platform.AndroidUiDispatcher
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.ViewRootForTest
+import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.unit.Density
+import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -20,6 +45,7 @@ import app.wardpulse.wear.MainActivity
 import app.wardpulse.wear.model.AlertSummary
 import app.wardpulse.wear.model.AllowanceSummary
 import app.wardpulse.wear.model.PeriodSummary
+import app.wardpulse.wear.model.ProviderSummary
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.WatchDashboardSummary
@@ -53,6 +79,8 @@ class WardPulseNavigationStateTest {
     private var summary by mutableStateOf<WatchDashboardSummary?>(null)
     private var watchFaceState by mutableStateOf(WatchFaceState(busy = true))
     private val calls = mutableListOf<String>()
+    private val scrollTrace = mutableListOf<String>()
+    private var focusedCoordinates: LayoutCoordinates? = null
     private var callbacks by mutableStateOf(callbacksFor("initial"))
     private val alpha = summary("Alpha", usedPercent = 25.0)
     private val beta = summary("Beta", usedPercent = 96.0)
@@ -145,11 +173,20 @@ class WardPulseNavigationStateTest {
         scrollToStart()
         change { watchFaceState = WatchFaceState(WatchFaceStatus.InUse) }
         assertVisible("In use")
-        back()
+        // Preserve restored Alerts focus; otherwise establish the focused-control fixture
+        // with the same public input-focus action used by the rotary ownership cases.
+        recordHomePager("before utility Back to Home page=0")
+        back(toHomePage = 0)
         assertVisible("Codex Beta")
         assertVisible("4% left")
-        assertTrue(scroll(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD))
+        assertClock(visible = false, anchor = "Alerts: 1")
+        val alerts = checkNotNull(appRoot()?.let { findButton(it, "Alerts: 1") })
+        if (!alerts.isFocused) {
+            assertTrue("Alerts input focus failed", alerts.performAction(AccessibilityNodeInfo.ACTION_FOCUS))
+        }
+        assertTrue(scroll(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, focusedGlanceControl = "Alerts: 1"))
         assertVisible("Plan windows")
+        assertClock(visible = true, anchor = "Plan windows")
         reveal("Codex Beta")
         click("Watch face")
         assertVisible("In use")
@@ -250,7 +287,674 @@ class WardPulseNavigationStateTest {
         assertCalls("initial.check")
     }
 
-    private fun launchApp(initialSummary: WatchDashboardSummary? = null) {
+    @Test
+    fun localLegendAndPagerAccessibilityActionsStaySeparateAndClocksFollowVisibleContent() {
+        // Three short rows overflow by height at the supported 2x text scale. Only
+        // this in-memory composition is scaled; no provider or device setting changes.
+        val overflowing = alpha.copy(
+            rings = listOf(
+                RingSummary("allowance.codex.plan", "Codex Alpha", 25.0, PulseStatus.OK),
+                RingSummary("allowance.cursor.plan", "Cursor Beta", 20.0, PulseStatus.OK),
+                RingSummary("allowance.claude.plan", "Claude Gamma", 0.0, PulseStatus.OK),
+            ),
+        )
+        launchApp(fontScale = 2f)
+        assertClock(visible = true, anchor = "Sync from phone")
+        change { summary = overflowing }
+        assertClock(visible = false, anchor = "Codex Alpha")
+        assertAbsent("Claude Gamma", anchor = "Codex Alpha")
+
+        val local = taggedNode("glance-legend", AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+        val pager = taggedNode("home-pager", AccessibilityNodeInfo.AccessibilityAction.ACTION_PAGE_DOWN.id)
+        assertTrue("Legend must be a separate node from the Home Pager", local != pager)
+        assertTrue("Local forward action failed", local.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD))
+        awaitUi()
+        // New content becomes visible, rather than merely exposing an XML action.
+        assertVisible("Claude Gamma")
+        assertAbsent("Codex Alpha", anchor = "Claude Gamma")
+        assertAbsent("Plan windows", anchor = "Alerts: 1")
+        assertClock(visible = false, anchor = "Claude Gamma")
+        val localBack = taggedNode("glance-legend", AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+        assertTrue("Local backward action failed", localBack.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD))
+        awaitUi()
+        assertVisible("Codex Alpha")
+        assertAbsent("Claude Gamma", anchor = "Codex Alpha")
+        assertAbsent("Plan windows", anchor = "Alerts: 1")
+
+        // Recomposition alone and a measured refresh-detail change must not restore time.
+        change { callbacks = callbacksFor("recomposed") }
+        assertClock(visible = false, anchor = "Codex Alpha")
+        change { summary = overflowing.copy(isStale = true) }
+        assertClock(visible = false, anchor = "Stale")
+
+        page(AccessibilityNodeInfo.AccessibilityAction.ACTION_PAGE_DOWN.id)
+        assertClock(visible = true, anchor = "Plan windows")
+        change { summary = null }
+        assertClock(visible = true, anchor = "Sync from phone")
+        change { summary = overflowing }
+        assertClock(visible = true, anchor = "Plan windows")
+        val planList = taggedNode("plan-windows-list")
+        val planHeaderAtStart = bounds(checkNotNull(findText(planList, "Plan windows")))
+        val planClockAtStart = bounds(taggedNode("app-clock"))
+        assertTrue(
+            "Expected the header, plan row and utility entry in the local collection",
+            findNode(planList) { it.collectionInfo?.rowCount == 3 } != null,
+        )
+        assertTrue(
+            "Plan windows must initially be at its local start",
+            findNode(planList) { node ->
+                node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD }
+            } == null && findNode(planList) { node ->
+                node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD }
+            } != null,
+        )
+        change { watchFaceState = WatchFaceState(WatchFaceStatus.InUse) }
+        assertTrue(
+            "Plan windows local forward action failed",
+            scroll(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, within = "plan-windows-list"),
+        )
+        reveal("Watch face", within = "plan-windows-list")
+        scrollToEnd(within = "plan-windows-list")
+        val planEnd = taggedNode("plan-windows-list")
+        val nativePlanEnd = checkNotNull(nativeSurface("plan-windows-list"))
+        assertTrue(
+            "Plan windows must reach its owned end with backward scrolling available",
+            nativePlanEnd.maxScrollOffset != null && nativePlanEnd.maxScrollOffset > 0f &&
+                nativePlanEnd.scrollOffset == nativePlanEnd.maxScrollOffset &&
+                findNode(planEnd) { node ->
+                    node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD }
+                } == null && findNode(planEnd) { node ->
+                    node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD }
+                } != null,
+        )
+        assertAbsent("Plan windows", anchor = "Watch face")
+        click("Watch face", within = "plan-windows-list")
+        assertClock(visible = true, anchor = "In use")
+        change { summary = null }
+        assertClock(visible = true, anchor = "In use")
+        change { summary = overflowing }
+        assertClock(visible = true, anchor = "In use")
+        back()
+        assertClock(visible = true, anchor = "Watch face")
+        assertAbsent("In use", anchor = "Watch face", anchorIsAction = true)
+        assertAbsent("Plan windows", anchor = "Watch face")
+        scrollToStart(within = "plan-windows-list")
+        assertPlanWindowsStart(planHeaderAtStart, planClockAtStart)
+        assertClock(visible = true, anchor = "Plan windows")
+        page(AccessibilityNodeInfo.AccessibilityAction.ACTION_PAGE_UP.id)
+        assertClock(visible = false, anchor = "Alerts: 1")
+
+        click("Alerts: 1")
+        assertClock(visible = true, anchor = "Alerts")
+        change { summary = null }
+        assertClock(visible = true, anchor = "Sync from phone")
+        change { summary = overflowing }
+        assertClock(visible = true, anchor = "Alerts")
+        back()
+        assertClock(visible = false, anchor = "Alerts: 1")
+        change {
+            summary = overflowing.copy(
+                rings = emptyList(),
+                providers = listOf(ProviderSummary("codex", PulseStatus.OK, null)),
+            )
+        }
+        assertClock(visible = false, anchor = "Choose percent rings")
+        change { summary = null }
+        assertClock(visible = true, anchor = "Sync from phone")
+        click("Watch face")
+        assertClock(visible = true, anchor = "In use")
+        change { summary = overflowing }
+        assertClock(visible = true, anchor = "In use")
+        back()
+        assertClock(visible = false, anchor = "Codex Alpha")
+        change { summary = null }
+        // The restored no-summary destination can retain its list near Watch face.
+        // There is no Home Pager here: reach the original anchor by local scrolling.
+        scrollToStart()
+        assertClock(visible = true, anchor = "Sync from phone")
+        change { summary = overflowing }
+        assertClock(visible = false, anchor = "Codex Alpha")
+    }
+
+    @Test
+    fun overflowingGlanceAcquiresRotaryFocusAndKeepsBothLimitsLocal() {
+        val overflowing = overflowingSummary()
+        launchApp(overflowing, fontScale = 2f)
+        assertLegendOffset("Visible overflowing Glance must acquire input focus without Tab") { value, max ->
+            value == 0f && max > 0f
+        }
+        change { callbacks = callbacksFor("startup-recomposed") }
+        assertLegendOffset("Recomposition before input must preserve Glance and its local start") { value, _ ->
+            value == 0f
+        }
+        val initialContent = checkNotNull(nativeSurface("glance-legend")).content
+
+        rotaryScroll(-1f)
+        assertLegendOffset("Native forward rotary must move the focused legend") { value, _ -> value > 0f }
+        assertTrue(initialContent != checkNotNull(nativeSurface("glance-legend")).content)
+        rotaryScroll(1f)
+        assertLegendOffset("Native backward rotary must return the legend to its start") { value, _ -> value == 0f }
+        rotaryScroll(1f)
+        assertLegendOffset("Unused backward rotary must stay on Glance at its start") { value, _ -> value == 0f }
+
+        rotaryScroll(-1_000f)
+        assertLegendOffset("Native rotary must reach the legend end") { value, max -> value == max }
+        assertVisible("Claude Gamma")
+        rotaryScroll(-1f)
+        assertLegendOffset("Unused forward rotary must stay on Glance at its end") { value, max -> value == max }
+        change { callbacks = callbacksFor("recomposed") }
+        assertLegendOffset("Recomposition must retain the focused legend position") { value, max -> value == max }
+
+        // Explicit input focus on an action is distinct from accessibility focus and
+        // must survive a stable-page update rather than being reclaimed by the legend.
+        val alerts = checkNotNull(appRoot()?.let { findButton(it, "Alerts: 1") })
+        assertTrue("Alerts input focus failed", alerts.performAction(AccessibilityNodeInfo.ACTION_FOCUS))
+        awaitAccessibility("Alerts must own input focus") { root ->
+            findButton(root, "Alerts: 1")?.isFocused == true
+        }
+        change { summary = overflowing.copy(isStale = true) }
+        awaitAccessibility("A header update must preserve action input focus") { root ->
+            findButton(root, "Alerts: 1")?.isFocused == true &&
+                nativeSurface("glance-legend")?.focused != true
+        }
+        val retainedOffset = checkNotNull(nativeSurface("glance-legend")?.scrollOffset)
+        click("Alerts: 1")
+        assertOtherRouteFocus("Alpha alert")
+        back()
+        assertLegendOffset("Returning from Alerts must retain the local position and focus") { value, _ ->
+            value == retainedOffset
+        }
+        rotaryScroll(1f)
+        assertLegendOffset("Returned Glance must receive backward rotary") { value, _ -> value < retainedOffset }
+        click("Alerts: 1")
+        assertOtherRouteFocus("Alpha alert")
+        // Retained Home content must not reclaim focus when overflow leaves or returns.
+        change { summary = alpha }
+        assertOtherRouteFocus("Alpha alert")
+        change { summary = overflowing }
+        assertOtherRouteFocus("Alpha alert")
+        back()
+        assertLegendOffset("Returning after retained content updates must restore local ownership") { value, max ->
+            value in 0f..max
+        }
+    }
+
+    @Test
+    fun rotaryOwnershipFollowsTheVisibleHomePageRouteAndOverflow() {
+        val overflowing = overflowingSummary()
+        launchApp(alpha, fontScale = 2f)
+        awaitAccessibility("Fitting Glance must not install a rotary focus target") {
+            nativeSurface("home-pager")?.atPage(0) == true &&
+                nativeSurface("glance-legend")?.let { it.focused != true && it.maxScrollOffset == null } == true
+        }
+        change { summary = overflowing }
+        assertLegendOffset("Entering overflow must acquire local rotary focus") { value, max -> value == 0f && max > 0f }
+        change { summary = alpha }
+        awaitAccessibility("Leaving overflow must release local rotary focus") {
+            nativeSurface("glance-legend")?.let { it.focused != true && it.maxScrollOffset == null } == true
+        }
+        change { summary = overflowing }
+        assertLegendOffset("Restored overflow must start with local rotary focus") { value, _ -> value == 0f }
+
+        page(AccessibilityNodeInfo.AccessibilityAction.ACTION_PAGE_DOWN.id)
+        assertPlanRotaryFocus()
+        change { summary = alpha }
+        assertPlanRotaryFocus()
+        change { summary = overflowing }
+        assertPlanRotaryFocus()
+        val planStart = checkNotNull(nativeSurface("plan-windows-list")).content
+        rotaryScroll(-1f)
+        awaitAccessibility("Plan windows must receive rotary after the Glance handoff") {
+            nativeSurface("home-pager")?.atPage(1) == true &&
+                nativeSurface("plan-windows-list")?.let {
+                    it.focused == true && it.scrollOffset != null && it.scrollOffset > 0f && it.content != planStart
+                } == true && nativeSurface("glance-legend")?.focused != true
+        }
+        scrollToStart(within = "plan-windows-list")
+        page(AccessibilityNodeInfo.AccessibilityAction.ACTION_PAGE_UP.id)
+        assertLegendOffset("Paging back must reactivate the legend") { value, _ -> value == 0f }
+
+        change { summary = null }
+        assertOtherRouteFocus("Sync from phone")
+        change { watchFaceState = WatchFaceState(WatchFaceStatus.InUse) }
+        click("Watch face")
+        assertOtherRouteFocus("In use")
+        change { summary = overflowing }
+        assertOtherRouteFocus("In use")
+        back()
+        assertLegendOffset("Returning from the utility must focus the newly restored legend") { value, _ -> value == 0f }
+        assertCalls("initial.check")
+
+        val alerts = checkNotNull(appRoot()?.let { findButton(it, "Alerts: 1") })
+        assertTrue("Alerts input focus failed", alerts.performAction(AccessibilityNodeInfo.ACTION_FOCUS))
+        awaitAccessibility("Alerts must own input focus before overflow changes") { root ->
+            findButton(root, "Alerts: 1")?.isFocused == true
+        }
+        for (next in listOf(alpha, overflowing)) {
+            change { summary = next }
+            awaitAccessibility("Changing overflow must preserve explicit action input focus") { root ->
+                findButton(root, "Alerts: 1")?.isFocused == true &&
+                    nativeSurface("glance-legend")?.focused != true
+            }
+        }
+    }
+
+    @Test
+    fun planWindowsTouchScrollAndBoundaryPagingRemainAvailable() {
+        launchApp(alpha, fontScale = 2f)
+        taggedNode("glance-legend")
+        page(AccessibilityNodeInfo.AccessibilityAction.ACTION_PAGE_DOWN.id)
+        assertClock(visible = true, anchor = "Plan windows")
+        val list = taggedNode("plan-windows-list")
+        val headerAtStart = bounds(checkNotNull(findText(list, "Plan windows")))
+        val clockAtStart = bounds(taggedNode("app-clock"))
+        val localContentAtStart = checkNotNull(nativeSurface("plan-windows-list")).content
+
+        verticalDrag(forward = true)
+        awaitAccessibility("Touch must move local content while Plan windows stays settled") { root ->
+            val currentList = findNode(root) {
+                it.isVisibleToUser && it.viewIdResourceName == "plan-windows-list"
+            }
+            val header = currentList?.let { findText(it, "Plan windows") }
+            val clock = findNode(root) { it.isVisibleToUser && it.viewIdResourceName == "app-clock" }
+            val localContent = nativeSurface("plan-windows-list")?.content
+            nativeSurface("home-pager")?.atPage(1) == true && currentList != null &&
+                !localContent.isNullOrEmpty() && localContent != localContentAtStart &&
+                findNode(currentList) { it.collectionInfo?.rowCount == 3 } != null &&
+                (header == null || bounds(header) != headerAtStart) &&
+                clock != null && !clock.text.isNullOrBlank() && !bounds(clock).isEmpty &&
+                findNode(root) { it.isVisibleToUser && it.viewIdResourceName == "glance-legend" } == null &&
+                findText(root, "Alerts: 1") == null
+        }
+        scrollToStart(within = "plan-windows-list")
+        assertPlanWindowsStart(headerAtStart, clockAtStart)
+        assertClock(visible = true, anchor = "Plan windows")
+        val localStart = taggedNode("plan-windows-list")
+        assertTrue(
+            "The touch paging gesture must start at the local backward boundary",
+            findNode(localStart) { node ->
+                node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD }
+            } == null && findNode(localStart) { node ->
+                node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD }
+            } != null,
+        )
+        verticalDrag(forward = false)
+        assertClock(visible = false, anchor = "Codex Alpha")
+        assertAbsent("Plan windows", anchor = "Codex Alpha")
+        awaitAccessibility("Touch boundary paging must settle fully on Glance") { root ->
+            val glance = findNode(root) { it.isVisibleToUser && it.viewIdResourceName == "glance-legend" }
+            nativeSurface("home-pager")?.atPage(0) == true && glance != null &&
+                findText(glance, "Codex Alpha") != null &&
+                findButton(root, "Alerts: 1") != null &&
+                findNode(root) { it.isVisibleToUser && it.viewIdResourceName == "app-clock" } == null &&
+                findNode(root) { it.isVisibleToUser && it.viewIdResourceName == "plan-windows-list" } == null
+        }
+        val arrival = "Touch reached the tagged Glance at the native Pager start:${surfaceDiagnostics()}"
+        scrollTrace += arrival
+        arrival.lineSequence().forEach { Log.i("WardPulseNavigation", it) }
+        // Explicit page navigation still works after an ordinary boundary drag.
+        page(AccessibilityNodeInfo.AccessibilityAction.ACTION_PAGE_DOWN.id)
+        assertClock(visible = true, anchor = "Plan windows")
+    }
+
+    @Test
+    fun destinationClockMovesWithCancelledAndCompletedBackPreviewsOverGlance() {
+        launchApp(alpha)
+        assertClock(visible = false, anchor = "Codex Alpha")
+        click("Alerts: 1")
+        assertClock(visible = true, anchor = "Alerts")
+        val root = checkNotNull(appRoot())
+        val clockAtRest = bounds(checkNotNull(findNode(root) { it.viewIdResourceName == "app-clock" }))
+        val titleAtRest = bounds(checkNotNull(findText(root, "Alerts")))
+
+        for (cancelled in listOf(true, false)) {
+            backPreview(cancelled) {
+                awaitAccessibility("Clock must move or clip with the dismissing Alerts page") { preview ->
+                    val title = findText(preview, "Alerts")
+                    val clock = findNode(preview) {
+                        it.isVisibleToUser && it.viewIdResourceName == "app-clock"
+                    }
+                    (title == null || bounds(title) != titleAtRest) &&
+                        (clock == null || bounds(clock) != clockAtRest)
+                }
+            }
+            if (cancelled) {
+                assertClock(visible = true, anchor = "Alerts")
+                awaitAccessibility("Cancelled dismissal must restore the Alerts clock") { restored ->
+                    val clock = findNode(restored) { it.viewIdResourceName == "app-clock" && it.isVisibleToUser }
+                    clock != null && bounds(clock) == clockAtRest && findText(restored, "Alerts") != null
+                }
+            } else {
+                assertClock(visible = false, anchor = "Codex Alpha")
+                assertAbsent("Alerts", anchor = "Codex Alpha")
+            }
+        }
+    }
+
+    private fun bounds(node: AccessibilityNodeInfo) = Rect().also { node.getBoundsInScreen(it) }
+
+    private data class NativeSurface(
+        val viewport: RectF,
+        val scrollOffset: Float?,
+        val maxScrollOffset: Float?,
+        val rows: Int?,
+        val pendingLayout: Boolean,
+        val touchSlop: Float,
+        val minimumFlingVelocity: Float,
+        val content: List<Pair<String, Offset>>,
+        val focused: Boolean?,
+        val retainedFocusedBounds: RectF?,
+        val inputFocus: List<String>,
+        val homePagerState: HomePagerState?,
+    ) {
+        // Foundation's Pager semantic range is its absolute pixel scroll offset. For
+        // these two fill-size pages, only the two endpoints represent page alignment.
+        fun atPage(page: Int): Boolean = !pendingLayout && rows == 2 &&
+            maxScrollOffset != null && maxScrollOffset > 0f &&
+            scrollOffset == (if (page == 0) 0f else maxScrollOffset)
+    }
+
+    private fun nativeSurface(tag: String): NativeSurface? {
+        var result: NativeSurface? = null
+        scenario.onActivity { activity ->
+            fun find(node: SemanticsNode): SemanticsNode? {
+                if (!node.layoutInfo.isAttached || !node.layoutInfo.isPlaced) return null
+                if (node.config.getOrNull(SemanticsProperties.TestTag) == tag) return node
+                return node.children.firstNotNullOfOrNull { find(it) }
+            }
+            fun content(node: SemanticsNode): List<Pair<String, Offset>> = buildList {
+                if (!node.layoutInfo.isAttached || !node.layoutInfo.isPlaced) return@buildList
+                node.config.getOrNull(SemanticsProperties.Text)?.forEach {
+                    add(it.text to node.positionOnScreen)
+                }
+                node.children.forEach { addAll(content(it)) }
+            }
+            fun inputFocus(node: SemanticsNode): List<String> = buildList {
+                if (!node.layoutInfo.isAttached || !node.layoutInfo.isPlaced) return@buildList
+                if (node.config.getOrNull(SemanticsProperties.Focused) == true) {
+                    add(
+                        "tag=${node.config.getOrNull(SemanticsProperties.TestTag)}, " +
+                            "text=${content(node).map { it.first }}, " +
+                            "position=${node.positionOnScreen}, size=${node.size}",
+                    )
+                }
+                node.children.forEach { addAll(inputFocus(it)) }
+            }
+            fun visit(view: View) {
+                if (view is ViewRootForTest) {
+                    val node = find(view.semanticsOwner.unmergedRootSemanticsNode)
+                    if (node != null) {
+                        // Read actual measured size and placement, before accessibility
+                        // clipping. AppScaffold overlays the clock on the fill-size Pager.
+                        val origin = node.positionOnScreen
+                        val range = node.config.getOrNull(SemanticsProperties.VerticalScrollAxisRange)
+                        val config = node.layoutInfo.viewConfiguration
+                        // This callback can retain live coordinates after focus is lost.
+                        // Only Focused semantics above identify current input ownership.
+                        val retainedFocusedBounds = focusedCoordinates?.takeIf { it.isAttached }?.let {
+                            val position = it.positionOnScreen()
+                            RectF(position.x, position.y, position.x + it.size.width, position.y + it.size.height)
+                        }
+                        result = NativeSurface(
+                            RectF(origin.x, origin.y, origin.x + node.size.width, origin.y + node.size.height),
+                            range?.value?.invoke(), range?.maxValue?.invoke(),
+                            node.config.getOrNull(SemanticsProperties.CollectionInfo)?.rowCount,
+                            view.hasPendingMeasureOrLayout, config.touchSlop, config.minimumFlingVelocity,
+                            content(node),
+                            node.config.getOrNull(SemanticsProperties.Focused),
+                            retainedFocusedBounds,
+                            inputFocus(view.semanticsOwner.unmergedRootSemanticsNode),
+                            node.config.getOrNull(HomePagerStateKey),
+                        )
+                    }
+                }
+                if (result == null && view is ViewGroup) {
+                    for (index in 0 until view.childCount) {
+                        visit(view.getChildAt(index))
+                        if (result != null) break
+                    }
+                }
+            }
+            visit(activity.window.decorView)
+        }
+        return result
+    }
+
+    private fun assertPlanWindowsStart(headerAtStart: Rect, clockAtStart: Rect) {
+        awaitAccessibility("Plan windows must return to its owned local start with the complete header and clock") { root ->
+            val pager = nativeSurface("home-pager")
+            val local = nativeSurface("plan-windows-list")
+            val list = findNode(root) { it.isVisibleToUser && it.viewIdResourceName == "plan-windows-list" }
+            val header = list?.let { findText(it, "Plan windows") }
+            val clock = findNode(root) { it.isVisibleToUser && it.viewIdResourceName == "app-clock" }
+            val headerBounds = header?.let { bounds(it) }
+            val clockBounds = clock?.let { bounds(it) }
+            // Keep the complete original text dimensions, not its transformed y or
+            // the dynamically clipped accessibility viewport, as the return contract.
+            pager?.atPage(1) == true && list != null && headerBounds != null && clock != null && clockBounds != null &&
+                local?.scrollOffset == 0f && local.maxScrollOffset != null && local.maxScrollOffset > 0f &&
+                findNode(list) { it.collectionInfo?.rowCount == 3 } != null &&
+                headerBounds.width() == headerAtStart.width() && headerBounds.height() == headerAtStart.height() &&
+                pager.viewport.contains(
+                    headerBounds.left.toFloat(), headerBounds.top.toFloat(),
+                    headerBounds.right.toFloat(), headerBounds.bottom.toFloat(),
+                ) &&
+                !clock.text.isNullOrBlank() && !clockBounds.isEmpty &&
+                clockBounds.width() == clockAtStart.width() && clockBounds.height() == clockAtStart.height() &&
+                bounds(root).contains(clockBounds) && clockBounds.bottom <= headerBounds.top &&
+                findNode(root) { it.isVisibleToUser && it.viewIdResourceName == "glance-legend" } == null &&
+                findText(root, "Alerts: 1") == null && findNode(list) { node ->
+                    node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD }
+                } == null && findNode(list) { node ->
+                    node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD }
+                } != null
+        }
+    }
+
+    private fun surfaceDiagnostics(): String = buildString {
+        appendLine("\nNative Pager=${nativeSurface("home-pager")}")
+        appendLine("Native Glance=${nativeSurface("glance-legend")}")
+        appendLine("Native Plan windows=${nativeSurface("plan-windows-list")}")
+        val root = appRoot()
+        if (root == null) {
+            appendLine("No application accessibility root")
+        } else {
+            findNode(root) { node ->
+                if (node.viewIdResourceName != null || !node.text.isNullOrBlank() || node.isScrollable) {
+                    appendLine(
+                        "id=${node.viewIdResourceName}, text=${node.text}, visible=${node.isVisibleToUser}, " +
+                            "focused=${node.isFocused}, accessibilityFocused=${node.isAccessibilityFocused}, " +
+                            "bounds=${bounds(node)}, scrollable=${node.isScrollable}, " +
+                            "actions=${node.actionList.map { it.id }}, rows=${node.collectionInfo?.rowCount}, " +
+                            "row=${node.collectionItemInfo?.rowIndex}",
+                    )
+                }
+                false
+            }
+        }
+    }
+
+    private fun assertLegendOffset(message: String, condition: (Float, Float) -> Boolean) {
+        awaitAccessibility(message) { root ->
+            val legend = nativeSurface("glance-legend")
+            // Observe the actual focus target, before clipping. Its rectangle must
+            // stay at the viewport while content moves beneath it, even at either end.
+            nativeSurface("home-pager")?.atPage(0) == true && legend?.focused == true &&
+                legend.retainedFocusedBounds == legend.viewport &&
+                legend.scrollOffset != null && legend.maxScrollOffset != null &&
+                condition(legend.scrollOffset, legend.maxScrollOffset) &&
+                findNode(root) { it.isVisibleToUser && it.viewIdResourceName == "glance-legend" } != null &&
+                findNode(root) { it.isVisibleToUser && it.viewIdResourceName == "app-clock" } == null &&
+                findNode(root) { it.isVisibleToUser && it.viewIdResourceName == "plan-windows-list" } == null
+        }
+    }
+
+    private fun assertPlanRotaryFocus() {
+        awaitAccessibility("Settled Plan windows must own rotary focus") { root ->
+            nativeSurface("home-pager")?.atPage(1) == true &&
+                nativeSurface("plan-windows-list")?.focused == true &&
+                nativeSurface("glance-legend")?.focused != true &&
+                findNode(root) { it.isVisibleToUser && it.viewIdResourceName == "plan-windows-list" } != null
+        }
+    }
+
+    private fun assertOtherRouteFocus(anchor: String) {
+        awaitAccessibility("$anchor must keep input focus outside the legend") { root ->
+            findText(root, anchor) != null && nativeSurface("glance-legend")?.focused != true &&
+                findNode(root) { it.isVisibleToUser && it.isFocused } != null
+        }
+    }
+
+    private fun rotaryScroll(axisScroll: Float) {
+        val now = SystemClock.uptimeMillis()
+        val event = MotionEvent.obtain(
+            now, now, MotionEvent.ACTION_SCROLL, 1,
+            arrayOf(MotionEvent.PointerProperties().apply { id = 0 }),
+            arrayOf(MotionEvent.PointerCoords().apply { setAxisValue(MotionEvent.AXIS_SCROLL, axisScroll) }),
+            0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_ROTARY_ENCODER, 0,
+        )
+        try {
+            // Native AXIS_SCROLL is negative forward; Compose converts it to pixels.
+            scrollTrace += "native rotary axisScroll=$axisScroll"
+            assertTrue("Native rotary input failed", automation.injectInputEvent(event, true))
+        } finally {
+            event.recycle()
+        }
+        awaitUi()
+    }
+
+    private fun verticalDrag(forward: Boolean) {
+        taggedNode("home-pager")
+        var alignedPager: NativeSurface? = null
+        awaitAccessibility("Touch must begin on aligned Plan windows") {
+            alignedPager = nativeSurface("home-pager")
+            alignedPager?.atPage(1) == true
+        }
+        val pager = checkNotNull(alignedPager)
+        val viewport = pager.viewport
+        val x = viewport.centerX()
+        // The intended 20%–80% stroke is 60% of the native page, not of its
+        // accessibility rectangle. Keep ordinary frame-paced touch input and release.
+        val startY = viewport.top + viewport.height() * (if (forward) 0.8f else 0.2f)
+        val endY = viewport.top + viewport.height() * (if (forward) 0.2f else 0.8f)
+        val before = surfaceDiagnostics()
+        val traceStart = scrollTrace.size
+        val velocity = VelocityTracker()
+        val downTime = SystemClock.uptimeMillis()
+        fun pointer(action: Int, y: Float) {
+            val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x, y, 0)
+            try {
+                event.source = InputDevice.SOURCE_TOUCHSCREEN
+                assertTrue("Vertical touch input failed", automation.injectInputEvent(event, true))
+                velocity.addPosition(event.eventTime, Offset(x, y))
+                scrollTrace += "touch action=$action, elapsed=${event.eventTime - downTime}ms, x=$x, y=$y"
+            } finally {
+                event.recycle()
+            }
+        }
+        pointer(MotionEvent.ACTION_DOWN, startY)
+        var beforeRelease: NativeSurface? = null
+        try {
+            for (step in 1..12) {
+                pointer(MotionEvent.ACTION_MOVE, startY + (endY - startY) * step / 12)
+                awaitFrame()
+                if (step == 6 || step == 12) {
+                    scrollTrace += "touch step=$step, native Pager=${nativeSurface("home-pager")}, " +
+                        "native local=${nativeSurface("plan-windows-list")}"
+                }
+            }
+            beforeRelease = nativeSurface("home-pager")
+        } finally {
+            pointer(MotionEvent.ACTION_UP, endY)
+            // This estimates the injected pointer velocity, not the velocity delivered
+            // through the child's nested fling. Arrival is asserted separately below.
+            val injectedVelocity = velocity.calculateVelocity().y
+            awaitUi()
+            val pagerTravelFraction = beforeRelease?.scrollOffset?.let { end ->
+                pager.scrollOffset?.let { start -> (end - start) / viewport.height() }
+            }
+            val diagnostic = "touch forward=$forward, viewport=$viewport, startY=$startY, endY=$endY, " +
+                "strokeFraction=${kotlin.math.abs(endY - startY) / viewport.height()}, " +
+                "touchSlop=${pager.touchSlop}, minimumFlingVelocity=${pager.minimumFlingVelocity}, " +
+                "injectedVelocityY=$injectedVelocity, pagerTravelFraction=$pagerTravelFraction, " +
+                "defaultSnapPositionalThreshold=0.5, beforeRelease=$beforeRelease\n" +
+                scrollTrace.drop(traceStart).joinToString("\n", postfix = "\n") +
+                "Before touch:$before\nAfter UP and UI synchronization:${surfaceDiagnostics()}"
+            scrollTrace += diagnostic
+            diagnostic.lineSequence().forEach { Log.i("WardPulseNavigation", it) }
+        }
+    }
+
+    private fun backPreview(cancelled: Boolean, duringPreview: () -> Unit) {
+        var inspected = false
+        if (Build.VERSION.SDK_INT > 35) {
+            // Wear's API 36+ host uses the Activity's predictive-back callback.
+            scenario.onActivity { activity ->
+                activity.onBackPressedDispatcher.dispatchOnBackStarted(
+                    BackEventCompat(0f, 0f, 0f, BackEventCompat.EDGE_LEFT),
+                )
+            }
+            try {
+                scenario.onActivity { activity ->
+                    activity.onBackPressedDispatcher.dispatchOnBackProgressed(
+                        BackEventCompat(0f, 0f, 0.75f, BackEventCompat.EDGE_LEFT),
+                    )
+                }
+                awaitUi()
+                duringPreview()
+                inspected = true
+            } finally {
+                scenario.onActivity { activity ->
+                    if (cancelled || !inspected) {
+                        activity.onBackPressedDispatcher.dispatchOnBackCancelled()
+                    } else {
+                        activity.onBackPressedDispatcher.onBackPressed()
+                    }
+                }
+                awaitUi()
+            }
+        } else {
+            // Earlier Wear hosts consume horizontal touch dragging, rather than
+            // predictive-back progress. Hold the pointer while inspecting the preview.
+            val window = bounds(checkNotNull(appRoot()))
+            val startX = window.left + window.width() * 0.05f
+            val endX = window.left + window.width() * 0.8f
+            val y = window.exactCenterY()
+            val downTime = SystemClock.uptimeMillis()
+            fun pointer(action: Int, x: Float) {
+                val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x, y, 0)
+                try {
+                    event.source = InputDevice.SOURCE_TOUCHSCREEN
+                    assertTrue("Back gesture input failed", automation.injectInputEvent(event, true))
+                } finally {
+                    event.recycle()
+                }
+            }
+            pointer(MotionEvent.ACTION_DOWN, startX)
+            try {
+                for (step in 1..12) {
+                    pointer(MotionEvent.ACTION_MOVE, startX + (endX - startX) * step / 12)
+                    awaitFrame()
+                }
+                awaitUi()
+                duringPreview()
+                inspected = true
+            } finally {
+                if (cancelled || !inspected) {
+                    for (step in 1..12) {
+                        pointer(MotionEvent.ACTION_MOVE, endX + (startX - endX) * step / 12)
+                        awaitFrame()
+                    }
+                    pointer(MotionEvent.ACTION_CANCEL, startX)
+                } else {
+                    pointer(MotionEvent.ACTION_UP, endX)
+                }
+                awaitUi()
+            }
+        }
+    }
+
+    private fun launchApp(initialSummary: WatchDashboardSummary? = null, fontScale: Float? = null) {
         instrumentation.runOnMainSync { summary = initialSummary }
         scenario = ActivityScenario.launch(MainActivity::class.java)
         scenario.onActivity { activity ->
@@ -263,15 +967,22 @@ class WardPulseNavigationStateTest {
             recomposer = Recomposer(context)
             recomposition = compositionScope.launch { recomposer.runRecomposeAndApplyChanges() }
             activity.setContent(parent = recomposer) {
-                WardPulseTheme {
-                    WardPulseApp(
-                        summary = summary,
-                        watchFaceState = watchFaceState,
-                        onCheckWatchFace = callbacks.onCheck,
-                        onInstallWatchFace = callbacks.onInstall,
-                        onUpdateWatchFace = callbacks.onUpdate,
-                        onUseWatchFace = callbacks.onUse,
-                    )
+                val density = LocalDensity.current
+                CompositionLocalProvider(
+                    LocalDensity provides Density(density.density, fontScale ?: density.fontScale),
+                ) {
+                    WardPulseTheme {
+                        Box(Modifier.fillMaxSize().onFocusedBoundsChanged { focusedCoordinates = it }) {
+                            WardPulseApp(
+                                summary = summary,
+                                watchFaceState = watchFaceState,
+                                onCheckWatchFace = callbacks.onCheck,
+                                onInstallWatchFace = callbacks.onInstall,
+                                onUpdateWatchFace = callbacks.onUpdate,
+                                onUseWatchFace = callbacks.onUse,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -292,29 +1003,42 @@ class WardPulseNavigationStateTest {
         // for their own observable state instead of treating event quiet as publication.
     }
 
-    private fun awaitFrame(timeoutMillis: Long = 5_000) {
+    private fun awaitFrame(
+        timeoutMillis: Long = 5_000,
+        onTimeout: () -> Nothing = { throw AssertionError("UI frame did not complete") },
+    ) {
         val frame = CountDownLatch(1)
         instrumentation.runOnMainSync {
             Choreographer.getInstance().postFrameCallback { frame.countDown() }
         }
-        assertTrue("UI frame did not complete", frame.await(timeoutMillis, TimeUnit.MILLISECONDS))
+        if (!frame.await(timeoutMillis, TimeUnit.MILLISECONDS)) onTimeout()
     }
 
-    private fun awaitAccessibility(message: String, condition: (AccessibilityNodeInfo) -> Boolean) {
+    private fun awaitAccessibility(
+        message: String,
+        diagnostics: () -> String = { "" },
+        condition: (AccessibilityNodeInfo) -> Boolean,
+    ) {
         val deadline = SystemClock.uptimeMillis() + 5_000
+        fun failure(): Nothing {
+            val state = runCatching { surfaceDiagnostics() }.getOrElse { "\nSurface diagnostics failed: $it" }
+            throw AssertionError(message + diagnostics() + "\n${scrollTrace.joinToString("\n")}" + state)
+        }
         while (SystemClock.uptimeMillis() < deadline) {
             val root = appRoot()
             if (root != null && condition(root)) return
             val remaining = deadline - SystemClock.uptimeMillis()
             if (remaining <= 0) break
-            awaitFrame(remaining)
+            // A final partial vsync belongs to this predicate's deadline. It must
+            // not replace the useful assertion and state with a frame-latch failure.
+            awaitFrame(remaining, onTimeout = ::failure)
         }
-        throw AssertionError(message)
+        failure()
     }
 
-    private fun back() {
+    private fun back(toHomePage: Int? = null) {
         instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
-        awaitUi()
+        if (toHomePage == null) awaitUi() else awaitHomePage(toHomePage)
     }
 
     private fun assertCalls(vararg expected: String) {
@@ -344,6 +1068,114 @@ class WardPulseNavigationStateTest {
 
     private fun assertVisible(text: String) {
         awaitAccessibility("Expected visible text: $text") { findText(it, text) != null }
+    }
+
+    private fun taggedNode(tag: String, action: Int? = null): AccessibilityNodeInfo {
+        var result: AccessibilityNodeInfo? = null
+        awaitAccessibility("Expected $tag with accessibility action $action") { root ->
+            val owner = findNode(root) { it.isVisibleToUser && it.viewIdResourceName == tag }
+            // Scroll semantics can be published on an untagged descendant of their owner.
+            result = owner?.let {
+                if (action == null) it else findNode(it) { node ->
+                    node.isVisibleToUser && node.actionList.any { it.id == action }
+                }
+            }
+            result != null
+        }
+        return checkNotNull(result)
+    }
+
+    private fun page(action: Int) {
+        val node = taggedNode("home-pager", action)
+        assertTrue("Home Pager action failed: $action", performHomePagerAction(node, action))
+    }
+
+    private fun homePagerObservation(pager: NativeSurface?): String =
+        "state=${pager?.homePagerState}, offset=${pager?.scrollOffset}/${pager?.maxScrollOffset}, " +
+            "pendingLayout=${pager?.pendingLayout}, inputFocus=${pager?.inputFocus}, " +
+            "retainedFocusedBounds=${pager?.retainedFocusedBounds}"
+
+    private fun recordHomePager(message: String) {
+        val observation = "$message: ${homePagerObservation(nativeSurface("home-pager"))}"
+        scrollTrace += observation
+        Log.i("WardPulseNavigation", observation)
+    }
+
+    private fun awaitHomePage(page: Int, focusedGlanceControl: String? = null) {
+        val started = SystemClock.uptimeMillis()
+        val trace = ArrayDeque<String>()
+        var previous: String? = null
+        awaitAccessibility(
+            "Expected resumed Home at settled page $page, focusedGlanceControl=$focusedGlanceControl",
+            diagnostics = { "\nHome settlement observations:\n${trace.joinToString("\n")}" },
+        ) { root ->
+            val pager = nativeSurface("home-pager")
+            val state = pager?.homePagerState
+            val local = nativeSurface(if (page == 0) "glance-legend" else "plan-windows-list")
+            val controlFocused = focusedGlanceControl?.let { findButton(root, it)?.isFocused }
+            val observation = "${homePagerObservation(pager)}, localFocused=${local?.focused}, " +
+                "localMax=${local?.maxScrollOffset}, controlFocused=$controlFocused"
+            if (observation != previous) {
+                // Retain bounded state changes, including transient focus and page targets.
+                if (trace.size == 32) trace.removeFirst()
+                trace.addLast("page=$page +${SystemClock.uptimeMillis() - started}ms: $observation")
+                previous = observation
+            }
+            pager?.atPage(page) == true && state != null && state.lifecycle == Lifecycle.State.RESUMED &&
+                !state.scrolling && state.currentPage == page && state.settledPage == page &&
+                state.targetPage == page && state.offsetFraction == 0f &&
+                (page != 1 || local?.focused == true) &&
+                (focusedGlanceControl == null || (page == 0 && local != null && local.maxScrollOffset == null &&
+                    local.focused != true && controlFocused == true))
+        }
+        trace.forEach {
+            scrollTrace += it
+            Log.i("WardPulseNavigation", it)
+        }
+    }
+
+    private fun performHomePagerAction(
+        node: AccessibilityNodeInfo,
+        action: Int,
+        focusedGlanceControl: String? = null,
+    ): Boolean {
+        val destination = when (action) {
+            AccessibilityNodeInfo.ACTION_SCROLL_FORWARD,
+            AccessibilityNodeInfo.AccessibilityAction.ACTION_PAGE_DOWN.id -> 1
+            AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD,
+            AccessibilityNodeInfo.AccessibilityAction.ACTION_PAGE_UP.id -> 0
+            else -> error("Unexpected Home Pager action: $action")
+        }
+        awaitHomePage(1 - destination, focusedGlanceControl)
+        recordHomePager("before action=$action owner=${node.viewIdResourceName} to page=$destination")
+        assertTrue("Home Pager action owner disappeared: $action", node.refresh())
+        if (focusedGlanceControl != null) {
+            assertTrue(
+                "Focused-control forward paging must expose the native PageDown dispatch",
+                node.actionList.any { it.id == AccessibilityNodeInfo.AccessibilityAction.ACTION_PAGE_DOWN.id },
+            )
+        }
+        val performed = node.performAction(action)
+        recordHomePager("after action=$action to page=$destination, performed=$performed")
+        if (performed) awaitHomePage(destination)
+        return performed
+    }
+
+    private fun assertClock(visible: Boolean, anchor: String) {
+        var observation = "No application accessibility root observed"
+        awaitAccessibility(
+            "Expected clock visible=$visible on $anchor",
+            diagnostics = { "\nLast evaluated clock/anchor state: $observation" },
+        ) { root ->
+            val clock = findNode(root) { it.viewIdResourceName == "app-clock" && it.isVisibleToUser }
+            val bounds = Rect()
+            clock?.getBoundsInScreen(bounds)
+            val showingTime = clock != null && !clock.text.isNullOrBlank() && !bounds.isEmpty
+            val anchored = findText(root, anchor) != null
+            observation = "anchorVisible=$anchored, clockVisible=${clock != null}, " +
+                "showingTime=$showingTime, clockText=${clock?.text}, clockBounds=$bounds"
+            anchored && (if (visible) showingTime else clock == null)
+        }
     }
 
     private fun assertAbsent(text: String, anchor: String, anchorIsAction: Boolean = false) {
@@ -382,8 +1214,8 @@ class WardPulseNavigationStateTest {
         }
     }
 
-    private fun click(text: String) {
-        reveal(text)
+    private fun click(text: String, within: String? = null) {
+        reveal(text, within)
         var node = checkNotNull(findText(text)) { "Missing action: $text" }
         while (!node.actionList.contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK)) {
             node = checkNotNull(node.parent?.takeIf { it.refresh() }) { "No click action for: $text" }
@@ -393,28 +1225,123 @@ class WardPulseNavigationStateTest {
         awaitUi()
     }
 
-    private fun reveal(text: String) {
+    private fun reveal(text: String, within: String? = null) {
         // Bounded user scrolling through a lazy list, never navigation or state retries.
         repeat(8) {
             if (hasText(text)) return
-            check(scroll(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) { "Cannot reveal: $text" }
+            check(scroll(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, within)) { "Cannot reveal: $text" }
         }
         assertVisible(text)
     }
 
-    private fun scrollToStart() {
+    private fun scrollToStart(within: String? = null) {
+        scrollTrace += "scrollToStart within=$within"
         repeat(8) {
-            if (!scroll(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)) return
+            if (!scroll(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD, within)) return
         }
-        error("Utility did not reach the start")
+        error("Scrollable content did not reach the start\n${scrollTrace.joinToString("\n")}")
     }
 
-    private fun scroll(action: Int): Boolean {
-        val node = findNode { candidate ->
-            candidate.isVisibleToUser && candidate.actionList.any { it.id == action }
-        } ?: return false
-        val performed = node.performAction(action)
-        if (performed) awaitUi()
+    private fun scrollToEnd(within: String) {
+        scrollTrace += "scrollToEnd within=$within"
+        repeat(8) {
+            if (!scroll(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, within)) return
+        }
+        error("Scrollable content did not reach the end\n${scrollTrace.joinToString("\n")}")
+    }
+
+    private fun scroll(action: Int, within: String? = null, focusedGlanceControl: String? = null): Boolean {
+        val verifyPlanWindows = within == "plan-windows-list"
+        var content = emptyList<Pair<String, Rect>>()
+        var nativeContent = emptyList<Pair<String, Offset>>()
+        var observation = "No Plan windows state observed"
+        val observePlanWindows: (AccessibilityNodeInfo) -> Boolean = { root ->
+            val list = findNode(root) { it.isVisibleToUser && it.viewIdResourceName == within }
+            val pager = findNode(root) { it.isVisibleToUser && it.viewIdResourceName == "home-pager" }
+            val glance = findNode(root) { it.isVisibleToUser && it.viewIdResourceName == "glance-legend" }
+            val clock = findNode(root) { it.isVisibleToUser && it.viewIdResourceName == "app-clock" }
+            val collection = list?.let { findNode(it) { node -> node.collectionInfo?.rowCount == 3 } }
+            content = buildList {
+                if (list != null) findNode(list) { node ->
+                    if (node.isVisibleToUser && !node.text.isNullOrBlank()) {
+                        add(node.text.toString() to bounds(node))
+                    }
+                    false
+                }
+            }
+            val listBounds = list?.let { bounds(it) }
+            val nativePager = nativeSurface("home-pager")
+            val nativeLocal = nativeSurface("plan-windows-list")
+            nativeContent = nativeLocal?.content.orEmpty()
+            val showingTime = clock != null && !clock.text.isNullOrBlank() && !bounds(clock).isEmpty
+            observation = "pagerBounds=${pager?.let { bounds(it) }}, listBounds=$listBounds, " +
+                "rows=${collection?.collectionInfo?.rowCount}, showingTime=$showingTime, " +
+                "glanceVisible=${glance != null}, nativePager=$nativePager, nativeLocal=$nativeLocal, content=$content"
+            pager != null && nativePager?.atPage(1) == true && list != null &&
+                collection != null && showingTime && glance == null &&
+                findText(root, "Alerts: 1") == null && content.isNotEmpty()
+        }
+        if (verifyPlanWindows) {
+            awaitAccessibility(
+                "Expected settled Plan windows before local action $action",
+                diagnostics = { "\n$observation\n${scrollTrace.joinToString("\n")}" },
+                condition = observePlanWindows,
+            )
+            scrollTrace += "before action=$action, $observation"
+        }
+        val before = content
+        val nativeBefore = nativeContent
+        val root = appRoot()
+        val owner = if (within == null) root else root?.let {
+            findNode(it) { candidate -> candidate.isVisibleToUser && candidate.viewIdResourceName == within }
+        }
+        if (within != null) checkNotNull(owner) { "Missing local list owner: $within" }
+        // Scoped local actions include untagged aliases inside the list owner only.
+        val node = owner?.let {
+            findNode(it) { candidate ->
+                candidate.isVisibleToUser && candidate.actionList.any { it.id == action }
+            }
+        }
+        val target = node?.toString()
+        val homePagerAction = node?.viewIdResourceName == "home-pager"
+        if (focusedGlanceControl != null) {
+            assertTrue("Focused-control paging must target Home Pager", homePagerAction)
+        }
+        val performed = if (homePagerAction) {
+            performHomePagerAction(checkNotNull(node), action, focusedGlanceControl)
+        } else node?.performAction(action) ?: false
+        scrollTrace += "action=$action, within=$within, owner=${owner?.viewIdResourceName}, rootPresent=${root != null}, " +
+            "target=$target, performed=$performed"
+        if (performed) {
+            if (!homePagerAction) awaitUi()
+            if (verifyPlanWindows) {
+                awaitAccessibility(
+                    "Expected local content movement on settled Plan windows after action $action",
+                    diagnostics = { "\n$observation\n${scrollTrace.joinToString("\n")}" },
+                ) { updated ->
+                    observePlanWindows(updated) && content.toSet() != before.toSet() &&
+                        nativeBefore.isNotEmpty() && nativeContent.isNotEmpty() && nativeContent != nativeBefore
+                }
+                scrollTrace += "after action=$action, $observation"
+            }
+        } else if (root != null) {
+            if (verifyPlanWindows) {
+                awaitAccessibility(
+                    "Expected settled Plan windows at the local boundary after action $action",
+                    diagnostics = { "\n$observation\n${scrollTrace.joinToString("\n")}" },
+                    condition = observePlanWindows,
+                )
+                scrollTrace += "boundary action=$action, $observation"
+            }
+            // Record published content at the stop without issuing another action or waiting
+            // for a missing action to appear. Its absence is not proof of list position.
+            findNode(root) { candidate ->
+                if (candidate.isVisibleToUser && !candidate.text.isNullOrBlank()) {
+                    scrollTrace += "text=${candidate.text}, bounds=${bounds(candidate)}"
+                }
+                false
+            }
+        }
         return performed
     }
 
@@ -423,11 +1350,6 @@ class WardPulseNavigationStateTest {
         return root.takeIf {
             it.refresh() && it.isVisibleToUser && it.packageName?.toString() == instrumentation.targetContext.packageName
         }
-    }
-
-    private fun findNode(predicate: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
-        val root = appRoot() ?: return null
-        return findNode(root, predicate)
     }
 
     private fun findNode(
@@ -445,6 +1367,14 @@ class WardPulseNavigationStateTest {
         }
         return null
     }
+
+    private fun overflowingSummary() = alpha.copy(
+        rings = listOf(
+            RingSummary("allowance.codex.plan", "Codex Alpha", 25.0, PulseStatus.OK),
+            RingSummary("allowance.cursor.plan", "Cursor Beta", 20.0, PulseStatus.OK),
+            RingSummary("allowance.claude.plan", "Claude Gamma", 0.0, PulseStatus.OK),
+        ),
+    )
 
     private fun summary(label: String, usedPercent: Double): WatchDashboardSummary {
         val period = PeriodSummary("today", null, null, null, null, null, PulseStatus.OK)

@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.sp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlin.math.ceil
+import kotlin.math.roundToInt
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -40,6 +41,11 @@ class GlanceLegendLayoutTest {
 
     @Test
     fun denseDefaultScenesKeepBothLinesAndClearEveryRefreshDetail() {
+        val usual = listOf(
+            pair.copy(subtitle = "100% · 64% left"),
+            ordinary.copy(title = "Codex plan · Weekly", subtitle = "80% left · 59.5K credits"),
+            ordinary.copy(title = "Claude plan · 5h", subtitle = "100% left"),
+        )
         listOf(360, 384, 466).forEach { pixels ->
             val density = Density(2f, fontScale = 1f)
             val measurer = measurer(density)
@@ -57,15 +63,27 @@ class GlanceLegendLayoutTest {
                             ),
                         ).size.height + ceil(8f * art).toInt()
                     } ?: 0
-                    val height = (230f * art).toInt() - detailHeight
-                    val layout = layout(listOf(ordinary, pair, pair.copy(title = "Codex plan")), pixels, 1f, height)
-                    assertFalse("$pixels / $detail unexpectedly scrolls", layout.scrolling)
-                    assertTrue(layout.rows.sumOf { it.height } <= height)
-                    layout.rows.forEach { row ->
-                        assertEquals(1, row.title.layout.lineCount)
-                        assertEquals(1, row.subtitle.layout.lineCount)
-                        assertComplete(row)
-                    }
+                    val height = regionHeight(pixels) - detailHeight
+                    listOf(usual, listOf(ordinary, pair, pair.copy(title = "Codex plan")))
+                        .forEach { models ->
+                            val layout = layout(models, pixels, 1f, height)
+                            assertFalse("$pixels / $detail unexpectedly scrolls", layout.scrolling)
+                            assertTrue(layout.rows.sumOf { it.height } <= height)
+                            layout.rows.forEach { row ->
+                                assertEquals(1, row.title.layout.lineCount)
+                                assertEquals(1, row.subtitle.layout.lineCount)
+                                assertComplete(row)
+                                val titleHeight = ceil(37f * art).toInt()
+                                val subtitleHeight = ceil(32f * art).toInt()
+                                assertTrue(row.title.height >= titleHeight)
+                                assertTrue(row.subtitle.height >= subtitleHeight)
+                                assertTrue(row.height >= ceil(titleHeight + subtitleHeight + 6f * art).toInt())
+                                if (models === usual) {
+                                    assertEquals(27f * art / density.density, row.title.style.fontSize.value, 0.001f)
+                                    assertEquals(23f * art / density.density, row.subtitle.style.fontSize.value, 0.001f)
+                                }
+                            }
+                        }
                 }
         }
     }
@@ -77,11 +95,11 @@ class GlanceLegendLayoutTest {
             val layout = layout(List(3) { short }, 384, scale)
             assertTrue("Short rows must scroll at $scale", layout.scrolling)
             assertEquals(3, layout.rows.size)
-            assertEquals((230f * 384 / 450).toInt() - ceil(14f * 384 / 450).toInt(), layout.viewportHeight)
+            assertEquals(regionHeight(384) - ceil(14f * 384 / 450).toInt(), layout.viewportHeight)
             layout.rows.forEach { row ->
                 assertEquals(1, row.title.layout.lineCount)
                 assertEquals(1, row.subtitle.layout.lineCount)
-                assertTrue(row.height >= 62f * 384 / 450 * scale)
+                assertTrue(row.height >= 75f * 384 / 450 * scale)
                 assertComplete(row)
             }
         }
@@ -108,8 +126,8 @@ class GlanceLegendLayoutTest {
                         row.subtitle.text.text.replace(" · ", " ").replace('\n', ' '),
                     )
                     val designScale = pixels / 450f / 2f
-                    assertTrue(row.title.style.fontSize.value / designScale in 17.9999f..20.0001f)
-                    assertTrue(row.subtitle.style.fontSize.value / designScale in 15.9999f..18.0001f)
+                    assertTrue(row.title.style.fontSize.value / designScale in 17.9999f..27.0001f)
+                    assertTrue(row.subtitle.style.fontSize.value / designScale in 15.9999f..23.0001f)
                 }
                 val styled = layout.rows.last().subtitle.text
                 assertEquals(listOf("0%", "0%"), styled.spanStyles.map {
@@ -142,13 +160,21 @@ class GlanceLegendLayoutTest {
         rows: List<GlanceLegendRowModel>,
         pixels: Int,
         scale: Float,
-        height: Int = (230f * pixels / 450).toInt(),
+        height: Int = regionHeight(pixels),
     ): GlanceLegendLayout {
         val density = Density(2f, fontScale = scale)
         return measureGlanceLegend(
             rows, (pixels / density.density).dp, (394f * pixels / 450).toInt(),
             height, density, measurer(density),
         )
+    }
+
+    private fun regionHeight(pixels: Int): Int {
+        val art = pixels / 450f
+        // Match the separately rounded native padding, controls and header gap.
+        return pixels - listOf(20f, 68f, 10f, 12f, 36f, 42f).sumOf {
+            (it * art).roundToInt()
+        }
     }
 
     private fun assertComplete(row: GlanceMeasuredRow) {

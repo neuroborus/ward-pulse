@@ -79,7 +79,8 @@ async function loadFontMetrics(fontSize, texts) {
         `texts = ${JSON.stringify(texts)}`,
         'asc, desc = font.getmetrics()',
         'widths = {t: font.getbbox(t)[2] - font.getbbox(t)[0] for t in texts}',
-        'print(json.dumps({"widths": widths, "ascent": asc, "descent": desc}))',
+        'bounds = {t: font.getbbox(t, anchor="ls") for t in texts}',
+        'print(json.dumps({"widths": widths, "bounds": bounds, "ascent": asc, "descent": desc}))',
       ].join('\n'),
     ],
     { encoding: 'utf8' },
@@ -255,7 +256,7 @@ async function legendFontMetrics(texts) {
       }
     }
   }
-  return new Map(await Promise.all([16, 17, 18, 19, 20].map(async (size) => [
+  return new Map(await Promise.all(Array.from({ length: 12 }, (_, i) => i + 16).map(async (size) => [
     size, await loadFontMetrics(size, [...candidates]),
   ])))
 }
@@ -316,7 +317,8 @@ function fitLegendText(text, preferred, floor, lineHeight, width, scale, metrics
     lines.push({ text: remaining, start })
   }
   const font = metrics.get(size)
-  const pitch = Math.max(lineHeight, font.ascent + font.descent) * scale
+  // Reserve each full line independently before rounding the complete row.
+  const pitch = Math.ceil(Math.max(lineHeight, font.ascent + font.descent) * scale)
   return {
     size: size * scale, lines, font, pitch,
     height: lines.length * pitch,
@@ -337,7 +339,6 @@ async function glanceSvg({
 }) {
   const cx = SIZE / 2
   const clipId = 'roundClip'
-  const timeSize = 16
   const refreshLabelSize = 13
   const emptySize = 16
   const detailSize = 11
@@ -359,7 +360,7 @@ async function glanceSvg({
   const legendMetrics = await legendFontMetrics([...titles, ...subs])
   const alertsMetrics = await loadFontMetrics(alertsSize, [alertsLabel])
 
-  const refreshCy = 96
+  const refreshCy = 54
   const refreshR = 34
   const refresh = await refreshStatusControl({
     cx,
@@ -374,7 +375,11 @@ async function glanceSvg({
   const detailY = statusDetail
     ? refreshCy + refresh.plateR + detailGap
     : null
-  const headerBottom = (detailY ?? refreshCy + refresh.plateR) + 12
+  const detailMetrics = statusDetail ? await loadFontMetrics(detailSize, [statusDetail]) : null
+  const headerBottom = detailY == null
+    ? refreshCy + refresh.plateR
+    : detailY + detailMetrics.bounds[statusDetail][3]
+  const availableTop = headerBottom + 10
 
   const alertsBtnH = 36
   const alertsBtnY = SIZE - 78
@@ -389,11 +394,7 @@ async function glanceSvg({
     alertsBtnH / 2 +
     (alertsMetrics.ascent - alertsMetrics.descent) / 2
 
-  let body = `
-    <text x="${cx}" y="48" text-anchor="middle"
-      font-family="${FONT}, sans-serif" font-size="${timeSize}"
-      font-weight="700" fill="${MUTED}">9:06</text>
-    ${refresh.markup}`
+  let body = refresh.markup
 
   if (statusDetail) {
     body += `
@@ -409,8 +410,8 @@ async function glanceSvg({
     const blockH =
       (lines.length - 1) * lineGap +
       (emptyMetrics.ascent + emptyMetrics.descent)
-    const bandTop = headerBottom
-    const bandBottom = alertsBtnY - 10
+    const bandTop = availableTop
+    const bandBottom = alertsBtnY - 12
     const bandMid = (bandTop + bandBottom) / 2
     const firstBaseline =
       bandMid - blockH / 2 + emptyMetrics.ascent
@@ -423,23 +424,21 @@ async function glanceSvg({
       lineY += lineGap
     }
   } else {
-    const detailMetrics = statusDetail ? await loadFontMetrics(detailSize, [statusDetail]) : null
-    const availableTop = detailY == null ? refreshCy + refresh.plateR : detailY + detailMetrics.descent
     const availableBottom = alertsBtnY - 12
     const measureRows = (indicator) => ordered.map((row, i) => {
       const arcWidth = arcColW + (row.split ? secondArcOffset : 0) + textGap
-      const width = 370 - indicator - arcWidth
-      const title = fitLegendText(titles[i], 20, 18, 28, width, fontScale, legendMetrics, false)
-      const sub = fitLegendText(subs[i], 18, 16, 26, width, fontScale, legendMetrics, true)
-      return { row, title, sub, arcWidth, height: Math.max(
-        39, 62 * fontScale, title.height + sub.height + 8 * fontScale,
-      ) }
+      const width = 360 - indicator - arcWidth
+      const title = fitLegendText(titles[i], 27, 18, 37, width, fontScale, legendMetrics, false)
+      const sub = fitLegendText(subs[i], 23, 16, 32, width, fontScale, legendMetrics, true)
+      return { row, title, sub, arcWidth, height: Math.ceil(Math.max(
+        39, 75 * fontScale, title.height + sub.height + 6 * fontScale,
+      )) }
     })
     let measured = measureRows(0)
     const scrolling = measured.reduce((sum, row) => sum + row.height, 0) > availableBottom - availableTop
     if (scrolling) measured = measureRows(6)
     const stackH = measured.reduce((sum, row) => sum + row.height, 0)
-    const blockW = scrolling ? 370 : Math.min(370, Math.max(0,
+    const blockW = scrolling ? 360 : Math.min(360, Math.max(0,
       ...measured.map(({ arcWidth, title, sub }) => arcWidth + Math.max(title.width, sub.width)),
     ))
     const blockLeft = cx - blockW / 2

@@ -1,5 +1,6 @@
 package app.wardpulse.wear.ui
 
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -9,13 +10,26 @@ import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.scrollBy
+import androidx.compose.ui.semantics.scrollByOffset
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
+import androidx.wear.compose.foundation.hierarchicalFocusGroup
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.AppScaffold
@@ -40,6 +54,7 @@ import app.wardpulse.wear.ui.theme.WardPulseTheme
 import app.wardpulse.wear.watchface.WatchFaceScreen
 import app.wardpulse.wear.watchface.WatchFaceState
 import java.time.Instant
+import kotlinx.coroutines.launch
 
 private const val HOME_ROUTE = "home"
 private const val ALERTS_ROUTE = "alerts"
@@ -49,6 +64,18 @@ private enum class HomePage {
     Glance,
     PlanWindows,
 }
+
+// Native observers need destination completion as well as visible Pager content.
+internal val HomePagerStateKey = SemanticsPropertyKey<HomePagerState>("HomePagerState")
+
+internal data class HomePagerState(
+    val lifecycle: Lifecycle.State,
+    val currentPage: Int,
+    val settledPage: Int,
+    val targetPage: Int,
+    val offsetFraction: Float,
+    val scrolling: Boolean,
+)
 
 internal data class SummaryRow(
     val title: String,
@@ -74,15 +101,18 @@ fun WardPulseApp(
     val currentOnInstall by rememberUpdatedState(onInstallWatchFace)
     val currentOnUpdate by rememberUpdatedState(onUpdateWatchFace)
     val currentOnUse by rememberUpdatedState(onUseWatchFace)
-    // Straight clock: default curved TimeText warps on round API 34+ shells.
-    // Sized to Glance review art (muted, not a face-style hero).
-    AppScaffold(timeText = { StraightAppTimeText() }) {
-        SwipeDismissableNavHost(
-            navController = navController,
-            startDestination = HOME_ROUTE,
-        ) {
-            composable(HOME_ROUTE) {
-                val latestSummary = currentSummary
+    // Each clock belongs to its destination so dismissal transforms and clips it
+    // with that page, including a cancelled swipe or a predictive-back preview.
+    SwipeDismissableNavHost(
+        navController = navController,
+        startDestination = HOME_ROUTE,
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        composable(HOME_ROUTE) {
+            val latestSummary = currentSummary
+            val showClock = latestSummary == null ||
+                (!pagerState.isScrollInProgress && pagerState.settledPage == HomePage.PlanWindows.ordinal)
+            AppScaffold(timeText = { if (showClock) StraightAppTimeText() }) {
                 if (latestSummary == null) {
                     EmptyDashboardScreen(onOpenWatchFace = { navController.navigate(WATCH_FACE_ROUTE) })
                 } else {
@@ -94,15 +124,19 @@ fun WardPulseApp(
                     )
                 }
             }
-            composable(ALERTS_ROUTE) {
-                val latestSummary = currentSummary
+        }
+        composable(ALERTS_ROUTE) {
+            val latestSummary = currentSummary
+            AppScaffold(timeText = { StraightAppTimeText() }) {
                 if (latestSummary == null) {
                     EmptyDashboardScreen(onOpenWatchFace = { navController.navigate(WATCH_FACE_ROUTE) })
                 } else {
                     SummaryScreen(title = "Alerts", rows = latestSummary.alertRows())
                 }
             }
-            composable(WATCH_FACE_ROUTE) {
+        }
+        composable(WATCH_FACE_ROUTE) {
+            AppScaffold(timeText = { StraightAppTimeText() }) {
                 WatchFaceScreen(
                     state = currentWatchFaceState,
                     onCheck = currentOnCheck,
@@ -142,6 +176,7 @@ internal fun WatchDashboardSummary.alertRows(): List<SummaryRow> =
         )
     }.ifEmpty { listOf(SummaryRow("No active alerts", "No alerts in the latest summary")) }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun HomeScreen(
     summary: WatchDashboardSummary,
@@ -150,26 +185,45 @@ private fun HomeScreen(
     onOpenWatchFace: () -> Unit,
 ) {
     val pages = HomePage.entries
+    val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
 
     VerticalPager(
         state = pagerState,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .semantics {
+                testTagsAsResourceId = true
+                this[HomePagerStateKey] = HomePagerState(
+                    lifecycle, pagerState.currentPage, pagerState.settledPage,
+                    pagerState.targetPage, pagerState.currentPageOffsetFraction, pagerState.isScrollInProgress,
+                )
+            }
+            .testTag("home-pager"),
         beyondViewportPageCount = 0,
     ) { page ->
+        // Keep source focus through the animation: changing the active hierarchy can
+        // trigger focus/bring-into-view scrolling that cancels the Pager mutation.
+        // Navigation owns route focus; transfer page ownership only on settlement.
+        val pageModifier = Modifier.hierarchicalFocusGroup(
+            active = pagerState.settledPage == page,
+        )
         when (pages[page]) {
             HomePage.Glance -> GlanceLegendPage(
                 summary = summary,
                 onOpenAlerts = onOpenAlerts,
+                modifier = pageModifier,
             )
             HomePage.PlanWindows -> SummaryScreen(
                 title = "Plan windows",
                 rows = summary.planRows(),
+                modifier = pageModifier.testTag("plan-windows-list"),
                 onOpenWatchFace = onOpenWatchFace,
             )
         }
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun StraightAppTimeText() {
     val timeSource = TimeTextDefaults.rememberTimeSource(TimeTextDefaults.timeFormat())
@@ -177,6 +231,8 @@ private fun StraightAppTimeText() {
         text = timeSource.currentTime(),
         modifier = Modifier
             .fillMaxWidth()
+            .semantics { testTagsAsResourceId = true }
+            .testTag("app-clock")
             // Review art: ~y=32 top of glyphs on a 450px canvas → ~14dp on 192dp shells.
             .padding(top = 14.dp),
         style = MaterialTheme.typography.labelSmall.copy(
@@ -194,13 +250,24 @@ private fun StraightAppTimeText() {
 private fun SummaryScreen(
     title: String,
     rows: List<SummaryRow>,
+    modifier: Modifier = Modifier,
     onOpenWatchFace: (() -> Unit)? = null,
 ) {
     val state = rememberTransformingLazyColumnState()
+    val scope = rememberCoroutineScope()
     val transformationSpec = rememberTransformationSpec()
 
     ScreenScaffold(scrollState = state) { contentPadding ->
         TransformingLazyColumn(
+            modifier = modifier.semantics {
+                // Accessibility scrolls belong to this list, including their unconsumed
+                // distance at a boundary. Touch and rotary keep the normal scrollable path.
+                scrollBy { _, y ->
+                    scope.launch { state.animateScrollBy(y) }
+                    true
+                }
+                scrollByOffset { Offset(0f, state.animateScrollBy(it.y)) }
+            },
             state = state,
             contentPadding = contentPadding,
             verticalArrangement = Arrangement.spacedBy(4.dp),

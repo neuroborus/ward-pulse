@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="450" height="450" viewBox="0 0 450 450" role="img" aria-label="Synthetic legend-only 1.5x text model; fixed review controls; scroll start">
+  <defs>
+    <radialGradient id="lift" cx="50%" cy="48%" r="62%">
+      <stop offset="0%" stop-color="#18201C"/>
+      <stop offset="55%" stop-color="#101412"/>
+      <stop offset="100%" stop-color="#0A0D0B"/>
+    </radialGradient>
+    <clipPath id="roundClip">
+      <circle cx="225" cy="225" r="225" />
+    </clipPath>
+  </defs>
+  <g clip-path="url(#roundClip)">
+    <rect width="450" height="450" fill="url(#lift)"/>
+
+    <circle cx="225" cy="54" r="34" fill="#141916"
+      stroke="#2E3632" stroke-width="1" />
+
+    <path d="M 208.8 40.4 A 21.15 21.15 0 0 1 242.0 41.4"
+      fill="none" stroke="#E6C349" stroke-width="2.2" stroke-linecap="butt"
+      opacity="1" />
+    <path d="M 245.5 48.9
+      L 239.1 43.9
+      L 245.3 39.4 Z"
+      fill="#E6C349" opacity="1" />
+
+    <path d="M 241.2 67.6 A 21.15 21.15 0 0 1 208.0 66.6"
+      fill="none" stroke="#E6C349" stroke-width="2.2" stroke-linecap="butt"
+      opacity="1" />
+    <path d="M 204.5 59.1
+      L 210.9 64.1
+      L 204.7 68.6 Z"
+      fill="#E6C349" opacity="1" />
+    <text x="225" y="59.0" text-anchor="middle"
+      font-family="Noto Sans, sans-serif" font-size="13"
+      font-weight="700" fill="#E6C349">!OK</text>
+    <text x="225" y="104.0" text-anchor="middle"
+      font-family="Noto Sans, sans-serif" font-size="11"
+      font-weight="700" fill="#5C655E">Stale</text><defs><clipPath id="legendClip"><rect x="45" y="114" width="354" height="232"/></clipPath></defs><g clip-path="url(#legendClip)">
+    <circle cx="64.5" cy="198.5" r="17" fill="none" stroke="#2E3632"
+      stroke-width="5" />
+    <circle cx="64.5" cy="198.5" r="17" fill="none" stroke="#E8915A"
+      stroke-width="5" stroke-linecap="round"
+      stroke-dasharray="101.81415022205297 106.81415022205297"
+      stroke-dashoffset="-2.5"
+      transform="rotate(-90 64.5 198.5)" />
+    <text x="96" y="160.8"
+      font-family="Noto Sans, sans-serif" font-size="40.5"
+      font-weight="700" fill="#F4FBF8">Claude plan ·</text>
+    <text x="96" y="216.8"
+      font-family="Noto Sans, sans-serif" font-size="40.5"
+      font-weight="700" fill="#F4FBF8">Sonnet weekly</text>
+    <text x="96" y="265.8"
+      font-family="Noto Sans, sans-serif" font-size="24"
+      font-weight="700" fill="#8A968F">100% left · 999.9T credits</text>
+    <circle cx="64.5" cy="363.5" r="17" fill="none" stroke="#2E3632"
+      stroke-width="5" />
+    <circle cx="64.5" cy="363.5" r="17" fill="none" stroke="#7E93B8"
+      stroke-width="5" stroke-linecap="round"
+      stroke-dasharray="101.81415022205297 106.81415022205297"
+      stroke-dashoffset="-2.5"
+      transform="rotate(-90 64.5 363.5)" />
+    <circle cx="115.5" cy="363.5" r="17" fill="none" stroke="#2E3632"
+      stroke-width="5" />
+    <circle cx="115.5" cy="363.5" r="17" fill="none" stroke="#67E8D4"
+      stroke-width="5" stroke-linecap="round"
+      stroke-dasharray="101.81415022205297 106.81415022205297"
+      stroke-dashoffset="-2.5"
+      transform="rotate(-90 115.5 363.5)" />
+    <text x="147" y="329.8"
+      font-family="Noto Sans, sans-serif" font-size="40.5"
+      font-weight="700" fill="#F4FBF8">Cursor plan</text>
+    <text x="147" y="381.0"
+      font-family="Noto Sans, sans-serif" font-size="31.5"
+      font-weight="700" fill="#8A968F">100% · 100% left</text>
+    <text x="147" y="429.0"
+      font-family="Noto Sans, sans-serif" font-size="31.5"
+      font-weight="700" fill="#8A968F">999.9T credits</text>
+    <circle cx="64.5" cy="524.5" r="17" fill="none" stroke="#2E3632"
+      stroke-width="5" />
+    <circle cx="64.5" cy="524.5" r="17" fill="none" stroke="#65D78A"
+      stroke-width="5" stroke-linecap="round"
+      stroke-dasharray="101.81415022205297 106.81415022205297"
+      stroke-dashoffset="-2.5"
+      transform="rotate(-90 64.5 524.5)" />
+    <circle cx="115.5" cy="524.5" r="17" fill="none" stroke="#2E3632"
+      stroke-width="5" />
+    <circle cx="115.5" cy="524.5" r="17" fill="none" stroke="#186020"
+      stroke-width="5" stroke-linecap="round"
+      stroke-dasharray="101.81415022205297 106.81415022205297"
+      stroke-dashoffset="-2.5"
+      transform="rotate(-90 115.5 524.5)" />
+    <text x="147" y="490.8"
+      font-family="Noto Sans, sans-serif" font-size="40.5"
+      font-weight="700" fill="#F4FBF8">Codex plan</text>
+    <text x="147" y="542.0"
+      font-family="Noto Sans, sans-serif" font-size="31.5"
+      font-weight="700" fill="#8A968F">100% · 100% left</text>
+    <text x="147" y="590.0"
+      font-family="Noto Sans, sans-serif" font-size="31.5"
+      font-weight="700" fill="#8A968F">999.9T credits</text></g><path d="M 402 114 v 109.62118126272912" stroke="#8A968F" stroke-width="2"/>
+    <rect x="161.0" y="372" width="128.0"
+      height="36" rx="18" fill="#171B18" stroke="#2A302C"
+      stroke-width="1"
+      fill-opacity="0.85" />
+    <text x="225" y="396.5" text-anchor="middle"
+      font-family="Noto Sans, sans-serif" font-size="16"
+      font-weight="700" fill="#5A635C">Alerts: 0</text>
+  </g>
+  <circle cx="225" cy="225" r="224.0" fill="none"
+    stroke="#1A201C" stroke-width="2" />
+</svg>

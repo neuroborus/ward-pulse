@@ -8,7 +8,8 @@ versioned `WatchDashboardSummary` payload and persists only the latest successfu
 ## Ownership
 
 - Home Glance text legend (`WEAR_GLANCE_DESIGN.md`): mini remaining arcs, OK/!OK refresh,
-  Alerts pill.
+  Alerts pill. Summary-backed Glance has no clock, including empty selection; Plan windows,
+  Alerts, Watch face utility and the pre-summary dashboard retain the straight clock.
 - A second page listing plan windows and when each comes back (see **Plan windows** below).
 - Alerts screen, reached from the Glance pill — the active list only, no rule editing.
 - Watch face setup utility, reached after all Plan windows rows or below the no-summary sync
@@ -141,11 +142,22 @@ bounded raster tolerance, and covers both paired palettes, ordinary round ends a
 near-full usage gap. It does not establish screen fit or native scene acceptance.
 
 `GlanceLegendLayoutTest`, also included in `just test-wear-device`, measures native text at
-360/384/466 target sizes. It covers default dense rows with every refresh detail, bounded
-title/subtitle fitting, scaled wrapping and exhaustion spans, height-only overflow for short
-rows, and the small-font mini-arc floor. Its runtime result and actual round/nonround screen,
-scroll/gesture, rotary and accessibility acceptance remain Pending under the
-[readability revision](../../docs/product/WEAR_GLANCE_DESIGN.md#revision-2026-10-24--larger-glance-legend).
+360/384/466 target sizes. It covers the preferred 27/23 ordinary three-row/detail scene,
+independently rounded complete rows, bounded fitting, scaled wrapping/exhaustion spans,
+height-only overflow and the small-font arc floor. `WardPulseNavigationStateTest` adds a
+bounded ActivityScenario case with synthetic in-memory summaries at composition-local 2×
+text scale. It targets the local legend and Home Pager separately, invokes actual forward/
+backward accessibility scroll/page actions and checks visible movement, Glance isolation,
+page changes/return and clock visibility through navigation, empty selection, summary changes
+and recomposition. It changes no device settings and accesses no provider data.
+Its focused back-preview case checks that the dismissing page's clock moves/clips with that
+page, restores after cancellation and leaves no clock on Glance after completion. The case
+uses horizontal touch input on legacy hosts and predictive-back dispatcher events on API 36+.
+These revised suites require actual HOST execution; round/nonround and physical screen,
+gesture, rotary and accessibility acceptance remain Pending under the
+[clock-free revision](../../docs/product/WEAR_GLANCE_DESIGN.md#revision-2026-10-24--clock-free-glance-and-larger-legend).
+Earlier 20/18 iteration results and review art do not validate the revised Source. Complete
+SVG/PNG regeneration and preview comparison remain HOST work after verified Runner retirement.
 
 HOST only, from `apps/wear_android`, after the whole Runner run is DONE and all owned
 processes/leases have retired:
