@@ -56,11 +56,19 @@ every alias the pipeline needs. Trusted commands execute in the project director
 the runner's environment. `local.properties` in each Android module removes the `ANDROID_HOME`
 dependency for Gradle.
 
-Before a fresh start, compare the effective pipeline selection with the scoped Native catalogue.
+Explicitly select the task-required supported mode; descriptor defaults do not prove effective configuration.
+Verify the resolved mode before accepting work or review; `lazy` cannot satisfy required independent review.
+Use a supported stop on mismatch; a matching mode alone does not prove the required independent review gates.
+
+Before a fresh start, reconcile one self-contained role-facing task/context against the current scoped Native
+catalogue and changed guarantees. Identify its complete Runner Native `requiredChecks` inventory separately
+from mandatory post-DONE HOST obligations; historical inventories are provenance, not competing catalogues.
 Every selected command enters discovery and needs legitimate scope applicability; remove unrelated
 selections only before that new run. Unused definitions are not selections.
-Put read-only discovery versus workspace-write FINALIZE and real extra-authority needs in role-visible
-task/context; local operator guidance is not injected. Report genuine needs, never force empty reports.
+Put read-only discovery versus workspace-write FINALIZE and real extra-authority needs in that task/context;
+local operator guidance is not injected. Report genuine Native needs truthfully, never force empty reports.
+A check assigned solely to HOST stays mandatory outside Native inventory/capability/environment-blocker
+reports; an unselected HOST command does not acquire Native applicability merely because it is mandatory.
 Keep mandatory HOST acceptance after whole DONE, run-owned process retirement and fresh separate
 quiescent ownership; if the route used a foreground owning CLI, also require its actual exit.
 HOST is not a Native check or Native-commit prerequisite. Preserve every scope-appropriate gate.
