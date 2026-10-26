@@ -51,6 +51,17 @@ unexpected artifacts and usage-progress arcs as separate checks. If a missed art
 reported after acceptance, preserve the incident frame, reopen the review and keep the
 public capture candidate Pending until actual repair and matched native verification.
 
+Locate controls from a fresh hierarchy and original frame in the current window/page.
+Inspect both `text` and `content-desc`: either may carry target identity while the other
+is empty. Resolve the matching node or its own enabled clickable ancestor, checking that
+the label/context identifies the intended control and that its visible bounds support
+safe action. Stop absence-driven scrolling once that target is visible; reveal a clipped
+target only as needed for usable bounds. One empty label field, or a selector that ignores
+the populated field, does not establish target absence. Ambiguous matches, disabled
+controls, stale nodes or the wrong window remain unresolved; reobserve or disambiguate
+within the existing bounded procedure. After action, verify the actual settled destination
+or effective binding; a found node or successful input alone is not completion proof.
+
 Choose gesture extent and commit requirements for the actual component being navigated,
 using its real unclipped viewport and intended gesture region. Neighboring legend bounds,
 clipped accessibility children and another component's remembered successful gesture are
