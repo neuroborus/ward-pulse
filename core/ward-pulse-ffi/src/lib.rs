@@ -767,6 +767,101 @@ mod tests {
     }
 
     #[test]
+    fn result_api_applies_legacy_and_sparse_plan_window_settings() {
+        let mut snapshot: serde_json::Value =
+            serde_json::from_str(&snapshot_with_weekly_percent(80.0)).expect("parse snapshot");
+        let account = &mut snapshot["accounts"][0];
+        account["connection"] = serde_json::json!("anthropic.plan");
+        account["today"]["spent"] = serde_json::json!({"minorUnits": 50, "currency": "USD"});
+        account["allowances"][1]["status"] = serde_json::json!("ok");
+        let mut extra = account["allowances"][0].clone();
+        extra["source"] = serde_json::json!("purchased");
+        extra["label"] = serde_json::json!("Extra usage");
+        let mut unknown = account["allowances"][0].clone();
+        unknown["id"] = serde_json::json!("dynamic-window/42");
+        unknown["usedPercent"] = serde_json::Value::Null;
+        unknown["status"] = serde_json::json!("unknown");
+        account["allowances"]
+            .as_array_mut()
+            .unwrap()
+            .extend([extra, unknown]);
+
+        for (rules, alert_count, statuses, budget_status) in [
+            (
+                serde_json::json!({
+                    "plan": {"warnAt": 80}, "purchased": {"at": 80},
+                    "today": {"at": 50}, "budget": {"today": 100}
+                }),
+                4,
+                ["warning", "warning", "warning", "unknown"],
+                "warning",
+            ),
+            (
+                serde_json::json!({
+                    "plan": {"at": 80},
+                    "planWindows": {"claude-weekly": {}, "claude-session": {"at": 100}},
+                    "purchased": {"at": 80}, "today": {"at": 50}, "budget": {"today": 100}
+                }),
+                3,
+                ["ok", "warning", "warning", "unknown"],
+                "warning",
+            ),
+            (
+                serde_json::json!({
+                    "planWindows": {
+                        "claude-weekly": {"at": 80}, "claude-session": {},
+                        "dynamic-window/42": {"at": 0}
+                    },
+                    "budget": {"today": 100}
+                }),
+                1,
+                ["warning", "ok", "ok", "unknown"],
+                "ok",
+            ),
+        ] {
+            let request = CString::new(
+                serde_json::json!({
+                    "snapshot": snapshot,
+                    "settings": {"connections": {"anthropic.plan": rules}}
+                })
+                .to_string(),
+            )
+            .expect("request has no null bytes");
+            let value = unsafe { ward_pulse_apply_alert_settings_result_json(request.as_ptr()) };
+            assert!(!value.is_null());
+            let result: serde_json::Value = serde_json::from_str(
+                unsafe { CStr::from_ptr(value) }
+                    .to_str()
+                    .expect("result is UTF-8"),
+            )
+            .expect("parse result JSON");
+            unsafe { ward_pulse_string_free(value) };
+
+            assert_eq!(result["status"], "success");
+            assert_eq!(result.as_object().unwrap().len(), 2);
+            let applied: serde_json::Value =
+                serde_json::from_str(result["dashboardJson"].as_str().expect("dashboard JSON"))
+                    .expect("parse dashboard JSON");
+            assert_eq!(applied["alerts"].as_array().unwrap().len(), alert_count);
+            let account = &applied["accounts"][0];
+            assert_eq!(account["status"], "warning");
+            assert_eq!(account["today"]["usedPercent"], 50.0);
+            assert_eq!(account["today"]["status"], budget_status);
+            assert_eq!(
+                account["allowances"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|window| window["status"].as_str().unwrap())
+                    .collect::<Vec<_>>(),
+                statuses
+            );
+            assert!(applied["todayTotal"]["usedPercent"].is_null());
+            assert!(applied["watchSummary"]["todayUsedPercent"].is_null());
+        }
+    }
+
+    #[test]
     fn merge_api_describes_invalid_snapshot_json() {
         let error = merge_dashboard_snapshots_json("{}").expect_err("reject invalid snapshots");
 

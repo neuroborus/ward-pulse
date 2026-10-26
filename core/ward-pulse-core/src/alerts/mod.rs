@@ -33,6 +33,10 @@ impl PercentThreshold {
 pub struct ConnectionAlertThresholds {
     #[serde(default)]
     pub plan: PercentThreshold,
+    /// Sparse overrides keyed by normalized Plan allowance ID. Missing entries
+    /// inherit `plan`; a present disabled threshold explicitly turns a window off.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub plan_windows: HashMap<String, PercentThreshold>,
     #[serde(default)]
     pub purchased: PercentThreshold,
     #[serde(default)]
@@ -70,16 +74,17 @@ impl ConnectionBudget {
 }
 
 impl ConnectionAlertThresholds {
-    /// Rule governing an allowance, chosen by where its capacity comes from.
-    fn for_allowance(&self, source: AllowanceSource) -> &PercentThreshold {
-        match source {
-            AllowanceSource::Plan => &self.plan,
+    /// Rule governing an allowance within this connection, by source and ID.
+    fn for_allowance(&self, allowance: &AllowanceState) -> &PercentThreshold {
+        match allowance.source {
+            AllowanceSource::Plan => self.plan_windows.get(&allowance.id).unwrap_or(&self.plan),
             AllowanceSource::Purchased => &self.purchased,
         }
     }
 
     pub fn is_enabled(&self) -> bool {
         self.plan.is_enabled()
+            || self.plan_windows.values().any(PercentThreshold::is_enabled)
             || self.purchased.is_enabled()
             || self.today.is_enabled()
             || self.week.is_enabled()
@@ -171,7 +176,7 @@ fn raise_crossed_thresholds(
 
     let mut window_crossed = false;
     for allowance in &mut account.allowances {
-        let threshold = connection.for_allowance(allowance.source);
+        let threshold = connection.for_allowance(allowance);
         if crossed(allowance.used_percent, threshold.at) {
             allowance.status = ProviderStatus::worst([allowance.status, ProviderStatus::Warning]);
             window_crossed = true;
@@ -234,7 +239,7 @@ fn alerts_for_account(account: &ProviderSnapshot, settings: &AlertSettings) -> V
         alerts.extend(alert_for_budget(provider_label, period, state, threshold));
     }
     for allowance in &account.allowances {
-        let threshold = connection.for_allowance(allowance.source);
+        let threshold = connection.for_allowance(allowance);
         if let Some(alert) = alert_for_allowance(provider_label, allowance, threshold) {
             alerts.push(alert);
         }
@@ -368,6 +373,18 @@ mod tests {
             window_minutes: None,
             resets_at: None,
             status: ProviderStatus::Warning,
+        }
+    }
+
+    fn plan_window(id: &str, used_percent: Option<f64>) -> AllowanceState {
+        AllowanceState {
+            id: id.into(),
+            source: AllowanceSource::Plan,
+            label: id.into(),
+            used_percent,
+            remaining: None,
+            status: ProviderStatus::Ok,
+            ..purchased(0.0)
         }
     }
 
@@ -667,5 +684,278 @@ mod tests {
         );
         let settings = AlertSettings { connections };
         assert!(calculate_alerts(&snapshot, &settings).is_empty());
+    }
+
+    #[test]
+    fn plan_window_settings_preserve_sparse_inheritance_and_explicit_off() {
+        let legacy: ConnectionAlertThresholds =
+            serde_json::from_str(r#"{"plan":{"warnAt":80},"purchased":{"at":90}}"#).unwrap();
+        let serialized = serde_json::to_value(&legacy).unwrap();
+        assert!(serialized.get("planWindows").is_none());
+        assert_eq!(legacy.plan.at, Some(80));
+        assert_eq!(legacy.purchased.at, Some(90));
+
+        let rules: ConnectionAlertThresholds = serde_json::from_str(
+            r#"{"plan":{"at":80},"planWindows":{"window-a":{},"window-b":{"at":0}}}"#,
+        )
+        .unwrap();
+        let serialized = serde_json::to_value(&rules).unwrap();
+        assert_eq!(
+            serialized["planWindows"],
+            serde_json::json!({"window-a": {}, "window-b": {"at": 0}})
+        );
+        assert_eq!(
+            serde_json::from_value::<ConnectionAlertThresholds>(serialized).unwrap(),
+            rules
+        );
+    }
+
+    #[test]
+    fn plan_window_overrides_replace_or_suppress_the_fallback() {
+        let account = ProviderSnapshot {
+            status: ProviderStatus::Ok,
+            allowances: ["inherited", "off", "higher", "lower"]
+                .map(|id| plan_window(id, Some(60.0)))
+                .into(),
+            ..claude_account(purchased(0.0))
+        };
+        let settings: AlertSettings = serde_json::from_value(serde_json::json!({
+            "connections": {"anthropic.plan": {
+                "plan": {"at": 60},
+                "planWindows": {"off": {}, "higher": {"at": 90}, "lower": {"at": 50}}
+            }}
+        }))
+        .unwrap();
+        let snapshot = snapshot_with(account, budget(0.0));
+        let alerts = calculate_alerts(&snapshot, &settings);
+        assert_eq!(
+            alerts
+                .iter()
+                .map(|alert| alert.message.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "Claude inherited reached the alert threshold.",
+                "Claude lower reached the alert threshold."
+            ]
+        );
+
+        let applied = apply_alert_settings(snapshot, &settings);
+        assert_eq!(applied.alerts, alerts);
+        assert_eq!(
+            applied.accounts[0]
+                .allowances
+                .iter()
+                .map(|window| window.status)
+                .collect::<Vec<_>>(),
+            [
+                ProviderStatus::Warning,
+                ProviderStatus::Ok,
+                ProviderStatus::Ok,
+                ProviderStatus::Warning
+            ]
+        );
+        assert_eq!(applied.accounts[0].status, ProviderStatus::Warning);
+    }
+
+    #[test]
+    fn plan_window_only_thresholds_include_equality_and_both_endpoints_but_not_unknown_usage() {
+        for (at, used, fires) in [
+            (0, Some(0.0), true),
+            (100, Some(100.0), true),
+            (80, Some(80.0), true),
+            (80, Some(79.0), false),
+            (100, Some(99.0), false),
+            (0, None, false),
+            (100, None, false),
+        ] {
+            let account = ProviderSnapshot {
+                status: ProviderStatus::Ok,
+                allowances: vec![
+                    plan_window("dynamic-window/42", used),
+                    plan_window("sibling", Some(100.0)),
+                ],
+                ..claude_account(purchased(0.0))
+            };
+            let settings: AlertSettings = serde_json::from_value(serde_json::json!({
+                "connections": {"anthropic.plan": {
+                    "planWindows": {"dynamic-window/42": {"at": at}}
+                }}
+            }))
+            .unwrap();
+            let snapshot = snapshot_with(account, budget(0.0));
+            let alerts = calculate_alerts(&snapshot, &settings);
+            assert_eq!(alerts.len(), usize::from(fires), "at={at}, used={used:?}");
+            let applied = apply_alert_settings(snapshot, &settings);
+            assert_eq!(applied.alerts, alerts);
+            let expected = if fires {
+                ProviderStatus::Warning
+            } else {
+                ProviderStatus::Ok
+            };
+            assert_eq!(applied.accounts[0].allowances[0].status, expected);
+            assert_eq!(applied.accounts[0].status, expected);
+            assert_eq!(applied.accounts[0].allowances[1].status, ProviderStatus::Ok);
+        }
+    }
+
+    #[test]
+    fn plan_window_identity_uses_the_owning_connection_and_id() {
+        let account = ProviderSnapshot {
+            account_id: "account-a".into(),
+            connection: Some("connection-a".into()),
+            status: ProviderStatus::Ok,
+            allowances: vec![
+                plan_window("window/7", Some(80.0)),
+                plan_window("window/9", Some(80.0)),
+            ],
+            ..claude_account(purchased(0.0))
+        };
+        let other = ProviderSnapshot {
+            account_id: "account-b".into(),
+            connection: Some("connection-b".into()),
+            ..account.clone()
+        };
+        let mut snapshot = snapshot_with(account, budget(0.0));
+        snapshot.accounts.push(other);
+        let settings: AlertSettings = serde_json::from_value(serde_json::json!({
+            "connections": {
+                "connection-a": {"planWindows": {"window/7": {}, "window/9": {"at": 80}}},
+                "connection-b": {"plan": {"at": 80}, "planWindows": {"window/7": {"at": 90}, "window/9": {}}}
+            }
+        }))
+        .unwrap();
+
+        let mut changed = snapshot.clone();
+        changed.accounts.reverse();
+        changed.watch_summary.today_used_percent = Some(100.0);
+        changed.watch_summary.week_used_percent = Some(100.0);
+        for account in &mut changed.accounts {
+            account.allowances.reverse();
+            for window in &mut account.allowances {
+                window.label = "Renamed window".into();
+                window.resets_at = Some(DateTimeUtc::from("2026-07-01T00:00:00Z"));
+                window.window_minutes = Some(60);
+            }
+        }
+        for snapshot in [snapshot, changed] {
+            let alerts = calculate_alerts(&snapshot, &settings);
+            assert_eq!(alerts.len(), 1);
+            let applied = apply_alert_settings(snapshot, &settings);
+            assert_eq!(applied.alerts, alerts);
+            for account in &applied.accounts {
+                let owner = account.connection.as_deref() == Some("connection-a");
+                assert_eq!(
+                    account.status,
+                    if owner {
+                        ProviderStatus::Warning
+                    } else {
+                        ProviderStatus::Ok
+                    }
+                );
+                for window in &account.allowances {
+                    let expected = if owner && window.id == "window/9" {
+                        ProviderStatus::Warning
+                    } else {
+                        ProviderStatus::Ok
+                    };
+                    assert_eq!(window.status, expected);
+                }
+            }
+            assert_eq!(applied.today_total.used_percent, None);
+            assert_eq!(applied.week_total.used_percent, None);
+            assert_eq!(applied.watch_summary.today_used_percent, None);
+            assert_eq!(applied.watch_summary.week_used_percent, None);
+            assert_eq!(applied.watch_summary.status, ProviderStatus::Warning);
+        }
+    }
+
+    #[test]
+    fn plan_window_rules_keep_purchased_and_intrinsic_budgets_separate() {
+        for (plan, purchased_rule, expected_statuses, alert_label) in [
+            (
+                Some(80),
+                None,
+                [ProviderStatus::Warning, ProviderStatus::Ok],
+                "Plan window",
+            ),
+            (
+                None,
+                Some(80),
+                [ProviderStatus::Ok, ProviderStatus::Warning],
+                "Extra usage",
+            ),
+        ] {
+            let mut window = plan_window("shared-id", Some(80.0));
+            window.label = "Plan window".into();
+            let extra = AllowanceState {
+                id: "shared-id".into(),
+                status: ProviderStatus::Ok,
+                ..purchased(80.0)
+            };
+            let account = ProviderSnapshot {
+                status: ProviderStatus::Ok,
+                allowances: vec![window, extra],
+                today: budget(100.0),
+                ..claude_account(purchased(0.0))
+            };
+            let settings: AlertSettings = serde_json::from_value(serde_json::json!({
+                "connections": {"anthropic.plan": {
+                    "planWindows": {"shared-id": {"at": plan}},
+                    "purchased": {"at": purchased_rule},
+                    "budget": {"today": 100}
+                }}
+            }))
+            .unwrap();
+            let snapshot = snapshot_with(account, budget(0.0));
+            let alerts = calculate_alerts(&snapshot, &settings);
+            assert_eq!(alerts.len(), 1);
+            assert_eq!(
+                alerts[0].message,
+                format!("Claude {alert_label} reached the alert threshold.")
+            );
+            let applied = apply_alert_settings(snapshot, &settings);
+            assert_eq!(applied.alerts, alerts);
+            assert_eq!(
+                applied.accounts[0]
+                    .allowances
+                    .iter()
+                    .map(|window| window.status)
+                    .collect::<Vec<_>>(),
+                expected_statuses
+            );
+            assert_eq!(applied.accounts[0].today.used_percent, Some(100.0));
+            assert_eq!(applied.accounts[0].today.status, ProviderStatus::Error);
+        }
+    }
+
+    #[test]
+    fn plan_window_overrides_preserve_genuine_provider_statuses() {
+        for status in [
+            ProviderStatus::Warning,
+            ProviderStatus::RateLimited,
+            ProviderStatus::AuthRequired,
+            ProviderStatus::Error,
+        ] {
+            for at in [None, Some(80)] {
+                let account = ProviderSnapshot {
+                    status,
+                    allowances: vec![AllowanceState {
+                        status,
+                        ..plan_window("window-a", Some(80.0))
+                    }],
+                    ..claude_account(purchased(0.0))
+                };
+                let settings: AlertSettings = serde_json::from_value(serde_json::json!({
+                    "connections": {"anthropic.plan": {
+                        "plan": {"at": 80}, "planWindows": {"window-a": {"at": at}}
+                    }}
+                }))
+                .unwrap();
+                let applied = apply_alert_settings(snapshot_with(account, budget(0.0)), &settings);
+                assert_eq!(applied.alerts.len(), usize::from(at.is_some()));
+                assert_eq!(applied.accounts[0].status, status);
+                assert_eq!(applied.accounts[0].allowances[0].status, status);
+            }
+        }
     }
 }
