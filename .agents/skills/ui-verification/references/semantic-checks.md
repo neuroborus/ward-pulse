@@ -38,6 +38,12 @@ units, clipping, default cells, status controls and navigation context relevant 
 case. Do not infer that uninspected neighboring elements are correct because one detail
 passed. Verify real circle/screen boundaries before measuring or cropping.
 
+Before concluding that an artifact is absent or unchanged, inspect the full affected
+contour or bounds proven to cover its geometry, including displaced caps and paired halves.
+Zero changed pixels in a narrow ROI proves only that ROI. The independent reviewer must
+challenge ROI adequacy and compare the whole footprint before dismissing a native artifact.
+This comparison alone does not establish a renderer cause.
+
 For upper face cells, inspect EVERY rim's full contour and its clearance to neighboring
 cells, time and bands in the original native frame, with a magnified view when needed.
 Compare original outward lighting and each explicitly added treatment with the current
