@@ -13,6 +13,11 @@ Team API key required by that reporting connection.
 If the row is already Connected, tap it and choose **Sign in again** to replace the login.
 Cancelling the replacement preserves the existing connection.
 
+Google sign-in may hang in WardPulse's built-in browser. If it does, tap **Cancel**,
+then open **Cursor plan** again and try email sign-in. If sign-in still does not complete,
+tap **Cancel** and follow [Advanced paste](#advanced-paste) to enter an existing Cursor
+session cookie value.
+
 ### Advanced paste
 
 Use this when sign-in through WardPulse's built-in browser does not work. Tap the
