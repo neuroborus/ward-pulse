@@ -32,6 +32,14 @@ including a top/resumed owner omitted by the parser, until fresh complete observ
 resolves it. Keep historical and fresh inventories separate; later observations do not
 reconstruct unsupported earlier stage counts.
 
+For claims about which complication slot/type dispatched a tap, shared PendingIntent
+identity, caller UID, coordinates or a configured binding alone do not identify the hit.
+Join actual renderer hit-event evidence to the current instance/slot, effective provider,
+current data type and successful destination. A DOWN record alone is not completed dispatch.
+Keep canonical/runtime slot IDs distinct; local proxy hashes do not prove cross-process
+token identity. If the required join is unavailable, keep type-specific provenance Pending
+while preserving separately proved common-entry, navigation/cycle and restoration results.
+
 ## Refresh and retained state
 
 Prove the specific surface/binding that needed updating. A request to update all producers
