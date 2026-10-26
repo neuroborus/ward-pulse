@@ -24,6 +24,14 @@ active renderer from the APK most recently built or installed. If diagnostics re
 inputs or do not expose a slot mapping, keep that distinction unproved rather than
 guessing it from internal numeric IDs or a resource filename.
 
+For Activity/task claims, inventory the unique relevant ActivityRecord identities and
+task IDs from a complete current native snapshot. Cross-check relevant top/resumed
+records against that inventory; repeated references are not additional instances.
+Hold instance-count claims when the dump or projection is incomplete or contradictory,
+including a top/resumed owner omitted by the parser, until fresh complete observation
+resolves it. Keep historical and fresh inventories separate; later observations do not
+reconstruct unsupported earlier stage counts.
+
 ## Refresh and retained state
 
 Prove the specific surface/binding that needed updating. A request to update all producers
