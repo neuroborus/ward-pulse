@@ -20,7 +20,8 @@
   Ring TITLE = the band's own token, suffixed with the outer-pool token when the
   band is shared: one slot, two jobs, one string to say both in.
   Remaining melt: Transform startAngle (1 - value/max)*359.9, endAngle fixed 359.9
-  so usage opens clockwise from 12 and remaining ends at 12.
+  so usage opens clockwise from 12 and remaining ends at 12. Exact full alone
+  has no cap insets: one ROUND path from 0 to 359.9, retaining the live ColorRamp.
 -->
 <WatchFace width="450" height="450">
     <Metadata key="CLOCK_TYPE" value="DIGITAL" />
@@ -415,9 +416,9 @@
                                             <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
                                             <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008502]]></Expression>
                                         </Expressions>
-                                        <!-- Nothing spent yet: there is no melt to inset, and the inset would
-                                             leave a seam at 12 on a ring that has spent nothing. Drawn without
-                                             the transform so the two round caps close over each other. -->
+                                        <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
+                                             endpoints 0.1 degrees apart in one path. A literal 360-degree
+                                             ROUND sweep historically collapsed to a tip on the watch. -->
                                         <Compare expression="isFull">
                                             <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
@@ -427,7 +428,7 @@
                                                     width="374"
                                                     height="374"
                                                     startAngle="0"
-                                                    endAngle="358.37">
+                                                    endAngle="359.9">
                                                     <WeightedStroke
                                                         thickness="10"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -508,9 +509,9 @@
                                             <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
                                             <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.016560]]></Expression>
                                         </Expressions>
-                                        <!-- Nothing spent yet: there is no melt to inset, and the inset would
-                                             leave a seam at 12 on a ring that has spent nothing. Drawn without
-                                             the transform so the two round caps close over each other. -->
+                                        <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
+                                             endpoints 0.1 degrees apart in one path. A literal 360-degree
+                                             ROUND sweep historically collapsed to a tip on the watch. -->
                                         <Compare expression="isFull">
                                             <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
@@ -520,7 +521,7 @@
                                                     width="384"
                                                     height="384"
                                                     startAngle="0"
-                                                    endAngle="356.92">
+                                                    endAngle="359.9">
                                                     <WeightedStroke
                                                         thickness="20"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -951,9 +952,9 @@
                                             <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
                                             <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009780]]></Expression>
                                         </Expressions>
-                                        <!-- Nothing spent yet: there is no melt to inset, and the inset would
-                                             leave a seam at 12 on a ring that has spent nothing. Drawn without
-                                             the transform so the two round caps close over each other. -->
+                                        <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
+                                             endpoints 0.1 degrees apart in one path. A literal 360-degree
+                                             ROUND sweep historically collapsed to a tip on the watch. -->
                                         <Compare expression="isFull">
                                             <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
@@ -963,7 +964,7 @@
                                                     width="326"
                                                     height="326"
                                                     startAngle="0"
-                                                    endAngle="358.14">
+                                                    endAngle="359.9">
                                                     <WeightedStroke
                                                         thickness="10"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -1044,9 +1045,9 @@
                                             <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
                                             <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.018950]]></Expression>
                                         </Expressions>
-                                        <!-- Nothing spent yet: there is no melt to inset, and the inset would
-                                             leave a seam at 12 on a ring that has spent nothing. Drawn without
-                                             the transform so the two round caps close over each other. -->
+                                        <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
+                                             endpoints 0.1 degrees apart in one path. A literal 360-degree
+                                             ROUND sweep historically collapsed to a tip on the watch. -->
                                         <Compare expression="isFull">
                                             <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
@@ -1056,7 +1057,7 @@
                                                     width="336"
                                                     height="336"
                                                     startAngle="0"
-                                                    endAngle="356.49">
+                                                    endAngle="359.9">
                                                     <WeightedStroke
                                                         thickness="20"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -1487,9 +1488,9 @@
                                             <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
                                             <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.011448]]></Expression>
                                         </Expressions>
-                                        <!-- Nothing spent yet: there is no melt to inset, and the inset would
-                                             leave a seam at 12 on a ring that has spent nothing. Drawn without
-                                             the transform so the two round caps close over each other. -->
+                                        <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
+                                             endpoints 0.1 degrees apart in one path. A literal 360-degree
+                                             ROUND sweep historically collapsed to a tip on the watch. -->
                                         <Compare expression="isFull">
                                             <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
@@ -1499,7 +1500,7 @@
                                                     width="278"
                                                     height="278"
                                                     startAngle="0"
-                                                    endAngle="357.84">
+                                                    endAngle="359.9">
                                                     <WeightedStroke
                                                         thickness="10"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -1580,9 +1581,9 @@
                                             <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
                                             <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.022117]]></Expression>
                                         </Expressions>
-                                        <!-- Nothing spent yet: there is no melt to inset, and the inset would
-                                             leave a seam at 12 on a ring that has spent nothing. Drawn without
-                                             the transform so the two round caps close over each other. -->
+                                        <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
+                                             endpoints 0.1 degrees apart in one path. A literal 360-degree
+                                             ROUND sweep historically collapsed to a tip on the watch. -->
                                         <Compare expression="isFull">
                                             <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
@@ -1592,7 +1593,7 @@
                                                     width="288"
                                                     height="288"
                                                     startAngle="0"
-                                                    endAngle="355.92">
+                                                    endAngle="359.9">
                                                     <WeightedStroke
                                                         thickness="20"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -2022,9 +2023,9 @@
                                     <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
                                     <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008058]]></Expression>
                                 </Expressions>
-                                <!-- Nothing spent yet: there is no melt to inset, and the inset would
-                                     leave a seam at 12 on a ring that has spent nothing. Drawn without
-                                     the transform so the two round caps close over each other. -->
+                                <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
+                                     endpoints 0.1 degrees apart in one path. A literal 360-degree
+                                     ROUND sweep historically collapsed to a tip on the watch. -->
                                 <Compare expression="isFull">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
@@ -2034,7 +2035,7 @@
                                             width="394"
                                             height="394"
                                             startAngle="0"
-                                            endAngle="358.45">
+                                            endAngle="359.9">
                                             <WeightedStroke
                                                 thickness="10"
                                                 colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -2115,9 +2116,9 @@
                                     <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
                                     <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009225]]></Expression>
                                 </Expressions>
-                                <!-- Nothing spent yet: there is no melt to inset, and the inset would
-                                     leave a seam at 12 on a ring that has spent nothing. Drawn without
-                                     the transform so the two round caps close over each other. -->
+                                <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
+                                     endpoints 0.1 degrees apart in one path. A literal 360-degree
+                                     ROUND sweep historically collapsed to a tip on the watch. -->
                                 <Compare expression="isFull">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
@@ -2127,7 +2128,7 @@
                                             width="346"
                                             height="346"
                                             startAngle="0"
-                                            endAngle="358.24">
+                                            endAngle="359.9">
                                             <WeightedStroke
                                                 thickness="10"
                                                 colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -2208,9 +2209,9 @@
                                     <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
                                     <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.010670]]></Expression>
                                 </Expressions>
-                                <!-- Nothing spent yet: there is no melt to inset, and the inset would
-                                     leave a seam at 12 on a ring that has spent nothing. Drawn without
-                                     the transform so the two round caps close over each other. -->
+                                <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
+                                     endpoints 0.1 degrees apart in one path. A literal 360-degree
+                                     ROUND sweep historically collapsed to a tip on the watch. -->
                                 <Compare expression="isFull">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
@@ -2220,7 +2221,7 @@
                                             width="298"
                                             height="298"
                                             startAngle="0"
-                                            endAngle="357.98">
+                                            endAngle="359.9">
                                             <WeightedStroke
                                                 thickness="10"
                                                 colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -2336,9 +2337,9 @@
                                     <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
                                     <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008058]]></Expression>
                                 </Expressions>
-                                <!-- Nothing spent yet: there is no melt to inset, and the inset would
-                                     leave a seam at 12 on a ring that has spent nothing. Drawn without
-                                     the transform so the two round caps close over each other. -->
+                                <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
+                                     endpoints 0.1 degrees apart in one path. A literal 360-degree
+                                     ROUND sweep historically collapsed to a tip on the watch. -->
                                 <Compare expression="isFull">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
@@ -2348,7 +2349,7 @@
                                             width="394"
                                             height="394"
                                             startAngle="0"
-                                            endAngle="358.45">
+                                            endAngle="359.9">
                                             <WeightedStroke
                                                 thickness="10"
                                                 colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -2429,9 +2430,9 @@
                                     <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
                                     <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009225]]></Expression>
                                 </Expressions>
-                                <!-- Nothing spent yet: there is no melt to inset, and the inset would
-                                     leave a seam at 12 on a ring that has spent nothing. Drawn without
-                                     the transform so the two round caps close over each other. -->
+                                <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
+                                     endpoints 0.1 degrees apart in one path. A literal 360-degree
+                                     ROUND sweep historically collapsed to a tip on the watch. -->
                                 <Compare expression="isFull">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
@@ -2441,7 +2442,7 @@
                                             width="346"
                                             height="346"
                                             startAngle="0"
-                                            endAngle="358.24">
+                                            endAngle="359.9">
                                             <WeightedStroke
                                                 thickness="10"
                                                 colors="[COMPLICATION.RANGED_VALUE_COLORS]"
@@ -2522,9 +2523,9 @@
                                     <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
                                     <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.010670]]></Expression>
                                 </Expressions>
-                                <!-- Nothing spent yet: there is no melt to inset, and the inset would
-                                     leave a seam at 12 on a ring that has spent nothing. Drawn without
-                                     the transform so the two round caps close over each other. -->
+                                <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
+                                     endpoints 0.1 degrees apart in one path. A literal 360-degree
+                                     ROUND sweep historically collapsed to a tip on the watch. -->
                                 <Compare expression="isFull">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
@@ -2534,7 +2535,7 @@
                                             width="298"
                                             height="298"
                                             startAngle="0"
-                                            endAngle="357.98">
+                                            endAngle="359.9">
                                             <WeightedStroke
                                                 thickness="10"
                                                 colors="[COMPLICATION.RANGED_VALUE_COLORS]"

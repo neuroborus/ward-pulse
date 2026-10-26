@@ -58,7 +58,8 @@ identities); readability revision **2026-10-25** (104×22 legend wells with fini
 fonts; initially 48-unit upper cells with 16/14/12 readings); outward-preserving refinement
 **2026-10-25** (50-unit cells with 17/14/12 readings; retain all outward fades and add only
 the lateral bottom treatment); combined composition revision **2026-10-25** (raise clock
-and watermark; 120×26 legend with 18/16/14 labels)
+and watermark; 120×26 legend with 18/16/14 labels); exact-full construction revision
+**2026-10-26** (remove the remaining end inset from the full-only path; native acceptance pending)
 — accepted visual target for
 Wear OS and Watch Face Format until the next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
@@ -1547,14 +1548,58 @@ already uses baked Noto Sans Bold—but would abandon the intentionally device-s
 Splitting hours, colon, and minutes would use three elements per mode, six total, and would
 centre their boxes rather than their ink because the system colon metrics remain unknown.
 
-**A band that has spent nothing closes (revision 2026-08-17).** The cap inset above is what
+**Historical full-ring repair (revision 2026-08-17).** The cap inset above is what
 makes a small melt visible, but at `usedPercent == 0` there is no melt to inset and the inset
 leaves the ring open anyway: measured on the paired band, a seam of about **1°** at 12, four
-pixels wide at that radius. A closed sweep is not available — `359.9` exists precisely because
-`360` collapses the `ROUND` tip — so the face branches instead: when the complication reads its
-maximum, the same arc is drawn without the start transform and the two caps close over each
-other. Boards do the same (`ringArc`, `remaining >= 1`), which is why
-`round-3-plan-untouched.svg` shows a closed inner half beside a spending outer one.
+pixels wide at that radius. A literal `360` sweep collapsed to a `ROUND` tip on the tested
+watch; `359.9` preserves that dated workaround. The repair removed the start transform at
+maximum but retained the partial end inset. The contemporary claim that its two caps closed
+smoothly was not sustained by the later exact-full nick. The board's `ringArc` full branch
+uses an SVG circle (`round-3-plan-untouched.svg`); that is intended appearance, not evidence
+of native WFF continuity.
+
+**Exact-full construction revision 2026-10-26 — native acceptance pending.** The original
+physical 466-pixel orange/100% photo records a visible nick without measuring its ranged
+Float. A later clean Round 384 capture and joined installed-resource/service/data receipts
+bind one ordinary outer Claude case to actual `VALUE=100`, `MAX=100` and the previous
+canonical XML. The mixed compositor frame is excluded as a clean repeated witness. These
+observations establish an actual full-ring defect; they do not isolate its exclusive cause.
+
+`bandArcs` previously drew exact full from 0 to `359.9 - capDegrees`: 356.92° on the ordinary
+outer band. Ideal circular-cap geometry predicts an outer-edge indentation of about 1.50
+units there and 0.77–0.79 on the halves. The chosen first repair removes that end inset
+only for actual `VALUE >= MAX`. One `Arc` now runs from 0 to 359.9 with the existing
+`ROUND` `WeightedStroke`, live family ColorRamp and alpha 255 / ambient 140. It adds no
+path junction, offset, texture or overlapping drawing element. Keeping both endpoints in
+one path avoids introducing a second independently blended stroke; native brightness still
+requires measurement.
+
+For radius `r`, half-thickness `h` and half of the undrawn angle `a`, the ideal cap union
+at the gap midpoint covers radial interval
+`r*cos(a) ± sqrt(h*h - (r*sin(a))²)`. With the retained 0.1° gap, the maximum ideal edge
+deficit across all nine geometries is under **0.004 design units**. The caps remain inside
+the original annulus; this is an analytical bound, not a pixel measurement or permission
+for a visible nick. `assertFullRing` checks the generated full path's centered radial
+envelope, family source and ambient alpha. `assertNearExhaustedArcs` now covers ordinary
+384/336/288 at thickness20, inner 374/326/278 and outer 394/346/298 at thickness10, retaining
+both cutoff invariants and proportional positive partials. Both outer-half services retain
+their three TITLE branches; their shared round-edged clip is checked to contain every
+half's complete envelope, including the join. Ordinal1/innermost remains unreachable.
+
+Actual 99.9 and 99.6 remaining may round to a `100%` label and still take the proportional
+partial branch. Double-to-Float conversion, min/max, integer labels, cap compensation,
+clockwise-from-12 melt, exact-zero gray tracks and unknown/NoData absence remain unchanged.
+The review-art generator already expresses the intended closed annulus, so its exports do
+not change with this runtime construction repair.
+
+No candidate native continuity pass is recorded by this revision. HOST acceptance remains
+pending: bind installed resources and actual Float/MAX; review two settled original frames
+per controlled scene in actual INTERACTIVE and AMBIENT on small round and nonround targets;
+measure the complete annulus, both edges and brightness. Inherited physical466 acceptance
+also remains pending while that target is unavailable. Safe debug-only Mock delivery,
+writer isolation and preservation/restoration of stored and derived state belong to HOST
+after Runner completion and retirement; the synthetic scene data does not prove those steps
+or establish a signed-release physical delivery route.
 
 **A positive remainder below the two-cap cutoff stays visible (revision 2026-10-01).** The
 owner reproduced a face with strips reading `2%`, `69%`, and `94%` on `emulator-5554` on
@@ -1581,8 +1626,9 @@ switching point moved; `assertNearExhaustedArcs` asserts that continuity on ever
 At or below its cutoff, a positive remainder keeps its proportional centreline without the
 two cap insets and uses straight ends. Above the cutoff the measured round-cap inset geometry
 is unchanged. This deliberately does not impose a minimum sweep: doing so would overstate
-remaining capacity at the edge of the scale. The existing zero-spend/full-ring branch, band
-thickness, split halves, and slots are unchanged. Review art mirrors the rule in
+remaining capacity at the edge of the scale. This low-positive revision left the then-existing
+zero-spend/full-ring branch, band thickness, split halves, and slots unchanged; the later
+2026-10-26 revision above changes only the full path's end inset. Review art mirrors the rule in
 `round-3-plan-near-exhausted.svg` with the observed `2%`, `69%`, and `94%` values.
 
 **Measured correction 2026-10-06.** On the owner's 384×384 capture, a 1% remainder on Ring3

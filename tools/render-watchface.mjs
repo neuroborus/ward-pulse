@@ -54,7 +54,8 @@ const FACE = { size: 450, center: 225 }
 
 /**
  * Both ends of the melt: usage opens clockwise from 12, remaining ends at 12.
- * `359.9` rather than a closed circle — at 360 the ROUND tip collapses.
+ * `359.9` retains the historical watch workaround: a literal 360 ROUND sweep
+ * collapsed to a tip. Exact full uses the same sweep without either cap inset.
  */
 const SWEEP = { start: 0, end: 359.9 }
 
@@ -432,7 +433,8 @@ const HEADER = `<?xml version="1.0" encoding="utf-8"?>
   Ring TITLE = the band's own token, suffixed with the outer-pool token when the
   band is shared: one slot, two jobs, one string to say both in.
   Remaining melt: Transform startAngle (1 - value/max)*359.9, endAngle fixed 359.9
-  so usage opens clockwise from 12 and remaining ends at 12.
+  so usage opens clockwise from 12 and remaining ends at 12. Exact full alone
+  has no cap insets: one ROUND path from 0 to 359.9, retaining the live ColorRamp.
 -->`
 
 /** Radial lift, brighter above centre so the stack reads as sunk into it. */
@@ -912,14 +914,66 @@ function visibleSweep(angles, roundCap) {
   return angles.end - angles.start + (angles.strokeCap === 'ROUND' ? 2 * roundCap : 0)
 }
 
+/**
+ * Conservative radial coverage at the midpoint between two ROUND endpoints.
+ * Elsewhere in that gap the nearer cap covers more; outside it the stroke has
+ * its complete annular envelope. This is ideal geometry, not a native AA test.
+ */
+function roundClosureEnvelope(diameter, thickness, start, end) {
+  const radius = diameter / 2
+  const halfGap = ((360 - (end - start)) * Math.PI) / 360
+  const along = radius * Math.cos(halfGap)
+  const across = radius * Math.sin(halfGap)
+  const reach = Math.sqrt((thickness / 2) ** 2 - across ** 2)
+  return { inner: along - reach, outer: along + reach }
+}
+
+function assertFullRing(diameter, thickness, markup) {
+  const full = markup.match(/<Compare expression="isFull">([\s\S]*?)<\/Compare>/)?.[1] ?? ''
+  const arcs = [...full.matchAll(/<Arc\s+([\s\S]*?)<\/Arc>/g)]
+  const attributes = Object.fromEntries(
+    [...(arcs[0]?.[1] ?? '').matchAll(/(\w+)="([^"]*)"/g)].map((match) => [match[1], match[2]]),
+  )
+  const start = Number(attributes.startAngle)
+  const end = Number(attributes.endAngle)
+  const envelope = roundClosureEnvelope(diameter, thickness, start, end)
+  const inner = (diameter - thickness) / 2
+  const outer = (diameter + thickness) / 2
+  // Bound the ideal edge deficit to a hundredth of one design unit, not a
+  // fullness epsilon. The old asymmetric full path misses by 0.77–1.50 units.
+  if (
+    arcs.length !== 1 ||
+    full.includes('<Transform') ||
+    attributes.centerX !== String(FACE.center) ||
+    attributes.centerY !== String(FACE.center) ||
+    attributes.width !== String(diameter) ||
+    attributes.height !== String(diameter) ||
+    attributes.thickness !== String(thickness) ||
+    attributes.cap !== 'ROUND' ||
+    attributes.colors !== '[COMPLICATION.RANGED_VALUE_COLORS]' ||
+    start !== SWEEP.start || end <= start || end >= 360 ||
+    !Number.isFinite(envelope.inner) || !Number.isFinite(envelope.outer) ||
+    envelope.inner < inner || envelope.inner - inner > 0.01 ||
+    envelope.outer > outer || outer - envelope.outer > 0.01 ||
+    !full.includes('alpha="255"') ||
+    !full.includes('<Variant mode="AMBIENT" target="alpha" value="140" />')
+  ) {
+    throw new Error(`ring ${diameter}/${thickness}: full path must cover the centered annulus without an inset or added junction`)
+  }
+}
+
 function assertNearExhaustedArcs() {
   const epsilon = 0.000001
   const tolerance = 0.000000001
-  for (const { diameter } of RINGS) {
-    const centre = bandCentre(diameter)
-    const geometry = meltGeometry(centre, BAND_THICKNESS)
+  const geometries = RINGS.flatMap(({ diameter }) => [
+    [bandCentre(diameter), BAND_THICKNESS],
+    [diameter - INNER_HALF_INSET, HALF_THICKNESS],
+    [diameter - OUTER_HALF_INSET, HALF_THICKNESS],
+  ])
+  for (const [centre, thickness] of geometries) {
+    const geometry = meltGeometry(centre, thickness)
     const belowRemaining = geometry.twoCapCutoff - epsilon
-    const below = meltAngles(centre, BAND_THICKNESS, belowRemaining)
+    const below = meltAngles(centre, thickness, belowRemaining)
     const expectedBelowSweep = belowRemaining * SWEEP.end
     if (
       !below.nearEmpty ||
@@ -928,12 +982,12 @@ function assertNearExhaustedArcs() {
       Math.abs(visibleSweep(below, geometry.cap) - expectedBelowSweep) > tolerance
     ) {
       throw new Error(
-        `ring ${diameter}: a remainder below the two-cap cutoff must stay visible and proportional`,
+        `ring ${centre}/${thickness}: a remainder below the two-cap cutoff must stay visible and proportional`,
       )
     }
 
     const aboveRemaining = geometry.twoCapCutoff + epsilon
-    const above = meltAngles(centre, BAND_THICKNESS, aboveRemaining)
+    const above = meltAngles(centre, thickness, aboveRemaining)
     const expectedStart = (1 - aboveRemaining) * SWEEP.end + geometry.cap
     if (
       above.nearEmpty ||
@@ -942,7 +996,7 @@ function assertNearExhaustedArcs() {
       above.end !== geometry.insetEnd ||
       Math.abs(visibleSweep(above, geometry.cap) - aboveRemaining * SWEEP.end) > tolerance
     ) {
-      throw new Error(`ring ${diameter}: geometry above the two-cap cutoff must stay inset`)
+      throw new Error(`ring ${centre}/${thickness}: geometry above the two-cap cutoff must stay inset`)
     }
 
     const buttAtCutoff = meltBranchAngles(geometry, geometry.twoCapCutoff, true)
@@ -952,15 +1006,27 @@ function assertNearExhaustedArcs() {
       Math.abs(visibleSweep(buttAtCutoff, geometry.cap) - cutoffSweep) > tolerance ||
       Math.abs(visibleSweep(roundAtCutoff, geometry.cap) - cutoffSweep) > tolerance
     ) {
-      throw new Error(`ring ${diameter}: melt branches must meet at the two-cap cutoff`)
+      throw new Error(`ring ${centre}/${thickness}: melt branches must meet at the two-cap cutoff`)
     }
 
-    const markup = bandArcs(centre, BAND_THICKNESS, '')
+    for (const remaining of [0.999, 0.996, 0.99, 0.37, 0.04, 0.01, 0.0000001]) {
+      const angles = meltAngles(centre, thickness, remaining)
+      if (
+        angles.end <= angles.start ||
+        Math.abs(visibleSweep(angles, geometry.cap) - remaining * SWEEP.end) > tolerance
+      ) {
+        throw new Error(`ring ${centre}/${thickness}: positive partials must remain proportional`)
+      }
+    }
+
+    const markup = bandArcs(centre, thickness, '')
+    assertFullRing(centre, thickness, markup)
     const rawStart = `(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end}`
     const caps = [...markup.matchAll(/cap="(ROUND|BUTT)"/g)].map((match) => match[1])
     if (
       !markup.includes(`<= ${geometry.twoCapCutoff.toFixed(6)}`) ||
       !markup.includes('<Compare expression="isNearEmpty">') ||
+      !markup.includes('<Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>') ||
       !markup.includes('<Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>') ||
       !markup.includes('<Compare expression="hasRemaining">') ||
       markup.indexOf(`color="${COLOR.track}"`) >= markup.indexOf('<Compare expression="hasRemaining">') ||
@@ -969,9 +1035,46 @@ function assertNearExhaustedArcs() {
       caps.join(',') !== 'ROUND,ROUND,BUTT,ROUND'
     ) {
       throw new Error(
-        `ring ${diameter}: generated markup does not preserve both melt branches`,
+        `ring ${centre}/${thickness}: generated markup does not preserve both melt branches`,
       )
     }
+  }
+
+  // Both services retain all three TITLE branches, even though ordinal 1 at
+  // the innermost band is unreachable in a three-band payload. The shared clip
+  // must contain every half's entire envelope, including its closure at 12.
+  for (const slot of OUTER_HALVES) {
+    const markup = outerHalfSlot(slot)
+    const clip = markup.match(/<BoundingArc\s+([\s\S]*?)\/>/)?.[1] ?? ''
+    const attributes = Object.fromEntries(
+      [...clip.matchAll(/(\w+)="([^"]*)"/g)].map((match) => [match[1], match[2]]),
+    )
+    const clipThickness = Number(attributes.thickness)
+    const envelope = roundClosureEnvelope(
+      Number(attributes.width) - clipThickness,
+      clipThickness,
+      Number(attributes.startAngle),
+      Number(attributes.endAngle),
+    )
+    if (
+      attributes.centerX !== String(FACE.center) || attributes.centerY !== String(FACE.center) ||
+      attributes.width !== attributes.height || attributes.isRoundEdge !== 'TRUE' ||
+      !Number.isFinite(envelope.inner) || !Number.isFinite(envelope.outer)
+    ) {
+      throw new Error(`slot ${slot.slotId}: outer-half clip must stay centered with round edges`)
+    }
+    RINGS.forEach(({ diameter }, index) => {
+      const centre = diameter - OUTER_HALF_INSET
+      const branch = markup.match(new RegExp(`<Compare expression="isBand${index}">\\s*<Group[^>]*name="outerHalf${slot.slotId}_${index + 1}">([\\s\\S]*?)</Group>\\s*</Compare>`))?.[1] ?? ''
+      assertFullRing(centre, HALF_THICKNESS, branch)
+      if (
+        !markup.includes(`<![CDATA[[COMPLICATION.TITLE] == "${index}"]]>`) ||
+        (centre - HALF_THICKNESS) / 2 <= envelope.inner ||
+        (centre + HALF_THICKNESS) / 2 >= envelope.outer
+      ) {
+        throw new Error(`slot ${slot.slotId}/band ${index}: full half must fit inside the clip at every angle`)
+      }
+    })
   }
 }
 
@@ -981,7 +1084,8 @@ function assertNearExhaustedArcs() {
  *
  * Above the cutoff, the melt is inset by one cap at each end, so the round caps
  * fill exactly the space the inset freed. At or below it, straight ends keep the
- * visible sweep equal to the proportional centreline.
+ * visible sweep equal to the proportional centreline. Exact full uses neither
+ * inset: one almost-closed path keeps the ROUND endpoints together at 12.
  */
 function bandArcs(diameter, thickness, pad) {
   const geometry = meltGeometry(diameter, thickness)
@@ -1007,9 +1111,9 @@ ${pad}    <Expressions>
 ${pad}        <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
 ${pad}        <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= ${geometry.twoCapCutoff.toFixed(6)}]]></Expression>
 ${pad}    </Expressions>
-${pad}    <!-- Nothing spent yet: there is no melt to inset, and the inset would
-${pad}         leave a seam at 12 on a ring that has spent nothing. Drawn without
-${pad}         the transform so the two round caps close over each other. -->
+${pad}    <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
+${pad}         endpoints 0.1 degrees apart in one path. A literal 360-degree
+${pad}         ROUND sweep historically collapsed to a tip on the watch. -->
 ${pad}    <Compare expression="isFull">
 ${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
 ${pad}            <Variant mode="AMBIENT" target="alpha" value="140" />
@@ -1019,7 +1123,7 @@ ${pad}                centerY="${FACE.center}"
 ${pad}                width="${diameter}"
 ${pad}                height="${diameter}"
 ${pad}                startAngle="${SWEEP.start}"
-${pad}                endAngle="${geometry.insetEnd.toFixed(2)}">
+${pad}                endAngle="${SWEEP.end}">
 ${pad}                <WeightedStroke
 ${pad}                    thickness="${thickness}"
 ${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
