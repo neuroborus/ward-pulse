@@ -1,5 +1,10 @@
 package app.wardpulse.wear.ui
 
+import android.app.PendingIntent
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Rect
@@ -41,11 +46,17 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.runner.lifecycle.ActivityLifecycleCallback
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
+import androidx.test.runner.lifecycle.Stage
 import androidx.wear.compose.material3.AppScaffold
 import app.wardpulse.wear.MainActivity
+import app.wardpulse.wear.WatchFaceViewModel
+import app.wardpulse.wear.data.WatchSummaryStore
 import app.wardpulse.wear.model.AlertSummary
 import app.wardpulse.wear.model.AllowanceSummary
 import app.wardpulse.wear.model.PeriodSummary
@@ -82,6 +93,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -102,21 +114,197 @@ class WardPulseNavigationStateTest {
     private var callbacks by mutableStateOf(callbacksFor("initial"))
     private val alpha = summary("Alpha", usedPercent = 25.0)
     private val beta = summary("Beta", usedPercent = 96.0)
+    private val productionOwners = mutableListOf<MainActivity>()
+    private var productionTaskId: Int? = null
+    private var savedSummaryPreferences: SharedPreferences? = null
+    private var originalSavedSummary: String? = null
+    private var oldTapToken: PendingIntent? = null
+    private var entrySequence = 0L
+    private val ownerLifecycle = ActivityLifecycleCallback { activity, stage ->
+        if (activity is MainActivity && stage == Stage.CREATED) {
+            if (productionTaskId == null) productionTaskId = activity.taskId
+            productionOwners += activity
+        }
+    }
 
     @After
     fun tearDown() {
         try {
             if (::scenario.isInitialized) scenario.close()
         } finally {
-            if (::recomposer.isInitialized) recomposer.cancel()
-            if (::compositionScope.isInitialized) compositionScope.cancel()
-            runBlocking {
-                withTimeout(5_000) {
-                    if (::recomposition.isInitialized) recomposition.join()
-                    if (::recomposer.isInitialized) recomposer.join()
+            try {
+                oldTapToken?.cancel()
+                instrumentation.runOnMainSync {
+                    // Only Activities created during this isolated test, including duplicates on failure.
+                    productionOwners.filterNot { it.isDestroyed }.forEach { it.finish() }
+                }
+                if (productionTaskId != null) {
+                    awaitOwnerState("Production test owners must be destroyed") {
+                        var destroyed = false
+                        instrumentation.runOnMainSync { destroyed = productionOwners.all { it.isDestroyed } }
+                        destroyed
+                    }
+                }
+            } finally {
+                try {
+                    instrumentation.runOnMainSync {
+                        ActivityLifecycleMonitorRegistry.getInstance().removeLifecycleCallback(ownerLifecycle)
+                    }
+                    savedSummaryPreferences?.let { preferences ->
+                        assertTrue(preferences.edit().putString("latest", originalSavedSummary).commit())
+                    }
+                } finally {
+                    if (::recomposer.isInitialized) recomposer.cancel()
+                    if (::compositionScope.isInitialized) compositionScope.cancel()
+                    runBlocking {
+                        withTimeout(5_000) {
+                            if (::recomposition.isInitialized) recomposition.join()
+                            if (::recomposer.isInitialized) recomposer.join()
+                        }
+                    }
                 }
             }
         }
+    }
+
+    @Test
+    fun productionRedeliveryKeepsOwnersAndLauncherNavigationWithoutReplayingConsumedFaceEntry() {
+        launchProduction(alpha)
+        val owner = productionOwner()
+        val model = productionModel(owner)
+        awaitHomePage(0)
+        click("Alerts: 1")
+        assertVisible("Alpha alert")
+
+        deliverEntry(launcherIntent())
+        assertVisible("Alpha alert")
+        assertClock(visible = true, anchor = "Alerts")
+        assertProductionOwner(owner)
+        onActivity { assertEquals(Intent.ACTION_MAIN, it.intent.action) }
+
+        // Old actionless delivery has no Activity flags. Manifest singleTop must suffice.
+        deliverEntry(Intent(instrumentation.targetContext, MainActivity::class.java))
+        awaitHomePage(0)
+        assertVisible("Codex Alpha")
+        assertClock(visible = false, anchor = "Codex Alpha")
+        assertProductionOwner(owner)
+        onActivity { assertEquals(null, it.intent.action) }
+
+        page(AccessibilityNodeInfo.AccessibilityAction.ACTION_PAGE_DOWN.id)
+        reveal("Watch face")
+        click("Watch face")
+        assertProductionUtility()
+        deliverEntry(launcherIntent())
+        assertProductionUtility()
+        assertSame(model, productionModel(owner))
+
+        // Measured wordmark flags: explicit component, NEW_TASK, no action/category.
+        deliverEntry(faceIntent())
+        awaitHomePage(0)
+        assertClock(visible = false, anchor = "Codex Alpha")
+        assertProductionOwner(owner)
+        assertSame(model, productionModel(owner))
+        onActivity {
+            assertTrue(it.intent.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
+            assertEquals(null, it.intent.categories)
+        }
+
+        // A consumed face Intent must not reset restored nested navigation on recreation.
+        click("Alerts: 1")
+        recreateProductionOwner()
+        val recreated = productionOwner()
+        assertTrue(owner !== recreated)
+        assertSame(model, productionModel(recreated))
+        assertProductionOwner(recreated, creations = 2)
+        assertVisible("Alpha alert")
+        assertClock(visible = true, anchor = "Alerts")
+
+        WatchSummaryStore(instrumentation.targetContext).save(beta)
+        assertVisible("Beta alert")
+        back(toHomePage = 0)
+        assertVisible("Codex Beta")
+        click("Alerts: 1")
+        deliverEntry(faceIntent().addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        awaitHomePage(0)
+        assertVisible("Codex Beta")
+        assertProductionOwner(recreated, creations = 2)
+        // Home/reopen cycles retain the same Activity and continue observing fresh data.
+        repeat(3) {
+            instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_HOME)
+            awaitBackground(recreated)
+            deliverEntry(faceIntent())
+            awaitHomePage(0)
+            assertVisible("Codex Beta")
+            assertProductionOwner(recreated, creations = 2)
+        }
+        back()
+        awaitBackground(recreated)
+        deliverEntry(launcherIntent())
+        awaitHomePage(0)
+        assertProductionOwner(recreated, creations = 2)
+        assertSame(model, productionModel(recreated))
+    }
+
+    @Test
+    fun productionOldTapReturnsToNoSummaryPromptAndRootSwipeRetainsTheOwner() {
+        launchProduction(null, entry = faceIntent())
+        val owner = productionOwner()
+        val model = productionModel(owner)
+        assertVisible("Sync from phone")
+        click("Watch face")
+        assertProductionUtility()
+        // A separate request code avoids changing or cancelling the installed face's token.
+        oldTapToken = PendingIntent.getActivity(
+            instrumentation.targetContext, 17361,
+            Intent(instrumentation.targetContext, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        checkNotNull(oldTapToken).send()
+        assertVisible("Sync from phone")
+        assertClock(visible = true, anchor = "Sync from phone")
+        assertProductionOwner(owner)
+        assertSame(model, productionModel(owner))
+
+        WatchSummaryStore(instrumentation.targetContext).save(alpha)
+        awaitHomePage(0)
+        assertVisible("Codex Alpha")
+        val viewport = checkNotNull(nativeSurface("home-pager")).viewport
+        backPreview(cancelled = true, touchOnly = true) { assertProductionOwner(owner) }
+        awaitHomePage(0)
+        awaitHomeViewport(viewport)
+        assertProductionOwner(owner)
+        backPreview(cancelled = false, touchOnly = true) { assertProductionOwner(owner) }
+        awaitBackground(owner)
+        deliverEntry(launcherIntent())
+        awaitHomePage(0)
+        assertVisible("Codex Alpha")
+        assertProductionOwner(owner)
+        assertSame(model, productionModel(owner))
+    }
+
+    @Test
+    fun homeDismissalCallsOnceAfterCommittedSwipeOrBackAndNeverAfterCancellation() {
+        var dismissals = 0
+        launchApp(alpha, onDismissHome = { dismissals++ })
+        awaitHomePage(0)
+        val viewport = checkNotNull(nativeSurface("home-pager")).viewport
+        for (cancelled in listOf(true, false)) {
+            backPreview(cancelled, touchOnly = true) {
+                scenario.onActivity { assertEquals(0, dismissals) }
+            }
+            scenario.onActivity { assertEquals(if (cancelled) 0 else 1, dismissals) }
+            awaitHomePage(0)
+            awaitHomeViewport(viewport)
+        }
+        back()
+        scenario.onActivity { assertEquals(2, dismissals) }
+        if (Build.VERSION.SDK_INT > 35) {
+            backPreview(cancelled = true) { scenario.onActivity { assertEquals(2, dismissals) } }
+            scenario.onActivity { assertEquals(2, dismissals) }
+            backPreview(cancelled = false) { scenario.onActivity { assertEquals(2, dismissals) } }
+            scenario.onActivity { assertEquals(3, dismissals) }
+        }
+        assertClock(visible = false, anchor = "Codex Alpha")
     }
 
     @Test
@@ -888,7 +1076,7 @@ class WardPulseNavigationStateTest {
 
     private fun nativeSurface(tag: String): NativeSurface? {
         var result: NativeSurface? = null
-        scenario.onActivity { activity ->
+        onActivity { activity ->
             fun find(node: SemanticsNode): SemanticsNode? {
                 if (!node.layoutInfo.isAttached || !node.layoutInfo.isPlaced) return null
                 if (node.config.getOrNull(SemanticsProperties.TestTag) == tag) return node
@@ -1117,17 +1305,17 @@ class WardPulseNavigationStateTest {
         }
     }
 
-    private fun backPreview(cancelled: Boolean, duringPreview: () -> Unit) {
+    private fun backPreview(cancelled: Boolean, touchOnly: Boolean = false, duringPreview: () -> Unit) {
         var inspected = false
-        if (Build.VERSION.SDK_INT > 35) {
+        if (Build.VERSION.SDK_INT > 35 && !touchOnly) {
             // Wear's API 36+ host uses the Activity's predictive-back callback.
-            scenario.onActivity { activity ->
+            onActivity { activity ->
                 activity.onBackPressedDispatcher.dispatchOnBackStarted(
                     BackEventCompat(0f, 0f, 0f, BackEventCompat.EDGE_LEFT),
                 )
             }
             try {
-                scenario.onActivity { activity ->
+                onActivity { activity ->
                     activity.onBackPressedDispatcher.dispatchOnBackProgressed(
                         BackEventCompat(0f, 0f, 0.75f, BackEventCompat.EDGE_LEFT),
                     )
@@ -1136,7 +1324,7 @@ class WardPulseNavigationStateTest {
                 duringPreview()
                 inspected = true
             } finally {
-                scenario.onActivity { activity ->
+                onActivity { activity ->
                     if (cancelled || !inspected) {
                         activity.onBackPressedDispatcher.dispatchOnBackCancelled()
                     } else {
@@ -1148,10 +1336,14 @@ class WardPulseNavigationStateTest {
         } else {
             // Earlier Wear hosts consume horizontal touch dragging, rather than
             // predictive-back progress. Hold the pointer while inspecting the preview.
-            val window = bounds(checkNotNull(appRoot()))
+            val window = if (touchOnly) {
+                checkNotNull(nativeSurface("home-pager")).viewport
+            } else {
+                RectF(bounds(checkNotNull(appRoot())))
+            }
             val startX = window.left + window.width() * 0.05f
             val endX = window.left + window.width() * 0.8f
-            val y = window.exactCenterY()
+            val y = window.centerY()
             val downTime = SystemClock.uptimeMillis()
             fun pointer(action: Int, x: Float) {
                 val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x, y, 0)
@@ -1186,10 +1378,174 @@ class WardPulseNavigationStateTest {
         }
     }
 
+    private fun launchProduction(initialSummary: WatchDashboardSummary?, entry: Intent = launcherIntent()) {
+        val context = instrumentation.targetContext
+        val preferences = context.getSharedPreferences("watch_summary", Context.MODE_PRIVATE)
+        originalSavedSummary = preferences.getString("latest", null)
+        savedSummaryPreferences = preferences
+        if (initialSummary == null) {
+            assertTrue(preferences.edit().remove("latest").commit())
+        } else {
+            WatchSummaryStore(context).save(initialSummary)
+        }
+        // Isolate only this test's task; do not clear or adopt historical retained owners.
+        // ActivityScenario filters lifecycle events by the original intent action/categories.
+        // Production setIntent() changes those, so track these owners by identity and task instead.
+        instrumentation.runOnMainSync {
+            ActivityLifecycleMonitorRegistry.getInstance().addLifecycleCallback(ownerLifecycle)
+            context.startActivity(
+                entry.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK),
+            )
+        }
+        awaitOwnerState("Initial production owner must be resumed") {
+            var resumed = false
+            instrumentation.runOnMainSync {
+                resumed = productionOwners.singleOrNull()?.lifecycle?.currentState == Lifecycle.State.RESUMED
+            }
+            resumed
+        }
+        awaitUi()
+    }
+
+    private fun onActivity(action: (MainActivity) -> Unit) {
+        if (productionTaskId == null) {
+            scenario.onActivity { action(it) }
+        } else {
+            instrumentation.runOnMainSync {
+                val owner = checkNotNull(productionOwners.lastOrNull {
+                    it.taskId == productionTaskId && !it.isDestroyed
+                }) { "No live production owner in task $productionTaskId" }
+                action(owner)
+            }
+        }
+    }
+
+    private fun recreateProductionOwner() {
+        val previous = productionOwner()
+        onActivity { it.recreate() }
+        awaitOwnerState("Production recreation must destroy the old owner and resume its replacement") {
+            var recreated = false
+            instrumentation.runOnMainSync {
+                val current = productionOwners.lastOrNull { it.taskId == productionTaskId && !it.isDestroyed }
+                recreated = previous.isDestroyed && current != null && current !== previous &&
+                    current.lifecycle.currentState == Lifecycle.State.RESUMED
+            }
+            recreated
+        }
+        awaitUi()
+    }
+
+    private fun launcherIntent() = Intent.makeMainActivity(
+        ComponentName(instrumentation.targetContext, MainActivity::class.java),
+    )
+
+    private fun faceIntent() = Intent(instrumentation.targetContext, MainActivity::class.java)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    private fun deliverEntry(intent: Intent) {
+        // These are production-owner regression inputs, not proof of actual WFF/launcher taps.
+        val receipt = ++entrySequence
+        val receiptKey = "wardpulse.navigation.test.entry"
+        onActivity { it.startActivity(intent.putExtra(receiptKey, receipt)) }
+        awaitOwnerState("Entry $receipt must reach a resumed owner: $intent") {
+            var delivered = false
+            instrumentation.runOnMainSync {
+                delivered = ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED)
+                    .filterIsInstance<MainActivity>()
+                    .any { it.intent.getLongExtra(receiptKey, -1L) == receipt }
+            }
+            delivered
+        }
+        awaitUi()
+    }
+
+    private fun productionOwner(): MainActivity {
+        lateinit var owner: MainActivity
+        onActivity { owner = it }
+        return owner
+    }
+
+    private fun productionModel(owner: MainActivity): WatchFaceViewModel {
+        lateinit var model: WatchFaceViewModel
+        instrumentation.runOnMainSync { model = ViewModelProvider(owner)[WatchFaceViewModel::class.java] }
+        return model
+    }
+
+    private fun assertProductionUtility() {
+        assertClock(visible = true, anchor = "Watch face")
+        awaitAccessibility("Watch face must be the utility header, not the Home entry button") { root ->
+            findText(root, "Watch face") != null && findButton(root, "Watch face") == null &&
+                nativeSurface("home-pager")?.homePagerState?.lifecycle != Lifecycle.State.RESUMED
+        }
+    }
+
+    private fun awaitHomeViewport(viewport: RectF) {
+        awaitAccessibility("Home must restore its native viewport after the root gesture") {
+            nativeSurface("home-pager")?.let { home ->
+                !home.pendingLayout && home.viewport == viewport
+            } == true
+        }
+    }
+
+    private fun assertProductionOwner(owner: MainActivity, creations: Int = 1) {
+        onActivity { current ->
+            assertSame(owner, current)
+            assertEquals(productionTaskId, current.taskId)
+            assertFalse(current.isFinishing)
+            assertFalse(current.isDestroyed)
+            val resumed = ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED)
+                .filterIsInstance<MainActivity>()
+            assertEquals(listOf(owner), resumed)
+            assertEquals(creations, productionOwners.size)
+            assertEquals(setOf(productionTaskId), productionOwners.map { it.taskId }.toSet())
+            Log.i(
+                "WardPulseNavigation",
+                "owner=${System.identityHashCode(current)}, task=${current.taskId}, " +
+                    "creations=$creations, delivered=${current.intent}",
+            )
+        }
+    }
+
+    private fun awaitBackground(owner: MainActivity) {
+        awaitOwnerState("One dismissal must background the retained owner/task") {
+            var stopped = false
+            instrumentation.runOnMainSync {
+                stopped = !owner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && !owner.hasWindowFocus()
+            }
+            stopped && appRoot() == null
+        }
+        instrumentation.runOnMainSync {
+            assertFalse(owner.isFinishing)
+            assertFalse(owner.isDestroyed)
+        }
+    }
+
+    private fun awaitOwnerState(message: String, condition: () -> Boolean) {
+        val deadline = SystemClock.uptimeMillis() + 5_000
+        fun failure(): Nothing {
+            var owners = ""
+            instrumentation.runOnMainSync {
+                owners = productionOwners.joinToString { owner ->
+                    "${System.identityHashCode(owner)}/task=${owner.taskId}/state=${owner.lifecycle.currentState}/" +
+                        "finishing=${owner.isFinishing}/destroyed=${owner.isDestroyed}"
+                }
+            }
+            throw AssertionError("$message; ownedTask=$productionTaskId, owners=[$owners]")
+        }
+        while (SystemClock.uptimeMillis() < deadline) {
+            if (condition()) return
+            val remaining = deadline - SystemClock.uptimeMillis()
+            if (remaining <= 0) break
+            awaitFrame(remaining, onTimeout = ::failure)
+        }
+        failure()
+    }
+
     private fun launchApp(
         initialSummary: WatchDashboardSummary? = null,
         fontScale: Float? = null,
         content: (@Composable () -> Unit)? = null,
+        onDismissHome: () -> Unit = {},
     ) {
         instrumentation.runOnMainSync { summary = initialSummary }
         scenario = ActivityScenario.launch(MainActivity::class.java)
@@ -1219,6 +1575,7 @@ class WardPulseNavigationStateTest {
                                     onInstallWatchFace = callbacks.onInstall,
                                     onUpdateWatchFace = callbacks.onUpdate,
                                     onUseWatchFace = callbacks.onUse,
+                                    onDismissHome = onDismissHome,
                                 )
                             }
                         }
@@ -1237,7 +1594,8 @@ class WardPulseNavigationStateTest {
     private fun awaitUi() {
         instrumentation.waitForIdleSync()
         repeat(2) { awaitFrame() }
-        runBlocking { withTimeout(5_000) { recomposer.awaitIdle() } }
+        // Production-owner cases keep MainActivity's own window Recomposer/composition.
+        if (::recomposer.isInitialized) runBlocking { withTimeout(5_000) { recomposer.awaitIdle() } }
         instrumentation.waitForIdleSync()
         // Callback-only changes need not emit accessibility events. Assertions below wait
         // for their own observable state instead of treating event quiet as publication.

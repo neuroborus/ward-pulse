@@ -32,6 +32,31 @@ The phone and Wear APKs intentionally share the `app.wardpulse` application ID. 
 namespaces remain separate, and paired builds must use the same signing certificate for Data
 Layer delivery.
 
+## Entry and dismissal
+
+`MainActivity` uses `singleTop`. Component WFF wordmark launches and existing complication
+tokens are actionless; initial delivery and `onNewIntent` return the retained navigation to
+Home/Glance, or the no-summary prompt. MAIN/LAUNCHER returns retain navigation. New complication
+tokens add `NEW_TASK | REORDER_TO_FRONT | SINGLE_TOP` without changing PendingIntent identity;
+already-issued tokens retain their original flags. The canonical component WFF Launch and
+missing-app Play routing are unchanged, so this repair requires no face update.
+
+At settled Home, Back and committed Compose swipes background the whole task with
+`moveTaskToBack(true)`. They preserve Activity/controller/permission owners and leave other
+tasks alone. Nested routes keep their usual Back behavior; canceled previews do not dismiss.
+The theme disables inherited window swipe-to-finish so it cannot expose an older same-task
+Glance beneath the current owner.
+
+Candidate HOST acceptance is **Pending**. Two added `WardPulseNavigationStateTest` device
+cases cover production-composition redelivery/launcher navigation, old-flag tap compatibility,
+no-summary entry, recreation, current summaries and retained dismissal. A third case checks
+the callback count for committed/canceled root gestures. Production cases use isolated owned tasks
+and restore the saved summary; synthetic intents do not prove real WFF/launcher routing.
+After Runner retirement, HOST must run the full affected navigation/consent suites on Round,
+Square and API34, measure added test cost, and verify real entries, preserving updates/old
+tokens and measured historical N=2 same/separate-task records. The dated results below remain
+evidence of their earlier builds, not acceptance of this candidate.
+
 ## Plan windows
 
 The Glance answers *how much is left*. The second page answers the other question — *when does

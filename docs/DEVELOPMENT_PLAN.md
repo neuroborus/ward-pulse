@@ -2354,6 +2354,21 @@ changing watch, Glance, or widget surface order
 
 ### Phase 17 — the watch's second page
 
+**Entry repair 2026-10-26 — candidate HOST acceptance Pending.** MainActivity now reuses a
+top owner and consumes actionless face entries through its retained navigation, returning
+to Glance (or the no-summary prompt) while launcher returns keep their current route.
+Back and committed swipes at Home background the whole task without finishing retained
+owners or cleaning up legacy tasks; nested Back and canceled previews remain local.
+The canonical component WFF Launch, resources and missing-app routing are unchanged.
+Production-owner regressions supplement all twelve existing navigation cases and preserve
+the consent suite's intentional separate-task owners. Full Wear/docs/paired HOST checks,
+Round/Square/API34 navigation and consent coverage, measured added test cost, real wordmark,
+ranged/short-text and launcher cold/warm/Home cycles, pending operations/recreation/new data,
+preserving updates with old tokens, and historical N=2 same/separate-task acceptance remain
+Pending after Runner retirement. Measured old-build actionless wordmarks on API36 and physical
+OnePlus API34 establish routing only; they do not accept the candidate or every OEM. The
+historical captures and acceptance below remain bounded to their original builds.
+
 **Integration status 2026-10-25 — bounded HOST proof, full acceptance open.** The
 [clock-free Glance revision](product/WEAR_GLANCE_DESIGN.md#revision-2026-10-24--clock-free-glance-and-larger-legend)
 keeps the preferred 27/23 legend, measured fitting/wrapping and local scrolling, with clocks

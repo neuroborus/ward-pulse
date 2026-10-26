@@ -22,6 +22,11 @@ selected window. Paired **Cursor plan** or **Codex plan** rows show two pool per
 Glance hides the clock to make room for larger labels. The clock remains on **Plan windows**,
 **Alerts**, the **Watch face** setup screen and the prompt shown before the first summary.
 
+Tap the WardPulse name or a usage complication on the face to open Glance. Before the first
+summary, this opens **Sync from phone**. Returning through the watch's app launcher keeps
+your current page. Swipe right or press Back from **Alerts** or **Watch face** to return to
+the previous page; from either home page, one dismissal leaves the app.
+
 ![Clock-free Wear Glance showing Cursor, Codex and Claude plan capacity with purchased credits in a circular screen.](/screenshots/wear-glance-overview.png)
 
 The selected metric with the lowest remaining percentage appears first.

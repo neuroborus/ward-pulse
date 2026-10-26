@@ -2,6 +2,7 @@ package app.wardpulse.wear
 
 import android.annotation.SuppressLint
 import android.app.Application
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,6 +13,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -35,6 +38,7 @@ class MainActivity : ComponentActivity() {
     private var summary by mutableStateOf<WatchDashboardSummary?>(null)
     private var storeObserver: AutoCloseable? = null
     private val watchFace by lazy { ViewModelProvider(this)[WatchFaceViewModel::class.java] }
+    private val faceEntry by lazy { ViewModelProvider(this)[FaceEntryViewModel::class.java] }
     // ComponentActivity owns this launcher; the diagnostic concerns transitive legacy Fragment handling.
     @SuppressLint("InvalidFragmentVersionForActivityResult")
     private val watchFacePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -46,6 +50,7 @@ class MainActivity : ComponentActivity() {
 
         store = WatchSummaryStore(this)
         summary = currentSummary()
+        if (savedInstanceState == null && intent.action == null) faceEntry.request()
 
         // A request belongs to the retained explicit action, independent of summary/navigation.
         lifecycleScope.launch {
@@ -62,6 +67,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val watchFaceState by watchFace.state.collectAsState()
+            val faceEntryRequest by faceEntry.pending.collectAsState()
             WardPulseTheme {
                 WardPulseApp(
                     summary = summary,
@@ -70,9 +76,21 @@ class MainActivity : ComponentActivity() {
                     onInstallWatchFace = watchFace::install,
                     onUpdateWatchFace = watchFace::update,
                     onUseWatchFace = watchFace::useWatchFace,
+                    faceEntryRequest = faceEntryRequest,
+                    onFaceEntryConsumed = faceEntry::consume,
+                    onDismissHome = { moveTaskToBack(true) },
                 )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        reloadSummary()
+        // Existing component WFF launches and old complication tokens are actionless.
+        // MAIN/LAUNCHER and ordinary lifecycle returns retain their navigation.
+        if (intent.action == null) faceEntry.request()
     }
 
     override fun onStart() {
@@ -97,6 +115,20 @@ class MainActivity : ComponentActivity() {
 
     private fun currentSummary() = store.load()?.let { saved ->
         saved.copy(isStale = saved.isStaleAt(Instant.now()))
+    }
+}
+
+internal class FaceEntryViewModel(private val savedState: SavedStateHandle) : ViewModel() {
+    val pending = savedState.getStateFlow<Long?>("pendingFaceEntry", null)
+
+    fun request() {
+        val next = (savedState.get<Long>("faceEntrySequence") ?: 0L) + 1L
+        savedState["faceEntrySequence"] = next
+        savedState["pendingFaceEntry"] = next
+    }
+
+    fun consume(request: Long) {
+        if (pending.value == request) savedState["pendingFaceEntry"] = null
     }
 }
 

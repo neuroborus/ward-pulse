@@ -1,5 +1,6 @@
 package app.wardpulse.wear.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,6 +10,7 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -29,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
+import androidx.wear.compose.foundation.BasicSwipeToDismissBox
 import androidx.wear.compose.foundation.hierarchicalFocusGroup
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
@@ -91,6 +94,9 @@ fun WardPulseApp(
     onInstallWatchFace: () -> Unit,
     onUpdateWatchFace: () -> Unit,
     onUseWatchFace: () -> Unit,
+    faceEntryRequest: Long? = null,
+    onFaceEntryConsumed: (Long) -> Unit = {},
+    onDismissHome: () -> Unit = {},
 ) {
     val navController = rememberSwipeDismissableNavController()
     val pagerState = rememberPagerState(pageCount = { HomePage.entries.size })
@@ -101,6 +107,14 @@ fun WardPulseApp(
     val currentOnInstall by rememberUpdatedState(onInstallWatchFace)
     val currentOnUpdate by rememberUpdatedState(onUpdateWatchFace)
     val currentOnUse by rememberUpdatedState(onUseWatchFace)
+    LaunchedEffect(faceEntryRequest) {
+        faceEntryRequest?.let { request ->
+            navController.popBackStack(HOME_ROUTE, inclusive = false)
+            // Also works before a summary (and therefore a Pager layout) exists.
+            pagerState.requestScrollToPage(HomePage.Glance.ordinal)
+            onFaceEntryConsumed(request)
+        }
+    }
     // Each clock belongs to its destination so dismissal transforms and clips it
     // with that page, including a cancelled swipe or a predictive-back preview.
     SwipeDismissableNavHost(
@@ -112,16 +126,18 @@ fun WardPulseApp(
             val latestSummary = currentSummary
             val showClock = latestSummary == null ||
                 (!pagerState.isScrollInProgress && pagerState.settledPage == HomePage.PlanWindows.ordinal)
-            AppScaffold(timeText = { if (showClock) StraightAppTimeText() }) {
-                if (latestSummary == null) {
-                    EmptyDashboardScreen(onOpenWatchFace = { navController.navigate(WATCH_FACE_ROUTE) })
-                } else {
-                    HomeScreen(
-                        summary = latestSummary,
-                        pagerState = pagerState,
-                        onOpenAlerts = { navController.navigate(ALERTS_ROUTE) },
-                        onOpenWatchFace = { navController.navigate(WATCH_FACE_ROUTE) },
-                    )
+            HomeDismissal(pagerState, onDismissHome) {
+                AppScaffold(timeText = { if (showClock) StraightAppTimeText() }) {
+                    if (latestSummary == null) {
+                        EmptyDashboardScreen(onOpenWatchFace = { navController.navigate(WATCH_FACE_ROUTE) })
+                    } else {
+                        HomeScreen(
+                            summary = latestSummary,
+                            pagerState = pagerState,
+                            onOpenAlerts = { navController.navigate(ALERTS_ROUTE) },
+                            onOpenWatchFace = { navController.navigate(WATCH_FACE_ROUTE) },
+                        )
+                    }
                 }
             }
         }
@@ -146,6 +162,21 @@ fun WardPulseApp(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun HomeDismissal(pagerState: PagerState, onDismiss: () -> Unit, content: @Composable () -> Unit) {
+    // Home can remain composed behind a nested destination or its back preview.
+    val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val resumed = lifecycle == Lifecycle.State.RESUMED
+    BackHandler(enabled = resumed, onBack = onDismiss)
+    BasicSwipeToDismissBox(
+        onDismissed = onDismiss,
+        modifier = Modifier.fillMaxSize(),
+        userSwipeEnabled = resumed && !pagerState.isScrollInProgress,
+    ) { isBackground ->
+        if (!isBackground) content()
     }
 }
 
