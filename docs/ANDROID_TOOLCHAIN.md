@@ -575,7 +575,9 @@ with `hw.gpu.mode=auto`. Start that AVD reliably with
 
 Treat the configured AVDs as persistent development devices:
 
-- Save a snapshot before any risky operation, with Vulkan disabled as described above.
+- Before risky operations, verify that suitable recovery protects the current state. Reuse an
+  existing compatible, verified restore point when it still covers that rollback scope;
+  otherwise save the necessary pre-change state, with Vulkan disabled as described above.
 - Do not delete or recreate an AVD to troubleshoot it. That discards Google sign-in, browser
   sessions, system settings, keyboard layout, and any existing phone-watch pairing.
 - Never run `pm clear com.google.android.gms` on the watch; it destroys the pairing record.
@@ -589,6 +591,44 @@ Treat the configured AVDs as persistent development devices:
   `am force-stop com.google.android.wearable.sysui` recovery above remains valid.
 - Size `/data` before first boot. Its size is fixed once materialized, and snapshots prevent
   `qemu-img resize` from changing the image afterward.
+
+**Named snapshot retention.** Full-state snapshots preserve OS/app/user data and can include
+large RAM images; they are recovery points, not a permanent record of every test. Read-only
+inspection, screenshots and routine non-destructive navigation do not warrant a fresh whole-RAM
+snapshot each time. Keep durable sanitized QA evidence instead. This does not waive recovery
+before an actual risk or permit an old restore point that no longer covers current user state.
+
+The WardPulse default per AVD is **one verified current/recovery anchor plus one transient
+pre-change named snapshot**, not a quota to fill, platform limit or automatic deletion threshold.
+Do not create checkpoints merely to fill that allowance. Quick Boot is separate; do not change
+its settings for housekeeping. Additional active-case checkpoints,
+paired anchors or other justified pins need a recorded recovery purpose, owner/dependency and
+review date or acceptance boundary. Reaching that date triggers review, not blind deletion.
+
+Inspect allocated disk usage and named-snapshot counts before adding checkpoints and when a
+case completes. Keep concise ignored working notes with AVD/snapshot identity, allocated
+size, purpose, verification/compatibility limits, active dependencies, review/expiry trigger and
+keep/retire decision; no credentials or raw user payloads. After verified restoration or
+acceptance of the intended state, retire superseded task snapshots through supported snapshot
+management, such as the emulator's Snapshots pane Delete action. Preserve required recovery,
+paired/active checkpoints and other owners' state; no name, age or count alone establishes that
+a snapshot is disposable.
+
+For already-authorized retirement of a task's own superseded transient, the operator's existing
+working notes and keep/retire check suffice; no fresh approval or independent agent review is needed.
+For bulk historical cleanup, review the exact keep/retire manifest under applicable authorization;
+a storage-diagnosis question alone does not authorize that deletion. Both paths require verified
+intended/restored state, suitable recovery kept, no active dependency or other-owner impact, and
+supported snapshot management. Without applicable authorization, report candidates only. Never
+blindly remove RAM/image files or snapshot directories, make a new full-AVD copy, wipe/recreate
+an AVD, lower its RAM, resize partitions or change configuration merely to conceal growth.
+Preserve current running state, userdata, sign-ins and pairing; configuration changes can also
+invalidate snapshots. Use supported management without disturbing active work.
+
+Respect the canonical phone's failed `paired` restore documented above: it is not verified
+rollback coverage. The cold-boot route preserves data across restart, not a prior version of
+mutated userdata. If suitable recovery for the intended risk is unavailable, report HOLD rather
+than proceeding without it or repeatedly creating unverified snapshots.
 
 ## Watch Face Format
 
@@ -1012,6 +1052,7 @@ After an update:
 - [Android `sdkmanager` bootstrap](https://developer.android.com/tools/sdkmanager)
 - [Android Emulator controls](https://developer.android.com/studio/run/emulator)
 - [Android Emulator acceleration](https://developer.android.com/studio/run/emulator-acceleration)
+- [Android Emulator snapshots and management](https://developer.android.com/studio/run/emulator-snapshots)
 - [Android SDK platform releases](https://developer.android.com/tools/releases/platforms)
 - [Android Gradle Plugin 9.3](https://developer.android.com/build/releases/agp-9-3-0-release-notes)
 - [Compose BOM](https://developer.android.com/develop/ui/compose/bom)
