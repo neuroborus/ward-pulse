@@ -14,6 +14,7 @@ does not establish the actual displayed result. Keep acceptance limited to prove
 | Verification need | Reference |
 | --- | --- |
 | Identify the reported defect and check every selected logical metric | [Semantic and visual checks](references/semantic-checks.md) |
+| Distinguish form input, validation error and action visibility | [Form visibility](references/form-visibility.md) |
 | Prove which artifacts, bindings and state are actually rendered | [State and artifact identity](references/state-and-artifacts.md) |
 | Correct a demonstrated coordinator verification mistake | [Mistake maintenance](references/mistake-maintenance.md) |
 

@@ -33,6 +33,12 @@ board, test status or screenshot filename. Identify the actual visible app/page/
 and compare it with the evidence's artifact identities. Review art can be correct while
 the installed active face is older or uses retained bindings.
 
+For an owner-requested preview approval, deliver the exact artifact through an owner-visible channel.
+An internal view, emitted image, file path or successful viewer launch alone does not prove visibility.
+If the owner cannot see it or asks to open it, use an existing authorized viewer/channel and verify the
+intended artifact/window or obtain owner acknowledgement before claiming it shown or requesting approval.
+This delivery check applies to preview handoff; mock approval remains distinct from native acceptance.
+
 Judge the whole affected surface after the final change: every metric/half, legends,
 units, clipping, default cells, status controls and navigation context relevant to the
 case. Do not infer that uninspected neighboring elements are correct because one detail
@@ -67,6 +73,8 @@ the populated field, does not establish target absence. Ambiguous matches, disab
 controls, stale nodes or the wrong window remain unresolved; reobserve or disambiguate
 within the existing bounded procedure. After action, verify the actual settled destination
 or effective binding; a found node or successful input alone is not completion proof.
+For composite fields, use [Form visibility](form-visibility.md) to check the editor, error
+and actions independently; a wrapper's hit-test result alone does not establish them.
 
 Choose gesture extent and commit requirements for the actual component being navigated,
 using its real unclipped viewport and intended gesture region. Neighboring legend bounds,
