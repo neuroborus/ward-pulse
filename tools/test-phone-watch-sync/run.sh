@@ -1055,7 +1055,7 @@ reader_stderr() {
 }
 
 work_snapshot() {
-  local label=$1 apk pid ticks name header line output= end= reader_in reader_out reader_host
+  local label=$1 apk pid ticks name header line output= end= rejection= reader_in reader_out reader_host
   local before_phone before_wear current phone_live=0 deadline=$((SECONDS + 8))
   local started read_status=0 read_outcome=line header_shape=complete wrapper_status diagnostic_status
   if (( RETAINING )); then check_separation "$label-entry"; fi
@@ -1138,13 +1138,17 @@ work_snapshot() {
     (( SECONDS < deadline && ${#output} < 16384 )) || hold 'Reader exceeded output/time bounds.'
     if [[ "$line" == 'HOLD '* ]]; then
       [[ "$line" =~ ^HOLD\ [A-Z_]+$ ]] || hold 'Malformed reader failure.'
-      hold "Work reader: ${line#HOLD }"
+      rejection=${line#HOLD }
+      case "$rejection" in
+        ORPHAN_SYSTEM_ID|FUTURE_SYSTEM_ID) break ;;
+        *) hold "Work reader: $rejection" ;;
+      esac
     fi
     if [[ "$line" == "END $pid $ticks" ]]; then end=1; break; fi
-    [[ "$line" =~ ^(SCHEMA|SQLITE|TIME|WORK)\ [a-zA-Z0-9._:\ -]+$ ]] || hold 'Malformed or unrecognized reader output.'
+    [[ "$line" =~ ^(SCHEMA|SQLITE|TIME|MAPPINGS|WORK)\ [a-zA-Z0-9._:\ -]+$ ]] || hold 'Malformed or unrecognized reader output.'
     output+="$line"$'\n'
   done
-  [[ "$end" == 1 ]] || hold 'Partial reader evidence.'
+  [[ "$end" == 1 || -n "$rejection" ]] || hold 'Partial reader evidence.'
   if IFS= read -r -t 1 line <&"$reader_out"; then hold 'Unexpected trailing reader output.'; fi
   exec {reader_out}<&-
   READER_OUTPUT_FD=
@@ -1158,7 +1162,11 @@ work_snapshot() {
   reader_diagnostic 'Reader stderr collector: phase=completion exit=%s\n' "$diagnostic_status"
   reader_stderr completion
   (( ! READER_DIAG_OUTPUT_FAILED )) || exit 1
-  (( wrapper_status == 0 )) || hold 'Reader process failed or did not retire normally.'
+  if [[ -n "$rejection" ]]; then
+    (( wrapper_status == 1 )) || hold 'Rejected reader process did not retire with its expected failure.'
+  else
+    (( wrapper_status == 0 )) || hold 'Reader process failed or did not retire normally.'
+  fi
   (( diagnostic_status == 0 )) || hold 'Reader stderr collector failed or did not retire normally.'
   adb_on "$PHONE_SERIAL" shell -n "test ! -e /proc/$pid" || hold 'Reader PID is still live or reused.'
   READER_DEVICE_PID= OBSERVER=
@@ -1173,7 +1181,8 @@ work_snapshot() {
   barrier wear "$WEAR_SERIAL"
   [[ -z "$EVENTS" ]] || hold 'Wear activity raced work observation.'
   printf '%s' "$output" >"$SCRATCH/work.current"
-  reconcile_work "$label"
+  reconcile_work "$label" "$rejection"
+  [[ -z "$rejection" ]] || hold "Work reader: $rejection"
   if (( RETAINING )); then check_separation "$label-before-native"; fi
   native_jobs "$label" "$phone_live"
   if (( PRE_DEATH_DEADLINE )); then
@@ -1192,7 +1201,7 @@ work_snapshot() {
   fi
   if [[ "$label" == preflight ]]; then
     # Keep the narrow installed tuple visible for HOST binding after scratch cleanup.
-    awk '$1 == "SCHEMA" || $1 == "SQLITE"' "$SCRATCH/work.current"
+    awk '$1 == "SCHEMA" || $1 == "SQLITE" || $1 == "MAPPINGS"' "$SCRATCH/work.current"
   fi
   # Advance the accepted pair only after logical AND native evidence reconcile.
   cp "$SCRATCH/work.current" "$SCRATCH/work.previous"
@@ -1202,13 +1211,17 @@ work_snapshot() {
 }
 
 reconcile_work() {
-  local label=$1
+  local label=$1 rejection=${2:-}
   # Validate the protocol independently of the Java reader, then reconcile only
   # documented transitions. Activity permits possible enqueue/execution, not
   # arbitrary spec changes or a claim about all intermediate transitions.
-  awk -v previous="$SCRATCH/work.previous" -v activity="$((PHONE_ACTIVITY - WORK_ACTIVITY))" '
+  awk -v previous="$SCRATCH/work.previous" -v activity="$((PHONE_ACTIVITY - WORK_ACTIVITY))" \
+    -v rejected="$rejection" '
     function fail() { bad=1; exit 1 }
     function same(x, y) { return ("x" x) == ("x" y) }
+    function bounded_count(value) {
+      return value ~ /^(0|[1-9][0-9]*)$/ && length(value) <= 10 && value+0 <= 2147483647
+    }
     function terminal(state) { return state == 2 || state == 3 || state == 5 }
     function recovery_transition(before, after) {
       if (before == 0 || before == 1) return after == 0 || after == 1 || after == 2
@@ -1222,26 +1235,35 @@ reconcile_work() {
       next
     }
     $1 == "SCHEMA" {
-      if (FNR != 1 || NF != 5 || $2 != "2.11.2" || $3 != 24 || $4 != "08b926448d86528e697981ddd30459f7" ||
+      if (rejected || FNR != 1 || NF != 5 || $2 != "2.11.2" || $3 != 24 || $4 != "08b926448d86528e697981ddd30459f7" ||
           ($5 != "no_backup" && $5 != "databases") || schema++ || (oldschema && $0 != oldschema)) fail()
       next
     }
     $1 == "SQLITE" {
       source=$5; sub(/-alt[0-9]+$/, "", source)
-      if (FNR != 2 || NF != 6 || ($2 != "3.44.3" && $2 != "3.44.4") ||
+      if (rejected || FNR != 2 || NF != 6 || ($2 != "3.44.3" && $2 != "3.44.4") ||
           $3 !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ ||
           $4 !~ /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]$/ ||
           length(source) != 64 || source !~ /^[0-9a-f]+$/ || length($5) > 79 ||
           ($6 != "wal" && $6 != "delete") || sqlite++ || (oldsqlite && $0 != oldsqlite)) fail()
       next
     }
-    $1 == "TIME" { if (FNR != 3 || NF != 2 || length($2) != 13 || $2 !~ /^[0-9]+$/ || time++) fail(); now=$2; next }
+    $1 == "TIME" { if (rejected || FNR != 3 || NF != 2 || length($2) != 13 || $2 !~ /^[0-9]+$/ || time++) fail(); now=$2; next }
+    $1 == "MAPPINGS" {
+      if (FNR != (rejected ? 1 : 4) || NF != 6 || mappings++) fail()
+      for (i=2;i<=6;i++) if (!bounded_count($i)) fail()
+      if ($2 != $3+$4+$5+$6) fail()
+      missing=$3; current=$4; future=$6; mapping_record=$0
+      next
+    }
     $1 == "WORK" {
-      if (schema != 1 || sqlite != 1 || time != 1 || NF != 25 || ++rows > 32 || seen[$3]++ ||
+      if (rejected || schema != 1 || sqlite != 1 || time != 1 || mappings != 1 || NF != 25 || ++rows > 32 || seen[$3]++ ||
           ($2 != "wardpulse.providerSync" && $2 != "wardpulse.recoveryWake") ||
           $3 !~ /^[0-9a-f-]+$/ || $4 !~ /^[0-5]$/ ||
           $5 != "dev.fluttercommunity.workmanager.BackgroundWorker") fail()
       for (i=6;i<=25;i++) if ($i !~ /^-?[0-9]+$/) fail()
+      if (!bounded_count($14) || (!same($15, "-1") && !bounded_count($15))) fail()
+      if ($15 >= 0) { if (job_seen[$15]++) fail(); mapped++ }
       if ($25 != -1 && $25 != 0 && $25 != 1) fail()
       if ($9 != 1 || $10 != 0 || $11 != 0 || $12 != 0 || $13 != 0) fail()
       if ($2 == "wardpulse.providerSync") {
@@ -1288,7 +1310,15 @@ reconcile_work() {
     }
     { fail() }
     END {
-      if (bad || schema != 1 || sqlite != 1 || time != 1 || periodic != 1) exit 1
+      if (bad || mappings != 1) exit 1
+      if (rejected) {
+        if (FNR != 1 || !((rejected == "ORPHAN_SYSTEM_ID" && missing > 0) ||
+            (rejected == "FUTURE_SYSTEM_ID" && missing == 0 && future > 0))) exit 1
+        print "Rejected mapping evidence: " mapping_record > "/dev/stderr"
+        exit 0
+      }
+      if (schema != 1 || sqlite != 1 || time != 1 || periodic != 1 || missing != 0 || future != 0 ||
+          mapped+0 != current) exit 1
       for (id in old) {
         # Already-terminal history may be pruned for either logical name.
         if (oldstate[id] == 2 || oldstate[id] == 3 || oldstate[id] == 5) continue

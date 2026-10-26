@@ -348,7 +348,13 @@ CANCELLED=5; CONNECTED=1; exponential/linear backoff=0/1). The generated legacy 
 HOST must reconcile the resolved 2.11.2 generated schema/converters with the installed
 APK marker, current identity, columns and actual values. Unknown versions/schemas HOLD. It joins
 only the two logical WorkNames through WorkSpec to SystemIdInfo, matching both ID and
-generation. At most 32 rows and 12 KiB of metadata leave the reader. Allowed fields are
+current generation; an older mapping's job ID never substitutes for the current mapping.
+WorkManager 2.11.2's SystemIdInfo foreign key references WorkSpec by ID alone. UPDATE can
+legitimately retain an older-generation mapping. Every mapping still requires a canonical
+work ID and integer generation/job metadata in 0..2147483647; duplicate mapping keys or job
+IDs, invalid referenced generations and ambiguous WorkSpec IDs HOLD. A genuinely missing
+work ID remains `ORPHAN_SYSTEM_ID`; a future mapping generation gives `FUTURE_SYSTEM_ID`.
+At most 32 work rows and 12 KiB of metadata leave the reader. Allowed fields are
 logical name, opaque ID, worker, state, interval/flex, initial delay, network/constraint
 flags, generation/job ID, enqueue/schedule, attempt/period, backoff, override and stop
 markers, including schema24's nullable `backoff_on_system_interruptions` (null=-1,
@@ -356,6 +362,29 @@ false=0, true=1), which must remain unchanged for a retained work identity.
 Constraint blobs yield only absence flags; their contents are never exported.
 No input/output/progress, arbitrary tags, accounts, credentials, preferences or whole rows
 are read/exported. All exceptions become fixed, sanitized HOLD categories.
+
+Successful evidence has exactly one `SCHEMA`, `SQLITE`, `TIME`, then `MAPPINGS` record,
+followed by the `WORK` records and the identity-bound `END`. `MAPPINGS total missing current
+older future` contains five canonical decimal integers in 0..2147483647. The four classes
+must sum to the total; missing and future must be zero for acceptance. All counts come from
+the same read-only transaction as the generation-matched projection. The consumer requires
+the current count to equal the number of projected job mappings and rejects missing,
+duplicate, misplaced, unknown, malformed, inconsistent or overflowing evidence.
+
+After a safely completed snapshot rejected for missing/future mappings, the reader emits
+only `MAPPINGS` followed by the corresponding `HOLD` (missing takes precedence), exits 1
+and emits no `END`. After reader retirement and surrounding process/event checks, the
+consumer validates and prints this as **rejected** count-only evidence, then HOLDs without
+advancing the accepted pair. Invalid metadata or failed safety checks emit HOLD without
+counts. Counts never certify quietness or establish the cause of a prior device failure;
+HOST must classify the actual current rows through this guarded path.
+
+The standard-library regressions in [test_work_snapshot.py](test_work_snapshot.py) execute
+the production fixed SQL on neutral in-memory metadata and the production shell/AWK
+consumer. They protect the older/missing distinction, current-generation job selection,
+invalid/ambiguous/mixed metadata and closed count protocol, including rejection diagnostics.
+Run them with `python3 -m unittest discover -s tools/test-phone-watch-sync -p 'test_*.py'`.
+These cheap metadata/protocol regressions provide no Java/DEX/device acceptance.
 
 The projection uses explicit `SQLiteDatabase.OPEN_READONLY | NO_LOCALIZED_COLLATORS` with a
 throwing, nondeleting corruption handler and a short `beginTransactionReadOnly` transaction.

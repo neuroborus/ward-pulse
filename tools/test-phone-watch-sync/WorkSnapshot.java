@@ -44,12 +44,46 @@ public final class WorkSnapshot {
             + "required_network_type requires_charging requires_device_idle requires_battery_not_low "
             + "requires_storage_not_low trigger_content_update_delay trigger_max_content_delay "
             + "backoff_on_system_interruptions";
+    // Validate every mapping, including rows excluded by the current-generation projection.
+    private static final String MAPPING_INVALID_SQL =
+            "SELECT CASE WHEN EXISTS (SELECT 1 FROM SystemIdInfo s LEFT JOIN WorkSpec w "
+            + "ON w.id=s.work_spec_id WHERE typeof(s.work_spec_id)!='text' "
+            + "OR length(s.work_spec_id)!=36 OR length(CAST(s.work_spec_id AS BLOB))!=36 "
+            + "OR substr(s.work_spec_id,9,1)!='-' "
+            + "OR substr(s.work_spec_id,14,1)!='-' OR substr(s.work_spec_id,19,1)!='-' "
+            + "OR substr(s.work_spec_id,24,1)!='-' "
+            + "OR length(replace(s.work_spec_id,'-',''))!=32 "
+            + "OR replace(s.work_spec_id,'-','') GLOB '*[^0-9a-f]*' "
+            + "OR typeof(s.generation)!='integer' OR s.generation<0 OR s.generation>2147483647 "
+            + "OR typeof(s.system_id)!='integer' OR s.system_id<0 OR s.system_id>2147483647 "
+            + "OR (w.id IS NOT NULL AND (typeof(w.id)!='text' OR typeof(w.generation)!='integer' "
+            + "OR w.generation<0 OR w.generation>2147483647))) "
+            + "OR EXISTS (SELECT 1 FROM SystemIdInfo GROUP BY work_spec_id,generation HAVING count(*)>1) "
+            + "OR EXISTS (SELECT 1 FROM SystemIdInfo GROUP BY system_id HAVING count(*)>1) "
+            + "OR EXISTS (SELECT 1 FROM WorkSpec GROUP BY id HAVING count(*)>1) THEN 1 ELSE 0 END";
+    // WorkManager 2.11.2's FK references WorkSpec.id alone, not its current generation.
+    private static final String MAPPING_COUNTS_SQL =
+            "SELECT count(*),coalesce(sum(w.id IS NULL),0),"
+            + "coalesce(sum(w.id IS NOT NULL AND s.generation=w.generation),0),"
+            + "coalesce(sum(w.id IS NOT NULL AND s.generation<w.generation),0),"
+            + "coalesce(sum(w.id IS NOT NULL AND s.generation>w.generation),0) "
+            + "FROM SystemIdInfo s LEFT JOIN WorkSpec w ON w.id=s.work_spec_id";
     private static final long START = SystemClock.elapsedRealtime();
 
     private WorkSnapshot() {}
 
     private static final class Hold extends RuntimeException {
         Hold(String category) { super(category); }
+    }
+
+    private static final class Observation {
+        final String evidence;
+        final String rejection;
+
+        Observation(String evidence, String rejection) {
+            this.evidence = evidence;
+            this.rejection = rejection;
+        }
     }
 
     private static void require(boolean value, String category) {
@@ -259,6 +293,25 @@ public final class WorkSnapshot {
         return "SQLITE " + version + " " + source + " " + mode;
     }
 
+    private static Observation mappings(SQLiteDatabase db) {
+        require(scalar(db, MAPPING_INVALID_SQL).equals("0"), "INVALID_SYSTEM_ID_METADATA");
+        long[] counts = new long[5];
+        try (Cursor c = db.rawQuery(MAPPING_COUNTS_SQL, null)) {
+            require(c.moveToFirst() && c.getColumnCount() == counts.length, "MAPPING_COUNTS");
+            for (int i = 0; i < counts.length; i++) {
+                counts[i] = integer(c, i, 0);
+                require(counts[i] <= Integer.MAX_VALUE, "MAPPING_COUNT_RANGE");
+            }
+            require(!c.moveToNext() && counts[0] == counts[1] + counts[2] + counts[3] + counts[4],
+                    "MAPPING_COUNTS");
+        }
+        String evidence = "MAPPINGS " + counts[0] + " " + counts[1] + " " + counts[2]
+                + " " + counts[3] + " " + counts[4] + "\n";
+        String rejection = counts[1] > 0 ? "ORPHAN_SYSTEM_ID"
+                : (counts[4] > 0 ? "FUTURE_SYSTEM_ID" : null);
+        return new Observation(evidence, rejection);
+    }
+
     private static String project(SQLiteDatabase db) {
         // No input, output, progress, tags, preferences or payload contents are queried.
         // The two blob-derived booleans only reject unsupported constraint encodings.
@@ -267,7 +320,7 @@ public final class WorkSnapshot {
         require(scalar(db, "SELECT count(*) FROM WorkName n LEFT JOIN WorkSpec w "
                 + "ON w.id=n.work_spec_id WHERE w.id IS NULL").equals("0"), "ORPHAN_WORK_NAME");
         require(scalar(db, "SELECT count(*) FROM SystemIdInfo s LEFT JOIN WorkSpec w "
-                + "ON w.id=s.work_spec_id AND w.generation=s.generation WHERE w.id IS NULL")
+                + "ON w.id=s.work_spec_id WHERE w.id IS NULL")
                 .equals("0"), "ORPHAN_SYSTEM_ID");
         String sql = "SELECT n.name,w.id,w.state,w.worker_class_name,"
                 + "w.interval_duration,w.flex_duration,w.initial_delay,w.required_network_type,"
@@ -337,10 +390,11 @@ public final class WorkSnapshot {
         return out.toString();
     }
 
-    private static String snapshot(String apk) throws Exception {
+    private static Observation snapshot(String apk) throws Exception {
         installedVersion(apk);
         File file = database();
-        String projection, sqlite;
+        String projection = "", sqlite;
+        Observation mapping;
         ParcelFileDescriptor descriptor = ParcelFileDescriptor.open(file,
                 ParcelFileDescriptor.MODE_READ_ONLY);
         try (ParcelFileDescriptor.AutoCloseInputStream input =
@@ -381,7 +435,8 @@ public final class WorkSnapshot {
                         columns(db, "WorkSpec", "id worker_class_name", "state " + COLUMNS,
                                 "required_network_request content_uri_triggers");
                         columns(db, "SystemIdInfo", "work_spec_id", "generation system_id", "");
-                        projection = project(db);
+                        mapping = mappings(db);
+                        if (mapping.rejection == null) projection = project(db);
                         requireStableJournalMode(file, descriptor, guard, true);
                         sidecarIdentity(file, "-wal", walFile);
                         sidecarIdentity(file, "-shm", shmFile);
@@ -400,8 +455,15 @@ public final class WorkSnapshot {
                 noSidecar(file, "-journal");
             }
         }
-        return "SCHEMA 2.11.2 24 " + IDENTITY + " " + file.getParentFile().getName()
-                + "\n" + sqlite + "\nTIME " + System.currentTimeMillis() + "\n" + projection;
+        // Publish neither counts nor projection until transaction close and all safety checks succeed.
+        String evidence = mapping.evidence;
+        if (mapping.rejection == null) {
+            evidence = "SCHEMA 2.11.2 24 " + IDENTITY + " " + file.getParentFile().getName()
+                    + "\n" + sqlite + "\nTIME " + System.currentTimeMillis() + "\n"
+                    + evidence + projection;
+        }
+        require(evidence.length() <= 12288, "WORK_OUTPUT_BOUND");
+        return new Observation(evidence, mapping.rejection);
     }
 
     public static void main(String[] args) {
@@ -425,11 +487,15 @@ public final class WorkSnapshot {
                 offset += n;
             }
             require(offset == 3 && Arrays.equals(go, new byte[] {'G', 'O', '\n'}), "READER_HANDSHAKE");
-            String result = snapshot(args[1]);
+            Observation result = snapshot(args[1]);
             require(identity().equals(process), "READER_IDENTITY");
-            System.out.print(result);
-            System.out.println("END " + process);
-            status = 0;
+            System.out.print(result.evidence);
+            if (result.rejection == null) {
+                System.out.println("END " + process);
+                status = 0;
+            } else {
+                System.out.println("HOLD " + result.rejection);
+            }
         } catch (Hold failure) {
             System.out.println("HOLD " + failure.getMessage());
         } catch (Throwable failure) {
