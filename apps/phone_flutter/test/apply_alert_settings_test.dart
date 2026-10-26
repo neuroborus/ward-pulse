@@ -25,54 +25,67 @@ void main() {
     ProviderConnections.openAiPlatform.storageKey: version.values,
   };
 
-  test('default-off settings clear leftover alerts without FFI', () {
-    final snapshot = DashboardSnapshot.empty().withSyncIssue(
-      DashboardSyncIssue.rateLimited,
-      details: 'provider floor',
-    );
-    final withAlerts = DashboardSnapshot(
-      generatedAt: snapshot.generatedAt,
-      overallStatus: snapshot.overallStatus,
-      accounts: snapshot.accounts,
-      todayTotal: snapshot.todayTotal,
-      weekTotal: snapshot.weekTotal,
-      monthTotal: snapshot.monthTotal,
-      alerts: const [
-        AlertSummary(severity: 'warning', message: 'stale auto-fire'),
-      ],
-      watchSummary: snapshot.watchSummary,
-      syncIssue: snapshot.syncIssue,
-      syncDetails: snapshot.syncDetails,
-      connectionVersions: versions,
-      reportingOutcomes: [outcome],
-    );
+  test(
+    'default-off and Off-only settings clear leftover alerts without FFI',
+    () {
+      final snapshot = DashboardSnapshot.empty().withSyncIssue(
+        DashboardSyncIssue.rateLimited,
+        details: 'provider floor',
+      );
+      final withAlerts = DashboardSnapshot(
+        generatedAt: snapshot.generatedAt,
+        overallStatus: snapshot.overallStatus,
+        accounts: snapshot.accounts,
+        todayTotal: snapshot.todayTotal,
+        weekTotal: snapshot.weekTotal,
+        monthTotal: snapshot.monthTotal,
+        alerts: const [
+          AlertSummary(severity: 'warning', message: 'stale auto-fire'),
+        ],
+        watchSummary: snapshot.watchSummary,
+        syncIssue: snapshot.syncIssue,
+        syncDetails: snapshot.syncDetails,
+        connectionVersions: versions,
+        reportingOutcomes: [outcome],
+      );
 
-    final applied = applyUserAlertSettings(
-      withAlerts,
-      const AlertThresholdPreferences(),
-      applyJson: (_, _) => throw StateError('Disabled effect was invoked.'),
-    );
-
-    expect(applied.alerts, isEmpty);
-    expect(applied.syncIssue, DashboardSyncIssue.rateLimited);
-    expect(applied.syncDetails, 'provider floor');
-    expect(applied.reportingOutcomes, [outcome]);
-    expect(applied.connectionVersions, versions);
-    expect(applied.toJson(), {...withAlerts.toJson(), 'alerts': <Object>[]});
-    expect(
-      applyUserAlertSettings(
-        applied,
-        const AlertThresholdPreferences(),
+      final applied = applyUserAlertSettings(
+        withAlerts,
+        const AlertThresholdPreferences(
+          connections: {
+            'openai.plan': ConnectionAlertThresholds(
+              planWindows: {'unavailable': AlertPercentThreshold()},
+            ),
+          },
+        ),
         applyJson: (_, _) => throw StateError('Disabled effect was invoked.'),
-      ),
-      same(applied),
-    );
-    const ApplyAlertSettings compatible = applyUserAlertSettings;
-    expect(
-      compatible(applied, const AlertThresholdPreferences()),
-      same(applied),
-    );
-  });
+      );
+
+      expect(applied.alerts, isEmpty);
+      expect(applied.syncIssue, DashboardSyncIssue.rateLimited);
+      expect(applied.syncDetails, 'provider floor');
+      expect(applied.reportingOutcomes, [outcome]);
+      expect(applied.connectionVersions, versions);
+      expect(applied.toJson(), {...withAlerts.toJson(), 'alerts': <Object>[]});
+      expect(
+        applyUserAlertSettings(
+          applied,
+          const AlertThresholdPreferences(),
+          applyJson: (_, _) => throw StateError('Disabled effect was invoked.'),
+        ),
+        same(applied),
+      );
+      const ApplyAlertSettings compatible = applyUserAlertSettings;
+      expect(
+        compatible(withAlerts, const AlertThresholdPreferences()).alerts,
+        isEmpty,
+      );
+      expect(
+        compatible(applied, const AlertThresholdPreferences()),
+        same(applied),
+      );
+    },
+  );
 
   for (final withSyncIssue in [false, true]) {
     test('enabled effect restores metadata (sync issue: $withSyncIssue)', () {
@@ -92,7 +105,14 @@ void main() {
       }
       final settings = const AlertThresholdPreferences().withConnection(
         ProviderConnections.openAiPlatform,
-        const ConnectionAlertThresholds(today: AlertPercentThreshold(at: 80)),
+        const ConnectionAlertThresholds(
+          planWindows: {
+            'window-a': AlertPercentThreshold(at: 0),
+            'window-b': AlertPercentThreshold(at: 100),
+            'window-c': AlertPercentThreshold(at: 83),
+            'unavailable': AlertPercentThreshold(),
+          },
+        ),
       );
       var calls = 0;
       late Map<String, dynamic> transformed;

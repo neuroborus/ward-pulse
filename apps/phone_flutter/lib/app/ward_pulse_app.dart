@@ -173,6 +173,8 @@ class _DashboardHostState extends State<DashboardHost> {
   var _surfaceRevision = 0;
   late Future<DashboardSnapshot> _snapshot = _loadSnapshot();
   DashboardSnapshot? _currentSnapshot;
+  // The accepted repository input, before applying phone-local alert rules.
+  DashboardSnapshot? _repositorySnapshot;
   final _reportingUpdates = <ProviderConnectionId, ConnectionReportingUpdate>{};
   ProviderConnectionId? _editReportingConnection;
   final _reportingSaves = <ProviderConnectionId>{};
@@ -187,7 +189,7 @@ class _DashboardHostState extends State<DashboardHost> {
   PhoneWidgetPreferences _widgetPreferences = const PhoneWidgetPreferences();
   AlertThresholdPreferences _alertThresholds =
       const AlertThresholdPreferences();
-  Future<void> _alertThresholdWrite = Future<void>.value();
+  Future<void> _snapshotSettingsWork = Future<void>.value();
   bool _mockDataEnabled = false;
   bool _recoveryNotificationsEnabled = true;
   int _selectedIndex = 0;
@@ -333,16 +335,17 @@ class _DashboardHostState extends State<DashboardHost> {
     return granted;
   }
 
-  Future<void> _readDebugDataPreference() async {
-    if (!widget.debugDataAvailable) {
-      _mockDataEnabled = false;
-      return;
+  Future<void> _readDebugDataPreference(int revision) async {
+    var enabled = false;
+    if (widget.debugDataAvailable) {
+      try {
+        enabled = await widget.debugDataPreferenceStore.readMockDataEnabled();
+      } catch (_) {
+        // Unavailable debug preferences leave live data enabled.
+      }
     }
-    try {
-      _mockDataEnabled =
-          await widget.debugDataPreferenceStore.readMockDataEnabled();
-    } catch (_) {
-      _mockDataEnabled = false;
+    if (mounted && revision == _loadRevision) {
+      _mockDataEnabled = enabled;
     }
   }
 
@@ -382,58 +385,88 @@ class _DashboardHostState extends State<DashboardHost> {
     }
   }
 
-  Future<void> _updateAlertThresholds(
-    AlertThresholdPreferences Function(AlertThresholdPreferences current)
-    update,
+  // Snapshot acceptance and preference transactions share one order. Provider
+  // loads stay outside the queue so they can fetch while a save is pending.
+  Future<T> _serializeSnapshotSettings<T>(
+    Future<T> Function() operation,
   ) async {
-    final previous = _alertThresholdWrite;
+    final previous = _snapshotSettingsWork;
     final done = Completer<void>();
-    _alertThresholdWrite = done.future;
+    _snapshotSettingsWork = done.future;
     await previous;
     try {
-      final value = update(_alertThresholds);
-      final snapshot = _currentSnapshot;
-      final loadRevision = _loadRevision;
-      final surfaceRevision = _surfaceRevision;
-      // Evaluate before persisting so a core/FFI failure does not leave the
-      // store ahead of in-memory prefs / dashboard alerts.
-      final withAlerts =
-          snapshot == null ? null : widget.applyAlertSettings(snapshot, value);
-      await widget.alertThresholdStore.write(value);
-      var owned = withAlerts == null;
-      if (withAlerts != null) {
-        try {
-          owned = await widget.repository.isSnapshotCurrent(withAlerts);
-        } catch (_) {
-          /* Preferences are saved; unavailable ownership cannot replace dashboard data. */
-        }
-      }
-      final publish =
-          mounted &&
-          owned &&
-          loadRevision == _loadRevision &&
-          surfaceRevision == _surfaceRevision;
-      if (mounted) {
-        setState(() {
-          _alertThresholds = value;
-          if (publish && withAlerts != null) {
-            _currentSnapshot = withAlerts;
-            _snapshot = Future.value(withAlerts);
-          }
-        });
-      } else {
-        _alertThresholds = value;
-        if (publish && withAlerts != null) {
-          _currentSnapshot = withAlerts;
-        }
-      }
-      if (publish && withAlerts != null) {
-        unawaited(_syncWatch(withAlerts));
-      }
+      return await operation();
     } finally {
       done.complete();
     }
   }
+
+  Future<void> _updateAlertThresholds(
+    AlertThresholdPreferences Function(AlertThresholdPreferences current)
+    update,
+  ) => _serializeSnapshotSettings(() async {
+    final value = update(_alertThresholds);
+    final snapshot = _repositorySnapshot;
+    final surfaceRevision = _surfaceRevision;
+    // Evaluate before persisting so a core/FFI failure does not leave the
+    // store ahead of in-memory prefs / dashboard alerts.
+    final withAlerts =
+        snapshot == null ? null : widget.applyAlertSettings(snapshot, value);
+    await widget.alertThresholdStore.write(value);
+    var owned = withAlerts == null;
+    if (withAlerts != null) {
+      try {
+        owned = await widget.repository.isSnapshotCurrent(withAlerts);
+      } catch (_) {
+        /* Preferences are saved; unavailable ownership cannot replace dashboard data. */
+      }
+    }
+    // A new load request may retain this accepted input as its owned fallback.
+    final publish =
+        mounted &&
+        owned &&
+        surfaceRevision == _surfaceRevision &&
+        identical(snapshot, _repositorySnapshot);
+    if (mounted) {
+      setState(() {
+        _alertThresholds = value;
+        if (publish && withAlerts != null) {
+          _currentSnapshot = withAlerts;
+        }
+      });
+    } else {
+      _alertThresholds = value;
+      if (publish && withAlerts != null) {
+        _currentSnapshot = withAlerts;
+      }
+    }
+    if (publish && withAlerts != null) {
+      unawaited(_syncWatch(withAlerts));
+      unawaited(_syncPhoneWidget(withAlerts));
+    }
+  });
+
+  Future<DashboardSnapshot> _acceptSnapshot(
+    DashboardSnapshot repositorySnapshot,
+    int revision,
+  ) => _serializeSnapshotSettings(() async {
+    if (!mounted || revision != _loadRevision) {
+      throw const DashboardLoadException(details: 'Refresh superseded.');
+    }
+    final snapshot = widget.applyAlertSettings(
+      repositorySnapshot,
+      _alertThresholds,
+    );
+    final current = await widget.repository.isSnapshotCurrent(snapshot);
+    if (!mounted || revision != _loadRevision || !current) {
+      throw const DashboardLoadException(
+        details: 'Connection changed during refresh.',
+      );
+    }
+    _repositorySnapshot = repositorySnapshot;
+    _currentSnapshot = snapshot;
+    return snapshot;
+  });
 
   Future<DashboardSnapshot> _loadSnapshot() {
     final load = _loadForegroundSnapshot();
@@ -451,24 +484,15 @@ class _DashboardHostState extends State<DashboardHost> {
       await _readRefreshInterval();
       await _readRingPreferences();
       await _readWidgetPreferences();
-      await _readAlertThresholds();
-      await _readDebugDataPreference();
+      await _serializeSnapshotSettings(_readAlertThresholds);
+      await _readDebugDataPreference(revision);
       await _readRecoveryNotificationPreference();
       // Rescheduling before the load keeps the next tick a full interval away, so
       // no connection is polled faster than its floor, and a failed load still
       // retries on the next tick. Headless WorkManager uses ≥15 minutes.
       unawaited(_scheduleAutoSync(_refreshInterval.interval));
-      final snapshot = widget.applyAlertSettings(
-        await _observedLoad(revision),
-        _alertThresholds,
-      );
-      final current = await widget.repository.isSnapshotCurrent(snapshot);
-      if (!mounted || revision != _loadRevision || !current) {
-        throw const DashboardLoadException(
-          details: 'Connection changed during refresh.',
-        );
-      }
-      _currentSnapshot = snapshot;
+      final repositorySnapshot = await _observedLoad(revision);
+      final snapshot = await _acceptSnapshot(repositorySnapshot, revision);
       unawaited(_syncRecoveries(snapshot));
       unawaited(_syncWatch(snapshot));
       unawaited(_syncPhoneWidget(snapshot));
@@ -476,7 +500,10 @@ class _DashboardHostState extends State<DashboardHost> {
     } catch (_) {
       // A failed foreground load leaves an error-only Dashboard. Successful
       // fallback loads return normally and retain their usable data.
-      if (mounted && revision == _loadRevision) _currentSnapshot = null;
+      if (mounted && revision == _loadRevision) {
+        _repositorySnapshot = null;
+        _currentSnapshot = null;
+      }
       rethrow;
     }
   }
@@ -590,14 +617,9 @@ class _DashboardHostState extends State<DashboardHost> {
     try {
       // Do not invalidate: load() already refetches, and clearing caches would
       // drop stale-with-issue recovery on a failed automatic tick.
-      final snapshot = widget.applyAlertSettings(
-        await _observedLoad(revision),
-        _alertThresholds,
-      );
-      final current = await widget.repository.isSnapshotCurrent(snapshot);
-      if (!mounted || revision != _loadRevision || !current) return;
-      _currentSnapshot = snapshot;
-      if (mounted) {
+      final repositorySnapshot = await _observedLoad(revision);
+      final snapshot = await _acceptSnapshot(repositorySnapshot, revision);
+      if (mounted && revision == _loadRevision) {
         setState(() {
           _snapshot = Future.value(snapshot);
         });
@@ -619,6 +641,7 @@ class _DashboardHostState extends State<DashboardHost> {
           // FutureBuilder attaches on the next build; observe errors meanwhile.
           failed.ignore();
           setState(() {
+            _repositorySnapshot = null;
             _currentSnapshot = null;
             _snapshot = failed;
           });
@@ -633,20 +656,59 @@ class _DashboardHostState extends State<DashboardHost> {
     }
   }
 
-  Future<void> _updateMockDataEnabled(bool value) async {
-    _loadRevision++;
-    _surfaceRevision++;
-    await widget.repository.clearPersistentSnapshots();
-    await widget.debugDataPreferenceStore.writeMockDataEnabled(value);
+  Future<void> _updateMockDataEnabled(
+    bool value,
+  ) => _serializeSnapshotSettings(() async {
+    final revision = ++_loadRevision;
+    final surfaceRevision = ++_surfaceRevision;
+    try {
+      await widget.repository.clearPersistentSnapshots();
+      await widget.debugDataPreferenceStore.writeMockDataEnabled(value);
+    } catch (_) {
+      final snapshot = _currentSnapshot;
+      final repositorySnapshot = _repositorySnapshot;
+      var owned = false;
+      try {
+        owned =
+            snapshot != null &&
+            repositorySnapshot != null &&
+            await widget.repository.isSnapshotCurrent(repositorySnapshot);
+      } catch (_) {
+        // Unavailable ownership cannot restore reader-visible data.
+      }
+      if (mounted &&
+          revision == _loadRevision &&
+          surfaceRevision == _surfaceRevision) {
+        setState(() {
+          if (owned) {
+            _snapshot = Future.value(snapshot!);
+          } else {
+            _repositorySnapshot = null;
+            _currentSnapshot = null;
+            final failed = Future<DashboardSnapshot>.error(
+              const DashboardLoadException(),
+            );
+            failed.ignore();
+            _snapshot = failed;
+          }
+        });
+      }
+      rethrow;
+    }
     if (!mounted) {
       return;
     }
+    // A completed mode write is authoritative even if a refresh started during
+    // it. Retire that refresh and reload with current credentials and mode.
+    _surfaceRevision++;
     widget.repository.invalidate();
     setState(() {
+      _repositorySnapshot = null;
+      _currentSnapshot = null;
       _mockDataEnabled = value;
       _snapshot = _loadSnapshot();
     });
-  }
+  });
 
   Future<void> _syncWatch(DashboardSnapshot snapshot) async {
     try {
@@ -660,7 +722,8 @@ class _DashboardHostState extends State<DashboardHost> {
     final revision = _surfaceRevision;
     try {
       if (!await widget.repository.isSnapshotCurrent(snapshot) ||
-          revision != _surfaceRevision)
+          revision != _surfaceRevision ||
+          !identical(snapshot, _currentSnapshot))
         return;
       await widget.phoneWidgetSyncService.sync(snapshot, _widgetPreferences);
     } catch (error) {
@@ -675,7 +738,8 @@ class _DashboardHostState extends State<DashboardHost> {
   Future<void> _queueWatchSummary(DashboardSnapshot snapshot) async {
     final revision = _surfaceRevision;
     if (!await widget.repository.isSnapshotCurrent(snapshot) ||
-        revision != _surfaceRevision)
+        revision != _surfaceRevision ||
+        !identical(snapshot, _currentSnapshot))
       return;
     await widget.watchSyncService.sync(
       snapshot,
@@ -822,6 +886,7 @@ class _DashboardHostState extends State<DashboardHost> {
   void _onCredentialsChanged() {
     _loadRevision++;
     _surfaceRevision++;
+    _repositorySnapshot = null;
     _currentSnapshot = null;
     widget.repository.invalidate();
     _reload(forCredentialChange: true);
@@ -853,7 +918,7 @@ class _DashboardHostState extends State<DashboardHost> {
       builder: (context, state) {
         // Credential changes retire visible data immediately while preserving
         // the active tab, its scroll position and any app-owned save operation.
-        final data = _currentSnapshot == null ? null : state.data;
+        final data = _currentSnapshot;
         final snapshot =
             data == null || _mockDataEnabled
                 ? data

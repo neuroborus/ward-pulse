@@ -86,6 +86,7 @@ final class ConnectionBudget {
 final class ConnectionAlertThresholds {
   const ConnectionAlertThresholds({
     this.plan = const AlertPercentThreshold(),
+    this.planWindows = const {},
     this.purchased = const AlertPercentThreshold(),
     this.today = const AlertPercentThreshold(),
     this.week = const AlertPercentThreshold(),
@@ -94,6 +95,9 @@ final class ConnectionAlertThresholds {
   });
 
   final AlertPercentThreshold plan;
+
+  /// Absent IDs inherit Plan; a present disabled threshold explicitly means Off.
+  final Map<String, AlertPercentThreshold> planWindows;
   final AlertPercentThreshold purchased;
   final AlertPercentThreshold today;
   final AlertPercentThreshold week;
@@ -103,16 +107,21 @@ final class ConnectionAlertThresholds {
   /// True when a percent rule can fire. A budget alone is a ceiling, not a rule.
   bool get hasAlertRules =>
       plan.isEnabled ||
+      planWindows.values.any((value) => value.isEnabled) ||
       purchased.isEnabled ||
       today.isEnabled ||
       week.isEnabled ||
       month.isEnabled;
 
-  /// Worth storing: a bare budget still reaches Rust and shapes the dashboard.
+  /// A bare budget also reaches Rust and shapes the dashboard.
   bool get isEnabled => hasAlertRules || !budget.isEmpty;
+
+  /// Explicit Off overrides must survive even when nothing needs evaluation.
+  bool get hasStoredSettings => isEnabled || planWindows.isNotEmpty;
 
   ConnectionAlertThresholds copyWith({
     AlertPercentThreshold? plan,
+    Map<String, AlertPercentThreshold>? planWindows,
     AlertPercentThreshold? purchased,
     AlertPercentThreshold? today,
     AlertPercentThreshold? week,
@@ -121,6 +130,7 @@ final class ConnectionAlertThresholds {
   }) {
     return ConnectionAlertThresholds(
       plan: plan ?? this.plan,
+      planWindows: planWindows ?? this.planWindows,
       purchased: purchased ?? this.purchased,
       today: today ?? this.today,
       week: week ?? this.week,
@@ -131,6 +141,11 @@ final class ConnectionAlertThresholds {
 
   Map<String, Object?> toJson() => {
     'plan': plan.toJson(),
+    if (planWindows.isNotEmpty)
+      'planWindows': {
+        for (final entry in planWindows.entries)
+          entry.key: entry.value.toJson(),
+      },
     'purchased': purchased.toJson(),
     'today': today.toJson(),
     'week': week.toJson(),
@@ -144,6 +159,12 @@ final class ConnectionAlertThresholds {
     }
     return ConnectionAlertThresholds(
       plan: AlertPercentThreshold.fromJson(json['plan']),
+      planWindows: Map.unmodifiable({
+        if (json['planWindows'] case final Map windows)
+          for (final entry in windows.entries)
+            if (entry.key is String)
+              entry.key as String: AlertPercentThreshold.fromJson(entry.value),
+      }),
       purchased: AlertPercentThreshold.fromJson(json['purchased']),
       today: AlertPercentThreshold.fromJson(json['today']),
       week: AlertPercentThreshold.fromJson(json['week']),
@@ -174,7 +195,7 @@ final class AlertThresholdPreferences {
     ConnectionAlertThresholds value,
   ) {
     final next = Map<String, ConnectionAlertThresholds>.of(connections);
-    if (value.isEnabled) {
+    if (value.hasStoredSettings) {
       next[id.storageKey] = value;
     } else {
       next.remove(id.storageKey);
@@ -193,7 +214,7 @@ final class AlertThresholdPreferences {
   Map<String, Object?> toJson() => {
     'connections': {
       for (final entry in connections.entries)
-        if (entry.value.isEnabled) entry.key: entry.value.toJson(),
+        if (entry.value.hasStoredSettings) entry.key: entry.value.toJson(),
     },
   };
 
@@ -210,7 +231,7 @@ final class AlertThresholdPreferences {
           continue;
         }
         final value = ConnectionAlertThresholds.fromJson(entry.value);
-        if (value.isEnabled) {
+        if (value.hasStoredSettings) {
           connections[key] = value;
         }
       }
@@ -285,7 +306,7 @@ int? _clampPercent(Object? value) {
   if (parsed == null) {
     return null;
   }
-  if (parsed < 1 || parsed > 100) {
+  if (parsed < 0 || parsed > 100) {
     return null;
   }
   return parsed;

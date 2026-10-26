@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_app.dart';
+import 'package:ward_pulse_phone/dashboard/apply_alert_settings.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_load.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
@@ -13,15 +14,18 @@ import 'package:ward_pulse_phone/sync/provider_reporting.dart';
 import 'package:ward_pulse_phone/dashboard/plan_recoveries.dart';
 import 'package:ward_pulse_phone/dashboard/provider_status_color.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
+import 'package:ward_pulse_phone/dashboard/dashboard_screen.dart';
 import 'package:ward_pulse_phone/dashboard/merging_connection_repository.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/providers/provider_connection_row.dart';
+import 'package:ward_pulse_phone/providers/providers_screen.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/settings/debug_data_preferences.dart';
 import 'package:ward_pulse_phone/settings/refresh_interval_preferences.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
+import 'package:ward_pulse_phone/widget/phone_widget_sync.dart';
 import 'package:ward_pulse_phone/sync/poll_cadence.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_scheduler.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_logger.dart';
@@ -499,13 +503,19 @@ void main() {
     addTearDown(scheduler.dispose);
     final store = _DelayedAlertThresholdStore();
     final watch = _FakeWatchSyncService();
+    final phoneWidget = _FakePhoneWidgetSyncService();
+    final inputs = <DashboardSnapshot>[];
     await tester.pumpWidget(
       WardPulseApp(
         repository: repository,
         syncScheduler: scheduler,
         watchSyncService: watch,
+        phoneWidgetSyncService: phoneWidget,
         alertThresholdStore: store,
-        applyAlertSettings: (current, _) => current,
+        applyAlertSettings: (current, _) {
+          inputs.add(current);
+          return current;
+        },
       ),
     );
     await tester.pumpAndSettle();
@@ -540,6 +550,21 @@ void main() {
     store.release.complete();
     await tester.pumpAndSettle();
     expect(watch.syncedSnapshots.last.accounts, isEmpty);
+    expect(phoneWidget.syncedSnapshots.last.accounts, isEmpty);
+    await tester
+        .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+        .onAlertThresholdsChanged(
+          (current) => current.withConnection(
+            ProviderConnections.codexPlan,
+            const ConnectionAlertThresholds(
+              plan: AlertPercentThreshold(at: 70),
+            ),
+          ),
+        );
+    await tester.pumpAndSettle();
+    expect(inputs.last.accounts, isEmpty);
+    expect(watch.syncedSnapshots.last.accounts, isEmpty);
+    expect(phoneWidget.syncedSnapshots.last.accounts, isEmpty);
     await tester.tap(find.text('Dashboard'));
     await tester.pumpAndSettle();
     expect(find.text('Connect a provider'), findsWidgets);
@@ -551,6 +576,544 @@ void main() {
       2500,
     );
   });
+
+  testWidgets('alert edits reevaluate owned input and publish both surfaces', (
+    tester,
+  ) async {
+    final source = _alertTestSnapshot();
+    final repository = _PublicationRepository(source);
+    final scheduler = _ManualProviderSyncScheduler();
+    addTearDown(scheduler.dispose);
+    final watch = _FakeWatchSyncService();
+    final phoneWidget = _FakePhoneWidgetSyncService();
+    final store = _MemoryAlertThresholdStore();
+    store.value = store.value.withConnection(
+      ProviderConnections.codexPlan,
+      const ConnectionAlertThresholds(plan: AlertPercentThreshold(at: 70)),
+    );
+    final inputs = <DashboardSnapshot>[];
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: repository,
+        syncScheduler: scheduler,
+        watchSyncService: watch,
+        phoneWidgetSyncService: phoneWidget,
+        alertThresholdStore: store,
+        applyAlertSettings: (snapshot, settings) {
+          inputs.add(snapshot);
+          // Deliberately nonidentity: proves shell reevaluation, not native math.
+          return applyUserAlertSettings(
+            snapshot,
+            settings,
+            applyJson: (input, _) {
+              final json = jsonDecode(input) as Map<String, dynamic>;
+              final accounts = json['accounts'] as List;
+              final account = accounts.first as Map<String, dynamic>;
+              final windows = account['allowances'] as List;
+              final rules = settings.forConnection(
+                ProviderConnections.codexPlan,
+              );
+              final at = (rules.planWindows['window-a'] ?? rules.plan).at;
+              if (windows.isNotEmpty && at != null && at <= 75) {
+                account['status'] = 'warning';
+                (windows.first as Map<String, dynamic>)['status'] = 'warning';
+                json['alerts'] = [
+                  {'severity': 'warning', 'message': 'Configured window alert'},
+                ];
+              }
+              return jsonEncode(json);
+            },
+          );
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+
+    void expectPublished(bool crossed) {
+      final snapshot = watch.syncedSnapshots.last;
+      expect(phoneWidget.syncedSnapshots.last, same(snapshot));
+      expect(
+        snapshot.accounts.first.status,
+        crossed ? ProviderStatus.warning : ProviderStatus.ok,
+      );
+      expect(
+        snapshot.accounts.first.allowances.single.status,
+        crossed ? ProviderStatus.warning : ProviderStatus.ok,
+      );
+      expect(snapshot.alerts, crossed ? isNotEmpty : isEmpty);
+      expect(snapshot.accounts.skip(1).map((account) => account.status), [
+        ProviderStatus.warning,
+        ProviderStatus.rateLimited,
+        ProviderStatus.authRequired,
+      ]);
+      expect(snapshot.todayTotal.toJson(), source.todayTotal.toJson());
+      expect(snapshot.accounts.first.today.status, ProviderStatus.warning);
+      expect(snapshot.syncIssue, repository.snapshot.syncIssue);
+      expect(snapshot.syncDetails, repository.snapshot.syncDetails);
+      expect(
+        snapshot.connectionVersions,
+        repository.snapshot.connectionVersions,
+      );
+      expect(snapshot.reportingOutcomes, repository.snapshot.reportingOutcomes);
+    }
+
+    expectPublished(true);
+    const edits = [
+      // Explicit Off suppresses the enabled fallback.
+      ConnectionAlertThresholds(
+        plan: AlertPercentThreshold(at: 70),
+        planWindows: {'window-a': AlertPercentThreshold()},
+      ),
+      // Removing that entry resumes inheritance.
+      ConnectionAlertThresholds(plan: AlertPercentThreshold(at: 70)),
+      ConnectionAlertThresholds(plan: AlertPercentThreshold(at: 90)),
+      ConnectionAlertThresholds(
+        planWindows: {'window-a': AlertPercentThreshold(at: 70)},
+      ),
+      ConnectionAlertThresholds(
+        planWindows: {'window-a': AlertPercentThreshold()},
+      ),
+    ];
+    for (var index = 0; index < edits.length; index++) {
+      // Either failed delivery must leave the other independent path usable.
+      watch.fail = index == 0;
+      phoneWidget.fail = index == 1;
+      await tester
+          .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+          .onAlertThresholdsChanged(
+            (current) => current.withConnection(
+              ProviderConnections.codexPlan,
+              edits[index],
+            ),
+          );
+      await tester.pumpAndSettle();
+      expectPublished(index == 1 || index == 3);
+      expect(repository.loads, 1);
+      expect(inputs, everyElement(same(source)));
+      expect(watch.syncedSnapshots, hasLength(index + 2));
+      expect(phoneWidget.syncedSnapshots, hasLength(index + 2));
+    }
+    watch.fail = false;
+    phoneWidget.fail = false;
+
+    // A missing window keeps its rule; the same ID returns with a new label.
+    repository.snapshot = _alertTestSnapshot(includeWindow: false);
+    scheduler.tick();
+    await tester.pumpAndSettle();
+    await tester
+        .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+        .onAlertThresholdsChanged(
+          (current) => current.withConnection(
+            ProviderConnections.codexPlan,
+            const ConnectionAlertThresholds(
+              planWindows: {'window-a': AlertPercentThreshold(at: 70)},
+            ),
+          ),
+        );
+    await tester.pumpAndSettle();
+    expect(inputs.last, same(repository.snapshot));
+    expect(watch.syncedSnapshots.last.alerts, isEmpty);
+    repository.snapshot = _alertTestSnapshot(windowLabel: 'Renamed');
+    scheduler.tick();
+    await tester.pumpAndSettle();
+    expectPublished(true);
+    expect(inputs.last, same(repository.snapshot));
+    expect(
+      watch.syncedSnapshots.last.accounts.first.allowances.single.label,
+      'Renamed',
+    );
+    expect(repository.loads, 3);
+    expect(
+      AlertThresholdPreferences.decode(store.value.encode())
+          .forConnection(ProviderConnections.codexPlan)
+          .planWindows['window-a']!
+          .at,
+      70,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final refreshFirst in [true, false]) {
+    testWidgets(
+      'in-flight refresh converges with alert save (refresh first: $refreshFirst)',
+      (tester) async {
+        final source = _alertTestSnapshot();
+        final newer = _alertTestSnapshot(windowLabel: 'New data');
+        final repository = _PublicationRepository(source);
+        final store = _DelayedAlertThresholdStore();
+        final watch = _FakeWatchSyncService();
+        final phoneWidget = _FakePhoneWidgetSyncService();
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            alertThresholdStore: store,
+            watchSyncService: watch,
+            phoneWidgetSyncService: phoneWidget,
+            applyAlertSettings:
+                (snapshot, settings) => applyUserAlertSettings(
+                  snapshot,
+                  settings,
+                  applyJson:
+                      (input, _) => jsonEncode({
+                        ...jsonDecode(input) as Map<String, dynamic>,
+                        'alerts': [
+                          {
+                            'severity': 'warning',
+                            'message': 'Configured alert',
+                          },
+                        ],
+                      }),
+                ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Providers'));
+        await tester.pumpAndSettle();
+        final refresh = Completer<DashboardSnapshot>();
+        repository.response = refresh.future;
+        await tester.tap(find.byTooltip('Refresh'));
+        await tester.pumpAndSettle();
+        expect(repository.loads, 2);
+
+        final save = tester
+            .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+            .onAlertThresholdsChanged(
+              (current) => current.withConnection(
+                ProviderConnections.codexPlan,
+                const ConnectionAlertThresholds(
+                  plan: AlertPercentThreshold(at: 70),
+                ),
+              ),
+            );
+        await tester.pump();
+        expect(store.started, isTrue);
+        if (refreshFirst) {
+          refresh.complete(newer);
+          await tester.pumpAndSettle();
+        }
+        store.release.complete();
+        await save;
+        await tester.pumpAndSettle();
+        if (!refreshFirst) {
+          // The edit is visible while the original foreground future is pending.
+          await tester.tap(find.text('Dashboard'));
+          await tester.pumpAndSettle();
+          final interim =
+              tester
+                  .widget<DashboardScreen>(find.byType(DashboardScreen))
+                  .snapshot;
+          expect(interim.accounts.first.allowances.single.label, 'Window A');
+          expect(interim.alerts.single.message, 'Configured alert');
+          refresh.complete(newer);
+          await tester.pumpAndSettle();
+        } else {
+          await tester.tap(find.text('Dashboard'));
+          await tester.pumpAndSettle();
+        }
+
+        final displayed =
+            tester
+                .widget<DashboardScreen>(find.byType(DashboardScreen))
+                .snapshot;
+        expect(displayed.accounts.first.allowances.single.label, 'New data');
+        expect(displayed.alerts.single.message, 'Configured alert');
+        expect(displayed.toJson(), watch.syncedSnapshots.last.toJson());
+        expect(displayed.toJson(), phoneWidget.syncedSnapshots.last.toJson());
+        expect(repository.loads, 2);
+        expect(
+          store.value.forConnection(ProviderConnections.codexPlan).plan.at,
+          70,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  for (final failure in ['evaluation', 'persistence']) {
+    testWidgets('$failure failure preserves state and releases queued edits', (
+      tester,
+    ) async {
+      final store = _MemoryAlertThresholdStore();
+      final watch = _FakeWatchSyncService();
+      final phoneWidget = _FakePhoneWidgetSyncService();
+      var failEvaluation = false;
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: ValueDashboardRepository(_alertTestSnapshot()),
+          watchSyncService: watch,
+          phoneWidgetSyncService: phoneWidget,
+          alertThresholdStore: store,
+          applyAlertSettings: (snapshot, _) {
+            if (failEvaluation) {
+              failEvaluation = false;
+              throw StateError('Evaluation unavailable');
+            }
+            return snapshot;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      final providers = tester.widget<ProvidersScreen>(
+        find.byType(ProvidersScreen),
+      );
+      final previous = watch.syncedSnapshots.single;
+      failEvaluation = failure == 'evaluation';
+      store.failNextWrite = failure == 'persistence';
+      final failed = providers.onAlertThresholdsChanged(
+        (current) => current.withConnection(
+          ProviderConnections.codexPlan,
+          const ConnectionAlertThresholds(plan: AlertPercentThreshold(at: 70)),
+        ),
+      );
+      final observedFailure = expectLater(failed, throwsStateError);
+      final queued = providers.onAlertThresholdsChanged((current) {
+        expect(current.connections, isEmpty);
+        expect(store.value.connections, isEmpty);
+        expect(store.writes, failure == 'evaluation' ? 0 : 1);
+        expect(watch.syncedSnapshots, [previous]);
+        expect(phoneWidget.syncedSnapshots, [previous]);
+        return current.withConnection(
+          ProviderConnections.cursorPlan,
+          const ConnectionAlertThresholds(plan: AlertPercentThreshold(at: 90)),
+        );
+      });
+      await observedFailure;
+      await queued;
+      await tester.pumpAndSettle();
+      expect(
+        store.value.forConnection(ProviderConnections.codexPlan).isEnabled,
+        isFalse,
+      );
+      expect(
+        store.value.forConnection(ProviderConnections.cursorPlan).plan.at,
+        90,
+      );
+      expect(watch.syncedSnapshots, hasLength(2));
+      expect(phoneWidget.syncedSnapshots, hasLength(2));
+      expect(
+        tester
+            .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+            .alertThresholds
+            .toJson(),
+        store.value.toJson(),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final failureFirst in [true, false]) {
+    testWidgets(
+      'alert save updates scheduled fallback (failure first: $failureFirst)',
+      (tester) async {
+        final source = _alertTestSnapshot();
+        final repository = _PublicationRepository(source);
+        final store = _DelayedAlertThresholdStore();
+        store.value = store.value.withConnection(
+          ProviderConnections.codexPlan,
+          const ConnectionAlertThresholds(plan: AlertPercentThreshold(at: 70)),
+        );
+        final scheduler = _ManualProviderSyncScheduler();
+        addTearDown(scheduler.dispose);
+        final watch = _FakeWatchSyncService();
+        final phoneWidget = _FakePhoneWidgetSyncService();
+        final inputs = <DashboardSnapshot>[];
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            alertThresholdStore: store,
+            syncScheduler: scheduler,
+            watchSyncService: watch,
+            phoneWidgetSyncService: phoneWidget,
+            applyAlertSettings: (snapshot, settings) {
+              inputs.add(snapshot);
+              return applyUserAlertSettings(
+                snapshot,
+                settings,
+                applyJson:
+                    (input, _) => jsonEncode({
+                      ...jsonDecode(input) as Map<String, dynamic>,
+                      'alerts': [
+                        {'severity': 'warning', 'message': 'Configured alert'},
+                      ],
+                    }),
+              );
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(watch.syncedSnapshots.single.alerts, isNotEmpty);
+        await tester.tap(find.text('Providers'));
+        await tester.pumpAndSettle();
+        final save = tester
+            .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+            .onAlertThresholdsChanged(
+              (current) => current.withConnection(
+                ProviderConnections.codexPlan,
+                const ConnectionAlertThresholds(),
+              ),
+            );
+        await tester.pump();
+        expect(store.started, isTrue);
+        final refresh = Completer<DashboardSnapshot>();
+        repository.response = refresh.future;
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(repository.loads, 2);
+        if (failureFirst) {
+          refresh.completeError(const DashboardLoadException());
+          await tester.pumpAndSettle();
+        }
+        store.release.complete();
+        await save;
+        await tester.pumpAndSettle();
+        if (!failureFirst) {
+          refresh.completeError(const DashboardLoadException());
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(find.text('Dashboard'));
+        await tester.pumpAndSettle();
+        final displayed =
+            tester
+                .widget<DashboardScreen>(find.byType(DashboardScreen))
+                .snapshot;
+        expect(displayed.toJson(), source.toJson());
+        expect(displayed.alerts, isEmpty);
+        expect(watch.syncedSnapshots.last.toJson(), displayed.toJson());
+        expect(phoneWidget.syncedSnapshots.last.toJson(), displayed.toJson());
+        expect(watch.syncedSnapshots, hasLength(2));
+        expect(phoneWidget.syncedSnapshots, hasLength(2));
+        expect(inputs, [source, source]);
+        expect(store.value.hasEnabledRules, isFalse);
+        expect(repository.loads, 2);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'alert write rechecks ownership before publishing either surface',
+    (tester) async {
+      final source = _alertTestSnapshot();
+      final repository = _PublicationRepository(source);
+      final store = _DelayedAlertThresholdStore();
+      final watch = _FakeWatchSyncService();
+      final phoneWidget = _FakePhoneWidgetSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          alertThresholdStore: store,
+          watchSyncService: watch,
+          phoneWidgetSyncService: phoneWidget,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      final save = tester
+          .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+          .onAlertThresholdsChanged(
+            (current) => current.withConnection(
+              ProviderConnections.codexPlan,
+              const ConnectionAlertThresholds(
+                plan: AlertPercentThreshold(at: 70),
+              ),
+            ),
+          );
+      await tester.pump();
+      expect(store.started, isTrue);
+      repository.current = false;
+      store.release.complete();
+      await save;
+      await tester.pumpAndSettle();
+      expect(watch.syncedSnapshots, [source]);
+      expect(phoneWidget.syncedSnapshots, [source]);
+      expect(
+        store.value.forConnection(ProviderConnections.codexPlan).plan.at,
+        70,
+      );
+      expect(repository.loads, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final retirement in [
+    'foreground',
+    'scheduled',
+    'credentials',
+    'fallback',
+  ]) {
+    testWidgets('$retirement load keeps only usable owned alert input', (
+      tester,
+    ) async {
+      final source = _alertTestSnapshot();
+      final repository = _PublicationRepository(source);
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      final watch = _FakeWatchSyncService();
+      final phoneWidget = _FakePhoneWidgetSyncService();
+      final inputs = <DashboardSnapshot>[];
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          syncScheduler: scheduler,
+          watchSyncService: watch,
+          phoneWidgetSyncService: phoneWidget,
+          applyAlertSettings: (snapshot, _) {
+            inputs.add(snapshot);
+            return snapshot;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      repository.failLoad = true;
+      repository.current = retirement != 'scheduled';
+      if (retirement == 'credentials') {
+        tester
+            .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+            .onCredentialsChanged();
+      } else if (retirement == 'foreground') {
+        await tester.tap(find.byTooltip('Refresh'));
+      } else {
+        scheduler.tick();
+      }
+      await tester.pumpAndSettle();
+      await tester
+          .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+          .onAlertThresholdsChanged(
+            (current) => current.withConnection(
+              ProviderConnections.codexPlan,
+              const ConnectionAlertThresholds(
+                plan: AlertPercentThreshold(at: 70),
+              ),
+            ),
+          );
+      await tester.pumpAndSettle();
+      final retained = retirement == 'fallback';
+      expect(inputs, retained ? [source, source] : [source]);
+      expect(watch.syncedSnapshots, retained ? [source, source] : [source]);
+      expect(
+        phoneWidget.syncedSnapshots,
+        retained ? [source, source] : [source],
+      );
+      expect(
+        tester
+            .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+            .alertThresholds
+            .forConnection(ProviderConnections.codexPlan)
+            .plan
+            .at,
+        70,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('a reload keeps the dashboard on screen', (tester) async {
     final snapshot = DashboardSnapshot.fromJsonString(
@@ -1930,6 +2493,155 @@ void main() {
     expect(find.text('Codex plan'), findsOneWidget);
   });
 
+  for (final failure in ['cache clear', 'preference write']) {
+    for (final owned in [true, false]) {
+      testWidgets('mock $failure failure retains only owned data ($owned)', (
+        tester,
+      ) async {
+        final source = _alertTestSnapshot();
+        final repository = _PublicationRepository(source);
+        final preferences = _MemoryDebugDataPreferenceStore();
+        final watch = _FakeWatchSyncService();
+        final phoneWidget = _FakePhoneWidgetSyncService();
+        final inputs = <DashboardSnapshot>[];
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            debugDataAvailable: true,
+            debugDataPreferenceStore: preferences,
+            watchSyncService: watch,
+            phoneWidgetSyncService: phoneWidget,
+            applyAlertSettings: (snapshot, _) {
+              inputs.add(snapshot);
+              return snapshot;
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Settings'));
+        await tester.pumpAndSettle();
+        final toggle = find.widgetWithText(SwitchListTile, 'Mock data');
+        await tester.scrollUntilVisible(
+          toggle,
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        repository.failClear = failure == 'cache clear';
+        preferences.failWrite = failure == 'preference write';
+        repository.current = owned;
+        await tester.tap(toggle);
+        await tester.pumpAndSettle();
+        expect(find.text('Could not update mock data setting'), findsOneWidget);
+        expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+        expect(preferences.value, isFalse);
+        expect(preferences.writes, failure == 'cache clear' ? 0 : 1);
+        expect(repository.loads, 1);
+
+        await tester.tap(find.text('Providers'));
+        await tester.pumpAndSettle();
+        await tester
+            .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+            .onAlertThresholdsChanged(
+              (current) => current.withConnection(
+                ProviderConnections.codexPlan,
+                const ConnectionAlertThresholds(
+                  plan: AlertPercentThreshold(at: 70),
+                ),
+              ),
+            );
+        await tester.pumpAndSettle();
+        expect(inputs, owned ? [source, source] : [source]);
+        expect(watch.syncedSnapshots, owned ? [source, source] : [source]);
+        expect(
+          phoneWidget.syncedSnapshots,
+          owned ? [source, source] : [source],
+        );
+        await tester.tap(find.text('Dashboard'));
+        await tester.pumpAndSettle();
+        if (owned) {
+          expect(
+            tester
+                .widget<DashboardScreen>(find.byType(DashboardScreen))
+                .snapshot
+                .toJson(),
+            source.toJson(),
+          );
+        } else {
+          expect(find.byType(DashboardScreen), findsNothing);
+        }
+        expect(repository.loads, 1);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  for (final trigger in ['scheduled', 'foreground']) {
+    testWidgets('mock mode write survives an overlapping $trigger refresh', (
+      tester,
+    ) async {
+      final live = _PublicationRepository(_alertTestSnapshot());
+      final mock = _PublicationRepository(
+        _alertTestSnapshot(windowLabel: 'Mock data'),
+      );
+      final preferences = _MemoryDebugDataPreferenceStore();
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      final watch = _FakeWatchSyncService();
+      final phoneWidget = _FakePhoneWidgetSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: DebugDashboardRepository(
+            live: live,
+            mock: mock,
+            preferences: preferences,
+          ),
+          debugDataAvailable: true,
+          debugDataPreferenceStore: preferences,
+          syncScheduler: scheduler,
+          watchSyncService: watch,
+          phoneWidgetSyncService: phoneWidget,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      final toggle = find.widgetWithText(SwitchListTile, 'Mock data');
+      await tester.scrollUntilVisible(
+        toggle,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      final release = Completer<void>();
+      preferences.pendingWrite = release.future;
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(preferences.writes, 1);
+      expect(preferences.value, isFalse);
+      if (trigger == 'scheduled') {
+        scheduler.tick();
+      } else {
+        await tester.tap(find.byTooltip('Refresh'));
+      }
+      await tester.pumpAndSettle();
+      release.complete();
+      await tester.pumpAndSettle();
+      expect(preferences.value, isTrue);
+      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+      expect(watch.mockModes.last, isTrue);
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      final displayed =
+          tester.widget<DashboardScreen>(find.byType(DashboardScreen)).snapshot;
+      expect(displayed.accounts.first.allowances.single.label, 'Mock data');
+      expect(displayed.toJson(), mock.snapshot.toJson());
+      expect(displayed.toJson(), watch.syncedSnapshots.last.toJson());
+      expect(displayed.toJson(), phoneWidget.syncedSnapshots.last.toJson());
+      expect(live.loads, trigger == 'scheduled' ? 2 : 1);
+      expect(mock.loads, 1);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets(
     'demo data leaves nothing for a recovery to be measured against',
     (tester) async {
@@ -2043,6 +2755,76 @@ DashboardSnapshot _asConnection(DashboardSnapshot snapshot) {
   });
 }
 
+DashboardSnapshot _alertTestSnapshot({
+  bool includeWindow = true,
+  String windowLabel = 'Window A',
+}) {
+  final empty = DashboardSnapshot.empty(
+    generatedAt: DateTime.utc(2026, 10, 26),
+  );
+  final budget = {
+    ...empty.todayTotal.toJson(),
+    'spent': {'minorUnits': 2501, 'currency': 'USD'},
+    'limit': {'minorUnits': 2500, 'currency': 'USD'},
+    'remaining': {'minorUnits': -1, 'currency': 'USD'},
+    'usedPercent': 100.04,
+    'status': 'warning',
+  };
+  final account = {
+    'accountId': 'plan-a',
+    'provider': 'codex',
+    'connection': ProviderConnections.codexPlan.storageKey,
+    'status': 'ok',
+    'today': budget,
+    'week': empty.weekTotal.toJson(),
+    'month': empty.monthTotal.toJson(),
+    'credits': <Object>[],
+    'allowances': [
+      if (includeWindow)
+        {
+          'id': 'window-a',
+          'source': 'plan',
+          'label': windowLabel,
+          'usedPercent': 75,
+          'status': 'ok',
+        },
+    ],
+    'buckets': <Object>[],
+    'modelBreakdown': <Object>[],
+  };
+  return DashboardSnapshot.fromJson({
+        ...empty.toJson(),
+        'overallStatus': 'authRequired',
+        'todayTotal': budget,
+        'accounts': [
+          account,
+          for (final status in ['warning', 'rateLimited', 'authRequired'])
+            {
+              ...account,
+              'accountId': 'source-$status',
+              'provider': 'claude',
+              'connection': ProviderConnections.claudePlan.storageKey,
+              'status': status,
+              'allowances': <Object>[],
+            },
+        ],
+      })
+      .withConnectionVersions({
+        ProviderConnections.codexPlan.storageKey: {'generation': 'g1'},
+      })
+      .withReportingOutcomes([
+        const ConnectionReportingOutcome(
+          connection: ProviderConnections.openAiPlatform,
+          category: ReportingOutcomeCategory.accessDenied,
+          source: ReportingOutcomeSource.live,
+        ),
+      ])
+      .withSyncIssue(
+        DashboardSyncIssue.permissionDenied,
+        details: 'Sanitized source issue',
+      );
+}
+
 class _MemoryRecoveryNotificationStore
     implements RecoveryNotificationPreferenceStore {
   bool enabled = true;
@@ -2080,6 +2862,8 @@ class _MemoryRecoveryWatchlistStore implements RecoveryWatchlistStore {
 
 class _FakeWatchSyncService implements WatchSyncService {
   final syncedSnapshots = <DashboardSnapshot>[];
+  final mockModes = <bool>[];
+  bool fail = false;
   void Function()? refreshHandler;
 
   @override
@@ -2090,6 +2874,8 @@ class _FakeWatchSyncService implements WatchSyncService {
     bool mockDataMode = false,
   }) async {
     syncedSnapshots.add(snapshot);
+    mockModes.add(mockDataMode);
+    if (fail) throw StateError('Watch unavailable');
   }
 
   @override
@@ -2100,6 +2886,20 @@ class _FakeWatchSyncService implements WatchSyncService {
   @override
   void unbindWatchRefreshListener() {
     refreshHandler = null;
+  }
+}
+
+class _FakePhoneWidgetSyncService implements PhoneWidgetSyncService {
+  final syncedSnapshots = <DashboardSnapshot>[];
+  bool fail = false;
+
+  @override
+  Future<void> sync(
+    DashboardSnapshot snapshot,
+    PhoneWidgetPreferences preferences,
+  ) async {
+    syncedSnapshots.add(snapshot);
+    if (fail) throw StateError('Widget unavailable');
   }
 }
 
@@ -2170,12 +2970,19 @@ class _MemoryWatchRingStore implements WatchRingPreferenceStore {
 
 class _MemoryAlertThresholdStore implements AlertThresholdPreferenceStore {
   AlertThresholdPreferences value = const AlertThresholdPreferences();
+  int writes = 0;
+  bool failNextWrite = false;
 
   @override
   Future<AlertThresholdPreferences> read() async => value;
 
   @override
   Future<void> write(AlertThresholdPreferences next) async {
+    writes++;
+    if (failNextWrite) {
+      failNextWrite = false;
+      throw StateError('Storage unavailable');
+    }
     value = next;
   }
 }
@@ -2246,12 +3053,19 @@ class _MemoryCredentialStore
 
 class _MemoryDebugDataPreferenceStore implements DebugDataPreferenceStore {
   bool value = false;
+  bool failWrite = false;
+  int writes = 0;
+  Future<void>? pendingWrite;
 
   @override
   Future<bool> readMockDataEnabled() async => value;
 
   @override
   Future<void> writeMockDataEnabled(bool value) async {
+    writes++;
+    if (failWrite) throw StateError('Debug preferences unavailable');
+    final pending = pendingWrite;
+    if (pending != null) await pending;
     this.value = value;
   }
 }
@@ -2293,11 +3107,32 @@ class _ManualProviderSyncScheduler implements ProviderSyncScheduler {
 class _PublicationRepository extends DashboardRepository {
   _PublicationRepository(this.snapshot);
   DashboardSnapshot snapshot;
+  int loads = 0;
+  bool failLoad = false;
+  bool failClear = false;
+  Future<DashboardSnapshot>? response;
+  bool current = true;
   bool delayNextValidation = false;
   bool validationStarted = false;
   final validation = Completer<bool>();
   @override
-  Future<DashboardSnapshot> load() async => snapshot;
+  Future<DashboardSnapshot> load() async {
+    loads++;
+    if (failLoad) throw const DashboardLoadException();
+    if (response != null) return response!;
+    return snapshot;
+  }
+
+  @override
+  Future<void> clearPersistentSnapshots() async {
+    if (failClear) throw StateError('Snapshot cache unavailable');
+    await super.clearPersistentSnapshots();
+  }
+
+  // The failed request can be current after its previous data loses ownership.
+  @override
+  Future<bool> isFailureCurrent(DashboardLoadException failure) async => true;
+
   @override
   Future<bool> isSnapshotCurrent(DashboardSnapshot snapshot) async {
     if (delayNextValidation) {
@@ -2305,7 +3140,7 @@ class _PublicationRepository extends DashboardRepository {
       validationStarted = true;
       return validation.future;
     }
-    return true;
+    return current;
   }
 }
 
