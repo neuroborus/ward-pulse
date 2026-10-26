@@ -56,6 +56,15 @@ every alias the pipeline needs. Trusted commands execute in the project director
 the runner's environment. `local.properties` in each Android module removes the `ANDROID_HOME`
 dependency for Gradle.
 
+Before a fresh start, compare the effective pipeline selection with the scoped Native catalogue.
+Every selected command enters discovery and needs legitimate scope applicability; remove unrelated
+selections only before that new run. Unused definitions are not selections.
+Put read-only discovery versus workspace-write FINALIZE and real extra-authority needs in role-visible
+task/context; local operator guidance is not injected. Report genuine needs, never force empty reports.
+Keep mandatory HOST acceptance after whole DONE, run-owned process retirement and fresh separate
+quiescent ownership; if the route used a foreground owning CLI, also require its actual exit.
+HOST is not a Native check or Native-commit prerequisite. Preserve every scope-appropriate gate.
+
 ## Observed environment limits
 
 - **`spawnSync python3` is denied (`EPERM`)**, so `just render-designs` can never finish inside

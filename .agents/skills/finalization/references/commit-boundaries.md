@@ -5,10 +5,15 @@ the owning rule for dividing work; [commit-message.md](commit-message.md) owns w
 
 ## Plan one cohesive problem
 
-By default, implement one backlog item or cohesive problem at a time in the coordinating
-working copy. Prepare actual Runner plans as focused commits with clear scope, necessary
-checks and independent review. A deliberate cohesive multi-commit plan is allowed; each
-step must remain reviewable and coherent rather than mixing unrelated backlog features.
+By default, work sequentially on one backlog item or cohesive problem in the main working
+copy. Prepare actual Runner plans as focused commits with clear scope, necessary checks and
+independent review. A deliberate cohesive multi-commit plan is allowed; each step must remain
+reviewable and coherent rather than mixing unrelated backlog features.
+
+Do not create clones or worktrees solely to fill an active Runner wait or implement a small
+unrelated skill/prose change. Queue those changes until the owning current integration
+boundary is accepted; read-only preparation, investigation and review may continue. The
+owner's explicit 2026-10-26 direction is sequential implementation in the main working copy.
 
 Include the owning code's necessary tests, documentation, contracts and generated exports
 in its coherent change. Do not separate a generator from required output or mix an
@@ -36,11 +41,12 @@ before further unrelated work; do not rewrite frozen run/task/config/state to ob
 
 ## Independent implementation streams
 
-Separately scoped implementation streams can proceed when each has appropriate isolation,
-its own actual Runner execution/review and an explicit focused commit/integration boundary.
-Do not pour their results into one uncommitted integration pool. Preserve dependencies,
-ownership and existing changes when bringing a completed stream back to the coordinating
-working copy. Isolation does not authorize bypassing another run's protected ownership.
+Use separate implementation streams or isolation only where actually needed and within the
+owner's authorized scope. Each stream still requires its own actual Runner execution/review
+and an explicit focused commit/integration boundary. Do not pour results into one uncommitted
+integration pool. Preserve dependencies, ownership and existing changes when bringing a
+completed stream back to the main working copy. Isolation does not authorize bypassing
+another run's protected ownership.
 
 ## Preserve the Native/HOST and commit contract
 
