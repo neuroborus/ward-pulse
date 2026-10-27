@@ -427,8 +427,11 @@ changes may require an app update. Never log tokens, authorization codes, or raw
 Status: implemented as an experimental on-device compatibility integration on 2026-07-25;
 dashboard WebView sign-in added 2026-07-26.
 
-Cursor has no official personal-account usage API and no OAuth grant for plan meters. Providers
-opens an in-app WebView to the Cursor dashboard; after sign-in the phone captures the
+The reviewed official [API](https://cursor.com/docs/api) and
+[SDK](https://cursor.com/docs/sdk/typescript) documentation does not establish an equivalent
+authorization grant for this integration’s personal plan meters. SDK User API keys and agent
+usage are separate from dashboard plan reporting and Team reporting. Providers opens an in-app
+WebView to the Cursor dashboard; after sign-in the phone captures the
 `WorkosCursorSessionToken` cookie (Advanced paste remains for the same value), stores it
 securely, and calls `GET /api/usage-summary`, normalizing included plan pools and on-demand
 meters into allowances. When the payload includes `autoPercentUsed` / `apiPercentUsed`, WardPulse
@@ -443,8 +446,45 @@ selection. Each can inherit Plan, set its own percentage or explicitly turn Off;
 Purchased controls the separate on-demand allowance. See
 [Alert thresholds](user-guide/DASHBOARD.md#alert-thresholds).
 
-Do not claim Admin-API hourly aggregation on this experimental row. Never log the cookie or
-raw response bodies.
+Navigation additionally admits only the six exact HTTPS identities in Cursor's
+[sign-in-domain guidance](https://cursor.com/help/troubleshooting/sign-in-domains), reviewed
+2026-10-27: `accounts.x.ai`, `accounts.spacex.ai`, `auth.x.ai`, `auth.grok.com`,
+`auth.grokusercontent.com` and `auth.grokipedia.com`. The page's October 30 fallback wording
+supplies no year. These hosts gain no credential-read authority: cookie reads/probes remain
+HTTPS `cursor.com` apex/subdomains only.
+
+The navigation policy rejects Google authorization in accordance with Google's
+[secure-browser policy](https://developers.google.com/identity/protocols/oauth2/policies#use-secure-browsers).
+Android's `CursorSignInWebViewClient` in
+`apps/phone_flutter/android/app/src/main/java/app/wardpulse/CursorSignInWebViewClient.java`
+wraps the plugin client to block authorization navigation and resource requests, including
+subframes that the Flutter delegate does not expose. Native interception enforces the same
+approved main-frame HTTPS/host policy for all request methods, including POST, which skips
+Android's navigation callback. The internal blank document is admitted only after retirement
+begins. Harmless CAPTCHA/static subresources still reach the original client. Native main-frame HTTP failures enter page recovery; optional
+subresource HTTP errors do not. The guard crosses only view/client IDs and fixed failure
+categories, and its sticky status is checked before/after cookie probing and before accepting completion.
+The WebView keeps its default user agent. Recovery uses
+same-account email when offered, Cancel/reopen and Help → Advanced paste, without a new
+browser handoff or OAuth protocol.
+External browser return does not supply the WebView cookie; no suitable reporting
+callback/exchange was established for this integration.
+
+`CursorPlanSignInScreen` in `apps/phone_flutter/lib/providers/cursor_plan_sign_in_screen.dart`
+bounds platform stages to 15 seconds and page loading to 30 seconds. Two minutes bounds
+automatic polling, then Check again resumes checks while password/MFA entry remains waiting.
+Retry verifies a new startup wipe; old work retains the shared-jar lease until it settles and
+its document finishes retiring to a local blank page. Unsettled cleanup cannot clear a newer
+attempt. Failure/cancellation leaves the previous saved connection intact. A token is returned
+only once after verified cleanup. A failed blank-page request is retryable: the barrier
+retains the old browser until retirement succeeds, including on Retry or Cancel/reopen.
+A failed retirement never grants a newer browser access to the shared jar.
+
+Native WebView recovery, current Google/email migration, external browser return, account
+entitlement and live-provider acceptance remain **Pending**. Source/fake tests do not establish
+native or live login success, and these changes do not establish a billing repair.
+Do not claim Admin-API hourly aggregation or a Team publication deadline on this experimental
+row. Never log auth query/fragment, identity/password, tokens, cookies/headers or raw bodies.
 
 ## Cursor team Admin API
 

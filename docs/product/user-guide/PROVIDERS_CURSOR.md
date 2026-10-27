@@ -8,7 +8,8 @@ Team API key required by that reporting connection.
 
 1. Open **Providers → Cursor → Cursor plan**.
 2. Sign in to the Cursor account you want to connect and follow the provider's prompts.
-3. Return to WardPulse after sign-in completes and check Dashboard.
+3. WardPulse closes sign-in only after capturing a session. Check Dashboard for a fresh report;
+   saving a connection does not confirm that reporting succeeded.
 
 If the row is already Connected, tap it and choose **Sign in again** to replace the login.
 Cancelling the replacement preserves the existing connection.
@@ -17,10 +18,22 @@ When Cursor reports **Cursor Models** and **Other Models**, each is a separate i
 window. Configure them independently through the connection's bell icon; **Purchased**
 controls on-demand usage. See [Alert thresholds](/guide/dashboard#alert-thresholds).
 
-Google sign-in may hang in WardPulse's built-in browser. If it does, tap **Cancel**,
-then open **Cursor plan** again and try email sign-in. If sign-in still does not complete,
-tap **Cancel** and follow [Advanced paste](#advanced-paste) to enter an existing Cursor
-session cookie value.
+Google authorization is blocked in WardPulse's built-in browser because Google's
+[secure-browser policy](https://developers.google.com/identity/protocols/oauth2/policies#use-secure-browsers)
+does not allow embedded browsers for this flow. Use email for the **same Cursor account**
+when offered, or **Cancel**, reopen **Cursor plan** and choose another offered method.
+This does not require another account, a plan change or account unification.
+
+For startup, page or session-reading problems, use **Retry**, **Cancel** or **Help**.
+Retry clears the in-app session and starts over. After two minutes, automatic session checks
+pause: continue password/MFA entry, then tap **Check again**. Waiting does not mean your
+password was rejected. A failed or cancelled replacement keeps the saved connection.
+For [Advanced paste](#advanced-paste), Cancel to Providers and open the plan row's help icon.
+Signing in in another browser or returning to WardPulse does not transfer that browser's session.
+
+This is an experimental dashboard-session connection. The reviewed official documentation does
+not establish an equivalent authorization grant for these personal plan meters. SDK User API
+keys and agent usage are separate from this connection and from Team reporting.
 
 ### Advanced paste
 

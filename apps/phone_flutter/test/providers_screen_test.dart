@@ -919,7 +919,7 @@ void main() {
     await tester.ensureVisible(value);
     await tester.pumpAndSettle();
     await tester.tap(value);
-    await tester.enterText(value, pasted);
+    await tester.enterText(value, ' ${Uri.encodeComponent(pasted)} ');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
@@ -931,7 +931,9 @@ void main() {
   testWidgets('Cursor plan Sign in uses injected port and marks Connected', (
     tester,
   ) async {
-    final store = _MemoryCredentialStore();
+    final store = _ReconnectMemoryCredentialStore();
+    await store.writeSecret(ProviderConnections.cursorPlatform, 'team-sentinel');
+    var credentialsChanged = 0;
     var signInCalls = 0;
 
     await tester.pumpWidget(
@@ -942,12 +944,12 @@ void main() {
             credentialStore: store,
             codexAccountService: const EmptyCodexAccountService(),
             claudeAccountService: const EmptyClaudeAccountService(),
-            onCredentialsChanged: () {},
+            onCredentialsChanged: () => credentialsChanged++,
             alertThresholds: const AlertThresholdPreferences(),
             onAlertThresholdsChanged: (_) async {},
             cursorPlanSignIn: (_) async {
               signInCalls++;
-              return 'user_01WEB::eyJhbGciOiJSUzI1NiJ9.payload.signature_padding==';
+              return ' user_01WEB%3A%3AeyJhbGciOiJSUzI1NiJ9.payload.signature_padding%3D%3D ';
             },
           ),
         ),
@@ -970,7 +972,60 @@ void main() {
       'user_01WEB::eyJhbGciOiJSUzI1NiJ9.payload.signature_padding==',
     );
     expect(find.text('Connected'), findsWidgets);
+    expect(credentialsChanged, 1);
+    expect(store.reconnectCalls, ['begin:cursor.plan', 'complete:cursor.plan']);
+    expect(
+      await store.readSecret(ProviderConnections.cursorPlatform),
+      'team-sentinel',
+    );
   });
+
+  for (final installed in [false, true]) {
+    testWidgets(
+      'Cursor cancellation preserves saved state (installed: $installed)',
+      (tester) async {
+        final store = _ReconnectMemoryCredentialStore();
+        if (installed) {
+          await store.writeSecret(ProviderConnections.cursorPlan, 'saved-session');
+        }
+        var changes = 0;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: ProvidersScreen(
+                onRefresh: _noRefresh,
+                credentialStore: store,
+                codexAccountService: const EmptyCodexAccountService(),
+                claudeAccountService: const EmptyClaudeAccountService(),
+                onCredentialsChanged: () => changes++,
+                alertThresholds: const AlertThresholdPreferences(),
+                onAlertThresholdsChanged: (_) async {},
+                cursorPlanSignIn: (_) async => null,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.text('Cursor plan'),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.tap(find.text('Cursor plan'));
+        await tester.pumpAndSettle();
+        if (installed) {
+          await tester.tap(find.text('Sign in again'));
+          await tester.pumpAndSettle();
+        }
+        expect(
+          await store.readSecret(ProviderConnections.cursorPlan),
+          installed ? 'saved-session' : null,
+        );
+        expect(store.reconnectCalls, ['begin:cursor.plan', 'cancel:cursor.plan']);
+        expect(changes, 0);
+      },
+    );
+  }
 
   testWidgets(
     'reporting controls and primary tap open only their own dialogs',
@@ -1586,4 +1641,35 @@ final class _MemoryCredentialAccess implements ConnectionCredentialAccess {
       expected.sameCache(store.version(id));
   @override
   Future<R> serializeFetch<R>(Future<R> Function() operation) => operation();
+}
+
+/// Records the row's lifecycle protocol; native lifecycle tests own persistence.
+class _ReconnectMemoryCredentialStore extends _MemoryCredentialStore
+    implements ReconnectProviderCredentialStore {
+  final reconnectCalls = <String>[];
+
+  @override
+  Future<CredentialVersion> beginReconnect(ProviderConnectionId id) async {
+    reconnectCalls.add('begin:${id.storageKey}');
+    return version(id);
+  }
+
+  @override
+  Future<bool> completeReconnect(
+    ProviderConnectionId id,
+    String value,
+    CredentialVersion ticket,
+  ) async {
+    reconnectCalls.add('complete:${id.storageKey}');
+    await writeSecret(id, value);
+    return true;
+  }
+
+  @override
+  Future<void> cancelReconnect(
+    ProviderConnectionId id,
+    CredentialVersion ticket,
+  ) async {
+    reconnectCalls.add('cancel:${id.storageKey}');
+  }
 }

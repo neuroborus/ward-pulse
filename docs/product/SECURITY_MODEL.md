@@ -87,17 +87,35 @@ against a later disconnect.
 ## Cursor Plan Account
 
 - The phone opens Cursor’s dashboard in an in-app WebView restricted to Cursor and known login
-  IdP hosts. After the user signs in, WardPulse reads the `WorkosCursorSessionToken` cookie only
-  from `cursor.com`, stores it in platform-secure storage, and wipes the WebView cookie jar
+  IdP hosts. The six exact HTTPS identities listed in [Cursor plan reporting](PROVIDER_NOTES.md#cursor-plan-reporting)
+  permit navigation only, never cookie reads. Google authorization transitions are rejected
+  by navigation policy and an Android WebViewClient request guard, including subframe and
+  resource requests that Flutter's navigation delegate does not expose. Harmless CAPTCHA
+  resources remain allowed. The native guard also enforces approved HTTPS main-frame hosts
+  during request interception, so POST cannot bypass navigation policy. Internal `about:blank`
+  loads require explicit retirement mode. Guard attachment must succeed before any sign-in
+  page loads; its channel carries only view/client IDs and fixed failure categories.
+  Main-document HTTP failures fail the attempt, while optional subresource errors do not. The WebView keeps its default
+  user agent. After sign-in,
+  WardPulse reads `WorkosCursorSessionToken` only from HTTPS `cursor.com` apex/subdomains,
+  stores it in platform-secure storage, and wipes the WebView cookie jar
   (clear + verify, also on disconnect and before each new sign-in). If a wipe cannot confirm the
-  session cookie is gone, Sign in refuses to proceed and disconnect warns the user. Settings help
-  explains the flow; Advanced paste explains how to copy the same cookie value from desktop
-  Chrome or Edge DevTools.
-- This is a dashboard session compatibility login, not a published Cursor OAuth grant. Do not
-  label it OAuth in UI or docs.
+  session cookie is gone, Sign in refuses to proceed and disconnect warns the user. Providers
+  Help explains same-account email when offered, Cancel/reopen and Advanced paste; the guide
+  preserves Chrome, Firefox and Safari cookie instructions. Retry verifies a fresh wipe.
+  Retired attempts cannot complete or clear a newer attempt: pending platform work and confirmed
+  document retirement to a local blank page retain the shared cookie-jar lease. Unconfirmed
+  retirement leaves subsequent sign-in fail-closed. Failed blank-page requests can be retried
+  on Retry or Cancel/reopen without releasing the old browser early; Cancel and manual recovery
+  stay available. Sticky native failures are rechecked before accepting a captured credential.
+  Failed/cancelled reconnect preserves the prior secret.
+- This is a dashboard session compatibility login. Reviewed official documentation does not
+  establish an equivalent grant for this integration’s personal plan meters. Do not label it
+  OAuth in UI or docs. SDK User API keys and Team reporting are separate.
 - The phone sends authenticated read-only requests only to `GET /api/usage-summary` with that
   cookie. Session values are never logged, sent to Wear OS, or passed across the Rust FFI
-  boundary. Explicit disconnect deletes the local secret.
+  boundary. Diagnostics exclude auth query/fragment, identity/password, cookies/headers and
+  raw bodies; recovery messages use fixed stage categories. Explicit disconnect deletes the local secret.
 - Treat the adapter as experimental, keep failures isolated, and do not extend it to prompts,
   agent execution, or arbitrary Cursor dashboard scraping.
 

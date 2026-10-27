@@ -14,6 +14,9 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        if (!flutterEngine.plugins.has(CursorSignInPlugin::class.java)) {
+            flutterEngine.plugins.add(CursorSignInPlugin(flutterEngine))
+        }
 
         watchRefreshChannel =
             MethodChannel(

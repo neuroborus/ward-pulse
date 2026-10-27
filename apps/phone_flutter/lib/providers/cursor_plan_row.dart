@@ -116,6 +116,7 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
   }
 
   Future<void> _runSignIn() async {
+    if (_isConnecting) return;
     setState(() {
       _isConnecting = true;
     });
@@ -128,6 +129,7 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
     var saved = false;
     try {
       ticket = await managed?.beginReconnect(ProviderConnections.cursorPlan);
+      if (!mounted) return;
       final signIn = widget.signIn ?? CursorPlanSignInScreen.open;
       final token = await signIn(context);
       if (!mounted) {
@@ -295,9 +297,13 @@ class _CursorPlanHelpDialog extends StatelessWidget {
         child: Text(
           'Tap the Cursor plan row to open Cursor’s dashboard in the app and '
           'sign in with your Cursor account.\n\n'
-          'WardPulse keeps the dashboard session on this phone only and uses it '
-          'to read plan usage. This is an experimental compatibility login, not '
-          'a published Cursor API.\n\n'
+          'WardPulse stores the session encrypted on this phone and sends it '
+          'only to Cursor to read plan usage. This experimental dashboard '
+          'connection may stop working if Cursor changes sign-in or reporting.\n\n'
+          'Google authorization requires a supported browser and is blocked '
+          'here. Use email for the same account when offered, or Cancel and '
+          'reopen. Retry starts a fresh in-app session; cancelling a replacement '
+          'keeps the saved connection.\n\n'
           'If you already have a WorkosCursorSessionToken, use Advanced paste.',
         ),
       ),

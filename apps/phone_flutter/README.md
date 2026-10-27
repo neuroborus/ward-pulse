@@ -54,3 +54,28 @@ Final-APK emulator acceptance on 2026-10-13 covered three real plan connections 
 Claude and Cursor), a production periodic WorkManager task in a fresh background process,
 offline cold-start recovery with unchanged cached data/success times, and restored live
 phone-to-watch delivery. Hardware and whole-phase release acceptance remain separate gates.
+
+## Cursor Sign-in Request Guard
+
+`WebViewCursorSignInBrowser` wires `CursorSignInPlugin` to the existing plugin's WebView
+and client before loading the sign-in page. `CursorSignInWebViewClient` blocks Google
+authorization in both navigation and resource interception, including subframes. Native
+interception also enforces the approved main-frame HTTPS/host policy for POST requests,
+which skip Android's navigation callback. Explicit retirement admits only the internal blank
+document. The client forwards other callbacks to the existing client and classifies HTTP failures with the native
+`isForMainFrame` flag. Only view/client IDs and fixed failure categories cross the guard channel.
+Retirement errors remain retryable while the shared cookie jar stays fenced.
+
+Focused HOST coverage adds `cursor_sign_in_adapter_test.dart` to the affected Flutter
+regressions and a dependency-free native callback harness:
+
+```sh
+python3 tools/test-cursor-sign-in/run.py
+```
+
+The harness compiles the production Java client against small Android API doubles. It checks
+subframe authorization interception, harmless-resource delegation, fixed diagnostics and
+main-document HTTP classification, and main-frame POST admission/rejection. It does not
+prove native rendering or live login. Run it
+as an additional focused HOST regression alongside the unchanged complete `just check-phone`;
+the real Android APK build and artifact-bound WebView acceptance remain required and Pending.

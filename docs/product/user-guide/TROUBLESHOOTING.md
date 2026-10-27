@@ -58,6 +58,14 @@ For a plan/session error, use the named plan row's **Reconnect** or Cursor's
 **Sign in again**. Claude callback paste expects **CODE#STATE**, not a reporting key.
 Do not paste a secret into an unrelated row or a help request.
 
+Cursor plan sign-in offers **Retry**, **Cancel** and **Help** after a startup, page or session
+check problem. Google authorization is blocked in the built-in browser; choose email for the
+same account when offered, or Cancel and reopen. After automatic checks pause, finish any
+password/MFA entry and tap **Check again**. A failed or cancelled replacement preserves the
+saved connection. [Advanced paste](/guide/providers-cursor#advanced-paste) remains available
+from the plan row's help icon after Cancel. This recovery does not establish account entitlement
+or repair a billing problem.
+
 ## Previous data, offline or rate limited
 
 **Showing previous data** and **STALE** identify earlier data kept after failed refresh. Restore

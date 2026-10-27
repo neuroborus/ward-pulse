@@ -285,6 +285,22 @@ void main() {
       expect(restored.version.generation, b.generation);
       expect(restored.version.generation, isNot(a.generation));
       expect(secure.values.values, isNot(contains('fake-delayed-A')));
+      final old = await store('old').beginReconnect();
+      final newer = await store('new').beginReconnect();
+      expect(
+        await store('new').completeReconnect('fake-new-account', newer),
+        isTrue,
+      );
+      expect(
+        await store('old').completeReconnect('fake-late-account', old),
+        isFalse,
+      );
+      await store('old').cancelReconnect(old);
+      final current = (await store('cold').read())!;
+      expect(current.value, 'fake-new-account');
+      expect(current.version.generation, newer.generation);
+      expect(await store('cold').isCurrent(restored.version), isFalse);
+      expect(secure.values.values, isNot(contains('fake-late-account')));
     },
   );
   test(

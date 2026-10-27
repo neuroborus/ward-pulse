@@ -1790,6 +1790,24 @@ Deliverables:
 - `docs/product/PROVIDER_NOTES.md` updated per provider with credential type, permissions,
   rate limits, revocation path, and redaction rules.
 
+Cursor sign-in recovery correction (2026-10-27): source adds exact HTTPS navigation for
+Cursor's six current identity hosts while retaining Cursor-only session capture. Google
+embedded authorization is blocked without UA disguise, including Android subframe/resource
+requests through a native client guard. Native interception also enforces approved HTTPS
+main-frame hosts for POST requests, while explicit retirement preserves internal blanking.
+Native main-document HTTP failures enter page recovery while optional resource failures
+remain harmless. Startup, page, probe and redirect
+failures expose Retry/Cancel/Help; finite polling pauses for human input with Check again.
+Attempts and shared-cookie cleanup are fenced across Retry, failure, Cancel/back/dispose and
+reopen; reconnect keeps the previous saved connection until valid replacement completion.
+Failed blank-page retirement can be retried without opening the shared jar early.
+Screen-event, real adapter, native callback and cookie boundary test source covers these contracts.
+**Pending:** the focused native guard JVM harness, runtime
+phone checks, native Android/WebView artifact verification and affected two-theme Help
+captures, plus unobserved Google/email migration, browser return, entitlement and live-provider
+acceptance. This does not claim Google login or billing repair. See
+[Cursor plan reporting](product/PROVIDER_NOTES.md#cursor-plan-reporting).
+
 Verified 2026-10-20: the Anthropic current-day and Cursor normalization corrections passed
 host Rust checks (113 tests, no failures), JSON validation (23 files parsed, including schemas
 and fixtures; 6 fixture files checked against schemas), Flutter

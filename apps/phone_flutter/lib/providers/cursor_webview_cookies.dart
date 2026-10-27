@@ -16,7 +16,12 @@ final _cursorCookieProbeUris = <Uri>[
 
 /// Exact IdP hosts not covered by the apex suffixes below.
 const _cursorSignInIdpHosts = <String>{
-  'accounts.youtube.com',
+  'accounts.x.ai',
+  'accounts.spacex.ai',
+  'auth.x.ai',
+  'auth.grok.com',
+  'auth.grokusercontent.com',
+  'auth.grokipedia.com',
   'github.com',
   'www.github.com',
   'challenges.cloudflare.com',
@@ -35,8 +40,8 @@ bool isCursorSessionCookieHost(Uri url) {
 
 /// Navigation allowlist for the Cursor sign-in WebView.
 ///
-/// Google login hops across several Google apexes; cookie capture stays on
-/// [isCursorSessionCookieHost] only.
+/// Google authorization is not supported in an embedded browser. Subresource
+/// policy is separate; cookie capture stays on [isCursorSessionCookieHost] only.
 bool isAllowedCursorSignInUrl(Uri url) {
   if (!url.isScheme('https') || url.host.isEmpty) {
     return false;
@@ -48,13 +53,22 @@ bool isAllowedCursorSignInUrl(Uri url) {
   if (_cursorSignInIdpHosts.contains(host)) {
     return true;
   }
-  return _hostMatches(host, 'google.com') ||
-      _hostMatches(host, 'googleusercontent.com') ||
-      _hostMatches(host, 'gstatic.com') ||
-      _hostMatches(host, 'googleapis.com') ||
-      _hostMatches(host, 'recaptcha.net') ||
+  return _hostMatches(host, 'recaptcha.net') ||
       _hostMatches(host, 'microsoftonline.com') ||
       _hostMatches(host, 'workos.com');
+}
+
+/// Block authorization transitions even when requested inside a subframe.
+/// Ordinary Google CAPTCHA/static subresources do not establish authorization.
+bool isGoogleCursorAuthorizationUrl(Uri url) {
+  final host = url.host.toLowerCase();
+  if (host == 'accounts.google.com') {
+    // Identity button assets are not authorization documents.
+    return !const {'/gsi/client', '/gsi/style', '/gsi/button'}.contains(url.path);
+  }
+  if (host == 'accounts.youtube.com') return true;
+  return _hostMatches(host, 'google.com') &&
+      RegExp(r'^/(accounts|signin|o/oauth2)(/|$)').hasMatch(url.path);
 }
 
 String _cookieProbeKey(Uri url) => '${url.scheme}://${url.host}';
