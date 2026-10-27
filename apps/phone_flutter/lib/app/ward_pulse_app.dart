@@ -988,6 +988,8 @@ class _DashboardHostState extends State<DashboardHost> {
                 onEditConnectionOpened: () => _editReportingConnection = null,
                 alertThresholds: _alertThresholds,
                 onAlertThresholdsChanged: _updateAlertThresholds,
+                snapshot: snapshot,
+                alertContextRevision: _surfaceRevision,
                 statuses: _providerStatuses(snapshot),
               ),
               _ when _selectedIndex == _settingsIndex => SettingsScreen(

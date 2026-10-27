@@ -34,6 +34,8 @@ class ProvidersScreen extends StatefulWidget {
     this.editConnection,
     this.onEditConnectionOpened,
     this.statuses = const {},
+    this.snapshot,
+    this.alertContextRevision = 0,
     required this.onRefresh,
   });
 
@@ -66,6 +68,11 @@ class ProvidersScreen extends StatefulWidget {
   /// managed. Empty until a snapshot lands.
   final Map<ProviderFamily, ProviderStatus> statuses;
 
+  /// Usable, owned repository data; family status and watch selection cannot
+  /// supply the connection's complete normalized Plan catalogue.
+  final DashboardSnapshot? snapshot;
+  final int alertContextRevision;
+
   /// Pull-to-refresh reload, shared with the app-bar action.
   final Future<void> Function() onRefresh;
 
@@ -81,6 +88,8 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
   var _readRevision = 0;
   ProviderConnectionId? _openingConnection;
   final _saving = <ProviderConnectionId>{};
+  ProviderConnectionId? _alertConnection;
+  ValueNotifier<List<AllowanceState>>? _alertWindows;
 
   /// Connections authorized by a pasted secret, in catalog order.
   static final _secretConnections = providerConnectionCatalog()
@@ -97,6 +106,16 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
   @override
   void didUpdateWidget(ProvidersScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (_alertConnection case final connection?) {
+      final windows = _alertWindows;
+      final catalogue = _planWindows(connection);
+      // The modal is a separate route; notify after the host's build completes.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && identical(windows, _alertWindows)) {
+          windows?.value = catalogue;
+        }
+      });
+    }
     if (!identical(oldWidget.reportingUpdates, widget.reportingUpdates) ||
         oldWidget.credentialStore != widget.credentialStore) {
       _currentUpdates.removeWhere(
@@ -288,22 +307,78 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
   }
 
   Future<void> _editConnectionAlerts(ProviderConnection connection) async {
-    final saved = await showDialog<ConnectionAlertThresholds>(
-      context: context,
-      builder:
-          (context) => ConnectionAlertsDialog(
-            connectionTitle: connection.listTitle,
-            kind: connection.id.kind,
-            thresholds: widget.alertThresholds.forConnection(connection.id),
-          ),
-    );
+    final revision = widget.alertContextRevision;
+    final store = widget.credentialStore;
+    final snapshot = widget.snapshot;
+    final thresholds = widget.alertThresholds.forConnection(connection.id);
+    final windows = ValueNotifier(_planWindows(connection.id));
+    _alertConnection = connection.id;
+    _alertWindows = windows;
+    ConnectionAlertThresholds? saved;
+    try {
+      saved = await showDialog<ConnectionAlertThresholds>(
+        context: context,
+        builder:
+            (context) => ValueListenableBuilder<List<AllowanceState>>(
+              valueListenable: windows,
+              builder:
+                  (_, catalogue, _) => ConnectionAlertsDialog(
+                    connectionTitle: connection.listTitle,
+                    connection: connection.id,
+                    thresholds: thresholds,
+                    planWindows: catalogue,
+                  ),
+            ),
+      );
+    } finally {
+      _alertConnection = null;
+      _alertWindows = null;
+      windows.dispose();
+    }
     if (saved == null || !mounted) {
       return;
     }
-    await _saveAlertThresholds(
-      (current) => current.withConnection(connection.id, saved),
-    );
+    final result = saved;
+    if (snapshot != null && widget.isSnapshotCurrent != null) {
+      try {
+        if (!await widget.isSnapshotCurrent!(snapshot)) {
+          if (mounted)
+            _showMessage('Connection changed. Reopen alert thresholds.');
+          return;
+        }
+      } catch (_) {
+        if (mounted) _showMessage('Could not update alert thresholds');
+        return;
+      }
+    }
+    if (!mounted) return;
+    await _saveAlertThresholds((current) {
+      if (!mounted ||
+          revision != widget.alertContextRevision ||
+          !identical(store, widget.credentialStore)) {
+        throw StateError('Connection changed during alert editing');
+      }
+      return current.withConnection(connection.id, result);
+    });
   }
+
+  List<AllowanceState> _planWindows(ProviderConnectionId connection) => [
+    for (final account in widget.snapshot?.accounts ?? <ProviderSnapshot>[])
+      if (_connectionKey(account) == connection.storageKey)
+        for (final allowance in account.allowances)
+          if (allowance.source == AllowanceSource.plan) allowance,
+  ];
+
+  // Match core alerts::connection_key: fallback only when identity is absent.
+  String? _connectionKey(ProviderSnapshot account) =>
+      account.connection ??
+      switch (account.provider) {
+        'codex' => ProviderConnections.codexPlan.storageKey,
+        'openai' => ProviderConnections.openAiPlatform.storageKey,
+        'claude' => ProviderConnections.claudePlan.storageKey,
+        'cursor' => ProviderConnections.cursorPlan.storageKey,
+        _ => null,
+      };
 
   Future<void> _editConnectionBudget(ProviderConnection connection) async {
     final saved = await showDialog<ConnectionBudget>(

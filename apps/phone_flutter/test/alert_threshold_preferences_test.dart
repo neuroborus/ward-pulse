@@ -237,19 +237,31 @@ void main() {
     expect(prefs.connections, isEmpty);
   });
 
-  test('remaining stops map to used percent for storage', () {
-    expect(alertRemainingToUsed(null), isNull);
-    expect(alertRemainingToUsed(50), 50);
-    expect(alertRemainingToUsed(30), 70);
-    expect(alertRemainingToUsed(20), 80);
-    expect(alertRemainingToUsed(10), 90);
-    expect(alertRemainingToUsed(0), 100);
+  test(
+    'every whole remaining percentage reverses used percent and keeps Off',
+    () {
+      expect(alertRemainingToUsed(null), isNull);
+      expect(alertRemainingToUsed(50), 50);
+      expect(alertRemainingToUsed(30), 70);
+      expect(alertRemainingToUsed(20), 80);
+      expect(alertRemainingToUsed(10), 90);
+      expect(alertRemainingToUsed(0), 100);
 
-    expect(alertUsedToRemaining(null), isNull);
-    expect(alertUsedToRemaining(70), 30);
-    expect(alertUsedToRemaining(100), 0);
-    expect(alertUsedToRemaining(75), isNull);
-  });
+      expect(alertUsedToRemaining(null), isNull);
+      expect(alertUsedToRemaining(70), 30);
+      expect(alertUsedToRemaining(100), 0);
+      for (var remaining = 0; remaining <= 100; remaining++) {
+        expect(
+          alertUsedToRemaining(alertRemainingToUsed(remaining)),
+          remaining,
+        );
+        expect(
+          alertRemainingToUsed(alertUsedToRemaining(remaining)),
+          remaining,
+        );
+      }
+    },
+  );
 
   test('withConnection removes disabled rules', () {
     final enabled = const AlertThresholdPreferences().withConnection(

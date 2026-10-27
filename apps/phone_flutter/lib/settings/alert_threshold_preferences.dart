@@ -6,8 +6,8 @@ import '../providers/provider_connection.dart';
 
 /// Discrete remaining-% stops shown in the UI (null = off).
 ///
-/// Maps to used% for storage/Rust: `100 - remaining` → 50/70/80/90/100.
-const alertRemainingStops = <int?>[null, 50, 30, 20, 10, 0];
+/// Custom input also accepts every whole percentage between the endpoints.
+const alertRemainingStops = <int?>[null, 100, 50, 30, 20, 10, 0];
 
 /// UI remaining → stored used percent.
 int? alertRemainingToUsed(int? remainingLeft) {
@@ -17,13 +17,12 @@ int? alertRemainingToUsed(int? remainingLeft) {
   return 100 - remainingLeft;
 }
 
-/// Stored used percent → UI remaining (null if not a known stop).
+/// Stored used percent → UI remaining, including custom values.
 int? alertUsedToRemaining(int? used) {
   if (used == null) {
     return null;
   }
-  final remaining = 100 - used;
-  return alertRemainingStops.contains(remaining) ? remaining : null;
+  return 100 - used;
 }
 
 /// Opt-in used-% threshold for Rust. Null = off.

@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_theme.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/providers/claude_account_service.dart';
+import 'package:ward_pulse_phone/providers/alert_threshold_dialogs.dart';
 import 'package:ward_pulse_phone/providers/codex_account_service.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
@@ -18,6 +19,175 @@ import 'package:ward_pulse_phone/settings/alert_percent_threshold_editor.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 
 void main() {
+  testWidgets(
+    'Plan catalogue uses owning connection and only absent-ID fallback',
+    (tester) async {
+      final snapshot = _windowSnapshot([
+        _windowAccount('cursor', 'cursor.plan', ['Models', 'Other Models']),
+        _windowAccount('cursor', 'cursor.platform', ['Sibling only']),
+        _windowAccount('cursor', 'unrecognized', ['Unknown owner']),
+        _windowAccount('codex', null, ['Legacy dynamic']),
+        _windowAccount('claude', null, ['Legacy weekly']),
+        _windowAccount('openai', null, ['Legacy reporting']),
+      ]);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ProvidersScreen(
+              onRefresh: _noRefresh,
+              credentialStore: const EmptyProviderCredentialStore(),
+              codexAccountService: const EmptyCodexAccountService(),
+              claudeAccountService: const EmptyClaudeAccountService(),
+              onCredentialsChanged: () {},
+              alertThresholds: const AlertThresholdPreferences(),
+              onAlertThresholdsChanged: (_) async => fail('Unexpected save'),
+              snapshot: snapshot,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      for (final (row, labels) in [
+        ('Claude plan', ['Legacy weekly']),
+        ('Cursor plan', ['Models', 'Other Models']),
+        ('Codex plan', ['Legacy dynamic']),
+      ]) {
+        await _openRowAlerts(tester, row);
+        final dialog = tester.widget<ConnectionAlertsDialog>(
+          find.byType(ConnectionAlertsDialog),
+        );
+        expect(dialog.planWindows.map((value) => value.label), labels);
+        expect(
+          dialog.planWindows.every((value) => value.usedPercent == null),
+          isTrue,
+        );
+        expect(find.text('Sibling only'), findsNothing);
+        expect(find.text('Unknown owner'), findsNothing);
+        expect(find.text('Legacy reporting'), findsNothing);
+        for (final label in labels) {
+          expect(find.text(label), findsOneWidget);
+        }
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+      }
+    },
+  );
+
+  testWidgets('catalogue refresh keeps drafts and rejects retired owners', (
+    tester,
+  ) async {
+    final credentials = _MemoryCredentialStore();
+    var preferences = const AlertThresholdPreferences().withConnection(
+      ProviderConnections.cursorPlan,
+      const ConnectionAlertThresholds(
+        planWindows: {'saved': AlertPercentThreshold()},
+      ),
+    );
+    DashboardSnapshot? snapshot;
+    var revision = 0;
+    var saves = 0;
+    late StateSetter refresh;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              refresh = setState;
+              return ProvidersScreen(
+                onRefresh: _noRefresh,
+                credentialStore: credentials,
+                codexAccountService: const EmptyCodexAccountService(),
+                claudeAccountService: const EmptyClaudeAccountService(),
+                onCredentialsChanged: () {},
+                alertThresholds: preferences,
+                onAlertThresholdsChanged: (edit) async {
+                  final next = edit(preferences);
+                  refresh(() => preferences = next);
+                  saves++;
+                },
+                snapshot: snapshot,
+                alertContextRevision: revision,
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openRowAlerts(tester, 'Cursor plan');
+    expect(find.text('Plan'), findsOneWidget);
+    expect(find.text('Purchased'), findsOneWidget);
+    await _chooseAlert(tester, 'Plan', '20% left');
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(saves, 0);
+    refresh(() {
+      snapshot = _windowSnapshot([
+        _windowAccount('cursor', 'cursor.plan', ['Initial'], ids: ['saved']),
+      ]);
+    });
+    await tester.pumpAndSettle();
+    await _openRowAlerts(tester, 'Cursor plan');
+    await _chooseAlert(tester, 'Initial', 'Custom % left');
+    final field = find.byType(TextFormField);
+    await tester.ensureVisible(field);
+    await tester.enterText(field, '17x');
+    refresh(() => snapshot = null);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Unavailable window'), findsOneWidget);
+    expect(tester.widget<TextFormField>(field).controller!.text, '17x');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(saves, 0);
+    refresh(() {
+      snapshot = _windowSnapshot([
+        _windowAccount(
+          'cursor',
+          'cursor.plan',
+          ['New pool', 'Renamed'],
+          ids: ['new', 'saved'],
+        ),
+      ]);
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('Renamed'), findsOneWidget);
+    expect(find.text('New pool'), findsOneWidget);
+    expect(tester.widget<TextFormField>(field).controller!.text, '17x');
+    await tester.enterText(field, '17');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(saves, 1);
+    expect(
+      preferences
+          .forConnection(ProviderConnections.cursorPlan)
+          .planWindows['saved']!
+          .at,
+      83,
+    );
+
+    // A draft from the prior credential/surface owner cannot save on retirement.
+    await _openRowAlerts(tester, 'Cursor plan');
+    refresh(() {
+      revision++;
+      snapshot = null;
+    });
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(saves, 1);
+    ScaffoldMessenger.of(
+      tester.element(find.byType(ProvidersScreen)),
+    ).hideCurrentSnackBar();
+    await tester.pumpAndSettle();
+    await _openRowAlerts(tester, 'Cursor plan');
+    expect(find.text('Plan'), findsOneWidget);
+    expect(find.text('Purchased'), findsOneWidget);
+    expect(find.text('Plan window · saved'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
   group('reporting proof', () {
     Future<void> show(
       WidgetTester tester,
@@ -1238,6 +1408,81 @@ Finder _inRow(String title, Finder matching) => find.descendant(
   of: find.widgetWithText(ProviderConnectionRow, title),
   matching: matching,
 );
+
+DashboardSnapshot _windowSnapshot(List<ProviderSnapshot> accounts) =>
+    DashboardSnapshot.fromJson({
+      ...DashboardSnapshot.empty(generatedAt: DateTime.utc(2026)).toJson(),
+      'accounts': [for (final account in accounts) account.toJson()],
+    });
+
+ProviderSnapshot _windowAccount(
+  String provider,
+  String? connection,
+  List<String> labels, {
+  List<String>? ids,
+}) => ProviderSnapshot(
+  accountId: '$provider-${connection ?? 'legacy'}',
+  provider: provider,
+  connection: connection,
+  status: ProviderStatus.ok,
+  today: const BudgetState.unknownPeriod('today'),
+  week: const BudgetState.unknownPeriod('week'),
+  month: const BudgetState.unknownPeriod('month'),
+  credits: const [],
+  allowances: [
+    for (var i = 0; i < labels.length; i++)
+      AllowanceState(
+        id: ids?[i] ?? 'window-$i',
+        source: AllowanceSource.plan,
+        label: labels[i],
+        usedPercent: null,
+        used: null,
+        limit: null,
+        remaining: null,
+        windowMinutes: null,
+        resetsAt: null,
+        status: ProviderStatus.ok,
+      ),
+  ],
+  buckets: const [],
+  modelBreakdown: const [],
+  lastSuccessfulSyncAt: null,
+);
+
+Future<void> _openRowAlerts(WidgetTester tester, String row) async {
+  tester
+      .state<ScrollableState>(find.byType(Scrollable).first)
+      .position
+      .jumpTo(0);
+  await tester.pumpAndSettle();
+  final action = _inRow(row, find.byTooltip('Alert thresholds'));
+  await tester.scrollUntilVisible(
+    action,
+    300,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(action);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _chooseAlert(
+  WidgetTester tester,
+  String title,
+  String choice,
+) async {
+  final dropdown = find.descendant(
+    of: find.widgetWithText(AlertPercentThresholdEditor, title),
+    matching: find.byType(DropdownButton<int?>),
+  );
+  await tester.ensureVisible(dropdown);
+  await tester.pumpAndSettle();
+  await tester.tap(dropdown);
+  await tester.pumpAndSettle();
+  await tester.ensureVisible(find.text(choice).last);
+  await tester.tap(find.text(choice).last);
+  await tester.pumpAndSettle();
+}
 
 Future<void> _pumpProvidersAtSize(WidgetTester tester, Size size) async {
   _setTestSurface(tester, size);

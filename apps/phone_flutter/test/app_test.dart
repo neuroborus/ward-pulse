@@ -17,10 +17,12 @@ import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_screen.dart';
 import 'package:ward_pulse_phone/dashboard/merging_connection_repository.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
+import 'package:ward_pulse_phone/providers/alert_threshold_dialogs.dart';
 import 'package:ward_pulse_phone/providers/provider_connection_row.dart';
 import 'package:ward_pulse_phone/providers/providers_screen.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
+import 'package:ward_pulse_phone/settings/alert_percent_threshold_editor.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/settings/debug_data_preferences.dart';
 import 'package:ward_pulse_phone/settings/refresh_interval_preferences.dart';
@@ -1400,6 +1402,181 @@ void main() {
     );
   });
 
+  testWidgets(
+    'owned window catalogue ignores watch selection and survives failed writes',
+    (tester) async {
+      final base = _alertTestSnapshot();
+      final account = base.primaryAccount!.toJson();
+      Map<String, dynamic> allowance(
+        String id,
+        String label, {
+        AllowanceSource source = AllowanceSource.plan,
+      }) {
+        return AllowanceState(
+          id: id,
+          source: source,
+          label: label,
+          usedPercent: null,
+          used: null,
+          limit: null,
+          remaining: null,
+          windowMinutes: null,
+          resetsAt: null,
+          status: ProviderStatus.ok,
+        ).toJson();
+      }
+
+      final snapshot = DashboardSnapshot.fromJson({
+        ...base.toJson(),
+        'accounts': [
+          {
+            ...account,
+            'allowances': [
+              for (var i = 0; i < 3; i++) allowance('dynamic-$i', 'Window $i'),
+              allowance(
+                'purchased',
+                'Purchased pool',
+                source: AllowanceSource.purchased,
+              ),
+            ],
+          },
+          {
+            ...account,
+            'accountId': 'reporting',
+            'connection': 'openai.platform',
+            'allowances': [allowance('sibling', 'Sibling window')],
+          },
+        ],
+      });
+      final repository = _PublicationRepository(snapshot);
+      final store = _MemoryAlertThresholdStore();
+      final ringStore =
+          _MemoryWatchRingStore()
+            ..value = const WatchRingPreferences(selectedIds: []);
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          alertThresholdStore: store,
+          watchRingPreferenceStore: ringStore,
+          applyAlertSettings: (current, _) => current,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      Future<void> open() async {
+        tester
+            .state<ScrollableState>(find.byType(Scrollable).first)
+            .position
+            .jumpTo(0);
+        await tester.pumpAndSettle();
+        final action = find.descendant(
+          of: find.widgetWithText(ProviderConnectionRow, 'Codex plan'),
+          matching: find.byTooltip('Alert thresholds'),
+        );
+        await tester.scrollUntilVisible(
+          action,
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(action);
+        await tester.pumpAndSettle();
+      }
+
+      Finder editor() =>
+          find.widgetWithText(AlertPercentThresholdEditor, 'Window 2');
+      Future<void> custom17() async {
+        final dropdown = find.descendant(
+          of: editor(),
+          matching: find.byType(DropdownButton<int?>),
+        );
+        await tester.ensureVisible(dropdown);
+        await tester.pumpAndSettle();
+        await tester.tap(dropdown);
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('Custom % left').last);
+        await tester.tap(find.text('Custom % left').last);
+        await tester.pumpAndSettle();
+        final field = find.descendant(
+          of: editor(),
+          matching: find.byType(TextFormField),
+        );
+        await tester.ensureVisible(field);
+        await tester.enterText(field, '17');
+      }
+
+      await open();
+      final dialog = tester.widget<ConnectionAlertsDialog>(
+        find.byType(ConnectionAlertsDialog),
+      );
+      expect(dialog.planWindows.map((value) => value.id), [
+        'dynamic-0',
+        'dynamic-1',
+        'dynamic-2',
+      ]);
+      expect(
+        dialog.planWindows.every((value) => value.usedPercent == null),
+        isTrue,
+      );
+      expect(find.text('Sibling window'), findsNothing);
+      expect(find.text('Purchased pool'), findsNothing);
+      await custom17();
+      store.failNextWrite = true;
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(store.value.connections, isEmpty);
+      expect(find.text('Could not update alert thresholds'), findsOneWidget);
+      ScaffoldMessenger.of(
+        tester.element(find.byType(ProvidersScreen)),
+      ).hideCurrentSnackBar();
+      await tester.pumpAndSettle();
+      await open();
+      expect(
+        tester.widget<AlertPercentThresholdEditor>(editor()).usePlanDefault,
+        isTrue,
+      );
+      await custom17();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(
+        store.value
+            .forConnection(ProviderConnections.codexPlan)
+            .planWindows['dynamic-2']!
+            .at,
+        83,
+      );
+      expect(repository.loads, 1);
+
+      // Reload persisted rules after an authoritative failure: no fabricated windows.
+      repository.failLoad = true;
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pumpAndSettle();
+      await open();
+      expect(find.text('Plan'), findsOneWidget);
+      expect(find.text('Purchased'), findsOneWidget);
+      expect(find.text('Plan window · dynamic-2'), findsOneWidget);
+      expect(
+        tester
+            .widget<ConnectionAlertsDialog>(find.byType(ConnectionAlertsDialog))
+            .planWindows,
+        isEmpty,
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      repository.failLoad = false;
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pumpAndSettle();
+      await open();
+      final reopened = tester.widget<AlertPercentThresholdEditor>(editor());
+      expect(reopened.value.at, 83);
+      expect(reopened.usePlanDefault, isFalse);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('Providers plan row can save connection alert thresholds', (
     tester,
   ) async {
@@ -2526,6 +2703,8 @@ void main() {
           300,
           scrollable: find.byType(Scrollable).first,
         );
+        await tester.pumpAndSettle();
+        expect(toggle.hitTestable(), findsOneWidget);
         repository.failClear = failure == 'cache clear';
         preferences.failWrite = failure == 'preference write';
         repository.current = owned;
@@ -2611,6 +2790,8 @@ void main() {
         300,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.pumpAndSettle();
+      expect(toggle.hitTestable(), findsOneWidget);
       final release = Completer<void>();
       preferences.pendingWrite = release.future;
       await tester.tap(toggle);

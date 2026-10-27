@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../dashboard/dashboard_models.dart';
 import '../settings/alert_percent_threshold_editor.dart';
 import '../settings/alert_threshold_preferences.dart';
 import 'provider_connection.dart';
@@ -13,46 +14,112 @@ class ConnectionAlertsDialog extends StatefulWidget {
   const ConnectionAlertsDialog({
     super.key,
     required this.connectionTitle,
-    required this.kind,
+    required this.connection,
     required this.thresholds,
+    this.planWindows = const [],
   });
 
   final String connectionTitle;
-  final ConnectionKind kind;
+  final ProviderConnectionId connection;
   final ConnectionAlertThresholds thresholds;
+  final List<AllowanceState> planWindows;
 
   @override
   State<ConnectionAlertsDialog> createState() => _ConnectionAlertsDialogState();
 }
 
 class _ConnectionAlertsDialogState extends State<ConnectionAlertsDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _editorKeys = <String, GlobalKey<AlertPercentThresholdEditorState>>{};
+  final _knownWindows = <String, AllowanceState>{};
+  double? _viewportExtent;
   late var _draft = widget.thresholds;
 
   @override
+  void initState() {
+    super.initState();
+    _rememberWindows();
+  }
+
+  @override
+  void didUpdateWidget(ConnectionAlertsDialog oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _rememberWindows();
+  }
+
+  void _rememberWindows() {
+    for (final window in widget.planWindows) {
+      if (window.source == AllowanceSource.plan) {
+        _knownWindows[window.id] = window;
+      }
+    }
+  }
+
+  GlobalKey<AlertPercentThresholdEditorState> _key(String id) =>
+      _editorKeys.putIfAbsent(
+        '${widget.connection.storageKey}/$id',
+        () => GlobalKey<AlertPercentThresholdEditorState>(),
+      );
+
+  bool _handleScrollMetrics(ScrollMetricsNotification notification) {
+    if (notification.depth == 0 &&
+        notification.metrics.axis == Axis.vertical &&
+        notification.metrics.viewportDimension != _viewportExtent) {
+      _viewportExtent = notification.metrics.viewportDimension;
+      // Keyboard insets animate the dialog viewport after focus is requested.
+      // Keep its focused error visible without taking focus from another control.
+      for (final key in _editorKeys.values) {
+        if (key.currentState?.revealError(requestFocus: false) == true) break;
+      }
+    }
+    return false;
+  }
+
+  void _save() {
+    if (!_formKey.currentState!.validate()) {
+      for (final key in _editorKeys.values) {
+        if (key.currentState?.revealError() == true) break;
+      }
+      return;
+    }
+    Navigator.of(context).pop(_draft);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final isPlan = widget.kind == ConnectionKind.plan;
-    return _ConnectionDialog(
-      title: 'Alerts · ${widget.connectionTitle}',
-      intro:
-          isPlan
-              ? 'Opt-in · fire when remaining capacity reaches the chosen % '
-                  'left. Off until you pick a value.'
-              : 'Opt-in · fire when this connection’s remaining budget reaches '
-                  'the chosen % left. Other providers do not count.',
-      onSave: () => Navigator.of(context).pop(_draft),
-      editors: isPlan ? _planEditors() : _budgetEditors(),
+    final isPlan = widget.connection.kind == ConnectionKind.plan;
+    return Form(
+      key: _formKey,
+      child: NotificationListener<ScrollMetricsNotification>(
+        onNotification: _handleScrollMetrics,
+        child: _ConnectionDialog(
+          title: 'Alerts · ${widget.connectionTitle}',
+          intro:
+              isPlan
+                  ? 'Opt-in · alert at the chosen % left. Windows without an '
+                      'override use Plan. Changing Plan keeps window overrides.'
+                  : 'Opt-in · fire when this connection’s remaining budget reaches '
+                      'the chosen % left. Other providers do not count.',
+          onSave: _save,
+          editors: isPlan ? _planEditors() : _budgetEditors(),
+        ),
+      ),
     );
   }
 
   List<Widget> _planEditors() {
     return [
       AlertPercentThresholdEditor(
+        key: _key('plan'),
         title: 'Plan',
         value: _draft.plan,
         onChanged:
             (plan) => setState(() => _draft = _draft.copyWith(plan: plan)),
       ),
+      for (final id in {..._knownWindows.keys, ..._draft.planWindows.keys})
+        _windowEditor(id),
       AlertPercentThresholdEditor(
+        key: _key('purchased'),
         title: 'Purchased',
         value: _draft.purchased,
         onChanged:
@@ -62,10 +129,50 @@ class _ConnectionAlertsDialogState extends State<ConnectionAlertsDialog> {
     ];
   }
 
+  Widget _windowEditor(String id) {
+    final window = _knownWindows[id];
+    final available = widget.planWindows.any(
+      (value) => value.source == AllowanceSource.plan && value.id == id,
+    );
+    final label = window?.label ?? 'Plan window';
+    final duplicate =
+        _knownWindows.values.where((value) => value.label == label).length > 1;
+    // Normalized IDs are identity, never labels, durations or reset times.
+    final safeId = id.replaceAll(RegExp(r'[\x00-\x1F\x7F]'), ' ');
+    final title = window == null || duplicate ? '$label · $safeId' : label;
+    return Column(
+      key: ValueKey((widget.connection.storageKey, id, AllowanceSource.plan)),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          available
+              ? 'Plan window'
+              : 'Unavailable window · not reported in the current snapshot.',
+        ),
+        const SizedBox(height: 8),
+        AlertPercentThresholdEditor(
+          key: _key('plan/$id'),
+          title: title,
+          value: _draft.planWindows[id] ?? _draft.plan,
+          usePlanDefault: !_draft.planWindows.containsKey(id),
+          onUsePlanDefault: () {
+            final windows = {..._draft.planWindows}..remove(id);
+            setState(() => _draft = _draft.copyWith(planWindows: windows));
+          },
+          onChanged: (value) {
+            final windows = {..._draft.planWindows, id: value};
+            setState(() => _draft = _draft.copyWith(planWindows: windows));
+          },
+        ),
+      ],
+    );
+  }
+
   List<Widget> _budgetEditors() {
     return [
       for (final period in _BudgetPeriod.values)
         AlertPercentThresholdEditor(
+          key: _key(period.name),
           title: period.label,
           value: period.thresholdOf(_draft),
           // The limit comes first: without it there is no percentage to alert on.
@@ -265,24 +372,20 @@ class _ConnectionDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return AlertDialog(
+      scrollable: true,
       title: Text(title),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              intro,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            intro,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
-            for (final editor in editors) ...[
-              const SizedBox(height: 16),
-              editor,
-            ],
-          ],
-        ),
+          ),
+          for (final editor in editors) ...[const SizedBox(height: 16), editor],
+        ],
       ),
       actions: [
         TextButton(
