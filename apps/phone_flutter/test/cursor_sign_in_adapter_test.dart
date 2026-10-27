@@ -13,7 +13,7 @@ void main() {
   late _Platform platform;
   late WebViewPlatform? previous;
   final ios = TargetPlatformVariant.only(TargetPlatform.iOS);
-  final browsers = <WebViewCursorSignInBrowser>[];
+  final browsers = <_Browser>[];
   const channel = MethodChannel(CursorSignInNativeGuard.channelName);
   final nativeCalls = <MethodCall>[];
   String? nativeFailure;
@@ -37,12 +37,10 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
-  WebViewCursorSignInBrowser createBrowser({
+  _Browser createBrowser({
     CursorSignInNativeGuard Function(void Function(String))? nativeGuardFactory,
   }) {
-    final browser = WebViewCursorSignInBrowser(
-      nativeGuardFactory: nativeGuardFactory,
-    );
+    final browser = _Browser(nativeGuardFactory: nativeGuardFactory);
     browsers.add(browser);
     return browser;
   }
@@ -312,6 +310,7 @@ void main() {
         (call) => call.method == 'retire',
       );
       expect(retiring.arguments, {'view': 41});
+      await browsers.single.firstStop!;
       expect(nativeCalls.last.method, 'detach');
     } finally {
       await retireScreen(tester);
@@ -426,6 +425,19 @@ Future<void> _configure(
   pageFinished: finished ?? () {},
   resourceError: error ?? (_) {},
 );
+
+class _Browser extends WebViewCursorSignInBrowser {
+  _Browser({super.nativeGuardFactory});
+
+  Future<void>? firstStop;
+
+  @override
+  Future<void> stop({bool requireHealthy = false}) {
+    final work = super.stop(requireHealthy: requireHealthy);
+    firstStop ??= work;
+    return work;
+  }
+}
 
 class _Platform extends WebViewPlatform {
   final controllers = <_Controller>[];
