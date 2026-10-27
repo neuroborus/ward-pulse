@@ -538,9 +538,11 @@ Widget. Surface configuration lives on those tabs, not under Settings.
 - **Widget** — configure the phone home-screen widget metrics and preview (Phase 14).
 - **Providers** — full connection catalog (every plan/platform row, with reporting-key
   verification and failure states), credentials / auth, **all** user alert thresholds
-  (plan/purchased per connection; Today/Week/Month on platform connections), the spend limits those budget
+  (Plan defaults, individual Plan windows and Purchased per connection; Today/Week/Month
+  on reporting connections), the spend limits those budget
   thresholds need — their own row entry, because a limit is a ceiling and not a rule —
-  and live status for synced accounts. Threshold UI speaks **% left**.
+  and live status for synced accounts. The shared threshold editor accepts presets or
+  custom whole **0–100% left**.
 - **Settings** — systemic only: global polling interval, diagnostics, data deletion,
   legal, debug toggles — not connections, credentials, display surface toggles, alert
   rules, glance layout, or a sixth Alerts tab.
@@ -593,15 +595,22 @@ It owns:
   and failure states;
 - credentials / auth entry for each connection (OAuth, session, API key — as today);
 - **all user-configured** alert thresholds:
-  - plan / purchased meters on plan rows (opt-in; no hard-coded cutoffs);
-  - Today / Week / Month spend budgets on organization-key rows, each a user-entered
+  - connection-local Plan defaults, sparse overrides for each normalized Plan window,
+    and Purchased meters on plan rows (opt-in; no hard-coded cutoffs). Missing overrides
+    inherit Plan; an explicit Off suppresses that fallback. The catalogue includes every
+    reported Plan window, including unknown usage, independently of watch selection;
+  - Today / Week / Month spend budgets on reporting rows, each a user-entered
     limit plus its own threshold (providers do not report a budget). The limit is entered
     through its own row action, not through the alert dialog — it is the ceiling every
     percentage depends on, and a threshold without it can never fire;
-  - UI speaks **% left**; storage and Rust keep used%;
+  - every shared editor accepts presets and custom whole **0–100% left**; storage and Rust
+    keep used%. Enabled endpoints, Off and window inheritance remain distinct. Invalid
+    active drafts block Save; retained unavailable-window overrides remain inspectable/resettable;
 - live status, last successful sync, last error, and supported metrics when connected.
 
-Rules can be prepared before the first successful sync because Not connected rows stay visible.
+General Plan/Purchased and local budget settings can be prepared before the first successful
+sync because Not connected rows stay visible. Actual window controls come from that connection's
+report; saved overrides survive temporary absence and reuse their identity when a window returns.
 
 Reporting-key feedback is implemented for OpenAI Platform reporting, Anthropic Organization
 reporting and Cursor Team Admin API. Saving or replacing a key starts one existing live
@@ -635,9 +644,9 @@ Split runtime output from configuration:
 | Concern | Surface | Notes |
 |---------|---------|--------|
 | Active alerts | Dashboard alerts panel (and Wear Alerts detail) | Only rules the user enabled, evaluated against the latest snapshot |
-| Plan / purchased alert rules | **Providers** (plan catalog rows) | One opt-in threshold per meter as **% left** |
+| Plan defaults / window overrides / Purchased alert rules | **Providers** (plan catalog rows) | Connection-local opt-in thresholds as whole **0–100% left**, including custom values; a missing window override inherits Plan, explicit Off disables it |
 | Today / Week / Month budget **limits** | **Providers**, its own per-connection entry | The ceiling itself, not an alert — it is what makes a percentage exist at all. Platform / organization connections only; not under Settings and not inside the alert dialog |
-| Today / Week / Month budget **alert rules** | **Providers** (alert dialog) | Same remaining-% editor; a period stays disabled until that connection has a limit for it |
+| Today / Week / Month budget **alert rules** | **Providers** (alert dialog) | Same preset/custom whole **0–100% left** editor; a period stays disabled until that connection has a limit for it, retaining its saved threshold |
 
 **Product rule:** alerts are opt-in. Provider status chrome (`Warning` / `RateLimited` from
 reported utilization) must **not** invent dashboard alerts by itself. Empty “No alerts” is the
@@ -649,7 +658,13 @@ using the persisted user rules. Platform shells persist rule preferences and ren
 Do not reintroduce automatic alerts from allowance/budget status alone.
 
 `build_dashboard_snapshot` always emits an empty alerts list; the phone host applies stored
-threshold prefs after each load (and on prefs change) before Dashboard / Wear sync.
+threshold prefs after each load before Dashboard / Wear / home-widget sync. A saved rule change
+reevaluates the latest owned undecorated provider snapshot, so changing or disabling a rule is
+reversible without another provider request. Evaluation precedes persistence; failed evaluation or
+storage does not publish a partial change. Credential/mode/refresh ownership guards prevent stale
+input from being republished. Genuine provider and intrinsic budget statuses remain intact;
+sync attempts through watch and home-widget paths are independent and use the resulting
+current snapshot.
 
 ---
 

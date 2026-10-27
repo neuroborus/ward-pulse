@@ -27,10 +27,13 @@ background sync, transport, storage, diagnostics and build work.
   exhausted selected watch metrics remain visible after the 2026-10-13 revision. Do not keep
   those controls in Settings.
 - **Providers** owns the full connection catalog (Connected / Not connected), credentials /
-  auth, and **all user-configured** alert thresholds (plan/purchased per connection;
-  Today/Week/Month budgets on OpenAI Platform). One threshold per meter; UI speaks
-  **% left** (storage/Rust keep used% as `at`). Editable before first sync. Do not keep
-  alert rules under Settings.
+  auth, and **all user-configured** alert thresholds: connection-local Plan defaults,
+  normalized Plan-window overrides and Purchased on plan rows; Today/Week/Month on reporting
+  rows. Missing overrides inherit Plan; explicit Off stays distinct. Shared editors accept
+  presets and custom whole **0–100% left** (storage/Rust keep used% as `at`). Reported windows,
+  including unknown usage, are independent of watch selection. General Plan/Purchased and
+  budget settings remain editable before first sync; actual windows require a report.
+  Do not keep alert rules under Settings.
 - **Settings** is systemic only: global polling interval, diagnostics, data deletion,
   legal, debug toggles — not connections, credentials, display surface toggles, or alerts.
 - Do not add a phone Alerts tab. Active alerts render on the Dashboard. Thresholds are

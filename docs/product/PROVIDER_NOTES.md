@@ -404,6 +404,11 @@ phone dashboard cards. It may surface as a warning/error alert
 **only when the user configures a threshold** for that meter on Providers — never from a
 hard-coded utilization cutoff alone.
 
+Providers exposes each reported Plan window for its own alert rule, independently of
+watch collapse or selection. A window inherits the connection's Plan threshold unless it
+has an explicit percentage or Off override. See the user guide's
+[Alert thresholds](user-guide/DASHBOARD.md#alert-thresholds).
+
 Claude plan resets are validated by `claude_provider_snapshot_from_report_json` in
 `core/ward-pulse-providers/src/claude/mod.rs`. Supported input is ASCII Gregorian
 `YYYY-MM-DDTHH:MM:SS[.digits]` with uppercase `T` and a mandatory uppercase `Z` or numeric
@@ -432,6 +437,12 @@ on the phone and as selectable watch rings. Purchased on-demand usage is phone-o
 alert **only** with a user-configured threshold on Providers); it is not a ring. Older combined-only payloads keep a single Plan
 usage bar. Selected known exhausted pools remain on the watch as 0% left with empty grey
 tracks; unknown or unavailable pools are not fabricated as zero.
+
+Both included pools remain Plan windows for alert configuration, independently of watch
+selection. Each can inherit Plan, set its own percentage or explicitly turn Off;
+Purchased controls the separate on-demand allowance. See
+[Alert thresholds](user-guide/DASHBOARD.md#alert-thresholds).
+
 Do not claim Admin-API hourly aggregation on this experimental row. Never log the cookie or
 raw response bodies.
 

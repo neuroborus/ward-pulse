@@ -90,24 +90,47 @@ Unsaved example: **Today 25.00**, with **Week** and **Month** empty. **Cancel** 
 ### Alert thresholds
 
 1. Tap the connection's **bell icon** to open **Alert thresholds**.
-2. For a plan connection, choose an **Alert when** value for **Plan** or **Purchased**.
-   Reporting connections use the budget periods that have limits.
-3. Choose **50**, **30**, **20**, **10** or **0% left**, or **Off** to disable the rule.
-4. Tap **Save**.
+2. For a plan connection, set **Plan**, an individual reported **Plan window**, or **Purchased**.
+   Reporting connections use **Today**, **Week** and **Month** where a budget limit is set.
+3. Choose **100**, **50**, **30**, **20**, **10** or **0% left**. To enter another whole
+   number from **0 to 100**, choose **Custom % left** and fill in **% left**.
+4. Tap **Save**, or **Cancel** to keep the previous rules.
 
-For example, **Plan → 20% left** alerts when the reported plan capacity is 20% or less.
+**Plan** is the default for windows without their own rule. For an individual window,
+**Use Plan default** follows that default, **Off** disables its alert, and a percentage
+sets a separate threshold. Changing Plan keeps those individual choices.
+
+Reported windows are listed even when they are not selected for the watch. When Cursor
+reports **Cursor Models** and **Other Models**, they have separate Plan-window controls;
+**Purchased** controls its on-demand allowance. Before a report arrives, you can still
+prepare Plan and Purchased rules.
+
+For example, **20% left** alerts when the reported remaining capacity is **20% or less**.
+A custom **17% left** uses the same rule. Both **0% left** and **100% left** are enabled
+thresholds; choose **Off** to disable one. Custom input must be a whole number in range;
+correct invalid fields before saving, or explicitly choose **Off**. Windows also offer
+**Use Plan default**.
+
+A saved window rule is kept if the window temporarily disappears from reporting. You can
+inspect it as an unavailable window or select **Use Plan default** to remove its override.
+If that same window returns, its saved choice is used again, including after a label change.
+An alert needs a reported percentage; a rule does not invent missing usage.
+
 For a reporting connection with a **25.00** Today limit, a **20% left** Today threshold is
-reached at **20.00** spent. These examples depend on usable reporting from that connection.
+reached at **20.00** spent. Each period has its own rule. A period without a budget limit
+stays unavailable and keeps any previously saved threshold.
 
-![Claude plan Alerts dialog with a Plan 20% left draft in the light theme.](/screenshots/phone-alert-thresholds-light.png)
+![Cursor plan Alerts with Other Models set to Custom % left and 17 in the % left field, in the light theme.](/screenshots/phone-alert-thresholds-light.png)
 
-![Claude plan Alerts dialog with a Plan 20% left draft in the dark theme.](/screenshots/phone-alert-thresholds-dark.png)
+![Cursor plan Alerts with Other Models set to Custom % left and 17 in the % left field, in the dark theme.](/screenshots/phone-alert-thresholds-dark.png)
 
-Unsaved example: **Plan 20% left**, **Purchased Off**. **Cancel** keeps the previous rules.
+Unsaved example: **Plan 20% left**, **Cursor Models → Use Plan default**,
+**Other Models → Custom % left** with **17** in **% left**, and **Purchased Off**.
+Scroll within the dialog to see all controls. **Cancel** keeps the previous rules.
 
-A budget threshold stays unavailable until that period has a limit. Each connection has its
-own rules; another provider's spend does not count against that connection's limit.
-**Cancel** leaves the existing settings unchanged.
+When current data is available, saving a rule updates alerts from that data without waiting
+for another provider report. It does not make the provider's usage statistics update sooner.
+Each connection has its own rules; another provider's spend does not count against its limit.
 
 Budget limits help you track spending. They do not stop requests, change the provider's
 spending limits or alter billing. Active threshold alerts appear on Dashboard.

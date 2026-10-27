@@ -13,6 +13,10 @@ Team API key required by that reporting connection.
 If the row is already Connected, tap it and choose **Sign in again** to replace the login.
 Cancelling the replacement preserves the existing connection.
 
+When Cursor reports **Cursor Models** and **Other Models**, each is a separate included Plan
+window. Configure them independently through the connection's bell icon; **Purchased**
+controls on-demand usage. See [Alert thresholds](/guide/dashboard#alert-thresholds).
+
 Google sign-in may hang in WardPulse's built-in browser. If it does, tap **Cancel**,
 then open **Cursor plan** again and try email sign-in. If sign-in still does not complete,
 tap **Cancel** and follow [Advanced paste](#advanced-paste) to enter an existing Cursor

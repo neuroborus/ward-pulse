@@ -28,6 +28,12 @@ and `justfile`; do not add a framework or dependency for this workflow.
 - Tests MUST be deterministic. Synchronize with events, awaited operations or controlled
   clocks. Artificial sleeps, timing-based ordering, retry-until-green and unnecessary polling
   are prohibited. Await teardown of every owned resource.
+- Prefer framework-owned default resources, such as enabled `testWidgets` semantics,
+  when they already provide the required coverage. Before adding a manual handle,
+  check the framework's actual verification lifetime: generic teardown may run after
+  its end-of-test invariants. Dispose manually owned resources with failure-safe
+  cleanup before the boundary that requires release; do not disable semantics,
+  invariants or assertions to accommodate late cleanup.
 - Preserve distinct safety, recovery and failure-path guarantees. Before deleting a redundant
   test, name its retained replacement. Never weaken assertions, skip or disable failures,
   or lower concurrency to hide a race.

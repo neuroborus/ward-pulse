@@ -86,6 +86,9 @@ do not retain credentials, raw provider payloads or unlock/authentication materi
 Derive a capture group's window from minimum/maximum measured per-image timestamps,
 not filenames, array order or a selected first frame. Retain the actual timestamp source
 and timezone; distinguish capture-time observations from file-mtime/export-time evidence.
+Export a capture group from an explicit indexed source/output list; keep diagnostics separate.
+Reconcile actual output names, counts and identities with that cohort before publication.
+A wildcard match or valid image alone does not establish membership; resolve unexpected outputs.
 
 For web images, scroll each intended current-theme image into the actual viewport and
 confirm its load and dimensions with bounded observation. Do not await hidden/offscreen

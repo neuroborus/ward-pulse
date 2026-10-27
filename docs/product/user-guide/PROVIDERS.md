@@ -61,9 +61,13 @@ provider's key settings if needed; other WardPulse connections remain independen
 
 ## Budget limits and alert thresholds
 
-The **bell icon** opens **Alert thresholds**. Reporting rows also have a **piggy-bank icon**
-for **Budget limits**. These are WardPulse settings; they do not change your provider's plan
-or billing limits. Follow the [Dashboard examples](/guide/dashboard#set-budget-limits-and-alert-thresholds).
+The **bell icon** opens **Alert thresholds**. For a plan connection, set a shared Plan
+threshold or separate thresholds for its reported windows. Choose a preset or
+**Custom % left** to enter a whole number from **0 to 100**. Reporting periods need a limit
+under the **piggy-bank icon's** **Budget limits** before their percentage threshold is available.
+
+These are WardPulse settings; they do not change your provider's plan or billing limits.
+Follow the [Dashboard examples](/guide/dashboard#set-budget-limits-and-alert-thresholds).
 
 ## Keep credentials private
 
