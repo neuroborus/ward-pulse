@@ -5,6 +5,12 @@ frame. State the requested mismatch before selecting a fix or changing data. A f
 seam and a cyan pool drawn on another provider's band are different defects; solving one
 does not close the other. Resolve ambiguity from the available evidence before guessing.
 
+Before approving geometry or implementation requirements, check each target attribute's
+type/range in the owning schema and primary documentation for the intended format/version.
+Confirm representable sizes and origins, including integer centre/size parity where required;
+correct floating arithmetic alone is insufficient. Apply integer constraints only to the
+attributes that require them; legitimate floating properties and transforms remain allowed.
+
 ## Map meaning before judging appearance
 
 Build a compact expected/observed mapping for every selected metric or pair, accounting
