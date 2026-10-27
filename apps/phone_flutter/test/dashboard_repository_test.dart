@@ -188,19 +188,33 @@ void main() {
           '../../fixtures/snapshots/dashboard_today.json',
         ).readAsStringSync();
     final live = DashboardSnapshot.fromJsonString(fixture);
-    final mock = DashboardSnapshot.fromJsonString(fixture);
+    final mockSeeds = <int>[];
     final preferences = _MemoryDebugDataPreferenceStore();
     final repository = DebugDashboardRepository(
       live: ValueDashboardRepository(live),
-      mock: ValueDashboardRepository(mock),
+      mock: DemoDashboardRepository(
+        debugSeed: '42',
+        loadDebugDashboardJson: (seed) {
+          mockSeeds.add(seed);
+          return fixture;
+        },
+      ),
       preferences: preferences,
     );
 
     expect(await repository.load(), same(live));
+    repository.invalidate();
+    expect(await repository.loadObserved((_) {}), same(live));
+    expect(mockSeeds, isEmpty);
 
     preferences.value = true;
 
-    expect(await repository.load(), same(mock));
+    expect(await repository.load(), isNot(same(live)));
+    expect(mockSeeds, [42]);
+
+    preferences.value = false;
+    expect(await repository.loadObserved((_) {}), same(live));
+    expect(mockSeeds, [42]);
   });
 
   test(
@@ -224,34 +238,124 @@ void main() {
     },
   );
 
-  test('demo repository reshuffles by seed', () async {
-    var loads = 0;
-    final repository = DemoDashboardRepository(
+  test('debug demo advances loaded scenarios and restarts', () async {
+    final fixture =
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync();
+    final seeds = <int>[];
+    DemoDashboardRepository createRepository() => DemoDashboardRepository(
+      debugSeed: '0042',
       loadDebugDashboardJson: (seed) {
-        loads += 1;
-        final json =
-            jsonDecode(
-                  File(
-                    '../../fixtures/snapshots/dashboard_today.json',
-                  ).readAsStringSync(),
-                )
-                as Map<String, dynamic>;
-        (json['accounts'] as List).first['accountId'] = 'seed-$seed';
-        return jsonEncode(json);
+        seeds.add(seed);
+        return fixture;
       },
-      seedForLoad: () => 42,
+      seedForLoad: () => throw StateError('unexpected random seed'),
     );
+    final repository = createRepository();
+
+    repository.invalidate();
+    repository.invalidate();
 
     final first = await repository.load();
     final second = await repository.load();
-    expect(first.accounts.single.accountId, 'seed-42');
-    expect(identical(first, second), isTrue);
-    expect(loads, 1);
+    expect(second, same(first));
+    expect(seeds, [42]);
 
     repository.invalidate();
+    repository.invalidate();
     final third = await repository.load();
-    expect(third.accounts.single.accountId, 'seed-42');
-    expect(loads, 2);
+    expect(third, isNot(same(first)));
+    expect(seeds, [42, 43]);
+
+    repository.invalidate();
+    await repository.load();
+    final restarted = await createRepository().load();
+    expect(restarted.toJson(), first.toJson());
+    expect(seeds, [42, 43, 44, 42]);
+  });
+
+  test('debug demo seeds include zero and wrap the maximum to zero', () async {
+    final fixture =
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync();
+    for (final startingSeed in [0, 9223372036854775807]) {
+      final seeds = <int>[];
+      final repository = DemoDashboardRepository(
+        debugSeed: '$startingSeed',
+        loadDebugDashboardJson: (seed) {
+          seeds.add(seed);
+          return fixture;
+        },
+      );
+
+      await repository.load();
+      repository.invalidate();
+      repository.invalidate();
+      await repository.load();
+      expect(seeds, [startingSeed, startingSeed == 0 ? 1 : 0]);
+    }
+  });
+
+  test('absent or invalid demo seeds retain the fallback source', () async {
+    final fixture =
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync();
+    for (final debugSeed in [
+      null,
+      '',
+      '-1',
+      '+1',
+      ' 1',
+      '1 ',
+      '1\n',
+      '1.0',
+      '1e3',
+      '0x33',
+      'invalid',
+      '9223372036854775808',
+    ]) {
+      final seeds = <int>[];
+      var fallbackSeed = 100;
+      final repository = DemoDashboardRepository(
+        debugSeed: debugSeed,
+        seedForLoad: () => fallbackSeed += 7,
+        loadDebugDashboardJson: (seed) {
+          seeds.add(seed);
+          return fixture;
+        },
+      );
+
+      await repository.load();
+      repository.invalidate();
+      await repository.load();
+      expect(seeds, [107, 114], reason: jsonEncode(debugSeed));
+    }
+  });
+
+  test('non-debug demo builds ignore a valid configured seed', () async {
+    final fixture =
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync();
+    final seeds = <int>[];
+    var fallbackSeed = 100;
+    final repository = DemoDashboardRepository(
+      debugMode: false,
+      debugSeed: '42',
+      seedForLoad: () => fallbackSeed += 7,
+      loadDebugDashboardJson: (seed) {
+        seeds.add(seed);
+        return fixture;
+      },
+    );
+
+    await repository.load();
+    repository.invalidate();
+    await repository.load();
+    expect(seeds, [107, 114]);
   });
 
   test('does not double-count cached input tokens', () {

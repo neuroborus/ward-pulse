@@ -43,6 +43,11 @@ Future<void> main() async {
               ? DebugDashboardRepository(
                 live: live.repository,
                 preferences: debugDataPreferenceStore,
+                mock: DemoDashboardRepository(
+                  debugSeed: const String.fromEnvironment(
+                    'WARD_PULSE_MOCK_SEED',
+                  ),
+                ),
               )
               : live.repository,
     ),

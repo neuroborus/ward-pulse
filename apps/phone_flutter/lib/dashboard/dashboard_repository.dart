@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 
 import '../settings/debug_data_preferences.dart';
@@ -71,14 +72,24 @@ typedef DebugDashboardJsonLoader = String Function(int seed);
 ///
 /// Cached until [invalidate] so automatic sync ticks stay stable; phone refresh
 /// and the Mock data toggle clear the cache and draw a new seed.
+/// A valid debug seed starts a reproducible sequence instead of time-based seeds.
 final class DemoDashboardRepository extends DashboardRepository {
   DemoDashboardRepository({
     this.loadDebugDashboardJson = loadDebugDashboardSnapshotJson,
     this.seedForLoad,
-  });
+    String? debugSeed,
+    bool debugMode = kDebugMode,
+  }) {
+    if (debugMode &&
+        debugSeed != null &&
+        !debugSeed.contains(RegExp(r'[^0-9]'))) {
+      _nextSeed = int.tryParse(debugSeed);
+    }
+  }
 
   final DebugDashboardJsonLoader loadDebugDashboardJson;
   final int Function()? seedForLoad;
+  int? _nextSeed;
   DashboardSnapshot? _cached;
 
   @override
@@ -88,7 +99,10 @@ final class DemoDashboardRepository extends DashboardRepository {
       return cached;
     }
     try {
-      final seed = seedForLoad?.call() ?? DateTime.now().microsecondsSinceEpoch;
+      final seed =
+          _nextSeed ??
+          seedForLoad?.call() ??
+          DateTime.now().microsecondsSinceEpoch;
       final snapshot = DashboardSnapshot.fromJsonString(
         loadDebugDashboardJson(seed),
       );
@@ -101,6 +115,10 @@ final class DemoDashboardRepository extends DashboardRepository {
 
   @override
   void invalidate() {
+    final seed = _nextSeed;
+    if (_cached != null && seed != null) {
+      _nextSeed = seed == 9223372036854775807 ? 0 : seed + 1;
+    }
     _cached = null;
   }
 }
