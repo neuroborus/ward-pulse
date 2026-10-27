@@ -41,18 +41,18 @@
             </Ellipse>
         </PartDraw>
         <!-- What lies under the cells, declared ahead of every slot so a filled
-             cell's own opaque well covers it: 149,112  200,98  251,112 at 50 units, centres on a
+             cell's own opaque well covers it: 147,109  199,95  251,109 at 52 units, centres on a
              curved row with the middle cell raised fourteen units.
              The middle and right cells
              carry the default weather, which costs no complication slot. -->
-        <Group x="149" y="112" width="50" height="50" name="cell1Chrome">
-            <PartDraw x="0" y="0" width="50" height="50">
-                <Ellipse x="0" y="0" width="50" height="50">
+        <Group x="147" y="109" width="52" height="52" name="cell1Chrome">
+            <PartDraw x="0" y="0" width="52" height="52">
+                <Ellipse x="0" y="0" width="52" height="52">
                     <Fill color="#ff0b0e0c">
                         <RadialGradient
-                            centerX="25"
-                            centerY="25"
-                            radius="25"
+                            centerX="26"
+                            centerY="26"
+                            radius="26"
                             colors="#ff0b0e0c #ff0b0e0c #ff242a27"
                             positions="0.0 0.55 1.0" />
                     </Fill>
@@ -60,32 +60,32 @@
             </PartDraw>
         </Group>
 
-        <Group x="200" y="98" width="50" height="50" name="cell2Chrome">
+        <Group x="199" y="95" width="52" height="52" name="cell2Chrome">
             <Condition>
                 <Expressions>
                     <Expression name="hasWeather"><![CDATA[[WEATHER.IS_AVAILABLE]]]></Expression>
                 </Expressions>
                 <Compare expression="hasWeather">
-                    <Group x="0" y="0" width="50" height="50" name="cell2Reading">
-                        <PartDraw x="0" y="0" width="50" height="50">
-                            <Ellipse x="0" y="0" width="50" height="50">
+                    <Group x="0" y="0" width="52" height="52" name="cell2Reading">
+                        <PartDraw x="0" y="0" width="52" height="52">
+                            <Ellipse x="0" y="0" width="52" height="52">
                                 <Fill color="#eb0b0e0c" />
                             </Ellipse>
                         </PartDraw>
-                        <PartDraw x="0" y="0" width="50" height="50" alpha="255">
+                        <PartDraw x="0" y="0" width="52" height="52" alpha="255">
                             <Variant mode="AMBIENT" target="alpha" value="140" />
                             <Arc
-                                centerX="25"
-                                centerY="25"
-                                width="48.5"
-                                height="48.5"
+                                centerX="26"
+                                centerY="26"
+                                width="50.5"
+                                height="50.5"
                                 startAngle="0"
                                 endAngle="359.9">
                                 <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
                                     <LinearGradient
-                                        startX="25"
-                                        startY="49.25"
-                                        endX="25"
+                                        startX="26"
+                                        startY="51.25"
+                                        endX="26"
                                         endY="0.75"
                                         colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
                                         positions="0 0.5 0.625 0.75 0.875 1" />
@@ -104,7 +104,7 @@
                                         <Expression name="mediumText"><![CDATA[!([WEATHER.TEMPERATURE] <= -100) && ([WEATHER.TEMPERATURE] < 0 || [WEATHER.TEMPERATURE] >= 100)]]></Expression>
                                     </Expressions>
                                     <Compare expression="smallText">
-                                        <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
                                             <Variant mode="AMBIENT" target="alpha" value="140" />
                                             <Text align="CENTER" ellipsis="TRUE">
                                                 <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
@@ -116,7 +116,7 @@
                                         </PartText>
                                     </Compare>
                                     <Compare expression="mediumText">
-                                        <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
                                             <Variant mode="AMBIENT" target="alpha" value="140" />
                                             <Text align="CENTER" ellipsis="TRUE">
                                                 <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
@@ -128,10 +128,10 @@
                                         </PartText>
                                     </Compare>
                                     <Default>
-                                        <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
                                             <Variant mode="AMBIENT" target="alpha" value="140" />
                                             <Text align="CENTER" ellipsis="TRUE">
-                                                <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                                <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
                                                     <Template>%s°C
                                                         <Parameter expression="[WEATHER.TEMPERATURE]" />
                                                     </Template>
@@ -148,7 +148,7 @@
                                         <Expression name="mediumText"><![CDATA[!([WEATHER.TEMPERATURE] <= -100) && ([WEATHER.TEMPERATURE] < 0 || [WEATHER.TEMPERATURE] >= 100)]]></Expression>
                                     </Expressions>
                                     <Compare expression="smallText">
-                                        <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
                                             <Variant mode="AMBIENT" target="alpha" value="140" />
                                             <Text align="CENTER" ellipsis="TRUE">
                                                 <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
@@ -160,7 +160,7 @@
                                         </PartText>
                                     </Compare>
                                     <Compare expression="mediumText">
-                                        <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
                                             <Variant mode="AMBIENT" target="alpha" value="140" />
                                             <Text align="CENTER" ellipsis="TRUE">
                                                 <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
@@ -172,10 +172,10 @@
                                         </PartText>
                                     </Compare>
                                     <Default>
-                                        <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
                                             <Variant mode="AMBIENT" target="alpha" value="140" />
                                             <Text align="CENTER" ellipsis="TRUE">
-                                                <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                                <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
                                                     <Template>%s°F
                                                         <Parameter expression="[WEATHER.TEMPERATURE]" />
                                                     </Template>
@@ -192,7 +192,7 @@
                                         <Expression name="mediumText"><![CDATA[!([WEATHER.TEMPERATURE] <= -100) && ([WEATHER.TEMPERATURE] < 0 || [WEATHER.TEMPERATURE] >= 100)]]></Expression>
                                     </Expressions>
                                     <Compare expression="smallText">
-                                        <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
                                             <Variant mode="AMBIENT" target="alpha" value="140" />
                                             <Text align="CENTER" ellipsis="TRUE">
                                                 <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
@@ -204,7 +204,7 @@
                                         </PartText>
                                     </Compare>
                                     <Compare expression="mediumText">
-                                        <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
                                             <Variant mode="AMBIENT" target="alpha" value="140" />
                                             <Text align="CENTER" ellipsis="TRUE">
                                                 <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
@@ -216,10 +216,10 @@
                                         </PartText>
                                     </Compare>
                                     <Default>
-                                        <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
                                             <Variant mode="AMBIENT" target="alpha" value="140" />
                                             <Text align="CENTER" ellipsis="TRUE">
-                                                <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                                <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
                                                     <Template>%s°
                                                         <Parameter expression="[WEATHER.TEMPERATURE]" />
                                                     </Template>
@@ -233,14 +233,14 @@
                     </Group>
                 </Compare>
                 <Default>
-                    <Group x="0" y="0" width="50" height="50" name="cell2Bare">
-                        <PartDraw x="0" y="0" width="50" height="50">
-                            <Ellipse x="0" y="0" width="50" height="50">
+                    <Group x="0" y="0" width="52" height="52" name="cell2Bare">
+                        <PartDraw x="0" y="0" width="52" height="52">
+                            <Ellipse x="0" y="0" width="52" height="52">
                                 <Fill color="#ff0b0e0c">
                                     <RadialGradient
-                                        centerX="25"
-                                        centerY="25"
-                                        radius="25"
+                                        centerX="26"
+                                        centerY="26"
+                                        radius="26"
                                         colors="#ff0b0e0c #ff0b0e0c #ff242a27"
                                         positions="0.0 0.55 1.0" />
                                 </Fill>
@@ -251,47 +251,47 @@
             </Condition>
         </Group>
 
-        <Group x="251" y="112" width="50" height="50" name="cell3Chrome">
+        <Group x="251" y="109" width="52" height="52" name="cell3Chrome">
             <Condition>
                 <Expressions>
                     <Expression name="hasWeather"><![CDATA[[WEATHER.IS_AVAILABLE]]]></Expression>
                 </Expressions>
                 <Compare expression="hasWeather">
-                    <Group x="0" y="0" width="50" height="50" name="cell3Reading">
-                        <PartDraw x="0" y="0" width="50" height="50">
-                            <Ellipse x="0" y="0" width="50" height="50">
+                    <Group x="0" y="0" width="52" height="52" name="cell3Reading">
+                        <PartDraw x="0" y="0" width="52" height="52">
+                            <Ellipse x="0" y="0" width="52" height="52">
                                 <Fill color="#eb0b0e0c" />
                             </Ellipse>
                         </PartDraw>
-                        <Group x="0" y="0" width="50" height="50" name="cell3ReadingBorder" alpha="255">
+                        <Group x="0" y="0" width="52" height="52" name="cell3ReadingBorder" alpha="255">
                             <Variant mode="AMBIENT" target="alpha" value="140" />
-                            <PartDraw x="0" y="0" width="50" height="50" alpha="255">
+                            <PartDraw x="0" y="0" width="52" height="52" alpha="255">
                                 <Arc
-                                    centerX="25"
-                                    centerY="25"
-                                    width="48.5"
-                                    height="48.5"
+                                    centerX="26"
+                                    centerY="26"
+                                    width="50.5"
+                                    height="50.5"
                                     startAngle="0"
                                     endAngle="359.9">
                                     <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
                                         <LinearGradient
-                                            startX="12.840473"
-                                            startY="45.981144"
-                                            endX="37.159527"
-                                            endY="4.018856"
+                                            startX="13.367991"
+                                            startY="47.863093"
+                                            endX="38.632009"
+                                            endY="4.136907"
                                             colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
                                             positions="0 0.5 0.625 0.75 0.875 1" />
                                     </Stroke>
                                 </Arc>
                             </PartDraw>
-                            <PartDraw x="0" y="0" width="50" height="50" renderMode="MASK">
-                                <Rectangle x="0" y="0" width="50" height="50">
+                            <PartDraw x="0" y="0" width="52" height="52" renderMode="MASK">
+                                <Rectangle x="0" y="0" width="52" height="52">
                                     <Fill color="#ffffffff">
                                         <LinearGradient
-                                            startX="25"
+                                            startX="26"
                                             startY="0.75"
-                                            endX="25"
-                                            endY="49.25"
+                                            endX="26"
+                                            endY="51.25"
                                             colors="#ffffffff #ffffffff #daffffff #87ffffff #35ffffff #0fffffff"
                                             positions="0 0.5 0.625 0.75 0.875 1" />
                                     </Fill>
@@ -304,7 +304,7 @@
                                 <Expression name="mediumText"><![CDATA[!(false) && ([WEATHER.UV_INDEX] >= 10)]]></Expression>
                             </Expressions>
                             <Compare expression="smallText">
-                                <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <PartText x="3" y="14" width="46" height="24" alpha="255">
                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                     <Text align="CENTER" ellipsis="TRUE">
                                         <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
@@ -316,7 +316,7 @@
                                 </PartText>
                             </Compare>
                             <Compare expression="mediumText">
-                                <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <PartText x="3" y="14" width="46" height="24" alpha="255">
                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                     <Text align="CENTER" ellipsis="TRUE">
                                         <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
@@ -328,10 +328,10 @@
                                 </PartText>
                             </Compare>
                             <Default>
-                                <PartText x="3" y="13" width="44" height="24" alpha="255">
+                                <PartText x="3" y="14" width="46" height="24" alpha="255">
                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                     <Text align="CENTER" ellipsis="TRUE">
-                                        <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                        <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
                                             <Template>UV %s
                                                 <Parameter expression="[WEATHER.UV_INDEX]" />
                                             </Template>
@@ -343,14 +343,14 @@
                     </Group>
                 </Compare>
                 <Default>
-                    <Group x="0" y="0" width="50" height="50" name="cell3Bare">
-                        <PartDraw x="0" y="0" width="50" height="50">
-                            <Ellipse x="0" y="0" width="50" height="50">
+                    <Group x="0" y="0" width="52" height="52" name="cell3Bare">
+                        <PartDraw x="0" y="0" width="52" height="52">
+                            <Ellipse x="0" y="0" width="52" height="52">
                                 <Fill color="#ff0b0e0c">
                                     <RadialGradient
-                                        centerX="25"
-                                        centerY="25"
-                                        radius="25"
+                                        centerX="26"
+                                        centerY="26"
+                                        radius="26"
                                         colors="#ff0b0e0c #ff0b0e0c #ff242a27"
                                         positions="0.0 0.55 1.0" />
                                 </Fill>
@@ -2600,7 +2600,7 @@
         <DigitalClock x="0" y="0" width="450" height="450">
             <TimeText
                 x="0"
-                y="182"
+                y="176"
                 width="450"
                 height="90"
                 alpha="255"
@@ -2610,14 +2610,14 @@
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <Font
                     family="SYNC_TO_DEVICE"
-                    size="70"
+                    size="86"
                     weight="BOLD"
                     slant="NORMAL"
                     color="#fff4fbf8" />
             </TimeText>
             <TimeText
                 x="0"
-                y="182"
+                y="175"
                 width="450"
                 height="90"
                 alpha="0"
@@ -2627,7 +2627,7 @@
                 <Variant mode="AMBIENT" target="alpha" value="255" />
                 <Font
                     family="SYNC_TO_DEVICE"
-                    size="81"
+                    size="96"
                     weight="THIN"
                     slant="NORMAL"
                     color="#fff4fbf8" />
@@ -2636,12 +2636,12 @@
 
         <Group x="0" y="0" width="450" height="450" name="wardpulse">
             <Launch target="app.wardpulse/app.wardpulse.wear.MainActivity" />
-            <!-- The asset is padded: active ink ends at 180.75, before the clock box at 182. -->
-            <PartImage x="194" y="142" width="62" height="62" alpha="95">
+            <!-- Preserve the original padded PNG; visible clock clearance needs native measurement. -->
+            <PartImage x="193" y="141" width="64" height="64" alpha="95">
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <Image resource="wardpulse_mono" />
             </PartImage>
-            <PartImage x="199" y="147" width="52" height="52" alpha="0">
+            <PartImage x="198" y="146" width="54" height="54" alpha="0">
                 <Variant mode="AMBIENT" target="alpha" value="70" />
                 <Image resource="wardpulse_mono" />
             </PartImage>
@@ -2651,10 +2651,10 @@
              in them; this face owns only the declaration and how it is drawn.
              (docs/product/WATCH_RING_DESIGN.md, Upper cells, revision 2026-10-09) -->
         <ComplicationSlot
-            x="149"
-            y="112"
-            width="50"
-            height="50"
+            x="147"
+            y="109"
+            width="52"
+            height="52"
             slotId="201"
             displayName="@string/cell1_complication"
             supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
@@ -2662,43 +2662,43 @@
             <DefaultProviderPolicy
                 defaultSystemProvider="DAY_OF_WEEK"
                 defaultSystemProviderType="SHORT_TEXT" />
-            <BoundingBox x="0" y="0" width="50" height="50" />
+            <BoundingBox x="0" y="0" width="52" height="52" />
             <Complication type="SHORT_TEXT">
-            <Group x="0" y="0" width="50" height="50" name="cell1">
-                    <PartDraw x="0" y="0" width="50" height="50">
-                        <Ellipse x="0" y="0" width="50" height="50">
+            <Group x="0" y="0" width="52" height="52" name="cell1">
+                    <PartDraw x="0" y="0" width="52" height="52">
+                        <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
-                    <Group x="0" y="0" width="50" height="50" name="cell1TextBorder" alpha="255">
+                    <Group x="0" y="0" width="52" height="52" name="cell1TextBorder" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
-                        <PartDraw x="0" y="0" width="50" height="50" alpha="255">
+                        <PartDraw x="0" y="0" width="52" height="52" alpha="255">
                             <Arc
-                                centerX="25"
-                                centerY="25"
-                                width="48.5"
-                                height="48.5"
+                                centerX="26"
+                                centerY="26"
+                                width="50.5"
+                                height="50.5"
                                 startAngle="0"
                                 endAngle="359.9">
                                 <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
                                     <LinearGradient
-                                        startX="37.159527"
-                                        startY="45.981144"
-                                        endX="12.840473"
-                                        endY="4.018856"
+                                        startX="38.632009"
+                                        startY="47.863093"
+                                        endX="13.367991"
+                                        endY="4.136907"
                                         colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
                                         positions="0 0.5 0.625 0.75 0.875 1" />
                                 </Stroke>
                             </Arc>
                         </PartDraw>
-                        <PartDraw x="0" y="0" width="50" height="50" renderMode="MASK">
-                            <Rectangle x="0" y="0" width="50" height="50">
+                        <PartDraw x="0" y="0" width="52" height="52" renderMode="MASK">
+                            <Rectangle x="0" y="0" width="52" height="52">
                                 <Fill color="#ffffffff">
                                     <LinearGradient
-                                        startX="25"
+                                        startX="26"
                                         startY="0.75"
-                                        endX="25"
-                                        endY="49.25"
+                                        endX="26"
+                                        endY="51.25"
                                         colors="#ffffffff #ffffffff #daffffff #87ffffff #35ffffff #0fffffff"
                                         positions="0 0.5 0.625 0.75 0.875 1" />
                                 </Fill>
@@ -2711,7 +2711,7 @@
                             <Expression name="mediumText"><![CDATA[!(textLength([COMPLICATION.TEXT]) >= 7) && (textLength([COMPLICATION.TEXT]) >= 5)]]></Expression>
                         </Expressions>
                         <Compare expression="smallText">
-                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                            <PartText x="3" y="14" width="46" height="24" alpha="255">
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
@@ -2723,7 +2723,7 @@
                             </PartText>
                         </Compare>
                         <Compare expression="mediumText">
-                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                            <PartText x="3" y="14" width="46" height="24" alpha="255">
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
@@ -2735,10 +2735,10 @@
                             </PartText>
                         </Compare>
                         <Default>
-                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                            <PartText x="3" y="14" width="46" height="24" alpha="255">
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <Text align="CENTER" ellipsis="TRUE">
-                                    <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                    <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
                                         <Template>%s
                                             <Parameter expression="[COMPLICATION.TEXT]" />
                                         </Template>
@@ -2750,41 +2750,41 @@
             </Group>
             </Complication>
             <Complication type="RANGED_VALUE">
-            <Group x="0" y="0" width="50" height="50" name="cell1">
-                    <PartDraw x="0" y="0" width="50" height="50">
-                        <Ellipse x="0" y="0" width="50" height="50">
+            <Group x="0" y="0" width="52" height="52" name="cell1">
+                    <PartDraw x="0" y="0" width="52" height="52">
+                        <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
-                    <Group x="0" y="0" width="50" height="50" name="cell1RangedBorder" alpha="255">
+                    <Group x="0" y="0" width="52" height="52" name="cell1RangedBorder" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
-                        <PartDraw x="0" y="0" width="50" height="50" alpha="255">
+                        <PartDraw x="0" y="0" width="52" height="52" alpha="255">
                             <Arc
-                                centerX="25"
-                                centerY="25"
-                                width="48.5"
-                                height="48.5"
+                                centerX="26"
+                                centerY="26"
+                                width="50.5"
+                                height="50.5"
                                 startAngle="0"
                                 endAngle="359.9">
                                 <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
                                     <LinearGradient
-                                        startX="37.159527"
-                                        startY="45.981144"
-                                        endX="12.840473"
-                                        endY="4.018856"
+                                        startX="38.632009"
+                                        startY="47.863093"
+                                        endX="13.367991"
+                                        endY="4.136907"
                                         colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
                                         positions="0 0.5 0.625 0.75 0.875 1" />
                                 </Stroke>
                             </Arc>
                         </PartDraw>
-                        <PartDraw x="0" y="0" width="50" height="50" renderMode="MASK">
-                            <Rectangle x="0" y="0" width="50" height="50">
+                        <PartDraw x="0" y="0" width="52" height="52" renderMode="MASK">
+                            <Rectangle x="0" y="0" width="52" height="52">
                                 <Fill color="#ffffffff">
                                     <LinearGradient
-                                        startX="25"
+                                        startX="26"
                                         startY="0.75"
-                                        endX="25"
-                                        endY="49.25"
+                                        endX="26"
+                                        endY="51.25"
                                         colors="#ffffffff #ffffffff #daffffff #87ffffff #35ffffff #0fffffff"
                                         positions="0 0.5 0.625 0.75 0.875 1" />
                                 </Fill>
@@ -2797,7 +2797,7 @@
                             <Expression name="mediumText"><![CDATA[!(textLength([COMPLICATION.TEXT]) >= 7) && (textLength([COMPLICATION.TEXT]) >= 5)]]></Expression>
                         </Expressions>
                         <Compare expression="smallText">
-                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                            <PartText x="3" y="14" width="46" height="24" alpha="255">
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
@@ -2809,7 +2809,7 @@
                             </PartText>
                         </Compare>
                         <Compare expression="mediumText">
-                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                            <PartText x="3" y="14" width="46" height="24" alpha="255">
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
@@ -2821,10 +2821,10 @@
                             </PartText>
                         </Compare>
                         <Default>
-                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                            <PartText x="3" y="14" width="46" height="24" alpha="255">
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <Text align="CENTER" ellipsis="TRUE">
-                                    <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                    <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
                                         <Template>%s
                                             <Parameter expression="[COMPLICATION.TEXT]" />
                                         </Template>
@@ -2836,48 +2836,48 @@
             </Group>
             </Complication>
             <Complication type="MONOCHROMATIC_IMAGE">
-            <Group x="0" y="0" width="50" height="50" name="cell1Icon">
-                    <PartDraw x="0" y="0" width="50" height="50">
-                        <Ellipse x="0" y="0" width="50" height="50">
+            <Group x="0" y="0" width="52" height="52" name="cell1Icon">
+                    <PartDraw x="0" y="0" width="52" height="52">
+                        <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
-                    <Group x="0" y="0" width="50" height="50" name="cell1IconBorder" alpha="255">
+                    <Group x="0" y="0" width="52" height="52" name="cell1IconBorder" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
-                        <PartDraw x="0" y="0" width="50" height="50" alpha="255">
+                        <PartDraw x="0" y="0" width="52" height="52" alpha="255">
                             <Arc
-                                centerX="25"
-                                centerY="25"
-                                width="48.5"
-                                height="48.5"
+                                centerX="26"
+                                centerY="26"
+                                width="50.5"
+                                height="50.5"
                                 startAngle="0"
                                 endAngle="359.9">
                                 <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
                                     <LinearGradient
-                                        startX="37.159527"
-                                        startY="45.981144"
-                                        endX="12.840473"
-                                        endY="4.018856"
+                                        startX="38.632009"
+                                        startY="47.863093"
+                                        endX="13.367991"
+                                        endY="4.136907"
                                         colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
                                         positions="0 0.5 0.625 0.75 0.875 1" />
                                 </Stroke>
                             </Arc>
                         </PartDraw>
-                        <PartDraw x="0" y="0" width="50" height="50" renderMode="MASK">
-                            <Rectangle x="0" y="0" width="50" height="50">
+                        <PartDraw x="0" y="0" width="52" height="52" renderMode="MASK">
+                            <Rectangle x="0" y="0" width="52" height="52">
                                 <Fill color="#ffffffff">
                                     <LinearGradient
-                                        startX="25"
+                                        startX="26"
                                         startY="0.75"
-                                        endX="25"
-                                        endY="49.25"
+                                        endX="26"
+                                        endY="51.25"
                                         colors="#ffffffff #ffffffff #daffffff #87ffffff #35ffffff #0fffffff"
                                         positions="0 0.5 0.625 0.75 0.875 1" />
                                 </Fill>
                             </Rectangle>
                         </PartDraw>
                     </Group>
-                <Group x="13" y="13" width="24" height="24" name="cell1Tint" tintColor="#fff4fbf8">
+                <Group x="14" y="14" width="24" height="24" name="cell1Tint" tintColor="#fff4fbf8">
                     <PartImage x="0" y="0" width="24" height="24" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
@@ -2889,10 +2889,10 @@
         </ComplicationSlot>
 
         <ComplicationSlot
-            x="200"
-            y="98"
-            width="50"
-            height="50"
+            x="199"
+            y="95"
+            width="52"
+            height="52"
             slotId="202"
             displayName="@string/cell2_complication"
             supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
@@ -2900,28 +2900,28 @@
             <DefaultProviderPolicy
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="50" height="50" />
+            <BoundingBox x="0" y="0" width="52" height="52" />
             <Complication type="SHORT_TEXT">
-            <Group x="0" y="0" width="50" height="50" name="cell2">
-                    <PartDraw x="0" y="0" width="50" height="50">
-                        <Ellipse x="0" y="0" width="50" height="50">
+            <Group x="0" y="0" width="52" height="52" name="cell2">
+                    <PartDraw x="0" y="0" width="52" height="52">
+                        <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
-                    <PartDraw x="0" y="0" width="50" height="50" alpha="255">
+                    <PartDraw x="0" y="0" width="52" height="52" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Arc
-                            centerX="25"
-                            centerY="25"
-                            width="48.5"
-                            height="48.5"
+                            centerX="26"
+                            centerY="26"
+                            width="50.5"
+                            height="50.5"
                             startAngle="0"
                             endAngle="359.9">
                             <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
                                 <LinearGradient
-                                    startX="25"
-                                    startY="49.25"
-                                    endX="25"
+                                    startX="26"
+                                    startY="51.25"
+                                    endX="26"
                                     endY="0.75"
                                     colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
                                     positions="0 0.5 0.625 0.75 0.875 1" />
@@ -2934,7 +2934,7 @@
                             <Expression name="mediumText"><![CDATA[!(textLength([COMPLICATION.TEXT]) >= 7) && (textLength([COMPLICATION.TEXT]) >= 5)]]></Expression>
                         </Expressions>
                         <Compare expression="smallText">
-                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                            <PartText x="3" y="14" width="46" height="24" alpha="255">
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
@@ -2946,7 +2946,7 @@
                             </PartText>
                         </Compare>
                         <Compare expression="mediumText">
-                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                            <PartText x="3" y="14" width="46" height="24" alpha="255">
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
@@ -2958,10 +2958,10 @@
                             </PartText>
                         </Compare>
                         <Default>
-                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                            <PartText x="3" y="14" width="46" height="24" alpha="255">
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <Text align="CENTER" ellipsis="TRUE">
-                                    <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                    <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
                                         <Template>%s
                                             <Parameter expression="[COMPLICATION.TEXT]" />
                                         </Template>
@@ -2973,26 +2973,26 @@
             </Group>
             </Complication>
             <Complication type="RANGED_VALUE">
-            <Group x="0" y="0" width="50" height="50" name="cell2">
-                    <PartDraw x="0" y="0" width="50" height="50">
-                        <Ellipse x="0" y="0" width="50" height="50">
+            <Group x="0" y="0" width="52" height="52" name="cell2">
+                    <PartDraw x="0" y="0" width="52" height="52">
+                        <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
-                    <PartDraw x="0" y="0" width="50" height="50" alpha="255">
+                    <PartDraw x="0" y="0" width="52" height="52" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Arc
-                            centerX="25"
-                            centerY="25"
-                            width="48.5"
-                            height="48.5"
+                            centerX="26"
+                            centerY="26"
+                            width="50.5"
+                            height="50.5"
                             startAngle="0"
                             endAngle="359.9">
                             <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
                                 <LinearGradient
-                                    startX="25"
-                                    startY="49.25"
-                                    endX="25"
+                                    startX="26"
+                                    startY="51.25"
+                                    endX="26"
                                     endY="0.75"
                                     colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
                                     positions="0 0.5 0.625 0.75 0.875 1" />
@@ -3005,7 +3005,7 @@
                             <Expression name="mediumText"><![CDATA[!(textLength([COMPLICATION.TEXT]) >= 7) && (textLength([COMPLICATION.TEXT]) >= 5)]]></Expression>
                         </Expressions>
                         <Compare expression="smallText">
-                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                            <PartText x="3" y="14" width="46" height="24" alpha="255">
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
@@ -3017,7 +3017,7 @@
                             </PartText>
                         </Compare>
                         <Compare expression="mediumText">
-                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                            <PartText x="3" y="14" width="46" height="24" alpha="255">
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
@@ -3029,10 +3029,10 @@
                             </PartText>
                         </Compare>
                         <Default>
-                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                            <PartText x="3" y="14" width="46" height="24" alpha="255">
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <Text align="CENTER" ellipsis="TRUE">
-                                    <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                    <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
                                         <Template>%s
                                             <Parameter expression="[COMPLICATION.TEXT]" />
                                         </Template>
@@ -3044,33 +3044,33 @@
             </Group>
             </Complication>
             <Complication type="MONOCHROMATIC_IMAGE">
-            <Group x="0" y="0" width="50" height="50" name="cell2Icon">
-                    <PartDraw x="0" y="0" width="50" height="50">
-                        <Ellipse x="0" y="0" width="50" height="50">
+            <Group x="0" y="0" width="52" height="52" name="cell2Icon">
+                    <PartDraw x="0" y="0" width="52" height="52">
+                        <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
-                    <PartDraw x="0" y="0" width="50" height="50" alpha="255">
+                    <PartDraw x="0" y="0" width="52" height="52" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Arc
-                            centerX="25"
-                            centerY="25"
-                            width="48.5"
-                            height="48.5"
+                            centerX="26"
+                            centerY="26"
+                            width="50.5"
+                            height="50.5"
                             startAngle="0"
                             endAngle="359.9">
                             <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
                                 <LinearGradient
-                                    startX="25"
-                                    startY="49.25"
-                                    endX="25"
+                                    startX="26"
+                                    startY="51.25"
+                                    endX="26"
                                     endY="0.75"
                                     colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
                                     positions="0 0.5 0.625 0.75 0.875 1" />
                             </Stroke>
                         </Arc>
                     </PartDraw>
-                <Group x="13" y="13" width="24" height="24" name="cell2Tint" tintColor="#fff4fbf8">
+                <Group x="14" y="14" width="24" height="24" name="cell2Tint" tintColor="#fff4fbf8">
                     <PartImage x="0" y="0" width="24" height="24" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
@@ -3083,9 +3083,9 @@
 
         <ComplicationSlot
             x="251"
-            y="112"
-            width="50"
-            height="50"
+            y="109"
+            width="52"
+            height="52"
             slotId="203"
             displayName="@string/cell3_complication"
             supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
@@ -3093,43 +3093,43 @@
             <DefaultProviderPolicy
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="50" height="50" />
+            <BoundingBox x="0" y="0" width="52" height="52" />
             <Complication type="SHORT_TEXT">
-            <Group x="0" y="0" width="50" height="50" name="cell3">
-                    <PartDraw x="0" y="0" width="50" height="50">
-                        <Ellipse x="0" y="0" width="50" height="50">
+            <Group x="0" y="0" width="52" height="52" name="cell3">
+                    <PartDraw x="0" y="0" width="52" height="52">
+                        <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
-                    <Group x="0" y="0" width="50" height="50" name="cell3TextBorder" alpha="255">
+                    <Group x="0" y="0" width="52" height="52" name="cell3TextBorder" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
-                        <PartDraw x="0" y="0" width="50" height="50" alpha="255">
+                        <PartDraw x="0" y="0" width="52" height="52" alpha="255">
                             <Arc
-                                centerX="25"
-                                centerY="25"
-                                width="48.5"
-                                height="48.5"
+                                centerX="26"
+                                centerY="26"
+                                width="50.5"
+                                height="50.5"
                                 startAngle="0"
                                 endAngle="359.9">
                                 <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
                                     <LinearGradient
-                                        startX="12.840473"
-                                        startY="45.981144"
-                                        endX="37.159527"
-                                        endY="4.018856"
+                                        startX="13.367991"
+                                        startY="47.863093"
+                                        endX="38.632009"
+                                        endY="4.136907"
                                         colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
                                         positions="0 0.5 0.625 0.75 0.875 1" />
                                 </Stroke>
                             </Arc>
                         </PartDraw>
-                        <PartDraw x="0" y="0" width="50" height="50" renderMode="MASK">
-                            <Rectangle x="0" y="0" width="50" height="50">
+                        <PartDraw x="0" y="0" width="52" height="52" renderMode="MASK">
+                            <Rectangle x="0" y="0" width="52" height="52">
                                 <Fill color="#ffffffff">
                                     <LinearGradient
-                                        startX="25"
+                                        startX="26"
                                         startY="0.75"
-                                        endX="25"
-                                        endY="49.25"
+                                        endX="26"
+                                        endY="51.25"
                                         colors="#ffffffff #ffffffff #daffffff #87ffffff #35ffffff #0fffffff"
                                         positions="0 0.5 0.625 0.75 0.875 1" />
                                 </Fill>
@@ -3142,7 +3142,7 @@
                             <Expression name="mediumText"><![CDATA[!(textLength([COMPLICATION.TEXT]) >= 7) && (textLength([COMPLICATION.TEXT]) >= 5)]]></Expression>
                         </Expressions>
                         <Compare expression="smallText">
-                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                            <PartText x="3" y="14" width="46" height="24" alpha="255">
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
@@ -3154,7 +3154,7 @@
                             </PartText>
                         </Compare>
                         <Compare expression="mediumText">
-                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                            <PartText x="3" y="14" width="46" height="24" alpha="255">
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
@@ -3166,10 +3166,10 @@
                             </PartText>
                         </Compare>
                         <Default>
-                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                            <PartText x="3" y="14" width="46" height="24" alpha="255">
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <Text align="CENTER" ellipsis="TRUE">
-                                    <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                    <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
                                         <Template>%s
                                             <Parameter expression="[COMPLICATION.TEXT]" />
                                         </Template>
@@ -3181,41 +3181,41 @@
             </Group>
             </Complication>
             <Complication type="RANGED_VALUE">
-            <Group x="0" y="0" width="50" height="50" name="cell3">
-                    <PartDraw x="0" y="0" width="50" height="50">
-                        <Ellipse x="0" y="0" width="50" height="50">
+            <Group x="0" y="0" width="52" height="52" name="cell3">
+                    <PartDraw x="0" y="0" width="52" height="52">
+                        <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
-                    <Group x="0" y="0" width="50" height="50" name="cell3RangedBorder" alpha="255">
+                    <Group x="0" y="0" width="52" height="52" name="cell3RangedBorder" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
-                        <PartDraw x="0" y="0" width="50" height="50" alpha="255">
+                        <PartDraw x="0" y="0" width="52" height="52" alpha="255">
                             <Arc
-                                centerX="25"
-                                centerY="25"
-                                width="48.5"
-                                height="48.5"
+                                centerX="26"
+                                centerY="26"
+                                width="50.5"
+                                height="50.5"
                                 startAngle="0"
                                 endAngle="359.9">
                                 <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
                                     <LinearGradient
-                                        startX="12.840473"
-                                        startY="45.981144"
-                                        endX="37.159527"
-                                        endY="4.018856"
+                                        startX="13.367991"
+                                        startY="47.863093"
+                                        endX="38.632009"
+                                        endY="4.136907"
                                         colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
                                         positions="0 0.5 0.625 0.75 0.875 1" />
                                 </Stroke>
                             </Arc>
                         </PartDraw>
-                        <PartDraw x="0" y="0" width="50" height="50" renderMode="MASK">
-                            <Rectangle x="0" y="0" width="50" height="50">
+                        <PartDraw x="0" y="0" width="52" height="52" renderMode="MASK">
+                            <Rectangle x="0" y="0" width="52" height="52">
                                 <Fill color="#ffffffff">
                                     <LinearGradient
-                                        startX="25"
+                                        startX="26"
                                         startY="0.75"
-                                        endX="25"
-                                        endY="49.25"
+                                        endX="26"
+                                        endY="51.25"
                                         colors="#ffffffff #ffffffff #daffffff #87ffffff #35ffffff #0fffffff"
                                         positions="0 0.5 0.625 0.75 0.875 1" />
                                 </Fill>
@@ -3228,7 +3228,7 @@
                             <Expression name="mediumText"><![CDATA[!(textLength([COMPLICATION.TEXT]) >= 7) && (textLength([COMPLICATION.TEXT]) >= 5)]]></Expression>
                         </Expressions>
                         <Compare expression="smallText">
-                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                            <PartText x="3" y="14" width="46" height="24" alpha="255">
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
@@ -3240,7 +3240,7 @@
                             </PartText>
                         </Compare>
                         <Compare expression="mediumText">
-                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                            <PartText x="3" y="14" width="46" height="24" alpha="255">
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <Text align="CENTER" ellipsis="TRUE">
                                     <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
@@ -3252,10 +3252,10 @@
                             </PartText>
                         </Compare>
                         <Default>
-                            <PartText x="3" y="13" width="44" height="24" alpha="255">
+                            <PartText x="3" y="14" width="46" height="24" alpha="255">
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <Text align="CENTER" ellipsis="TRUE">
-                                    <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff4fbf8">
+                                    <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
                                         <Template>%s
                                             <Parameter expression="[COMPLICATION.TEXT]" />
                                         </Template>
@@ -3267,48 +3267,48 @@
             </Group>
             </Complication>
             <Complication type="MONOCHROMATIC_IMAGE">
-            <Group x="0" y="0" width="50" height="50" name="cell3Icon">
-                    <PartDraw x="0" y="0" width="50" height="50">
-                        <Ellipse x="0" y="0" width="50" height="50">
+            <Group x="0" y="0" width="52" height="52" name="cell3Icon">
+                    <PartDraw x="0" y="0" width="52" height="52">
+                        <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
                         </Ellipse>
                     </PartDraw>
-                    <Group x="0" y="0" width="50" height="50" name="cell3IconBorder" alpha="255">
+                    <Group x="0" y="0" width="52" height="52" name="cell3IconBorder" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
-                        <PartDraw x="0" y="0" width="50" height="50" alpha="255">
+                        <PartDraw x="0" y="0" width="52" height="52" alpha="255">
                             <Arc
-                                centerX="25"
-                                centerY="25"
-                                width="48.5"
-                                height="48.5"
+                                centerX="26"
+                                centerY="26"
+                                width="50.5"
+                                height="50.5"
                                 startAngle="0"
                                 endAngle="359.9">
                                 <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
                                     <LinearGradient
-                                        startX="12.840473"
-                                        startY="45.981144"
-                                        endX="37.159527"
-                                        endY="4.018856"
+                                        startX="13.367991"
+                                        startY="47.863093"
+                                        endX="38.632009"
+                                        endY="4.136907"
                                         colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
                                         positions="0 0.5 0.625 0.75 0.875 1" />
                                 </Stroke>
                             </Arc>
                         </PartDraw>
-                        <PartDraw x="0" y="0" width="50" height="50" renderMode="MASK">
-                            <Rectangle x="0" y="0" width="50" height="50">
+                        <PartDraw x="0" y="0" width="52" height="52" renderMode="MASK">
+                            <Rectangle x="0" y="0" width="52" height="52">
                                 <Fill color="#ffffffff">
                                     <LinearGradient
-                                        startX="25"
+                                        startX="26"
                                         startY="0.75"
-                                        endX="25"
-                                        endY="49.25"
+                                        endX="26"
+                                        endY="51.25"
                                         colors="#ffffffff #ffffffff #daffffff #87ffffff #35ffffff #0fffffff"
                                         positions="0 0.5 0.625 0.75 0.875 1" />
                                 </Fill>
                             </Rectangle>
                         </PartDraw>
                     </Group>
-                <Group x="13" y="13" width="24" height="24" name="cell3Tint" tintColor="#fff4fbf8">
+                <Group x="14" y="14" width="24" height="24" name="cell3Tint" tintColor="#fff4fbf8">
                     <PartImage x="0" y="0" width="24" height="24" alpha="255">
                         <Variant mode="AMBIENT" target="alpha" value="140" />
                         <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />

@@ -41,14 +41,15 @@ const CELL_RIM = '#242A27'
  * the UV index are the face's own chrome and cost no slot.
  */
 const CELL = {
-  size: 50,
-  fontSize: 17,
+  size: 52,
+  fontSize: 18,
+  textWidth: 46,
   /**
-   * The occupied-cell border is inscribed: a stroke of 1.5 on a path of 48.5
-   * spans radius 23.5 to 25.0.
+   * The occupied-cell border is inscribed: a stroke of 1.5 on a path of 50.5
+   * spans radius 24.5 to 26.0.
    * An empty cell wears none, so a ring means occupied and a recess means free.
    */
-  ringDiameter: 48.5,
+  ringDiameter: 50.5,
   ringThickness: 1.5,
   /** `0xaa` of the face's text colour, and the arcs' own ambient proportion. */
   ringAmbientAlpha: 140,
@@ -63,9 +64,9 @@ const CELL = {
    * too — a preview draws what the face draws.
    */
   readings: [
-    { x: 149, y: 112, text: 'Tue', wellOpacity: 1 },
-    { x: 200, y: 98, text: '18°C', temperature: 18, wellOpacity: 0xeb / 255 },
-    { x: 251, y: 112, text: 'UV 7', uv: 7, wellOpacity: 0xeb / 255 },
+    { x: 147, y: 109, text: 'Tue', wellOpacity: 1 },
+    { x: 199, y: 95, text: '18°C', temperature: 18, wellOpacity: 0xeb / 255 },
+    { x: 251, y: 109, text: 'UV 7', uv: 7, wellOpacity: 0xeb / 255 },
   ],
 }
 
@@ -118,10 +119,14 @@ const STRIP = {
 }
 
 /**
- * The approved clock model is centred on the canvas without changing either
- * clock's type. Actual native glyph centres still require matched measurements.
+ * Fixed per-mode baselines model the measured 08:08 lower edges while larger
+ * whole digits grow upward. Host SVG metrics are illustrative, not native fit
+ * or balanced-gap acceptance; other time strings retain their natural optics.
  */
-const TIME_LIFT = 0
+const CLOCK = {
+  active: { fontSize: 86, baseline: 250.78125, weight: 700 },
+  ambient: { fontSize: 96, baseline: 254.296875, weight: 100 },
+}
 
 /**
  * The ring type drawn as texture: the budget period repeated round the band and punched out in
@@ -711,13 +716,14 @@ async function faceSvg({
       stroke="${TRACK}" stroke-width="${(size * 0.018).toFixed(1)}" />`
   }
 
-  const timeSize = (ambient ? 81 : 70) * size / FACE
-  const timeY = cy - TIME_LIFT * (size / FACE) + timeSize * 0.36
+  const clock = ambient ? CLOCK.ambient : CLOCK.active
+  const timeSize = clock.fontSize * size / FACE
+  const timeY = clock.baseline * size / FACE
   let content = upperCells({ size, ambient, clearedCells })
   content += `
     <text x="${cx}" y="${timeY.toFixed(1)}" text-anchor="middle"
       font-family="${FONT}, sans-serif" font-size="${timeSize.toFixed(1)}"
-      font-weight="${ambient ? 100 : 700}" fill="${LABEL}">10:08</text>`
+      font-weight="${clock.weight}" fill="${LABEL}">10:08</text>`
   content += await providerBars({
     layers: stripLayers,
     showPlan,
@@ -1031,7 +1037,7 @@ const cellFitReadings = [
 ]
 await assertLabelsFit(cellFitReadings.map(({ text }) => text), {
   fontSize: (text) => cellFontSize(cellFitReadings.find((reading) => reading.text === text)),
-  width: 44,
+  width: CELL.textWidth,
 })
 
 for (const variant of variants) {

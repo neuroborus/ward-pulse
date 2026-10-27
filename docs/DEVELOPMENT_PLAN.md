@@ -2592,19 +2592,47 @@ the mono wordmark remains reserved for watermark use and is not duplicated besid
 
 ### Phase 20 — three upper cells on the watch face
 
-**Composition revision 2026-10-27 — implementation target; native/public acceptance Pending.**
-The operative [centred face target](product/WATCH_RING_DESIGN.md#revision-2026-10-27--centred-clocks-and-wider-legend)
-retains 50-unit cells at (149,112)/(200,98)/(251,112), 17/14/12 readings and original outward
-lighting with added bottom treatment only laterally. Both whole clocks start at nominal y182,
-unchanged 70 Bold/81 Thin. The original logo sits above the clock/below the central cell:
-active 62×62 at (194,142), alpha95; ambient 52×52 at integer (199,147), alpha70; centre (225,173).
+**Composition revision 2026-10-27 — calibrated upward digits; bounded native evidence.**
+The operative [upward-digit face target](product/WATCH_RING_DESIGN.md#revision-2026-10-27--upward-digits-and-fixed-reference-bottoms)
+uses 52-unit cells at (147,109)/(199,95)/(251,109), preferred **18** with existing **14/12** readings,
+46×24 text at (3,14), 24-unit icons at inset **14** and original outward lighting with added
+bottom treatment only laterally. Whole-clock **86 Bold/y176** and **96 Thin/y175**, both height 90,
+are the current Round-calibrated settings. Digits enlarge upward, preserving the measured
+08:08 bottoms **250.78125 active/254.296875 ambient** and balancing visible logo→time and
+time→legend gaps only in the reference with three full rows: targets **8.21875/4.703125** respectively.
+Other strings retain natural optical variation; do not retune by row count. Review art
+uses per-mode fixed baselines; the owning revision records actual Round metrics and bounded fit.
+The original logo sits above the clock/below the central cell: active **64×64** at (193,141),
+alpha95; ambient **54×54** at (198,146), alpha70; centre (225,173). Preserve original PNG pixels.
 Equal 132×26 wells at x159/y259,286,313 use 120-unit 20/18/16 whole-label branches, bottom339
 and unchanged bottom anchoring/marker semantics. The calculated aperture margin is 2.0730.
+Historical centred 2026-10-27 Round 384 originals at **09:11/08:08/11:11** in INTERACTIVE and actual
+AMBIENT all measured centre 193 native pixels (226.171875 design units) at initial nominal y182.
+The inherited y181/70 Bold/81 Thin candidate (Source6397) supplied the 08:08 reference
+bottoms above. Its old centre225 goal and review `TIME_LIFT=0` are superseded; arithmetic
+and older native results do not establish enlarged-clock acceptance or a new tolerance.
 Slots, sources, units, protocols, ring geometry/textures and navigation stay unchanged;
-adaptive-width item 12 remains separate. New glyph/Thin/ink/AMBIENT/native-fit acceptance
-and the complete seven-file public cohort refresh remain Pending until post-retirement HOST
-validation/builds and matched native artifact/input/mode evidence, followed by shared-state
-capture/guidance reconciliation. Older native measurements do not accept these bytes.
+adaptive-width item 12 remains separate. Current XML1685 passed post-retirement checkout/HOST
+checks, strict Push validation and canonical-resource equality in both APKs. Native evidence
+is for active legacy `app.wardpulse.watchface`, `wfId-15`. The previous upward
+Source54f6 measured clean active 86/y175 08:08 bottom 213 versus reference 214, and true
+AMBIENT 97/y175 bottom 217 with height 61 on Round 384. The owning revision preserves the dated
+bounds/gaps and subsequent corrected Round calibration: 08:08 now retains both reference
+bottoms, with settled 53-pixel Bold and 60-pixel Thin ink. The older mixed Thin/Bold first-wake
+frame remains rejected despite INTERACTIVE metadata.
+One inspected actual 08:08 active original was already delivered through an Owner-visible
+channel; no further approval is required. Root reviewed the Round anchors/six-frame clock corpus,
+20 originals from ten fit cases plus four supplemental originals, and restored Live data.
+Square's 24 case originals/restored MUTE frame passed only clock/legend/cell-well fit;
+cleared upper cells and an external system indicator prove neither populated defaults nor
+bottom-ring contour/public cleanliness. Summary/settings and the asynchronously restored
+Square notification were reverified. All seven healthy Live public originals and proportional
+exports were captured and Root-reviewed with filled defaults and actual matching phone themes;
+the [current cohort](assets/README.md#shared-state-capture-refresh-2026-10-27) and its scoped
+publication review are accepted. Temporary-time unfilled
+weather is not showcase proof. Physical/custom/extreme-weather, signed-money native fit,
+active Push rendering and live Codex/Spark selection remain unproved; no all-string or
+all-row-count equal-gap claim follows. Older native measurements prove only their dated bytes.
 
 **Historical readability acceptance 2026-10-25 — bounded native cases for that layout.**
 The combined layout used 120×26 wells at x165 with 18/16/14 labels, both clocks at y152 and
@@ -2628,16 +2656,20 @@ builds. This face refinement adds no widget feature and does not close Phase 17'
 **Selected-zero revision 2026-10-13.** The retained-zero ring and legend treatment changes
 no upper-cell geometry. That build used the complete cells
 at integer origins `(152,114)`, `(204,100)`, `(256,114)`, the three-unit downward move, full
-temperature labels and shortest radial border fades. The acceptance below follows those
-dated revisions; new exhausted-state review art follows the readability target above.
+temperature labels and shortest radial border fades. The historical acceptance block below
+records those dated revisions; current acceptance follows the upward-digit contract above.
 
-Status: design locked 2026-10-09 in `docs/product/WATCH_RING_DESIGN.md` (upper-cell revision,
-with the melt-length and cell-layout corrections of the same day), and the first implementation
-pass is in the tree. `tools/render-watchface.mjs` now bounds the
-three ring slots with a full-canvas `BoundingBox` and declares each band at the 20 units it
-paints; `watchface.xml` is regenerated from it. The nine ring textures came out byte-identical,
-and the review-art generators and the Wear complication sources are still untouched. The rest of
-this entry is what the design commits the remaining passes to.
+**Historical first implementation status, 2026-10-09.** The design was locked in
+`docs/product/WATCH_RING_DESIGN.md` (upper-cell revision, with the melt-length and cell-layout
+corrections of the same day), and the first implementation pass was in the tree.
+`tools/render-watchface.mjs` bounded the
+three ring slots with a full-canvas `BoundingBox` and declared each band at the 20 units it
+painted; `watchface.xml` was regenerated from it. The nine ring textures came out byte-identical,
+and the review-art generators and the Wear complication sources were still untouched at that
+point. The following records preserve the original scope and dated observations. Current
+implementation and acceptance follow the
+[upward-digit contract](product/WATCH_RING_DESIGN.md#revision-2026-10-27--upward-digits-and-fixed-reference-bottoms);
+the historical geometry below does not prescribe future passes or accept the current candidate.
 
 Unrelated to the cells, and found while reading the system face picker on 2026-10-09: the
 picker was advertising the face with `drawable/preview.png`, unchanged since `2c5aec3`, which
@@ -2852,7 +2884,9 @@ Measured during the design (recorded with its numbers in the design baseline):
   and with the one width that is estimated rather than measured, under *Reading revision
   2026-10-12* in `docs/product/WATCH_RING_DESIGN.md`, Upper cells, rule 11.
 
-Scope when the implementation runs:
+**Historical implementation scope — superseded geometry.** This records the original cell
+implementation scope. Its 42-unit wells, 37×18 text box, degree-only offset and 21-unit icons
+are superseded by the upward-digit contract above; they are not remaining implementation work.
 
 - `tools/render-watchface.mjs` — three cell slots of 42 units on new ids, centred on the arc of
   radius 106.8 at −29° / 0 / +29° (boxes at `152, 111`, `204, 97`, `256, 111`), the wells as
@@ -2873,15 +2907,24 @@ Scope when the implementation runs:
   three strip services fold into the ring services, which gain the strip label on `TEXT` and the
   combined token on `TITLE`.
 
-Migration risk, named here rather than in the design baseline: the Wear complication sources
+**Historical migration risk — 2026-10-09 slot folding.** The Wear complication sources
 already carry comments reading *class name kept for installed faces*, because earlier slot
 reshuffles broke faces that were installed at the time, and Split band rule 4 records the exact
-shape of that damage. This revision moves more slots than any revision before it — three slots
-change what they draw, and three more are new. An installed old face paired with the new app
-will show wrong data until both are updated, and keeping the service names stable cannot prevent
-it, as the 2026-09-16 revision already learned. The face and the app have to ship together.
+shape of that damage. That revision moved more slots than any revision before it — three slots
+changed what they drew, and three more were new. An installed old face paired with the new app
+would show wrong data until both were updated; keeping the service names stable could not
+prevent it, as the 2026-09-16 revision already learned. The face and the app had to ship together
+for that migration. The current composition refinement changes no slots, services or transport.
 
-Acceptance:
+**Current acceptance — bounded native and captured-public evidence.** Use the upward-digit
+contract's measured scope and remaining proof requirements. The eight-slot budget, weather chrome and occlusion,
+customizable bindings, provider taps, complete-label rendering, bottom anchoring, tightest-first
+ordering, ring/texture preservation and ambient retention below remain required with current
+geometry. Earlier device observations establish only their dated artifacts.
+
+**Historical acceptance criteria — superseded 2026-10-09/13 geometry.** The original criteria
+are retained below, including the old cell origins, 37-unit text box and legend rows
+283/304/325. Those dimensions do not apply to the current candidate.
 
 ```text
 the face declares exactly eight complication slots and the validator passes

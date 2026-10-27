@@ -38,8 +38,8 @@ to 0%; watch displays keep ordinary styling for that rounded value.
 ![Dashboard showing Claude plan windows and organization usage history in the dark theme.](/screenshots/phone-dashboard-overview-dark.png)
 
 Read each plan's capacity **left** and the reporting status beside it. These captures show
-two Claude plan windows at **100% left** and organization usage history totalling
-**39 tokens across 25 buckets**.
+Claude's 5-hour session at **21% left**, its Weekly plan at **87% left**, and organization
+usage history totalling **39 tokens across 27 buckets** from October 1 to 27.
 
 Selected exhausted watch metrics remain present with an empty grey track and a pale-red zero
 percentage. They do not disappear or get replaced by a less-used Claude window. The widget

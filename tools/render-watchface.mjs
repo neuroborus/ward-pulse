@@ -282,10 +282,20 @@ const STRIP = {
  * The wordmark, centred below the middle cell and above the clock. Both boxes are
  * square because the asset is — WFF stretches the image to fill its box, and
  * the earlier 66x55 / 54x45 boxes flattened the mark by 17%. The PNG carries
- * its own padding, so the active ink lands at y=156.8542-180.75, leaving
- * 8.8542 units below the middle cell and 1.25 before the nominal clock box.
+ * its own padding: active ink spans y=156.333333-181, ambient 158.9375-179.75.
+ * Native clock ink and resampling still need matched device measurements.
  */
-const WORDMARK = { centerX: FACE.center, centerY: 173, size: 62, ambientSize: 52 }
+const WORDMARK = { centerX: FACE.center, centerY: 173, size: 64, ambientSize: 54 }
+
+/**
+ * Enlarge whole digits upward from the measured 08:08 lower edges, rather than
+ * retaining the old centred clock. These integer boxes are calibration starters:
+ * native font metrics must establish complete glyph fit, bottom and visible gaps.
+ */
+const CLOCK = {
+  active: { y: 176, height: 90, fontSize: 86 },
+  ambient: { y: 175, height: 90, fontSize: 96 },
+}
 
 /**
  * Which row of the stack a ring's own slot paints, counted from the top.
@@ -307,24 +317,24 @@ const CREDITS_RING_INDEX = 0
 
 /**
  * The three cells above the clock retain the original curved row. Since
- * 2026-10-25 the wells are 50 units. Origins are the integers
+ * 2026-10-27 the wells are 52 units. Origins are the integers
  * `WATCH_RING_DESIGN.md` rule 1 locks; the middle remains fourteen units raised.
  */
 const CELL = {
-  size: 50,
-  /** Both the 44x24 text box and the 24-unit icon centre on the integer grid. */
-  textY: 13,
+  size: 52,
+  /** Both the 46x24 text box and the 24-unit icon centre on the integer grid. */
+  textY: 14,
   textX: 3,
-  textWidth: 44,
+  textWidth: 46,
   textHeight: 24,
-  fontSize: 17,
+  fontSize: 18,
   iconSize: 24,
   /**
    * The border that says a cell is holding something. Its 1.5-unit stroke,
-   * retained from 2026-10-13, now follows a 48.5 path: radius 23.5 to 25.0,
+   * retained from 2026-10-13, now follows a 50.5 path: radius 24.5 to 26.0,
    * inscribed in the enlarged well.
    */
-  ringDiameter: 48.5,
+  ringDiameter: 50.5,
   ringThickness: 1.5,
   /**
    * The ring dims in ambient with everything else a cell carries. Rule 12 keeps
@@ -337,9 +347,9 @@ const CELL = {
 }
 
 const CELLS = [
-  { slotId: 201, x: 149, y: 112, label: 'cell1', provider: 'DAY_OF_WEEK', type: 'SHORT_TEXT' },
-  { slotId: 202, x: 200, y: 98, label: 'cell2', provider: 'EMPTY', type: 'EMPTY' },
-  { slotId: 203, x: 251, y: 112, label: 'cell3', provider: 'EMPTY', type: 'EMPTY' },
+  { slotId: 201, x: 147, y: 109, label: 'cell1', provider: 'DAY_OF_WEEK', type: 'SHORT_TEXT' },
+  { slotId: 202, x: 199, y: 95, label: 'cell2', provider: 'EMPTY', type: 'EMPTY' },
+  { slotId: 203, x: 251, y: 109, label: 'cell3', provider: 'EMPTY', type: 'EMPTY' },
 ]
 
 /** Outward-half dissolve, also normalized for the lateral bottom masks. */
@@ -689,7 +699,7 @@ ${body}
  *
  * The well inside the slot is the occluder, and it is opaque for that reason.
  * It carries no ambient variant: switching it off would let the chrome back out
- * from under the complication, with two values in the same 50 units.
+ * from under the complication, with two values in the same 52 units.
  */
 function cellSlot({ slotId, x, y, label, provider: systemProvider, type }) {
   const pad = ' '.repeat(20)
@@ -1301,9 +1311,9 @@ function clock() {
   return `        <DigitalClock x="0" y="0" width="${FACE.size}" height="${FACE.size}">
             <TimeText
                 x="0"
-                y="182"
+                y="${CLOCK.active.y}"
                 width="${FACE.size}"
-                height="90"
+                height="${CLOCK.active.height}"
                 alpha="255"
                 align="CENTER"
                 format="hh:mm"
@@ -1311,16 +1321,16 @@ function clock() {
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <Font
                     family="SYNC_TO_DEVICE"
-                    size="70"
+                    size="${CLOCK.active.fontSize}"
                     weight="BOLD"
                     slant="NORMAL"
                     color="${COLOR.text}" />
             </TimeText>
             <TimeText
                 x="0"
-                y="182"
+                y="${CLOCK.ambient.y}"
                 width="${FACE.size}"
-                height="90"
+                height="${CLOCK.ambient.height}"
                 alpha="0"
                 align="CENTER"
                 format="hh:mm"
@@ -1328,7 +1338,7 @@ function clock() {
                 <Variant mode="AMBIENT" target="alpha" value="255" />
                 <Font
                     family="SYNC_TO_DEVICE"
-                    size="81"
+                    size="${CLOCK.ambient.fontSize}"
                     weight="THIN"
                     slant="NORMAL"
                     color="${COLOR.text}" />
@@ -1342,7 +1352,7 @@ function wordmark() {
     `x="${WORDMARK.centerX - size / 2}" y="${WORDMARK.centerY - size / 2}" width="${size}" height="${size}"`
   return `        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="wardpulse">
             <Launch target="app.wardpulse/app.wardpulse.wear.MainActivity" />
-            <!-- The asset is padded: active ink ends at 180.75, before the clock box at 182. -->
+            <!-- Preserve the original padded PNG; visible clock clearance needs native measurement. -->
             <PartImage ${box(WORDMARK.size)} alpha="95">
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <Image resource="wardpulse_mono" />

@@ -91,14 +91,29 @@ the `wffFiles` subset into `apps/watchface_wff/design/`, and rasterizes the face
 asset `apps/watchface_wff/src/main/res/drawable/preview.png` from the Primary one. Primary
 preview: `apps/wear_android/design/preview-3-plan-credits.png`.
 
-The [centred 2026-10-27 composition](product/WATCH_RING_DESIGN.md#revision-2026-10-27--centred-clocks-and-wider-legend)
-owns 26 face boards/previews, 23 WFF mirrors and the shipped portrait. The 50-unit cells
-preserve outward fading and add lower fading only laterally. Both whole clocks start at
-nominal y182 with unchanged 70 Bold/81 Thin; the same original smaller logo sits above the
-clock, below the central cell, at image-box centre (225,173). Equal 132×26 wells at x159 use
-120-unit labels and 20/18/16 branches. The calculated bottom-corner aperture margin is 2.0730.
-New glyph/Thin, logo ink/opacity/resampling, AMBIENT, native fit and public-cohort acceptance
-remain **Pending**. Generation/drift or host-font fit cannot establish them.
+The [upward-digit 2026-10-27 composition](product/WATCH_RING_DESIGN.md#revision-2026-10-27--upward-digits-and-fixed-reference-bottoms)
+owns 26 face boards/previews, 23 WFF mirrors and the shipped portrait. The 52-unit cells
+at (147,109)/(199,95)/(251,109) use preferred **18** with unchanged **14/12** fallbacks, centred
+46×24 text at (3,14) and 24-unit icons at inset **14**. Preserve outward fading and add lower
+fading only laterally. Whole-clock **86 Bold/y176** and **96 Thin/y175**, both height 90, are
+the current Round-calibrated settings: digits grow upward from the measured 08:08 bottoms **250.78125/254.296875**,
+balancing visible gaps only in the three-row reference. Review art uses per-mode fixed
+baselines; it is not native metric evidence. The original logo sits above the clock,
+below the central cell, at image-box centre (225,173). Equal 132×26 wells at x159 use
+120-unit labels and 20/18/16 branches with unchanged shorter-stack bottom anchoring.
+The calculated bottom-corner aperture margin is 2.0730.
+The owning revision records bounded Round calibration/corpus and twelve-case Round/Square
+fit. The [current shared-state cohort](assets/README.md#shared-state-capture-refresh-2026-10-27)
+and its scoped publication review are accepted. Generation/drift or host-font fit is not native proof.
+The 2026-10-27 Source54f6 calibration measured clean active 86/y175 bottom 213 instead of 214
+and true AMBIENT 97/y175 bottom 217 with height 61 on Round 384. The owning revision retains
+those dated bounds/gaps and subsequent corrected Round calibration; the mixed Thin/Bold first
+wake is rejected evidence despite INTERACTIVE metadata. The already delivered actual 08:08
+preview creates no additional approval loop. Current evidence is scoped in the owning revision;
+unfilled temporary-time weather wells do not establish the healthy filled-default public cohort.
+The historical centred calibration records six Round 384 glyph centres at **193** native pixels
+(226.171875 design units) with y182, followed by the y181/70 Bold/81 Thin Source6397
+candidate. Its measurements do not accept the enlarged clocks or new logo resampling.
 
 **Historical 2026-10-25 acceptance, for those artifacts only.** Actual combined-layout
 and stable-Group-name repair runs completed and were separately retired. Their legacy
@@ -149,20 +164,23 @@ wordmark for quiet watermark treatments.
 Quiet branding on WFF — not a second hero. Locked with the concentric face baseline:
 
 - **No framing ring** — straight `WARDPULSE` wordmark above the pulse + eye.
-- **Placement** — below the central upper cell and above the centred clock; order is
+- **Placement** — below the central upper cell and above the enlarged whole clock; order is
   cells → logo → clock → sunk strips.
-- **Size / mute, revision 2026-10-27** — active **62×62 at (194,142)** on the 450 canvas,
-  alpha **95** (37%); ambient **52×52 at integer (199,147)**, alpha **70**. Both image-box
+- **Size / mute, revision 2026-10-27** — active **64×64 at (193,141)** on the 450 canvas,
+  alpha **95** (37%); ambient **54×54 at (198,146)**, alpha **70**. Both image-box
   centres are **(225,173)**. Keep the original square 192×192 source and alpha pixels,
   SHA-256 `599a722e2c08bb5d952e87ceb0ea02c228c77554e0dc3572e7eeb992b96d1cef`,
   in both runtime/widget copies; no extra shading, darkening, fade, blur or mask.
   Source alpha bounds x[4,186), y[46,120) map to active ink
-  **x195.2917–254.0625 / y156.8542–180.7500**. Ambient ink is exactly
-  **x[2401/12,1995/8), y[3827/24,359/2)**, a conservative **1183/24×481/24** rectangle
-  centred at **(10787/48,8135/48)**, retaining source-padding asymmetry. Calculated ambient
-  clearances are **275/24** below the central well, **9.4197183877 / 9.8319876136** at the
-  lateral wells and **2.5** before the nominal clock box at y182. These are affine bounds,
-  not native glyph/Thin/resampling/ink acceptance; new clearance remains Pending.
+  **x[194.333333…,255), y[156.333333…,181)**. Ambient ink is exactly
+  **x[199.125,250.3125), y[158.9375,179.75)**, retaining source-padding asymmetry.
+  Calculated central/left/right well clearances are **9.333333 /4.169889 /4.644920 active**
+  and **11.9375 /9.433311 /9.850057 ambient**. Target visible logo→08:08 and 08:08→legend
+  gaps in the three-row reference are **8.21875 active /4.703125 ambient**. These are affine
+  bounds and reference intent, not measured composited-logo ink/opacity. The owning Round
+  glyph-gap record uses this source-alpha boundary; unobserved native scope stays Pending.
+  Historical centred 2026-10-27 boxes were 62 at (194,142) and 52 at (199,147),
+  with ink bottoms **180.75/179.5** and nominal clock y181; these are superseded.
   **Historical 2026-10-25:** active 66-square (192,214) / ambient 54-square (198,220) mapped
   ink to y229.8125–255.25 / 232.9375–253.75, leaving 3.75/5.25 before row259. Earlier boxes
   (192,227)/(198,233), ink ending near268 and rows271/283 likewise describe dated layouts.
@@ -220,7 +238,7 @@ is deleted, the compositing step is gone from `tools/export-icons.sh`, and this 
 the face's asset above. One canonical picture, owned by the document that owns the face.
 
 Two things survive the move and are this document's, not the baseline's. The current active
-**box** — 62×62 at (194,142), alpha95 under the 2026-10-27 revision — is read out of
+**box** — 64×64 at (193,141), alpha95 under the 2026-10-27 revision — is read out of
 `watchface.xml` at render time rather than copied into a generator, so the portrait cannot
 drift from the placement it documents. And the mark in it is still WardPulse branding:
 compositing it into a shipped drawable no more places it under
