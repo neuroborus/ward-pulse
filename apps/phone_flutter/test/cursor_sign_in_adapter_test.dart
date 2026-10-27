@@ -298,7 +298,7 @@ void main() {
       final controller = platform.controllers.single;
       await controller.loaded.future;
       controller.beforeBlank = () {
-        expect(nativeCalls.last.method, 'retire');
+        expectSync(nativeCalls.last.method, 'retire');
       };
       await nativeEvent(41, 'navigationRejected');
       await tester.pumpAndSettle();
