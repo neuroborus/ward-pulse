@@ -386,6 +386,38 @@ which looks like a rendering bug rather than an empty payload; start the app onc
 directory exists. And reinstalling the **face** package resets its slots the same way, so seed
 after the install, not before.
 
+**Controlled summary cases — debug Wear AVD only.** Verify the explicit ADB serial's canonical
+AVD identity with `emu avd name` and use reviewed mock XML matching the actual summary schema.
+Before replacement, preserve live bytes opaquely in a collision-free app-private device file
+at mode 600; keep only hashes, original mode/UID and size on the host. Preserve the original
+file's metadata (660 in the measured cases), not the backup's mode. Leave SharedPreferences
+`.bak`/pending files untouched; do not erase them to force a quiet writer.
+
+Record the actual peer and owned reverse mapping first. Airplane/Wi-Fi/Bluetooth switches did
+not isolate the paired Round's ADB bridge: removing only its observed Wear `tcp:5601` reverse
+and using [the existing connection refresh](#restarting-a-paired-emulator-set) proved that
+peer disconnected. Restore that exact mapping and refresh to recover its original connection.
+An unpaired Square with no reverse and no active peer must stay unpaired; do not create a
+mapping or require a connected peer on cleanup. Leave phone forwarding, jobs, settings and
+pairing alone. This route does not apply to physical devices.
+
+Require a quiet writer and guards immediately before mutation; the pilot used three stable
+summary hashes plus the intended disconnected peer. Late delivery, pending writes or changed
+snapshot guards invalidate the case, not permission to overwrite newer live data. External
+preference writes need a genuine cold load: prove the old PID retired, use `am start -W`, then
+observe a nonempty new PID within a bound. An empty immediate `pidof` can be asynchronous
+startup, not proof of cold load. An invisible previous app can remain in LAST/OOM adjustment
+700 after ordinary `am kill`; in that observed state, opening existing Settings without
+changes, returning Back and retrying `am kill` allowed retirement. Verify it; do not escalate
+to force-stop, process signals, reset or data clear when that conditional route fails.
+
+Use an outer `try/finally`-equivalent cleanup: a failed byte/PID reload must not bypass
+restoration of recorded transport and touched OS/time state. Restore guarded original
+bytes/metadata through a fresh process. Reconcile newer live delivery rather than clobbering it with the old
+backup. Verify the original peer state and fresh whole Glance/Face after reload and settlement;
+a copied file alone does not prove restoration. Remove only the operation's temporary file
+after verified recovery; otherwise retain private recovery material and the unresolved result.
+
 Ambient is `KEYCODE_SLEEP`, not the power button — `keyevent 26` leaves this image
 interactive:
 
@@ -397,6 +429,44 @@ adb -s "$WEAR_SERIAL" shell input keyevent 224   # back to interactive
 `screencap` in doze captures the frame after the system's own dimming, which is neither a
 scale nor a gamma of the interactive one. Use it to check that ambient renders what it should;
 never read alpha levels off it.
+
+**Controlled clock cases — Wear AVD only.** Never change a physical watch's or the Owner's
+phone's clock for this route. Verify AVD identity before mutation; record host/watch epochs
+and offset, `auto_time`, `auto_time_zone`, timezone ID, effective DND policy and renderer mode.
+Arrange failure-safe cleanup first. Use existing `settings put global auto_time 0` and
+`cmd alarm set-time TIME`, with epoch milliseconds for the intended local date/time in the
+unchanged timezone. Do not replace live time with a Source change, mock or helper.
+
+Bind each original to artifact/instance, actual clock and renderer mode before and after.
+Sleep or `ambient=true` alone does not establish AMBIENT. For a chosen ambient minute,
+establish the interactive case, position time shortly before the target minute, use the sleep
+command above and bound observation around the actual minute tick/render. The measured
+five-second pre-tick route worked where a 13-second wait from minute 00 did not establish
+AMBIENT; neither duration is a universal timeout or completion receipt. Inspect a fresh
+settled whole frame; metadata or a narrow glyph ROI cannot validate a mixed/overlay frame.
+
+Check effective policy when a case requires normal INTERACTIVE/AMBIENT: a global `zen_mode`
+write alone did not change Square's interruption filter. The supported
+`cmd notification set_dnd off` route did; observe the effective filter and actual rendering.
+Restore the original policy through its effective control, not just the setting bytes;
+Square's original priority policy and MUTE renderer were valid restoration targets.
+
+Always restore time from the current host epoch plus the saved watch offset, accounting for
+elapsed time rather than replaying a frozen epoch; restore original automatic-time values,
+unchanged timezone and touched effective DND policy. Verify actual clock, policy and original
+renderer mode plus a fresh settled restored frame, even after a failed measurement. Missing
+restoration proof remains unresolved. Record actual day/weather/UV and metric inputs per
+frame: controlling time does not freeze them or certify a later candidate's fit.
+
+**A blocking system view is separate from the face.** For the recurring GMS “Reset your
+watch” view, temporary OS snooze of one exactly identified current notification was a bounded
+visibility-only route, not a reset or notification erasure. Use it only when that identified
+view blocks the authorized AVD case; retain the key privately and arrange unsnooze in outer
+cleanup. `adb shell` joins arguments: preserve proper device-shell quoting of the entire key,
+including pipes; host argument quoting alone is insufficient. Keep raw keys/payloads and
+authentication out of logs. After unsnooze, verify that same notification's presence with a
+fresh separate observation: an immediate false key-list result can be asynchronous. Do not
+declare restoration or accept a covered frame from that first result alone.
 
 Tap coordinates measured off a screenshot are a guess: the image is scaled, and a system dialog
 sits above whatever it covers, so a near miss lands on the screen underneath and quietly changes

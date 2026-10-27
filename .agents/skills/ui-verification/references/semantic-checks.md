@@ -50,6 +50,9 @@ units, clipping, default cells, status controls and navigation context relevant 
 case. Do not infer that uninspected neighboring elements are correct because one detail
 passed. Verify real circle/screen boundaries before measuring or cropping.
 
+Classify the complete original's intended visible mode and settled state before using glyph/ROI measurements.
+Renderer metadata alone does not validate a mixed wake/handoff frame or one covered by an overlay.
+
 Before concluding that an artifact is absent or unchanged, inspect the full affected
 contour or bounds proven to cover its geometry, including displaced caps and paired halves.
 Zero changed pixels in a narrow ROI proves only that ROI. The independent reviewer must
