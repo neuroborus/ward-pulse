@@ -2592,13 +2592,24 @@ the mono wordmark remains reserved for watermark use and is not duplicated besid
 
 ### Phase 20 — three upper cells on the watch face
 
-**Readability revision 2026-10-25 — current composition verified in bounded native cases.**
-The operative [combined face target](product/WATCH_RING_DESIGN.md#revision-2026-10-25--combined-face-readability)
-uses 50-unit cells at (149,112)/(200,98)/(251,112), 17/14/12 readings and a 120×26 legend at
-x165/y259,286,313 with 18/16/14 labels. Both clock variants move to y152; watermark centre
-is 247. All rims preserve the original outward fade; only lateral rims add the vertical
-bottom treatment through isolated WFF2 masks. Sources, slots, units and usage arcs stay.
-Actual combined-layout 415f and name-repair 88 executions completed and retired; current
+**Composition revision 2026-10-27 — implementation target; native/public acceptance Pending.**
+The operative [centred face target](product/WATCH_RING_DESIGN.md#revision-2026-10-27--centred-clocks-and-wider-legend)
+retains 50-unit cells at (149,112)/(200,98)/(251,112), 17/14/12 readings and original outward
+lighting with added bottom treatment only laterally. Both whole clocks start at nominal y182,
+unchanged 70 Bold/81 Thin. The original logo sits above the clock/below the central cell:
+active 62×62 at (194,142), alpha95; ambient 52×52 at integer (199,147), alpha70; centre (225,173).
+Equal 132×26 wells at x159/y259,286,313 use 120-unit 20/18/16 whole-label branches, bottom339
+and unchanged bottom anchoring/marker semantics. The calculated aperture margin is 2.0730.
+Slots, sources, units, protocols, ring geometry/textures and navigation stay unchanged;
+adaptive-width item 12 remains separate. New glyph/Thin/ink/AMBIENT/native-fit acceptance
+and the complete seven-file public cohort refresh remain Pending until post-retirement HOST
+validation/builds and matched native artifact/input/mode evidence, followed by shared-state
+capture/guidance reconciliation. Older native measurements do not accept these bytes.
+
+**Historical readability acceptance 2026-10-25 — bounded native cases for that layout.**
+The combined layout used 120×26 wells at x165 with 18/16/14 labels, both clocks at y152 and
+watermark centre247. Actual combined-layout 415f and name-repair 88 executions completed and
+retired; their
 strict Push and legacy WFF2 validation/builds passed. Round 384 active/AOD passed independent
 review with actual visible `AMBIENT`/Dozing and later `INTERACTIVE`/Awake confirmed;
 physical 466 active charging/unlocked Face/Glance were verified, and the coherent

@@ -262,30 +262,30 @@ if (TOKENS.some(({ repeats }) => repeats.length !== TEXTURE_RINGS)) {
 }
 
 /**
- * Strips, one per ring, stacked below the wordmark. Measured off the face, not
- * sized to content: 120x26 boxes stepping 27 from y=259, inside the unchanged
+ * Strips, one per ring, stacked below the clock. Fixed in the face's units, not
+ * sized to content: 132x26 boxes stepping 27 from y=259, inside the unchanged
  * inner ring aperture. Literal WFF2 font branches fit the bounded label grammar.
  */
 const STRIP = {
-  x: 165,
+  x: 159,
   top: 259,
   pitch: 27,
-  width: 120,
+  width: 132,
   height: 26,
   radius: 6,
   textInset: 6,
-  textWidth: 108,
-  fontSize: 18,
+  textWidth: 120,
+  fontSize: 20,
 }
 
 /**
- * The wordmark, centred between the clock and the strip stack. Both boxes are
+ * The wordmark, centred below the middle cell and above the clock. Both boxes are
  * square because the asset is — WFF stretches the image to fill its box, and
  * the earlier 66x55 / 54x45 boxes flattened the mark by 17%. The PNG carries
- * its own padding, so the active ink lands at y=229.8125-255.25, leaving
- * 3.75 units before the first strip at y=259.
+ * its own padding, so the active ink lands at y=156.8542-180.75, leaving
+ * 8.8542 units below the middle cell and 1.25 before the nominal clock box.
  */
-const WORDMARK = { centerX: FACE.center, centerY: 247, size: 66, ambientSize: 54 }
+const WORDMARK = { centerX: FACE.center, centerY: 173, size: 62, ambientSize: 52 }
 
 /**
  * Which row of the stack a ring's own slot paints, counted from the top.
@@ -417,8 +417,8 @@ const HEADER = `<?xml version="1.0" encoding="utf-8"?>
   (docs/product/WATCH_RING_DESIGN.md, baseline 2026-07-25).
 
   Visual target: apps/wear_android/design/round-*-plan*.svg
-  — radial lift background, 20-unit ring stroke, equal-width sunk strips (120x26,
-  rx=6) with bounded 18/16/14-unit labels. Ring slots are RANGED_VALUE so accents
+  — radial lift background, 20-unit ring stroke, equal-width sunk strips (132x26,
+  rx=6) with bounded 20/18/16-unit labels. Ring slots are RANGED_VALUE so accents
   use the same ColorRamp as arcs ([COMPLICATION.RANGED_VALUE_COLORS]).
 
   Ring type: the budget period from COMPLICATION.TITLE (D / 7D / M) repeated around the
@@ -1301,7 +1301,7 @@ function clock() {
   return `        <DigitalClock x="0" y="0" width="${FACE.size}" height="${FACE.size}">
             <TimeText
                 x="0"
-                y="152"
+                y="182"
                 width="${FACE.size}"
                 height="90"
                 alpha="255"
@@ -1318,7 +1318,7 @@ function clock() {
             </TimeText>
             <TimeText
                 x="0"
-                y="152"
+                y="182"
                 width="${FACE.size}"
                 height="90"
                 alpha="0"
@@ -1342,7 +1342,7 @@ function wordmark() {
     `x="${WORDMARK.centerX - size / 2}" y="${WORDMARK.centerY - size / 2}" width="${size}" height="${size}"`
   return `        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="wardpulse">
             <Launch target="app.wardpulse/app.wardpulse.wear.MainActivity" />
-            <!-- The asset is padded: active ink ends at 255.25, before row 1 at 259. -->
+            <!-- The asset is padded: active ink ends at 180.75, before the clock box at 182. -->
             <PartImage ${box(WORDMARK.size)} alpha="95">
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <Image resource="wardpulse_mono" />
@@ -1416,10 +1416,10 @@ ${innerPad}        <Expression name="longLabel"><![CDATA[${length} == 11]]></Exp
 ${innerPad}        <Expression name="longestLabel"><![CDATA[${length} >= 12]]></Expression>
 ${innerPad}    </Expressions>
 ${innerPad}    <Compare expression="longLabel">
-${partAtSize(runs, 16, `${innerPad}        `)}
+${partAtSize(runs, 18, `${innerPad}        `)}
 ${innerPad}    </Compare>
 ${innerPad}    <Compare expression="longestLabel">
-${partAtSize(runs, 14, `${innerPad}        `)}
+${partAtSize(runs, 16, `${innerPad}        `)}
 ${innerPad}    </Compare>
 ${innerPad}    <Default>
 ${partAtSize(runs, fontSize, `${innerPad}        `)}

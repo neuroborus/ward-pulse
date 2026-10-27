@@ -94,8 +94,8 @@ const FONT = 'Noto Sans'
 const FACE = 450
 
 /**
- * Fixed in the 450-unit language: 120x26 boxes stepping 27 from y=259,
- * with 18/16/14-unit labels inside a centred 108-unit text region. Sizing a box to
+ * Fixed in the 450-unit language: 132x26 boxes stepping 27 from y=259,
+ * with 20/18/16-unit labels inside a centred 120-unit text region. Sizing a box to
  * its content instead is what let review art drift a stack wider than the watch draws.
  *
  * The accent is what the face paints, not what its markup declares: a 3x14 arc under a
@@ -103,26 +103,25 @@ const FACE = 450
  * box edge. Same path-versus-paint trap the design document flags for the ring bands.
  */
 const STRIP = {
-  x: 165,
+  x: 159,
   /** The top row of a full stack; a shorter one starts further down. */
   y: 259,
-  width: 120,
+  width: 132,
   height: 26,
   pitch: 27,
   radius: 6,
   accentWidth: 4.5,
   accentHeight: 17,
   textInset: 6,
-  textWidth: 108,
-  fontSize: 18,
+  textWidth: 120,
+  fontSize: 20,
 }
 
 /**
- * How far above the canvas centre the clock sits, measured off the face: `watchface.xml`
- * originally rendered the digits 21.7 up. The combined composition lifts that
- * measured position another eight units without changing either clock's type.
+ * The approved clock model is centred on the canvas without changing either
+ * clock's type. Actual native glyph centres still require matched measurements.
  */
-const TIME_LIFT = 29.7
+const TIME_LIFT = 0
 
 /**
  * The ring type drawn as texture: the budget period repeated round the band and punched out in
@@ -235,7 +234,7 @@ const CATALOG = {
 const CREDITS_GLANCE = '500'
 
 function stripFontSize(text) {
-  return text.length >= 12 ? 14 : text.length === 11 ? 16 : STRIP.fontSize
+  return text.length >= 12 ? 16 : text.length === 11 ? 18 : STRIP.fontSize
 }
 
 /**

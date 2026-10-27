@@ -59,14 +59,16 @@ fonts; initially 48-unit upper cells with 16/14/12 readings); outward-preserving
 **2026-10-25** (50-unit cells with 17/14/12 readings; retain all outward fades and add only
 the lateral bottom treatment); combined composition revision **2026-10-25** (raise clock
 and watermark; 120×26 legend with 18/16/14 labels); exact-full construction revision
-**2026-10-26** (remove the remaining end inset from the full-only path; native acceptance pending)
-— accepted visual target for
+**2026-10-26** (remove the remaining end inset from the full-only path; native acceptance pending);
+centred composition revision **2026-10-27** (logo above both centred clocks; 132×26 legend
+with 20/18/16 labels; native acceptance pending)
+— locked visual target for
 Wear OS and Watch Face Format until the next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
 wireframes, large remaining-% heroes, or bordered strip cards.
 
 The operative layout is
-[combined face readability](#revision-2026-10-25--combined-face-readability), retaining the
+[centred clocks and wider legend](#revision-2026-10-27--centred-clocks-and-wider-legend), retaining the
 [outward-preserving cell contract](#revision-2026-10-25--preserved-outward-fade-and-50-unit-cells).
 The earlier bottom-only/uniform-centre candidate below is superseded, not accepted intent.
 
@@ -238,19 +240,24 @@ The interim proposal retained the 104×22 legend and clock/watermark positions; 
 operative replacements follow below. Bands, payload semantics, defaults, units, RGB,
 navigation and normalized empty-cell treatments remain unchanged.
 
-The combined record below owns current implementation and native acceptance. Keep the full
-corpus/variant matrix and complete contour checks, including the original Sun fleck case;
+The combined record below retains its dated native acceptance; the 2026-10-27 revision owns
+the current composition. Keep the full corpus/variant matrix and complete contour checks,
+including the original Sun fleck case;
 restoring a radial stroke alone is not proof against recurrence. No causal diagnosis is
 asserted. All three outward/upper treatments and the separate lower fades require actual
 native comparison, not just a mathematical or generated-board result.
 
 ## Revision 2026-10-25 — combined face readability
 
+**Historical layout and evidence.** The 2026-10-27 revision below supersedes this clock,
+watermark and legend geometry. These measurements and native results cover only their
+original artifacts; they do not accept the new composition.
+
 The Owner authorized lifting the clock and watermark to give the legend more readable
 space. Retain the 50-unit cells, font 17/14/12 and outward-plus-lateral-bottom product-mask
 contract above. This supersedes only the interim clock/watermark/legend restrictions.
 
-| Element | Operative target, in 450×450 design units |
+| Element | Historical combined target, in 450×450 design units |
 | --- | --- |
 | Active clock | TimeText **y=152**, height 90; unchanged 70 Bold, format and alignment |
 | Ambient clock | TimeText **y=152**, height 90; unchanged 81 Thin and mode switch |
@@ -286,7 +293,7 @@ into the candidate geometry, not a new-render pass or proof for every time strin
 The broader earlier ambient ROI included band pixels and is not clock evidence.
 
 **Bounded acceptance, 2026-10-25.** The actual combined-layout and shared-Group-name repair
-runs completed and were separately retired. Current legacy WFF2 and strict Push validation
+runs completed and were separately retired. That layout's legacy WFF2 and strict Push validation
 and builds passed through `just check-watchface` and `just check-wear`. Canonical XML SHA-256
 is `47e1149d819a91e0e6b4b8d9b5bde864dd03006578ddd55c2efb77a67f582a86`.
 It is bound to the actual legacy resource package `app.wardpulse.watchface`, Round instance
@@ -355,6 +362,90 @@ lone-pool recovery and the one-row pair (`DEVELOPMENT_PLAN.md`). The far marker'
 equivalence check was completed on **2026-10-12** — see *Marker equivalence confirmed* under
 Split band. These checks do not establish a live Codex/Spark payload; that live-data condition
 remains unverified.
+
+## Revision 2026-10-27 — centred clocks and wider legend
+
+The Owner-approved composition keeps the **450×450** canvas and centre **(225,225)**.
+The reading order is **cells → logo → clock → legend**. Keep the original 50-unit cells,
+17/14/12 cell readings, outward lighting on every occupied rim and additional bottom
+treatment only on the lateral rims. The approval establishes composition, not the mock's
+gloss, palette or rim changes.
+
+| Element | Current target, in 450×450 design units |
+| --- | --- |
+| Both whole clocks | Nominal `TimeText` **x=0, y=182, width=450, height=90**, `CENTER`; device-defined `hh:mm` / hour format |
+| Clock typography | Unchanged active **70 Bold**, ambient **81 Thin**; review-art `TIME_LIFT=0` models the centred target |
+| Active logo | Original square PNG, **62×62 at (194,142)**, centre **(225,173)**, alpha **95** |
+| Ambient logo | Same PNG, **52×52 at integer (199,147)**, same centre, alpha **70** |
+| Equal legend wells | **132×26 at x=159**, radius **6**, tops **259 / 286 / 313**, pitch **27**, bottom **339** |
+| Complete mixed-run label | **120×26**, inset **6**, centred at x=225; **20** through 10 characters, **18** at 11, **16** at 12+ |
+| Row/markers | Whole-row alpha **255 active / 90 ambient**; unchanged marker geometry, family and token meaning; far marker follows the wider well |
+
+The [official PartImage reference](https://developer.android.com/reference/wear-os/wff/group/part/image/part-image)
+declares integer x/y/width/height. The even 52-unit ambient square preserves its integer
+centre directly, without rounding, a transform or an asset workaround. Legitimate floating
+gradient/transform properties remain unchanged. Both logo boxes preserve the square source,
+its original alpha pixels and bottom dissolve; no darkening, extra fade, blur or mask is added.
+The runtime and phone-widget copies retain SHA-256
+`599a722e2c08bb5d952e87ceb0ea02c228c77554e0dc3572e7eeb992b96d1cef`.
+
+From the unchanged **192×192** source alpha bounds **x[4,186), y[46,120)**:
+
+| Mapped nonzero-alpha ink | x interval | y interval |
+| --- | --- | --- |
+| Active | **195.2917–254.0625** | **156.8542–180.7500** |
+| Ambient, exact half-open bounds | **[2401/12,1995/8)** | **[3827/24,359/2)** |
+| Ambient, decimal | **200.0833333333–249.375** | **159.4583333333–179.5** |
+
+The ambient conservative rectangle is **1183/24×481/24**, centred at
+**(10787/48,8135/48)**; preserve this source-padding asymmetry. Its calculated gap below
+the central well is **275/24 = 11.4583333333**, lateral radius-25 clearances are
+**9.4197183877 / 9.8319876136**, and its bottom is **2.5** above the nominal clock box.
+Active ink clears the central well by **8.8542**, the lateral wells by **4.1122 / 4.5879**,
+and the nominal clock box by **1.25**. Transparent box overlap does not imply ink overlap.
+The lowest cell ends at y=162, **20** above the nominal clock box. The bottom legend corner
+**(159,339)** is **131.7270** from the disk centre, leaving **2.0730** inside the unchanged
+**133.8** clear aperture. These are affine/clearance calculations, not native measurements.
+
+Keep contiguous bottom anchoring: three rows at **259/286/313**, two at **286/313**, one
+at **313**. Credits-only retains its thin framing track and row313; no-plan/no-credit draws
+no row. Tightest-first ordering, paired identities, zero/unavailable survivor handling,
+mixed numeric colouring, signed money/currency/denominators and all existing cell defaults
+and overrides stay unchanged. Keep ring geometry, textures, palette, eight slots, stable
+Group names, closed TITLE vocabulary, services, bindings, payload/schema/version, units and
+navigation. Adaptive-width item 12 remains separate; no autosizing, dependency or new harness.
+
+The existing bounded fit corpus remains complete: `100% · 64%`, `82% · 59.5K`,
+`100% · 100%`, `100% · 999.9T`, `$999.99/999`, `$999.99/999.9T`, `$999.9T/999.9T`,
+`$-12.34/100`, `0% · 0%` and `0% · 0`. Its host-font guard and the existing cell/semantic
+guards run during owning generation. Explicit extreme/arbitrary strings retain ellipsis;
+host-font fit does not prove Android mixed-run fit.
+
+Generate canonical WFF XML/nine textures with `node tools/render-watchface.mjs` **before**
+`node tools/render-watch-ring-designs.mjs`: the portrait reads the generated active PartImage.
+The existing maps own **26 boards, 26 PNGs and 23 WFF mirrors**, plus the shipped picker
+portrait. Ordinary boards remain mark-free; only the active portrait overlays the logo.
+XML `--check` omits PNGs and design `--check` skips rendering, so preserve actual generation
+provenance and inspect PNGs; unchanged texture inputs require unchanged content/hashes.
+
+**Acceptance Pending.** No new native result is claimed here. After whole Runner completion,
+owning CLI exit and fresh retirement/quiescence proof, HOST must complete legacy WFF2 and
+strict Push validation/builds (`just check-watchface`, `just check-wear`), require Push's
+successful-validation record and single valid token, confirm docs and inspect all outputs.
+Bind source → generated resources → built/installed APK → active legacy/Push instance and
+effective inputs. Inspect original frames at 09:11 and representative wide/narrow whole clocks in
+INTERACTIVE and renderer-proven AMBIENT on round 384/small nonround, physical 466 when available.
+Measure glyph centres/Thin, every unchanged rim/dissolve, logo opacity/ink clearance,
+first-row gap, mixed-run fit, family/band/value mapping and bottom-corner clipping across the
+existing count, pair, zero/partial/unavailable, money/period/credits and cell matrix.
+MUTE/Doze, padded boxes, old artifacts and host fonts establish none of those results.
+Matched native evidence may justify at most **±2 units per clock variant** through Runner;
+larger changes return to measured design review. Keep whole-clock fonts, colon spacing and
+proportional-glyph optical variation; add no per-time offset or clock helper. Restore temporary
+case/time inputs and original automatic-time/offset settings, retain Europe/Paris and leave
+Owner-phone/physical clocks untouched, then reverify derived surfaces. After native acceptance,
+refresh all seven shared-state public captures and owning Watch guide/captions/index together.
+Unproved native, physical, AMBIENT, provenance, fit and public-cohort evidence stays Pending.
 
 ## Goal
 
@@ -474,8 +565,8 @@ theme `outlineVariant` at runtime).
   │                       ( 18°C )                               │
   │             ( Tue )              ( UV 7 )                    │  ← three cells, on an arc
   │                                                              │
-  │                       10:08                                  │  ← large time (hero)
   │                   WARDPULSE watermark                        │  ← quiet mono, no ring
+  │                       10:08                                  │  ← centred time (hero)
   │            ┌─ sunk well ──────────────┐                      │
   │            │▌ 8% · 500                │                      │  ▌ = family accent
   │            │▌ 39%                     │                      │
@@ -486,7 +577,8 @@ theme `outlineVariant` at runtime).
 
 Rules:
 
-- **Time is the hero** — optically centered; not a large remaining %.
+- **Time is the hero** — nominal y182 for both whole clocks, targeting visible centre
+  (225,225); native optical calibration remains Pending. It is not a large remaining %.
 - **Upper cells** — three customizable complication cells in the band the baseline reserved for
   a weather glance until **2026-10-09**. They retain a curved row, with the middle one higher
   than the outer two; the operative **2026-10-25** origins and 50-unit wells are listed above.
@@ -496,14 +588,15 @@ Rules:
   temperature and the UV index, but only the day is a complication: the two weather readings are
   the face's own chrome, so all three cells stay free for the wearer. A cell showing nothing is
   a well with a graded rim, which is how an empty cell says it is empty (see Upper cells).
-- **Watermark** — ringless mono `WARDPULSE` + pulse/eye between time and strips; low PartImage
-  alpha with a bottom dissolve into the strip stack. Same faded PNG is reused on the phone
+- **Watermark** — ringless mono `WARDPULSE` + pulse/eye below the central cell and above
+  the clock, image-box centre (225,173); active 62/ambient 52 squares at alpha95/70. Preserve
+  the source PNG's original bottom dissolve. Same faded PNG is reused on the phone
   home widget (day/night tint). Details: `docs/DESIGN_ASSETS.md`.
 - **Lower strips** — short rounded rectangles, not full-width tablets and not stadium pills:
   - sunk into the surface (dark well, no high-contrast border card);
   - thin left **family accent** bar (same ColorRamp / `ring.id` family as the matching arc);
     WFF strip slots are `RANGED_VALUE` so accents use `[COMPLICATION.RANGED_VALUE_COLORS]`;
-  - **equal 120-unit width** for every strip, with the finite 18/16/14 label sizes above
+  - **equal 132-unit width** for every strip, with the finite 20/18/16 label sizes above
     (compact `K`/`M`/`B`/`T` credits); wells stay inside the clear aperture. Extreme
     values retain the explicit ellipsis limitation;
   - measured horizontal padding so Bold labels clear the well edges;
@@ -659,7 +752,7 @@ called this band the "upper aperture"; it is the same band.
 1. **Three cells of 50 units in a curved row, refined on 2026-10-25.** Each complete
    well/border/text/icon/slot moves together. The integer coordinates below must match
    in the WFF and review generators. Clock font/format stay unchanged; its position follows
-   the combined revision:
+   the centred 2026-10-27 revision:
 
    | Cell | Centre | Box origin, integer | Radius from face centre |
    |---|---|---|---:|
@@ -668,13 +761,13 @@ called this band the "upper aperture"; it is the same band.
    | right | 276, 137 | `251, 112` | 101.7104 |
 
    The derived clearances, against the clear aperture of **133.8** (the innermost band's
-   outer edge at 154, less the 20.2 the band renders inward) and the `TimeText` box at `y=152`:
+   outer edge at 154, less the 20.2 the band renders inward) and the `TimeText` box at `y=182`:
 
    | | Value |
    |---|---:|
    | Left/right cell to inner band | **7.0896** |
    | Middle cell to inner band | **6.8000** |
-   | Lowest cell to the clock box | **−10.00** (box overlap; projected ink gaps recorded above) |
+   | Lowest cell to the clock box | **20.00** (nominal box separation; new glyph clearance Pending) |
    | Between neighbouring cells | 2.8867 |
    | Middle cell above the outer two | 14.00 |
 
@@ -1482,7 +1575,7 @@ type texture for the one feature that tempted it and why it no longer does.
 | Ring pitch (outer edge to outer edge) | 24 units |
 | Outer edges, outer to inner | 202 / 178 / 154 / 130 |
 | Gap between bands | 3.5–4.8 units |
-| Strip clearance to the inner band | 4.9745 units calculated for the combined120×26 target; older104×22 calculation8.50 and measured8.4 |
+| Strip clearance to the inner band | **2.0730** units calculated for the current 132×26 target; historical 120×26 calculation4.9745, older 104×22 calculation8.50 and measured8.4 |
 
 Widening the band alone is not enough: at the original 18-unit pitch a thickness of 40 made
 neighbouring bands touch, and a first attempt at pitch 21 still left a 0.8-unit hairline
@@ -1517,13 +1610,14 @@ against its own generator, never against the face. The two agree as of the melt-
 correction below, to within the 0.1 unit between the art's measured 20.2 and the face's
 declared 20.
 
-**Historical clock measurement; the combined revision lifts both variants8 more units.**
-At that measured baseline, `TimeText` used `y=160, height=90`, its centre20 above the canvas centre;
-measured 2026-08-13, WFF renders the digits **21.7** up. That is the optical centre the hero rule
-asks for — the strip stack below pulls the eye down. Review art centred the clock geometrically
-and disagreed with the face by that much; it now carries the measured lift (`TIME_LIFT` in
-`tools/render-watch-ring-designs.mjs`), which is why the boards and the watch show the same
-screen.
+**Historical clock measurement; superseded by the centred 2026-10-27 target.**
+At that measured baseline, `TimeText` used `y=160, height=90`, its centre 20 above the canvas centre;
+measured 2026-08-13, WFF rendered the digits **21.7** up. Review art then adopted that
+measured lift; the historical combined y152 revision lifted it another 8. Current review art
+uses `TIME_LIFT=0` in `tools/render-watch-ring-designs.mjs` to model the centred target.
+Both native variants start at nominal y182, a 30-unit shift from y152 projecting a centre
+near 225.3 from that older reading. New visible-glyph centres and Thin metrics remain Pending;
+the projection does not prove board/device agreement or every time string's optical centre.
 
 **Clock colon spacing stays device-defined (revision 2026-10-01).** On the `emulator-5554`
 screenshot used for the 2026-09-26 decision, `03:24` at 384×384 produced these bright-pixel
@@ -1800,7 +1894,7 @@ band's slot at a fixed row, and the three slots this frees are spent on upper ce
 ids (Upper cells, rule 2). That revision retained the 88x18 boxes at 21-unit pitch from
 `y=283`, but fixed which slot paints which row rather than following the payload index.
 The initial **2026-10-25** readability revision used104×22 at23-unit pitch fromy271.
-The operative combined target is **120×26**, pitch **27** from **y=259**, preserving the
+The operative centred target is **132×26**, pitch **27** from **y=259**, preserving the
 same bottom339, bottom anchoring and all ring geometry.
 
 The historical **2026-08-16** reading is the "before": the shared marker landed at x 265–268 of
@@ -1827,8 +1921,8 @@ the box edge is inside that tolerance, not a measured overhang.
 what the watch shows. Before that revision the generator drew the nominal 26, roughly 2.3x
 the real band; it also sized each strip box to its own label until **2026-08-09**, which drew
 the retired 96-unit stack in a 12pt-face world. The stack is now a constant there too, and the
-generator must reject a supported review label wider than the operative **108-unit** text
-region at its selected18/16/14 size rather than let it overhang; the face would ellipsize it.
+generator must reject a supported review label wider than the operative **120-unit** text
+region at its selected 20/18/16 size rather than let it overhang; the face would ellipsize it.
 
 The family accent bar is the band trap again at strip scale: its 3x14 arc carries a 3-thick
 stroke, so it paints 17 units tall and 6 wide with the left half clipped by the box edge —
@@ -1901,6 +1995,12 @@ the height moves: that art paints a thinner band, and the type follows it at the
 whatever is drawn.
 
 ## Ambient
+
+The current whole clock starts at nominal y182 with unchanged 81 Thin. The original logo
+is 52×52 at integer (199,147), centre (225,173), alpha70; active uses 62×62 at (194,142), alpha95.
+Legend wells remain 132×26 with 120-unit 20/18/16 mixed-run labels and whole-row alpha90.
+New Thin, logo resampling/ink clearance and complete native label fit remain Pending;
+historical ambient readings below apply only to their original artifacts.
 
 Muted remaining arcs (when plan rings exist) and large centered time. Ring type dims with the
 band it is punched into (alpha 140, same as the arcs) — it is part of the ring, not chrome to
@@ -2010,6 +2110,12 @@ primary review preview after generation:
 ```sh
 xdg-open apps/wear_android/design/preview-3-plan-credits.png
 ```
+
+The current maps contain 26 boards/26 PNGs and 23 WFF mirrors. All model the centred clock
+and 132×26 wells with 20/18/16 labels. Ordinary boards stay mark-free; the shipped portrait
+alone overlays the active 62-square logo at (194,142), alpha95, read from generated XML.
+Generate WFF first, then review art; inspect actual PNGs separately from SVG drift checks.
+These images are review/picker art, not native or public-capture acceptance.
 
 | File | Meaning |
 |------|---------|
@@ -2234,20 +2340,20 @@ documented inference hardening into a remembered observation is how a preview ha
 remembered face.
 
 **Watermark revision 2026-10-11 — the face's portrait carries the mark the face carries.** The
-shipped asset omitted the quiet `WARDPULSE` watermark that Composition locks between the time
-and the strips and that `watchface.xml` draws at every launch. It omitted it because it is
-rasterized from a review board and review boards are mark-free. That is right for a board and
+shipped asset omitted the quiet `WARDPULSE` watermark then locked between time and strips
+(now above the clock under the 2026-10-27 revision) and drawn by `watchface.xml`. It omitted
+it because it is rasterized from a review board and review boards are mark-free. That is right for a board and
 wrong for this file. A board is read by a reviewer checking ring geometry; this asset is the
 face's own portrait, declared as its `Preview`, and a portrait that drops a locked element of
 the face shows a wearer a face they will not get.
 
 So the asset is **composed** rather than only rasterized: the Primary board at 450, then the
 faded mono drawable `apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png` at the box
-`watchface.xml` gives the mark — originally66×66 at(192,227), alpha95; the combined target
-is(192,214) at the same size/alpha — read out of that file at
+`watchface.xml` gives the mark — currently 62×62 at (194,142), alpha95; historical 66-square
+boxes were (192,227), then (192,214) — read out of that file at
 render time rather than copied into the generator, so the portrait cannot disagree with the face
 about where the mark sits. The ambient mark is not drawn: this is the active portrait, and the
-smaller 54×54 at alpha 70 only appears under an ambient variant (Upper cells, rule 12, and
+smaller 52×52 at (199,147), alpha70 only appears under an ambient variant (Upper cells, rule 12, and
 `docs/DESIGN_ASSETS.md`).
 
 **The review boards stay mark-free, and that is not an inconsistency.** They are review art for

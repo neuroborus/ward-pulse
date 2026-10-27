@@ -4,8 +4,8 @@
   (docs/product/WATCH_RING_DESIGN.md, baseline 2026-07-25).
 
   Visual target: apps/wear_android/design/round-*-plan*.svg
-  — radial lift background, 20-unit ring stroke, equal-width sunk strips (120x26,
-  rx=6) with bounded 18/16/14-unit labels. Ring slots are RANGED_VALUE so accents
+  — radial lift background, 20-unit ring stroke, equal-width sunk strips (132x26,
+  rx=6) with bounded 20/18/16-unit labels. Ring slots are RANGED_VALUE so accents
   use the same ColorRamp as arcs ([COMPLICATION.RANGED_VALUE_COLORS]).
 
   Ring type: the budget period from COMPLICATION.TITLE (D / 7D / M) repeated around the
@@ -609,10 +609,10 @@
                 </Condition>
                 <!-- The legend row this ring owns. Its own slot since 2026-10-09:
                      the three the strips held are the three the cells took. -->
-                <Group x="165" y="313" width="120" height="26" name="ring1_strip" alpha="255">
+                <Group x="159" y="313" width="132" height="26" name="ring1_strip" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="90" />
-                    <PartDraw x="0" y="0" width="120" height="26">
-                        <RoundRectangle x="0" y="0" width="120" height="26" cornerRadiusX="6" cornerRadiusY="6">
+                    <PartDraw x="0" y="0" width="132" height="26">
+                        <RoundRectangle x="0" y="0" width="132" height="26" cornerRadiusX="6" cornerRadiusY="6">
                             <Fill color="#eb0b0e0c" />
                         </RoundRectangle>
                         <!-- Family accent from ColorRamp (same path as matching ring). -->
@@ -635,9 +635,9 @@
                             <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
                         </Expressions>
                         <Compare expression="isPool0">
-                            <PartDraw x="0" y="0" width="120" height="26">
+                            <PartDraw x="0" y="0" width="132" height="26">
                                 <Arc
-                                    centerX="118.5"
+                                    centerX="130.5"
                                     centerY="13"
                                     width="3"
                                     height="14"
@@ -648,9 +648,9 @@
                             </PartDraw>
                         </Compare>
                         <Compare expression="isPool1">
-                            <PartDraw x="0" y="0" width="120" height="26">
+                            <PartDraw x="0" y="0" width="132" height="26">
                                 <Arc
-                                    centerX="118.5"
+                                    centerX="130.5"
                                     centerY="13"
                                     width="3"
                                     height="14"
@@ -674,7 +674,23 @@
                                     <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
                                 </Expressions>
                                 <Compare expression="longLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
                                             <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#ffffb4ab">
                                                 <Template>%s
@@ -689,31 +705,15 @@
                                         </Text>
                                     </PartText>
                                 </Compare>
-                                <Compare expression="longestLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
-                                        <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
-                                                </Template>
-                                            </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
-                                                </Template>
-                                            </Font>
-                                        </Text>
-                                    </PartText>
-                                </Compare>
                                 <Default>
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#ffffb4ab">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
                                                 </Template>
                                             </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#fff4fbf8">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
                                                 </Template>
@@ -730,7 +730,23 @@
                                     <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
                                 </Expressions>
                                 <Compare expression="longLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
                                             <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#fff4fbf8">
                                                 <Template>%s
@@ -745,31 +761,15 @@
                                         </Text>
                                     </PartText>
                                 </Compare>
-                                <Compare expression="longestLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
-                                        <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
-                                                </Template>
-                                            </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
-                                                </Template>
-                                            </Font>
-                                        </Text>
-                                    </PartText>
-                                </Compare>
                                 <Default>
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#fff4fbf8">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
                                                 </Template>
                                             </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#ffffb4ab">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
                                                 </Template>
@@ -786,7 +786,28 @@
                                     <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
                                 </Expressions>
                                 <Compare expression="longLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
                                             <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#ffffb4ab">
                                                 <Template>%s
@@ -806,41 +827,20 @@
                                         </Text>
                                     </PartText>
                                 </Compare>
-                                <Compare expression="longestLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
-                                        <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
-                                                </Template>
-                                            </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
-                                                </Template>
-                                            </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
-                                                </Template>
-                                            </Font>
-                                        </Text>
-                                    </PartText>
-                                </Compare>
                                 <Default>
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#ffffb4ab">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
                                                 </Template>
                                             </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#fff4fbf8">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
                                                 </Template>
                                             </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#ffffb4ab">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
                                                 </Template>
@@ -857,7 +857,18 @@
                                     <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
                                 </Expressions>
                                 <Compare expression="longLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
                                             <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#fff4fbf8">
                                                 <Template>%s
@@ -867,21 +878,10 @@
                                         </Text>
                                     </PartText>
                                 </Compare>
-                                <Compare expression="longestLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
-                                        <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                                <Template>%s
-                                                    <Parameter expression="[COMPLICATION.TEXT]" />
-                                                </Template>
-                                            </Font>
-                                        </Text>
-                                    </PartText>
-                                </Compare>
                                 <Default>
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#fff4fbf8">
                                                 <Template>%s
                                                     <Parameter expression="[COMPLICATION.TEXT]" />
                                                 </Template>
@@ -1145,10 +1145,10 @@
                 </Condition>
                 <!-- The legend row this ring owns. Its own slot since 2026-10-09:
                      the three the strips held are the three the cells took. -->
-                <Group x="165" y="286" width="120" height="26" name="ring2_strip" alpha="255">
+                <Group x="159" y="286" width="132" height="26" name="ring2_strip" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="90" />
-                    <PartDraw x="0" y="0" width="120" height="26">
-                        <RoundRectangle x="0" y="0" width="120" height="26" cornerRadiusX="6" cornerRadiusY="6">
+                    <PartDraw x="0" y="0" width="132" height="26">
+                        <RoundRectangle x="0" y="0" width="132" height="26" cornerRadiusX="6" cornerRadiusY="6">
                             <Fill color="#eb0b0e0c" />
                         </RoundRectangle>
                         <!-- Family accent from ColorRamp (same path as matching ring). -->
@@ -1171,9 +1171,9 @@
                             <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
                         </Expressions>
                         <Compare expression="isPool0">
-                            <PartDraw x="0" y="0" width="120" height="26">
+                            <PartDraw x="0" y="0" width="132" height="26">
                                 <Arc
-                                    centerX="118.5"
+                                    centerX="130.5"
                                     centerY="13"
                                     width="3"
                                     height="14"
@@ -1184,9 +1184,9 @@
                             </PartDraw>
                         </Compare>
                         <Compare expression="isPool1">
-                            <PartDraw x="0" y="0" width="120" height="26">
+                            <PartDraw x="0" y="0" width="132" height="26">
                                 <Arc
-                                    centerX="118.5"
+                                    centerX="130.5"
                                     centerY="13"
                                     width="3"
                                     height="14"
@@ -1210,7 +1210,23 @@
                                     <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
                                 </Expressions>
                                 <Compare expression="longLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
                                             <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#ffffb4ab">
                                                 <Template>%s
@@ -1225,31 +1241,15 @@
                                         </Text>
                                     </PartText>
                                 </Compare>
-                                <Compare expression="longestLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
-                                        <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
-                                                </Template>
-                                            </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
-                                                </Template>
-                                            </Font>
-                                        </Text>
-                                    </PartText>
-                                </Compare>
                                 <Default>
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#ffffb4ab">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
                                                 </Template>
                                             </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#fff4fbf8">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
                                                 </Template>
@@ -1266,7 +1266,23 @@
                                     <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
                                 </Expressions>
                                 <Compare expression="longLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
                                             <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#fff4fbf8">
                                                 <Template>%s
@@ -1281,31 +1297,15 @@
                                         </Text>
                                     </PartText>
                                 </Compare>
-                                <Compare expression="longestLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
-                                        <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
-                                                </Template>
-                                            </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
-                                                </Template>
-                                            </Font>
-                                        </Text>
-                                    </PartText>
-                                </Compare>
                                 <Default>
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#fff4fbf8">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
                                                 </Template>
                                             </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#ffffb4ab">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
                                                 </Template>
@@ -1322,7 +1322,28 @@
                                     <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
                                 </Expressions>
                                 <Compare expression="longLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
                                             <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#ffffb4ab">
                                                 <Template>%s
@@ -1342,41 +1363,20 @@
                                         </Text>
                                     </PartText>
                                 </Compare>
-                                <Compare expression="longestLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
-                                        <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
-                                                </Template>
-                                            </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
-                                                </Template>
-                                            </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
-                                                </Template>
-                                            </Font>
-                                        </Text>
-                                    </PartText>
-                                </Compare>
                                 <Default>
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#ffffb4ab">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
                                                 </Template>
                                             </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#fff4fbf8">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
                                                 </Template>
                                             </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#ffffb4ab">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
                                                 </Template>
@@ -1393,7 +1393,18 @@
                                     <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
                                 </Expressions>
                                 <Compare expression="longLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
                                             <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#fff4fbf8">
                                                 <Template>%s
@@ -1403,21 +1414,10 @@
                                         </Text>
                                     </PartText>
                                 </Compare>
-                                <Compare expression="longestLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
-                                        <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                                <Template>%s
-                                                    <Parameter expression="[COMPLICATION.TEXT]" />
-                                                </Template>
-                                            </Font>
-                                        </Text>
-                                    </PartText>
-                                </Compare>
                                 <Default>
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#fff4fbf8">
                                                 <Template>%s
                                                     <Parameter expression="[COMPLICATION.TEXT]" />
                                                 </Template>
@@ -1681,10 +1681,10 @@
                 </Condition>
                 <!-- The legend row this ring owns. Its own slot since 2026-10-09:
                      the three the strips held are the three the cells took. -->
-                <Group x="165" y="259" width="120" height="26" name="ring3_strip" alpha="255">
+                <Group x="159" y="259" width="132" height="26" name="ring3_strip" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="90" />
-                    <PartDraw x="0" y="0" width="120" height="26">
-                        <RoundRectangle x="0" y="0" width="120" height="26" cornerRadiusX="6" cornerRadiusY="6">
+                    <PartDraw x="0" y="0" width="132" height="26">
+                        <RoundRectangle x="0" y="0" width="132" height="26" cornerRadiusX="6" cornerRadiusY="6">
                             <Fill color="#eb0b0e0c" />
                         </RoundRectangle>
                         <!-- Family accent from ColorRamp (same path as matching ring). -->
@@ -1707,9 +1707,9 @@
                             <Expression name="isPool1"><![CDATA[[COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
                         </Expressions>
                         <Compare expression="isPool0">
-                            <PartDraw x="0" y="0" width="120" height="26">
+                            <PartDraw x="0" y="0" width="132" height="26">
                                 <Arc
-                                    centerX="118.5"
+                                    centerX="130.5"
                                     centerY="13"
                                     width="3"
                                     height="14"
@@ -1720,9 +1720,9 @@
                             </PartDraw>
                         </Compare>
                         <Compare expression="isPool1">
-                            <PartDraw x="0" y="0" width="120" height="26">
+                            <PartDraw x="0" y="0" width="132" height="26">
                                 <Arc
-                                    centerX="118.5"
+                                    centerX="130.5"
                                     centerY="13"
                                     width="3"
                                     height="14"
@@ -1746,7 +1746,23 @@
                                     <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
                                 </Expressions>
                                 <Compare expression="longLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
                                             <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#ffffb4ab">
                                                 <Template>%s
@@ -1761,31 +1777,15 @@
                                         </Text>
                                     </PartText>
                                 </Compare>
-                                <Compare expression="longestLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
-                                        <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
-                                                </Template>
-                                            </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
-                                                </Template>
-                                            </Font>
-                                        </Text>
-                                    </PartText>
-                                </Compare>
                                 <Default>
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#ffffb4ab">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
                                                 </Template>
                                             </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#fff4fbf8">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
                                                 </Template>
@@ -1802,7 +1802,23 @@
                                     <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
                                 </Expressions>
                                 <Compare expression="longLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
                                             <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#fff4fbf8">
                                                 <Template>%s
@@ -1817,31 +1833,15 @@
                                         </Text>
                                     </PartText>
                                 </Compare>
-                                <Compare expression="longestLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
-                                        <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
-                                                </Template>
-                                            </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
-                                                </Template>
-                                            </Font>
-                                        </Text>
-                                    </PartText>
-                                </Compare>
                                 <Default>
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#fff4fbf8">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
                                                 </Template>
                                             </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#ffffb4ab">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
                                                 </Template>
@@ -1858,7 +1858,28 @@
                                     <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
                                 </Expressions>
                                 <Compare expression="longLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
+                                                </Template>
+                                            </Font>
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                                <Template>%s
+                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
                                             <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#ffffb4ab">
                                                 <Template>%s
@@ -1878,41 +1899,20 @@
                                         </Text>
                                     </PartText>
                                 </Compare>
-                                <Compare expression="longestLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
-                                        <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
-                                                </Template>
-                                            </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
-                                                </Template>
-                                            </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#ffffb4ab">
-                                                <Template>%s
-                                                    <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
-                                                </Template>
-                                            </Font>
-                                        </Text>
-                                    </PartText>
-                                </Compare>
                                 <Default>
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#ffffb4ab">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], 0, clamp(2, 0, textLength([COMPLICATION.TEXT])))" />
                                                 </Template>
                                             </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#fff4fbf8">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], clamp(2, 0, textLength([COMPLICATION.TEXT])), clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])))" />
                                                 </Template>
                                             </Font>
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#ffffb4ab">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#ffffb4ab">
                                                 <Template>%s
                                                     <Parameter expression="subText([COMPLICATION.TEXT], clamp(textLength([COMPLICATION.TEXT]) - 2, clamp(2, 0, textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT])), textLength([COMPLICATION.TEXT]))" />
                                                 </Template>
@@ -1929,7 +1929,18 @@
                                     <Expression name="longestLabel"><![CDATA[textLength([COMPLICATION.TEXT]) >= 12]]></Expression>
                                 </Expressions>
                                 <Compare expression="longLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>%s
+                                                    <Parameter expression="[COMPLICATION.TEXT]" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="longestLabel">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
                                             <Font family="SYNC_TO_DEVICE" size="16" weight="BOLD" color="#fff4fbf8">
                                                 <Template>%s
@@ -1939,21 +1950,10 @@
                                         </Text>
                                     </PartText>
                                 </Compare>
-                                <Compare expression="longestLabel">
-                                    <PartText x="6" y="0" width="108" height="26">
-                                        <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                                <Template>%s
-                                                    <Parameter expression="[COMPLICATION.TEXT]" />
-                                                </Template>
-                                            </Font>
-                                        </Text>
-                                    </PartText>
-                                </Compare>
                                 <Default>
-                                    <PartText x="6" y="0" width="108" height="26">
+                                    <PartText x="6" y="0" width="120" height="26">
                                         <Text align="CENTER" ellipsis="TRUE">
-                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                            <Font family="SYNC_TO_DEVICE" size="20" weight="BOLD" color="#fff4fbf8">
                                                 <Template>%s
                                                     <Parameter expression="[COMPLICATION.TEXT]" />
                                                 </Template>
@@ -2600,7 +2600,7 @@
         <DigitalClock x="0" y="0" width="450" height="450">
             <TimeText
                 x="0"
-                y="152"
+                y="182"
                 width="450"
                 height="90"
                 alpha="255"
@@ -2617,7 +2617,7 @@
             </TimeText>
             <TimeText
                 x="0"
-                y="152"
+                y="182"
                 width="450"
                 height="90"
                 alpha="0"
@@ -2636,12 +2636,12 @@
 
         <Group x="0" y="0" width="450" height="450" name="wardpulse">
             <Launch target="app.wardpulse/app.wardpulse.wear.MainActivity" />
-            <!-- The asset is padded: active ink ends at 255.25, before row 1 at 259. -->
-            <PartImage x="192" y="214" width="66" height="66" alpha="95">
+            <!-- The asset is padded: active ink ends at 180.75, before the clock box at 182. -->
+            <PartImage x="194" y="142" width="62" height="62" alpha="95">
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <Image resource="wardpulse_mono" />
             </PartImage>
-            <PartImage x="198" y="220" width="54" height="54" alpha="0">
+            <PartImage x="199" y="147" width="52" height="52" alpha="0">
                 <Variant mode="AMBIENT" target="alpha" value="70" />
                 <Image resource="wardpulse_mono" />
             </PartImage>
