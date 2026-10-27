@@ -24,7 +24,10 @@ class CursorSignInNativeGuard {
       _guards[arguments['view']]?._report(arguments['category'] as String);
     });
     _guards[view] = this;
-    await _channel.invokeMethod<void>('attach', {'view': view, 'client': client});
+    await _channel.invokeMethod<void>('attach', {
+      'view': view,
+      'client': client,
+    });
   }
 
   void _report(String category) {

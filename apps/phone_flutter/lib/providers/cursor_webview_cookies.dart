@@ -64,7 +64,11 @@ bool isGoogleCursorAuthorizationUrl(Uri url) {
   final host = url.host.toLowerCase();
   if (host == 'accounts.google.com') {
     // Identity button assets are not authorization documents.
-    return !const {'/gsi/client', '/gsi/style', '/gsi/button'}.contains(url.path);
+    return !const {
+      '/gsi/client',
+      '/gsi/style',
+      '/gsi/button',
+    }.contains(url.path);
   }
   if (host == 'accounts.youtube.com') return true;
   return _hostMatches(host, 'google.com') &&

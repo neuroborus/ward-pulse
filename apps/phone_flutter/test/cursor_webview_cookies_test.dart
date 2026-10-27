@@ -101,7 +101,11 @@ void main() {
         Uri.https('prefix$host', '/'),
         Uri.parse('https://$host@evil.example/'),
       ]) {
-        expect(isAllowedCursorSignInUrl(rejected), isFalse, reason: '$rejected');
+        expect(
+          isAllowedCursorSignInUrl(rejected),
+          isFalse,
+          reason: '$rejected',
+        );
         expect(isCursorSessionCookieHost(rejected), isFalse);
         expect(
           await readWebViewCookieHeader(rejected, cookieManager: cookies),
@@ -109,7 +113,10 @@ void main() {
         );
       }
       expect(isCursorSessionCookieHost(url), isFalse);
-      expect(await readWebViewCookieHeader(url, cookieManager: cookies), isNull);
+      expect(
+        await readWebViewCookieHeader(url, cookieManager: cookies),
+        isNull,
+      );
       expect(cookies.reads, isEmpty);
       expect(
         await probeCursorSessionToken(extraUrl: url, cookieManager: cookies),
@@ -123,40 +130,43 @@ void main() {
   }
 
   group('isAllowedCursorSignInUrl', () {
-    test('retains non-Google compatibility and rejects Google authorization', () {
-      expect(
-        isAllowedCursorSignInUrl(Uri.parse('https://cursor.com/dashboard')),
-        isTrue,
-      );
-      expect(
-        isAllowedCursorSignInUrl(
-          Uri.parse('https://authenticator.cursor.sh/login'),
-        ),
-        isTrue,
-      );
-      expect(
-        isAllowedCursorSignInUrl(Uri.parse('https://accounts.google.com/o')),
-        isFalse,
-      );
-      expect(
-        isAllowedCursorSignInUrl(Uri.parse('https://accounts.youtube.com/')),
-        isFalse,
-      );
-      expect(
-        isAllowedCursorSignInUrl(
-          Uri.parse('https://www.google.com/accounts/SetOSID'),
-        ),
-        isFalse,
-      );
-      expect(
-        isAllowedCursorSignInUrl(Uri.parse('https://github.com/login')),
-        isTrue,
-      );
-      expect(
-        isAllowedCursorSignInUrl(Uri.parse('https://www.recaptcha.net/')),
-        isTrue,
-      );
-    });
+    test(
+      'retains non-Google compatibility and rejects Google authorization',
+      () {
+        expect(
+          isAllowedCursorSignInUrl(Uri.parse('https://cursor.com/dashboard')),
+          isTrue,
+        );
+        expect(
+          isAllowedCursorSignInUrl(
+            Uri.parse('https://authenticator.cursor.sh/login'),
+          ),
+          isTrue,
+        );
+        expect(
+          isAllowedCursorSignInUrl(Uri.parse('https://accounts.google.com/o')),
+          isFalse,
+        );
+        expect(
+          isAllowedCursorSignInUrl(Uri.parse('https://accounts.youtube.com/')),
+          isFalse,
+        );
+        expect(
+          isAllowedCursorSignInUrl(
+            Uri.parse('https://www.google.com/accounts/SetOSID'),
+          ),
+          isFalse,
+        );
+        expect(
+          isAllowedCursorSignInUrl(Uri.parse('https://github.com/login')),
+          isTrue,
+        );
+        expect(
+          isAllowedCursorSignInUrl(Uri.parse('https://www.recaptcha.net/')),
+          isTrue,
+        );
+      },
+    );
 
     test('blocks unrelated https hosts and non-https', () {
       expect(

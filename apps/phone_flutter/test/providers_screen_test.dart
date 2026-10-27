@@ -932,7 +932,10 @@ void main() {
     tester,
   ) async {
     final store = _ReconnectMemoryCredentialStore();
-    await store.writeSecret(ProviderConnections.cursorPlatform, 'team-sentinel');
+    await store.writeSecret(
+      ProviderConnections.cursorPlatform,
+      'team-sentinel',
+    );
     var credentialsChanged = 0;
     var signInCalls = 0;
 
@@ -986,7 +989,10 @@ void main() {
       (tester) async {
         final store = _ReconnectMemoryCredentialStore();
         if (installed) {
-          await store.writeSecret(ProviderConnections.cursorPlan, 'saved-session');
+          await store.writeSecret(
+            ProviderConnections.cursorPlan,
+            'saved-session',
+          );
         }
         var changes = 0;
         await tester.pumpWidget(
@@ -1021,7 +1027,10 @@ void main() {
           await store.readSecret(ProviderConnections.cursorPlan),
           installed ? 'saved-session' : null,
         );
-        expect(store.reconnectCalls, ['begin:cursor.plan', 'cancel:cursor.plan']);
+        expect(store.reconnectCalls, [
+          'begin:cursor.plan',
+          'cancel:cursor.plan',
+        ]);
         expect(changes, 0);
       },
     );

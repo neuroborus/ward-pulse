@@ -35,7 +35,7 @@ class WebViewCursorSignInBrowser implements CursorSignInBrowser {
   final WebViewController _controller = WebViewController();
   final WebViewCookieManager _cookies;
   final CursorSignInNativeGuard Function(void Function(String))?
-      nativeGuardFactory;
+  nativeGuardFactory;
   CursorSignInNativeGuard? _guard;
   bool _loadStarted = false;
   bool _retiring = false;
@@ -58,7 +58,9 @@ class WebViewCursorSignInBrowser implements CursorSignInBrowser {
             _retiring
                 ? request.url == 'about:blank'
                 : navigate(request.url, request.isMainFrame);
-        return allowed ? NavigationDecision.navigate : NavigationDecision.prevent;
+        return allowed
+            ? NavigationDecision.navigate
+            : NavigationDecision.prevent;
       },
       onPageStarted: (url) {
         if (_retiring || url == 'about:blank') return;
@@ -111,6 +113,7 @@ class WebViewCursorSignInBrowser implements CursorSignInBrowser {
         resourceError(true);
       }
     }
+
     final factory = nativeGuardFactory;
     if (factory != null) {
       _guard = factory(failure);
@@ -149,6 +152,7 @@ class WebViewCursorSignInBrowser implements CursorSignInBrowser {
     if (_guard != null && !await _guard!.check()) return null;
     return token;
   }
+
   @override
   Future<bool> wipe() => wipeCursorWebViewSession(_cookies);
   @override
@@ -288,7 +292,7 @@ class _Attempt {
 class _CursorPlanSignInScreenState extends State<CursorPlanSignInScreen> {
   // A timed-out native Future is not cancelled. Keep the shared jar leased until
   // old work settles and its WebView stops, including across close/reopen.
-  static Future<void> Function() _jarAvailable = () async {};
+  static _Attempt? _jarAvailable;
   _Attempt? _attempt;
   String _message = '';
   bool _closed = false;
@@ -307,8 +311,8 @@ class _CursorPlanSignInScreenState extends State<CursorPlanSignInScreen> {
     if (_closed) return;
     final previous = _attempt;
     if (previous != null) _retire(previous);
-    final a = _Attempt(_jarAvailable);
-    _jarAvailable = a.retire;
+    final a = _Attempt(_jarAvailable?.retire ?? () async {});
+    _jarAvailable = a;
     _attempt = a;
     _message = 'Preparing a fresh Cursor sign-in…';
     unawaited(_start(a));
@@ -465,7 +469,13 @@ class _CursorPlanSignInScreenState extends State<CursorPlanSignInScreen> {
   }
 
   void _retire(_Attempt a, {bool clean = false}) {
-    unawaited(a.retire(clean: clean).catchError((Object _) {}));
+    unawaited(
+      a.retire(clean: clean).then<void>((_) {
+        // A settled lease must not retain its browser, state or async zone.
+        // Only its current owner may release it; unfinished work stays fenced.
+        if (identical(_jarAvailable, a)) _jarAvailable = null;
+      }, onError: (Object _, StackTrace _) {}),
+    );
   }
 
   void _cancel() {
@@ -482,27 +492,28 @@ class _CursorPlanSignInScreenState extends State<CursorPlanSignInScreen> {
     try {
       await showDialog<void>(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Cursor sign-in recovery'),
-          content: const SingleChildScrollView(
-            child: Text(
-              'Google does not allow this embedded browser for authorization. '
-              'Use email for the same Cursor account when offered. '
-              'Cancel and reopen to choose another offered method.\n\n'
-              'For Advanced paste, Cancel to Providers, open About Cursor plan '
-              'sign-in (?), then Advanced paste. Use the session cookie from '
-              'the same account. Never share it.\n\n'
-              'Retry clears the in-app session and starts over. Cancelling or '
-              'failing a replacement keeps the previously saved connection.',
+        builder:
+            (context) => AlertDialog(
+              title: const Text('Cursor sign-in recovery'),
+              content: const SingleChildScrollView(
+                child: Text(
+                  'Google does not allow this embedded browser for authorization. '
+                  'Use email for the same Cursor account when offered. '
+                  'Cancel and reopen to choose another offered method.\n\n'
+                  'For Advanced paste, Cancel to Providers, open About Cursor plan '
+                  'sign-in (?), then Advanced paste. Use the session cookie from '
+                  'the same account. Never share it.\n\n'
+                  'Retry clears the in-app session and starts over. Cancelling or '
+                  'failing a replacement keeps the previously saved connection.',
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Close'),
+                ),
+              ],
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
       );
     } finally {
       _helpOpen = false;
@@ -544,10 +555,7 @@ class _CursorPlanSignInScreenState extends State<CursorPlanSignInScreen> {
         ),
         body: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(_message),
-            ),
+            Padding(padding: const EdgeInsets.all(16), child: Text(_message)),
             Wrap(
               spacing: 12,
               children: [
@@ -560,7 +568,9 @@ class _CursorPlanSignInScreenState extends State<CursorPlanSignInScreen> {
                     onPressed: () {
                       if (!_active(a) || a.finishing) return;
                       _watch(a);
-                      setState(() => _message = 'Checking for a Cursor session…');
+                      setState(
+                        () => _message = 'Checking for a Cursor session…',
+                      );
                       unawaited(_probe(a));
                     },
                     child: const Text('Check again'),

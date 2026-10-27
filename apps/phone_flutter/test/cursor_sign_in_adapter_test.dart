@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,18 +12,18 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late _Platform platform;
   late WebViewPlatform? previous;
-  late TargetPlatform? previousTarget;
+  final ios = TargetPlatformVariant.only(TargetPlatform.iOS);
+  final browsers = <WebViewCursorSignInBrowser>[];
   const channel = MethodChannel(CursorSignInNativeGuard.channelName);
   final nativeCalls = <MethodCall>[];
   String? nativeFailure;
 
   setUp(() {
     previous = WebViewPlatform.instance;
-    previousTarget = debugDefaultTargetPlatformOverride;
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     platform = _Platform();
     WebViewPlatform.instance = platform;
     nativeCalls.clear();
+    browsers.clear();
     nativeFailure = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
@@ -31,25 +33,45 @@ void main() {
   });
   tearDown(() {
     if (previous != null) WebViewPlatform.instance = previous;
-    debugDefaultTargetPlatformOverride = previousTarget;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
   });
+
+  WebViewCursorSignInBrowser createBrowser({
+    CursorSignInNativeGuard Function(void Function(String))? nativeGuardFactory,
+  }) {
+    final browser = WebViewCursorSignInBrowser(
+      nativeGuardFactory: nativeGuardFactory,
+    );
+    browsers.add(browser);
+    return browser;
+  }
+
+  Future<void> retireScreen(WidgetTester tester) async {
+    for (final controller in platform.controllers) {
+      controller.blankFailures = 0;
+      controller.beforeBlank = null;
+    }
+    await tester.pumpWidget(const SizedBox.shrink());
+    await Future.wait(browsers.map((browser) => browser.stop()));
+    await tester.pumpAndSettle();
+  }
 
   Future<void> nativeEvent(int view, String category) async {
     await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .handlePlatformMessage(
           CursorSignInNativeGuard.channelName,
-          const StandardMethodCodec().encodeMethodCall(MethodCall('failure', {
-            'view': view,
-            'category': category,
-          })),
+          const StandardMethodCodec().encodeMethodCall(
+            MethodCall('failure', {'view': view, 'category': category}),
+          ),
           (_) {},
         );
   }
 
   for (final reopen in [false, true]) {
-    testWidgets('blank request failure recovers (reopen: $reopen)', (tester) async {
+    testWidgets('blank request failure recovers (reopen: $reopen)', (
+      tester,
+    ) async {
       final results = <String?>[];
       try {
         await tester.pumpWidget(
@@ -64,8 +86,7 @@ void main() {
                             MaterialPageRoute(
                               builder:
                                   (_) => CursorPlanSignInScreen(
-                                    browserFactory:
-                                        () => WebViewCursorSignInBrowser(),
+                                    browserFactory: createBrowser,
                                   ),
                             ),
                           ),
@@ -80,6 +101,7 @@ void main() {
         await tester.tap(find.text('Open'));
         await tester.pumpAndSettle();
         final old = platform.controllers.single;
+        await old.loaded.future;
         old.blankFailures = 1;
         platform.delegate.onError(
           const WebResourceError(
@@ -102,6 +124,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(old.blanks, 2);
         expect(platform.controllers, hasLength(2));
+        await platform.controllers.last.loaded.future;
         expect(
           platform.controllers.last.loads.single,
           Uri.parse(CursorPlanSignInScreen.defaultSignInUrl),
@@ -109,16 +132,14 @@ void main() {
         expect(platform.cookies.clears, greaterThan(clears));
         expect(results.whereType<String>(), isEmpty);
       } finally {
-        await tester.pumpWidget(const SizedBox.shrink());
-        for (final controller in platform.controllers) {
-          controller.blankFailures = 0;
-        }
-        await tester.pumpAndSettle();
+        await retireScreen(tester);
       }
-    });
+    }, variant: ios);
   }
 
-  test('concurrent retirement shares the failed request and can retry it', () async {
+  const concurrentRetirement =
+      'concurrent retirement shares the failed request and can retry it';
+  _testIOS(concurrentRetirement, () async {
     final browser = WebViewCursorSignInBrowser();
     try {
       await _configure(browser);
@@ -136,17 +157,26 @@ void main() {
   });
 
   for (final status in [401, 503]) {
-    test('adapter HTTP $status distinguishes current document and subresource', () async {
+    final description =
+        'adapter HTTP $status distinguishes current document and subresource';
+    _testIOS(description, () async {
       final browser = WebViewCursorSignInBrowser();
       final errors = <bool>[];
       var finished = 0;
       try {
-        await _configure(browser, error: errors.add, finished: () => finished++);
+        await _configure(
+          browser,
+          error: errors.add,
+          finished: () => finished++,
+        );
         final document = Uri.parse('https://cursor.com/login');
         await browser.load(document);
+        platform.delegate.onStarted(document.toString());
         platform.delegate.onHttpError(
           HttpResponseError(
-            request: WebResourceRequest(uri: Uri.parse('https://cursor.com/icon')),
+            request: WebResourceRequest(
+              uri: Uri.parse('https://cursor.com/icon'),
+            ),
             response: WebResourceResponse(uri: null, statusCode: status),
           ),
         );
@@ -166,42 +196,55 @@ void main() {
     });
   }
 
-  testWidgets('main-document HTTP failure reaches screen recovery before waiting', (tester) async {
-    try {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: CursorPlanSignInScreen(
-            browserFactory: () => WebViewCursorSignInBrowser(),
+  testWidgets(
+    'main-document HTTP failure reaches screen recovery before waiting',
+    (tester) async {
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: CursorPlanSignInScreen(browserFactory: createBrowser),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      platform.delegate.onHttpError(
-        HttpResponseError(
-          request: WebResourceRequest(
-            uri: Uri.parse(CursorPlanSignInScreen.defaultSignInUrl),
+        );
+        await tester.pumpAndSettle();
+        final controller = platform.controllers.single;
+        await controller.loaded.future;
+        controller.delegate.onHttpError(
+          HttpResponseError(
+            request: WebResourceRequest(
+              uri: Uri.parse(CursorPlanSignInScreen.defaultSignInUrl),
+            ),
+            response: const WebResourceResponse(uri: null, statusCode: 503),
           ),
-          response: const WebResourceResponse(uri: null, statusCode: 503),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.textContaining('Could not load the sign-in page'), findsOneWidget);
-      await tester.pump(CursorPlanSignInScreen.waitingTimeout);
-      expect(find.textContaining('Continue password or MFA entry'), findsNothing);
-      expect(find.text('Retry'), findsOneWidget);
-      expect(find.byTooltip('Cancel'), findsOneWidget);
-      expect(find.byTooltip('Help'), findsOneWidget);
-    } finally {
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pumpAndSettle();
-    }
-  });
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('Could not load the sign-in page'),
+          findsOneWidget,
+        );
+        await tester.pump(CursorPlanSignInScreen.waitingTimeout);
+        expect(
+          find.textContaining('Continue password or MFA entry'),
+          findsNothing,
+        );
+        expect(find.text('Retry'), findsOneWidget);
+        expect(find.byTooltip('Cancel'), findsOneWidget);
+        expect(find.byTooltip('Help'), findsOneWidget);
+      } finally {
+        await retireScreen(tester);
+      }
+    },
+    variant: ios,
+  );
 
-  testWidgets('guard attachment failure prevents the initial page load', (tester) async {
+  testWidgets('guard attachment failure prevents the initial page load', (
+    tester,
+  ) async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           nativeCalls.add(call);
-          if (call.method == 'attach') throw PlatformException(code: 'unavailable');
+          if (call.method == 'attach') {
+            throw PlatformException(code: 'unavailable');
+          }
           return null;
         });
     try {
@@ -209,7 +252,7 @@ void main() {
         MaterialApp(
           home: CursorPlanSignInScreen(
             browserFactory:
-                () => WebViewCursorSignInBrowser(
+                () => createBrowser(
                   nativeGuardFactory:
                       (failure) => CursorSignInNativeGuard(
                         view: 31,
@@ -221,22 +264,28 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.textContaining('prepare the sign-in browser'), findsOneWidget);
+      final controller = platform.controllers.single;
+      await controller.configured.future;
+      expect(
+        find.textContaining('prepare the sign-in browser'),
+        findsOneWidget,
+      );
       expect(platform.controllers.single.loads, isEmpty);
       expect(nativeCalls.map((call) => call.method), ['attach', 'detach']);
     } finally {
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pumpAndSettle();
+      await retireScreen(tester);
     }
-  });
+  }, variant: ios);
 
-  testWidgets('native POST rejection reaches unsupported-redirect recovery', (tester) async {
+  testWidgets('native POST rejection reaches unsupported-redirect recovery', (
+    tester,
+  ) async {
     try {
       await tester.pumpWidget(
         MaterialApp(
           home: CursorPlanSignInScreen(
             browserFactory:
-                () => WebViewCursorSignInBrowser(
+                () => createBrowser(
                   nativeGuardFactory:
                       (failure) => CursorSignInNativeGuard(
                         view: 41,
@@ -248,7 +297,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      platform.controllers.single.beforeBlank = () {
+      final controller = platform.controllers.single;
+      await controller.loaded.future;
+      controller.beforeBlank = () {
         expect(nativeCalls.last.method, 'retire');
       };
       await nativeEvent(41, 'navigationRejected');
@@ -257,27 +308,25 @@ void main() {
       expect(find.text('Retry'), findsOneWidget);
       expect(find.byTooltip('Cancel'), findsOneWidget);
       expect(find.byTooltip('Help'), findsOneWidget);
-      final retiring = nativeCalls.firstWhere((call) => call.method == 'retire');
+      final retiring = nativeCalls.firstWhere(
+        (call) => call.method == 'retire',
+      );
       expect(retiring.arguments, {'view': 41});
       expect(nativeCalls.last.method, 'detach');
     } finally {
-      for (final controller in platform.controllers) {
-        controller.beforeBlank = null;
-      }
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pumpAndSettle();
+      await retireScreen(tester);
     }
-  });
+  }, variant: ios);
 
-  test('native guard events bind to the adapter and detach after retirement', () async {
+  const guardEvents =
+      'native guard events bind to the adapter and detach after retirement';
+  _testIOS(guardEvents, () async {
     var blocked = 0;
     final errors = <bool>[];
     final browser = WebViewCursorSignInBrowser(
-      nativeGuardFactory: (failure) => CursorSignInNativeGuard(
-        view: 7,
-        client: 9,
-        onFailure: failure,
-      ),
+      nativeGuardFactory:
+          (failure) =>
+              CursorSignInNativeGuard(view: 7, client: 9, onFailure: failure),
     );
     try {
       await browser.configure(
@@ -310,13 +359,13 @@ void main() {
     }
   });
 
-  test('HTTP failure during blanking refuses completion but retirement can recover', () async {
+  const blankingFailure =
+      'HTTP failure during blanking refuses completion but retirement can recover';
+  _testIOS(blankingFailure, () async {
     final browser = WebViewCursorSignInBrowser(
-      nativeGuardFactory: (failure) => CursorSignInNativeGuard(
-        view: 21,
-        client: 22,
-        onFailure: failure,
-      ),
+      nativeGuardFactory:
+          (failure) =>
+              CursorSignInNativeGuard(view: 21, client: 22, onFailure: failure),
     );
     try {
       await _configure(browser);
@@ -333,14 +382,14 @@ void main() {
     }
   });
 
-  test('queued native HTTP failure prevents capture without relying on event order', () async {
+  const queuedHttpFailure =
+      'queued native HTTP failure prevents capture without relying on event order';
+  _testIOS(queuedHttpFailure, () async {
     final errors = <bool>[];
     final browser = WebViewCursorSignInBrowser(
-      nativeGuardFactory: (failure) => CursorSignInNativeGuard(
-        view: 11,
-        client: 12,
-        onFailure: failure,
-      ),
+      nativeGuardFactory:
+          (failure) =>
+              CursorSignInNativeGuard(view: 11, client: 12, onFailure: failure),
     );
     try {
       await _configure(browser, error: errors.add);
@@ -351,6 +400,18 @@ void main() {
       expect(platform.cookies.reads, isEmpty);
     } finally {
       await browser.stop();
+    }
+  });
+}
+
+void _testIOS(String description, Future<void> Function() body) {
+  test(description, () async {
+    final previous = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      await body();
+    } finally {
+      debugDefaultTargetPlatformOverride = previous;
     }
   });
 }
@@ -379,6 +440,7 @@ class _Platform extends WebViewPlatform {
     controllers.add(controller);
     return controller;
   }
+
   @override
   PlatformNavigationDelegate createPlatformNavigationDelegate(
     PlatformNavigationDelegateCreationParams params,
@@ -402,6 +464,8 @@ class _PlatformWidget extends PlatformWebViewWidget {
 class _Controller extends PlatformWebViewController {
   _Controller(super.params) : super.implementation();
   final loads = <Uri>[];
+  final configured = Completer<void>();
+  final loaded = Completer<void>();
   late _Delegate delegate;
   VoidCallback? beforeBlank;
   int blankFailures = 0;
@@ -411,9 +475,13 @@ class _Controller extends PlatformWebViewController {
   @override
   Future<void> setJavaScriptMode(JavaScriptMode mode) async {}
   @override
-  Future<void> setPlatformNavigationDelegate(PlatformNavigationDelegate value) async {
+  Future<void> setPlatformNavigationDelegate(
+    PlatformNavigationDelegate value,
+  ) async {
     delegate = value as _Delegate;
+    configured.complete();
   }
+
   @override
   Future<void> loadRequest(LoadRequestParams params) async {
     if (params.uri.toString() == 'about:blank') {
@@ -426,15 +494,20 @@ class _Controller extends PlatformWebViewController {
     }
     loads.add(params.uri);
     url = params.uri.toString();
-    delegate.onStarted(url!);
-    delegate.onFinished(url!);
+    if (url == 'about:blank') {
+      delegate.onFinished(url!);
+    } else if (!loaded.isCompleted) {
+      loaded.complete();
+    }
   }
+
   @override
   Future<String?> currentUrl() async => url;
 }
 
 class _Cookies extends PlatformWebViewCookieManager {
-  _Cookies() : super.implementation(const PlatformWebViewCookieManagerCreationParams());
+  _Cookies()
+    : super.implementation(const PlatformWebViewCookieManagerCreationParams());
   final reads = <Uri>[];
   int clears = 0;
   @override
@@ -442,6 +515,7 @@ class _Cookies extends PlatformWebViewCookieManager {
     clears++;
     return true;
   }
+
   @override
   Future<List<WebViewCookie>> getCookies(Uri url) async {
     reads.add(url);
@@ -456,19 +530,24 @@ class _Delegate extends PlatformNavigationDelegate {
   late WebResourceErrorCallback onError;
   late HttpResponseErrorCallback onHttpError;
   @override
-  Future<void> setOnNavigationRequest(NavigationRequestCallback callback) async {}
+  Future<void> setOnNavigationRequest(
+    NavigationRequestCallback callback,
+  ) async {}
   @override
   Future<void> setOnPageStarted(PageEventCallback callback) async {
     onStarted = callback;
   }
+
   @override
   Future<void> setOnPageFinished(PageEventCallback callback) async {
     onFinished = callback;
   }
+
   @override
   Future<void> setOnWebResourceError(WebResourceErrorCallback callback) async {
     onError = callback;
   }
+
   @override
   Future<void> setOnHttpError(HttpResponseErrorCallback callback) async {
     onHttpError = callback;

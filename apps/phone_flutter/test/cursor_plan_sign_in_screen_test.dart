@@ -11,7 +11,10 @@ void main() {
     tester,
   ) async {
     await _withScreen(tester, (h) async {
-      expect(find.textContaining('prepare the sign-in browser'), findsOneWidget);
+      expect(
+        find.textContaining('prepare the sign-in browser'),
+        findsOneWidget,
+      );
       await tester.tap(find.byTooltip('Help'));
       await tester.pumpAndSettle();
       expect(find.textContaining('Advanced paste'), findsOneWidget);
@@ -27,52 +30,70 @@ void main() {
   });
 
   for (final stage in ['configure', 'wipe', 'load', 'url', 'probe']) {
-    testWidgets('$stage failure is visible and Retry starts a verified attempt', (
-      tester,
-    ) async {
-      await _withScreen(tester, (h) async {
-        final first = h.browsers.first;
-        if (stage == 'url' || stage == 'probe') {
-          first.pageFinished();
-          await tester.pumpAndSettle();
-        }
-        expect(find.textContaining('Could not'), findsOneWidget);
-        expect(h.results, isEmpty);
-        if (stage == 'configure' || stage == 'wipe') {
-          expect(first.calls, isNot(contains('load')));
-        }
-        await tester.tap(find.text('Retry'));
-        await tester.pumpAndSettle();
-        expect(h.browsers.last.calls.take(3), ['configure', 'wipe', 'load']);
-        expect(h.browsers.last, isNot(same(first)));
-      }, setup: (browser, index) {
-        if (index == 0) browser.failure = stage;
-      });
-    });
+    testWidgets(
+      '$stage failure is visible and Retry starts a verified attempt',
+      (tester) async {
+        await _withScreen(
+          tester,
+          (h) async {
+            final first = h.browsers.first;
+            if (stage == 'url' || stage == 'probe') {
+              first.pageFinished();
+              await tester.pumpAndSettle();
+            }
+            expect(find.textContaining('Could not'), findsOneWidget);
+            expect(h.results, isEmpty);
+            if (stage == 'configure' || stage == 'wipe') {
+              expect(first.calls, isNot(contains('load')));
+            }
+            await tester.tap(find.text('Retry'));
+            await tester.pumpAndSettle();
+            expect(h.browsers.last.calls.take(3), [
+              'configure',
+              'wipe',
+              'load',
+            ]);
+            expect(h.browsers.last, isNot(same(first)));
+          },
+          setup: (browser, index) {
+            if (index == 0) browser.failure = stage;
+          },
+        );
+      },
+    );
 
-    testWidgets('$stage work has a finite deadline without releasing old work', (
-      tester,
-    ) async {
-      await _withScreen(tester, (h) async {
-        final first = h.browsers.first;
-        if (stage == 'url' || stage == 'probe') {
-          first.pageFinished();
-          await tester.pump();
-        }
-        await tester.pump(CursorPlanSignInScreen.stageTimeout);
-        expect(find.textContaining('Could not'), findsOneWidget);
-        await tester.tap(find.text('Retry'));
-        await tester.pump();
-        expect(h.browsers, hasLength(1));
-        first.release();
-        await tester.pumpAndSettle();
-        expect(h.browsers, hasLength(2));
-        expect(h.browsers.last.calls.take(3), ['configure', 'wipe', 'load']);
-        expect(h.results, isEmpty);
-      }, setup: (browser, index) {
-        if (index == 0) browser.hold = stage;
-      });
-    });
+    testWidgets(
+      '$stage work has a finite deadline without releasing old work',
+      (tester) async {
+        await _withScreen(
+          tester,
+          (h) async {
+            final first = h.browsers.first;
+            if (stage == 'url' || stage == 'probe') {
+              first.pageFinished();
+              await tester.pump();
+            }
+            await tester.pump(CursorPlanSignInScreen.stageTimeout);
+            expect(find.textContaining('Could not'), findsOneWidget);
+            await tester.tap(find.text('Retry'));
+            await tester.pump();
+            expect(h.browsers, hasLength(1));
+            first.release();
+            await tester.pumpAndSettle();
+            expect(h.browsers, hasLength(2));
+            expect(h.browsers.last.calls.take(3), [
+              'configure',
+              'wipe',
+              'load',
+            ]);
+            expect(h.results, isEmpty);
+          },
+          setup: (browser, index) {
+            if (index == 0) browser.hold = stage;
+          },
+        );
+      },
+    );
   }
 
   testWidgets('unverified startup wipe fails closed', (tester) async {
@@ -90,16 +111,17 @@ void main() {
     ('unreadable', null),
     ('unapproved', 'https://unapproved.example/login'),
   ]) {
-    testWidgets('$location current location cannot capture', (
-      tester,
-    ) async {
+    testWidgets('$location current location cannot capture', (tester) async {
       await _withScreen(tester, (h) async {
         final browser = h.browsers.single;
         browser.url = url;
         browser.token = _token;
         browser.pageFinished();
         await tester.pumpAndSettle();
-        expect(find.textContaining('Retry, Cancel, or open Help'), findsOneWidget);
+        expect(
+          find.textContaining('Retry, Cancel, or open Help'),
+          findsOneWidget,
+        );
         expect(browser.calls, isNot(contains('probe')));
         expect(h.results, isEmpty);
       });
@@ -126,47 +148,61 @@ void main() {
   });
 
   for (final mainFrame in [true, false]) {
-    testWidgets('Google authorization callbacks are rejected (main: $mainFrame)', (
-      tester,
-    ) async {
-      await _withScreen(tester, (h) async {
-        final browser = h.browsers.single;
-        expect(
-          browser.navigate('https://www.gstatic.com/resource', false),
-          isTrue,
-        );
-        expect(
-          browser.navigate('https://www.google.com/recaptcha/api2', false),
-          isTrue,
-        );
-        expect(browser.navigate('https://accounts.google.com/gsi/client', false), isTrue);
-        expect(browser.navigate('https://accounts.google.com/gsi/button', false), isTrue);
-        expect(
-          browser.navigate('https://accounts.google.com/signin', mainFrame),
-          isFalse,
-        );
-        await tester.pumpAndSettle();
-        expect(find.textContaining('same-account email'), findsOneWidget);
-        expect(h.results, isEmpty);
-      });
-    });
+    testWidgets(
+      'Google authorization callbacks are rejected (main: $mainFrame)',
+      (tester) async {
+        await _withScreen(tester, (h) async {
+          final browser = h.browsers.single;
+          expect(
+            browser.navigate('https://www.gstatic.com/resource', false),
+            isTrue,
+          );
+          expect(
+            browser.navigate('https://www.google.com/recaptcha/api2', false),
+            isTrue,
+          );
+          expect(
+            browser.navigate('https://accounts.google.com/gsi/client', false),
+            isTrue,
+          );
+          expect(
+            browser.navigate('https://accounts.google.com/gsi/button', false),
+            isTrue,
+          );
+          expect(
+            browser.navigate('https://accounts.google.com/signin', mainFrame),
+            isFalse,
+          );
+          await tester.pumpAndSettle();
+          expect(find.textContaining('same-account email'), findsOneWidget);
+          expect(h.results, isEmpty);
+        });
+      },
+    );
   }
 
-  testWidgets('unapproved main-frame redirect is recoverable and cannot succeed', (
-    tester,
-  ) async {
-    await _withScreen(tester, (h) async {
-      final browser = h.browsers.single;
-      expect(browser.navigate('https://auth.x.ai/login', true), isTrue);
-      expect(h.results, isEmpty);
-      expect(browser.navigate('https://auth.x.ai.example/login', true), isFalse);
-      browser.token = _token;
-      browser.pageFinished();
-      await tester.pumpAndSettle();
-      expect(find.textContaining('redirect is not supported'), findsOneWidget);
-      expect(h.results, isEmpty);
-    });
-  });
+  testWidgets(
+    'unapproved main-frame redirect is recoverable and cannot succeed',
+    (tester) async {
+      await _withScreen(tester, (h) async {
+        final browser = h.browsers.single;
+        expect(browser.navigate('https://auth.x.ai/login', true), isTrue);
+        expect(h.results, isEmpty);
+        expect(
+          browser.navigate('https://auth.x.ai.example/login', true),
+          isFalse,
+        );
+        browser.token = _token;
+        browser.pageFinished();
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('redirect is not supported'),
+          findsOneWidget,
+        );
+        expect(h.results, isEmpty);
+      });
+    },
+  );
 
   testWidgets('a page that never finishes has finite recovery', (tester) async {
     await _withScreen(tester, (h) async {
@@ -175,32 +211,35 @@ void main() {
       await tester.pump(const Duration(seconds: 10));
       expect(find.textContaining('did not finish loading'), findsOneWidget);
       expect(h.results, isEmpty);
-    }, setup: (browser, _) => browser.finishPage = false);
-  });
-
-  testWidgets('human input remains waiting; Check again resumes bounded probing', (
-    tester,
-  ) async {
-    await _withScreen(tester, (h) async {
-      final browser = h.browsers.single;
-      await tester.pump(CursorPlanSignInScreen.waitingTimeout);
-      expect(
-        find.textContaining('Continue password or MFA entry'),
-        findsOneWidget,
-      );
-      expect(find.byKey(const ValueKey('browser')), findsOneWidget);
-      final probes = browser.calls.where((call) => call == 'probe').length;
-      await tester.pump(CursorPlanSignInScreen.waitingTimeout);
-      browser.pageFinished();
-      await tester.pump();
-      expect(browser.calls.where((call) => call == 'probe').length, probes);
-      expect(h.results, isEmpty);
-      browser.token = _token;
-      await tester.tap(find.text('Check again'));
-      await tester.pumpAndSettle();
-      expect(h.results, [_token]);
     });
   });
+
+  testWidgets(
+    'human input remains waiting; Check again resumes bounded probing',
+    (tester) async {
+      await _withScreen(tester, (h) async {
+        final browser = h.browsers.single;
+        browser.pageFinished();
+        await tester.pump();
+        await tester.pump(CursorPlanSignInScreen.waitingTimeout);
+        expect(
+          find.textContaining('Continue password or MFA entry'),
+          findsOneWidget,
+        );
+        expect(find.byKey(const ValueKey('browser')), findsOneWidget);
+        final probes = browser.calls.where((call) => call == 'probe').length;
+        await tester.pump(CursorPlanSignInScreen.waitingTimeout);
+        browser.pageFinished();
+        await tester.pump();
+        expect(browser.calls.where((call) => call == 'probe').length, probes);
+        expect(h.results, isEmpty);
+        browser.token = _token;
+        await tester.tap(find.text('Check again'));
+        await tester.pumpAndSettle();
+        expect(h.results, [_token]);
+      });
+    },
+  );
 
   testWidgets('rapid Retry fences superseded work and late callbacks', (
     tester,
@@ -261,27 +300,31 @@ void main() {
     });
   }
 
-  testWidgets('reopen waits for old cleanup; blocked cleanup has finite recovery', (
-    tester,
-  ) async {
-    await _withScreen(tester, (h) async {
-      final old = h.browsers.single;
-      old.hold = 'stop';
-      await tester.tap(find.byTooltip('Cancel'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Open'));
-      await tester.pump();
-      expect(h.browsers, hasLength(1));
-      await tester.pump(CursorPlanSignInScreen.stageTimeout);
-      expect(find.textContaining('close the previous sign-in'), findsOneWidget);
-      old.release();
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Retry'));
-      await tester.pumpAndSettle();
-      expect(h.browsers, hasLength(2));
-      expect(old.calls.last, 'wipe');
-    });
-  });
+  testWidgets(
+    'reopen waits for old cleanup; blocked cleanup has finite recovery',
+    (tester) async {
+      await _withScreen(tester, (h) async {
+        final old = h.browsers.single;
+        old.hold = 'stop';
+        await tester.tap(find.byTooltip('Cancel'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Open'));
+        await tester.pump();
+        expect(h.browsers, hasLength(1));
+        await tester.pump(CursorPlanSignInScreen.stageTimeout);
+        expect(
+          find.textContaining('close the previous sign-in'),
+          findsOneWidget,
+        );
+        old.release();
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Retry'));
+        await tester.pumpAndSettle();
+        expect(h.browsers, hasLength(2));
+        expect(old.calls.last, 'wipe');
+      });
+    },
+  );
 
   testWidgets('completion is normalized, verified clean and returned once', (
     tester,
@@ -338,24 +381,28 @@ void main() {
     });
   });
 
-  testWidgets('completion cleanup timeout is recoverable and cannot return late', (
-    tester,
-  ) async {
-    await _withScreen(tester, (h) async {
-      final browser = h.browsers.single;
-      browser.hold = 'wipe';
-      browser.token = _token;
-      browser.pageFinished();
-      await tester.pump();
-      await tester.pump(CursorPlanSignInScreen.stageTimeout);
-      expect(find.textContaining('clear the sign-in browser'), findsOneWidget);
-      await tester.tap(find.byTooltip('Cancel'));
-      await tester.pumpAndSettle();
-      browser.release();
-      await tester.pumpAndSettle();
-      expect(h.results, [null]);
-    });
-  });
+  testWidgets(
+    'completion cleanup timeout is recoverable and cannot return late',
+    (tester) async {
+      await _withScreen(tester, (h) async {
+        final browser = h.browsers.single;
+        browser.hold = 'wipe';
+        browser.token = _token;
+        browser.pageFinished();
+        await tester.pump();
+        await tester.pump(CursorPlanSignInScreen.stageTimeout);
+        expect(
+          find.textContaining('clear the sign-in browser'),
+          findsOneWidget,
+        );
+        await tester.tap(find.byTooltip('Cancel'));
+        await tester.pumpAndSettle();
+        browser.release();
+        await tester.pumpAndSettle();
+        expect(h.results, [null]);
+      });
+    },
+  );
 
   testWidgets('unverified completion cleanup never returns a credential', (
     tester,
@@ -395,7 +442,9 @@ Future<void> _withScreen(
                               browserFactory: () {
                                 if (creationFailure) {
                                   creationFailure = false;
-                                  throw StateError('Synthetic creation failure');
+                                  throw StateError(
+                                    'Synthetic creation failure',
+                                  );
                                 }
                                 final browser = _FakeBrowser();
                                 setup?.call(browser, h.browsers.length);
@@ -423,6 +472,7 @@ Future<void> _withScreen(
     for (final browser in h.browsers) {
       browser.release();
     }
+    await Future.wait(h.browsers.map((browser) => browser.retired));
     await tester.pumpAndSettle();
   }
 }
@@ -436,12 +486,14 @@ class _Harness {
 class _FakeBrowser implements CursorSignInBrowser {
   final calls = <String>[];
   final _gate = Completer<void>();
+  final _retired = Completer<void>();
+  bool _stopped = false;
+  Future<void> get retired => _retired.future;
   String? failure;
   String? hold;
   String? token;
   String? url = 'https://cursor.com/dashboard';
   bool wiped = true;
-  bool finishPage = true;
   late bool Function(String, bool) navigate;
   late VoidCallback pageStarted;
   late VoidCallback pageFinished;
@@ -473,20 +525,27 @@ class _FakeBrowser implements CursorSignInBrowser {
   }
 
   @override
-  Future<void> load(Uri url) async {
-    await _effect<void>('load', null);
-    pageStarted();
-    if (finishPage) pageFinished();
-  }
+  Future<void> load(Uri url) => _effect<void>('load', null);
 
   @override
   Future<String?> currentUrl() => _effect('url', url);
   @override
   Future<String?> probe(Uri? url) => _effect('probe', token);
   @override
-  Future<bool> wipe() => _effect('wipe', wiped);
+  Future<bool> wipe() async {
+    try {
+      return await _effect('wipe', wiped);
+    } finally {
+      if (_stopped && !_retired.isCompleted) _retired.complete();
+    }
+  }
+
   @override
-  Future<void> stop({bool requireHealthy = false}) => _effect<void>('stop', null);
+  Future<void> stop({bool requireHealthy = false}) async {
+    await _effect<void>('stop', null);
+    _stopped = true;
+  }
+
   @override
   Widget build() => const SizedBox(key: ValueKey('browser'));
 }
