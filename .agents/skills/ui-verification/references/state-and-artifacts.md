@@ -1,7 +1,7 @@
 # State and artifact identity
 
-Use when proving what is running, especially after app/face updates, ordering changes,
-preference restoration or renderer/cache recovery. Keep evidence layer-specific.
+Use when proving active app/face state after updates, ordering, preference restoration or renderer/cache recovery.
+Keep evidence layer-specific. For UI instrumentation, follow [ownership, result and artifact checks](../../../../docs/ANDROID_TOOLCHAIN.md#routine-verification).
 
 ## Distinguish the layers
 

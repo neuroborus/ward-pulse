@@ -992,6 +992,25 @@ and unrestricted by keyguard. Record the prior power state and settings; an ordi
 Restore temporary power-state or setting changes exactly after verification. No screen-timeout
 change is required.
 
+**UiAutomation ownership.** Keep one automation owner per selected target while a
+connected instrumentation suite runs. Do not concurrently invoke `uiautomator dump`
+or another consumer that registers a separate UiAutomation service. Observe through
+noncompeting `screencap`, read-only `dumpsys`, or the existing instrumentation's own
+outputs; defer hierarchy dumps until that instrumentation owner finishes.
+Inspect the reported instrumentation test/run status and expected test counts before
+declaring PASS. Interpret the invocation's output mode: formatted JUnit
+`OK (...)`/`FAILURES!!!` summaries, or raw instrumentation status records with `-r`.
+Confirm the selected cases and expected counts in either mode; do not require raw
+`INSTRUMENTATION_STATUS_CODE: 0` in formatted output.
+An ADB exit code of zero does not establish test success; an automation
+registration abort supplies neither product-assertion evidence nor a verified frame.
+Preserve earlier RED evidence and distinguish such an invocation failure from it.
+Before recording a copied native artifact as present, verify its actual format and content:
+a decodable PNG for an image, or the expected case/metric records for text. An ADB transfer's
+exit code, destination filename or nonempty file alone proves none of this. Command
+diagnostics and absent conditional outputs remain missing evidence; preserve the original
+receipt and record the correction rather than accepting diagnostic text as an artifact.
+
 Prove scoped before/after continuity of target UID, APK identity, saved-summary digest,
 logical consent and verifier/debug-app/wait-for-debugger settings alongside work and pairing.
 A compatible build can change APK bytes; a legitimate fresh publication can change the
