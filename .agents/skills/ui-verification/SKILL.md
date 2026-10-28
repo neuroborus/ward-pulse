@@ -59,6 +59,16 @@ If a required identity, binding, value or visible state is unproved, report that
 Pending. A healthy fixture used for documentation must not erase the incident or count
 as its repair. Never hide a bug by replacing its inputs before acceptance.
 
+During review of native layout/state assertions, verify each guard's phase applicability
+against the owning contract: a correct predicate can still impose an unsupported condition
+in the wrong phase. Preserve proven boundary requirements separately. Include guards before
+image or metrics capture. Require bounded diagnostics joined at the failure point: expected
+and actual state, target, phase, system font scale, viewport, items/offsets, padding and motion
+as applicable. Retain that trace before the risky guard or in its failure message, without
+moving or mutating the observed state. Do not loosen or normalize the assertion, or retry
+past its failure merely to collect artifacts. Diagnostic output preserves failure evidence;
+it does not establish PASS.
+
 After the last fix, the coordinator repeats the full independent zero-findings pass under
 [delegation](../delegation/SKILL.md) and applicable [finalization](../finalization/SKILL.md).
 Return code findings to actual Runner execution/review; no implementation fallback.
