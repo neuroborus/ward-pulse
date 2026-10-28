@@ -781,6 +781,24 @@ separate Owner receipt and final handoff, without a second status-only Source co
 Closure of that task requires Owner ZERO; this status makes no documentation-build
 acceptance claim.
 
+**No-summary action refinement, 2026-10-28 — emulator/docs/browser verified; physical deferred.**
+The [dated design](product/WEAR_GLANCE_DESIGN.md#revision-2026-10-28--compact-no-summary-watch-face-action)
+specifies a compact label-only tonal Watch face action below the initial sync prompt, with
+an ordinary full-text tonal button when measured width or line height requires it. It keeps
+system scaling, touch size and complete scrolling, while requiring pre-summary content to
+clear the retained straight clock at every settled position. Other destinations, the clock
+matrix and installation/consent/status behavior remain unchanged. The reviewed working-tree
+candidate based on HEAD `eb0a371` passed `just check-wear`, the 39-test round suite, four
+focused square cases and separate actual
+OS-font-2.0 cases on both SDK 36 targets. Native review covered initial readability, a genuine
+interior, both physical limits, every prompt line through scrolling and the complete usable
+action, with preserved touch/navigation and restored settings/saved summaries. Full
+`just check-docs` and the public Watch-guide browser review passed before this status record,
+including actual light/dark desktop and mobile views. Physical OnePlus verification remains
+deferred. Root's final whole integration review and documentation recheck follow this status
+update. Earlier intermediate results and the historical utility overlap retain their
+original scope; no new public screenshot cohort is needed.
+
 Original working inputs remain `LOCAL_ARTIFACTS/business-model/WATCH_FACE_PUSH_TASK.md`,
 `LOCAL_ARTIFACTS/business-model/PLAY_RELEASE.md` sections “Автоматическая установка
 циферблата” / “Совместимость и объём изменений”, and

@@ -111,8 +111,15 @@ Rules:
 ## Watch face setup
 
 Scroll past the complete Plan windows list and tap **Watch face**. Before the first phone
-summary, the same entry appears below **Sync from phone**. Summary arrival, replacement or
-loss does not reset this route or a pending permission result.
+summary, a compact label-only tonal button appears below **Sync from phone**. It uses the
+ordinary full-text tonal button when the measured label width or line height does not fit
+the compact component, preserving wrapping, system font scaling and the minimum touch area.
+The pre-summary straight clock stays visible, with scrolling content kept clear of it at
+every settled position. The heading and start of the sync prompt remain readable initially;
+ordinary scrolling makes all prompt text readable, across multiple positions if needed,
+and reveals the complete button and label together at a settled usable position.
+See the [dated no-summary design](../../docs/product/WEAR_GLANCE_DESIGN.md#revision-2026-10-28--compact-no-summary-watch-face-action).
+Summary arrival, replacement or loss does not reset this route or a pending permission result.
 
 On supported Wear OS 6+ devices, the bundled Push face can be installed with the Wear app.
 If it is missing and a slot is free, **Install watch face** installs it without activating

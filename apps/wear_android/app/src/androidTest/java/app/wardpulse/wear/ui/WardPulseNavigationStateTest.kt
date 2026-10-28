@@ -37,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.positionOnScreen
@@ -316,10 +318,13 @@ class WardPulseNavigationStateTest {
     @Test
     fun noSummaryActionIsCompactAndItsPaddedTouchTargetAndAccessibilityClickNavigateBack() {
         // Scale only this composition; runtime OS font-scale acceptance is separate.
+        val endEvidence = noSummaryEndEvidence("default-finger")
+        assertTrue("Previous boundary evidence must be removed", !endEvidence.exists() || endEvidence.delete())
         launchApp(fontScale = 1f)
         assertVisible("Sync from phone")
         assertClock(visible = true, anchor = "Sync from phone")
         val action = assertFullNoSummaryAction()
+        recordNoSummaryEnd(endEvidence)
         val density = action.textLayouts.single().layout.layoutInput.density
         val allocatedHeight = with(density) { 48.dp.toPx() }
         assertEquals(
@@ -380,8 +385,11 @@ class WardPulseNavigationStateTest {
     @Test
     fun noSummaryActionWrapsItsFullLabelWhenTheCompactWidthDoesNotFit() {
         // Constrain this real app composition, without changing a device or its data.
+        val endEvidence = noSummaryEndEvidence("constrained80dp")
+        assertTrue("Previous boundary evidence must be removed", !endEvidence.exists() || endEvidence.delete())
         launchApp(fontScale = 1f, contentWidth = 80.dp)
         val action = assertFullNoSummaryAction()
+        recordNoSummaryEnd(endEvidence)
         val label = action.textLayouts.single().layout
         assertTrue("Narrow action must wrap the complete label", label.lineCount > 1)
         assertTrue(
@@ -398,8 +406,11 @@ class WardPulseNavigationStateTest {
     @Test
     fun noSummaryActionKeepsFullScaledLinesInTheContentSizedFallback() {
         // This injected scale exercises layout, not actual OS large-font acceptance.
+        val endEvidence = noSummaryEndEvidence("injected-large-font")
+        assertTrue("Previous boundary evidence must be removed", !endEvidence.exists() || endEvidence.delete())
         launchApp(fontScale = 2.5f)
         val action = assertFullNoSummaryAction()
+        recordNoSummaryEnd(endEvidence)
         val label = action.textLayouts.single().layout
         assertEquals(2.5f, label.layoutInput.density.fontScale, 0f)
         assertTrue(
@@ -414,12 +425,415 @@ class WardPulseNavigationStateTest {
         assertFullNoSummaryAction()
     }
 
-    private fun assertFullNoSummaryAction(): NativeSurface {
+    @Test
+    fun noSummaryActionIsFullyReachableAtTheInheritedOsFontScaleWithSettledNativeEvidence() {
+        val cache = instrumentation.targetContext.cacheDir
+        for (phase in listOf("initial", "middle", "end", "start") + (1..7).map { "prompt-$it" }) {
+            for (extension in listOf("png", "txt")) {
+                val file = File(cache, noSummaryEvidenceName(phase, extension))
+                assertTrue("Previous NoSummary evidence must be removed", !file.exists() || file.delete())
+            }
+        }
+
+        launchApp()
+        scenario.onActivity { assertEquals(null, summary) }
+        assertVisible("WardPulse")
+        assertVisible("Sync from phone")
+        assertClock(visible = true, anchor = "Sync from phone")
+        val covered = mutableSetOf<Pair<String, Int>>()
+        val initial = captureNoSummaryEvidence("initial", covered)
+        val prompt = listOf("Sync from phone", "No dashboard data yet")
+        val expected = prompt.associateWith { label ->
+            val layout = initial.textLayouts.single { it.layout.layoutInput.text.text == label }.layout
+            assertFalse("The full prompt must be laid out without overflow: $label", layout.hasVisualOverflow)
+            assertEquals(0, layout.getLineStart(0))
+            assertEquals(label.length, layout.getLineEnd(layout.lineCount - 1, visibleEnd = true))
+            (0 until layout.lineCount).map { line ->
+                assertFalse("No prompt line may be ellipsized: $label/$line", layout.isLineEllipsized(line))
+                layout.getLineStart(line) to layout.getLineEnd(line, visibleEnd = true)
+            }
+        }
+        fun assertPromptLines(surface: NativeSurface) {
+            for (text in surface.textLayouts) {
+                val label = text.layout.layoutInput.text.text
+                val ranges = expected[label] ?: continue
+                assertFalse("Prompt text must retain its full layout", text.layout.hasVisualOverflow)
+                assertEquals("Prompt wrapping must stay unchanged while scrolling", ranges.size, text.layout.lineCount)
+                for (line in ranges.indices) {
+                    assertEquals(ranges[line].first, text.layout.getLineStart(line))
+                    assertEquals(ranges[line].second, text.layout.getLineEnd(line, visibleEnd = true))
+                    assertFalse("No reached prompt line may be ellipsized", text.layout.isLineEllipsized(line))
+                }
+            }
+        }
+        val heading = initial.textLayouts.single { it.layout.layoutInput.text.text == "WardPulse" }
+        assertFalse("The initial heading must retain its full layout", heading.layout.hasVisualOverflow)
+        assertTrue("The initial heading must be fully readable", heading.lineBounds.all { initial.viewport.contains(it) })
+        val title = initial.textLayouts.single { it.layout.layoutInput.text.text == prompt.first() }
+        assertTrue("The initial prompt must start readably", initial.viewport.contains(title.lineBounds.first()))
+        assertPromptLines(initial)
+        val required = expected.flatMap { (label, lines) -> lines.indices.map { label to it } }.toSet()
+        // Small real finger drags cover intervening lines and the genuine interior;
+        // page-sized platform accessibility requests remain a separate regression.
+        for (step in 0 until 8) {
+            dragNoSummary()
+            assertPromptLines(captureNoSummaryEvidence(if (step == 0) "middle" else "prompt-$step", covered))
+            if (covered.containsAll(required)) break
+        }
+        assertTrue(
+            "Every complete prompt line must have native paint evidence; missing=${required - covered}",
+            covered.containsAll(required),
+        )
+        val action = assertFullNoSummaryAction(byLabel = true)
+        assertClock(visible = true, anchor = "Watch face")
+        val list = checkNotNull(nativeSurface("empty-dashboard-list"))
+        val clock = checkNotNull(nativeSurface("app-clock"))
+        assertTrue(
+            "The complete action allocation must fit the native list viewport",
+            list.viewport.contains(action.layoutBounds),
+        )
+        assertFalse("The action must clear the shared clock", RectF.intersects(clock.viewport, action.layoutBounds))
+        captureNoSummaryEvidence("end")
+        assertCalls()
+
+        click("Watch face", within = "empty-dashboard-list")
+        assertVisible("Checking watch face…")
+        assertClock(visible = true, anchor = "Checking watch face…")
+        assertCalls("initial.check")
+        back()
+        assertFullNoSummaryAction(byLabel = true)
+        scrollToStart(within = "empty-dashboard-list")
+        assertVisible("WardPulse")
+        assertVisible("Sync from phone")
+        assertClock(visible = true, anchor = "Sync from phone")
+        captureNoSummaryEvidence("start")
+        assertCalls("initial.check")
+        scenario.onActivity { assertEquals(null, summary) }
+    }
+
+    private fun dragNoSummary() {
+        var before: NativeSurface? = null
+        awaitAccessibility(
+            "Expected settled NoSummary before finger scrolling",
+            diagnostics = { noSummaryObservation(before) },
+        ) {
+            before = nativeSurface("empty-dashboard-list")
+            before?.let { surface ->
+                surface.summaryScrollState?.let { state ->
+                    !surface.pendingLayout && !state.scrolling && state.items.isNotEmpty() &&
+                        state.request?.completed != false
+                }
+            } == true
+        }
+        val start = checkNotNull(before)
+        val state = checkNotNull(start.summaryScrollState)
+        assertTrue(
+            "Prompt coverage needs forward travel: ${noSummaryObservation(start)}",
+            !state.atBoundary(true) && state.canScrollForward,
+        )
+        // Aim halfway through the last item's physical overhang when it is placed.
+        // The middle capture below must independently prove an interior position.
+        val overhang = state.items.last().takeIf { it.index == state.totalItems - 1 }?.let {
+            (it.offset + it.transformedHeight + state.afterPadding - state.viewportHeight).toFloat()
+        }
+        val distance = minOf(start.viewport.height() / 4f, (overhang ?: Float.POSITIVE_INFINITY) / 2f)
+        assertTrue("A useful interior drag must exceed one physical pixel", distance > 1f)
+        val stroke = start.touchSlop + distance
+        val x = start.viewport.centerX()
+        val startY = start.viewport.centerY() + stroke / 2f
+        val endY = startY - stroke
+        assertTrue(
+            "Finger stroke must stay inside the native list",
+            startY < start.viewport.bottom && endY > start.viewport.top,
+        )
+        val velocity = VelocityTracker()
+        val downTime = SystemClock.uptimeMillis()
+        var currentY = startY
+        fun pointer(action: Int) {
+            val event = MotionEvent.obtain(
+                downTime, SystemClock.uptimeMillis(), action, 1,
+                arrayOf(MotionEvent.PointerProperties().apply {
+                    id = 0
+                    toolType = MotionEvent.TOOL_TYPE_FINGER
+                }),
+                arrayOf(MotionEvent.PointerCoords().apply {
+                    this.x = x
+                    y = currentY
+                    pressure = 1f
+                    size = 1f
+                }),
+                0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0,
+            )
+            try {
+                assertTrue("NoSummary finger input failed", automation.injectInputEvent(event, true))
+                velocity.addPosition(event.eventTime, Offset(x, currentY))
+            } finally {
+                event.recycle()
+            }
+        }
+        try {
+            pointer(MotionEvent.ACTION_DOWN)
+            // A conventional decelerating drag, released below native fling speed.
+            // Settlement after release is observed without another input operation.
+            for (step in 1..32) {
+                val remaining = 1f - step / 32f
+                currentY = endY + stroke * remaining * remaining * remaining
+                pointer(MotionEvent.ACTION_MOVE)
+                awaitFrame()
+            }
+        } finally {
+            pointer(MotionEvent.ACTION_UP)
+        }
+        val releasedVelocity = velocity.calculateVelocity().y
+        assertTrue(
+            "Evidence drag must release below native fling speed: $releasedVelocity",
+            kotlin.math.abs(releasedVelocity) < start.minimumFlingVelocity,
+        )
+        var after: NativeSurface? = null
+        awaitAccessibility(
+            "Expected settled native progress after NoSummary finger input",
+            diagnostics = { noSummaryObservation(after) },
+        ) {
+            after = nativeSurface("empty-dashboard-list")
+            after?.let { surface ->
+                surface.summaryScrollState?.let { end ->
+                    !surface.pendingLayout && !end.scrolling && end.items != state.items
+                }
+            } == true
+        }
+        val end = checkNotNull(after)
+        val firstBefore = state.items.first()
+        val firstAfter = checkNotNull(end.summaryScrollState).items.first()
+        assertTrue(
+            "Finger input must advance physical content in the forward direction",
+            firstAfter.index > firstBefore.index ||
+                (firstAfter.index == firstBefore.index && firstAfter.offset < firstBefore.offset),
+        )
+        assertSame(
+            "Finger input must not replace the platform request",
+            state.request?.invocation, end.summaryScrollState?.request?.invocation,
+        )
+        assertNoSummaryClockClearance(end)
+        scrollTrace += "NoSummary finger stroke=$stroke, releaseVelocity=$releasedVelocity, " +
+            "before=${noSummaryObservation(start)}, after=${noSummaryObservation(end)}"
+    }
+
+    private fun noSummaryEndEvidence(case: String): File =
+        File(instrumentation.targetContext.cacheDir, "wear-no-summary-$case-end.txt")
+
+    private fun recordNoSummaryEnd(evidence: File) {
+        val list = checkNotNull(nativeSurface("empty-dashboard-list"))
+        val state = checkNotNull(list.summaryScrollState)
+        assertTrue(
+            "Boundary receipt must prove the physical end",
+            !list.pendingLayout && !state.scrolling && state.atBoundary(true),
+        )
+        val report = buildString {
+            appendLine("case=${evidence.nameWithoutExtension}")
+            appendLine(noSummaryObservation(list))
+            appendLine("physicalEnd=true")
+            appendLine(scrollTrace.filter { it.startsWith("NoSummary ") }.takeLast(24).joinToString("\n"))
+        }
+        val bytes = report.toByteArray(Charsets.UTF_8)
+        assertTrue("NoSummary boundary receipt exceeds bounds", bytes.size in 1..16_384)
+        evidence.writeBytes(bytes)
+        assertEquals("NoSummary boundary receipt changed on disk", report, evidence.readText(Charsets.UTF_8))
+    }
+
+    private fun noSummaryEvidenceName(phase: String, extension: String): String {
+        val suffix = if (phase == "end") "" else "-$phase"
+        return "wear-no-summary-inherited-font$suffix.$extension"
+    }
+
+    private fun captureNoSummaryEvidence(
+        phase: String,
+        coveredPromptLines: MutableSet<Pair<String, Int>>? = null,
+    ): NativeSurface {
+        var settled: NativeSurface? = null
+        awaitAccessibility(
+            "Expected settled NoSummary $phase capture",
+            diagnostics = { noSummaryObservation(settled) },
+        ) {
+            settled = nativeSurface("empty-dashboard-list")
+            settled?.let { surface ->
+                surface.summaryScrollState?.let { state ->
+                    !surface.pendingLayout && !state.scrolling &&
+                        state.request?.completed != false
+                }
+            } == true
+        }
+        val list = checkNotNull(settled)
+        assertNoSummaryClockClearance(list)
+        val state = checkNotNull(list.summaryScrollState)
+        // Initial readability is separate from the physical start reached by backward scrolling.
+        when (phase) {
+            "start" -> assertTrue(
+                "Start capture must prove the physical start: ${noSummaryObservation(list)}",
+                state.atBoundary(false),
+            )
+            "end" -> assertTrue("End capture must prove the physical end", state.atBoundary(true))
+            "middle" -> assertTrue(
+                "Middle capture must be physically interior: ${noSummaryObservation(list)}",
+                !state.atBoundary(false) && !state.atBoundary(true),
+            )
+        }
+        val clock = checkNotNull(nativeSurface("app-clock"))
+        val window = RectF()
+        var configuration = ""
+        scenario.onActivity { activity ->
+            val resources = activity.resources
+            val config = resources.configuration
+            val metrics = resources.displayMetrics
+            for (text in list.textLayouts) {
+                val density = text.layout.layoutInput.density
+                assertEquals("Text must inherit actual OS font scale", config.fontScale, density.fontScale, 0f)
+                assertEquals("Text must inherit actual display density", metrics.density, density.density, 0f)
+            }
+            val view = activity.window.decorView
+            val origin = IntArray(2)
+            view.getLocationOnScreen(origin)
+            window.set(
+                origin[0].toFloat(), origin[1].toFloat(),
+                (origin[0] + view.width).toFloat(), (origin[1] + view.height).toFloat(),
+            )
+            configuration = "osFontScale=${config.fontScale}, density=${metrics.density}, " +
+                "densityDpi=${metrics.densityDpi}, screenDp=${config.screenWidthDp}x${config.screenHeightDp}, " +
+                "round=${config.isScreenRound}, sdk=${Build.VERSION.SDK_INT}"
+        }
+        assertTrue("The native list must fit the actual window", window.contains(list.viewport))
+        val cache = instrumentation.targetContext.cacheDir
+        val evidence = File(cache, noSummaryEvidenceName(phase, "png"))
+        val measurements = File(cache, noSummaryEvidenceName(phase, "txt"))
+        val capturedAt = SystemClock.elapsedRealtime()
+        val screenshot = checkNotNull(automation.takeScreenshot()) { "NoSummary screenshot failed" }
+        try {
+            val width = screenshot.width
+            val height = screenshot.height
+            assertTrue("NoSummary screenshot dimensions exceed bounds", width in 1..1024 && height in 1..1024)
+            assertTrue(
+                "The native window must fit the unscaled screenshot",
+                RectF(0f, 0f, width.toFloat(), height.toFloat()).contains(window),
+            )
+            // Semantics survive a parent's alpha=0. Check actual clock ink in the
+            // original native frame as well; HOST still reviews its full readability.
+            fun paintPixels(bounds: RectF, color: Color): Int {
+                assertTrue("Measured text line must fit the native window", window.contains(bounds))
+                assertFalse("Native text must have a resolved paint color", color == Color.Unspecified)
+                val expected = color.toArgb()
+                val channels = listOf(16, 8, 0)
+                var count = 0
+                for (y in kotlin.math.floor(bounds.top).toInt() until kotlin.math.ceil(bounds.bottom).toInt()) {
+                    for (x in kotlin.math.floor(bounds.left).toInt() until kotlin.math.ceil(bounds.right).toInt()) {
+                        val pixel = screenshot.getPixel(x, y)
+                        if (channels.all { shift ->
+                                kotlin.math.abs((pixel ushr shift and 0xff) - (expected ushr shift and 0xff)) <= 8
+                            }
+                        ) count++
+                    }
+                }
+                return count
+            }
+            val clockText = clock.textLayouts.single()
+            val clockLine = clockText.lineBounds.single()
+            val clockPixels = paintPixels(clockLine, clockText.layout.layoutInput.style.color)
+            val initialHeadingPaint = if (phase == "initial") {
+                val heading = list.textLayouts.single { it.layout.layoutInput.text.text == "WardPulse" }
+                heading.lineBounds.map { bounds ->
+                    if (list.viewport.contains(bounds)) paintPixels(bounds, heading.layout.layoutInput.style.color) else 0
+                }
+            } else {
+                emptyList()
+            }
+            val promptPaint = mutableMapOf<Pair<String, Int>, Int>()
+            for (text in list.textLayouts) {
+                val label = text.layout.layoutInput.text.text
+                if (label != "Sync from phone" && label != "No dashboard data yet") continue
+                for ((line, bounds) in text.lineBounds.withIndex()) {
+                    if (list.viewport.contains(bounds)) {
+                        promptPaint[label to line] = paintPixels(bounds, text.layout.layoutInput.style.color)
+                    }
+                }
+            }
+            evidence.outputStream().use { output ->
+                assertTrue("NoSummary PNG compression failed", screenshot.compress(Bitmap.CompressFormat.PNG, 100, output))
+            }
+            assertTrue("NoSummary PNG size exceeds bounds", evidence.isFile && evidence.length() in 1L..(4L * 1024 * 1024))
+            val options = BitmapFactory.Options().apply { inScaled = false }
+            val decoded = checkNotNull(BitmapFactory.decodeFile(evidence.absolutePath, options)) {
+                "NoSummary PNG could not be decoded"
+            }
+            try {
+                assertEquals("NoSummary artifact is not PNG", "image/png", options.outMimeType)
+                assertEquals("NoSummary PNG width changed", width, decoded.width)
+                assertEquals("NoSummary PNG height changed", height, decoded.height)
+            } finally {
+                decoded.recycle()
+            }
+            val after = checkNotNull(nativeSurface("empty-dashboard-list"))
+            val afterState = checkNotNull(after.summaryScrollState)
+            assertFalse("Capture must retain settled layout", after.pendingLayout)
+            assertFalse("Capture must retain completed scrolling", afterState.scrolling)
+            assertEquals("Capture must retain physical list placement", list.summaryScrollState?.items, afterState.items)
+            assertEquals("Capture must retain the list viewport", list.viewport, after.viewport)
+            assertEquals(
+                "Capture must retain the complete text",
+                list.textLayouts.map { it.bounds }, after.textLayouts.map { it.bounds },
+            )
+            assertEquals(
+                "Capture must retain native transformed line placement",
+                list.textLayouts.map { it.lineBounds }, after.textLayouts.map { it.lineBounds },
+            )
+            val report = buildString {
+                appendLine("case=genuine-NoSummary; phase=$phase; inherited OS font; private native evidence")
+                appendLine("captureElapsedRealtimeMs=$capturedAt, png=${width}x$height, pngBytes=${evidence.length()}")
+                appendLine(configuration)
+                appendLine("window=$window, clock=${clock.layoutBounds}, clockLine=$clockLine, clockPaintPixels=$clockPixels")
+                if (phase == "initial") appendLine("initialHeadingLinePaintPixels=$initialHeadingPaint")
+                appendLine("fullyVisiblePromptLinePaintPixels=$promptPaint")
+                appendLine(noSummaryObservation(list))
+                appendLine("physicalStart=${afterState.atBoundary(false)}, physicalEnd=${afterState.atBoundary(true)}")
+                appendLine(scrollTrace.filter { it.startsWith("NoSummary ") }.takeLast(24).joinToString("\n"))
+                for (text in list.textLayouts) {
+                    val layout = text.layout
+                    appendLine(
+                        "text=${layout.layoutInput.text.text}, bounds=${text.bounds}, size=${layout.size}, " +
+                            "lines=${layout.lineCount}, overflow=${layout.hasVisualOverflow}",
+                    )
+                    for (line in 0 until layout.lineCount) {
+                        appendLine(
+                            "line=$line, start=${layout.getLineStart(line)}, end=${layout.getLineEnd(line, visibleEnd = true)}, " +
+                                "left=${layout.getLineLeft(line)}, top=${layout.getLineTop(line)}, " +
+                                "right=${layout.getLineRight(line)}, bottom=${layout.getLineBottom(line)}, " +
+                                "ellipsized=${layout.isLineEllipsized(line)}, nativeBounds=${text.lineBounds[line]}, " +
+                                "fullyInViewport=${list.viewport.contains(text.lineBounds[line])}",
+                        )
+                    }
+                }
+            }
+            val bytes = report.toByteArray(Charsets.UTF_8)
+            assertTrue("NoSummary measurements exceed bounds", bytes.size in 1..16_384)
+            measurements.writeBytes(bytes)
+            assertEquals("NoSummary measurements changed on disk", report, measurements.readText(Charsets.UTF_8))
+            assertTrue("The settled $phase frame must actually paint the clock", clockPixels > 0)
+            // HOST reviews initial composited readability in the original frame.
+            // Prompt style-color counts contribute to whole-prompt coverage.
+            coveredPromptLines?.addAll(promptPaint.filterValues { it > 0 }.keys)
+        } finally {
+            screenshot.recycle()
+        }
+        return list
+    }
+
+    private fun assertFullNoSummaryAction(byLabel: Boolean = false): NativeSurface {
         reveal("Watch face", within = "empty-dashboard-list")
         scrollToEnd(within = "empty-dashboard-list")
         var action: NativeSurface? = null
         awaitAccessibility("Expected settled full no-summary action") { root ->
-            action = nativeSurface("empty-watch-face-action")
+            action = if (byLabel) {
+                nativeSurface("empty-dashboard-list", actionLabel = "Watch face")
+            } else {
+                nativeSurface("empty-watch-face-action")
+            }
             findButton(root, "Watch face")?.isEnabled == true && action?.pendingLayout == false &&
                 action?.textLayouts?.singleOrNull()?.layout?.layoutInput?.text?.text == "Watch face"
         }
@@ -427,6 +841,12 @@ class WardPulseNavigationStateTest {
         assertEquals("Only one navigation action belongs below the sync prompt", 1, surface.clickActions)
         val text = surface.textLayouts.single()
         val layout = text.layout
+        val list = checkNotNull(nativeSurface("empty-dashboard-list"))
+        assertFalse("Full reveal must complete scrolling", checkNotNull(list.summaryScrollState).scrolling)
+        assertTrue("Full reveal must reach the physical outer-list end", checkNotNull(list.summaryScrollState).atBoundary(forward = true))
+        assertNoSummaryClockClearance(list)
+        assertTrue("Full action must fit the native viewport", list.viewport.contains(surface.viewport))
+        assertTrue("Full label must fit the native viewport", list.viewport.contains(text.bounds))
         assertFalse("Full label must not overflow its native text box", layout.hasVisualOverflow)
         // Compare measured sizes; SurfaceTransformation can move/scale child paint.
         assertTrue(
@@ -436,6 +856,11 @@ class WardPulseNavigationStateTest {
         assertEquals("Watch face".length, layout.getLineEnd(layout.lineCount - 1, visibleEnd = true))
         for (line in 0 until layout.lineCount) {
             assertFalse("No label line may be ellipsized", layout.isLineEllipsized(line))
+            assertTrue(
+                "Every complete label line must fit its native text box",
+                layout.getLineTop(line) >= 0f && layout.getLineBottom(line) <= layout.size.height &&
+                    layout.getLineLeft(line) >= 0f && layout.getLineRight(line) <= layout.size.width,
+            )
         }
         return surface
     }
@@ -1186,10 +1611,15 @@ class WardPulseNavigationStateTest {
 
     private fun bounds(node: AccessibilityNodeInfo) = Rect().also { node.getBoundsInScreen(it) }
 
-    private data class NativeText(val bounds: RectF, val layout: TextLayoutResult)
+    private data class NativeText(
+        val bounds: RectF,
+        val layout: TextLayoutResult,
+        val lineBounds: List<RectF>,
+    )
 
     private data class NativeSurface(
         val viewport: RectF,
+        val layoutBounds: RectF,
         val scrollOffset: Float?,
         val maxScrollOffset: Float?,
         val rows: Int?,
@@ -1203,6 +1633,7 @@ class WardPulseNavigationStateTest {
         val homePagerState: HomePagerState?,
         val textLayouts: List<NativeText>,
         val clickActions: Int,
+        val summaryScrollState: SummaryScrollState?,
     ) {
         // Foundation's Pager semantic range is its absolute pixel scroll offset. For
         // these two fill-size pages, only the two endpoints represent page alignment.
@@ -1211,7 +1642,7 @@ class WardPulseNavigationStateTest {
             scrollOffset == (if (page == 0) 0f else maxScrollOffset)
     }
 
-    private fun nativeSurface(tag: String): NativeSurface? {
+    private fun nativeSurface(tag: String, actionLabel: String? = null): NativeSurface? {
         var result: NativeSurface? = null
         onActivity { activity ->
             fun find(node: SemanticsNode): SemanticsNode? {
@@ -1236,6 +1667,17 @@ class WardPulseNavigationStateTest {
                         NativeText(
                             RectF(origin.x, origin.y, origin.x + node.size.width, origin.y + node.size.height),
                             layout,
+                            (0 until layout.lineCount).map { line ->
+                                // Public coordinates include native parent surface transformations.
+                                val coordinates = node.layoutInfo.coordinates
+                                val topLeft = coordinates.localToScreen(
+                                    Offset(layout.getLineLeft(line), layout.getLineTop(line)),
+                                )
+                                val bottomRight = coordinates.localToScreen(
+                                    Offset(layout.getLineRight(line), layout.getLineBottom(line)),
+                                )
+                                RectF(topLeft.x, topLeft.y, bottomRight.x, bottomRight.y)
+                            },
                         ),
                     )
                 }
@@ -1245,6 +1687,13 @@ class WardPulseNavigationStateTest {
                 if (!node.layoutInfo.isAttached || !node.layoutInfo.isPlaced) return 0
                 return (if (node.config.contains(SemanticsActions.OnClick)) 1 else 0) +
                     node.children.sumOf { clickActions(it) }
+            }
+            fun findAction(node: SemanticsNode, label: String): SemanticsNode? {
+                if (!node.layoutInfo.isAttached || !node.layoutInfo.isPlaced) return null
+                if (node.config.contains(SemanticsActions.OnClick) &&
+                    textLayouts(node).any { it.layout.layoutInput.text.text == label }
+                ) return node
+                return node.children.firstNotNullOfOrNull { findAction(it, label) }
             }
             fun inputFocus(node: SemanticsNode): List<String> = buildList {
                 if (!node.layoutInfo.isAttached || !node.layoutInfo.isPlaced) return@buildList
@@ -1259,11 +1708,17 @@ class WardPulseNavigationStateTest {
             }
             fun visit(view: View) {
                 if (view is ViewRootForTest) {
-                    val node = find(view.semanticsOwner.unmergedRootSemanticsNode)
+                    val owner = find(view.semanticsOwner.unmergedRootSemanticsNode)
+                    val node = if (actionLabel == null) owner else owner?.let { findAction(it, actionLabel) }
                     if (node != null) {
                         // Read actual measured size and placement, before accessibility
                         // clipping. AppScaffold overlays the clock on the fill-size Pager.
                         val origin = node.positionOnScreen
+                        // LayoutInfo includes outer padding that can sit outside the
+                        // click semantics, notably CompactButton's allocated touch area.
+                        val coordinates = node.layoutInfo.getModifierInfo().firstOrNull()?.coordinates
+                            ?: node.layoutInfo.coordinates
+                        val layoutOrigin = coordinates.positionOnScreen()
                         val range = node.config.getOrNull(SemanticsProperties.VerticalScrollAxisRange)
                         val config = node.layoutInfo.viewConfiguration
                         // This callback can retain live coordinates after focus is lost.
@@ -1274,6 +1729,10 @@ class WardPulseNavigationStateTest {
                         }
                         result = NativeSurface(
                             RectF(origin.x, origin.y, origin.x + node.size.width, origin.y + node.size.height),
+                            RectF(
+                                layoutOrigin.x, layoutOrigin.y,
+                                layoutOrigin.x + coordinates.size.width, layoutOrigin.y + coordinates.size.height,
+                            ),
                             range?.value?.invoke(), range?.maxValue?.invoke(),
                             node.config.getOrNull(SemanticsProperties.CollectionInfo)?.rowCount,
                             view.hasPendingMeasureOrLayout, config.touchSlop, config.minimumFlingVelocity,
@@ -1284,6 +1743,7 @@ class WardPulseNavigationStateTest {
                             node.config.getOrNull(HomePagerStateKey),
                             textLayouts(node),
                             clickActions(node),
+                            node.config.getOrNull(SummaryScrollStateKey)?.invoke(),
                         )
                     }
                 }
@@ -1719,10 +2179,7 @@ class WardPulseNavigationStateTest {
             recomposer = Recomposer(context)
             recomposition = compositionScope.launch { recomposer.runRecomposeAndApplyChanges() }
             activity.setContent(parent = recomposer) {
-                val density = LocalDensity.current
-                CompositionLocalProvider(
-                    LocalDensity provides Density(density.density, fontScale ?: density.fontScale),
-                ) {
+                val appContent: @Composable () -> Unit = {
                     WardPulseTheme {
                         val modifier = if (contentWidth == null) Modifier.fillMaxSize() else {
                             Modifier.width(contentWidth).fillMaxHeight()
@@ -1742,6 +2199,14 @@ class WardPulseNavigationStateTest {
                                 )
                             }
                         }
+                    }
+                }
+                if (fontScale == null) {
+                    appContent()
+                } else {
+                    val density = LocalDensity.current
+                    CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
+                        appContent()
                     }
                 }
             }
@@ -1999,6 +2464,9 @@ class WardPulseNavigationStateTest {
         scrollTrace += "scrollToStart within=$within"
         repeat(8) {
             if (!scroll(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD, within)) return
+            if (within == "empty-dashboard-list" &&
+                nativeSurface(within)?.summaryScrollState?.atBoundary(forward = false) == true
+            ) return
         }
         error("Scrollable content did not reach the start\n${scrollTrace.joinToString("\n")}")
     }
@@ -2007,11 +2475,133 @@ class WardPulseNavigationStateTest {
         scrollTrace += "scrollToEnd within=$within"
         repeat(8) {
             if (!scroll(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, within)) return
+            if (within == "empty-dashboard-list" &&
+                nativeSurface(within)?.summaryScrollState?.atBoundary(forward = true) == true
+            ) return
         }
         error("Scrollable content did not reach the end\n${scrollTrace.joinToString("\n")}")
     }
 
+    // TLC's range is estimated from visible average heights. Its native pinning
+    // algorithm stops within one physical pixel (gradientDescent's abs(delta) > 1).
+    private fun SummaryScrollState.atBoundary(forward: Boolean): Boolean {
+        if (totalItems <= 0 || viewportHeight <= 0 || items.isEmpty()) return false
+        return if (forward) {
+            val last = items.last()
+            last.index == totalItems - 1 &&
+                last.offset + last.transformedHeight + afterPadding <= viewportHeight + 1
+        } else {
+            val first = items.first()
+            first.index == 0 && first.offset >= beforePadding - 1
+        }
+    }
+
+    private fun noSummaryObservation(surface: NativeSurface?): String {
+        if (surface == null) return "absent"
+        val state = surface.summaryScrollState
+        val request = state?.request
+        return "viewport=${surface.viewport}, pendingLayout=${surface.pendingLayout}, " +
+            "estimatedOffset=${surface.scrollOffset}/${surface.maxScrollOffset}, " +
+            "scrolling=${state?.scrolling}, directions=${state?.canScrollBackward}/${state?.canScrollForward}, " +
+            "items=${state?.items}, count=${state?.totalItems}, height=${state?.viewportHeight}, " +
+            "padding=${state?.beforePadding}/${state?.afterPadding}, " +
+            "requestAmount=${request?.amount}, consumed=${request?.consumed}, " +
+            "completed=${request?.completed}, cancelled=${request?.cancelled}"
+    }
+
+    private fun assertNoSummaryClockClearance(list: NativeSurface) {
+        val clock = checkNotNull(nativeSurface("app-clock"))
+        // The outer list clip contains all transformed/overhanging item paint.
+        // Original PNGs below retain the actual paint for HOST whole-frame review.
+        assertTrue(
+            "The scrolling paint viewport must start below the complete clock",
+            list.viewport.top >= clock.layoutBounds.bottom,
+        )
+        assertFalse("Clock clearance must be measured at settled layout", list.pendingLayout || clock.pendingLayout)
+        assertEquals(list.viewport.height().toInt(), checkNotNull(list.summaryScrollState).viewportHeight)
+    }
+
+    private fun scrollNoSummary(action: Int): Boolean {
+        val forward = when (action) {
+            AccessibilityNodeInfo.ACTION_SCROLL_FORWARD -> true
+            AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD -> false
+            else -> error("Unexpected NoSummary scroll action: $action")
+        }
+        var before: NativeSurface? = null
+        var target: AccessibilityNodeInfo? = null
+        awaitAccessibility(
+            "Expected settled NoSummary outer list before scrolling",
+            diagnostics = { "\nNoSummary before=${noSummaryObservation(before)}" },
+        ) { root ->
+            before = nativeSurface("empty-dashboard-list")
+            val owner = findNode(root) { it.isVisibleToUser && it.viewIdResourceName == "empty-dashboard-list" }
+            target = owner?.let {
+                findNode(it) { node -> node.isVisibleToUser && node.actionList.any { it.id == action } }
+            }
+            owner != null && before?.let { surface ->
+                surface.summaryScrollState?.let { state ->
+                    !surface.pendingLayout && !state.scrolling && state.items.isNotEmpty() &&
+                        state.request?.completed != false
+                }
+            } == true
+        }
+        val start = checkNotNull(before)
+        val state = checkNotNull(start.summaryScrollState)
+        assertNoSummaryClockClearance(start)
+        scrollTrace += "NoSummary action=$action, before=${noSummaryObservation(start)}"
+        // Use the same last/first item, transformed height and padding join as
+        // native measurement, not the estimated range or a direction flag alone.
+        if (state.atBoundary(forward)) {
+            scrollTrace += "NoSummary physical boundary action=$action"
+            return false
+        }
+        assertTrue(
+            "A list away from its physical boundary must allow scrolling: ${noSummaryObservation(start)}",
+            if (forward) state.canScrollForward else state.canScrollBackward,
+        )
+        val node = checkNotNull(target) { "The moving NoSummary list must expose accessibility action $action" }
+        assertTrue("NoSummary platform scroll failed: $action", node.performAction(action))
+        scrollTrace += "NoSummary accepted platform action=$action, target=${node.viewIdResourceName}"
+        var after: NativeSurface? = null
+        awaitAccessibility(
+            "Expected genuine NoSummary platform handler completion for action $action",
+            diagnostics = { "\nNoSummary after=${noSummaryObservation(after)}" },
+        ) {
+            after = nativeSurface("empty-dashboard-list")
+            after?.let { surface ->
+                surface.summaryScrollState?.let { end ->
+                    val request = end.request
+                    !surface.pendingLayout && !end.scrolling && request != null &&
+                        request.invocation !== state.request?.invocation && request.completed
+                }
+            } == true
+        }
+        val endSurface = checkNotNull(after)
+        val end = checkNotNull(endSurface.summaryScrollState)
+        val request = checkNotNull(end.request)
+        val facts = noSummaryObservation(endSurface)
+        assertFalse("Platform animation must complete without cancellation: $facts", request.cancelled)
+        assertTrue(
+            "Platform handler must receive the requested direction: $facts",
+            request.amount.isFinite() && (if (forward) request.amount > 0f else request.amount < 0f),
+        )
+        val consumed = checkNotNull(request.consumed) { "Completed platform handler has no consumption: $facts" }
+        assertTrue(
+            "Platform consumption must be finite and in the requested direction: $facts",
+            consumed.isFinite() && (if (forward) consumed >= 0f else consumed <= 0f),
+        )
+        val moved = consumed != 0f && end.items != state.items
+        assertTrue(
+            "Completed platform scroll must make native progress or prove its physical boundary: $facts",
+            moved || end.atBoundary(forward),
+        )
+        assertNoSummaryClockClearance(endSurface)
+        scrollTrace += "NoSummary completed action=$action, moved=$moved, after=$facts"
+        return moved
+    }
+
     private fun scroll(action: Int, within: String? = null, focusedGlanceControl: String? = null): Boolean {
+        if (within == "empty-dashboard-list") return scrollNoSummary(action)
         val verifyPlanWindows = within == "plan-windows-list"
         var content = emptyList<Pair<String, Rect>>()
         var nativeContent = emptyList<Pair<String, Offset>>()

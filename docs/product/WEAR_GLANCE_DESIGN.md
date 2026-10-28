@@ -213,6 +213,9 @@ follows the complete Plan windows list, after its last row, and opens a swipe-ba
 route. Before the first phone summary, the same entry appears below the sync prompt. The
 utility is not a third home page and adds no controls to Glance or Alerts.
 
+The pre-summary action's later presentation and clock clearance are specified in
+[Revision 2026-10-28 — compact no-summary Watch face action](#revision-2026-10-28--compact-no-summary-watch-face-action).
+
 Preserve Glance typography, refresh behavior, row and paired-pool ordering, the 54-unit row
 pitch and 12-unit Alerts clearance. Keep every existing Plan windows row and its ordering.
 This revision changes no face geometry, ring selection, data contract or provider behavior.
@@ -529,6 +532,79 @@ retention and final saved-summary preservation. This is acceptance of that canon
 The earlier post-update WorkManager service start was observed, but which job or worker
 triggered it, including attribution to job1969, remains unproved.
 These receipts do not certify the remaining historical interaction/variant matrix below.
+
+## Revision 2026-10-28 — compact no-summary Watch face action
+
+The pre-summary Empty Dashboard keeps its WardPulse heading, Sync from phone /
+No dashboard data yet prompt and straight clock. Below the sync card, show one full-width,
+label-only native tonal CompactButton named Watch face. Its component default has a
+32dp visible surface and 48dp allocated tap area, including surrounding tap padding;
+these are component contracts, not application measurements or a reduction percentage.
+
+Use the ordinary native tonal Button for the same action when measured full label width
+or full line height cannot fit the compact content box. Preserve the complete wrapping
+label, system font scaling, native minimum touch sizing and content-sized height. Do not
+shrink text, ellipsize it, choose an arbitrary font-scale cutoff or add an inner scroll area.
+
+Give the retained clock and scrolling content distinct visual space. At every reachable
+settled position, including both scroll limits, no heading, prompt, action label or surface
+may paint over the clock. A heading may leave the visible list naturally during scrolling;
+its departing paint must clear the clock rather than remain visible behind or across it.
+Keep the heading and the start of the sync prompt readable initially. All prompt text must
+remain readable through ordinary scrolling, across multiple settled positions when enlarged
+text requires it. Keep the separation compact and native, without an arbitrary empty band.
+The historical utility-end overlap from October 16 does not establish acceptance of this
+pre-summary screen.
+
+Preserve existing typography and system scaling. Normal list, rotary and accessibility
+scrolling must make every part of the prompt readable, across multiple positions if needed.
+The complete Watch face action and label must be revealed together at a settled usable
+position within the actual viewport, retaining its padded touch area. The Plan windows
+action retains its Card; Plan windows, Alerts, the Watch face utility and summary-backed
+Glance keep their existing presentation and behavior. The destination clock matrix remains
+unchanged: the pre-summary clock is visible, and removing it or globally hiding the heading
+is not a solution to overlap.
+
+This remains one enabled navigation action to the existing Watch face utility, available
+before first sync regardless of installed, active, missing or unknown face status. It does
+not itself install, update, activate or request permission. Back, summary transitions and
+the utility's retained route, consent and status behavior keep their existing contracts.
+
+**Emulator HOST acceptance, 2026-10-28.** The reviewed working-tree candidate based on HEAD
+`eb0a371` used `WardPulseApp.kt` SHA-256
+`e83faed21ab04553d3e3e7c87dc2be5d01c39d6b9ef337671a6900deffedc038` and
+`WardPulseNavigationStateTest.kt` SHA-256
+`953aa9f4d7dac3221d70652f9bca74eae94fd4d65f71d42de7c4909a9def83bb`.
+`just check-wear` passed in 27 seconds. The full round suite passed
+**39 tests, 0 failures/errors/skips**, taking
+75.025 seconds on HOST and 61.856 seconds in JUnit. Four focused square cases passed in
+9.8265 seconds. The actual OS-font-2.0 inherited-font case passed separately on Round in
+6.8994 seconds and Square in 9.2677 seconds. Installed APK SHA-256 values were app
+`5592dd766852d0f62e5a1035219dcbc1d6a67e33b228095c4166710abab5e77c` and instrumentation
+`b6ad8829a17483e8cceac783ea24daa4b37faa0ba51934a167d5a34d0a3ccd2f`.
+
+SDK 36 round **384×384 px / 192dp** and square **360×360 px / 180dp** targets at 320 dpi
+were checked at actual system font scales **1.0 and 2.0**. Root reviewed all **22** full,
+unedited native originals: the initial heading, prompt start and painted clock were
+readable and clear; a genuine settled interior, both actual physical limits and the
+after-Back start were observed separately. Every prompt line was readable through ordinary
+scrolling, and the complete action/label was usable together at a settled position; an
+oversized prompt was not required to fit one viewport. Initial readability was not equated
+to the exact physical-start boundary. The 48dp finger case and padded touch, 80dp-wide
+full-text fallback, injected 2.5 font-scale case, platform scrolling, button activation, navigation,
+Back and summary transitions passed their required checks. The injected 2.5 case is separate
+from the actual OS-font observations; the 32dp/48dp component defaults remain distinct from
+case geometry.
+
+Both targets returned to system font scale 1.0 with prior settings, UID/first-install
+identity and saved summaries preserved; normal app presentation was restored. This is
+emulator-native acceptance. Physical OnePlus verification remains deferred by the owner.
+The full citation/documentation build and Watch-guide browser review passed before this
+factual status update. Root reviewed four full browser originals in actual light/dark
+themes at **1365×1000** desktop and **390×844** mobile sizes: the task paragraph and anchor
+were readable without horizontal overflow, and the existing utility image matched.
+Root's final whole integration review and documentation recheck follow this status update.
+No new public no-summary image or screenshot freshness is claimed.
 
 ## Goal
 

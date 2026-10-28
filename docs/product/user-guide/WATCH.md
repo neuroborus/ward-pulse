@@ -133,8 +133,8 @@ The technical `wardpulse-push-…apk` is bundled with the watch app, not another
 installer to choose.
 
 Open WardPulse on the watch. From **Glance**, swipe up to **Plan windows**, scroll past the
-windows and tap **Watch face**. Before the first phone summary, the same entry is below
-**Sync from phone**. Swipe back to return to the previous screen.
+windows and tap **Watch face**. Before the first phone summary, tap the **Watch face** button
+below **Sync from phone**. Swipe back to return to the previous screen.
 
 On supported Wear OS 6+ devices, the face can be installed with the Wear app. If it is
 missing, tap **Install watch face**. Installation does not activate it. If another face

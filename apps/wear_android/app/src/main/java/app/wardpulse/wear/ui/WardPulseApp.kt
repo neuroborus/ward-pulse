@@ -4,6 +4,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -13,12 +16,18 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
@@ -31,12 +40,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
 import androidx.wear.compose.foundation.BasicSwipeToDismissBox
+import androidx.wear.compose.foundation.ScrollInfoProvider
 import androidx.wear.compose.foundation.hierarchicalFocusGroup
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
@@ -49,6 +60,7 @@ import androidx.wear.compose.material3.CompactButtonDefaults
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
+import androidx.wear.compose.material3.ScrollIndicator
 import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.TimeTextDefaults
@@ -67,6 +79,7 @@ import app.wardpulse.wear.watchface.WatchFaceScreen
 import app.wardpulse.wear.watchface.WatchFaceState
 import java.time.Instant
 import kotlin.math.ceil
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 private const val HOME_ROUTE = "home"
@@ -89,6 +102,37 @@ internal data class HomePagerState(
     val offsetFraction: Float,
     val scrolling: Boolean,
 )
+
+// NoSummary observers read native layout and the existing asynchronous request;
+// observation never initiates or cancels scrolling.
+internal val SummaryScrollStateKey = SemanticsPropertyKey<() -> SummaryScrollState>("SummaryScrollState")
+
+internal data class SummaryScrollState(
+    val scrolling: Boolean,
+    val canScrollForward: Boolean,
+    val canScrollBackward: Boolean,
+    val items: List<SummaryScrollItem>,
+    val totalItems: Int,
+    val viewportHeight: Int,
+    val beforePadding: Int,
+    val afterPadding: Int,
+    val request: SummaryScrollRequest?,
+)
+
+internal data class SummaryScrollItem(val index: Int, val offset: Int, val transformedHeight: Int)
+
+internal data class SummaryScrollRequest(
+    val invocation: Any,
+    val amount: Float,
+    val consumed: Float?,
+    val completed: Boolean,
+    val cancelled: Boolean,
+)
+
+private class SummaryScrollRequestState(val amount: Float) {
+    var job: Job? = null
+    var consumed: Float? = null
+}
 
 internal data class SummaryRow(
     val title: String,
@@ -134,12 +178,15 @@ fun WardPulseApp(
     ) {
         composable(HOME_ROUTE) {
             val latestSummary = currentSummary
+            var clockHeight by remember { mutableIntStateOf(0) }
             val showClock = latestSummary == null ||
                 (!pagerState.isScrollInProgress && pagerState.settledPage == HomePage.PlanWindows.ordinal)
             HomeDismissal(pagerState, onDismissHome) {
-                AppScaffold(timeText = { if (showClock) StraightAppTimeText() }) {
+                AppScaffold(timeText = {
+                    if (showClock) StraightAppTimeText(Modifier.onSizeChanged { clockHeight = it.height })
+                }) {
                     if (latestSummary == null) {
-                        EmptyDashboardScreen(onOpenWatchFace = { navController.navigate(WATCH_FACE_ROUTE) })
+                        EmptyDashboardScreen(clockHeight, onOpenWatchFace = { navController.navigate(WATCH_FACE_ROUTE) })
                     } else {
                         HomeScreen(
                             summary = latestSummary,
@@ -153,9 +200,10 @@ fun WardPulseApp(
         }
         composable(ALERTS_ROUTE) {
             val latestSummary = currentSummary
-            AppScaffold(timeText = { StraightAppTimeText() }) {
+            var clockHeight by remember { mutableIntStateOf(0) }
+            AppScaffold(timeText = { StraightAppTimeText(Modifier.onSizeChanged { clockHeight = it.height }) }) {
                 if (latestSummary == null) {
-                    EmptyDashboardScreen(onOpenWatchFace = { navController.navigate(WATCH_FACE_ROUTE) })
+                    EmptyDashboardScreen(clockHeight, onOpenWatchFace = { navController.navigate(WATCH_FACE_ROUTE) })
                 } else {
                     SummaryScreen(title = "Alerts", rows = latestSummary.alertRows())
                 }
@@ -192,7 +240,7 @@ private fun HomeDismissal(pagerState: PagerState, onDismiss: () -> Unit, content
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun EmptyDashboardScreen(onOpenWatchFace: () -> Unit) {
+private fun EmptyDashboardScreen(clockHeight: Int, onOpenWatchFace: () -> Unit) {
     SummaryScreen(
         title = "WardPulse",
         rows = listOf(SummaryRow("Sync from phone", "No dashboard data yet")),
@@ -201,6 +249,7 @@ private fun EmptyDashboardScreen(onOpenWatchFace: () -> Unit) {
             .testTag("empty-dashboard-list"),
         onOpenWatchFace = onOpenWatchFace,
         compactWatchFaceAction = true,
+        clockInset = with(LocalDensity.current) { clockHeight.toDp() } + 4.dp,
     )
 }
 
@@ -271,11 +320,11 @@ private fun HomeScreen(
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun StraightAppTimeText() {
+private fun StraightAppTimeText(modifier: Modifier = Modifier) {
     val timeSource = TimeTextDefaults.rememberTimeSource(TimeTextDefaults.timeFormat())
     Text(
         text = timeSource.currentTime(),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .semantics { testTagsAsResourceId = true }
             .testTag("app-clock")
@@ -299,24 +348,82 @@ private fun SummaryScreen(
     modifier: Modifier = Modifier,
     onOpenWatchFace: (() -> Unit)? = null,
     compactWatchFaceAction: Boolean = false,
+    clockInset: Dp = 0.dp,
 ) {
     val state = rememberTransformingLazyColumnState()
     val scope = rememberCoroutineScope()
     val transformationSpec = rememberTransformationSpec()
+    var lastRequest by remember { mutableStateOf<SummaryScrollRequestState?>(null) }
+    val scrollInfo = remember(state, compactWatchFaceAction) {
+        val native = ScrollInfoProvider(state)
+        if (compactWatchFaceAction) {
+            // NoSummary reserves separate clock space. Keep native indicator/stage
+            // information, but never scroll that persistent clock away.
+            object : ScrollInfoProvider by native {
+                override val isScrollAwayValid = false
+            }
+        } else {
+            native
+        }
+    }
 
-    ScreenScaffold(scrollState = state) { contentPadding ->
+    ScreenScaffold(
+        scrollInfoProvider = scrollInfo,
+        scrollIndicator = { ScrollIndicator(state) },
+    ) { contentPadding ->
+        // Reserve only the measured clock and the list's ordinary 4dp spacing.
+        // Clip outside all item transformations, including departing text/surface paint.
+        val listModifier = if (compactWatchFaceAction) {
+            Modifier.padding(top = clockInset).clipToBounds().then(modifier)
+        } else {
+            modifier
+        }
+        val listPadding = if (compactWatchFaceAction) {
+            val direction = LocalLayoutDirection.current
+            PaddingValues(
+                start = contentPadding.calculateStartPadding(direction),
+                top = (contentPadding.calculateTopPadding() - clockInset).coerceAtLeast(0.dp),
+                end = contentPadding.calculateEndPadding(direction),
+                bottom = contentPadding.calculateBottomPadding(),
+            )
+        } else {
+            contentPadding
+        }
         TransformingLazyColumn(
-            modifier = modifier.semantics {
+            modifier = listModifier.semantics {
+                if (compactWatchFaceAction) {
+                    this[SummaryScrollStateKey] = {
+                        val layout = state.layoutInfo
+                        SummaryScrollState(
+                            state.isScrollInProgress, state.canScrollForward, state.canScrollBackward,
+                            layout.visibleItems.map { SummaryScrollItem(it.index, it.offset, it.transformedHeight) },
+                            layout.totalItemsCount, layout.viewportSize.height,
+                            layout.beforeContentPadding, layout.afterContentPadding,
+                            lastRequest?.let {
+                                SummaryScrollRequest(
+                                    it, it.amount, it.consumed,
+                                    it.job?.isCompleted == true, it.job?.isCancelled == true,
+                                )
+                            },
+                        )
+                    }
+                }
                 // Accessibility scrolls belong to this list, including their unconsumed
                 // distance at a boundary. Touch and rotary keep the normal scrollable path.
                 scrollBy { _, y ->
-                    scope.launch { state.animateScrollBy(y) }
+                    if (compactWatchFaceAction) {
+                        val request = SummaryScrollRequestState(y)
+                        lastRequest = request
+                        request.job = scope.launch { request.consumed = state.animateScrollBy(y) }
+                    } else {
+                        scope.launch { state.animateScrollBy(y) }
+                    }
                     true
                 }
                 scrollByOffset { Offset(0f, state.animateScrollBy(it.y)) }
             },
             state = state,
-            contentPadding = contentPadding,
+            contentPadding = listPadding,
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             item {
