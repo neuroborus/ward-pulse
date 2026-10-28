@@ -334,9 +334,25 @@ class WardPulseNavigationStateTest {
         val y = action.viewport.top + with(density) { 4.dp.toPx() }
         val downTime = SystemClock.uptimeMillis()
         fun pointer(eventAction: Int) {
-            val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), eventAction, x, y, 0)
+            val event = MotionEvent.obtain(
+                downTime, SystemClock.uptimeMillis(), eventAction, 1,
+                arrayOf(MotionEvent.PointerProperties().apply {
+                    id = 0
+                    toolType = MotionEvent.TOOL_TYPE_FINGER
+                }),
+                arrayOf(MotionEvent.PointerCoords().also {
+                    it.x = x
+                    it.y = y
+                    it.pressure = 1f
+                    it.size = 1f
+                }),
+                0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0,
+            )
             try {
-                event.source = InputDevice.SOURCE_TOUCHSCREEN
+                assertEquals("Padded touch must have one pointer", 1, event.pointerCount)
+                assertEquals("Padded touch must keep its pointer identity", 0, event.getPointerId(0))
+                assertEquals("Padded touch must use a finger", MotionEvent.TOOL_TYPE_FINGER, event.getToolType(0))
+                assertEquals("Padded touch must use the touchscreen", InputDevice.SOURCE_TOUCHSCREEN, event.source)
                 assertTrue("Watch face touch failed", automation.injectInputEvent(event, true))
             } finally {
                 event.recycle()
