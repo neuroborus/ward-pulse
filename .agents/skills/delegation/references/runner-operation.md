@@ -73,6 +73,16 @@ Keep mandatory HOST acceptance after whole DONE, run-owned process retirement an
 quiescent ownership; if the route used a foreground owning CLI, also require its actual exit.
 HOST is not a Native check or Native-commit prerequisite. Preserve every scope-appropriate gate.
 
+Bind managed controllers by `/proc` executable identity, the pinned Runner entry and exact
+project/run arguments appropriate to their supported route; Node can expose `comm=MainThread`.
+Revalidate PID + startTicks before comparisons; name/CWD alone or an empty `node`/`nodejs`
+comm-filter result proves neither ownership nor retirement. Keep the census scoped,
+including separately tracked owned descendants. An unreadable known or evidenced in-scope
+identity leaves retirement unresolved; unrelated unreadable processes do not create a global
+blocker. Public DONE or CPU/I/O activity alone proves neither owned-process exit nor semantic
+progress/command success. Record match results/hashes instead of raw argv, environment,
+prompts or authentication.
+
 ## Observed environment limits
 
 - **`spawnSync python3` is denied (`EPERM`)**, so `just render-designs` can never finish inside
