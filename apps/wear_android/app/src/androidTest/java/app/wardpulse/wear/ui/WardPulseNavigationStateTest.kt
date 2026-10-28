@@ -22,7 +22,9 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.BackEventCompat
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.onFocusedBoundsChanged
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -41,10 +43,14 @@ import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewRootForTest
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ActivityScenario
@@ -305,6 +311,117 @@ class WardPulseNavigationStateTest {
             scenario.onActivity { assertEquals(3, dismissals) }
         }
         assertClock(visible = false, anchor = "Codex Alpha")
+    }
+
+    @Test
+    fun noSummaryActionIsCompactAndItsPaddedTouchTargetAndAccessibilityClickNavigateBack() {
+        // Scale only this composition; runtime OS font-scale acceptance is separate.
+        launchApp(fontScale = 1f)
+        assertVisible("Sync from phone")
+        assertClock(visible = true, anchor = "Sync from phone")
+        val action = assertFullNoSummaryAction()
+        val density = action.textLayouts.single().layout.layoutInput.density
+        val allocatedHeight = with(density) { 48.dp.toPx() }
+        assertEquals(
+            "Compact action must retain its native 48dp allocation",
+            allocatedHeight, action.viewport.height(), 1f,
+        )
+        assertEquals(1, action.textLayouts.single().layout.lineCount)
+        assertCalls()
+
+        // Tap inside the allocated top padding, above the 32dp visible surface.
+        val x = action.viewport.centerX()
+        val y = action.viewport.top + with(density) { 4.dp.toPx() }
+        val downTime = SystemClock.uptimeMillis()
+        fun pointer(eventAction: Int) {
+            val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), eventAction, x, y, 0)
+            try {
+                event.source = InputDevice.SOURCE_TOUCHSCREEN
+                assertTrue("Watch face touch failed", automation.injectInputEvent(event, true))
+            } finally {
+                event.recycle()
+            }
+        }
+        try {
+            pointer(MotionEvent.ACTION_DOWN)
+            awaitFrame()
+        } finally {
+            pointer(MotionEvent.ACTION_UP)
+        }
+        assertVisible("Checking watch face…")
+        assertCalls("initial.check")
+        back()
+        assertFullNoSummaryAction()
+        click("Watch face", within = "empty-dashboard-list")
+        assertVisible("Checking watch face…")
+        assertCalls("initial.check", "initial.check")
+        back()
+        scrollToStart(within = "empty-dashboard-list")
+        assertVisible("Sync from phone")
+        assertClock(visible = true, anchor = "Sync from phone")
+    }
+
+    @Test
+    fun noSummaryActionWrapsItsFullLabelWhenTheCompactWidthDoesNotFit() {
+        // Constrain this real app composition, without changing a device or its data.
+        launchApp(fontScale = 1f, contentWidth = 80.dp)
+        val action = assertFullNoSummaryAction()
+        val label = action.textLayouts.single().layout
+        assertTrue("Narrow action must wrap the complete label", label.lineCount > 1)
+        assertTrue(
+            "Width overflow must select a content-sized action",
+            action.viewport.height() > with(label.layoutInput.density) { 48.dp.toPx() },
+        )
+        click("Watch face", within = "empty-dashboard-list")
+        assertVisible("Checking watch face…")
+        assertCalls("initial.check")
+        back()
+        assertFullNoSummaryAction()
+    }
+
+    @Test
+    fun noSummaryActionKeepsFullScaledLinesInTheContentSizedFallback() {
+        // This injected scale exercises layout, not actual OS large-font acceptance.
+        launchApp(fontScale = 2.5f)
+        val action = assertFullNoSummaryAction()
+        val label = action.textLayouts.single().layout
+        assertEquals(2.5f, label.layoutInput.density.fontScale, 0f)
+        assertTrue(
+            "Large text must grow beyond the compact allocation",
+            action.viewport.height() > with(label.layoutInput.density) { 48.dp.toPx() },
+        )
+        assertTrue("Large text must wrap without losing its final line", label.lineCount > 1)
+        click("Watch face", within = "empty-dashboard-list")
+        assertVisible("Checking watch face…")
+        assertCalls("initial.check")
+        back()
+        assertFullNoSummaryAction()
+    }
+
+    private fun assertFullNoSummaryAction(): NativeSurface {
+        reveal("Watch face", within = "empty-dashboard-list")
+        scrollToEnd(within = "empty-dashboard-list")
+        var action: NativeSurface? = null
+        awaitAccessibility("Expected settled full no-summary action") { root ->
+            action = nativeSurface("empty-watch-face-action")
+            findButton(root, "Watch face")?.isEnabled == true && action?.pendingLayout == false &&
+                action?.textLayouts?.singleOrNull()?.layout?.layoutInput?.text?.text == "Watch face"
+        }
+        val surface = checkNotNull(action)
+        assertEquals("Only one navigation action belongs below the sync prompt", 1, surface.clickActions)
+        val text = surface.textLayouts.single()
+        val layout = text.layout
+        assertFalse("Full label must not overflow its native text box", layout.hasVisualOverflow)
+        // Compare measured sizes; SurfaceTransformation can move/scale child paint.
+        assertTrue(
+            "Full native text box must fit the action allocation",
+            text.bounds.width() <= surface.viewport.width() && text.bounds.height() <= surface.viewport.height(),
+        )
+        assertEquals("Watch face".length, layout.getLineEnd(layout.lineCount - 1, visibleEnd = true))
+        for (line in 0 until layout.lineCount) {
+            assertFalse("No label line may be ellipsized", layout.isLineEllipsized(line))
+        }
+        return surface
     }
 
     @Test
@@ -1053,6 +1170,8 @@ class WardPulseNavigationStateTest {
 
     private fun bounds(node: AccessibilityNodeInfo) = Rect().also { node.getBoundsInScreen(it) }
 
+    private data class NativeText(val bounds: RectF, val layout: TextLayoutResult)
+
     private data class NativeSurface(
         val viewport: RectF,
         val scrollOffset: Float?,
@@ -1066,6 +1185,8 @@ class WardPulseNavigationStateTest {
         val retainedFocusedBounds: RectF?,
         val inputFocus: List<String>,
         val homePagerState: HomePagerState?,
+        val textLayouts: List<NativeText>,
+        val clickActions: Int,
     ) {
         // Foundation's Pager semantic range is its absolute pixel scroll offset. For
         // these two fill-size pages, only the two endpoints represent page alignment.
@@ -1088,6 +1209,26 @@ class WardPulseNavigationStateTest {
                     add(it.text to node.positionOnScreen)
                 }
                 node.children.forEach { addAll(content(it)) }
+            }
+            fun textLayouts(node: SemanticsNode): List<NativeText> = buildList {
+                if (!node.layoutInfo.isAttached || !node.layoutInfo.isPlaced) return@buildList
+                val layouts = mutableListOf<TextLayoutResult>()
+                node.config.getOrNull(SemanticsActions.GetTextLayoutResult)?.action?.invoke(layouts)
+                val origin = node.positionOnScreen
+                layouts.forEach { layout ->
+                    add(
+                        NativeText(
+                            RectF(origin.x, origin.y, origin.x + node.size.width, origin.y + node.size.height),
+                            layout,
+                        ),
+                    )
+                }
+                node.children.forEach { addAll(textLayouts(it)) }
+            }
+            fun clickActions(node: SemanticsNode): Int {
+                if (!node.layoutInfo.isAttached || !node.layoutInfo.isPlaced) return 0
+                return (if (node.config.contains(SemanticsActions.OnClick)) 1 else 0) +
+                    node.children.sumOf { clickActions(it) }
             }
             fun inputFocus(node: SemanticsNode): List<String> = buildList {
                 if (!node.layoutInfo.isAttached || !node.layoutInfo.isPlaced) return@buildList
@@ -1125,6 +1266,8 @@ class WardPulseNavigationStateTest {
                             retainedFocusedBounds,
                             inputFocus(view.semanticsOwner.unmergedRootSemanticsNode),
                             node.config.getOrNull(HomePagerStateKey),
+                            textLayouts(node),
+                            clickActions(node),
                         )
                     }
                 }
@@ -1546,6 +1689,7 @@ class WardPulseNavigationStateTest {
         fontScale: Float? = null,
         content: (@Composable () -> Unit)? = null,
         onDismissHome: () -> Unit = {},
+        contentWidth: Dp? = null,
     ) {
         instrumentation.runOnMainSync { summary = initialSummary }
         scenario = ActivityScenario.launch(MainActivity::class.java)
@@ -1564,7 +1708,10 @@ class WardPulseNavigationStateTest {
                     LocalDensity provides Density(density.density, fontScale ?: density.fontScale),
                 ) {
                     WardPulseTheme {
-                        Box(Modifier.fillMaxSize().onFocusedBoundsChanged { focusedCoordinates = it }) {
+                        val modifier = if (contentWidth == null) Modifier.fillMaxSize() else {
+                            Modifier.width(contentWidth).fillMaxHeight()
+                        }
+                        Box(modifier.onFocusedBoundsChanged { focusedCoordinates = it }) {
                             if (content != null) {
                                 content()
                             } else {

@@ -3,6 +3,7 @@ package app.wardpulse.wear.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -18,6 +19,8 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.scrollBy
@@ -25,7 +28,9 @@ import androidx.compose.ui.semantics.scrollByOffset
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -36,7 +41,11 @@ import androidx.wear.compose.foundation.hierarchicalFocusGroup
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.AppScaffold
+import androidx.wear.compose.material3.Button
+import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.Card
+import androidx.wear.compose.material3.CompactButton
+import androidx.wear.compose.material3.CompactButtonDefaults
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
@@ -57,6 +66,7 @@ import app.wardpulse.wear.ui.theme.WardPulseTheme
 import app.wardpulse.wear.watchface.WatchFaceScreen
 import app.wardpulse.wear.watchface.WatchFaceState
 import java.time.Instant
+import kotlin.math.ceil
 import kotlinx.coroutines.launch
 
 private const val HOME_ROUTE = "home"
@@ -180,12 +190,17 @@ private fun HomeDismissal(pagerState: PagerState, onDismiss: () -> Unit, content
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun EmptyDashboardScreen(onOpenWatchFace: () -> Unit) {
     SummaryScreen(
         title = "WardPulse",
         rows = listOf(SummaryRow("Sync from phone", "No dashboard data yet")),
+        modifier = Modifier
+            .semantics { testTagsAsResourceId = true }
+            .testTag("empty-dashboard-list"),
         onOpenWatchFace = onOpenWatchFace,
+        compactWatchFaceAction = true,
     )
 }
 
@@ -283,6 +298,7 @@ private fun SummaryScreen(
     rows: List<SummaryRow>,
     modifier: Modifier = Modifier,
     onOpenWatchFace: (() -> Unit)? = null,
+    compactWatchFaceAction: Boolean = false,
 ) {
     val state = rememberTransformingLazyColumnState()
     val scope = rememberCoroutineScope()
@@ -326,16 +342,77 @@ private fun SummaryScreen(
             }
             if (onOpenWatchFace != null) {
                 item {
-                    Card(
-                        onClick = onOpenWatchFace,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .transformedHeight(this, transformationSpec),
-                        transformation = SurfaceTransformation(transformationSpec),
-                    ) {
-                        Text("Watch face")
+                    val actionModifier = Modifier
+                        .fillMaxWidth()
+                        .transformedHeight(this, transformationSpec)
+                    val transformation = SurfaceTransformation(transformationSpec)
+                    if (compactWatchFaceAction) {
+                        CompactWatchFaceAction(
+                            onClick = onOpenWatchFace,
+                            modifier = actionModifier.testTag("empty-watch-face-action"),
+                            transformation = transformation,
+                        )
+                    } else {
+                        Card(
+                            onClick = onOpenWatchFace,
+                            modifier = actionModifier,
+                            transformation = transformation,
+                        ) {
+                            Text("Watch face")
+                        }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompactWatchFaceAction(
+    onClick: () -> Unit,
+    modifier: Modifier,
+    transformation: SurfaceTransformation,
+) {
+    val label = "Watch face"
+    val density = LocalDensity.current
+    val direction = LocalLayoutDirection.current
+    val style = MaterialTheme.typography.labelSmall
+    val labelLayout = rememberTextMeasurer().measure(label, style = style, softWrap = false)
+    BoxWithConstraints(modifier) {
+        val padding = CompactButtonDefaults.ContentPadding
+        val tapPadding = CompactButtonDefaults.TapTargetPadding
+        val contentWidth = with(density) {
+            constraints.maxWidth - padding.calculateLeftPadding(direction).roundToPx() -
+                padding.calculateRightPadding(direction).roundToPx() -
+                tapPadding.calculateLeftPadding(direction).roundToPx() -
+                tapPadding.calculateRightPadding(direction).roundToPx()
+        }
+        val contentHeight = with(density) {
+            CompactButtonDefaults.Height.roundToPx() - tapPadding.calculateTopPadding().roundToPx() -
+                tapPadding.calculateBottomPadding().roundToPx() - padding.calculateTopPadding().roundToPx() -
+                padding.calculateBottomPadding().roundToPx()
+        }
+        // Include the full scaled line reservation even when native font metrics trim it.
+        val lineHeight = maxOf(
+            labelLayout.size.height,
+            ceil(with(density) { style.lineHeight.toPx() }).toInt(),
+        )
+        if (labelLayout.size.width <= contentWidth && lineHeight <= contentHeight) {
+            CompactButton(
+                onClick = onClick,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.filledTonalButtonColors(),
+                transformation = transformation,
+                label = { Text(label, maxLines = Int.MAX_VALUE, overflow = TextOverflow.Clip) },
+            )
+        } else {
+            Button(
+                onClick = onClick,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.filledTonalButtonColors(),
+                transformation = transformation,
+            ) {
+                Text(label, maxLines = Int.MAX_VALUE, overflow = TextOverflow.Clip)
             }
         }
     }
