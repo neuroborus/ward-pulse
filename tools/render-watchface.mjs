@@ -25,6 +25,7 @@ import { execFile } from 'node:child_process'
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
@@ -1288,6 +1289,7 @@ function ringSlot({ slotId, service }, index) {
   const expressions = layouts.map(({ name, max }) =>
     `                        <Expression name="is${name}"><![CDATA[${rangeGuard(max)} && (${titles})]]></Expression>`,
   ).join('\n')
+  // Keep existing subtree whitespace stable when adding the single-tree wrapper.
   return `        <ComplicationSlot
             x="0"
             y="0"
@@ -1310,6 +1312,7 @@ function ringSlot({ slotId, service }, index) {
                     </Expressions>
                     <!-- Invalid range, value, TITLE or position paints nothing, including the well. -->
                     <Compare expression="isValid">
+                        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="ring${index + 1}_main">
                         <Condition>
                             <Expressions>
 ${expressions}
@@ -1317,6 +1320,7 @@ ${expressions}
 ${layouts.map((layout) => mainBand(layout, index)).join('\n')}
                         </Condition>
 ${stripRow(index, ' '.repeat(24))}
+                        </Group>
                     </Compare>
                 </Condition>
             </Complication>
@@ -1670,11 +1674,23 @@ ${body}
 `
 }
 
+/** Parse the actual output before either writing it or comparing it with disk. */
+async function assertConditionTrees(xml) {
+  const check = runFile('python3', [join(root, 'tools/check-watchface-structure.py')])
+  const closed = new Promise((resolve) => check.child.once('close', resolve))
+  try {
+    await Promise.all([check, pipeline([xml], check.child.stdin)])
+  } finally {
+    await closed
+  }
+}
+
 const xml = face()
 
 assertLegacyCutoffs()
 assertNearExhaustedArcs()
 assertLowerContracts()
+await assertConditionTrees(xml)
 await emit(target, xml, 'render-watchface')
 
 // Textures are rasterized, not compared: ImageMagick stamps metadata that

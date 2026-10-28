@@ -23,7 +23,7 @@ official plan and all native declarations before stock generation or native writ
 mirrors a genuine transition with phone +2, next even Wear and independent legacy/Push +1.
 A fully matching target changes nothing and preserves pending fragments. Partial generation
 or I/O requires reconciliation, not an automatic retry. The adaptive compatibility allocation
-now retains 0.1.0 with phone/Wear/legacy/Push 3/4/2/2;
+now retains 0.1.0 with phone/Wear/legacy/Push 3/4/2/3 after the main-comparison correction;
 this scoped packaging change is not a release cut or release preparation. HOST read-only
 `just release-status` must verify parity on the final metadata; that result is Pending.
 
@@ -34,7 +34,7 @@ The current 0.1.0 source versions are:
 | Phone AAB | `app.wardpulse` | `0.1.0` | `3` | `version` in [pubspec.yaml](../../apps/phone_flutter/pubspec.yaml) (`0.1.0+3`) |
 | Wear host AAB | `app.wardpulse` | `0.1.0` | `4` | `defaultConfig` in [Wear build.gradle.kts](../../apps/wear_android/app/build.gradle.kts) |
 | Legacy WFF AAB | `app.wardpulse.watchface` | `0.1.0` | `2` | `defaultConfig` in [WFF build.gradle.kts](../../apps/watchface_wff/build.gradle.kts) |
-| Bundled Push APK | `app.wardpulse.watchfacepush.main` | `0.1.0` | `2` | `pushVersionCode` / `defaultConfig` in [Push build.gradle.kts](../../apps/wear_android/watchface_push/build.gradle.kts) |
+| Bundled Push APK | `app.wardpulse.watchfacepush.main` | `0.1.0` | `3` | `pushVersionCode` / `defaultConfig` in [Push build.gradle.kts](../../apps/wear_android/watchface_push/build.gradle.kts) |
 
 Phone and Wear share a package and delivered app-signing identity, but need distinct
 versionCodes. WardPulse allocates coordinated pairs as **odd phone / next even Wear**:
@@ -51,8 +51,11 @@ internal positive `versionCode`; see Android's
 [version settings](https://developer.android.com/studio/publish/versioning#version-settings).
 
 Both face packages have independent version histories. Push's positive
-`wardpulsePushVersionCode` input currently defaults to 2. The adaptive change reserves
-Push 1→2 and legacy 1→2 in-place updates independently of the phone 3/Wear 4 pair. Root must resolve first
+`wardpulsePushVersionCode` input currently defaults to 3. The correction advances only Push
+2→3; legacy 1→2 remains independent of the phone 3/Wear 4 pair. Preserve the original
+unobserved Push 1→2 step; the
+[adaptive qualification](#adaptive-integration-qualification-2026-10-28) owns the current
+forward-only acceptance path. Root must resolve first
 publication versus existing signing and uploaded-version history before provisioning
 credentials or treating these versions as publishable. If actual history conflicts with
 this RC, return the material decision to Root before release execution; do not silently
@@ -217,6 +220,50 @@ size, alt, caption and original link. Restore the agreed original-directory/path
 share. Record actual results in a separate Owner receipt and final handoff; whole-task
 closure requires Owner ZERO. This procedure does not predict Docs GREEN or require a
 second status-only Source commit. Concrete findings return through supported Runner repair.
+
+#### Adaptive integration qualification (2026-10-28)
+
+The item12 baseline `604e2e5` emitted 221 Compare branches. Each main `isValid` branch in
+slots 101/102/105 had two direct element trees (layout Condition, then strip Group); the
+other 218 had one. This violates the documented
+[Condition single-tree contract](https://developer.android.com/reference/wear-os/wff/common/condition).
+`ringSlot` in `tools/render-watchface.mjs` now wraps each main selector and strip in one
+stable named full-canvas Group. `tools/check-watchface-structure.py` parses actual generated
+XML before emission in both modes, counts direct Compare/Default element children and
+checks that the selector and strip remain below the main tree. Ordinary generation produced
+the baseline three-branch RED and corrected GREEN. This proves the structural repair;
+its exact native causal effect remains unknown until corrected native observation.
+
+The original controlled N2 input was `[Codex ordinary, Cursor pair]`: Cursor OWN blue at
+outer j0's inner half, Codex green at inner j1's full band and Cursor OTHER teal at outer-half
+j0, with semantic 37 encoded as VALUE148/MAX400. The unaccepted Push 2 frame retained main
+legends but showed only the teal usage arc. Do not infer producer reordering, a colour
+workaround or blanket main admission failure. HOST must repeat this identical witness,
+binding source → emitted XML → built raw resources → installed package → active face and
+effective responses, and inspect original corrected interactive/true-ambient frames.
+
+During that attempt, installing Wear 4 was followed by installed Push 2 before any explicit
+**Update watch face** operation. The observed receiver is not a proved trigger. Original
+new-Wear4/old-Push1 and explicit Push 1→2 were **not observed**. Preserve original APK,
+runtime and frame receipts, including the distinct preadaptive calibration XML; do not
+relabel these gaps or the dated 2026-10-16 results above.
+
+Only the guarded Push default now advances 2→3. Before delivery verify actual installed
+codes/signers, lower bindings and upper choices. Require a genuine explicit manager update
+from installed Push 2 to candidate 3. If delivery advances unexpectedly, preserve the
+observation and independently review a strictly newer candidate through the existing
+`wardpulsePushVersionCode` input. Bundled installation cannot prove explicit update. Complete
+the remaining four-combination obligations through independently reviewed, supported
+forward-only reconciliation; never downgrade, reset, reinstall or synthesize an old baseline.
+
+Corrected builds, official validation, API/wire/device checks, both channels, remaining
+settled/transition and phone/version/sync coverage, full documentation/browser acceptance,
+healthy public captures, guarded restoration and Root's whole zero-findings review remain
+**Pending**. HOST follows whole execution DONE, owned-process retirement, owning CLI exit
+where applicable and fresh separate public/OS idle; it is not a Native-commit prerequisite.
+A Native commit does not close item12. Physical-phone work remains forbidden and physical
+watch work deferred. The [adaptive design](WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count)
+owns the unchanged geometry and remaining native matrix.
 
 ## Signing
 

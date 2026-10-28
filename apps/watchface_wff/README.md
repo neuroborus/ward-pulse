@@ -22,13 +22,19 @@ resource-only, signed APK dependency of the Wear app, with `hasCode=false` and m
 There is one scene and one generator; do not copy or hand-edit generated XML or drawables.
 Both packages retain complication and launch targets in the host `app.wardpulse`.
 
-The adaptive compatibility change uses legacy code 2 and Push default code 2 with Wear 4
+The corrected adaptive face uses legacy code 2 and Push default code 3 with Wear 4
 and phone 0.1.0+3; every versionName stays 0.1.0. Package/signing identities are preserved.
 This is packaging for in-place updates, not a product release cut. Actual retained-binding,
 legacy/Push update, true-ambient and transition acceptance remains **Pending** under the
 [adaptive revision](../../docs/product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count).
 The new face admits only its own response's exact 0/100, 0/200, 0/400, 0/800 envelopes;
 MAX100 always means fixed legacy geometry, and malformed contracts draw no lower component.
+`ringSlot` in `tools/render-watchface.mjs` keeps each main selector and strip beneath one
+named full-canvas Group. Before emission in normal and `--check` modes,
+`tools/check-watchface-structure.py` parses the actual XML to enforce one direct element
+tree per Compare/Default and preserve main selector/strip containment. The baseline's three
+main branches failed this check; corrected generation passes. Native causal effect remains
+unproved; see the [adaptive incident and update qualification](../../docs/product/RELEASE_CHECKLIST.md#adaptive-integration-qualification-2026-10-28).
 
 The Wear app minimum is API 33; the phone minimum is unchanged. The Wear app checks Push
 support before using its manager. Supported Wear OS 6+ devices can install the bundled
@@ -64,14 +70,16 @@ Owner signing setup:
 ./gradlew :app:assembleDebug
 ```
 
-The positive `wardpulsePushVersionCode` input defaults to 2. Keep the same Push certificate
+The positive `wardpulsePushVersionCode` input defaults to 3. Keep the same Push certificate
 across versions and outside build outputs so `clean` cannot replace it. Debug and release
 Push signing use separate ignored configuration and must differ from the host certificate.
 See [signing inputs](../wear_android/watchface_push/README.md#signing-inputs) and
 [Push validation ownership](../../docs/ANDROID_TOOLCHAIN.md#watch-face-push-builds).
-Never substitute an APK or token manually. Updating the Wear app does not itself update
-the installed face; the utility's explicit **Update watch face** action does that without
-activation. See [watch setup](../../docs/product/user-guide/WATCH.md).
+Never substitute an APK or token manually. The utility's explicit **Update watch face**
+action updates without activation. Require an observed manager update from installed Push 2
+to candidate 3; a bundled installation cannot prove that operation. The earlier unexpected
+Push advance has an unknown trigger and leaves the original compatibility gaps open in the
+qualification above. See [watch setup](../../docs/product/user-guide/WATCH.md).
 
 Local development acceptance recorded **2026-10-16** includes final legacy WFF2/XML
 validation, generator drift, lint/debug APK/AAB builds, and actual API34/canonical API36

@@ -69,17 +69,22 @@ builds the current bundled face:
 ./gradlew :app:assembleDebug
 ```
 
-`wardpulsePushVersionCode` currently defaults to 2 and accepts a positive Kotlin/Android integer.
+`wardpulsePushVersionCode` currently defaults to 3 and accepts a positive Kotlin/Android integer.
 It controls the Push package's independent version history, not the Wear host version.
 The [local product bridge](../../../tools/release/README.md#local-version-preparation) advances
 its default by 1 for a genuine product transition, independently of legacy face codes, and
 mirrors the stable product versionName. An unchanged target does not increment it. Keep the
 package/certificate stable and check actual uploaded history before distribution.
 The [current source versions](../../../docs/product/RELEASE_CHECKLIST.md#release-versions)
-are phone 3/Wear 4/legacy 2/Push 2, all versionName 0.1.0. This scoped adaptive compatibility
-allocation is not a release cut. HOST update acceptance remains Pending: retain the original
-installed Push 1 while updating Wear 2→4, then use explicit **Update watch face** for Push 1→2.
-Do not rebuild a synthetic code 1 baseline, downgrade or reset retained state.
+are phone 3/Wear 4/legacy 2/Push 3, all versionName 0.1.0. The main-comparison correction
+advances only Push's guarded default from 2 to 3, without a release cut. In the adaptive
+HOST attempt, installing Wear 4 was followed by Push 2 before any explicit update; the
+trigger is unknown. New-Wear4/old-Push1 and explicit 1→2 were not observed. Preserve those
+receipts and gaps; require a genuine explicit **Update watch face** from installed Push 2
+to candidate 3, or reviewed strictly newer input if delivery advances unexpectedly. Bundled
+installation is not explicit-update evidence. Follow the
+[forward-only acceptance record](../../../docs/product/RELEASE_CHECKLIST.md#adaptive-integration-qualification-2026-10-28);
+do not synthesize an old baseline, downgrade, reinstall or reset retained state.
 For a release artifact, Root uses the existing guarded recipe from the repository root:
 
 ```sh

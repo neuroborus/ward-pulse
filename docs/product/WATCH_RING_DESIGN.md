@@ -129,6 +129,15 @@ Invalid producer selections and obsolete services return actual `NoData`. Credit
 uncounted previews retain MAX100; credits never establish a usage band. Main TITLE keeps
 the existing empty/zero, period and closed split/zero vocabulary; no count suffix is added.
 
+Each main `isValid` Compare in slots 101/102/105 holds one stable named full-canvas Group
+(`ring1_main` / `ring2_main` / `ring3_main`), containing the existing layout selector then
+its strip. `ringSlot` in `tools/render-watchface.mjs` preserves their admission, order,
+geometry, clipping and ambient behavior. The awaited Python-standard-library regression
+in `tools/check-watchface-structure.py` parses actual XML before emission in generation and
+`--check`, enforcing one direct element tree per Compare/Default and main selector/strip
+containment. It rejects the baseline's three malformed branches and passes corrected
+generation; this establishes structure, not corrected native rendering.
+
 Each response derives count, selection, pools, semantic fields and scaling from one accepted
 summary load. A valid delivered extra survives an absent delivered main without inventing
 main paint or a row. A resolved singleton with split=null remains an ordinary full band
@@ -158,13 +167,22 @@ compatibility is unsupported. The older slot 109 marker incompatibility in
 [Split band](#split-band-revised-2026-09-16) remains: stable service names do not repair it.
 
 **Integration acceptance: known Pending.** Generator output and review art are authored,
-not native acceptance. Packaging is phone 0.1.0+3, Wear 4, legacy 2, Push default 2, all
+not native acceptance. Packaging is phone 0.1.0+3, Wear 4, legacy 2, Push default 3, all
 versionNames 0.1.0 with identities/signers retained; this is not a release cut. HOST owns
 full builds/official validation/API wire tests, both delivery channels, four installed
-app/face combinations and retained lower bindings/upper choices. Push: old-old, Wear 2→4
-retaining Push 1, then explicit **Update watch face** Push 1→2. Legacy: old-old, face 1→2
-retaining Wear 2, then Wear 2→4. Verify existing installed history first; conflicts need
-reviewed correction, never downgrade/reinstall/reset. Later verify phone 1→3 on its existing
+app/face combinations and retained lower bindings/upper choices. The original Push path
+required old-old, Wear 2→4 retaining Push 1, then explicit **Update watch face** Push 1→2.
+Installing Wear 4 was instead followed by Push 2 before an explicit update; the trigger
+remains unknown. New-Wear4/old-Push1 and explicit 1→2 remain unobserved gaps. The correction
+advances only the guarded Push default 2→3; require a genuine explicit manager update from
+installed Push 2 to candidate 3. If delivery advances unexpectedly, preserve it and
+independently review a strictly newer candidate through the existing version input. Bundled
+installation is not explicit update. The
+[incident qualification](RELEASE_CHECKLIST.md#adaptive-integration-qualification-2026-10-28)
+preserves the original N2 missing-main-paint evidence, its unknown exact native cause and
+forward-only compatibility obligations. Legacy still requires old-old, face 1→2 retaining
+Wear 2, then Wear 2→4. Verify actual installed codes/signers first; conflicts need reviewed
+correction, never downgrade/reinstall/reset. Later verify phone 1→3 on its existing
 emulator with retained data/settings/credentials. Physical phone work is forbidden and
 physical 466 remains deferred.
 

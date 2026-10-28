@@ -383,6 +383,7 @@
                     </Expressions>
                     <!-- Invalid range, value, TITLE or position paints nothing, including the well. -->
                     <Compare expression="isValid">
+                        <Group x="0" y="0" width="450" height="450" name="ring1_main">
                         <Condition>
                             <Expressions>
                         <Expression name="isLegacy"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && ([COMPLICATION.TITLE] == "" || [COMPLICATION.TITLE] == "zero" || [COMPLICATION.TITLE] == "D" || [COMPLICATION.TITLE] == "7D" || [COMPLICATION.TITLE] == "M" || [COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both")]]></Expression>
@@ -1551,6 +1552,7 @@
                                 </Default>
                             </Condition>
                         </Group>
+                        </Group>
                     </Compare>
                 </Condition>
             </Complication>
@@ -1579,6 +1581,7 @@
                     </Expressions>
                     <!-- Invalid range, value, TITLE or position paints nothing, including the well. -->
                     <Compare expression="isValid">
+                        <Group x="0" y="0" width="450" height="450" name="ring2_main">
                         <Condition>
                             <Expressions>
                         <Expression name="isLegacy"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && ([COMPLICATION.TITLE] == "" || [COMPLICATION.TITLE] == "zero" || [COMPLICATION.TITLE] == "D" || [COMPLICATION.TITLE] == "7D" || [COMPLICATION.TITLE] == "M" || [COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both")]]></Expression>
@@ -2527,6 +2530,7 @@
                                 </Default>
                             </Condition>
                         </Group>
+                        </Group>
                     </Compare>
                 </Condition>
             </Complication>
@@ -2555,6 +2559,7 @@
                     </Expressions>
                     <!-- Invalid range, value, TITLE or position paints nothing, including the well. -->
                     <Compare expression="isValid">
+                        <Group x="0" y="0" width="450" height="450" name="ring3_main">
                         <Condition>
                             <Expressions>
                         <Expression name="isLegacy"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && ([COMPLICATION.TITLE] == "" || [COMPLICATION.TITLE] == "zero" || [COMPLICATION.TITLE] == "D" || [COMPLICATION.TITLE] == "7D" || [COMPLICATION.TITLE] == "M" || [COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both")]]></Expression>
@@ -3282,6 +3287,7 @@
                                     </Condition>
                                 </Default>
                             </Condition>
+                        </Group>
                         </Group>
                     </Compare>
                 </Condition>

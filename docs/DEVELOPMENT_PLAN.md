@@ -1490,8 +1490,9 @@ consumed the initial and tooling fragments for the explicitly selected version, 
 native version transition. The guarded local version bridge and
 [prepare-release skill](../.agents/skills/prepare-release/SKILL.md) add explicit version cuts
 and repository-wide semantic coverage review. That preparation retained 0.1.0 and
-1/2/1/1; the later adaptive compatibility allocation uses 0.1.0 and 3/4/2/2 without a
-release cut or release preparation. Earlier local HOST acceptance on **2026-10-23** passed 33 tooling tests, including
+1/2/1/1; the later adaptive compatibility allocation used 0.1.0 and 3/4/2/2, followed by
+the main-comparison correction advancing only Push to 3, without a release cut or release
+preparation. Earlier local HOST acceptance on **2026-10-23** passed 33 tooling tests, including
 real pinned CLI/bootstrap/bridge integration in isolated fixtures. Separate verification passed
 initially empty-cache acquisition and offline tests with a root CLI already installed, plus
 independent raw partial/complete coverage skill scenarios. Fresh local checks of `df23ee9`
@@ -3491,16 +3492,34 @@ singletons remain full bands. Independent delivery promises no common-N/atomic/A
 contract; harmful mixing or persistent wrong output is a finding. All eight scene slots,
 five lower identities, six updaters including Status and wearer-owned upper choices remain.
 
-Source packaging is phone 0.1.0+3/Wear 4/legacy 2/Push default 2, common versionName 0.1.0,
+The main-comparison correction keeps each main `isValid` Compare in slots 101/102/105 to
+one stable named full-canvas Group containing the existing selector then strip. The
+Python-standard-library parsed-XML regression runs through the awaited generation route
+before emission in generation and `--check`. Ordinary generation demonstrated RED on the
+baseline's three malformed branches and corrected GREEN, retaining existing semantic
+assertions. The structural defect is proven; its exact native causal effect is still
+unknown. Corrected native rendering must repeat the original controlled N2 blue/green/teal
+witness, including semantic 37 as VALUE148/MAX400, with actual effective responses and frames.
+
+Source packaging is phone 0.1.0+3/Wear 4/legacy 2/Push default 3, common versionName 0.1.0,
 with signers/identities and native_state parity preserved. Phone UI, core, providers and
 summary/schema/settings/auth remain unchanged. This is one compatibility change, not a
-release cut. Producer JVM, geometry/admission assertions and focused Android API/wire/Parcel
-coverage are authored; test/build execution and official/native acceptance remain Pending.
+release cut; only the guarded Push default advances 2→3 in this correction. Producer JVM,
+geometry/admission assertions and focused Android API/wire/Parcel coverage are retained;
+corrected full builds and official/native acceptance remain Pending.
 
 HOST owns acceptance after whole execution DONE, owned retirement, actual owning CLI exit
 where applicable and fresh separate public/OS idle. Preserve original APK receipts and
-installed history. On the smallest round Push target: old-old, Wear 2→4 retaining Push 1,
-then explicit **Update watch face** Push 1→2. On nonround legacy: old-old, face 1→2 retaining
+installed history. The original smallest-round Push path required old-old, Wear 2→4 retaining
+Push 1, then explicit **Update watch face** Push 1→2. Installing Wear 4 was followed by Push 2
+before any explicit update; the trigger remains unknown. Original new-Wear4/old-Push1 and
+explicit 1→2 were not observed and remain gaps. Require a genuine explicit manager update
+from installed Push 2 to candidate 3. If delivery advances unexpectedly, preserve it and
+independently review a strictly newer candidate through the existing version input; bundled
+installation cannot prove explicit update. Complete the remaining four-combination duties
+through supported, independently reviewed forward-only reconciliation, preserving the
+[incident qualification](product/RELEASE_CHECKLIST.md#adaptive-integration-qualification-2026-10-28).
+On nonround legacy: old-old, face 1→2 retaining
 Wear 2, then Wear 2→4. Verify retained bindings/upper choices/signers and source→canonical→
 built→installed→active identity. Conflicts require reviewed correction, never downgrade,
 reinstall or reset. Later update the existing phone emulator 1→3 with retained data/settings/
@@ -3517,4 +3536,5 @@ Use existing AVDs only, without copies/worktrees/new snapshots/clearing. Delegat
 documentation owners in this same integration must refresh healthy shared-state captures,
 the index and browser uses after native acceptance, restore guarded summary/data/bindings/
 settings/time/font/ambient/pairing, then obtain Root's whole zero-findings review after the
-last correction. Native implementation completion does not close integration acceptance.
+last correction. These HOST obligations are not a Native-commit prerequisite. Native
+implementation completion does not close integration acceptance.

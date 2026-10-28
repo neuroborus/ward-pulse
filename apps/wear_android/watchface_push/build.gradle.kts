@@ -91,7 +91,7 @@ val pushKeys = listOf("debug", "release").associateWith { kind ->
 val pushVersionCode = providers.gradleProperty("wardpulsePushVersionCode").map { value ->
     value.toIntOrNull()?.takeIf { it > 0 }
         ?: throw GradleException("wardpulsePushVersionCode must be a positive integer.")
-}.orElse(2)
+}.orElse(3)
 
 android {
     enableKotlin = false

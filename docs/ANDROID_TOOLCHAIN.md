@@ -839,12 +839,18 @@ bundled face through the ordinary graph:
 ./gradlew :app:assembleDebug
 ```
 
-`wardpulsePushVersionCode` defaults to 2 and accepts a positive Android integer. Keep the
+`wardpulsePushVersionCode` defaults to 3 and accepts a positive Android integer. Keep the
 Push package and certificate identical for N/N+1 development builds. This input belongs to
 the independent Push package; it does not set the Wear host version. The adaptive
-compatibility allocation is phone 3/Wear 4/legacy 2/Push 2, all versionName 0.1.0, without a
-release cut. Preserve the actual old code 1 APK for HOST Push 1→2 update acceptance;
-rebuilding current sources as code 1 is not the old baseline. Follow the central [release version scheme](product/RELEASE_CHECKLIST.md#release-versions)
+compatibility allocation now uses phone 3/Wear 4/legacy 2/Push 3, all versionName 0.1.0;
+the main-comparison correction advances only Push's default 2→3 without a release cut.
+Preserve the actual old code 1 receipt and unobserved new-Wear4/old-Push1 and explicit 1→2
+steps. Installing Wear 4 was followed by Push 2 before explicit update, with an unknown
+trigger. Require an actual explicit manager update from installed Push 2 to candidate 3;
+if delivery advances unexpectedly, preserve it and independently review a strictly newer
+candidate through this same input. Bundled installation is not explicit-update evidence.
+Follow the [forward-only qualification](product/RELEASE_CHECKLIST.md#adaptive-integration-qualification-2026-10-28);
+never rebuild a synthetic old baseline, downgrade, reinstall or reset. Follow the central [release version scheme](product/RELEASE_CHECKLIST.md#release-versions)
 and [ordinary release flow](#release-artifact-builds). Release needs both host release
 configuration and separate Push release configuration.
 The normal variant graph consumes a signed APK artifact from `:watchface_push`, validates
