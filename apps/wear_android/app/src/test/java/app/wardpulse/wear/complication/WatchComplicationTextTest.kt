@@ -1,6 +1,7 @@
 package app.wardpulse.wear.complication
 
 import androidx.wear.watchface.complications.data.NoDataComplicationData
+import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import app.wardpulse.wear.model.AllowanceSummary
 import app.wardpulse.wear.model.CreditsGlance
 import app.wardpulse.wear.model.PreviewWatchDashboardSummary
@@ -39,22 +40,79 @@ class WatchComplicationTextTest {
     fun zeroHalvesPublishZeroRangedValuesAtTheirExistingOrdinal() {
         val zero = cursorPair.copy(usedPercent = 100.0, split = cursorPair.split!!.copy(usedPercent = 100.0))
         var innerCalled = false
-        val inner = ringComplicationData(listOf(zero), 0) { _, remaining, title ->
+        val inner = ringComplicationData(listOf(zero), 0) { _, remaining, title, count ->
             innerCalled = true
             assertEquals(0f, remaining)
             assertEquals("split:cursor-other:zero-both", title)
-            rangedComplicationBuilder(remaining, title, RingFamily.CURSOR_OWN, text = "0% · 0%").build()
+            rangedComplicationBuilder(remaining, title, RingFamily.CURSOR_OWN, text = "0% · 0%", ringCount = count).build()
         }
         assertTrue(innerCalled)
-        assertTrue(inner is androidx.wear.watchface.complications.data.RangedValueComplicationData)
+        assertTrue(inner is RangedValueComplicationData)
+        assertEquals(200f, (inner as RangedValueComplicationData).max)
         var outerCalled = false
-        outerHalfComplicationData(listOf(zero, codexPair), 0) { half, outside ->
+        val outer = outerHalfComplicationData(listOf(zero, codexPair), 0) { half, outside, count ->
             outerCalled = true
             assertEquals(1, outside)
+            assertEquals(2, count)
             assertEquals(0f, WatchComplicationText.remainingPercent(half.usedPercent))
-            NoDataComplicationData()
+            rangedComplicationBuilder(
+                WatchComplicationText.remainingPercent(half.usedPercent), outside.toString(), ringCount = count,
+            ).build()
         }
         assertTrue(outerCalled)
+        assertEquals(400f, (outer as RangedValueComplicationData).max)
+        assertEquals(0f, outer.value)
+    }
+
+    @Test
+    fun resolvedBandsEncodeCountWithoutChangingSelectionOrSemanticPercent() {
+        val ordinary = cursorPair.copy(split = null, usedPercent = 99.96)
+        val cases = listOf(
+            emptyList<RingSummary>(),
+            listOf(ordinary),
+            listOf(ordinary.copy(usedPercent = 100.0), cursorPair),
+            listOf(cursorPair, ordinary, codexPair),
+            PreviewWatchDashboardSummary.value.rings, // Independent same-family budgets.
+        )
+        for (rings in cases) {
+            assertEquals(rings.size, resolvedBandCount(rings))
+            for (outside in rings.indices) {
+                val expected = rings[rings.lastIndex - outside]
+                val data = ringComplicationData(rings, outside) { ring, percent, title, count ->
+                    assertEquals(expected, ring)
+                    assertEquals(WatchComplicationText.remainingPercent(expected.usedPercent), percent)
+                    rangedComplicationBuilder(percent, title, ringCount = count).build()
+                } as RangedValueComplicationData
+                val factor = (1 shl rings.size).toFloat()
+                assertEquals(100f * factor, data.max)
+                assertEquals(WatchComplicationText.remainingPercent(expected.usedPercent) / 100f, data.value / data.max)
+                assertEquals(RangedValueComplicationData.TYPE_UNDEFINED, data.valueType)
+            }
+            assertTrue(ringComplicationData(rings, rings.size) { _, _, _, _ ->
+                error("Obsolete main slot must return NoData")
+            } is NoDataComplicationData)
+        }
+    }
+
+    @Test
+    fun malformedResolvedDataCannotSupplyAnAdaptiveCountEvenToAnotherValidEntry() {
+        val ordinary = cursorPair.copy(split = null)
+        val invalidLists = listOf(
+            List(4) { ordinary },
+            listOf(cursorPair, codexPair, cursorPair), // Only two outer-half services exist.
+            listOf(ordinary, cursorPair.copy(usedPercent = Double.NaN)),
+            listOf(ordinary, cursorPair.copy(usedPercent = -1.0)),
+            listOf(ordinary, cursorPair.copy(split = cursorPair.split!!.copy(usedPercent = Double.POSITIVE_INFINITY))),
+        )
+        for (rings in invalidLists) {
+            assertNull(resolvedBandCount(rings))
+            assertTrue(ringComplicationData(rings, 0) { _, _, _, _ ->
+                error("Invalid resolved data must clear the main")
+            } is NoDataComplicationData)
+            assertTrue(outerHalfComplicationData(rings, 0) { _, _, _ ->
+                error("Invalid resolved data must clear the extra")
+            } is NoDataComplicationData)
+        }
     }
 
     @Test
@@ -132,8 +190,9 @@ class WatchComplicationTextTest {
             val built = NoDataComplicationData()
             var called = false
             val result =
-                outerHalfComplicationData(rings, ordinal) { actualHalf, actualIndex ->
+                outerHalfComplicationData(rings, ordinal) { actualHalf, actualIndex, count ->
                     called = true
+                    assertEquals(rings.size, count)
                     assertEquals(half, actualHalf)
                     assertEquals(outsideIndex, actualIndex)
                     built
@@ -171,7 +230,7 @@ class WatchComplicationTextTest {
             )
         for ((rings, ordinal) in cases) {
             val result =
-                outerHalfComplicationData(rings, ordinal) { _, _ ->
+                outerHalfComplicationData(rings, ordinal) { _, _, _ ->
                     error("Missing or invalid split must clear the arc")
                 }
             assertTrue(result is NoDataComplicationData)
@@ -186,7 +245,8 @@ class WatchComplicationTextTest {
             val built = NoDataComplicationData()
             var captured: String? = null
             val result =
-                ringComplicationData(listOf(ring), 0) { actualRing, remaining, title ->
+                ringComplicationData(listOf(ring), 0) { actualRing, remaining, title, count ->
+                    assertEquals(1, count)
                     assertEquals(ring, actualRing)
                     assertEquals(82f, remaining)
                     captured = title
@@ -198,7 +258,7 @@ class WatchComplicationTextTest {
 
         assertEquals("", normalTitle(single))
         val loneOuter =
-            outerHalfComplicationData(listOf(single), 0) { _, _ ->
+            outerHalfComplicationData(listOf(single), 0) { _, _, _ ->
                 error("A lone pool must not publish outer-half data")
             }
         assertTrue(loneOuter is NoDataComplicationData)
@@ -209,8 +269,9 @@ class WatchComplicationTextTest {
         val builtOuter = NoDataComplicationData()
         var outerBuilt = false
         val pairedOuter =
-            outerHalfComplicationData(listOf(cursorPair), 0) { half, outerSlot ->
+            outerHalfComplicationData(listOf(cursorPair), 0) { half, outerSlot, count ->
                 outerBuilt = true
+                assertEquals(1, count)
                 assertEquals(cursorPair.split, half)
                 assertEquals(0, outerSlot)
                 builtOuter

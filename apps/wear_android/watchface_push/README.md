@@ -62,23 +62,24 @@ never permission to publish a debug-signed host. See the central
 
 ## Ordinary builds and versions
 
-From `apps/wear_android/`, after private development signing setup, these debug commands
-illustrate N/N+1 upgrade acceptance:
+From `apps/wear_android/`, after private development signing setup, this debug command
+builds the current bundled face:
 
 ```sh
-./gradlew :app:assembleDebug -PwardpulsePushVersionCode=1
-./gradlew :app:assembleDebug -PwardpulsePushVersionCode=2
+./gradlew :app:assembleDebug
 ```
 
-`wardpulsePushVersionCode` currently defaults to 1 and accepts a positive Kotlin/Android integer.
+`wardpulsePushVersionCode` currently defaults to 2 and accepts a positive Kotlin/Android integer.
 It controls the Push package's independent version history, not the Wear host version.
 The [local product bridge](../../../tools/release/README.md#local-version-preparation) advances
 its default by 1 for a genuine product transition, independently of legacy face codes, and
 mirrors the stable product versionName. An unchanged target does not increment it. Keep the
-package/certificate stable and check actual uploaded history before distribution. These
-development examples do not require Push code 2 for the RC: the central
-[0.1.0 version table](../../../docs/product/RELEASE_CHECKLIST.md#release-versions) retains
-Push code 1 while the Wear host uses code 2; every versionName remains 0.1.0.
+package/certificate stable and check actual uploaded history before distribution.
+The [current source versions](../../../docs/product/RELEASE_CHECKLIST.md#release-versions)
+are phone 3/Wear 4/legacy 2/Push 2, all versionName 0.1.0. This scoped adaptive compatibility
+allocation is not a release cut. HOST update acceptance remains Pending: retain the original
+installed Push 1 while updating Wear 2→4, then use explicit **Update watch face** for Push 1→2.
+Do not rebuild a synthetic code 1 baseline, downgrade or reset retained state.
 For a release artifact, Root uses the existing guarded recipe from the repository root:
 
 ```sh

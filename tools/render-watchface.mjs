@@ -113,24 +113,30 @@ const RINGS = [
  */
 const BAND_THICKNESS = 20
 
-/**
- * An arc inside a slot takes **twice its centre line** in `width`, so a band
- * whose outer edge is `diameter / 2` is drawn one half-thickness further in.
- */
-function bandCentre(diameter) {
-  return diameter - BAND_THICKNESS
+/** MAX100 never asserts a resolved count: it always uses the legacy positions. */
+const LAYOUTS = [
+  { name: 'Legacy', count: 3, max: 100, thickness: 20 },
+  ...[1, 2, 3].map((count) => ({
+    name: `N${count}`, count, max: 100 * 2 ** count,
+    thickness: (68 - 4 * (count - 1)) / count,
+  })),
+]
+
+function bandGeometry(layout, index) {
+  const { thickness } = layout
+  const diameter = layout.count === 3
+    ? RINGS[index].diameter : 404 - 2 * index * (thickness + 4)
+  return {
+    diameter, thickness, full: diameter - thickness,
+    inner: diameter - 1.5 * thickness, outer: diameter - thickness / 2,
+    half: thickness / 2,
+  }
 }
 
-/**
- * Halves of a shared band, measured on the watch 2026-08-13
- * (`WATCH_RING_DESIGN.md`, Ring geometry): centre lines at `outer - 5` and
- * `outer - 15`, both at thickness 10, and inside a slot `width` is **twice the
- * centre line**. A band's `diameter` here is twice its outer edge, so the two
- * halves are `diameter - 10` and `diameter - 30`.
- */
-const HALF_THICKNESS = 10
-const OUTER_HALF_INSET = 10
-const INNER_HALF_INSET = 30
+/** Equality and bounded comparisons also reject non-finite fields (including NaN). */
+function rangeGuard(max) {
+  return `[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == ${max} && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= ${max}`
+}
 
 /**
  * Two outer-half slots dispatch by outside-counted band index in TITLE.
@@ -223,8 +229,8 @@ const TEXTURE_FONT_SIZE = Number((TEXTURE_CAP / TEXTURE.capRatio).toFixed(1))
 /**
  * The baseline, as an inset from the ring's outer edge: an image is that ring's
  * own square, so the band runs along its rim and a baseline half a cap below the
- * band's centreline leaves the cap centred on it. One number for every ring —
- * what changes between them is the square, not where the type sits in the band.
+ * band's centreline leaves the cap centred on it. This is the historical N3
+ * baseline; wider bands derive their inset from the same fixed cap height.
  */
 const TEXTURE_BASELINE = Number(((TEXTURE.band + TEXTURE_CAP) / 2).toFixed(2))
 
@@ -247,6 +253,11 @@ const TOKENS = [
   { period: 'Week', title: '7D', repeats: [9, 8, 6] },
   { period: 'Month', title: 'M', repeats: [12, 10, 9] },
 ]
+
+const ADAPTIVE_REPEATS = {
+  1: { D: [13], '7D': [8], M: [10] },
+  2: { D: [15, 11], '7D': [9, 6], M: [12, 9] },
+}
 
 /**
  * Rings the type can label — all of them: the baseline caps the face at three
@@ -751,8 +762,9 @@ ${icon}
 }
 
 /** The drawable a ring's period is baked into, and the name WFF resolves it by. */
-function textureResource(index, period) {
-  return `ring${index + 1}_type_${period.toLowerCase()}`
+function textureResource(index, period, count = 3) {
+  const prefix = count === 3 ? 'ring' : `ring_n${count}_`
+  return `${prefix}${index + 1}_type_${period.toLowerCase()}`
 }
 
 /**
@@ -760,8 +772,12 @@ function textureResource(index, period) {
  * by one, each rotated onto its share of the sweep, so the spacing is uniform by
  * construction — which is the whole reason the type is baked rather than set.
  */
-function textureImage(diameter, title, repeats) {
+function textureImage(diameter, title, repeats, thickness = BAND_THICKNESS) {
   const centre = diameter / 2
+  // Preserve the measured N3 placement byte for byte. Wider bands keep the same
+  // glyph cap height, centred at their actual new radius, rather than stretching.
+  const baseline = thickness === BAND_THICKNESS
+    ? TEXTURE_BASELINE : Number(((thickness + TEXTURE_CAP) / 2).toFixed(2))
   const pitch = 360 / TEXTURE.sweeps
   const slot = (pitch - TEXTURE.sweepGap) / repeats
   // Half a sweep off 12, so the breaks fall on the diagonals: 12 is where both
@@ -771,7 +787,7 @@ function textureImage(diameter, title, repeats) {
   const tokens = Array.from({ length: TEXTURE.sweeps }, (_, sweep) =>
     Array.from({ length: repeats }, (_, repeat) => {
       const angle = (origin + sweep * pitch + (repeat + 0.5) * slot).toFixed(2)
-      return `<text x="${centre}" y="${TEXTURE_BASELINE}" transform="rotate(${angle} ${centre} ${centre})">${title}</text>`
+      return `<text x="${centre}" y="${baseline}" transform="rotate(${angle} ${centre} ${centre})">${title}</text>`
     }).join(''),
   ).join('')
   // One user unit per design unit: a viewBox that scales makes the rasterizer
@@ -796,7 +812,7 @@ function textureImage(diameter, title, repeats) {
  * `rotate()` turns about — every token lands on a circle around the corner.
  *
  * `-strip` for the sake of the diff: it drops the render timestamp, without which
- * every run rewrites nine committed binaries whose pixels did not change.
+ * every run rewrites committed binaries whose pixels did not change.
  */
 async function rasterize(file, png, signal) {
   const render = runFile('convert', ['-background', 'none', '-density', '96', '-strip', file, `png32:${png}`], { signal })
@@ -823,12 +839,16 @@ async function writeTextures() {
   try {
     scratch = await mkdtemp(join(tmpdir(), 'wardpulse-type-'))
     controller.signal.throwIfAborted()
-    for (const [index, { diameter }] of RINGS.slice(0, TEXTURE_RINGS).entries()) {
-      for (const { period, title, repeats } of TOKENS) {
-        const name = textureResource(index, period)
-        const svg = join(scratch, `${name}.svg`)
-        await writeFile(svg, textureImage(diameter, title, repeats[index]))
-        await rasterize(svg, join(drawables, `${name}.png`), controller.signal)
+    for (const layout of LAYOUTS.filter(({ name }) => name !== 'Legacy')) {
+      for (let index = 0; index < layout.count; index += 1) {
+        const { diameter, thickness } = bandGeometry(layout, index)
+        for (const { period, title, repeats } of TOKENS) {
+          const name = textureResource(index, period, layout.count)
+          const svg = join(scratch, `${name}.svg`)
+          const repeat = ADAPTIVE_REPEATS[layout.count]?.[title][index] ?? repeats[index]
+          await writeFile(svg, textureImage(diameter, title, repeat, thickness))
+          await rasterize(svg, join(drawables, `${name}.png`), controller.signal)
+        }
       }
     }
     controller.signal.throwIfAborted()
@@ -851,12 +871,12 @@ async function writeTextures() {
  * inside that square, so a box sized to the ring needs no separate bounds and
  * lines the image up with the arc by construction.
  */
-function ringTextureBranch(diameter, index, period) {
+function ringTextureBranch(diameter, index, period, count) {
   const inset = Number(((FACE.size - diameter) / 2).toFixed(1))
   return `                                <Compare expression="is${period}">
                                     <PartImage x="${inset}" y="${inset}" width="${diameter}" height="${diameter}" alpha="${TEXTURE_ALPHA}">
                                         <Variant mode="AMBIENT" target="alpha" value="${TEXTURE_ALPHA_AMBIENT}" />
-                                        <Image resource="${textureResource(index, period)}" />
+                                        <Image resource="${textureResource(index, period, count)}" />
                                     </PartImage>
                                 </Compare>`
 }
@@ -866,7 +886,7 @@ function ringTextureBranch(diameter, index, period) {
  * rather than being labelled with whichever token the fallback happened to be.
  * A ring past the cap gets none either — there is no image baked for it.
  */
-function ringTexture(diameter, index) {
+function ringTexture(diameter, index, count = 3) {
   if (index >= TEXTURE_RINGS) return ''
   // A period token needs no combined spelling: only a split band carries a pool
   // token, and a budget ring is never shared (`WATCH_RING_DESIGN.md`, Split band).
@@ -880,7 +900,7 @@ function ringTexture(diameter, index) {
                                 <Expressions>
 ${expressions}
                                 </Expressions>
-${TOKENS.map(({ period }) => ringTextureBranch(diameter, index, period)).join('\n')}
+${TOKENS.map(({ period }) => ringTextureBranch(diameter, index, period, count)).join('\n')}
                             </Condition>`
 }
 
@@ -898,9 +918,13 @@ function capDegrees(diameter, thickness) {
 
 function meltGeometry(diameter, thickness) {
   const cap = capDegrees(diameter, thickness)
+  const twoCapCutoff = (2 * cap) / SWEEP.end
   return {
     cap,
-    twoCapCutoff: (2 * cap) / SWEEP.end,
+    twoCapCutoff,
+    // Only Legacy/N3 use 20/10-unit strokes; retain their published branch boundary.
+    cutoffLiteral: thickness === BAND_THICKNESS || thickness === BAND_THICKNESS / 2
+      ? twoCapCutoff.toFixed(6) : String(twoCapCutoff),
     insetEnd: SWEEP.end - cap,
   }
 }
@@ -972,14 +996,40 @@ function assertFullRing(diameter, thickness, markup) {
   }
 }
 
+/** Legacy and N3 keep the published cutoff, including its six-decimal rounding. */
+function assertLegacyCutoffs() {
+  const emittedCutoff = (diameter, thickness) => Number(
+    bandArcs(diameter, thickness, '').match(/name="isNearEmpty"[^\n]*<= ([\d.]+)/)?.[1],
+  )
+  // This Float lies between the analytical and published 336/20 cutoffs.
+  // Both the old percentage range and binary-scaled N3 must still select BUTT.
+  const percent = Math.fround(1.8949854373931885)
+  for (const max of [100, 800]) {
+    const ratio = Math.fround(Math.fround(percent * (max / 100)) / max)
+    if (!(ratio <= emittedCutoff(336, 20))) {
+      throw new Error(`MAX${max}: the preserved boundary remainder must select BUTT`)
+    }
+  }
+  for (const [diameter, thickness, cutoff] of [
+    [384, 20, 0.016560], [336, 20, 0.018950], [288, 20, 0.022117],
+    [374, 10, 0.008502], [326, 10, 0.009780], [278, 10, 0.011448],
+    [394, 10, 0.008058], [346, 10, 0.009225], [298, 10, 0.010670],
+  ]) {
+    if (emittedCutoff(diameter, thickness) !== cutoff) {
+      throw new Error(`ring ${diameter}/${thickness}: published Legacy/N3 cutoff changed`)
+    }
+  }
+}
+
 function assertNearExhaustedArcs() {
   const epsilon = 0.000001
   const tolerance = 0.000000001
-  const geometries = RINGS.flatMap(({ diameter }) => [
-    [bandCentre(diameter), BAND_THICKNESS],
-    [diameter - INNER_HALF_INSET, HALF_THICKNESS],
-    [diameter - OUTER_HALF_INSET, HALF_THICKNESS],
-  ])
+  const geometries = LAYOUTS.filter(({ name }) => name !== 'Legacy').flatMap((layout) =>
+    Array.from({ length: layout.count }, (_, index) => {
+      const { full, inner, outer, thickness, half } = bandGeometry(layout, index)
+      return [[full, thickness], [inner, half], [outer, half]]
+    }).flat(),
+  )
   for (const [centre, thickness] of geometries) {
     const geometry = meltGeometry(centre, thickness)
     const belowRemaining = geometry.twoCapCutoff - epsilon
@@ -1034,7 +1084,7 @@ function assertNearExhaustedArcs() {
     const rawStart = `(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end}`
     const caps = [...markup.matchAll(/cap="(ROUND|BUTT)"/g)].map((match) => match[1])
     if (
-      !markup.includes(`<= ${geometry.twoCapCutoff.toFixed(6)}`) ||
+      !markup.includes(`<= ${geometry.cutoffLiteral}`) ||
       !markup.includes('<Compare expression="isNearEmpty">') ||
       !markup.includes('<Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>') ||
       !markup.includes('<Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>') ||
@@ -1050,21 +1100,16 @@ function assertNearExhaustedArcs() {
     }
   }
 
-  // Both services retain all three TITLE branches, even though ordinal 1 at
-  // the innermost band is unreachable in a three-band payload. The shared clip
-  // must contain every half's entire envelope, including its closure at 12.
-  for (const slot of OUTER_HALVES) {
-    const markup = outerHalfSlot(slot)
+  for (const [ordinal, slot] of OUTER_HALVES.entries()) {
+    const markup = outerHalfSlot(slot, ordinal)
     const clip = markup.match(/<BoundingArc\s+([\s\S]*?)\/>/)?.[1] ?? ''
     const attributes = Object.fromEntries(
       [...clip.matchAll(/(\w+)="([^"]*)"/g)].map((match) => [match[1], match[2]]),
     )
     const clipThickness = Number(attributes.thickness)
     const envelope = roundClosureEnvelope(
-      Number(attributes.width) - clipThickness,
-      clipThickness,
-      Number(attributes.startAngle),
-      Number(attributes.endAngle),
+      Number(attributes.width) - clipThickness, clipThickness,
+      Number(attributes.startAngle), Number(attributes.endAngle),
     )
     if (
       attributes.centerX !== String(FACE.center) || attributes.centerY !== String(FACE.center) ||
@@ -1073,18 +1118,40 @@ function assertNearExhaustedArcs() {
     ) {
       throw new Error(`slot ${slot.slotId}: outer-half clip must stay centered with round edges`)
     }
-    RINGS.forEach(({ diameter }, index) => {
-      const centre = diameter - OUTER_HALF_INSET
-      const branch = markup.match(new RegExp(`<Compare expression="isBand${index}">\\s*<Group[^>]*name="outerHalf${slot.slotId}_${index + 1}">([\\s\\S]*?)</Group>\\s*</Compare>`))?.[1] ?? ''
-      assertFullRing(centre, HALF_THICKNESS, branch)
-      if (
-        !markup.includes(`<![CDATA[[COMPLICATION.TITLE] == "${index}"]]>`) ||
-        (centre - HALF_THICKNESS) / 2 <= envelope.inner ||
-        (centre + HALF_THICKNESS) / 2 >= envelope.outer
-      ) {
-        throw new Error(`slot ${slot.slotId}/band ${index}: full half must fit inside the clip at every angle`)
+    for (const layout of LAYOUTS) {
+      for (let index = 0; index < layout.count; index += 1) {
+        const expression = `is${layout.name}Band${index}`
+        const marker = `<Compare expression="${expression}">`
+        if (index >= layout.count - ordinal) {
+          if (markup.includes(marker)) throw new Error(`impossible split ordinal ${ordinal}/${expression}`)
+          continue
+        }
+        const { outer, half } = bandGeometry(layout, index)
+        const branch = markup.split(marker)[1]?.split('</Group>')[0] ?? ''
+        assertFullRing(outer, half, branch)
+        if ((outer - half) / 2 <= envelope.inner || (outer + half) / 2 >= envelope.outer) {
+          throw new Error(`slot ${slot.slotId}/${expression}: entire half must fit inside the clip`)
+        }
       }
-    })
+    }
+  }
+  for (const layout of LAYOUTS) {
+    for (let index = 0; index < layout.count; index += 1) {
+      const { diameter, full, inner, outer, thickness, half } = bandGeometry(layout, index)
+      const edge = diameter / 2
+      if ((full - thickness) / 2 < 133.8 || edge > 202 ||
+          (outer - half) / 2 !== (inner + half) / 2 ||
+          (inner - half) / 2 !== edge - thickness ||
+          (outer + half) / 2 !== edge) {
+        throw new Error(`${layout.name}/${index}: band envelope or gapless split drifted`)
+      }
+      if (index > 0) {
+        const previous = bandGeometry(layout, index - 1)
+        if ((previous.full - thickness) / 2 - edge !== 4) throw new Error('band gap must remain four')
+      }
+    }
+    const last = bandGeometry(layout, layout.count - 1)
+    if ((last.full - last.thickness) / 2 !== 134) throw new Error('belt must end at 134')
   }
 }
 
@@ -1119,7 +1186,7 @@ ${pad}    <Compare expression="hasRemaining">
 ${pad}<Condition>
 ${pad}    <Expressions>
 ${pad}        <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-${pad}        <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= ${geometry.twoCapCutoff.toFixed(6)}]]></Expression>
+${pad}        <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= ${geometry.cutoffLiteral}]]></Expression>
 ${pad}    </Expressions>
 ${pad}    <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
 ${pad}         endpoints 0.1 degrees apart in one path. A literal 360-degree
@@ -1190,15 +1257,44 @@ ${pad}    </Compare>
 ${pad}</Condition>`
 }
 
-function ringSlot({ slotId, diameter, service }, index) {
-  const name = `ring${index + 1}`
+/** Geometry is selected solely from this response; no sibling can supply a count. */
+function mainBand(layout, index) {
+  const { diameter, thickness, full, inner, half } = bandGeometry(layout, index)
+  const name = `ring${index + 1}${layout.name}`
+  return `                        <Compare expression="is${layout.name}">
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="isSplit"><![CDATA[${titleEquals(...SPLIT_TITLES)}]]></Expression>
+                                </Expressions>
+                                <Compare expression="isSplit">
+                                    <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}Half">
+${bandArcs(inner, half, ' '.repeat(40))}
+                                    </Group>
+                                </Compare>
+                                <Default>
+                                    <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}">
+${bandArcs(full, thickness, ' '.repeat(40))}${ringTexture(diameter, index, layout.count)}
+                                    </Group>
+                                </Default>
+                            </Condition>
+                        </Compare>`
+}
+
+function ringSlot({ slotId, service }, index) {
+  const layouts = LAYOUTS.filter(({ count }) => index < count)
+  const titles = titleEquals('', ZERO_TOKEN, ...TOKENS.map(({ title }) => title), ...SPLIT_TITLES)
+  const credits = index === CREDITS_RING_INDEX
+    ? ` || (${rangeGuard(100)} && ${titleEquals(CREDITS_TOKEN)})` : ''
+  const expressions = layouts.map(({ name, max }) =>
+    `                        <Expression name="is${name}"><![CDATA[${rangeGuard(max)} && (${titles})]]></Expression>`,
+  ).join('\n')
   return `        <ComplicationSlot
             x="0"
             y="0"
             width="${FACE.size}"
             height="${FACE.size}"
             slotId="${slotId}"
-            displayName="@string/${name}_complication"
+            displayName="@string/ring${index + 1}_complication"
             supportedTypes="RANGED_VALUE EMPTY"
             isCustomizable="FALSE">
             <DefaultProviderPolicy
@@ -1208,69 +1304,49 @@ function ringSlot({ slotId, diameter, service }, index) {
                 defaultSystemProviderType="EMPTY" />
             <BoundingBox x="0" y="0" width="${FACE.size}" height="${FACE.size}" />
             <Complication type="RANGED_VALUE">
-                <!-- The band, unless this is the lone credits row: that one has a
-                     reading but no ring behind it, so it draws its strip only. -->
                 <Condition>
                     <Expressions>
-                        <Expression name="hasBand">
-                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 0 && !(${titleEquals(CREDITS_TOKEN)})]]>
-                        </Expression>
+                        <Expression name="isValid"><![CDATA[((${layouts.map(({ max }) => `(${rangeGuard(max)})`).join(' || ')}) && (${titles}))${credits}]]></Expression>
                     </Expressions>
-                    <Compare expression="hasBand">
-                        <!-- Shared band: this slot keeps the inner half, the outer one
-                             comes from the slot that serves every band. -->
+                    <!-- Invalid range, value, TITLE or position paints nothing, including the well. -->
+                    <Compare expression="isValid">
                         <Condition>
                             <Expressions>
-                                <Expression name="isSplit"><![CDATA[${titleEquals(...SPLIT_TITLES)}]]></Expression>
+${expressions}
                             </Expressions>
-                            <Compare expression="isSplit">
-                                <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}Half">
-${bandArcs(diameter - INNER_HALF_INSET, HALF_THICKNESS, ' '.repeat(36))}
-                                </Group>
-                            </Compare>
-                            <Default>
-                                <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}">
-${bandArcs(bandCentre(diameter), BAND_THICKNESS, ' '.repeat(36))}${ringTexture(diameter, index)}
-                                </Group>
-                            </Default>
+${layouts.map((layout) => mainBand(layout, index)).join('\n')}
                         </Condition>
+${stripRow(index, ' '.repeat(24))}
                     </Compare>
                 </Condition>
-                <!-- The legend row this ring owns. Its own slot since 2026-10-09:
-                     the three the strips held are the three the cells took. -->
-${stripRow(index, ' '.repeat(16))}
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>`
 }
 
 /**
- * One selected split ordinal, three possible radii: the watch
- * writes the band index — counted from the outside — into TITLE, and the branch
- * below turns it into a radius. A missing split ordinal yields `NoData`, so
- * that slot draws nothing.
- *
- * Its `BoundingArc` has to reach every band it may draw on, so it spans from the
- * outermost half down to the innermost one rather than hugging a single band.
- * A `BoundingArc` takes its **outer edge** in `width` — unlike the arcs inside a
- * slot, which take twice their centre line. Measured 2026-08-16: with `width`
- * set to twice the centre the clip cut the outermost half in half.
+ * Each extra carries its own envelope and exact outside index. Ordinal one
+ * cannot occupy the innermost band: an earlier pair must precede it in payload
+ * order. No delivered main is required and no main paint/label is synthesized.
  */
-function outerHalfSlot({ slotId, service, label }) {
-  const centres = RINGS.map(({ diameter }) => (diameter - OUTER_HALF_INSET) / 2)
-  const clipOuter = Math.max(...centres) + HALF_THICKNESS
-  const clipInner = Math.min(...centres) - HALF_THICKNESS
-  const branches = RINGS.map(
-    ({ diameter }, index) => `                    <Compare expression="isBand${index}">
-                        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="outerHalf${slotId}_${index + 1}">
-${bandArcs(diameter - OUTER_HALF_INSET, HALF_THICKNESS, ' '.repeat(28))}
+function outerHalfSlot({ slotId, service, label }, ordinal) {
+  const positions = LAYOUTS.flatMap((layout) =>
+    Array.from({ length: layout.count - ordinal }, (_, index) => ({ layout, index })),
+  )
+  // Retain the accepted N3 clip, with margin around every new half as well.
+  const clipOuter = 207
+  const clipInner = 139
+  const expressions = positions.map(({ layout, index }) =>
+    `                        <Expression name="is${layout.name}Band${index}"><![CDATA[${rangeGuard(layout.max)} && [COMPLICATION.TITLE] == "${index}"]]></Expression>`,
+  ).join('\n')
+  const branches = positions.map(({ layout, index }) => {
+    const { outer, half } = bandGeometry(layout, index)
+    return `                    <Compare expression="is${layout.name}Band${index}">
+                        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="outerHalf${slotId}_${layout.name}_${index + 1}">
+${bandArcs(outer, half, ' '.repeat(28))}
                         </Group>
-                    </Compare>`,
-  ).join('\n')
-  const expressions = RINGS.map(
-    (_, index) =>
-      `                        <Expression name="isBand${index}"><![CDATA[[COMPLICATION.TITLE] == "${index}"]]></Expression>`,
-  ).join('\n')
+                    </Compare>`
+  }).join('\n')
   return `        <ComplicationSlot
             x="0"
             y="0"
@@ -1304,6 +1380,62 @@ ${branches}
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>`
+}
+
+/** Exercise the emitted admission expressions, including non-finite wire fields. */
+function assertLowerContracts() {
+  function expressions(markup) {
+    return new Map([...markup.matchAll(/<Expression name="([^"]+)"><!\[CDATA\[([\s\S]*?)\]\]><\/Expression>/g)]
+      .map(([, name, expression]) => {
+        const source = expression.replaceAll('[COMPLICATION.RANGED_VALUE_MIN]', 'min')
+          .replaceAll('[COMPLICATION.RANGED_VALUE_MAX]', 'max')
+          .replaceAll('[COMPLICATION.RANGED_VALUE_VALUE]', 'value')
+          .replaceAll('[COMPLICATION.TITLE]', 'title')
+        return [name, new Function('min', 'max', 'value', 'title', `return ${source}`)]
+      }))
+  }
+  for (const [index, ring] of RINGS.entries()) {
+    const markup = ringSlot(ring, index)
+    const valid = expressions(markup).get('isValid')
+    for (const [max, allowed] of [[100, true], [200, index === 0], [400, index < 2], [800, true]]) {
+      if (valid(0, max, 0, 'zero') !== allowed || valid(0, max, max, '') !== allowed) {
+        throw new Error(`main ${index}: legacy/adaptive position or endpoint admission drifted`)
+      }
+    }
+    const malformed = [
+      [0, 300, 50, ''], [1, 200, 50, ''], [0, 200, -1, ''], [0, 200, 201, ''],
+      [0, 200, NaN, ''], [0, 200, Infinity, ''], [0, Infinity, 50, ''],
+      [NaN, 200, 50, ''], [0, NaN, 50, ''], [0, 800, 50, 'split:unknown'],
+    ]
+    if (malformed.some((fields) => valid(...fields)) ||
+        valid(0, 100, 100, CREDITS_TOKEN) !== (index === CREDITS_RING_INDEX) ||
+        valid(0, 200, 100, CREDITS_TOKEN)) {
+      throw new Error(`main ${index}: malformed data or count-bearing credits admitted`)
+    }
+    // Every drawing, including the row, is below the single valid-position gate.
+    const body = markup.split('<Complication type="RANGED_VALUE">')[1].split('</Complication>')[0]
+    if (body.indexOf('<Compare expression="isValid">') > body.indexOf('<PartDraw') ||
+        !body.trimEnd().endsWith('</Compare>\n                </Condition>')) {
+      throw new Error(`main ${index}: a lower component escaped its admission gate`)
+    }
+  }
+  for (const [ordinal, slot] of OUTER_HALVES.entries()) {
+    const predicates = [...expressions(outerHalfSlot(slot, ordinal)).entries()]
+      .filter(([name]) => /^is(?:Legacy|N\d)Band/.test(name)).map(([, predicate]) => predicate)
+    const admitted = (...fields) => predicates.some((predicate) => predicate(...fields))
+    for (const [max, lastIndex] of [[100, 2], [200, 0], [400, 1], [800, 2]]) {
+      for (let index = 0; index < 3; index += 1) {
+        if (admitted(0, max, max / 3, String(index)) !== (index <= lastIndex - ordinal)) {
+          throw new Error(`extra ${ordinal}/${max}/${index}: impossible ordinal or position admitted`)
+        }
+      }
+    }
+    if ([[0, 300, 50, '0'], [1, 800, 50, '0'], [0, 800, NaN, '0'],
+      [0, 800, Infinity, '0'], [0, 800, -1, '0'], [0, 800, 801, '0'],
+      [0, 800, 50, '00'], [0, 800, 50, '3']].some((fields) => admitted(...fields))) {
+      throw new Error(`extra ${ordinal}: malformed response admitted`)
+    }
+  }
 }
 
 /** Two clocks, not one: the ambient copy is thinner and swaps in by alpha. */
@@ -1540,12 +1672,14 @@ ${body}
 
 const xml = face()
 
+assertLegacyCutoffs()
 assertNearExhaustedArcs()
+assertLowerContracts()
 await emit(target, xml, 'render-watchface')
 
 // Textures are rasterized, not compared: ImageMagick stamps metadata that
 // differs between runs on pixel-identical output (see design-output.mjs).
 if (!process.argv.includes('--check')) {
   await writeTextures()
-  console.log(`wrote ${TEXTURE_RINGS * TOKENS.length} ring textures to ${drawables}`)
+  console.log(`wrote ${LAYOUTS.filter(({ name }) => name !== 'Legacy').reduce((total, { count }) => total + count, 0) * TOKENS.length} ring textures to ${drawables}`)
 }

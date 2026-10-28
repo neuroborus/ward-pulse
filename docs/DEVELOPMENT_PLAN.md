@@ -1489,8 +1489,9 @@ features and release tooling in one unpublished initial `0.1.0` entry. Stock gen
 consumed the initial and tooling fragments for the explicitly selected version, without a
 native version transition. The guarded local version bridge and
 [prepare-release skill](../.agents/skills/prepare-release/SKILL.md) add explicit version cuts
-and repository-wide semantic coverage review; current native versions/codes stay 0.1.0 and
-1/2/1/1. Earlier local HOST acceptance on **2026-10-23** passed 33 tooling tests, including
+and repository-wide semantic coverage review. That preparation retained 0.1.0 and
+1/2/1/1; the later adaptive compatibility allocation uses 0.1.0 and 3/4/2/2 without a
+release cut or release preparation. Earlier local HOST acceptance on **2026-10-23** passed 33 tooling tests, including
 real pinned CLI/bootstrap/bridge integration in isolated fixtures. Separate verification passed
 initially empty-cache acquisition and offline tests with a root CLI already installed, plus
 independent raw partial/complete coverage skill scenarios. Fresh local checks of `df23ee9`
@@ -3472,16 +3473,48 @@ credential model. It does not authorize uploading provider credentials or usage 
 WardPulse backend. Any later service design must define its own data and security boundaries
 before implementation and update the applicable privacy guidance.
 
-### Deferred watch-face refinement
+### Adaptive watch-face bands — active integration
 
-**Status: deferred, excluded from 0.1.0.** Adaptive radial ring widths are future work
-after 0.1.0, without a promised release or date.
+**2026-10-28 status: implementation authored; native integration known Pending.** This
+supersedes the earlier post-0.1.0 deferral. The
+[dated design revision](product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count)
+owns automatic 68/32/20 full widths and 34/16/10 halves for resolved N1/N2/N3, retaining
+belt 202..134, gap 4, no pair gap and required actual aperture≥133.8. Ordinary plans,
+independent budgets, pairs and known zero count once; unavailable data is never fake zero.
+Current N3 art/textures and the 52-unit cells/logo/clock/132×26 legend stay fixed.
 
-- Automatically choose fixed layouts for one, two or three occupied bands, retaining the
-  current three-band outer boundary and central clearance: three unchanged, two widened,
-  one filling the available annulus.
-- A supported half-ring pair occupies one band; one full ring plus two halves occupies two.
-  Known 0% remains occupied. Preserve ordering and remaining-percent semantics; add no setting.
-- Future implementation owners: WFF generator, Wear complication band-count metadata and
-  matching review-art generators; retain the current phone-to-watch schema. Review halves,
-  0%/near-0%/100%, ambient rendering and budget textures.
+Wear complication responses derive count/order/pools/semantic fields from one accepted
+summary, then encode generic binary 2/4/8 ranges 0/200, 0/400, 0/800. MAX100 always uses legacy
+fixed widths for any count. Invalid contracts paint no lower component; obsolete producer
+selections return actual NoData. Valid extras survive absent delivered mains, while resolved
+singletons remain full bands. Independent delivery promises no common-N/atomic/ACK/grace
+contract; harmful mixing or persistent wrong output is a finding. All eight scene slots,
+five lower identities, six updaters including Status and wearer-owned upper choices remain.
+
+Source packaging is phone 0.1.0+3/Wear 4/legacy 2/Push default 2, common versionName 0.1.0,
+with signers/identities and native_state parity preserved. Phone UI, core, providers and
+summary/schema/settings/auth remain unchanged. This is one compatibility change, not a
+release cut. Producer JVM, geometry/admission assertions and focused Android API/wire/Parcel
+coverage are authored; test/build execution and official/native acceptance remain Pending.
+
+HOST owns acceptance after whole execution DONE, owned retirement, actual owning CLI exit
+where applicable and fresh separate public/OS idle. Preserve original APK receipts and
+installed history. On the smallest round Push target: old-old, Wear 2→4 retaining Push 1,
+then explicit **Update watch face** Push 1→2. On nonround legacy: old-old, face 1→2 retaining
+Wear 2, then Wear 2→4. Verify retained bindings/upper choices/signers and source→canonical→
+built→installed→active identity. Conflicts require reviewed correction, never downgrade,
+reinstall or reset. Later update the existing phone emulator 1→3 with retained data/settings/
+credentials. Physical phone work is forbidden; physical watch 466 remains deferred.
+
+Full unchanged phone/Wear/legacy/Push builds and official validation, device/API wire tests,
+read-only release-status parity and docs checks remain mandatory HOST work. Prove settled
+N0..3, pairs/budgets/credits/NoData/malformed suppression, old ratio compatibility and actual
+interactive/true-ambient aperture, outer-half clipping, caps, textures and N3 continuity.
+Preserve original transient plus settled frames for N3↔N1/N2, pair appearance/removal,
+same-count reorder and delayed/interrupted recovery through normal summary updates.
+Unseen transitions stay Pending; sleeps/retries/final-frame substitutes do not prove them.
+Use existing AVDs only, without copies/worktrees/new snapshots/clearing. Delegated design/
+documentation owners in this same integration must refresh healthy shared-state captures,
+the index and browser uses after native acceptance, restore guarded summary/data/bindings/
+settings/time/font/ambient/pairing, then obtain Root's whole zero-findings review after the
+last correction. Native implementation completion does not close integration acceptance.

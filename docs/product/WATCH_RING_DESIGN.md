@@ -62,7 +62,9 @@ and watermark; 120×26 legend with 18/16/14 labels); exact-full construction rev
 **2026-10-26** (remove the remaining end inset from the full-only path; native acceptance pending);
 centred composition revision **2026-10-27** (historical logo-above-clock layout; 132×26 legend
 with 20/18/16 labels); upward-digit revision **2026-10-27** (larger whole clocks retaining
-the 08:08 reference bottoms, 52-unit cells and 64/54-square logos; bounded native evidence below)
+the 08:08 reference bottoms, 52-unit cells and 64/54-square logos; bounded native evidence below);
+adaptive-band revision **2026-10-28** (resolved counts select 68/32/20-unit bands;
+generic ranged envelopes replace the raw percentage interface; native acceptance Pending)
 — locked visual target for
 Wear OS and Watch Face Format until the next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
@@ -71,6 +73,7 @@ wireframes, large remaining-% heroes, or bordered strip cards.
 The operative layout is
 [upward digits and fixed reference bottoms](#revision-2026-10-27--upward-digits-and-fixed-reference-bottoms), retaining the
 [outward-preserving cell contract](#revision-2026-10-25--preserved-outward-fade-and-50-unit-cells).
+Band widths follow the [adaptive revision](#revision-2026-10-28--adaptive-bands-from-resolved-count).
 The earlier bottom-only/uniform-centre candidate below is superseded, not accepted intent.
 
 Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 13). Asset ownership: `docs/DESIGN_ASSETS.md`.
@@ -79,6 +82,106 @@ Canonical review generator: `tools/render-watch-ring-designs.mjs`
 Canonical face generator: `tools/render-watchface.mjs` — it writes the shipped `watchface.xml`
 and the ring-type drawables beside it.  
 Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and sibling variants).
+
+## Revision 2026-10-28 — adaptive bands from resolved count
+
+This revision supersedes fixed width for accepted adaptive responses. Count validated,
+resolved band entries once each: an ordinary plan, an independent budget, a supported pair
+or a known zero occupies one band. Preserve tightest-first payload order, `RingSurfaceOrder`,
+pool identities and both split ordinals. Missing, negative or non-finite values never become
+zero or a count. N0 draws no usage band and may retain the legacy credits-only row. N>3 or
+more than two splits is invalid. Availability changes can legitimately change the count;
+the payload does not distinguish every temporary omission from deselection.
+
+On the unchanged 450 canvas, width is `(68 - 4 * (N - 1)) / N`. Outside index j has
+outer edge `202 - j * (width + 4)`, full centreline `edge - width/2`, and outer/inner pair
+centrelines `edge - width/4` / `edge - 3*width/4`. There is no gap inside a pair.
+
+| Resolved bands | Full / half width | Full centrelines, outside first | Outer / inner pair centrelines |
+| --- | --- | --- | --- |
+| 1 | 68 / 34 | 168 | 185 / 151 |
+| 2 | 32 / 16 | 186, 150 | 194 / 178; 158 / 142 |
+| 3 | 20 / 10 | 192, 168, 144 | 197 / 187; 173 / 163; 149 / 139 |
+
+The nominal belt remains 202..134, with gap 4 and actual aperture at least 133.8 required.
+`bandGeometry`, `assertNearExhaustedArcs` and `assertFullRing` in `tools/render-watchface.mjs`
+cover every actual radius/stroke: cap compensation, proportional tiny remainders on both
+sides of the two-cap cutoff, zero tracks, near-full and exact-full closure. The full path
+retains one 0..359.9 ROUND arc without either cap inset. These are declaration/analytical
+checks, not measurements of actual aperture, clipping or native antialiasing.
+
+The deliberate raw-range interface revision keeps generic `TYPE_UNDEFINED`. The producer
+derives the semantic Float percentage, TEXT, description and zero tokens before multiplying
+VALUE and MAX by a binary factor. Scaled units never enter a percentage formatter or clamp.
+
+| Exact MIN / MAX | Meaning | Geometry |
+| --- | --- | --- |
+| 0 / 100 | Legacy percentage, any actual count | Fixed 20 / half 10 at legacy positions; never N3 evidence |
+| 0 / 200 | Factor 2, N1 | Full 68 / half 34 |
+| 0 / 400 | Factor 4, N2 | Full 32 / half 16 |
+| 0 / 800 | Factor 8, N3 | Full 20 / half 10 |
+
+Only finite admitted envelopes and finite bounded VALUE are accepted. Adaptive main j must
+be less than N. Extras require exact TITLE `0`/`1`/`2` and feasible ordinal: ordinal 1 requires
+j<N-1; the legacy envelope retains static positions without asserting an actual count.
+Unsupported TITLE/range/value/position paints nothing: no arc, track, texture, well or label.
+Invalid producer selections and obsolete services return actual `NoData`. Credits and
+uncounted previews retain MAX100; credits never establish a usage band. Main TITLE keeps
+the existing empty/zero, period and closed split/zero vocabulary; no count suffix is added.
+
+Each response derives count, selection, pools, semantic fields and scaling from one accepted
+summary load. A valid delivered extra survives an absent delivered main without inventing
+main paint or a row. A resolved singleton with split=null remains an ordinary full band
+with `NoData` extra. Decode each response independently: there is no common-N selector,
+generation tag, atomic transaction, renderer ACK or grace-period promise. Old/new counts
+can overlap during independent delivery; harmful ambiguity or persistent wrong output is
+a finding, not accepted behavior.
+
+N3 geometry, nine existing texture pixels and all N3 review art remain fixed. New textures
+are baked at actual N1/N2 radii, not resized N3 images. Keep nominal cap 15.756, Noto Sans
+Bold, alpha 115/63, four diagonal breaks and existing ambient treatment. Repeats per sweep
+outside first are N1 D 13 / 7D 8 / M 10 and N2 D 15/11, 7D 9/6, M 12/9. Eighteen texture PNGs now
+cover all six full-band geometries. New-radius refits require independent design review;
+N3 is not retuned. `adaptiveVariants` in `tools/render-watch-ring-designs.mjs` adds one/two
+band pair boards and all new-radius period fits in active/ambient; the existing N3 art's
+measured model is preserved, including its historical thinner ambient strokes.
+
+Keep all eight scene slots: lower 101/102/105/106/109, all six updater services including
+Status, and upper 201/202/203 with existing types, DAY_OF_WEEK/EMPTY/EMPTY defaults and wearer
+choices. Canonical IDs do not establish runtime IDs. The current 52-unit cells, logo,
+clock/type/reference bottoms, 132×26 wells, labels and fades remain unchanged.
+
+Old app/new face stays fixed legacy width for any count. New app/old face preserves
+VALUE/MAX ratios, semantic strings and the existing pair contract, but third-party raw
+readers and OEM speech/renderers may interpret generic scaled units differently; universal
+compatibility is unsupported. The older slot 109 marker incompatibility in
+[Split band](#split-band-revised-2026-09-16) remains: stable service names do not repair it.
+
+**Integration acceptance: known Pending.** Generator output and review art are authored,
+not native acceptance. Packaging is phone 0.1.0+3, Wear 4, legacy 2, Push default 2, all
+versionNames 0.1.0 with identities/signers retained; this is not a release cut. HOST owns
+full builds/official validation/API wire tests, both delivery channels, four installed
+app/face combinations and retained lower bindings/upper choices. Push: old-old, Wear 2→4
+retaining Push 1, then explicit **Update watch face** Push 1→2. Legacy: old-old, face 1→2
+retaining Wear 2, then Wear 2→4. Verify existing installed history first; conflicts need
+reviewed correction, never downgrade/reinstall/reset. Later verify phone 1→3 on its existing
+emulator with retained data/settings/credentials. Physical phone work is forbidden and
+physical 466 remains deferred.
+
+Preserve the actual installed Push 1 receipt separately from the calibration APK used for
+preadaptive N3 continuity. They have different XML bytes. Ratio-consumer eligibility is
+not XML/pixel/runtime equivalence and supplies no new slot 109 compatibility promise.
+
+After execution DONE, owned-process retirement and fresh public/OS idle, HOST must bind
+source/canonical/built/installed/active identities, interactive and true-ambient geometry,
+caps/aperture/clipping/textures/N3 continuity on the smallest round and nonround targets,
+and original transient plus settled frames for N3↔N1/N2, pair appearance/removal,
+same-count reorder and delayed/interrupted recovery through normal updates. Unseen cases
+remain Pending; final frames, sleeps or retries do not substitute. Delegated documentation/
+design ownership in this same integration must refresh healthy public captures, their index
+and browser uses only after native acceptance, then restore guarded data/bindings/settings/
+time/font/ambient/pairing and obtain Root's whole zero-findings review. Native completion
+alone does not close this acceptance.
 
 ## Revision 2026-10-25 — larger face legend and cells
 
@@ -1768,7 +1871,7 @@ not change with this runtime construction repair.
 No candidate native continuity pass is recorded by this revision. HOST acceptance remains
 pending: bind installed resources and actual Float/MAX; review two settled original frames
 per controlled scene in actual INTERACTIVE and AMBIENT on small round and nonround targets;
-measure the complete annulus, both edges and brightness. Inherited physical466 acceptance
+measure the complete annulus, both edges and brightness. Inherited physical 466 acceptance
 also remains pending while that target is unavailable. Safe debug-only Mock delivery,
 writer isolation and preservation/restoration of stored and derived state belong to HOST
 after Runner completion and retirement; the synthetic scene data does not prove those steps
@@ -2193,7 +2296,9 @@ primary review preview after generation:
 xdg-open apps/wear_android/design/preview-3-plan-credits.png
 ```
 
-The current maps contain 26 boards/26 PNGs and 23 WFF mirrors. All model the enlarged whole
+The current maps contain 40 boards/40 PNGs and 37 WFF mirrors. The 14 adaptive additions
+come from `adaptiveVariants` in `tools/render-watch-ring-designs.mjs` and are included in
+both `variants` and `wffFiles`. All model the enlarged whole
 clock with per-mode fixed baselines, 52-unit cells and 132×26 wells with 20/18/16 labels.
 Ordinary boards stay mark-free; the shipped portrait alone overlays the active 64-square
 logo at (193,141), alpha95, read from generated XML.
@@ -2226,6 +2331,10 @@ These images are review/picker art, not native or public-capture acceptance.
 | `round-3-plan-cell-cleared.svg` | **Empty-cell baseline** — the left cell cleared, showing the graded recess beside two filled ones |
 | `round-ambient-3.svg` | Ambient, three muted rings |
 | `round-ambient-budget.svg` | Ambient with type — the band dims and takes its type with it |
+| `round-1-plan-split.svg` | One widened adaptive band with a Cursor pair |
+| `round-2-plan-two-pairs.svg` | Two widened adaptive bands with Codex/Spark and Cursor pairs |
+| `round-{1,2}-budget-{d,7d,m}.svg` | Six active adaptive budget boards; all periods at each new radius, with distinct periods rotated across two-band layouts |
+| `round-ambient-{1,2}-budget-{d,7d,m}.svg` | Six ambient counterparts for the new-radius period fits |
 
 **Preview coverage revision 2026-10-11 — every board in that table has a preview beside it**,
 named `preview-<board>.png` for `round-<board>.svg`, and the generator derives that list from

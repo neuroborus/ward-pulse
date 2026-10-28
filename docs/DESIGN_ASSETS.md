@@ -92,7 +92,19 @@ asset `apps/watchface_wff/src/main/res/drawable/preview.png` from the Primary on
 preview: `apps/wear_android/design/preview-3-plan-credits.png`.
 
 The [upward-digit 2026-10-27 composition](product/WATCH_RING_DESIGN.md#revision-2026-10-27--upward-digits-and-fixed-reference-bottoms)
-owns 26 face boards/previews, 23 WFF mirrors and the shipped portrait. The 52-unit cells
+owns the preserved centre composition. The
+[adaptive-band revision](product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count)
+now owns 40 face boards/previews, 37 WFF mirrors and the shipped portrait. N3 boards,
+previews, portrait and the original nine textures retain their accepted bytes. Nine new
+N1/N2 textures are baked at actual radii with fixed nominal 15.756 glyph caps; no existing
+PNG is stretched. New one/two-band pair and D/7D/M active/ambient boards are generated
+by `adaptiveVariants` in `tools/render-watch-ring-designs.mjs`. Face generation precedes
+review art so the portrait reads current canonical geometry.
+Actual adaptive aperture, clipping, textures, transitions and native acceptance remain
+**known Pending**. Delegated documentation/design work in the same integration owns final
+healthy shared-state public captures, screenshot-index and browser review after native
+acceptance; existing public images retain their dated N3 provenance.
+The 52-unit cells
 at (147,109)/(199,95)/(251,109) use preferred **18** with unchanged **14/12** fallbacks, centred
 46×24 text at (3,14) and 24-unit icons at inset **14**. Preserve outward fading and add lower
 fading only laterally. Whole-clock **86 Bold/y176** and **96 Thin/y175**, both height 90, are

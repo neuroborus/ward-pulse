@@ -102,6 +102,11 @@ See [Sync and notifications](/guide/sync#refresh-now) for request delivery and r
 ![Watchface selection showing three bands used by checked metrics in the dark theme.](/screenshots/phone-watch-settings-dark.png)
 
 Choose which metrics fill the bands; paired pools can share one band.
+With both the watch app and face updated, one or two available bands widen automatically
+to fill the same ring area; three bands keep their current widths. A pair counts as one
+band. Temporarily unavailable data can change the width when it disappears or returns;
+a known exhausted **0%** still occupies its band. An older app or face keeps narrow bands
+until both are updated.
 
 ### Display order
 

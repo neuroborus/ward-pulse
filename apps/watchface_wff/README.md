@@ -22,6 +22,14 @@ resource-only, signed APK dependency of the Wear app, with `hasCode=false` and m
 There is one scene and one generator; do not copy or hand-edit generated XML or drawables.
 Both packages retain complication and launch targets in the host `app.wardpulse`.
 
+The adaptive compatibility change uses legacy code 2 and Push default code 2 with Wear 4
+and phone 0.1.0+3; every versionName stays 0.1.0. Package/signing identities are preserved.
+This is packaging for in-place updates, not a product release cut. Actual retained-binding,
+legacy/Push update, true-ambient and transition acceptance remains **Pending** under the
+[adaptive revision](../../docs/product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count).
+The new face admits only its own response's exact 0/100, 0/200, 0/400, 0/800 envelopes;
+MAX100 always means fixed legacy geometry, and malformed contracts draw no lower component.
+
 The Wear app minimum is API 33; the phone minimum is unchanged. The Wear app checks Push
 support before using its manager. Supported Wear OS 6+ devices can install the bundled
 face; WFF 2 devices without Push use separate installation and manual selection. API 33
@@ -53,11 +61,10 @@ its matching APK/token through Gradle's variant graph. From `apps/wear_android/`
 Owner signing setup:
 
 ```sh
-./gradlew :app:assembleDebug -PwardpulsePushVersionCode=1
-./gradlew :app:assembleDebug -PwardpulsePushVersionCode=2
+./gradlew :app:assembleDebug
 ```
 
-The positive `wardpulsePushVersionCode` input defaults to 1. Keep the same Push certificate
+The positive `wardpulsePushVersionCode` input defaults to 2. Keep the same Push certificate
 across versions and outside build outputs so `clean` cannot replace it. Debug and release
 Push signing use separate ignored configuration and must differ from the host certificate.
 See [signing inputs](../wear_android/watchface_push/README.md#signing-inputs) and
@@ -74,7 +81,8 @@ those results. The [acceptance record](../../docs/product/RELEASE_CHECKLIST.md#w
 retains the API34 replacement-time headless-renderer exception and N2 transient fallback,
 and keeps production signing, Play delivery, API35 and hardware acceptance separate.
 The dated utility baseline and approved manual-selection capture are integrated; existing
-face geometry and screenshot bytes are unchanged.
+face geometry and screenshot bytes were unchanged by that setup-route work. Adaptive
+geometry and its native acceptance are tracked separately above.
 
 ## Ownership
 

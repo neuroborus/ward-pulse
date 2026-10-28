@@ -22,16 +22,19 @@ The [local bridge](../../tools/release/README.md#local-version-preparation) pref
 official plan and all native declarations before stock generation or native writes, then
 mirrors a genuine transition with phone +2, next even Wear and independent legacy/Push +1.
 A fully matching target changes nothing and preserves pending fragments. Partial generation
-or I/O requires reconciliation, not an automatic retry. This setup retains 0.1.0 and 1/2/1/1.
+or I/O requires reconciliation, not an automatic retry. The adaptive compatibility allocation
+now retains 0.1.0 with phone/Wear/legacy/Push 3/4/2/2;
+this scoped packaging change is not a release cut or release preparation. HOST read-only
+`just release-status` must verify parity on the final metadata; that result is Pending.
 
-The 0.1.0 RC source versions are:
+The current 0.1.0 source versions are:
 
 | Artifact | Package | versionName | versionCode | Source |
 | --- | --- | --- | --- | --- |
-| Phone AAB | `app.wardpulse` | `0.1.0` | `1` | `version` in [pubspec.yaml](../../apps/phone_flutter/pubspec.yaml) (`0.1.0+1`) |
-| Wear host AAB | `app.wardpulse` | `0.1.0` | `2` | `defaultConfig` in [Wear build.gradle.kts](../../apps/wear_android/app/build.gradle.kts) |
-| Legacy WFF AAB | `app.wardpulse.watchface` | `0.1.0` | `1` | `defaultConfig` in [WFF build.gradle.kts](../../apps/watchface_wff/build.gradle.kts) |
-| Bundled Push APK | `app.wardpulse.watchfacepush.main` | `0.1.0` | `1` | `pushVersionCode` / `defaultConfig` in [Push build.gradle.kts](../../apps/wear_android/watchface_push/build.gradle.kts) |
+| Phone AAB | `app.wardpulse` | `0.1.0` | `3` | `version` in [pubspec.yaml](../../apps/phone_flutter/pubspec.yaml) (`0.1.0+3`) |
+| Wear host AAB | `app.wardpulse` | `0.1.0` | `4` | `defaultConfig` in [Wear build.gradle.kts](../../apps/wear_android/app/build.gradle.kts) |
+| Legacy WFF AAB | `app.wardpulse.watchface` | `0.1.0` | `2` | `defaultConfig` in [WFF build.gradle.kts](../../apps/watchface_wff/build.gradle.kts) |
+| Bundled Push APK | `app.wardpulse.watchfacepush.main` | `0.1.0` | `2` | `pushVersionCode` / `defaultConfig` in [Push build.gradle.kts](../../apps/wear_android/watchface_push/build.gradle.kts) |
 
 Phone and Wear share a package and delivered app-signing identity, but need distinct
 versionCodes. WardPulse allocates coordinated pairs as **odd phone / next even Wear**:
@@ -48,8 +51,8 @@ internal positive `versionCode`; see Android's
 [version settings](https://developer.android.com/studio/publish/versioning#version-settings).
 
 Both face packages have independent version histories. Push's positive
-`wardpulsePushVersionCode` input currently defaults to 1; its N/N+1 development upgrade examples do
-not set the Wear host code or require Push code 2 for this RC. Root must resolve first
+`wardpulsePushVersionCode` input currently defaults to 2. The adaptive change reserves
+Push 1→2 and legacy 1→2 in-place updates independently of the phone 3/Wear 4 pair. Root must resolve first
 publication versus existing signing and uploaded-version history before provisioning
 credentials or treating these versions as publishable. If actual history conflicts with
 this RC, return the material decision to Root before release execution; do not silently
@@ -381,13 +384,13 @@ and guarded ordinary release APK builds produce these seven files for the curren
 
 | File in the Actions artifact | Purpose |
 | --- | --- |
-| `wardpulse-phone-0.1.0-code1.aab` | Phone Play upload bundle |
+| `wardpulse-phone-0.1.0-code3.aab` | Phone Play upload bundle |
 | `WardPulse-0.1.0-Android.apk` | Direct phone installer |
-| `wardpulse-wear-0.1.0-code2.aab` | Wear Play upload bundle |
+| `wardpulse-wear-0.1.0-code4.aab` | Wear Play upload bundle |
 | `WardPulse-0.1.0-WearOS.apk` | Direct Wear installer |
-| `wardpulse-legacy-0.1.0-code1.aab` | Legacy WFF Play upload bundle |
+| `wardpulse-legacy-0.1.0-code2.aab` | Legacy WFF Play upload bundle |
 | `WardPulse-0.1.0-WatchFace-WearOS5Plus.apk` | Separate Wear OS 5+ face installer |
-| `wardpulse-push-0.1.0-code1.apk` | Separate Push identity, embedded by the Wear producer |
+| `wardpulse-push-0.1.0-code2.apk` | Separate Push identity, embedded by the Wear producer |
 
 The three direct installers are signed with the **upload key**. This does not promise update
 compatibility with debug installs or Play-delivered installs, whose app-signing certificates

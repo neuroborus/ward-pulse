@@ -162,6 +162,12 @@ const TEXTURE = {
   },
 }
 
+// New-radius fits mirror the face's ADAPTIVE_REPEATS; N3 art stays unchanged.
+const ADAPTIVE_REPEATS = {
+  1: { D: [13], '7D': [8], M: [10] },
+  2: { D: [15, 11], '7D': [9, 6], M: [12, 9] },
+}
+
 const CATALOG = {
   codex: {
     id: 'codex',
@@ -323,9 +329,23 @@ function visibleRingArcLength(geometry, thickness) {
 function assertNearExhaustedArcs() {
   const epsilon = 0.000001
   const tolerance = 0.000000001
-  for (const diameter of [404, 356, 308]) {
-    const r = diameter / 2
-    const thickness = 40
+  const geometries = [1, 2, 3].flatMap((count) => {
+    const width = (68 - 4 * (count - 1)) / count
+    return Array.from({ length: count }, (_, index) => {
+      // Preserve the accepted measured N3 art, including its ambient model.
+      const modes = count === 3 ? [false, true] : [false]
+      return modes.flatMap((ambient) => {
+        const pitchWidth = count === 3 ? 450 * (ambient ? 0.0403 : 0.0449) : width
+        const band = ambient ? pitchWidth * 0.75 : pitchWidth
+        const r = count === 3
+          ? 450 * 0.4264 - index * (pitchWidth + 450 * 0.0084)
+          : 202 - index * (width + 4) - width / 2
+        return [[r, band], ...ringArcPair(r, band)]
+      })
+    }).flat()
+  })
+  for (const [r, thickness] of geometries) {
+    const diameter = r * 2
     const cutoff = twoCapCutoff(r, thickness)
     const belowRemaining = cutoff - epsilon
     const below = ringArcGeometry(r, thickness, belowRemaining)
@@ -418,12 +438,12 @@ function ringArcPair(r, band) {
   ]
 }
 
-function ringTexture({ cx, cy, r, thickness, period, fromOutside }) {
-  const repeats = TEXTURE.repeats[period]?.[fromOutside]
+function ringTexture({ cx, cy, r, thickness, period, fromOutside, count }) {
+  const repeats = (count === 3 ? TEXTURE.repeats : ADAPTIVE_REPEATS[count])?.[period]?.[fromOutside]
   if (!repeats) {
     throw new Error(`no measured repeat count for "${period}" on ring ${fromOutside + 1}`)
   }
-  const cap = thickness * TEXTURE.capOfBand
+  const cap = count === 3 ? thickness * TEXTURE.capOfBand : 15.756 * (cx * 2 / FACE)
   // Baseline half a cap height below the centre line leaves the cap centred on the band.
   const y = (cy - r + cap / 2).toFixed(1)
   const pitch = 360 / TEXTURE.sweeps
@@ -648,13 +668,13 @@ async function faceSvg({
   // Measured off the device, not taken from watchface.xml: `thickness="40"`
   // renders a 20.2-unit band on a 450 face at a 24-unit pitch, and `width` sets
   // the band's outer edge, so the outermost centre line sits at 202 - 20.2/2.
-  const outer = size * 0.4264
-  const gap = size * 0.0084
-  const thickness = Math.max(8, size * (ambient ? 0.0403 : 0.0449))
+  let outer = size * 0.4264
+  let gap = size * 0.0084
+  let thickness = Math.max(8, size * (ambient ? 0.0403 : 0.0449))
   // Ambient art paints a thinner band than it reserves; the ring pitch stays on `thickness`
   // while the stroke and the type punched into it take `band`, so a cap set for the full
   // width cannot overflow the thinned stroke.
-  const band = ambient ? thickness * 0.75 : thickness
+  let band = ambient ? thickness * 0.75 : thickness
   const hasPercent = (value) => Number.isFinite(value) && value >= 0
   const knownLayers = layers.flatMap((layer) => {
     if (!hasPercent(layer.used)) {
@@ -665,6 +685,14 @@ async function faceSvg({
     return [{ ...layer, split: hasPercent(layer.split?.used) ? layer.split : null }]
   })
   const planLayers = sortByRemaining(knownLayers)
+  if (planLayers.length > 3) throw new Error('the face supports at most three bands')
+  if (planLayers.length > 0 && planLayers.length < 3) {
+    const scale = size / FACE
+    thickness = ((68 - 4 * (planLayers.length - 1)) / planLayers.length) * scale
+    outer = 202 * scale - thickness / 2
+    gap = 4 * scale
+    band = thickness
+  }
   const stripLayers = showPlan ? planLayers : layers.slice(0, 1)
 
   let ringMarkup = ''
@@ -707,6 +735,7 @@ async function faceSvg({
           thickness: band,
           period: planLayers[i].period,
           fromOutside,
+          count: planLayers.length,
         })
       }
     }
@@ -782,7 +811,35 @@ const budgetPeriods = [
   CATALOG.anthropicBudgetToday,
 ]
 
+const adaptiveBudgets = {
+  D: CATALOG.anthropicBudgetToday,
+  '7D': CATALOG.anthropicBudgetWeek,
+  M: CATALOG.anthropicBudgetMonth,
+}
+const periods = Object.keys(adaptiveBudgets)
+
+const adaptiveVariants = [
+  { file: 'round-1-plan-split.svg', name: 'One adaptive band with two pools', layers: [CATALOG.cursorPair] },
+  { file: 'round-2-plan-two-pairs.svg', name: 'Two adaptive bands with two pairs', layers: [CATALOG.codexPair, CATALOG.cursorPair] },
+  ...[false, true].flatMap((ambient) => periods.map((period) => ({
+    file: `round-${ambient ? 'ambient-' : ''}1-budget-${period.toLowerCase()}.svg`,
+    name: `One adaptive budget band · ${period}${ambient ? ' · ambient' : ''}`,
+    layers: [adaptiveBudgets[period]], ambient,
+  }))),
+  // Rotate distinct periods across both radii. Synthetic money/usage agree,
+  // and no board invents a duplicate budget for one connection and period.
+  ...[false, true].flatMap((ambient) => periods.map((period, index) => ({
+    file: `round-${ambient ? 'ambient-' : ''}2-budget-${period.toLowerCase()}.svg`,
+    name: `Two adaptive budget bands · ${period}${ambient ? ' · ambient' : ''}`,
+    layers: [
+      { ...adaptiveBudgets[period], used: 0.25, budget: '$25.00/100' },
+      { ...adaptiveBudgets[periods[(index + 1) % periods.length]], used: 0.5, budget: '$50.00/100' },
+    ], ambient,
+  }))),
+].map((variant) => ({ ...variant, showPlan: true, showCredits: false }))
+
 const variants = [
+  ...adaptiveVariants,
   {
     file: 'round-3-plan-credits.svg',
     name: 'Round · 3 providers · plan + credits',
@@ -920,6 +977,7 @@ const variants = [
 ]
 
 const wffFiles = new Set([
+  ...adaptiveVariants.map(({ file }) => file),
   'round-1-plan-exhausted.svg',
   'round-3-plan-exhausted-claude.svg',
   'round-plan-pair-inner-zero.svg',

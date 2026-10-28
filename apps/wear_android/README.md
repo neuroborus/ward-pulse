@@ -108,6 +108,33 @@ Rules:
   twenty-four hours: `back at HH:MM` for a window rolling today, `back MMM d, HH:mm` for any
   other, so tomorrow evening never reads like tonight.
 
+## Adaptive face complication contract
+
+`WatchSummaryComplications.kt` resolves count, order, pools and semantics from one accepted
+summary load per response. Each ordinary/budget/pair/known-zero entry counts once (0..3).
+Main selections and extras preserve `RingSurfaceOrder` and split ordinals; invalid resolved
+data and obsolete selections return actual `NoData`. A resolved singleton stays a full band.
+
+Semantic percentages/text/descriptions/zero tokens precede generic `TYPE_UNDEFINED` scaling:
+MAX200/400/800 encode N1/N2/N3 with factors 2/4/8. VALUE/MAX stays the percentage ratio;
+MAX100 remains legacy 20/half 10 for any count, including credits and uncounted previews.
+The face decodes each response independently. Valid extras survive an absent delivered main;
+there is no cross-slot atomicity promise. Third-party raw-value readers/OEM speech are not
+universally supported, and the older slot 109 marker boundary remains documented in
+[Split band](../../docs/product/WATCH_RING_DESIGN.md#split-band-revised-2026-09-16).
+
+`WatchComplicationTextTest` covers count/order/pools, independent budgets, semantic ranges,
+zero, singleton and obsolete NoData. `AdaptiveRangedComplicationTest`, included in
+`just test-wear-device`, invokes actual AndroidX validation and wire/Parcel roundtrips for
+legacy and adaptive envelopes, endpoints and fractional semantics. Execution and native
+acceptance are **Pending**; no new test/build/device pass is asserted here.
+
+Current packaging is phone 0.1.0+3/Wear 4/legacy 2/Push default 2, all versionNames 0.1.0. Preserve
+package identities, signers and release-tool parity; this is not a release cut. The
+[adaptive revision](../../docs/product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count)
+owns required HOST delivery/retained-binding/transition/true-ambient acceptance and deferred
+public captures. Native implementation alone does not close that work.
+
 ## Watch face setup
 
 Scroll past the complete Plan windows list and tap **Watch face**. Before the first phone
@@ -166,7 +193,7 @@ The durable-consent device tests in `WatchFaceConsentStoreTest`, included in
 `just test-wear-device`, verify synchronous on-disk history. The retained-navigation UI
 tests use synthetic summary availability; the controller tests use injected effects.
 Actual platform consent/data observations are recorded separately in the acceptance record.
-Current `just check-wear` passed, including the newly validated Push bundle. An actual
+The earlier setup-route HOST run passed `just check-wear`, including its validated Push bundle. An actual
 API 34 native frame confirms the separately installed face's **Installed. Select WardPulse
 from your watch-face list** guidance. Historical consent captures are not that evidence.
 `WardPulseNavigationStateTest` holds an old absence across pause/resume, navigation re-entry

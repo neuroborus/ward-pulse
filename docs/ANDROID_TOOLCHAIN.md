@@ -832,18 +832,19 @@ APK certificate differs from the selected host certificate, including debug. The
 host `key.properties` / `wardpulseRequireReleaseKey` guard and shared phone/Wear identity
 still apply; Push release signing is additional. See [Signing](product/RELEASE_CHECKLIST.md#signing).
 
-From `apps/wear_android/`, after private development signing setup, these ordinary debug
-builds illustrate N/N+1 upgrade acceptance:
+From `apps/wear_android/`, after private development signing setup, build the current
+bundled face through the ordinary graph:
 
 ```sh
-./gradlew :app:assembleDebug -PwardpulsePushVersionCode=1
-./gradlew :app:assembleDebug -PwardpulsePushVersionCode=2
+./gradlew :app:assembleDebug
 ```
 
-`wardpulsePushVersionCode` defaults to 1 and accepts a positive Android integer. Keep the
+`wardpulsePushVersionCode` defaults to 2 and accepts a positive Android integer. Keep the
 Push package and certificate identical for N/N+1 development builds. This input belongs to
-the independent Push package; it does not set the Wear host version or require Push code 2
-for the 0.1.0 RC. Follow the central [release version scheme](product/RELEASE_CHECKLIST.md#release-versions)
+the independent Push package; it does not set the Wear host version. The adaptive
+compatibility allocation is phone 3/Wear 4/legacy 2/Push 2, all versionName 0.1.0, without a
+release cut. Preserve the actual old code 1 APK for HOST Push 1→2 update acceptance;
+rebuilding current sources as code 1 is not the old baseline. Follow the central [release version scheme](product/RELEASE_CHECKLIST.md#release-versions)
 and [ordinary release flow](#release-artifact-builds). Release needs both host release
 configuration and separate Push release configuration.
 The normal variant graph consumes a signed APK artifact from `:watchface_push`, validates

@@ -79,13 +79,14 @@ abstract class SplitBandComplicationDataSourceService(private val splitIndex: In
             return null
         }
         val rings = WatchSummaryStore(this).load()?.rings.orEmpty()
-        return outerHalfComplicationData(rings, splitIndex) { half, outerSlot ->
+        return outerHalfComplicationData(rings, splitIndex) { half, outerSlot, count ->
             ComplicationBuilders.ranged(
                 this,
                 WatchComplicationText.remainingPercent(half.usedPercent),
                 title = outerSlot.toString(),
                 colorArgb = RingFamily.colorArgb(half.id),
                 contentDescription = half.label,
+                ringCount = count,
             )
         }
     }
@@ -108,18 +109,25 @@ abstract class SplitBandComplicationDataSourceService(private val splitIndex: In
 internal fun outerHalfComplicationData(
     rings: List<RingSummary>,
     splitIndex: Int,
-    build: (RingHalf, Int) -> ComplicationData,
+    build: (RingHalf, Int, Int) -> ComplicationData,
 ): ComplicationData {
+    val count = resolvedBandCount(rings) ?: return NoDataComplicationData()
     val payloadIndex = rings.indices.filter { rings[it].split != null }.getOrNull(splitIndex)
         ?: return NoDataComplicationData()
     val half = rings[payloadIndex].split ?: return NoDataComplicationData()
     val outerSlot = RingSurfaceOrder.outerSlotForPayloadIndex(rings.size, payloadIndex)
         ?: return NoDataComplicationData()
-    if (!half.usedPercent.isFinite() || half.usedPercent < 0.0) {
-        return NoDataComplicationData()
-    }
-    return build(half, outerSlot)
+    return build(half, outerSlot, count)
 }
+
+/** A pair and a known zero each occupy one band; invalid data supplies no count. */
+internal fun resolvedBandCount(rings: List<RingSummary>): Int? =
+    rings.size.takeIf { count ->
+        count in 0..3 && rings.count { it.split != null } <= 2 && rings.all { ring ->
+            ring.usedPercent.isFinite() && ring.usedPercent >= 0.0 &&
+                (ring.split?.let { it.usedPercent.isFinite() && it.usedPercent >= 0.0 } != false)
+        }
+    }
 
 /**
  * The legend row a face draws when the payload carries credits but no plan ring.
@@ -144,17 +152,15 @@ internal fun creditsOnlyComplicationData(
 internal fun ringComplicationData(
     rings: List<RingSummary>,
     ringIndex: Int,
-    build: (RingSummary, Float, String) -> ComplicationData,
+    build: (RingSummary, Float, String, Int) -> ComplicationData,
 ): ComplicationData {
+    val count = resolvedBandCount(rings) ?: return NoDataComplicationData()
     val dataIndex =
         RingSurfaceOrder.payloadIndexForOuterSlot(rings.size, ringIndex)
             ?: return NoDataComplicationData()
     val ring = rings[dataIndex]
-    if (!ring.usedPercent.isFinite() || ring.usedPercent < 0.0) {
-        return NoDataComplicationData()
-    }
     val remaining = WatchComplicationText.remainingPercent(ring.usedPercent)
-    return build(ring, remaining, WatchComplicationText.ringTitleToken(ring))
+    return build(ring, remaining, WatchComplicationText.ringTitleToken(ring), count)
 }
 
 /**
@@ -184,13 +190,15 @@ abstract class RingComplicationDataSourceService :
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
         val summary = WatchSummaryStore(this).load()
         val rings = summary?.rings.orEmpty()
-        val dataIndex = RingSurfaceOrder.payloadIndexForOuterSlot(rings.size, ringIndex)
+        val dataIndex = resolvedBandCount(rings)?.let {
+            RingSurfaceOrder.payloadIndexForOuterSlot(it, ringIndex)
+        }
         val ring = dataIndex?.let { rings[it] }
         val label = ring?.label
         return when (request.complicationType) {
             // NoData clears a previous arc; null would leave stale complication data.
             ComplicationType.RANGED_VALUE ->
-                if (summary != null && dataIndex == null && ringIndex == CREDITS_RING_INDEX) {
+                if (summary != null && rings.isEmpty() && ringIndex == CREDITS_RING_INDEX) {
                     // No plan ring at all: this slot still owes the face a
                     // legend row, and the face draws it without a band because
                     // the title says there is none.
@@ -205,7 +213,7 @@ abstract class RingComplicationDataSourceService :
                         )
                     }
                 } else {
-                    ringComplicationData(rings, ringIndex) { selectedRing, remaining, title ->
+                    ringComplicationData(rings, ringIndex) { selectedRing, remaining, title, count ->
                         // One slot, two jobs: TEXT carries the strip label the
                         // folded row prints, TITLE what the face branches on —
                         // the budget period, a shared band and its outer pool,
@@ -219,6 +227,7 @@ abstract class RingComplicationDataSourceService :
                             text = dataIndex?.let {
                                 WatchComplicationText.stripLabel(summary, it)
                             },
+                            ringCount = count,
                         )
                     }
                 }
@@ -250,8 +259,9 @@ abstract class RingComplicationDataSourceService :
                 ComplicationBuilders.ranged(
                     this,
                     previewPercent,
-                    title = previewLabel,
+                    title = "",
                     colorArgb = previewColorArgb,
+                    contentDescription = previewLabel,
                 )
             ComplicationType.SHORT_TEXT ->
                 ComplicationBuilders.shortText(
@@ -291,8 +301,9 @@ private object ComplicationBuilders {
         colorArgb: Int = RingFamily.FALLBACK,
         contentDescription: String? = null,
         text: String? = null,
+        ringCount: Int? = null,
     ): ComplicationData =
-        rangedComplicationBuilder(percent, title, colorArgb, contentDescription, text)
+        rangedComplicationBuilder(percent, title, colorArgb, contentDescription, text, ringCount)
             .setTapAction(tapAction(context))
             .build()
 
@@ -315,19 +326,31 @@ internal fun rangedComplicationBuilder(
     colorArgb: Int = RingFamily.FALLBACK,
     contentDescription: String? = null,
     text: String? = null,
+    ringCount: Int? = null,
 ): RangedValueComplicationData.Builder {
+    require(percent.isFinite())
     val value = percent.coerceIn(0f, 100f)
     val amount = WatchComplicationText.percentAmount(value)
     val label = text?.takeIf { it.isNotBlank() } ?: amount
     val description = contentDescription?.let { "$it $amount%" }
         ?: title.takeIf { it.isNotEmpty() }?.let { "$amount% · $it" }
         ?: WatchComplicationText.percentLabel(value)
+    // Derive every human/zero semantic above before encoding generic ranged units.
+    // Binary scaling preserves the existing Float ratio, including tiny positives.
+    val factor = when (ringCount) {
+        null -> 1f // Credits and previews without an accepted count stay legacy.
+        1 -> 2f
+        2 -> 4f
+        3 -> 8f
+        else -> error("Adaptive ring count must be between one and three")
+    }
     return RangedValueComplicationData.Builder(
-        value = value,
+        value = value * factor,
         min = 0f,
-        max = 100f,
+        max = 100f * factor,
         contentDescription = PlainComplicationText.Builder(description).build(),
-    ).setText(PlainComplicationText.Builder(label).build())
+    ).setValueType(RangedValueComplicationData.TYPE_UNDEFINED)
+        .setText(PlainComplicationText.Builder(label).build())
         .setTitle(PlainComplicationText.Builder(title).build())
         .setColorRamp(ColorRamp(intArrayOf(colorArgb), /* interpolated = */ false))
 }

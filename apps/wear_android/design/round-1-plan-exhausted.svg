@@ -14,8 +14,8 @@
   </defs>
   <rect width="450" height="450" fill="url(#lift)"/>
 
-    <circle cx="225" cy="225" r="191.88" fill="none" stroke="#2E3632"
-      stroke-width="20.205000000000002" />
+    <circle cx="225" cy="225" r="168" fill="none" stroke="#2E3632"
+      stroke-width="68" />
 
     <circle cx="173.0" cy="135.0" r="26.0" fill="#0B0E0C" />
 
