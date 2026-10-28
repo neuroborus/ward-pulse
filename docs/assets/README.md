@@ -33,6 +33,11 @@ The Providers, Budget limits and Alert thresholds theme pairs form a separate si
 phone task group captured on 2026-10-27. Their unsaved examples share unchanged saved
 settings and recorded live derived state; this refresh does not update the other capture groups.
 
+The Cursor Help and Paste token theme pairs form a separate four-frame task group
+captured on 2026-10-28 from one cached Mock reference. Its gray neutral Unknown count
+marks unavailable Cursor reporting periods; it contains no warning, error or Stale state.
+These demonstration frames do not establish live reporting or refresh the other groups.
+
 The Used in column records the source placements for each image. Last verified records
 actual-frame review on the stated date; the dated capture sections describe its scope.
 Image review and publication review are
@@ -47,10 +52,10 @@ image or its placement changes.
 | [phone-dashboard-dark.png](phone-dashboard-dark.png) | Claude unsupported-response warning and previous data. | Dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Dark Troubleshooting guide, warning / previous-data example only |
 | [phone-providers-light.png](phone-providers-light.png) | Shared-state Providers: four visible Connected rows and independent actions, without a warning badge. | Light | 2026-10-14 | 2026-10-27 | 2026-10-27 | 864×1920 | WardPulse phone | Providers overview; Anthropic/Cursor connection examples; Getting started; Dashboard actions |
 | [phone-providers-dark.png](phone-providers-dark.png) | Shared-state Providers: four visible Connected rows and independent actions, without a warning badge. | Dark | 2026-10-14 | 2026-10-27 | 2026-10-27 | 864×1920 | WardPulse phone | Providers overview; Anthropic/Cursor connection examples; Getting started; Dashboard actions |
-| [phone-cursor-sign-in-help-light.png](phone-cursor-sign-in-help-light.png) | Cursor plan sign-in Help, Advanced paste and healthy Providers background. | Light | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Light Cursor guide, Advanced paste |
-| [phone-cursor-sign-in-help-dark.png](phone-cursor-sign-in-help-dark.png) | Cursor plan sign-in Help, Advanced paste and healthy Providers background. | Dark | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Dark Cursor guide, Advanced paste |
-| [phone-cursor-paste-token-light.png](phone-cursor-paste-token-light.png) | Saved-token editor with empty Value and Remove/leave-blank-to-keep controls. | Light | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Light Cursor guide, Save the token |
-| [phone-cursor-paste-token-dark.png](phone-cursor-paste-token-dark.png) | Saved-token editor with empty Value and Remove/leave-blank-to-keep controls. | Dark | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Dark Cursor guide, Save the token |
+| [phone-cursor-sign-in-help-light.png](phone-cursor-sign-in-help-light.png) | Cursor Help with Google/email recovery and Advanced paste; neutral Mock setup background. | Light | 2026-10-14 | 2026-10-28 | 2026-10-28 | 864×1920 | WardPulse phone | Light Cursor guide, Advanced paste |
+| [phone-cursor-sign-in-help-dark.png](phone-cursor-sign-in-help-dark.png) | Cursor Help with Google/email recovery and Advanced paste; neutral Mock setup background. | Dark | 2026-10-14 | 2026-10-28 | 2026-10-28 | 864×1920 | WardPulse phone | Dark Cursor guide, Advanced paste |
+| [phone-cursor-paste-token-light.png](phone-cursor-paste-token-light.png) | Saved-token editor with empty Value and Remove/leave-blank-to-keep controls; the same Mock state. | Light | 2026-10-14 | 2026-10-28 | 2026-10-28 | 864×1920 | WardPulse phone | Light Cursor guide, Save the token |
+| [phone-cursor-paste-token-dark.png](phone-cursor-paste-token-dark.png) | Saved-token editor with empty Value and Remove/leave-blank-to-keep controls; the same Mock state. | Dark | 2026-10-14 | 2026-10-28 | 2026-10-28 | 864×1920 | WardPulse phone | Dark Cursor guide, Save the token |
 | [phone-reporting-key-light.png](phone-reporting-key-light.png) | Saved Anthropic reporting-key editor with empty Value/Label and keep/Remove controls. | Light | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Light Anthropic guide, Connect the key (Organization reporting) |
 | [phone-reporting-key-dark.png](phone-reporting-key-dark.png) | Saved Anthropic reporting-key editor with empty Value/Label and keep/Remove controls. | Dark | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Dark Anthropic guide, Connect the key (Organization reporting) |
 | [phone-openai-reporting-key-light.png](phone-openai-reporting-key-light.png) | Saved OpenAI Platform reporting editor with empty Value/Label and fixed sk-admin-… hint. | Light | 2026-10-18 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Light OpenAI guide, Connect the key (Platform reporting) |
@@ -76,6 +81,55 @@ image or its placement changes.
 | [wear-plan-windows.png](wear-plan-windows.png) | Shared-state first window: Claude 5-hour session, 21% left, back at 17:20; the next row is partly visible below. | Fixed dark | 2026-10-14 | 2026-10-27 | 2026-10-27 | 500×500 | WardPulse Wear | Watch guide in both themes |
 | [wear-watch-face.png](wear-watch-face.png) | Enlarged-clock face: Claude 21% inner band, Codex 23% / 59.5K credits middle, Cursor 100%/64% outer; default day, temperature and UV cells filled. | Fixed dark | 2026-10-14 | 2026-10-27 | 2026-10-27 | 500×500 | WardPulse watch face | Both landing/README themes and Watch guide |
 | [wear-watch-face-utility.png](wear-watch-face-utility.png) | Historical manual-selection guidance after Don’t allow; Source-backed UI reuse. | Fixed dark | 2026-10-16 | 2026-10-16 | 2026-10-18 | 500×500 | WardPulse Wear | Watch guide in both themes |
+
+## Cursor recovery capture refresh, 2026-10-28
+
+Four existing phone task PNGs were captured on the canonical phone AVD in one session,
+**00:01:36.150553–00:02:53.084441 UTC** (**01:01–01:02 Europe/Paris**), from the minimum
+capture-start and maximum capture-end observations. Source commit was
+`5eb874f5195efc7ab47210fee680d79f67e8b294`; the installed debug APK, built with
+`WARD_PULSE_MOCK_SEED=51`, had SHA-256
+`e6b4ae2a3bc1f3f797f97613d339bac7e37ff041e515b35e4f8a6e11f18c369b`.
+
+These are actual native UI captures with explicit **Mock data** enabled, not anonymous
+live-reporting captures. The cached reference stayed at Cursor Models **60.5% left** and
+Other Models **74.8% left** before and after both themes. Five demo accounts were OK;
+Cursor platform was neutral Unknown because its reporting periods were unavailable.
+The visible gray count **1** is that neutral state, not a warning, error or Stale mark.
+The background's **Key not checked while Mock data is on** describes the reporting row;
+the existing saved-connection controls do not establish a fresh API verification.
+
+Both Help frames show the current Google/email recovery, Cancel/reopen, Retry and saved
+replacement guidance with Advanced paste and OK visible. Both saved-token editors show
+the complete instructions, an empty Value field and Remove/Cancel/Save; no saved value or
+identifying account data is pictured, and no credential was entered, saved or removed.
+All four originals and exports were reviewed. Each theme was captured natively at font
+scale **1.0**. The only export operation was proportional ImageMagick resizing from
+1080×2400 to 864×1920; no cropping, recolouring or UI retouching was used.
+
+The normal APK (`ed4a3814d265ecdf7ad098f733a143b28d695587af7f760fc10e3543655e4b79`)
+was restored with data preserved and its installed hash verified. Mock data returned to Off;
+night mode returned to no, font scale to 1.0, refresh interval to 15 minutes, status-bar
+disable flags to 0/0, Wi-Fi/mobile data to on and airplane mode to off. An ordinary normal
+refresh settled, and the Dashboard and home widget were reviewed with normal data replacing
+the seeded values; the app returned to Dashboard. The saved connection remained present;
+its secret value was not read or compared. No notifications were dismissed or physical
+devices operated. Browser placement and served-image checks passed on 2026-10-28:
+all 15 current public routes were checked in both themes, including actual current-theme
+image loading, dimensions and clean original-image links. The Advanced paste and Save
+the token anchors were reviewed in both themes at 390×844 in Chrome, with all four
+mobile frames personally inspected and no horizontal overflow. All four served PNG
+hashes matched the canonical exports.
+Only these four filenames were refreshed;
+their Date added remains 2026-10-14, earlier capture records stay historical, and this
+session does not certify live login, provider attribution, hardware or release acceptance.
+
+| File | Original SHA-256 | Export SHA-256 |
+| --- | --- | --- |
+| `phone-cursor-sign-in-help-light.png` | `f9b5e72aae678e2e7abee00659b1e88c2b420697db3cb687037dda5cd9cdc80e` | `d39ad7d27428c4932af4ca7d5c1be909d286f9e087e419042c6ded64c8d49f1a` |
+| `phone-cursor-sign-in-help-dark.png` | `69a143720c66487d0dcfecea3fd1e124a84f48f49af5fa3bf73deb98e13c2fa0` | `fd3caf24845e05cc7c67b45f95c2808943073bc0ffce86ced9849916f570fe18` |
+| `phone-cursor-paste-token-light.png` | `f8513909eeb210ccdfb342367f2b14ed0ae1bd64eab47e6c1758a9df0e180f79` | `ef842689fb33b2d4da7b18df5f177eb0f62c8a2acf3f9b6f175403f4bff93043` |
+| `phone-cursor-paste-token-dark.png` | `c8e3d796cde0bf021c0b965149fde0a1eef18687f66d94e0585698eb7a3f3a36` | `3a20e28167f31919cbbbd34e70c8f1e583369709f33259c3a276b4fcf60c8d52` |
 
 ## Provider task capture refresh, 2026-10-27
 

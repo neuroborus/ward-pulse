@@ -1802,10 +1802,27 @@ Attempts and shared-cookie cleanup are fenced across Retry, failure, Cancel/back
 reopen; reconnect keeps the previous saved connection until valid replacement completion.
 Failed blank-page retirement can be retried without opening the shared jar early.
 Screen-event, real adapter, native callback and cookie boundary test source covers these contracts.
-**Pending:** the focused native guard JVM harness, runtime
-phone checks, native Android/WebView artifact verification and affected two-theme Help
-captures, plus unobserved Google/email migration, browser return, entitlement and live-provider
-acceptance. This does not claim Google login or billing repair. See
+
+Local verification on 2026-10-27–28 passed the unchanged complete phone check
+(559 Flutter tests), all eight affected Flutter files (140 tests) and the additional
+native callback JVM harness. Normal and seeded debug APKs were built and
+installed with data preserved on the API36 phone emulator. Native offline page recovery,
+Retry, Cancel/back/reopen, Help and the empty Advanced paste editor were observed;
+the current normal build repeated page recovery and Cancel after the bootstrap change.
+Saved-connection presence was retained without inspecting its value.
+
+The debug-only `WARD_PULSE_MOCK_SEED` build define now selects a reproducible initial
+Mock scenario, advances once when a loaded scenario is invalidated and restarts from
+the configured seed with a fresh repository. It leaves explicit Mock opt-in and release
+repository selection unchanged. Native seed 51 → Refresh 52 → cold restart 51 was
+verified. See [Reproducible Debug Mock Data](../apps/phone_flutter/README.md#reproducible-debug-mock-data)
+for invocation and accepted input. The [four refreshed Help/Paste captures](assets/README.md#cursor-recovery-capture-refresh-2026-10-28)
+share that cached Mock reference in both actual themes; its neutral unavailable Cursor
+periods are not presented as all-healthy or live reporting.
+
+**Pending:** unobserved current Google/email migration, external browser return, new live
+session capture, entitlement and live-provider acceptance. This does not claim Google
+login or billing repair. See
 [Cursor plan reporting](product/PROVIDER_NOTES.md#cursor-plan-reporting).
 
 Verified 2026-10-20: the Anthropic current-day and Cursor normalization corrections passed

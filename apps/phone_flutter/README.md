@@ -31,6 +31,27 @@ Build the native libraries and run the app:
 just run-phone
 ```
 
+## Reproducible Debug Mock Data
+
+For repeatable capture data, build from `apps/phone_flutter/` with an optional starting seed:
+
+```sh
+flutter build apk --debug --dart-define=WARD_PULSE_MOCK_SEED=51
+```
+
+The define does not enable Mock data; turn it on explicitly in Settings. Release builds
+do not select the mock repository; only the debug startup branch consumes the define.
+The seed accepts ASCII decimal digits from **0** through **9223372036854775807**;
+leading zeroes are valid. Signs, whitespace, decimals, exponents, hexadecimal values
+and out-of-range values are invalid. An absent or invalid value retains the existing
+time-based seed selection.
+
+A loaded scenario stays cached across automatic sync. Invalidating a loaded scenario
+advances the sequence once; repeated invalidation before another load does not advance
+it again. Recreating the repository, including an app-process restart, starts from the
+configured seed again. The maximum seed wraps to zero. A reproducible seed is not a
+healthy-data preset: inspect the actual rendered statuses before choosing public captures.
+
 ## Persistent Connection Recovery
 
 `PhoneLiveBindings` wires all six live connections to `ConnectionSnapshotCache` and the
@@ -76,6 +97,13 @@ python3 tools/test-cursor-sign-in/run.py
 The harness compiles the production Java client against small Android API doubles. It checks
 subframe authorization interception, harmless-resource delegation, fixed diagnostics and
 main-document HTTP classification, and main-frame POST admission/rejection. It does not
-prove native rendering or live login. Run it
-as an additional focused HOST regression alongside the unchanged complete `just check-phone`;
-the real Android APK build and artifact-bound WebView acceptance remain required and Pending.
+prove native rendering or live login. Run it as an additional focused HOST regression
+alongside the unchanged complete `just check-phone`.
+
+Local verification on 2026-10-27–28 passed the complete phone check, affected Flutter
+regressions and this JVM harness. Normal and seeded debug APKs were built and installed
+with data preserved on the API36 phone emulator. Offline page recovery and Cancel were
+rechecked in the normal build; earlier native verification of the unchanged sign-in code
+also covers Retry, Cancel/back/reopen, Help and the empty Advanced paste editor. The saved connection
+remained available without reading its value. These checks do not establish a new live
+Google/email login, session capture, account entitlement or billing repair.

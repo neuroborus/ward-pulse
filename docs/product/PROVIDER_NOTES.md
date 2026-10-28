@@ -480,9 +480,17 @@ only once after verified cleanup. A failed blank-page request is retryable: the 
 retains the old browser until retirement succeeds, including on Retry or Cancel/reopen.
 A failed retirement never grants a newer browser access to the shared jar.
 
-Native WebView recovery, current Google/email migration, external browser return, account
-entitlement and live-provider acceptance remain **Pending**. Source/fake tests do not establish
-native or live login success, and these changes do not establish a billing repair.
+Local verification on 2026-10-27–28 passed the complete phone check, affected Flutter
+regressions and native callback JVM harness. Normal and seeded debug APKs were built
+and installed with data preserved on the API36 phone emulator. Native offline page recovery,
+Retry, Cancel/back/reopen, Help and the empty Advanced paste route were observed;
+the normal build repeated page recovery and Cancel after the debug-seed bootstrap change.
+Saved-connection presence remained intact; its secret value was not inspected.
+The four Help/Paste captures use a shared Mock reference, not live-provider acceptance.
+
+Current Google/email migration, external browser return, new live session capture,
+account entitlement and live-provider acceptance remain **Pending**. Source/fake tests
+do not establish live login success, and these changes do not establish a billing repair.
 Do not claim Admin-API hourly aggregation or a Team publication deadline on this experimental
 row. Never log auth query/fragment, identity/password, tokens, cookies/headers or raw bodies.
 
