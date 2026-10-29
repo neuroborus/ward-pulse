@@ -403,25 +403,93 @@ private fun nativeComponent(value: String): ComponentName {
     return ComponentName.unflattenFromString(value) ?: throw NativePending("component-record")
 }
 
+/** The outer wallpaper Engine owns these fields; the later AndroidX registry does not. */
+private data class NativeEngineScope(val component: ComponentName, val user: Int, val display: Int,
+    val identity: List<String>) {
+    companion object {
+        fun parse(dump: String): NativeEngineScope {
+            val lines = dump.lineSequence().filter { it.isNotBlank() }.toList()
+            val text = lines.map { it.trim() }
+            fun index(prefix: String) = text.indices.filter { text[it].startsWith(prefix) }.singleOrNull()
+                ?: throw NativePending("native-owner-scope")
+            fun indent(index: Int) = lines[index].indexOfFirst { !it.isWhitespace() }
+            val serviceIndex = index("SERVICE ")
+            val clientIndex = index("Client:")
+            val stateIndex = index("State of wallpaper ")
+            val engineIndex = index("Engine ")
+            val managerIndex = index("InteractiveInstanceManager instances:")
+            val engineIndent = indent(engineIndex)
+            // Only measured framework continuations may cross the Engine's indentation boundary.
+            val continuations = mutableSetOf<Int>()
+            val layoutFields = listOf("fl=", "pfl=", "bhv=", "frameRateBoostOnTouch=", "dvrrWindowFrameRateHint=")
+            for (line in engineIndex + 1 until managerIndex) {
+                if (indent(line) == engineIndent - 1 && text[line].matches(Regex("mIsScreenTurningOn=(true|false)")) &&
+                    text[line - 1] == "mVisible=true mReportedVisible=true" && indent(line - 1) == engineIndent + 2) {
+                    continuations += line
+                }
+                if (indent(line) == engineIndent - 2 && text[line].startsWith("ClientWindowFrames{frame=") &&
+                    text[line].endsWith('}') && text[line - 1] == "mWinFrames=" && indent(line - 1) == engineIndent + 2) {
+                    continuations += line
+                }
+                if (indent(line) == engineIndent + 2 && text[line].startsWith("mLayout={") && !text[line].endsWith('}') &&
+                    layoutFields.indices.all { offset ->
+                        val next = line + offset + 1
+                        next < managerIndex && indent(next) == engineIndent && text[next].startsWith(layoutFields[offset]) &&
+                            text[next].endsWith('}') == (offset == layoutFields.lastIndex)
+                    }) {
+                    continuations.addAll(line + 1..line + layoutFields.size)
+                }
+            }
+            fun end(index: Int) = (index + 1 until lines.size).firstOrNull {
+                indent(it) <= indent(index) && it !in continuations
+            } ?: lines.size
+            fun child(parent: Int, child: Int) {
+                nativeGuard(child in (parent + 1 until end(parent)) && indent(child) == indent(parent) + 2,
+                    "native-owner-scope")
+            }
+            nativeGuard(indent(serviceIndex) == 0 && text[clientIndex] == "Client:" &&
+                text[managerIndex] == "InteractiveInstanceManager instances:", "native-owner-scope")
+            child(serviceIndex, clientIndex)
+            child(clientIndex, stateIndex)
+            child(stateIndex, engineIndex)
+            child(clientIndex, managerIndex)
+            nativeGuard(end(engineIndex) == managerIndex, "native-owner-scope")
+            val engineLines = engineIndex + 1 until managerIndex
+            nativeGuard(engineLines.all { indent(it) >= engineIndent + 2 || it in continuations }, "native-owner-scope")
+            val header = Regex("([^ ]+) [a-f0-9]+ pid=[0-9]+ user=([0-9]+)")
+                .matchEntire(text[serviceIndex].removePrefix("SERVICE ")) ?: throw NativePending("native-service-scope")
+            val component = nativeComponent(header.groupValues[1])
+            val user = header.groupValues[2].toIntOrNull() ?: throw NativePending("native-user-component")
+            nativeGuard(component.packageName == RUNTIME_PACKAGE && component.className in setOf(
+                "$RUNTIME_PACKAGE.DeclarativeWatchFaceRuntime0", "$RUNTIME_PACKAGE.DeclarativeWatchFaceRuntime1"),
+                "native-user-component")
+            val state = text[stateIndex].removePrefix("State of wallpaper ")
+            nativeGuard(state.matches(Regex("${Regex.escape(component.className)}@[a-f0-9]+:")), "native-wallpaper-scope")
+            val engine = text[engineIndex].removePrefix("Engine ")
+            nativeGuard(engine.matches(Regex("[^ ]+@[a-f0-9]+:")), "single-native-engine")
+            val body = NativeRecord(engineLines
+                .filter { indent(it) == engineIndent + 2 }.joinToString("\n") { text[it] })
+            body.requireLine("mInitializing=false mDestroyed=false")
+            body.requireLine("mVisible=true mReportedVisible=true")
+            val nativeDisplay = body.one("mDisplay=Display id ")
+            val display = Regex("([0-9]+): DisplayInfo\\{.*").matchEntire(nativeDisplay)?.groupValues?.get(1)?.toIntOrNull()
+                ?: throw NativePending("native-display")
+            val displayInfo = Regex("displayId ([0-9]+),").findAll(nativeDisplay).toList().singleOrNull()
+            nativeGuard(displayInfo?.groupValues?.get(1)?.toIntOrNull() == display, "native-display")
+            return NativeEngineScope(component, user, display, listOf(header.value, state, engine))
+        }
+    }
+}
+
 /** Current-user System authority, including the live display's matching connection. */
 internal data class NativeSystem(val user: Int, val display: Int, val component: ComponentName,
     val userRecord: String, val connection: String, val engine: String, val service: String, val token: String) {
     fun renderer(dump: String): NativeRenderer {
-        val record = NativeRecord(dump)
-        val header = Regex("([^ ]+) [a-f0-9]+ pid=[0-9]+ user=([0-9]+)").matchEntire(record.one("SERVICE "))
-            ?: throw NativePending("native-service-scope")
-        nativeGuard(nativeComponent(header.groupValues[1]) == component && header.groupValues[2].toIntOrNull() == user,
-            "native-user-component")
-        val state = record.one("State of wallpaper ")
-        nativeGuard(state.matches(Regex("${Regex.escape(component.className)}@[a-f0-9]+:")), "native-wallpaper-scope")
-        nativeGuard(record.one("Engine ").matches(Regex("[^ ]+@[a-f0-9]+:")), "single-native-engine")
-        record.requireLine("mInitializing=false mDestroyed=false")
-        val nativeDisplay = record.one("mDisplay=Display id ")
-        val displayInfo = Regex("displayId ([0-9]+),").findAll(nativeDisplay).toList().singleOrNull()
-        nativeGuard(nativeDisplay.startsWith("$display: DisplayInfo{") &&
-            displayInfo?.groupValues?.get(1)?.toIntOrNull() == display, "native-display")
+        val owner = NativeEngineScope.parse(dump)
+        nativeGuard(owner.component == component && owner.user == user, "native-user-component")
+        nativeGuard(owner.display == display, "native-display")
         return NativeRenderer.parse(dump).copy(runtime = component.className.substringAfterLast('.'),
-            nativeScope = listOf(header.value, state, record.one("Engine ")))
+            nativeScope = owner.identity)
     }
 
     companion object {
@@ -585,6 +653,7 @@ internal data class NativeRenderer(
 
     companion object {
         fun parse(dump: String): NativeRenderer {
+            NativeEngineScope.parse(dump)
             val record = NativeRecord(dump)
             nativeGuard(record.lines.lastOrNull { it.isNotEmpty() } == "HeadlessWatchFace instances:", "no-headless-instances")
             val manager = record.section("InteractiveInstanceManager instances:", "EditorService:")
@@ -599,7 +668,6 @@ internal data class NativeRenderer(
             val instance = single("interactiveInstanceId=")
             nativeGuard(instance == single("watchFaceInstanceId=") && instance == registered.one("impl.instanceId=") &&
                 instance.isNotBlank(), "instance-record")
-            record.requireLine("mVisible=true mReportedVisible=true")
             for (value in listOf("destroyed=false", "surfaceDestroyed=false",
                 "editorObscuresWatchFace=false", "isVisible=true", "isAmbient=false", "isHeadless=false",
                 "asyncWatchFaceConstructionPending=false", "overriddenComplications=null")) {

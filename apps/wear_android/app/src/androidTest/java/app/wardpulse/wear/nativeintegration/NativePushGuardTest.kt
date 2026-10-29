@@ -165,19 +165,95 @@ class NativePushGuardTest {
             systemRecord().replace("Lock wallpaper state:", "mDisplayId=0\nLock wallpaper state:"))) {
             assertThrows(NativePending::class.java) { read(systemDump = dump) }
         }
-        for (dump in listOf("", rendererRecord().replace("user=0", "user=1"),
-            rendererRecord().replace("Display id 0:", "Display id 1:"),
-            rendererRecord().replace("displayId 0,", "displayId 1,"),
-            rendererRecord().replace("userStyle=UserStyle[]", "userStyle="),
-            rendererRecord().replace("Runtime0 ab", "Runtime1 ab"),
+        for (dump in listOf("", rendererRecord().replace("userStyle=UserStyle[]", "userStyle="),
             rendererRecord().replace("WatchFaceEngine:", "WatchFaceEngine:\nWatchFaceEngine:"),
-            rendererRecord().replace("mDestroyed=false", "mDestroyed=true"),
             rendererRecord().replace("asyncWatchFaceConstructionPending=false", "asyncWatchFaceConstructionPending=true"),
             rendererRecord().replace("ComplicationSlot 18:", "ComplicationSlot 17:"),
             rendererRecord().replace("enabled=true", "enabled=true\nenabled=false"),
             rendererRecord().replace("impl.instanceId=existing", "impl.instanceId=existing\nimpl.instanceId=other"),
             rendererRecord().replace("impl.instanceId=existing", "impl.instanceId=other"))) {
             assertThrows(NativePending::class.java) { read(nativeDump = dump) }
+        }
+        val ownerDump = rendererRecord()
+        val manager = "    InteractiveInstanceManager instances:\n"
+        val registry = "    \t\tWatchFaceEngine:\n"
+        fun rejectSystemOwner(dump: String) {
+            assertThrows(NativePending::class.java) { read(nativeDump = dump) }
+            var frame = 0
+            assertThrows(NativePending::class.java) {
+                readNativeSelections({ NativeSystem.parse("0", systemRecord()) },
+                    { it.renderer(if (frame++ == 0) ownerDump else dump) }, { activeConfigurationRecord() },
+                    diagnostics = NativeDiagnostics { })
+            }
+            assertEquals("Owner evidence must also be checked in the second native frame", 2, frame)
+        }
+        fun rejectOwner(dump: String) {
+            assertThrows(NativePending::class.java) { NativeRenderer.parse(dump) }
+            rejectSystemOwner(dump)
+        }
+        val fields = listOf(
+            "mInitializing=false mDestroyed=false" to "mInitializing=false mDestroyed=true",
+            "mVisible=true mReportedVisible=true" to "mVisible=false mReportedVisible=false",
+            "mDisplay=Display id 0: DisplayInfo{displayId 0, state ON}" to
+                "mDisplay=Display id 0: DisplayInfo{displayId 1, state ON}",
+        )
+        for ((field, conflict) in fields) {
+            val line = "        $field\n"
+            val missing = ownerDump.replace(line, "")
+            for (dump in listOf(missing, ownerDump.replace(line, line + line),
+                ownerDump.replace(line, "        $conflict\n"),
+                ownerDump.replace(line, line + "        $conflict\n"),
+                // A unique valid-looking value in the later registry cannot replace an outer field.
+                missing.replace(registry, registry + "    \t\t\t$field\n"),
+                // Nor can an Engine child registry, sibling scope, or unrelated client record supply it.
+                missing.replace("      Engine test@ab:\n", "      Engine test@ab:\n        Registry:\n          $field\n"),
+                missing.replace(manager, "       Registry:\n        $field\n$manager"),
+                missing.replace(manager, "      Sibling:\n        $field\n$manager"),
+                missing.replace(manager, "      Sibling record\n        $field\n$manager"),
+                missing.replace(manager, "      Sibling=value\n        $field\n$manager"),
+                missing.replace(manager, "    Sibling=value\n        $field\n$manager"),
+                missing.replace(manager, " Sibling=value\n        $field\n$manager"),
+                // Framework-looking continuations outside their measured context are ambiguous too.
+                missing.replace(manager, "     mIsScreenTurningOn=false\n        $field\n$manager"),
+                missing.replace(manager, "    ClientWindowFrames{frame=[0,0][1,1]}\n        $field\n$manager"),
+                missing.replace(manager, "      fl=NOT_FOCUSABLE\n        $field\n$manager"),
+                missing.replace(manager, "    Unrelated record:\n        $field\n$manager"),
+                missing.replace("      Engine test@ab:\n", "$line      Engine test@ab:\n"))) {
+                rejectOwner(dump)
+            }
+            // Unrelated nested copies must not conflict with complete evidence on the actual owner.
+            assertEquals(NativeRenderer.parse(ownerDump), NativeRenderer.parse(ownerDump.replace(registry,
+                registry + "    \t\t\t$field\n    \t\t\t$conflict\n")))
+            assertEquals(configuration, read(nativeDump = ownerDump.replace(registry,
+                registry + "    \t\t\t$field\n    \t\t\t$conflict\n")).configuration)
+        }
+        val service = ownerDump.lineSequence().first() + "\n"
+        val state = "    State of wallpaper $RUNTIME_PACKAGE.DeclarativeWatchFaceRuntime0@ab:\n"
+        val engine = "      Engine test@ab:\n"
+        for (line in listOf(service, "  Client:\n", state, engine)) {
+            val missing = ownerDump.replace(line, "")
+            rejectOwner(missing)
+            rejectOwner(ownerDump.replace(line, line + line))
+            rejectOwner(missing.replace(registry, registry + "    \t\t\t${line.trim()}\n"))
+        }
+        for (dump in listOf(ownerDump.replace(engine, engine + "      Engine other@cd:\n"),
+            ownerDump.replace(engine, "        Engine test@ab:\n"),
+            ownerDump.replace(engine, "    Engine test@ab:\n"),
+            ownerDump.replace(state, "      ${state.trim()}\n"),
+            ownerDump.replace(state, state.replace("Runtime0@", "Runtime1@")),
+            ownerDump.replace(service, service.replace("Runtime0 ab", "Runtime1 ab")),
+            ownerDump.replace(service, service.replace(RUNTIME_PACKAGE, "unrelated.runtime")),
+            ownerDump.replace(service, service.replace("user=0", "user=unavailable")),
+            ownerDump.replace(service, service.replace("user=0", "user=0 user=1")),
+            ownerDump.replace("    InteractiveInstanceManager instances:", "      InteractiveInstanceManager instances:"),
+            ownerDump.replace("mDisplay=Display id 0:", "mDisplay=Display id 1:"))) {
+            rejectOwner(dump)
+        }
+        // A self-consistent alternate owner still has to match the independent System authority.
+        for (dump in listOf(ownerDump.replace("user=0", "user=1"), ownerDump.replace("Runtime0", "Runtime1"),
+            ownerDump.replace("Display id 0:", "Display id 1:").replace("displayId 0,", "displayId 1,"))) {
+            NativeRenderer.parse(dump)
+            rejectSystemOwner(dump)
         }
         val config = activeConfigurationRecord()
         val row = config.lineSequence().first { it.startsWith("id=") }
@@ -536,33 +612,46 @@ class NativePushGuardTest {
 
     private fun rendererRecord() = buildString {
         appendLine("SERVICE $RUNTIME_PACKAGE/.DeclarativeWatchFaceRuntime0 ab pid=123 user=0")
-        appendLine("State of wallpaper $RUNTIME_PACKAGE.DeclarativeWatchFaceRuntime0@ab:")
-        appendLine("Engine test@ab:")
-        appendLine("mInitializing=false mDestroyed=false")
-        appendLine("mVisible=true mReportedVisible=true")
-        appendLine("mDisplay=Display id 0: DisplayInfo{displayId 0, state ON}")
-        appendLine("InteractiveInstanceManager instances:")
-        appendLine("InteractiveInstanceManager:")
-        appendLine("impl.instanceId=existing")
-        appendLine("WatchFaceEngine:")
-        appendLine("WatchFaceImpl (ComponentInfo{$CANDIDATE_PACKAGE/null}):")
-        appendLine("Resource only package name $CANDIDATE_PACKAGE")
-        appendLine("interactiveInstanceId=existing")
-        appendLine("watchFaceInstanceId=existing")
-        appendLine("currentUserStyleRepository.userStyle=UserStyle[]")
+        appendLine("  Client:")
+        appendLine("    State of wallpaper $RUNTIME_PACKAGE.DeclarativeWatchFaceRuntime0@ab:")
+        appendLine("      Engine test@ab:")
+        appendLine("        mInitializing=false mDestroyed=false")
+        appendLine("        mVisible=true mReportedVisible=true")
+        appendLine("     mIsScreenTurningOn=false")
+        appendLine("        mDisplay=Display id 0: DisplayInfo{displayId 0, state ON}")
+        appendLine("        mWinFrames=")
+        appendLine("    ClientWindowFrames{frame=[0,0][384,384]}")
+        appendLine("        mLayout={(0,0)(fillxfill) gr=TOP START CENTER ty=WALLPAPER fmt=RGBX_8888")
+        appendLine("      fl=NOT_FOCUSABLE NOT_TOUCHABLE LAYOUT_IN_SCREEN LAYOUT_NO_LIMITS LAYOUT_INSET_DECOR")
+        appendLine("      pfl=WANTS_OFFSET_NOTIFICATIONS")
+        appendLine("      bhv=DEFAULT")
+        appendLine("      frameRateBoostOnTouch=true")
+        appendLine("      dvrrWindowFrameRateHint=true}")
+        appendLine("        mOffsetMessageEnqueued=falseAndroidX WatchFaceService $RUNTIME_PACKAGE")
+        appendLine("    InteractiveInstanceManager instances:")
+        appendLine("    \tInteractiveInstanceManager:")
+        appendLine("    \t\timpl.instanceId=existing")
+        appendLine("    \t\tWatchFaceEngine:")
         listOf("destroyed=false", "surfaceDestroyed=false", "asyncWatchFaceConstructionPending=false",
-            "editorObscuresWatchFace=false", "isVisible=true", "isAmbient=false", "isHeadless=false", "overriddenComplications=null")
-            .forEach { appendLine(it) }
-        appendLine("ComplicationSlotsManager:")
+            "overriddenComplications=null").forEach { appendLine("    \t\t\t$it") }
+        appendLine("    \t\t\tResource only package name $CANDIDATE_PACKAGE")
+        appendLine("    \t\t\tinteractiveInstanceId=existing")
+        appendLine("    \t\t\tWatchFaceImpl (ComponentInfo{$CANDIDATE_PACKAGE/null}):")
+        appendLine("    \t\t\t\tcurrentUserStyleRepository.userStyle=UserStyle[]")
+        appendLine("    \t\t\t\teditorObscuresWatchFace=false")
+        appendLine("    \t\t\t\tWatchState:")
+        listOf("isVisible=true", "isAmbient=false", "isHeadless=false", "watchFaceInstanceId=existing")
+            .forEach { appendLine("    \t\t\t\t\t$it") }
+        appendLine("    \t\t\t\tComplicationSlotsManager:")
         for ((id, source) in fixtureProviders()) {
-            appendLine("ComplicationSlot $id:")
-            appendLine("enabled=true")
-            appendLine("supportedTypes=RANGED_VALUE, EMPTY")
-            appendLine("defaultDataSourcePolicy.primaryDataSource=ComponentInfo{provider.test/Unselected}")
-            appendLine("data=ShortText(dataSource=ComponentInfo{$source})")
+            appendLine("    \t\t\t\t\tComplicationSlot $id:")
+            appendLine("    \t\t\t\t\t\tenabled=true")
+            appendLine("    \t\t\t\t\t\tsupportedTypes=RANGED_VALUE, EMPTY")
+            appendLine("    \t\t\t\t\t\tdefaultDataSourcePolicy.primaryDataSource=ComponentInfo{provider.test/Unselected}")
+            appendLine("    \t\t\t\t\t\tdata=ShortText(dataSource=ComponentInfo{$source})")
         }
-        appendLine("EditorService:")
-        appendLine("HeadlessWatchFace instances:")
+        appendLine("    EditorService:")
+        appendLine("    HeadlessWatchFace instances:")
     }
 
     private fun fixtureProviders(): Map<Int, String?> {
