@@ -314,6 +314,7 @@ dependencies {
     androidTestImplementation("androidx.test:core:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.wear.watchface:watchface-client:1.2.1")
 }
 
 // Build-time only: one pinned official validator resolved through settings' Google Maven.

@@ -210,6 +210,13 @@ unmapped responses keep dispatch/retention Pending; actual service applicability
 Legacy-only evidence cannot complete the pre-replacement witness or admit target installation;
 do not activate the face to fill that gap.
 
+The later [client probe](../README.md#guarded-complication-client-probe) is test-only and
+requires that completed pre-replacement witness and subsequent ordinary target provisioning.
+It cannot create/activate an instance, bypass permissions or replace SDK-update/ordinary
+datasource evidence with a supplied bitmap. Its access, effective restoration and the full
+item12 matrix remain Pending. Neither that probe nor candidate 4 closes UNKNOWN causality,
+old-Push1 matrix gaps, missing 1→2/2→3 manager evidence or the utility-button gap.
+
 ## Local development acceptance
 
 Recorded **2026-10-16** for runtime Source `abebbbc5`: debug builds, negative signing

@@ -3476,6 +3476,21 @@ before implementation and update the applicable privacy guidance.
 
 ### Adaptive watch-face bands — active integration
 
+**2026-10-29 harness support: native acceptance remains Pending.** The
+[guarded client probe](../apps/wear_android/README.md#guarded-complication-client-probe)
+adds test-only watchface-client 1.2.1 existing-instance access and bounded unsupported,
+malformed and partial-map observations. Access, permissions and restoration are capability
+gates, not promised override PASS. Supplied-data bitmaps are separate from ordinary active
+publication, transitions and true ambient. Preserve phone 3/Wear 4/legacy 2/Push default 3/
+common 0.1.0; candidate 4 is a test input. First obtain the genuine baseline-host Push 3→4
+result and separate settled observation/restoration, retire that owner, then provision the
+ordinary rebuilt seam-bearing target and confirm the original isolated 40. Warm and fresh
+task-owned empty-cache/reuse dependency checks, remaining builds/official validation,
+release parity, both shapes/four combinations/transitions, native restoration, healthy public
+captures, docs/browser and Root whole ZERO remain ordered post-DONE HOST work. This neither
+closes UNKNOWN historical causality nor old-Push1 matrix, explicit 1→2/2→3 manager or utility
+button gaps; the older 2→3 requirement below remains an unobserved historical obligation.
+
 **2026-10-28 status: implementation authored; native integration known Pending.** This
 supersedes the earlier post-0.1.0 deferral. The
 [dated design revision](product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count)

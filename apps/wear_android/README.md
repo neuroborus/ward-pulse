@@ -245,11 +245,12 @@ installer to recover. The stock update route must not load this application or l
 
 ## Guarded native Push integration
 
-`ManualNativeIntegration` marks eleven additional cases: `NativePushGuardTest` has three
+`ManualNativeIntegration` marks sixteen additional cases: `NativePushGuardTest` has three
 negative/cleanup cases, including candidate file/FD cleanup on either callback outcome;
 the journal case also exercises discovery through fake selection responses into one fake dispatch.
 `NativePushUpdateTest` has individually selected `probeBaseline`,
-`updateOwnedPush3To4` and `observeSettledUpdate` cases. The datasource classes below add five.
+`updateOwnedPush3To4` and `observeSettledUpdate` cases. The datasource classes below add five,
+and the client classes add five.
 `IsolatedWearRunner.onCreate` always
 excludes that annotation, including explicitly selected manual classes. The original default
 inventory remains 40. The stock `androidx.test.runner.AndroidJUnitRunner` entry in the test
@@ -407,6 +408,90 @@ normal effective data/frames and verify retained bindings, upper choices, consen
 time/font/ambient and bridge state. Unsupported mapping/provenance, unseen transitions and
 unsafe restoration remain **Pending**. See
 [the manual invocation](../../docs/ANDROID_TOOLCHAIN.md#guarded-datasource-observations).
+
+## Guarded complication client probe
+
+`NativeComplicationOverrideTest` has three individually selected stock-runner cases:
+`probeClient`, `observeOverride` and `observeRestoration`. `NativeClientGuardTest` adds two
+synthetic binding/object cases without real service binds or data updates. All five carry
+`ManualNativeIntegration` and remain excluded from the original default 40. This route is
+HOST-only after the baseline-host Push witness, separate settled evidence/restoration and
+owner retirement, ordinary rebuilding and seam-bearing target provisioning. It never launches
+an Activity or supplies the isolation Application. See
+[client invocation and dependency proof](../../docs/ANDROID_TOOLCHAIN.md#guarded-complication-client-probe).
+
+The [test dependency](app/build.gradle.kts) pins `androidx.wear.watchface:watchface-client:1.2.1`
+only in `androidTestImplementation`. The saved source JAR is API research, not Gradle
+resolution, checksum, installed access or capability evidence. HOST must verify the exact
+resolved AAR and graph in ordinary warm, fresh empty task-owned cache and same-cache reuse
+checks. The explicit artifact review/hash arguments record HOST's provenance; instrumentation
+cannot establish Maven provenance from a loaded class. No cache seeding or shared-cache
+modification is authorized.
+
+`withExistingNativeClient` in
+[NativeClientProbe.kt](app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeClientProbe.kt)
+uses only the public resource-only factory and existing-instance lookup. Before a real bind,
+it resolves the factory's actual intent and checks a unique enabled/exported runtime service
+and any declared permission under the target UID. Null, denied, unresolved, incompatible or
+unmapped capability stays **Pending**, without granting permission, creating an instance,
+activating a face or changing style/UI/ambient state. Client instance and enabled-slot records
+must match the native renderer and independent selected-provider/system-ID mappings. Client
+default datasource policies do not prove effective selections or data.
+
+`NativeClientBinding` tracks both bind overloads, including the executor overload used by
+1.2.1, before Android is called. Returned interactive/control clients close in nested cleanup;
+tracked connections release even when the suspend factory times out before returning a client.
+The timeout bounds factory acquisition only; synchronous remote operations must return before
+the owner can retire. An unreturned interactive acquisition is recorded as remote ownership
+**Pending**: releasing a control binding does not prove release of an unreturned remote
+reference. Failed close/unresolved ownership forbids another owner until HOST reconciliation.
+
+The first probe captures one private original for HOST inspection before further cases.
+Overrides require its exact receipt/frame hashes, retained installed/active identities, explicit
+review, quiet-writer/unpaired-bridge preconditions and an independently reviewed normal
+datasource restoration receipt with matching mappings. No unproved recovery path permits an
+override. Each mode/scenario has a fresh, single-use private directory under `files/native_client/`.
+The private `latest.json` records acquisition ownership before binding. Another case requires
+retired resources and, after any armed transport, a separate later restoration observation
+with explicit HOST review bound to that exact receipt. An old normal-delivery review cannot
+authorize another override while this route's recovery remains unresolved.
+
+`nativeOverrideData` uses the actually mapped Today/RingSplit slots. `unsupported-range` is
+a valid generic `TYPE_UNDEFINED` 0/300 envelope, VALUE111 (37%), unsupported by WardPulse's
+WFF contract. `malformed-title` uses an admitted 0/400 envelope with invalid TITLE;
+`nonfinite-value` and `out-of-range` attempt SDK objects which may be rejected before transport.
+SDK normalization also stops the case before transport instead of silently changing its input.
+`partial-no-data-main` updates just the main; `no-data-main-valid-extra` supplies NoData main
+with a valid extra. These are bounded observations, not arbitrary wire injection or promised
+override PASS. Object rejection, transport rejection/unavailability, application state and
+demonstrated WFF suppression are separate outcomes. Missing transient/provenance evidence
+stays Pending.
+
+`active` calls `updateComplicationData` once and captures requested/bounded originals around
+one finite runtime-event boundary, without a delivery ACK, timing retry or atomicity claim.
+`supplied-bitmap` calls `renderWatchFaceToBitmap` once with a partial map and current style;
+its output is labeled separately from native screenshots. It proves neither ordinary active
+publication, transitions nor true ambient rendering. Every returned bitmap is recycled,
+including write failures. Effective native records and frames observe separate instants.
+
+Before either transport, an opaque private summary reference is persisted; this route never
+writes summary storage. Failure-safe cleanup requests current normal production data with
+each affected provider's `requestUpdateAll` before closing clients, even after a transport
+failure. Every affected provider is attempted even if another request fails; failure stays
+Pending. Requests use current selections, without reusing possibly stale system IDs. It neither
+replays stale renderer data nor overwrites legitimate newer producers. Recovery files, raw
+effective-data records and original frames stay private. A later separately selected
+`observeRestoration` records current normal data after client retirement and compares the
+current summary to cleanup's observed value. HOST must reconcile it, inspect effective
+restored rendering and retained
+bindings/upper choices/consent/settings/time/font/ambient/bridge, and retire the instrumentation's
+single UiAutomation owner. Unsafe or unverified restoration remains **Pending**.
+
+No native result is claimed by this implementation. All item12 HOST obligations, public
+capture/browser review and Root's whole zero-findings pass remain Pending. A 3→4 result or
+client bitmap cannot close UNKNOWN historical causality, old-Push1 compatibility gaps,
+missing explicit 1→2/2→3 manager evidence or the utility-button gap. Phone 3/Wear 4/legacy 2/
+Push default 3/common 0.1.0 stay unchanged; candidate 4 is solely a test input.
 
 ## Commands
 

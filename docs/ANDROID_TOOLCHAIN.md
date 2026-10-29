@@ -1001,6 +1001,30 @@ Wear code 4/bundled asset 3 and compatible signing, then admit target provisioni
 from the isolated test bodies' effects. Keep retained Push 4, bindings and active-state checks
 separate from the pre-replacement manager evidence.
 
+Before native work, retain the ordinary warm `just check-wear` and additionally run that
+complete check on a network-capable HOST with `GRADLE_USER_HOME` pointing to a **new, empty,
+task-owned cache** under `LOCAL_ARTIFACTS/`. Record its exact path and command. Verify the
+actual download/resolution of `androidx.wear.watchface:watchface-client:1.2.1`, the resolved
+AAR's SHA-256 against official artifact provenance and complete check success; repeat the
+same check with the same cache to prove reuse. Set `ITEM12_GRADLE_CACHE` to the absolute
+path of a newly created, verified empty task-owned directory. From the repository root:
+
+```sh
+GRADLE_USER_HOME="${ITEM12_GRADLE_CACHE:?Set the task-owned cache path}" just check-wear
+```
+
+After recording resolution, checksum and complete first-run success, execute that same
+command with the same path again and record the reuse outcome.
+
+Do not seed, delete or repurpose shared caches, substitute the saved sources/POM for Gradle
+resolution, or claim a successful build proves native access. Record resolution/checksum and
+both full outcomes, including failures. These non-installing HOST checks follow whole Runner
+DONE, process retirement, owning CLI exit where applicable and fresh idle ownership; they are
+not Native-commit prerequisites. All remain Pending until executed. After the manager witness,
+`just test-wear-device` explicitly provisions the rebuilt seam-bearing target and test APKs
+through `connectedDebugAndroidTest`; verify the retention policy below first, confirm the
+original 40 tests/manual exclusion, then recheck retained Push 4, bindings and active state.
+
 #### Guarded Push witness
 
 This is HOST-only after whole Runner execution DONE, owned-process retirement, owning CLI
@@ -1042,9 +1066,9 @@ before dispatch and through later observation. Use the stock entry
 ABI absent from the baseline; it must not be used here. Never invoke stock discovery/default
 tests. The three `NativePushGuardTest` cases can separately be explicitly selected by class;
 they touch only memory and private temporary files/descriptors, not the manager/live stores.
-The three update-class cases are manual; together with the three Push guard and five
-datasource cases, `IsolatedWearRunner` excludes all eleven manual cases and keeps the
-original default 40 tests.
+The three update-class cases are manual; together with the three Push guard, five
+datasource and five client cases, `IsolatedWearRunner` excludes all sixteen manual cases
+and keeps the original default 40 tests.
 
 Supply these fresh HOST expectations as `am instrument -e` strings. SHA-256 values use lowercase
 hex; fingerprint/instance/slot strings are hashed as UTF-8 **without** a trailing newline.
@@ -1223,6 +1247,79 @@ The three transition methods and two guard cases are annotation-excluded from th
 provenance, unseen transitions or effective-restoration acceptance. All native outcomes remain
 Pending until ordered HOST execution and inspection. Retire the instrumentation's single
 UiAutomation owner before another native/hierarchy owner starts.
+
+#### Guarded complication client probe
+
+Use this later HOST route only after the manager witness/restoration/owner retirement and
+ordinary target provisioning described above. It cannot recover a failed witness or authorize
+early installation. Resolve and checksum the exact test-only client 1.2.1 artifact first,
+including the warm/empty-cache/reuse proof above. No permission grant, instance creation,
+activation, service-policy bypass or hidden state normalization is permitted.
+
+Select exactly one `NativeComplicationOverrideTest` method on the stock runner with
+`wardpulseNativeIntegration=client-probe`. All five new client cases (three native methods,
+two synthetic `NativeClientGuardTest` cases) remain excluded by the isolated runner; the
+manual total is sixteen and the default total stays 40. The native methods require the same
+current host/asset/Push/legacy/renderer identity arguments as the
+[datasource probe](#guarded-datasource-observations), plus `managerWitnessReview=complete`,
+`clientArtifactReview=resolved-1.2.1` and `expectedClientArtifactSha256` from the actual resolved
+AAR. Freshly observe identities; do not reuse the pre-replacement host hash. The class checks
+the retained manager receipt before binding only the already-existing active instance.
+
+For `probeClient`, use the prior stock-runner command shape with these substitutions:
+
+```sh
+adb -s "$WEAR_SERIAL" shell am instrument -w -r \
+  -e class app.wardpulse.wear.nativeintegration.NativeComplicationOverrideTest#probeClient \
+  -e wardpulseNativeIntegration client-probe \
+  -e clientArtifactReview resolved-1.2.1 \
+  -e expectedClientArtifactSha256 "$CLIENT_AAR_SHA256" \
+  -e managerWitnessReview complete \
+  ... \
+  app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+The `...` denotes the mandatory identity arguments above; expand them before executing.
+This is an invocation template, not an executable abbreviated command. Inspect private
+`files/native_client/probe/first.png` for the first complete unobscured original and inspect
+`probe/receipt.json` for actual API/service/permission/instance/slot access and cleanup. A
+source signature, default datasource policy or caller-provided artifact hash proves none
+of these capabilities. Unavailable/denied/unmapped capability stays Pending; do not override.
+
+Only after a successful probe and supported recovery, select `observeOverride` once with:
+
+| Additional argument | Required independent HOST observation/review |
+| --- | --- |
+| `clientProbeReview`, `normalRestorationReview` | Both `complete` |
+| `expectedClientProbeSha256` | SHA-256 of the completed private probe receipt |
+| `firstFrameReview` | `complete-unobscured` |
+| `expectedReviewedFrameSha256` | SHA-256 of the inspected client probe original |
+| `quietWriters` | `confirmed-unpaired`; preserve/restore the original HOST bridge state |
+| `normalRestorationScenario` | The previously reviewed `normal`, `delayed`, `obsolete` or `recovery` datasource case |
+| `expectedNormalRestorationReceiptSha256` | Exact completed datasource receipt after separate later restoration observation and effective-data review |
+| `overrideMode` | `active` or `supplied-bitmap` |
+| `overrideScenario` | One of the six cases in `nativeOverrideData` in [NativeClientProbe.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeClientProbe.kt) |
+| `priorClientRestorationReview`, `expectedPriorClientRestorationSha256` | After a previous armed client transport: `complete` and the exact prior case receipt hash following separate effective-restoration review |
+
+The [component contract](../apps/wear_android/README.md#guarded-complication-client-probe)
+defines cases, API/transport rejection, binding ownership and evidence limits. No argument
+may supply guessed slot IDs, raw payloads, permission or a new instance. Each mode/scenario
+is single-use, including failure; no retries, resets or deleted receipts to obtain a witness.
+Keep `.bin` summary reference bytes, effective-data records and original frames private.
+No summary is restored from those bytes: cleanup requests **current** normal producer data,
+preserving legitimate newer publications and all existing choices/settings.
+
+After that client owner retires and normal delivery separately settles, select
+`observeRestoration` with the same mode/scenario and identity/artifact arguments. It captures
+one later native original, checks client/binding cleanup and notes producer changes. Inspect
+normal effective rendering and reconcile newer data, including bindings, upper choices,
+consent, settings, time/font/ambient and original bridge state. Failed close or unreturned
+interactive acquisition leaves resource ownership Pending; control unbind alone is not proof
+that an unreturned remote reference released. Do not start another owner until reconciled.
+The private latest-acquisition receipt guards subsequent cases; an earlier normal-delivery
+receipt cannot substitute for reviewing this route's own effective restoration.
+Supplied bitmaps cannot replace normal datasource/transition/true-ambient proof. No override,
+restoration or visual PASS is promised; full native acceptance stays Pending.
 
 #### Connected-suite retention policy
 

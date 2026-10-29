@@ -223,6 +223,21 @@ second status-only Source commit. Concrete findings return through supported Run
 
 #### Adaptive integration qualification (2026-10-28)
 
+**2026-10-29 support status:** the [client probe](../../apps/wear_android/README.md#guarded-complication-client-probe)
+uses test-only watchface-client 1.2.1, guarded public existing-instance access and bounded
+unsupported/malformed/partial observations. Actual resolution/checksum (warm plus new empty
+task-owned cache and reuse), service access/permission, mappings, overrides and effective
+normal-data restoration remain Pending. Rejection is not WFF suppression; supplied bitmaps
+are not ordinary datasource/transition/true-ambient evidence. The genuine stock-runner 3→4
+witness must preserve the original host/asset 3 through result and separate settled native
+observation/restoration before owner retirement and ordinary seam-bearing target provisioning.
+Candidate 4 is an integration input, with phone 3/Wear 4/legacy 2/Push default 3/common 0.1.0
+unchanged. Neither support nor a later 3→4 result closes UNKNOWN causality, old-Push1 matrix
+gaps, missing explicit 1→2/2→3 manager evidence or the utility-button gap. Full ordered HOST
+acceptance, both shapes/four combinations/transitions, retained choices, public captures,
+docs/browser, restoration and Root whole ZERO remain Pending after whole Runner DONE and
+retirement; none becomes a Native-commit prerequisite.
+
 The item12 baseline `604e2e5` emitted 221 Compare branches. Each main `isValid` branch in
 slots 101/102/105 had two direct element trees (layout Condition, then strip Group); the
 other 218 had one. This violates the documented
