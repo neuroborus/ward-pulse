@@ -222,6 +222,11 @@ including retained owners, recreation, resume and synchronous consent claims on 
 Assertions check the actual owners' backing stores, private fixture writes and the normal
 datasource-storage constructor. They attribute this suite's effects without requiring live
 phone/Data Layer publications to stop or restoring an older value over a newer publication.
+Equal private and normal bytes are valid and do not establish publication provenance.
+`WardPulseNavigationStateTest.productionRedeliveryKeepsOwnersAndLauncherNavigationWithoutReplayingConsumedFaceEntry`
+extends the existing owner case with private normal-storage stand-ins: equal pre-existing
+state is accepted, a valid newer producer value survives private saves/removal, and actual
+backing-store aliasing is rejected. Live normal preferences are never seeded for these checks.
 These assertions do not establish effective renderer delivery or restoration.
 
 The rule encloses test teardown. Every owned Activity must be destroyed and its lifecycle,
@@ -384,6 +389,14 @@ PASS. Requested frames precede the potentially slow selection lookup; native rec
 images observe separate instants. No sleep, repeated gesture, timing retry or final-frame
 substitute is used.
 
+`NativeDatasourceGuardTest.failedPublicationRestoresOnlyOwnedDataAndRetainsUnresolvedRecovery`
+also checks both actual `deliverySummary` outputs against the schema-9 property/type contract,
+including explicit nullable root, full-ring and budget fields and the distinct four-property
+ring half. The pair uses `allowance.cursor.cursor-plan-other`; normal complication selection
+and AndroidX construction must emit `split:cursor-other`, retaining its recognized far marker
+and the cyan outer arc. Decoder acceptance or static shared-fixture validation alone cannot
+establish this inline-fixture coverage. These subcases add no separately discovered tests.
+
 `NativeSummaryLease` durably retains the exact original preference string opaquely before
 publication, plus owned/reconciliation values and receipts under app-private
 `files/native_datasource/<scenario>/`. Its `.bin` files use one presence-marker byte followed
@@ -427,6 +440,11 @@ resolved AAR and graph in ordinary warm, fresh empty task-owned cache and same-c
 checks. The explicit artifact review/hash arguments record HOST's provenance; instrumentation
 cannot establish Maven provenance from a loaded class. No cache seeding or shared-cache
 modification is authorized.
+
+`NativeComplicationOverrideTest` references `androidx.wear.watchface.style.WatchFaceLayer`,
+the namespace in the pinned 1.2.1 API. The earlier AndroidTest Kotlin compilation failure is
+separate from native access or override capability. Corrected compilation/full build checks
+and runtime capability remain Pending until their ordered HOST checks run.
 
 `withExistingNativeClient` in
 [NativeClientProbe.kt](app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeClientProbe.kt)

@@ -20,7 +20,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -175,33 +175,32 @@ internal class IsolatedActivityScope(private val application: IsolatedWearApplic
         checkNotNull(owners[activity]).complete(Unit)
     }
 
-    fun saveSummary(summary: WatchDashboardSummary?) {
+    fun saveSummary(summary: WatchDashboardSummary?, normalStorageContext: Context = application) {
+        val store = WatchSummaryStore(summaryPreferences)
         if (summary == null) {
             assertTrue(summaryPreferences.edit().remove("latest").commit())
         } else {
-            WatchSummaryStore(summaryPreferences).save(summary)
-            val fixture = checkNotNull(summaryPreferences.getString("latest", null))
-            // Compare only this fixture's provenance; a newer phone publication is legitimate.
-            assertFalse(
-                "Test fixture reached normal datasource storage",
-                fixture == application.getSharedPreferences("watch_summary", Context.MODE_PRIVATE)
-                    .getString("latest", null),
-            )
+            store.save(summary)
         }
-        assertStorageIsPrivate()
+        assertEquals(summary, store.load())
+        // Equal bytes carry no publication provenance. Check storage identity and routing instead.
+        // Regressions supply a private stand-in context without writing live normal storage.
+        assertStorageIsPrivate(normalStorageContext)
     }
 
-    fun assertStorageIsPrivate() {
+    fun assertStorageIsPrivate(normalStorageContext: Context = application) {
         // Inspect the actual backing stores, without freezing live values or restoring over a producer.
-        val normalSummary = application.getSharedPreferences("watch_summary", Context.MODE_PRIVATE)
-        val normalConsent = application.getSharedPreferences("watch_face_consent", Context.MODE_PRIVATE)
+        val normalSummary = normalStorageContext.applicationContext
+            .getSharedPreferences("watch_summary", Context.MODE_PRIVATE)
+        val normalConsent = normalStorageContext.applicationContext
+            .getSharedPreferences("watch_face_consent", Context.MODE_PRIVATE)
         assertNotSame(normalSummary, summaryPreferences)
         assertNotSame(normalConsent, consentPreferences)
         val summaryField = WatchSummaryStore::class.java.getDeclaredField("preferences").apply { isAccessible = true }
         val consentField = WatchFaceConsentStore::class.java.getDeclaredField("preferences").apply { isAccessible = true }
         // This is the Context constructor used by production datasource services, even in this application.
-        assertSame(normalSummary, summaryField.get(WatchSummaryStore(application)))
-        assertSame(normalConsent, consentField.get(WatchFaceConsentStore(application)))
+        assertSame(normalSummary, summaryField.get(WatchSummaryStore(normalStorageContext)))
+        assertSame(normalConsent, consentField.get(WatchFaceConsentStore(normalStorageContext)))
         assertSame(summaryPreferences, summaryField.get(application.summaryStore(application)))
         assertSame(consentPreferences, consentField.get(application.consentStore(application)))
     }

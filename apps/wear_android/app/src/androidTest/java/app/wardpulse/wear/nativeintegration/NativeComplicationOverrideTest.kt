@@ -9,9 +9,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.wear.watchface.DrawMode
 import androidx.wear.watchface.RenderParameters
-import androidx.wear.watchface.WatchFaceLayer
 import androidx.wear.watchface.complications.data.ComplicationType
 import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester
+import androidx.wear.watchface.style.WatchFaceLayer
 import app.wardpulse.wear.data.WatchSummaryStore
 import java.io.File
 import java.time.Instant

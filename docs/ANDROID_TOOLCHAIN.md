@@ -988,6 +988,9 @@ keeps all original 40 tests and real owner/lifecycle/durable-consent guarantees,
 fixture stores and a recording refresh sink. Test-APK installation alone does not provide
 that seam on the original installed host. Default-suite acceptance is Pending until actual
 ordered provisioning and native execution; earlier suite results do not validate isolation.
+Its attribution regressions use private stand-ins for equal and newer normal-store values;
+byte equality is not evidence that a test published to normal storage. Actual backing-store
+identity, constructor routing and recording-sink dispatch remain the isolation evidence.
 
 For item12, preserve the original target APK and bundled Push asset 3 through the genuine
 guarded stock-runner Push 3→4 SDK operation, its recorded result and separate settled native
@@ -1255,6 +1258,12 @@ ordinary target provisioning described above. It cannot recover a failed witness
 early installation. Resolve and checksum the exact test-only client 1.2.1 artifact first,
 including the warm/empty-cache/reuse proof above. No permission grant, instance creation,
 activation, service-policy bypass or hidden state normalization is permitted.
+
+The pinned 1.2.1 rendering API declares `WatchFaceLayer` in `androidx.wear.watchface.style`.
+`NativeComplicationOverrideTest` uses that namespace without changing rendering parameters
+or dependency versions. The recorded unresolved-import Kotlin failure did not install a target
+or establish unavailable native capability. Corrected compilation, complete build checks and
+actual client access remain separate Pending HOST evidence.
 
 Select exactly one `NativeComplicationOverrideTest` method on the stock runner with
 `wardpulseNativeIntegration=client-probe`. All five new client cases (three native methods,

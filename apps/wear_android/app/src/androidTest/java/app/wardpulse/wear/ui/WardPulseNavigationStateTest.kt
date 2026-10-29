@@ -3,6 +3,7 @@ package app.wardpulse.wear.ui
 import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Bitmap
@@ -65,6 +66,7 @@ import androidx.wear.compose.material3.AppScaffold
 import app.wardpulse.wear.IsolatedActivityRule
 import app.wardpulse.wear.MainActivity
 import app.wardpulse.wear.WatchFaceViewModel
+import app.wardpulse.wear.data.WatchSummaryStore
 import app.wardpulse.wear.model.AlertSummary
 import app.wardpulse.wear.model.AllowanceSummary
 import app.wardpulse.wear.model.PeriodSummary
@@ -86,6 +88,7 @@ import app.wardpulse.wear.watchface.WatchFaceState
 import app.wardpulse.wear.watchface.WatchFaceStatus
 import java.io.File
 import java.util.Collections
+import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -102,6 +105,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -181,6 +185,7 @@ class WardPulseNavigationStateTest {
 
     @Test
     fun productionRedeliveryKeepsOwnersAndLauncherNavigationWithoutReplayingConsumedFaceEntry() {
+        assertPrivateSummaryAttribution()
         launchProduction(alpha)
         val owner = productionOwner()
         val model = productionModel(owner)
@@ -1998,6 +2003,60 @@ class WardPulseNavigationStateTest {
                 }
                 awaitUi()
             }
+        }
+    }
+
+    private fun assertPrivateSummaryAttribution() {
+        val context = instrumentation.targetContext
+        val prefix = "normal_storage_standin_${UUID.randomUUID()}"
+        val names = listOf("${prefix}_summary", "${prefix}_consent")
+        try {
+            val normalSummary = context.getSharedPreferences(names[0], Context.MODE_PRIVATE)
+            val normalConsent = context.getSharedPreferences(names[1], Context.MODE_PRIVATE)
+            fun normalContext(summaryPreferences: SharedPreferences) = object : ContextWrapper(context) {
+                override fun getApplicationContext(): Context = this
+                override fun getSharedPreferences(name: String, mode: Int): SharedPreferences = when (name) {
+                    "watch_summary" -> summaryPreferences
+                    "watch_face_consent" -> normalConsent
+                    else -> error("Unexpected stand-in preference name")
+                }
+            }
+            val standIn = normalContext(normalSummary)
+            val normalStore = WatchSummaryStore(standIn)
+            val newerSummary = beta.copy(generatedAt = "2026-10-16T12:01:00Z")
+            instrumentation.runOnMainSync {
+                // Both are valid producer states in private resources, never the live normal file.
+                normalStore.save(alpha)
+                val equal = checkNotNull(normalSummary.getString("latest", null))
+                assertEquals(alpha, normalStore.load())
+                isolation.scope.saveSummary(alpha, standIn)
+                assertEquals(equal, normalSummary.getString("latest", null))
+                assertEquals(equal, isolation.scope.summaryPreferences.getString("latest", null))
+
+                normalStore.save(newerSummary)
+                val newer = checkNotNull(normalSummary.getString("latest", null))
+                assertEquals(newerSummary, normalStore.load())
+                isolation.scope.saveSummary(alpha, standIn)
+                isolation.scope.saveSummary(null, standIn)
+                assertEquals(newer, normalSummary.getString("latest", null))
+                assertFalse(isolation.scope.summaryPreferences.contains("latest"))
+
+                // Reject actual backing-store aliasing even when value equality is allowed.
+                assertThrows(AssertionError::class.java) {
+                    isolation.scope.saveSummary(alpha, normalContext(isolation.scope.summaryPreferences))
+                }
+                isolation.scope.assertStorageIsPrivate()
+            }
+        } finally {
+            // Try every acquired private resource even if an earlier deletion fails.
+            val cleaned = names.map { name ->
+                val flushed = runCatching {
+                    context.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().commit()
+                }
+                val deleted = runCatching { context.deleteSharedPreferences(name) }
+                flushed.getOrDefault(false) && deleted.getOrDefault(false)
+            }
+            assertTrue("Private normal-storage stand-ins must be deleted", cleaned.all { it })
         }
     }
 

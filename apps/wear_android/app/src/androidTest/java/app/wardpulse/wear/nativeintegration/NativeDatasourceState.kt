@@ -156,15 +156,21 @@ internal class NativeSummaryLease(
 
 /** Minimal sanitized summaries, passed through the production decoder without changing its rules. */
 internal fun deliverySummary(pair: Boolean, generatedAt: String): String {
-    fun ring(id: String, used: Int) = JSONObject().put("id", id).put("label", "Plan")
+    fun half(id: String, used: Int) = JSONObject().put("id", id).put("label", "Plan")
         .put("usedPercent", used).put("status", "ok")
+    fun ring(id: String, used: Int) = half(id, used).put("spent", JSONObject.NULL)
+        .put("limit", JSONObject.NULL).put("split", JSONObject.NULL)
     fun period(name: String) = JSONObject().put("period", name).put("status", "unknown")
+        .put("spent", JSONObject.NULL).put("limit", JSONObject.NULL).put("remaining", JSONObject.NULL)
+        .put("usedPercent", JSONObject.NULL).put("projectedTotal", JSONObject.NULL)
     val rings = org.json.JSONArray().put(ring("allowance.codex.week", if (pair) 63 else 20))
     if (pair) rings.put(ring("allowance.cursor.cursor-plan-models", 30)
-        .put("split", ring("allowance.cursor.other-models", 50)))
+        .put("split", half("allowance.cursor.cursor-plan-other", 50)))
     return JSONObject().put("schemaVersion", 9).put("dataMode", "live").put("generatedAt", generatedAt)
-        .put("overallStatus", "ok").put("rings", rings).put("today", period("today"))
+        .put("overallStatus", "ok").put("rings", rings).put("creditsGlance", JSONObject.NULL)
+        .put("today", period("today"))
         .put("week", period("week")).put("allowances", org.json.JSONArray())
         .put("providers", org.json.JSONArray()).put("alerts", org.json.JSONArray())
-        .put("isStale", false).put("manualRefreshAllowed", false).toString()
+        .put("isStale", false).put("manualRefreshAllowed", false)
+        .put("manualRefreshAvailableAt", JSONObject.NULL).toString()
 }

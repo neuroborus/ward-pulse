@@ -2,16 +2,27 @@ package app.wardpulse.wear.nativeintegration
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.wear.watchface.complications.data.NoDataComplicationData
+import androidx.wear.watchface.complications.data.RangedValueComplicationData
+import app.wardpulse.wear.complication.WatchComplicationText
+import app.wardpulse.wear.complication.outerHalfComplicationData
+import app.wardpulse.wear.complication.rangedComplicationBuilder
+import app.wardpulse.wear.complication.ringComplicationData
 import app.wardpulse.wear.data.WatchSummaryStore
+import app.wardpulse.wear.ui.RingFamily
 import java.io.File
+import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.FutureTask
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -59,8 +70,8 @@ class NativeDatasourceGuardTest {
         check(directory.mkdir())
         try {
             instrumentation.runOnMainSync {
-                val original = deliverySummary(false, "2026-01-01T00:00:00Z")
-                val own = deliverySummary(true, "2026-01-01T00:01:00Z")
+                val original = checkedDeliverySummary(false, "2026-01-01T00:00:00Z", preferences)
+                val own = checkedDeliverySummary(true, "2026-01-01T00:01:00Z", preferences)
                 val newer = deliverySummary(false, "2026-01-01T00:02:00Z")
                 for (outcome in listOf("failure", "rejected", "newer", "during-persistence", "writers-unresolved", "absent")) {
                     check(preferences.edit().clear().commit())
@@ -124,8 +135,94 @@ class NativeDatasourceGuardTest {
                 }
             }
         } finally {
-            check(context.deleteSharedPreferences(name))
-            check(directory.deleteRecursively())
+            // Flush private test writes and attempt both deletions even after a cleanup failure.
+            val flushed = runCatching { preferences.edit().clear().commit() }
+            val deleted = runCatching { context.deleteSharedPreferences(name) }
+            val removed = runCatching { directory.deleteRecursively() }
+            check(listOf(flushed, deleted, removed).all { it.getOrDefault(false) }) {
+                "Private delivery-test resources must be deleted"
+            }
         }
+    }
+
+    /** Inspect actual helper output: the decoder intentionally tolerates absent nullable keys. */
+    private fun checkedDeliverySummary(pair: Boolean, generatedAt: String, preferences: SharedPreferences): String {
+        val encoded = deliverySummary(pair, generatedAt)
+        val summary = JSONObject(encoded)
+        fun keys(value: JSONObject, vararg expected: String) =
+            assertEquals(expected.toSet(), value.keys().asSequence().toSet())
+        fun explicitNulls(value: JSONObject, vararg names: String) {
+            names.forEach { assertSame("Explicit null required for $it", JSONObject.NULL, value.get(it)) }
+        }
+        fun half(value: JSONObject, id: String, used: Int) {
+            assertEquals(id, value.get("id"))
+            assertEquals("Plan", value.get("label"))
+            assertEquals("ok", value.get("status"))
+            assertTrue("usedPercent must be a JSON number", value.get("usedPercent") is Number)
+            assertEquals(used.toDouble(), value.getDouble("usedPercent"), 0.0)
+        }
+        keys(summary, "schemaVersion", "dataMode", "generatedAt", "overallStatus", "rings", "creditsGlance",
+            "today", "week", "allowances", "providers", "alerts", "isStale", "manualRefreshAllowed",
+            "manualRefreshAvailableAt")
+        assertEquals(9, summary.get("schemaVersion"))
+        assertEquals("live", summary.get("dataMode"))
+        assertEquals(generatedAt, summary.get("generatedAt"))
+        Instant.parse(summary.getString("generatedAt"))
+        assertEquals("ok", summary.get("overallStatus"))
+        assertEquals(false, summary.get("isStale"))
+        assertEquals(false, summary.get("manualRefreshAllowed"))
+        explicitNulls(summary, "creditsGlance", "manualRefreshAvailableAt")
+        for (name in listOf("allowances", "providers", "alerts")) {
+            assertEquals(0, summary.getJSONArray(name).length())
+        }
+        for (name in listOf("today", "week")) {
+            val period = summary.getJSONObject(name)
+            keys(period, "period", "status", "spent", "limit", "remaining", "usedPercent", "projectedTotal")
+            assertEquals(name, period.get("period"))
+            assertEquals("unknown", period.get("status"))
+            explicitNulls(period, "spent", "limit", "remaining", "usedPercent", "projectedTotal")
+        }
+        val rings = summary.getJSONArray("rings")
+        assertEquals(if (pair) 2 else 1, rings.length())
+        for (index in 0 until rings.length()) {
+            val ring = rings.getJSONObject(index)
+            keys(ring, "id", "label", "usedPercent", "status", "spent", "limit", "split")
+            half(ring, if (index == 0) "allowance.codex.week" else "allowance.cursor.cursor-plan-models",
+                if (index == 0) (if (pair) 63 else 20) else 30)
+            explicitNulls(ring, "spent", "limit")
+            if (index == 0) explicitNulls(ring, "split") else {
+                val split = ring.getJSONObject("split")
+                // A half has four properties; full-ring money/split fields must not leak into it.
+                keys(split, "id", "label", "usedPercent", "status")
+                half(split, "allowance.cursor.cursor-plan-other", 50)
+            }
+        }
+
+        val store = WatchSummaryStore(preferences)
+        assertTrue(store.saveEncoded(encoded))
+        val decoded = checkNotNull(store.load())
+        // Use normal selection and AndroidX data construction, rather than a token-only assertion.
+        val main = ringComplicationData(decoded.rings, 0) { ring, remaining, title, count ->
+            rangedComplicationBuilder(remaining, title, RingFamily.colorArgb(ring.id),
+                contentDescription = ring.label, ringCount = count).build()
+        } as RangedValueComplicationData
+        main.validate()
+        val resources = InstrumentationRegistry.getInstrumentation().targetContext.resources
+        assertEquals(if (pair) "split:cursor-other" else "", main.title!!.getTextAt(resources, Instant.EPOCH).toString())
+        assertEquals(if (pair) 280f else 160f, main.value, 0f)
+        assertEquals(if (pair) 400f else 200f, main.max, 0f)
+        val extra = outerHalfComplicationData(decoded.rings, 0) { half, slot, count ->
+            rangedComplicationBuilder(WatchComplicationText.remainingPercent(half.usedPercent), slot.toString(),
+                RingFamily.colorArgb(half.id), contentDescription = half.label, ringCount = count).build()
+        }
+        if (pair) {
+            extra as RangedValueComplicationData
+            extra.validate()
+            assertEquals("0", extra.title!!.getTextAt(resources, Instant.EPOCH).toString())
+            assertEquals(200f, extra.value, 0f)
+            assertEquals(400f, extra.max, 0f)
+            assertEquals(RingFamily.CURSOR, extra.colorRamp!!.colors.single())
+        } else assertTrue(extra is NoDataComplicationData)
+        return encoded
     }
 }
