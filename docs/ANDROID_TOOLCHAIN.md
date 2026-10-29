@@ -1042,8 +1042,9 @@ before dispatch and through later observation. Use the stock entry
 ABI absent from the baseline; it must not be used here. Never invoke stock discovery/default
 tests. The three `NativePushGuardTest` cases can separately be explicitly selected by class;
 they touch only memory and private temporary files/descriptors, not the manager/live stores.
-The three update-class cases are manual; `IsolatedWearRunner` excludes all six new cases and
-keeps the original default 40 tests.
+The three update-class cases are manual; together with the three Push guard and five
+datasource cases, `IsolatedWearRunner` excludes all eleven manual cases and keeps the
+original default 40 tests.
 
 Supply these fresh HOST expectations as `am instrument -e` strings. SHA-256 values use lowercase
 hex; fingerprint/instance/slot strings are hashed as UTF-8 **without** a trailing newline.
@@ -1138,6 +1139,92 @@ admit seam-bearing target provisioning under the policies below. Later rebuilt-h
 cannot replace pre-replacement evidence. The 3→4 witness closes neither the utility button nor
 missing 1→2/2→3 manager evidence, old-Push1 matrix gaps or UNKNOWN historical causality. All
 unexecuted builds, native routes, effective restoration and visual acceptance remain Pending.
+
+#### Guarded datasource observations
+
+These are later HOST-only observations, after the successful baseline-host manager witness,
+separate native evidence/restoration and owner retirement, ordinary rebuilding and compatible
+seam-bearing target provisioning. They cannot authorize early target installation. Preserve
+the Push update receipt and intended Push 4 advancement. Production schema, normalization,
+settings, consent and datasource behavior stay unchanged.
+
+Select only one explicit `NativeDatasourceTransitionTest` method using the **stock** runner
+and literal `wardpulseNativeIntegration=normal-delivery`. `probeDelivery` is read-only apart
+from private evidence files; it requires the retained manager-result/native-observation record,
+canonical emulator/image/display, current host 4/asset 3, Push 4, legacy 2 and current active
+instance/configuration identities. The source reads explicit system-manager mapping records
+with `discoverDeliveryTargets`; see
+[mapping and recovery limits](../apps/wear_android/README.md#guarded-normal-datasource-observations).
+Exposure/access/format of applicable system records is unverified until HOST probes it. If
+fields or mappings are unavailable, leave Pending; do not supply guessed IDs, synthesize
+records, use cached data/default policy, select providers or grant permission to proceed.
+
+Freshly populate the named variables from independent installed/active observations. The
+host hash here is the **post-witness rebuilt** host, distinct from the original manager
+witness. The command shape for the single first-frame probe is:
+
+```sh
+adb -s "$WEAR_SERIAL" shell am instrument -w -r \
+  -e class app.wardpulse.wear.nativeintegration.NativeDatasourceTransitionTest#probeDelivery \
+  -e wardpulseNativeIntegration normal-delivery \
+  -e expectedAvd "$NATIVE_AVD" -e expectedFingerprintSha256 "$NATIVE_FINGERPRINT_SHA256" \
+  -e expectedHostApkSha256 "$NATIVE_HOST_SHA256" -e expectedHostSignerSha256 "$NATIVE_HOST_SIGNER_SHA256" \
+  -e expectedAsset3Sha256 "$NATIVE_ASSET3_SHA256" -e expectedPush4ApkSha256 "$NATIVE_PUSH4_SHA256" \
+  -e expectedPushSignerSha256 "$NATIVE_PUSH_SIGNER_SHA256" \
+  -e expectedLegacyApkSha256 "$NATIVE_LEGACY_SHA256" -e expectedLegacySignerSha256 "$NATIVE_LEGACY_SIGNER_SHA256" \
+  -e expectedRuntime "$NATIVE_RUNTIME" -e expectedResourcePackage "$NATIVE_RESOURCE_PACKAGE" \
+  -e expectedInstanceSha256 "$NATIVE_INSTANCE_SHA256" -e expectedConfigurationSha256 "$NATIVE_CONFIG_SHA256" \
+  app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+Inspect the original private `files/native_datasource/probe/first.png` before batching. Require
+a complete unobscured native frame; an overlay is not accepted evidence. Record its SHA-256.
+HOST must establish quiet summary writers and quiet/unpaired transport, record the original
+bridge/peer configuration, and restore it after reconciliation. Absence of connected nodes or
+a running listener alone cannot prove that no producer has future work. Do not disable the
+listener, freeze live preferences, clear state or overwrite a newer publication to create
+these preconditions. If quiet ownership cannot be established, leave the mutation route Pending.
+
+For one `observeDelivery` invocation, retain the same identity arguments, change only the
+explicit method and add all these `-e` strings:
+
+| Argument | Required value |
+| --- | --- |
+| `deliveryScenario` | One of `normal`, `delayed`, `obsolete`, `recovery` |
+| `quietWriters` | `confirmed-unpaired`, after establishing the HOST precondition |
+| `managerWitnessReview` | `complete`, after reviewing the original pre-replacement evidence |
+| `firstFrameReview` | `complete-unobscured`, after inspecting this probe's original |
+| `expectedReviewedFrameSha256` | SHA-256 of that exact private original PNG |
+
+One method runs one bounded scenario; its private directory prevents replay. The normal case
+publishes a sanitized pair through `WatchSummaryStore.saveEncoded` and requests the selected
+system IDs. Delayed stages withhold extra requests until after the main observation; obsolete
+removes secondary mains/extras, and recovery restores the pair. Inspect every original
+requested/bounded frame and actual effective data. Requested updates, accepted application
+state, a runtime accessibility event, cached native data and effective rendering are separate
+evidence. No callback provenance or transition PASS follows from request return, event arrival,
+event timeout or the final frame. Redacted native fields can leave semantics unavailable.
+
+`NativeSummaryLease` retains originals opaquely and restores only attributable owned data
+after rechecking quiet writers. A newer publication is preserved and recorded privately;
+unresolved interleaving/transport retains recovery material and stays Pending. There is no
+cross-writer atomic compare-and-set guarantee. Cleanup requests ordinary six-service delivery
+on failure as well as success. Its immediate frame is diagnostic. After actual native
+settlement, select `observeRestoration` once with the same identity arguments plus
+`deliveryScenario`; it records a separate later original and newer-write status without
+publishing or restoring a snapshot. Verify actual restored normal delivery/rendering, retained
+instance/bindings/upper choices/consent/settings/time/font/ambient and the original HOST bridge
+state; reconcile newer data instead of forcing the old digest. Keep `.bin` originals,
+reconciliation bytes, raw records and frames app-private until recovery/review is resolved.
+
+`NativeDatasourceGuardTest` has two separately selectable private mapping/cleanup cases.
+The three transition methods and two guard cases are annotation-excluded from the default
+40. Neither source completion nor a successful instrumentation exit closes unavailable
+provenance, unseen transitions or effective-restoration acceptance. All native outcomes remain
+Pending until ordered HOST execution and inspection. Retire the instrumentation's single
+UiAutomation owner before another native/hierarchy owner starts.
+
+#### Connected-suite retention policy
 
 Both `just test-wear-device` and the connected suite inside `just test-phone-watch-sync`
 require the shared Wear project policy in `apps/wear_android/gradle.properties`:

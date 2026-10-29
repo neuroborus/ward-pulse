@@ -56,10 +56,11 @@ internal class NativePushExpectations(private val arguments: Bundle) {
         nativeGuard(it.matches(Regex("[a-f0-9]{64}")), name)
     }
 
-    fun admit(method: String, runnerName: String, avd: String, qemu: String, watch: Boolean) {
+    fun admit(method: String, runnerName: String, avd: String, qemu: String, watch: Boolean,
+        testClass: String = UPDATE_CLASS, optIn: String = "push-3-to-4") {
         nativeGuard(runnerName == "androidx.test.runner.AndroidJUnitRunner", "stock-runner")
-        nativeGuard(arguments.getString("class") == "$UPDATE_CLASS#$method", "explicit-method")
-        nativeGuard(arguments.getString("wardpulseNativeIntegration") == "push-3-to-4", "opt-in")
+        nativeGuard(arguments.getString("class") == "$testClass#$method", "explicit-method")
+        nativeGuard(arguments.getString("wardpulseNativeIntegration") == optIn, "opt-in")
         nativeGuard(watch && qemu == "1" && avd in setOf(
             "wardpulse_wear_round_api36_1", "wardpulse_wear_square_api36_1",
         ) && avd == required("expectedAvd"), "canonical-emulator")
@@ -100,13 +101,15 @@ internal class NativePushDevice(private val instrumentation: Instrumentation) {
         bytes.toString(Charsets.UTF_8).trim()
     }
 
-    fun admit(expected: NativePushExpectations, method: String) {
+    fun admit(expected: NativePushExpectations, method: String,
+        testClass: String = UPDATE_CLASS, optIn: String = "push-3-to-4") {
         val avd = shell("getprop ro.boot.qemu.avd_name").ifBlank {
             shell("getprop ro.kernel.qemu.avd_name")
         }
         expected.admit(
             method, instrumentation.javaClass.name, avd, shell("getprop ro.kernel.qemu"),
             context.packageManager.hasSystemFeature(PackageManager.FEATURE_WATCH),
+            testClass, optIn,
         )
         nativeGuard(Build.VERSION.SDK_INT == 36 &&
             Build.FINGERPRINT.sha256() == expected.hash("expectedFingerprintSha256"), "system-image")
@@ -258,6 +261,8 @@ internal data class NativeRenderer(
     val enabled: Map<Int, Boolean>,
     val deliveredSources: Map<Int, String?>,
     val selections: NativeSelections? = null,
+    // Kept private by callers: native data may include sensitive producer content.
+    val effectiveData: Map<Int, String> = emptyMap(),
 ) {
     val deliveryProvenance: String
         get() = deliveredSources.toSortedMap().entries.joinToString("\n") { (id, source) ->
@@ -309,11 +314,13 @@ internal data class NativeRenderer(
                 "native-slot-inventory")
             val enabled = mutableMapOf<Int, Boolean>()
             val deliveredSources = mutableMapOf<Int, String?>()
+            val effectiveData = mutableMapOf<Int, String>()
             slots.forEachIndexed { index, match ->
                 val id = match.groupValues[1].toInt()
                 val block = dump.substring(match.range.last + 1, slots.getOrNull(index + 1)?.range?.first ?: dump.length)
                 val data = block.lineSequence().map { it.trim() }.filter { it.startsWith("data=") }.singleOrNull()
                     ?: throw NativePending("effective-data-unavailable")
+                effectiveData[id] = data.removePrefix("data=")
                 val sources = Regex("dataSource=ComponentInfo\\{([^}]+)}").findAll(data).toList()
                 nativeGuard(sources.size <= 1, "ambiguous-delivery-provenance")
                 // Cached provenance is diagnostic only, even when a source is present.
@@ -326,7 +333,7 @@ internal data class NativeRenderer(
             // Selections come from the independent service query in readNativeSelections,
             // never cached dataSource or defaultDataSourcePolicy from this dump.
             return NativeRenderer(resourcePackage, instance, single("currentUserStyleRepository.userStyle="),
-                enabled, deliveredSources)
+                enabled, deliveredSources, effectiveData = effectiveData)
         }
     }
 }

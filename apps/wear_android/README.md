@@ -245,11 +245,12 @@ installer to recover. The stock update route must not load this application or l
 
 ## Guarded native Push integration
 
-`ManualNativeIntegration` marks six additional cases: `NativePushGuardTest` has three
+`ManualNativeIntegration` marks eleven additional cases: `NativePushGuardTest` has three
 negative/cleanup cases, including candidate file/FD cleanup on either callback outcome;
 the journal case also exercises discovery through fake selection responses into one fake dispatch.
 `NativePushUpdateTest` has individually selected `probeBaseline`,
-`updateOwnedPush3To4` and `observeSettledUpdate` cases. `IsolatedWearRunner.onCreate` always
+`updateOwnedPush3To4` and `observeSettledUpdate` cases. The datasource classes below add five.
+`IsolatedWearRunner.onCreate` always
 excludes that annotation, including explicitly selected manual classes. The original default
 inventory remains 40. The stock `androidx.test.runner.AndroidJUnitRunner` entry in the test
 manifest follows the configured isolated runner, because AGP applies its runner name to the
@@ -331,6 +332,81 @@ Candidate provenance belongs to
 Compilation, guards on actual devices, SDK results, settled rendering and restoration are
 all **Pending** until ordered HOST execution after the whole Runner run retires. This harness
 does not close the utility-button gap, earlier manager-update gaps or historical causality.
+
+## Guarded normal datasource observations
+
+`NativeDatasourceTransitionTest` adds three stock-runner manual cases: `probeDelivery`,
+`observeDelivery` and `observeRestoration`. `NativeDatasourceGuardTest` adds two private
+mapping/cleanup cases, with no live preferences or manager mutation. These five cases remain
+excluded from the original default 40. Invoke the manual route only after the genuine Push
+3→4 result, separate settled evidence/restoration and instrumentation retirement, followed by
+ordinary seam-bearing target provisioning. This is not a target installer or a manager retry.
+
+`discoverDeliveryTargets` in
+[NativeDatasourceState.kt](app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeDatasourceState.kt)
+joins independently selected providers to explicit system-manager records for the actual
+runtime component, existing instance and enabled slot. Its bounded read-only source is
+`dumpsys activity service com.google.android.wearable.app`. A recognized row must co-locate
+`watchFaceComponent`, `watchFaceInstanceId`, `watchFaceComplicationId`,
+`complicationInstanceId` and `providerComponent` as named `key=value` fields; components may
+be flattened or wrapped in `ComponentInfo{…}`. Current installed-manager exposure of these
+fields is **unverified**. Missing, ambiguous, duplicate or unproved applicable records leave
+the route **Pending before publication**. Neither HOST-supplied IDs, scene IDs 101/102/etc,
+runtime slot numbers alone, cached `dataSource` nor default policy can supply missing mappings.
+The component-scoped selection query is bracketed by unchanged active-instance observations;
+all five lower services must be selected and enabled. Wear 4, asset 3, retained Push 4 and
+legacy 2 identities are guarded. An already-active Push or legacy instance can be observed;
+this harness never activates or reselects either one.
+
+HOST first inspects the single private `probe/first.png` original for a complete unobscured
+frame, then supplies its hash and explicit review/precondition attestations. Before controlled
+writes, HOST must independently establish quiet summary producers, an unpaired bridge with no
+connected nodes and no in-flight `WatchSummaryListenerService`; record and later restore the
+original HOST bridge configuration. The test rechecks its explicit HOST precondition and
+listener-service state before publications and cleanup. It never edits the bridge, disables
+a receiver, pauses a producer or changes settings itself. These
+observations cannot prove the absence of every future write. Quiet-writer ownership is a HOST
+precondition; concurrent phone/Data Layer publications remain legitimate.
+
+`observeDelivery` selects one finite `normal`, `delayed`, `obsolete` or `recovery` scenario.
+Sanitized live-mode summaries pass through the real `WatchSummaryStore.saveEncoded`, unchanged
+schema-9 decoding and normal services. A two-band summary has a main/extra pair; a single-band
+summary removes obsolete mains/extras. The delayed case requests mains first and extras only
+after its bounded observation; recovery returns the pair after removal. Every selected
+`ComplicationDataSourceUpdateRequester.requestUpdate` uses discovered **system** IDs and
+records each provider call's armed/returned state separately from accepted-summary hashes.
+Withholding a request controls neither OS delivery time nor cross-slot atomicity. A runtime
+accessibility event supplies only a bounded observation boundary; timeout and unavailable
+response provenance stay Pending. Effective native data, NoData observations and original
+requested/bounded frames are separate private evidence, never a callback ACK or a renderer
+PASS. Requested frames precede the potentially slow selection lookup; native records and
+images observe separate instants. No sleep, repeated gesture, timing retry or final-frame
+substitute is used.
+
+`NativeSummaryLease` durably retains the exact original preference string opaquely before
+publication, plus owned/reconciliation values and receipts under app-private
+`files/native_datasource/<scenario>/`. Its `.bin` files use one presence-marker byte followed
+by the unmodified UTF-8 string. They and native records/frames must remain private. Recovery
+runs on failure as well as success, unregisters its preference listener and makes queued
+callbacks inert. It compares current data to this instrumentation's issued values before
+restoring original bytes or original absence. After persisting an armed publication, it
+rechecks ownership before saving the fixture. A newer value is preserved, including a
+producer write during persistence; observed interleaving or unreestablished quiet writers
+retain recovery material and remain Pending. SharedPreferences
+does not provide a cross-writer compare-and-set transaction: do not run this route with active
+writers or claim concurrency isolation from its comparisons. No restoration blindly overwrites
+a changed value. Original and recovery files remain until HOST reconciliation and native review.
+
+Cleanup requests the normal six-service `WatchComplicationUpdater` even on observation
+failure, without reusing potentially stale selected IDs. The immediate restoration frame is
+diagnostic. HOST separately selects `observeRestoration` once after native settlement; it
+records a later original and detects newer live data without restoring over it. Equality of
+native dump text is diagnostic, especially with redacted values, and cannot prove semantic
+data restoration or visual acceptance. HOST must reconcile newer publications, inspect actual
+normal effective data/frames and verify retained bindings, upper choices, consent, settings,
+time/font/ambient and bridge state. Unsupported mapping/provenance, unseen transitions and
+unsafe restoration remain **Pending**. See
+[the manual invocation](../../docs/ANDROID_TOOLCHAIN.md#guarded-datasource-observations).
 
 ## Commands
 
