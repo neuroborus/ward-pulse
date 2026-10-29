@@ -21,7 +21,7 @@ internal fun discoverDeliveryTargets(record: String, component: ComponentName,
     // Accept only explicit, co-located fields in an applicable system record. No canonical-ID,
     // list-position, cached-dataSource or default-policy fallback exists. Unexposed fields stay Pending.
     val rows = record.lineSequence().mapNotNull { line ->
-        fun field(name: String) = Regex("(?:^|[\\s,{])$name=(ComponentInfo\\{[^}]+}|[^,\\s}]+)")
+        fun field(name: String) = Regex("(?:^|[\\s,{])$name=(ComponentInfo\\{[^}]+\\}|[^,\\s}]+)")
             .findAll(line).toList().singleOrNull()?.groupValues?.get(1)
         fun source(name: String) = field(name)?.removePrefix("ComponentInfo{")?.removeSuffix("}")
             ?.let(ComponentName::unflattenFromString)

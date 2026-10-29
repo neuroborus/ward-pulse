@@ -486,7 +486,7 @@ internal data class NativeRenderer(
                 val data = block.lineSequence().map { it.trim() }.filter { it.startsWith("data=") }.singleOrNull()
                     ?: throw NativePending("effective-data-unavailable")
                 effectiveData[id] = data.removePrefix("data=")
-                val sources = Regex("dataSource=ComponentInfo\\{([^}]+)}").findAll(data).toList()
+                val sources = Regex("dataSource=ComponentInfo\\{([^}]+)\\}").findAll(data).toList()
                 nativeGuard(sources.size <= 1, "ambiguous-delivery-provenance")
                 // Cached provenance is diagnostic only, even when a source is present.
                 deliveredSources[id] = if (data.startsWith("data=NoDataComplicationData") ||
