@@ -1001,6 +1001,144 @@ Wear code 4/bundled asset 3 and compatible signing, then admit target provisioni
 from the isolated test bodies' effects. Keep retained Push 4, bindings and active-state checks
 separate from the pre-replacement manager evidence.
 
+#### Guarded Push witness
+
+This is HOST-only after whole Runner execution DONE, owned-process retirement, owning CLI
+exit where applicable and fresh separate idle ownership. Source/semantic review is not native
+acceptance. Keep the original target APK and asset 3 throughout this sequence; a failed or
+uncertain witness forbids subsequent target installation. Never run a connected/default suite,
+`run-wear`, sync recipe or other target installer first. No activation, receiver disable,
+permission grant, reset, downgrade, candidate substitution or version loop is allowed.
+
+From `apps/wear_android`, build the signed, officially validated candidate into the **test**
+APK without installing anything:
+
+```sh
+./gradlew --no-daemon :app:assembleDebugAndroidTest -PwardpulseNativeCandidate=true -PwardpulsePushVersionCode=4
+```
+
+Before provisioning, independently inspect the installed target APK/code/signer, its embedded
+asset's package/code/signer/hash, installed Push package/code/signer/hash, AVD name/image and
+physical display. Bind the actual selected serial to the canonical Wear AVD using `emu avd name`;
+the instrumentation independently checks QEMU, the AVD-name property, watch feature, API 36,
+image fingerprint and unoverridden 360×360 square or 384×384 round display. Preserve active
+runtime/instance, lower bindings, upper choices, summary, consent, settings and bridge state.
+Review compatible signing and the packaged test manifest's two instrumentation entries during
+HOST. Source keeps the configured isolated runner first and stock runner second: AGP rewrites
+the first instrumentation element with the configured runner name. If baseline SDK/classloader
+access is unavailable, leave Pending; never install the seam as recovery.
+
+Provision only the generated test APK (never the local target APK):
+
+```sh
+adb -s "$WEAR_SERIAL" install -r -t app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+```
+
+Re-observe target APK/asset hashes and identities after provisioning; require equality to the
+independent pre-provisioning receipt. The harness additionally checks those expected hashes
+before dispatch and through later observation. Use the stock entry
+`app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner`, with **one explicit method** of
+`app.wardpulse.wear.nativeintegration.NativePushUpdateTest`. The isolated entry would load an
+ABI absent from the baseline; it must not be used here. Never invoke stock discovery/default
+tests. The three `NativePushGuardTest` cases can separately be explicitly selected by class;
+they touch only memory and private temporary files/descriptors, not the manager/live stores.
+The three update-class cases are manual; `IsolatedWearRunner` excludes all six new cases and
+keeps the original default 40 tests.
+
+Supply these fresh HOST expectations as `am instrument -e` strings. SHA-256 values use lowercase
+hex; fingerprint/instance/slot strings are hashed as UTF-8 **without** a trailing newline.
+
+| Argument | Expected input |
+| --- | --- |
+| `wardpulseNativeIntegration` | Literal `push-3-to-4` |
+| `expectedAvd` | Canonical `wardpulse_wear_square_api36_1` or `wardpulse_wear_round_api36_1` |
+| `expectedFingerprintSha256` | Hash of the actual `Build.FINGERPRINT` |
+| `expectedHostApkSha256`, `expectedHostSignerSha256` | Original installed host APK and single signer hashes |
+| `expectedAsset3Sha256` | Exact installed host's Push asset 3 APK hash |
+| `expectedPush3ApkSha256`, `expectedPushSignerSha256` | Installed Push 3 APK and single signer hashes |
+| `expectedRuntime` | Actual `DeclarativeWatchFaceRuntime0` or `DeclarativeWatchFaceRuntime1` |
+| `expectedResourcePackage` | Actual active package; legacy-only evidence leaves Push configuration retention Pending |
+| `expectedSlotSha256`, `expectedInstanceSha256`, `expectedConfigurationSha256` | Owned slot and Push-instance identities; configuration requires independent actual selection records, never cached delivery |
+
+First select `probeBaseline`. It requires the first eight rows, checks all applicable native
+records and reports slot/instance hashes and a separate cached-delivery provenance hash,
+without writing an attempt or changing the manager. That diagnostic line is not a passed
+binding/choice check. Successful selection discovery also emits a configuration hash.
+Configuration hashing uses user-style content followed by ascending
+slot rows `id|enabled=true-or-false|selected-package/class`, with `<none>` for an explicitly
+unselected provider, separated by newlines without a final newline. Selection records must
+cover every slot and identify the resource package and actual instance; see `NativeRenderer`
+and `NativeSelections` in
+[NativePushState.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativePushState.kt).
+Neither default policy nor a cached `ComplicationData.dataSource` is a current selection record:
+a chooser change/reset can leave old delivered data intact. `NativePushDevice.readRenderer`
+uses `ComplicationDataSourceInfoRetriever` from the existing baseline complications 1.2.1
+dependency. It queries selected-provider information for the actual active wallpaper component
+and discovered native slot IDs, bracketed by native registry/engine observations. Only a single
+unchanged component/instance/resource package, style and enabled-slot mapping can associate this
+component-scoped response with the active instance. It checks complete unique slot coverage;
+an unavailable response is Pending, while a null provider in a complete response denotes an
+empty choice. Nonempty entries need a component identity, and all five lower selections must
+match the required providers. Multiple instances, transitions, partial responses, access denial
+or unproved applicability remain Pending. Expected hashes cannot override missing records.
+The query's finite timeout does not retry; its tracked service binding closes even if constructor
+or connection setup fails. No dependency, permission grant or instance creation is added.
+Actual resolution, access and mapping need HOST proof. Never alter choices or inject data to
+manufacture preconditions. With legacy active, the reader also cannot observe the inactive
+Push face's own existing configuration; legacy-only evidence remains Pending and cannot
+authorize a completed witness or target
+replacement. No activation is permitted to obtain the missing evidence.
+
+Only with the actual Push instance and authoritative selection preconditions established may
+one `updateOwnedPush3To4` invocation dispatch. Successful discovery supplies the selection
+fingerprint to the dispatch guard; unavailable evidence stays Pending. Never bypass a Pending
+probe. The command shape, with the values above independently populated in the named shell
+variables (the probe uses the same command with its method name and omits the last three
+hash arguments), is:
+
+```sh
+adb -s "$WEAR_SERIAL" shell am instrument -w -r \
+  -e class app.wardpulse.wear.nativeintegration.NativePushUpdateTest#updateOwnedPush3To4 \
+  -e wardpulseNativeIntegration push-3-to-4 \
+  -e expectedAvd "$NATIVE_AVD" -e expectedFingerprintSha256 "$NATIVE_FINGERPRINT_SHA256" \
+  -e expectedHostApkSha256 "$NATIVE_HOST_SHA256" -e expectedHostSignerSha256 "$NATIVE_HOST_SIGNER_SHA256" \
+  -e expectedAsset3Sha256 "$NATIVE_ASSET3_SHA256" -e expectedPush3ApkSha256 "$NATIVE_PUSH3_SHA256" \
+  -e expectedPushSignerSha256 "$NATIVE_PUSH_SIGNER_SHA256" -e expectedRuntime "$NATIVE_RUNTIME" \
+  -e expectedResourcePackage "$NATIVE_RESOURCE_PACKAGE" -e expectedSlotSha256 "$NATIVE_SLOT_SHA256" \
+  -e expectedInstanceSha256 "$NATIVE_INSTANCE_SHA256" -e expectedConfigurationSha256 "$NATIVE_CONFIG_SHA256" \
+  app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+`AttemptJournal` retains the dispatch boundary and returned identities privately; never delete
+it to retry. SDK failure/disconnection/crash can mean uncertain advancement. Preserve the host
+and record actual installed state; do not repeat the update. Await every owned SDK callback
+and descriptor cleanup. No timeout establishes remote completion, and a hanging owner is not
+retired. No immediate `isWatchFaceActive` query is made after updating.
+
+Keep the original host/asset through separate later native observations and select
+`observeSettledUpdate` once with the same expectations. It reads the verified journal, checks
+installed candidate bytes/resources, slot and retained native configuration, and captures one
+private original frame only when the updated Push face's own instance and independent actual
+selection records are available. The receipt keeps Push configuration retention and target
+replacement Pending until that proof; a legacy screenshot or SDK-result verification cannot
+substitute. Missing selection records or an unavailable inactive Push instance fail Pending,
+and no target replacement is admitted. Inspect the first complete unobscured PNG before batching;
+notification/editor overlays invalidate visual acceptance. Use this instrumentation's single
+UiAutomation; no concurrent `uiautomator` hierarchy owner. Supplied/last-frame substitutes,
+sleeps, timing retries and hidden state normalization are excluded. An absent verified result
+or missing native provenance remains Pending. The harness changes no summary/consent/settings,
+choices or bridge; do not blindly restore older values over legitimate producer writes. Verify
+normal effective data/restoration independently, retain intended version advancement, close
+this instrumentation owner and preserve private receipts. See
+[native integration ownership](../apps/wear_android/README.md#guarded-native-push-integration).
+
+Only after successful witness, separate settled evidence, restoration and owner retirement
+rebuild ordinary artifacts **without candidate flags**, verify Wear 4/asset 3/signing, and
+admit seam-bearing target provisioning under the policies below. Later rebuilt-host evidence
+cannot replace pre-replacement evidence. The 3→4 witness closes neither the utility button nor
+missing 1→2/2→3 manager evidence, old-Push1 matrix gaps or UNKNOWN historical causality. All
+unexecuted builds, native routes, effective restoration and visual acceptance remain Pending.
+
 Both `just test-wear-device` and the connected suite inside `just test-phone-watch-sync`
 require the shared Wear project policy in `apps/wear_android/gradle.properties`:
 `android.injected.androidTest.leaveApksInstalledAfterRun` must be true. It suppresses

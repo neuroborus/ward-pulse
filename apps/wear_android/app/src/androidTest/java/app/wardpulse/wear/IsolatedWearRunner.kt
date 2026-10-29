@@ -33,6 +33,14 @@ import org.junit.runners.model.Statement
 class IsolatedWearRunner : AndroidJUnitRunner() {
     private lateinit var isolatedApplication: IsolatedWearApplication
 
+    override fun onCreate(arguments: Bundle) {
+        val filtered = Bundle(arguments)
+        val excluded = filtered.getString("notAnnotation").orEmpty().split(',').filter { it.isNotBlank() }
+        filtered.putString("notAnnotation", (excluded + "app.wardpulse.wear.nativeintegration.ManualNativeIntegration")
+            .distinct().joinToString(","))
+        super.onCreate(filtered)
+    }
+
     override fun newApplication(cl: ClassLoader, className: String, context: Context): Application =
         super.newApplication(cl, IsolatedWearApplication::class.java.name, context).also {
             isolatedApplication = it as IsolatedWearApplication

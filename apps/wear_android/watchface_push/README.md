@@ -172,6 +172,44 @@ version, signing, APK byte, validator, client-package, or Java-runtime changes i
 the relevant inputs; a failed validation publishes no bundle. No APK or token is checked in,
 and no runtime validator or separate download helper is used.
 
+## Native integration candidate
+
+`PrepareNativePushCandidate` in the [host build script](../app/build.gradle.kts) is attached
+only to debug AndroidTest assets when **both** `-PwardpulseNativeCandidate=true` and
+`-PwardpulsePushVersionCode=4` are supplied. A different/missing version with opt-in is
+rejected. It consumes `PrepareDefaultWatchFace.outputDirectory` through the existing signed
+APK/official-validation dependency graph, without an APK/token input property or alternate
+validator. Ordinary builds have no candidate asset source. Returning to ordinary flags removes
+that source from the variant graph; do not install a host built with candidate flags.
+
+`PrepareDefaultWatchFace` also emits `identity.properties` outside the host's assets/resources.
+This minimal producer receipt binds package/code, APK and resource-table SHA-256, separate face
+and host signer hashes, pinned validator hash and token hash. A successful opt-in consumer
+copies the exact APK/token and receipt into generated test assets `native_push_candidate/`.
+Failed producer validation invalidates its whole output; failed consumer packaging removes
+its assets. The AGP source graph tracks these outputs and their producer inputs. No generated
+APK, receipt or token is checked in or printed. Resource equality plus complete installed APK
+byte equality binds the actual candidate; it is not a renderer observation.
+
+Candidate 4 is strictly an integration input. Push's default stays 3, Wear 4, phone 3,
+legacy 2 and common versionName 0.1.0; no product release is prepared. A non-installing
+`:app:assembleDebugAndroidTest` may build local dependencies but never authorizes target
+installation. Follow the [stock-runner provisioning order](../../../docs/ANDROID_TOOLCHAIN.md#guarded-push-witness):
+only the test APK is installed before the actual baseline-host SDK witness. Keep the original
+installed host and asset 3 intact through the result and separate settled native evidence.
+Afterward retain intended Push 4, reconcile uncertain results without retry or downgrade,
+restore/verify normal data and retire the instrumentation owner before ordinary rebuilding
+and target provisioning. Test APK provisioning, SDK mutation and later target installation
+are distinct effects and evidence. Actual graph execution and native acceptance remain Pending.
+The SDK result or a retained legacy renderer does not prove retained Push selections. The
+updated Push face's own existing instance and independent actual provider-selection records
+are required; cached delivered-data sources and defaults are not selection records. The baseline
+reader queries the existing complications selection service and requires a sole stable active
+runtime instance before and after that component-scoped query. Unavailable, partial, denied or
+unmapped responses keep dispatch/retention Pending; actual service applicability requires HOST proof.
+Legacy-only evidence cannot complete the pre-replacement witness or admit target installation;
+do not activate the face to fill that gap.
+
 ## Local development acceptance
 
 Recorded **2026-10-16** for runtime Source `abebbbc5`: debug builds, negative signing

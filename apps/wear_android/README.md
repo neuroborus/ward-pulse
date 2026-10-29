@@ -243,6 +243,95 @@ acceptance Pending. Do not use a connected suite, `run-wear`, sync recipe or oth
 installer to recover. The stock update route must not load this application or launch
 `MainActivity`. See the [toolchain ordering](../../docs/ANDROID_TOOLCHAIN.md#wear-instrumentation-provisioning-order).
 
+## Guarded native Push integration
+
+`ManualNativeIntegration` marks six additional cases: `NativePushGuardTest` has three
+negative/cleanup cases, including candidate file/FD cleanup on either callback outcome;
+the journal case also exercises discovery through fake selection responses into one fake dispatch.
+`NativePushUpdateTest` has individually selected `probeBaseline`,
+`updateOwnedPush3To4` and `observeSettledUpdate` cases. `IsolatedWearRunner.onCreate` always
+excludes that annotation, including explicitly selected manual classes. The original default
+inventory remains 40. The stock `androidx.test.runner.AndroidJUnitRunner` entry in the test
+manifest follows the configured isolated runner, because AGP applies its runner name to the
+first instrumentation element. Verify both entries in the packaged test manifest during HOST.
+The stock entry never substitutes `IsolatedWearApplication`. Never invoke the stock
+entry without an explicit class/method; it does not isolate the original default tests.
+
+The update class uses Android, the baseline Push SDK 1.0.0/complications 1.2.1 APIs and test-local helpers. It
+does not reference the production wrapper, isolation ABI or `MainActivity`. `NativePushDevice`
+resolves the baseline SDK method before mutation, verifies the ordinary target Application,
+canonical emulator/image/display, original host code 4/APK/signer, actual bundled asset 3
+archive and installed Push 3. All manager observations use `targetContext`, retaining the
+host's ownership. Expectations are from fresh independent HOST observations **before** test-APK
+provisioning, never from a newly installed target or a synthetic old baseline.
+
+`NativeRenderer.parse` reads the applicable active runtime's instance, interactive state,
+user style, enabled slots and cached delivered-data provenance. Neither a delivered
+`dataSource` nor default datasource policy proves which provider is currently selected.
+`NativeSelections` represents independent selection records for the exact resource package,
+instance and all eight slots, including explicit empty choices. Only those records can supply
+the five fixed lower bindings and three upper choices in the configuration fingerprint.
+Changing a selection while cached delivery remains unchanged fails retention; changing cached
+provenance alone does not change the selection fingerprint.
+
+`NativePushDevice.readRenderer` queries the baseline's existing
+`ComplicationDataSourceInfoRetriever.retrieveComplicationDataSourceInfo` for slot IDs discovered
+from the actual active runtime. This API returns selected-provider configuration independently
+of cached delivery. Its component-scoped results are accepted only while that same wallpaper
+component has a single native registry/engine instance with matching IDs and resource package
+before and after the query. Multiple instances, transitions, incomplete/null responses,
+missing provider identities or denied access leave configuration retention **Pending before
+dispatch**. A null response is unavailable; a null provider entry in a complete response is an
+explicit empty selection. The five lower selections must still match their required services.
+Caller-supplied expectations cannot supply missing records. Do not select providers, publish
+fixtures or infer selections to make the guard pass.
+
+The selection query uses a finite timeout without retries and tracks the service connection
+before retriever construction. Closing the retriever and its scoped context releases bindings
+on success, timeout and partial-construction failure. It creates no face instance and adds no
+dependency or permission. Actual service access, API applicability and instance mapping remain
+HOST verification duties. The reader observes only the active renderer: with legacy active it
+cannot verify the inactive Push face's own existing instance/configuration.
+`requirePushConfiguration` leaves that route Pending without activation; a legacy snapshot cannot complete the Push witness or
+permit target replacement. No face is activated or reselected.
+
+`AttemptJournal.dispatch` durably arms one SDK call and retains successful or uncertain
+advancement in private `files/native_push_update/attempt.json`. The exact generated APK/token
+pair is opened privately; every temporary APK/descriptor is owned through callback completion
+and cleaned on success/failure. The manager has no public close API. No detached operation,
+timeout cancellation, retry, downgrade or version loop is used. A missing callback leaves
+that instrumentation owner unresolved; do not start another owner or replace the target.
+Returned identities and installed APK/resource bytes are checked and recorded before any
+later observation, which also requires the explicit successful resource-cleanup record.
+There is no post-update `isWatchFaceActive` call. A dispatched record,
+including an interrupted write, prevents another update; retain it for reconciliation.
+SDK-result verification alone leaves `pushConfigurationRetention` and `targetReplacement`
+Pending in the private receipt.
+
+HOST later selects `observeSettledUpdate` once, after independent native settlement. It
+requires the updated Push face's own instance and authoritative selections, separately from
+delivered provenance; unavailable evidence fails Pending before capture. A legacy-only result
+cannot mark Push configuration retention verified. When the required evidence is available,
+it checks the original host/asset, candidate bytes, owned slot and retained Push configuration,
+then captures one original PNG through this instrumentation's existing UiAutomation and
+recycles the bitmap. Observation is armed once before capture, including failure paths, so
+another invocation cannot overwrite the first frame. The private
+`files/native_push_update/settled-original.png` needs HOST
+inspection for a complete unobscured frame; the case's success is not visual acceptance.
+No concurrent hierarchy owner is permitted. No summary, consent, binding, setting or bridge
+is changed by these cases, so cleanup does not overwrite live producer data. Intended Push
+advancement stays installed, including an uncertain advancement; never restore Push 3.
+Any unverified retention/restoration remains Pending. Tokens/raw native records are not
+logged; public diagnostics contain only bounded identities/hashes or sanitized reason codes.
+
+Build/provision/run instructions and the strict pre-replacement ordering are in
+[Guarded Push witness](../../docs/ANDROID_TOOLCHAIN.md#guarded-push-witness).
+Candidate provenance belongs to
+[the generated test bundle](watchface_push/README.md#native-integration-candidate).
+Compilation, guards on actual devices, SDK results, settled rendering and restoration are
+all **Pending** until ordered HOST execution after the whole Runner run retires. This harness
+does not close the utility-button gap, earlier manager-update gaps or historical causality.
+
 ## Commands
 
 From the repository root:
