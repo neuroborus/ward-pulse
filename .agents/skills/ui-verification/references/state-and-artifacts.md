@@ -19,10 +19,9 @@ one proof. For WFF, distinguish the Wear app from the separate legacy/Push face 
 An installed newer Push face is not evidence that the active legacy instance uses it.
 Static default-provider policy does not prove a retained instance's effective binding.
 
-Record the identities necessary for the claim before/after the action. Never infer an
-active renderer from the APK most recently built or installed. If diagnostics redact live
-inputs or do not expose a slot mapping, keep that distinction unproved rather than
-guessing it from internal numeric IDs or a resource filename.
+Record the identities necessary for the claim before/after the action. Never infer an active renderer
+from the APK most recently built or installed. If diagnostics redact live inputs or do not expose a slot
+mapping, keep that distinction unproved rather than guessing it from internal numeric IDs or a resource filename.
 
 For Activity/task claims, inventory the unique relevant ActivityRecord identities and
 task IDs from a complete current native snapshot. Cross-check relevant top/resumed
@@ -53,17 +52,18 @@ supported diagnostics and normal app/renderer operations. A corrected image afte
 recreation supports a stale-layer hypothesis; it does not identify that layer or prove a
 durable product fix by itself. Keep unavailable causal evidence Pending.
 
-After an authorized install/update, inspect the whole affected native UI again. Updating
-only the Wear APK does not establish that the separately installed face changed, that its
-active instance refreshed or that old slot bindings were migrated.
+After an authorized install/update, inspect the whole affected native UI again. Updating only the Wear APK
+does not establish that the separately installed face changed, that its active instance refreshed or that old slot bindings were migrated.
 
-After an app/face handoff, prove current full-window focus and settled native content.
-UIAutomator idle or a visible WFF runtime alone does not prove completed compositor handoff;
-inspect actual frames for previous-page residue. Use bounded successive observations of
-the intended settled content, allowing real clock/live-value changes rather than requiring
-universal byte-identical frames. Keep mixed/transient frames Pending as diagnostic evidence;
-clean reobservation does not establish a Source cause or product fix. Fixed sleep alone is
-insufficient; input/charging procedures stay with android-devices/android-emulators.
+After an app/face handoff, join current full-window focus and foreground hierarchy with the full first
+original showing the intended unobscured surface before expanding any native capture batch. Active
+wallpaper/renderer mode or UIAutomator idle alone is not completed compositor handoff or visibility proof.
+If an OS prompt/notification covers the face, stop the batch as an environment obstruction, not Source/UI PASS.
+Use only safe existing dismissal procedures; never reset or provision a watch for capture. Inspect previous-page
+residue with bounded successive observations of the intended settled content, allowing real clock/live-value
+changes rather than byte-identical frames. Mixed/transient or obscured frames stay Pending as diagnostic evidence;
+clean reobservation does not establish a Source cause or product fix. Fixed sleep alone is insufficient;
+input/charging procedures stay with android-devices/android-emulators.
 
 For AMBIENT acceptance, prove the actual renderer drawMode and intended visible variant.
 Dozing or `isAmbient=true` alone does not distinguish MUTE from AMBIENT; preserve MUTE as
