@@ -207,8 +207,16 @@ are required; cached delivered-data sources and defaults are not selection recor
 reader queries the existing complications selection service and requires a sole stable active
 runtime instance before and after that component-scoped query. Unavailable, partial, denied or
 unmapped responses keep dispatch/retention Pending; actual service applicability requires HOST proof.
-Legacy-only evidence cannot complete the pre-replacement witness or admit target installation;
-do not activate the face to fill that gap.
+Legacy-only evidence cannot complete the pre-replacement witness or admit target installation.
+The harness never creates, activates or reselects a face; the completed run's frozen ban is
+unchanged. The adopted **2026-10-29 post-DONE HOST scope** permits **one** ordinary system-picker
+selection of a pre-existing, configured, owned Push 3 instance on the canonical **Round AVD**
+under the [limited procedure](../../../docs/ANDROID_TOOLCHAIN.md#guarded-push-witness).
+Preserve original host 4/asset 3 through the stock witness; discover authoritative configuration
+after test-only provisioning and before dispatch, then restore the exact original configured
+Legacy selection, settings and normal data after the witness/whole original/owner retirement
+while retaining Push 4. No instance creation, SDK/app activation, new permission or binding/style change is
+included; missing configuration or witness evidence remains Pending.
 
 The later [client probe](../README.md#guarded-complication-client-probe) is test-only and
 requires that completed pre-replacement witness and subsequent ordinary target provisioning.

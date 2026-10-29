@@ -269,8 +269,12 @@ does not reference the production wrapper, isolation ABI or `MainActivity`. `Nat
 resolves the baseline SDK method before mutation, verifies the ordinary target Application,
 canonical emulator/image/display, original host code 4/APK/signer, actual bundled asset 3
 archive and installed Push 3. All manager observations use `targetContext`, retaining the
-host's ownership. Expectations are from fresh independent HOST observations **before** test-APK
-provisioning, never from a newly installed target or a synthetic old baseline.
+host's ownership. Independent HOST observations before test-APK-only provisioning bind the
+original host/asset, APK/signers and selected package/runtime, never a newly installed target
+or synthetic baseline. After test-only provisioning and the unchanged host/asset recheck,
+the read-only stock `probeBaseline` discovers the slot/instance/authoritative configuration
+hashes before SDK dispatch. A first post-provisioning fingerprint does not prove earlier
+full selection retention.
 
 `NativeRenderer.parse` reads the applicable active runtime's instance, interactive state,
 user style, enabled slots and cached delivered-data provenance. Neither a delivered
@@ -299,8 +303,18 @@ on success, timeout and partial-construction failure. It creates no face instanc
 dependency or permission. Actual service access, API applicability and instance mapping remain
 HOST verification duties. The reader observes only the active renderer: with legacy active it
 cannot verify the inactive Push face's own existing instance/configuration.
-`requirePushConfiguration` leaves that route Pending without activation; a legacy snapshot cannot complete the Push witness or
-permit target replacement. No face is activated or reselected.
+`requirePushConfiguration` leaves legacy-only evidence Pending, without a completed Push
+witness or target replacement. The harness never creates, activates or reselects a face;
+the completed execution's frozen operator no-activation inputs remain unchanged.
+
+**Adopted HOST scope, 2026-10-29.** The post-DONE scope permits **one** ordinary system-picker
+selection of a pre-existing, configured, owned Push 3 instance on the verified canonical
+**Round AVD**, after whole DONE/retirement/fresh idle. Record original Legacy state and the
+deliberate changed baseline; preserve original host 4/asset 3 through the stock witness.
+Follow the [limited procedure](../../docs/ANDROID_TOOLCHAIN.md#guarded-push-witness) and restore
+exact original Legacy selection/settings while retaining intended Push 4. No instance creation,
+SDK/app activation, new permission or binding/style edit is included. This is a new HOST
+boundary, not retrospective permission for the frozen run or native acceptance.
 
 `AttemptJournal.dispatch` durably arms one SDK call and retains successful or uncertain
 advancement in private `files/native_push_update/attempt.json`. The exact generated APK/token

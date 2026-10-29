@@ -1034,8 +1034,29 @@ This is HOST-only after whole Runner execution DONE, owned-process retirement, o
 exit where applicable and fresh separate idle ownership. Source/semantic review is not native
 acceptance. Keep the original target APK and asset 3 throughout this sequence; a failed or
 uncertain witness forbids subsequent target installation. Never run a connected/default suite,
-`run-wear`, sync recipe or other target installer first. No activation, receiver disable,
-permission grant, reset, downgrade, candidate substitution or version loop is allowed.
+`run-wear`, sync recipe or other target installer first. Receiver disable, permission grant,
+reset, downgrade, candidate substitution and version loops remain forbidden. The harness
+never creates, activates or reselects a face. The completed execution's frozen operator
+no-activation inputs are unchanged; the adopted post-DONE scope below is a new HOST boundary.
+
+**Adopted HOST scope, 2026-10-29 — existing-Push baseline.** After whole DONE, owned-process/
+CLI retirement and fresh idle, HOST is permitted **one** ordinary system-picker selection of
+a pre-existing, configured, owned Push 3 instance on the verified canonical **Round AVD**.
+Record original Legacy identity/settings, available native state and private recovery/
+quiet-writer/bridge evidence, then the deliberate changed baseline. Preserve original host 4/
+asset 3 bytes. No new instance, SDK/app activation, permission, binding/style edit or reset is
+included. Unproved identity or safe exact restoration stays Pending; no route success is promised.
+
+Before test-only provisioning, independently record host/asset/APK/signer, selected existing
+package/instance and available native state with its limits. Provision only the test APK,
+recheck unchanged host/asset, then use read-only stock `probeBaseline`: its first eight rows
+omit the three slot/instance/configuration hashes discovered before SDK dispatch. Require
+complete authoritative selections and all actual guards; cached delivery/defaults are insufficient.
+The first post-provisioning fingerprint cannot prove earlier full selection retention. After
+the genuine stock result, separate later whole original, cleanup and instrumentation retirement,
+restore exact original configured Legacy selection/settings and normal effective data/bridge
+state while reconciling newer writes and retaining owned Push 4. The genuine witness must
+still precede target provisioning; retries, downgrades and an immediate-active oracle remain forbidden.
 
 From `apps/wear_android`, build the signed, officially validated candidate into the **test**
 APK without installing anything:
@@ -1115,7 +1136,9 @@ Actual resolution, access and mapping need HOST proof. Never alter choices or in
 manufacture preconditions. With legacy active, the reader also cannot observe the inactive
 Push face's own existing configuration; legacy-only evidence remains Pending and cannot
 authorize a completed witness or target
-replacement. No activation is permitted to obtain the missing evidence.
+replacement. The frozen run forbids activation to obtain that evidence. The adopted later
+operator setup above does not waive legacy-only Pending, authoritative discovery or any
+dispatch/retention guard.
 
 Only with the actual Push instance and authoritative selection preconditions established may
 one `updateOwnedPush3To4` invocation dispatch. Successful discovery supplies the selection
