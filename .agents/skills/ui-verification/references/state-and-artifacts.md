@@ -18,26 +18,26 @@ A shared versionName, installed package or successful build does not collapse th
 distinguish the Wear app from the separate legacy/Push face package. An installed newer Push face is not evidence that the active legacy instance uses it.
 Static default-provider policy does not prove a retained instance's effective binding.
 
-Record the identities necessary for the claim before/after the action. Never infer an active renderer
-from the APK most recently built or installed. If diagnostics redact live inputs or do not expose a slot
-mapping, keep that distinction unproved rather than guessing it from internal numeric IDs or a resource filename.
+Record necessary identities before/after the action; never infer an active renderer from the APK most recently built or installed.
+Before treating a diagnostic observer as feasible or expanding its harness/matrix, verify actual caller UID/package/context,
+service/component and instance scope against pinned official API preconditions/access. Public API does not mean unrestricted cross-package capability.
+Use a bounded actual minimal probe where needed; distinguish contract support, observed results and unknown enforcement.
+Keep unproved capability Pending: no default/cache substitution, identity swaps, access bypass or unbounded framework growth.
+If diagnostics redact live inputs or omit slot mappings, keep them unproved rather than guessing from internal numeric IDs or a resource filename.
 
-For Activity/task claims, inventory the unique relevant ActivityRecord identities and
-task IDs from a complete current native snapshot. Cross-check relevant top/resumed
-records against that inventory; repeated references are not additional instances.
-Hold instance-count claims when the dump or projection is incomplete or contradictory,
-including a top/resumed owner omitted by the parser, until fresh complete observation
-resolves it. Keep historical and fresh inventories separate; later observations do not
-reconstruct unsupported earlier stage counts.
+For Activity/task claims, inventory unique relevant ActivityRecord identities and task IDs from a complete
+current native snapshot. Cross-check relevant top/resumed records; repeated references are not additional
+instances. Hold instance-count claims when the dump/projection is incomplete or contradictory, including
+a top/resumed owner omitted by the parser, until fresh complete observation resolves it. Keep historical
+and fresh inventories separate; later observations do not reconstruct unsupported earlier stage counts.
 
-For claims about which complication slot/type dispatched a tap, shared PendingIntent
-identity, caller UID, coordinates or a configured binding alone do not identify the hit.
-Join actual renderer hit-event evidence to the current instance/slot, effective provider,
-current data type and successful destination. A DOWN record alone is not completed dispatch.
+For claims about which complication slot/type dispatched a tap, shared PendingIntent identity, caller UID,
+coordinates or a configured binding alone do not identify the hit. Join actual renderer hit-event evidence to the current
+instance/slot, effective provider, current data type and successful destination; DOWN alone is not completed dispatch.
 Keep canonical/runtime slot IDs distinct. Resolve retained APK raw XML through its resource table, not a guessed ZIP path,
-then join its canonical IDs with actual native instance/slot evidence. Numeric IDs alone do not prove that mapping;
-local proxy hashes do not prove cross-process token identity. If the required join is unavailable, keep type-specific
-provenance Pending while preserving separately proved common-entry, navigation/cycle and restoration results.
+then join canonical IDs with actual native instance/slot evidence. Numeric IDs alone do not prove that mapping; local proxy
+hashes do not prove cross-process token identity. If the join is unavailable, keep type-specific provenance Pending while preserving
+separately proved common-entry, navigation/cycle and restoration results.
 
 ## Refresh and retained state
 
