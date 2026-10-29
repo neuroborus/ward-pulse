@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.wear.watchface.complications.data.ColorRamp
 import androidx.wear.watchface.complications.data.ComplicationData
 import androidx.wear.watchface.complications.data.ComplicationType
@@ -14,6 +15,7 @@ import androidx.wear.watchface.complications.data.ShortTextComplicationData
 import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester
 import androidx.wear.watchface.complications.datasource.ComplicationRequest
 import androidx.wear.watchface.complications.datasource.SuspendingComplicationDataSourceService
+import app.wardpulse.wear.BuildConfig
 import app.wardpulse.wear.MainActivity
 import app.wardpulse.wear.data.WatchSummaryStore
 import app.wardpulse.wear.model.PulseStatus
@@ -78,8 +80,14 @@ abstract class SplitBandComplicationDataSourceService(private val splitIndex: In
         if (request.complicationType != ComplicationType.RANGED_VALUE) {
             return null
         }
-        val rings = WatchSummaryStore(this).load()?.rings.orEmpty()
-        return outerHalfComplicationData(rings, splitIndex) { half, outerSlot, count ->
+        val summary = WatchSummaryStore(this).load()
+        var route: N1PairDiagnostics.Route? = null
+        val returned = outerHalfComplicationData(summary?.rings.orEmpty(), splitIndex) { half, outerSlot, count ->
+            if (BuildConfig.DEBUG && BuildConfig.WARDPULSE_N1_PAIR_DIAGNOSTICS) {
+                route = N1PairDiagnostics.Route(
+                    summary?.rings?.indexOfFirst { it.split === half } ?: -1, outerSlot, count,
+                )
+            }
             ComplicationBuilders.ranged(
                 this,
                 WatchComplicationText.remainingPercent(half.usedPercent),
@@ -89,6 +97,10 @@ abstract class SplitBandComplicationDataSourceService(private val splitIndex: In
                 ringCount = count,
             )
         }
+        n1PairDiagnostics.observe(summary, splitIndex, returned, route) {
+            it.title?.getTextAt(resources, Instant.EPOCH)
+        }
+        return returned
     }
 
     override fun getPreviewData(type: ComplicationType): ComplicationData? =
@@ -103,6 +115,105 @@ abstract class SplitBandComplicationDataSourceService(private val splitIndex: In
         } else {
             null
         }
+}
+
+private val n1PairDiagnostics = N1PairDiagnostics(
+    BuildConfig.DEBUG && BuildConfig.WARDPULSE_N1_PAIR_DIAGNOSTICS,
+) { Log.i("WardPulseN1Pair", it) }
+
+/** Bounded synthetic service-return evidence; never a delivery or rasterization claim. */
+internal class N1PairDiagnostics(
+    private val enabled: Boolean,
+    private val emit: (String) -> Unit,
+) {
+    data class Route(val payload: Int, val outside: Int, val bands: Int)
+
+    private var records = 0
+
+    @Synchronized
+    fun observe(
+        summary: WatchDashboardSummary?,
+        ordinal: Int,
+        returned: ComplicationData?,
+        route: Route?,
+        readTitle: (RangedValueComplicationData) -> CharSequence?,
+    ) {
+        if (!enabled || records >= MAX_RECORDS || !isCase(summary, ordinal)) return
+        records++
+        // Observation failure must not change the service's return or expose an exception.
+        try {
+            val type = when (returned) {
+                null -> "absent"
+                is RangedValueComplicationData -> "ranged_value"
+                is NoDataComplicationData -> "no_data"
+                else -> "other"
+            }
+            val fields = if (returned is RangedValueComplicationData) {
+                val title = try {
+                    when (readTitle(returned)?.toString()) {
+                        null -> "absent"
+                        "" -> "empty"
+                        "0" -> "index0"
+                        "1" -> "index1"
+                        "2" -> "index2"
+                        else -> "other"
+                    }
+                } catch (_: RuntimeException) {
+                    "unknown"
+                }
+                val valueType = when (returned.valueType) {
+                    RangedValueComplicationData.TYPE_UNDEFINED -> "undefined"
+                    RangedValueComplicationData.TYPE_PERCENTAGE -> "percentage"
+                    RangedValueComplicationData.TYPE_RATING -> "rating"
+                    else -> "other"
+                }
+                val ramp = when {
+                    returned.colorRamp == null -> "absent"
+                    returned.colorRamp?.colors?.singleOrNull() == RingFamily.CODEX_SPARK -> "spark"
+                    else -> "other"
+                }
+                "value=${number(returned.value)} min=${number(returned.min)} max=${number(returned.max)} " +
+                    "valueType=$valueType title=$title ramp=$ramp"
+            } else {
+                "value=unknown min=unknown max=unknown valueType=unknown title=unknown ramp=unknown"
+            }
+            emit(
+                "case=N1_PAIR stage=service_return ordinal=0 " +
+                    "payload=${routing(route?.payload, 0..2)} outside=${routing(route?.outside, 0..2)} " +
+                    "bands=${routing(route?.bands, 1..3)} type=$type $fields",
+            )
+        } catch (_: RuntimeException) {
+            // This stage is unavailable; no substitute or exception text is emitted.
+        }
+    }
+
+    private fun isCase(summary: WatchDashboardSummary?, ordinal: Int): Boolean {
+        if (ordinal != 0 || summary == null || summary.schemaVersion != 9 || summary.dataMode != WatchDataMode.MOCK) {
+            return false
+        }
+        val ring = summary.rings.singleOrNull() ?: return false
+        return ring.id == "allowance.codex.plan" && ring.usedPercent == 63.0 &&
+            ring.spent == null && ring.limit == null && ring.status == PulseStatus.OK &&
+            ring.split?.let {
+                it.id == "allowance.codex.spark" && it.usedPercent == 63.0 && it.status == PulseStatus.OK
+            } == true
+    }
+
+    private fun number(value: Float): String = when {
+        !value.isFinite() -> "non_finite"
+        value !in 0f..800f -> "out_of_range"
+        else -> value.toString()
+    }
+
+    private fun routing(value: Int?, allowed: IntRange): String = when (value) {
+        null -> "unknown"
+        in allowed -> value.toString()
+        else -> "out_of_range"
+    }
+
+    companion object {
+        const val MAX_RECORDS = 4
+    }
 }
 
 /** Missing/invalid splits clear stale data; exhausted halves retain their tracks. */

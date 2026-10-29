@@ -1,7 +1,43 @@
 import java.util.Properties
+import javax.inject.Inject
+import org.gradle.process.ExecOperations
 
 plugins {
     id("com.android.application") version "9.3.0"
+}
+
+abstract class GenerateN1PairDiagnostics : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val generator: RegularFileProperty
+
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val supportFiles: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @get:Inject
+    abstract val execOperations: ExecOperations
+
+    @TaskAction
+    fun generate() {
+        execOperations.exec {
+            commandLine(
+                "node", generator.get().asFile.absolutePath, "--n1-pair-diagnostics-output",
+                outputDirectory.file("raw/watchface.xml").get().asFile.absolutePath,
+            )
+        }
+    }
+}
+
+val n1PairDiagnostics = providers.gradleProperty("wardpulseN1PairDiagnostics")
+    .map { it.toBooleanStrict() }.getOrElse(false)
+gradle.taskGraph.whenReady {
+    if (n1PairDiagnostics && allTasks.any { it.name.contains("release", ignoreCase = true) }) {
+        throw GradleException("wardpulseN1PairDiagnostics is debug-only; release requests are forbidden.")
+    }
 }
 
 // A separate application id, so Play lists this on its own — but the same key as
@@ -75,5 +111,20 @@ android {
                     signingConfigs.getByName("debug")
                 }
         }
+    }
+}
+
+// Register the resource source only while opted in, even if a previous overlay still exists.
+androidComponents.onVariants(androidComponents.selector().withBuildType("debug")) { variant ->
+    if (n1PairDiagnostics) {
+        val overlay = tasks.register<GenerateN1PairDiagnostics>("generateN1PairDiagnostics") {
+            generator.set(layout.projectDirectory.file("../../tools/render-watchface.mjs"))
+            supportFiles.from(
+                layout.projectDirectory.file("../../tools/check-watchface-structure.py"),
+                layout.projectDirectory.file("../../tools/design-output.mjs"),
+            )
+            outputDirectory.set(layout.buildDirectory.dir("generated/n1PairDiagnostics/debug/res"))
+        }
+        variant.sources.res!!.addGeneratedSourceDirectory(overlay, GenerateN1PairDiagnostics::outputDirectory)
     }
 }

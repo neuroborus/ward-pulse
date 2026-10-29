@@ -15,6 +15,7 @@
  *
  * Usage: node tools/render-watchface.mjs [--check]
  *   --check  compare the XML against the file on disk and exit non-zero on drift
+ *   --n1-pair-diagnostics-output PATH  write only a debug build-directory XML overlay
  *
  * `--check` covers the XML only: the images are what a rasterizer made of it, and
  * comparing bytes would fail on a different ImageMagick rather than on a real
@@ -24,7 +25,7 @@
 import { execFile } from 'node:child_process'
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
@@ -1165,7 +1166,7 @@ function assertNearExhaustedArcs() {
  * visible sweep equal to the proportional centreline. Exact full uses neither
  * inset: one almost-closed path keeps the ROUND endpoints together at 12.
  */
-function bandArcs(diameter, thickness, pad) {
+function bandArcs(diameter, thickness, pad, diagnostics = false) {
   const geometry = meltGeometry(diameter, thickness)
   return `${pad}<PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}">
 ${pad}    <Arc
@@ -1193,7 +1194,7 @@ ${pad}    <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
 ${pad}         endpoints 0.1 degrees apart in one path. A literal 360-degree
 ${pad}         ROUND sweep historically collapsed to a tip on the watch. -->
 ${pad}    <Compare expression="isFull">
-${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
+${diagnostics ? n1PaintOpen('full', pad) : ''}${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
 ${pad}            <Variant mode="AMBIENT" target="alpha" value="140" />
 ${pad}            <Arc
 ${pad}                centerX="${FACE.center}"
@@ -1207,14 +1208,14 @@ ${pad}                    thickness="${thickness}"
 ${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
 ${pad}                    cap="ROUND" />
 ${pad}            </Arc>
-${pad}        </PartDraw>
+${pad}        </PartDraw>${diagnostics ? n1PaintClose('full', 'Pfull', pad) : ''}
 ${pad}    </Compare>
 ${pad}    <!-- The two-cap inset cannot represent a smaller positive remainder:
 ${pad}         its sweep would be zero or negative. Keep the proportional
 ${pad}         centreline without either inset and use straight ends so the
 ${pad}         visible sweep does not overstate the remainder. -->
 ${pad}    <Compare expression="isNearEmpty">
-${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
+${diagnostics ? n1PaintOpen('tiny', pad) : ''}${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
 ${pad}            <Variant mode="AMBIENT" target="alpha" value="140" />
 ${pad}            <Arc
 ${pad}                centerX="${FACE.center}"
@@ -1231,10 +1232,10 @@ ${pad}                    thickness="${thickness}"
 ${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
 ${pad}                    cap="BUTT" />
 ${pad}            </Arc>
-${pad}        </PartDraw>
+${pad}        </PartDraw>${diagnostics ? n1PaintClose('tiny', 'Ptiny', pad) : ''}
 ${pad}    </Compare>
 ${pad}    <Default>
-${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
+${diagnostics ? n1PaintOpen('round', pad) : ''}${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
 ${pad}            <Variant mode="AMBIENT" target="alpha" value="140" />
 ${pad}            <Arc
 ${pad}                centerX="${FACE.center}"
@@ -1251,11 +1252,64 @@ ${pad}                    thickness="${thickness}"
 ${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
 ${pad}                    cap="ROUND" />
 ${pad}            </Arc>
-${pad}        </PartDraw>
+${pad}        </PartDraw>${diagnostics ? n1PaintClose('round', 'Pround', pad) : ''}
 ${pad}    </Default>
 ${pad}</Condition>
-${pad}    </Compare>
+${pad}    </Compare>${diagnostics ? `
+${pad}    <Default>
+${n1Witness('paintNone', 'Pnone', 2, 1)}
+${pad}    </Default>` : ''}
 ${pad}</Condition>`
+}
+
+// All six readout boxes are inside r139..171.25, below the clock, outside the
+// preserved original-frame r137..159 measurement annulus at 360/450 scale.
+function n1Text(template, column, row, parameter = null) {
+  return `<PartText x="${173 + column * 35}" y="${366 + row * 11}" width="34" height="10">
+    <Text align="CENTER" ellipsis="TRUE">
+        <Font family="SYNC_TO_DEVICE" size="7" weight="BOLD" color="${COLOR.text}">
+            ${parameter === null ? template : `<Template>${template}<Parameter expression="${parameter}" /></Template>`}
+        </Font>
+    </Text>
+</PartText>`
+}
+
+function n1Group(name, content) {
+  return `<Group x="0" y="0" width="450" height="450" name="n1Diag_${name}">${content}</Group>`
+}
+
+function n1Witness(name, text, column, row) {
+  return n1Group(`add_${name}`, n1Text(text, column, row))
+}
+
+function n1PaintOpen(name, pad) {
+  return `${pad}<Group x="0" y="0" width="450" height="450" name="n1Diag_wrap_${name}">\n`
+}
+
+function n1PaintClose(name, text, pad) {
+  return `\n${n1Witness(`paint_${name}`, text, 2, 1)}\n${pad}</Group>`
+}
+
+/** Fields are independent of admission, with no raw TITLE or unbounded literals. */
+function n1ConsumerFields() {
+  const numbers = [['VALUE', 'V'], ['MIN', 'm'], ['MAX', 'M']].map(([field, label], column) => {
+    const value = `[COMPLICATION.RANGED_VALUE_${field}]`
+    return `<Condition>
+    <Expressions><Expression name="bounded${field}"><![CDATA[${value} >= 0 && ${value} <= 800]]></Expression></Expressions>
+    <Compare expression="bounded${field}">${n1Group(`add_field_${field}`, n1Text(`${label}%s`, column, 0, value))}</Compare>
+    <Default>${n1Witness(`field_${field}_other`, `${label}?`, column, 0)}</Default>
+</Condition>`
+  }).join('\n')
+  const titles = ['0', '1', '2', ''].map((title, index) =>
+    `<Expression name="title${index}"><![CDATA[[COMPLICATION.TITLE] == "${title}"]]></Expression>`,
+  ).join('\n')
+  const branches = ['T0', 'T1', 'T2', 'Tempty'].map((label, index) =>
+    `<Compare expression="title${index}">${n1Witness(`title${index}`, label, 0, 1)}</Compare>`,
+  ).join('\n')
+  return n1Group('add_fields', `${numbers}
+<Condition><Expressions>${titles}</Expressions>${branches}
+    <Default>${n1Witness('titleOther', 'Tother', 0, 1)}</Default>
+</Condition>`)
 }
 
 /** Geometry is selected solely from this response; no sibling can supply a count. */
@@ -1333,7 +1387,7 @@ ${stripRow(index, ' '.repeat(24))}
  * cannot occupy the innermost band: an earlier pair must precede it in payload
  * order. No delivered main is required and no main paint/label is synthesized.
  */
-function outerHalfSlot({ slotId, service, label }, ordinal) {
+function outerHalfSlot({ slotId, service, label }, ordinal, diagnostics = false) {
   const positions = LAYOUTS.flatMap((layout) =>
     Array.from({ length: layout.count - ordinal }, (_, index) => ({ layout, index })),
   )
@@ -1347,7 +1401,8 @@ function outerHalfSlot({ slotId, service, label }, ordinal) {
     const { outer, half } = bandGeometry(layout, index)
     return `                    <Compare expression="is${layout.name}Band${index}">
                         <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="outerHalf${slotId}_${layout.name}_${index + 1}">
-${bandArcs(outer, half, ' '.repeat(28))}
+${bandArcs(outer, half, ' '.repeat(28), diagnostics && layout.name === 'N1')}${diagnostics ? `
+${n1Witness(`admit_${layout.name}_${index}`, layout.name === 'N1' ? 'AN1' : 'Aother', 1, 1)}` : ''}
                         </Group>
                     </Compare>`
   }).join('\n')
@@ -1374,12 +1429,14 @@ ${bandArcs(outer, half, ' '.repeat(28))}
                 startAngle="${SWEEP.start}"
                 endAngle="${SWEEP.end}"
                 isRoundEdge="TRUE" />
-            <Complication type="RANGED_VALUE">
+            <Complication type="RANGED_VALUE">${diagnostics ? `
+${n1ConsumerFields()}` : ''}
                 <Condition>
                     <Expressions>
 ${expressions}
                     </Expressions>
-${branches}
+${branches}${diagnostics ? `
+                    <Default>${n1Group('add_rejected', `${n1Text('Areject', 1, 1)}${n1Text('Pnone', 2, 1)}`)}</Default>` : ''}
                 </Condition>
             </Complication>
             <Complication type="EMPTY" />
@@ -1641,7 +1698,7 @@ ${branches}
 ${pad}</Condition>`
 }
 
-function face() {
+function face(diagnostics = false) {
   // A blank line means "a different slot starts here". The lift is the ground
   // the first ring sits on and the comment introduces the strip stack, so
   // neither is cut off from what follows it.
@@ -1653,7 +1710,7 @@ function face() {
     ].join('\n'),
     [
       RINGS.map(ringSlot).join('\n\n'),
-      OUTER_HALVES.map(outerHalfSlot).join('\n\n'),
+      OUTER_HALVES.map((slot, ordinal) => outerHalfSlot(slot, ordinal, diagnostics && slot.slotId === 106)).join('\n\n'),
     ].join('\n\n'),
     clock(),
     wordmark(),
@@ -1675,27 +1732,50 @@ ${body}
 }
 
 /** Parse the actual output before either writing it or comparing it with disk. */
-async function assertConditionTrees(xml) {
-  const check = runFile('python3', [join(root, 'tools/check-watchface-structure.py')])
+async function assertConditionTrees(xml, baseline = null) {
+  const check = runFile('python3', [join(root, 'tools/check-watchface-structure.py'),
+    ...(baseline === null ? [] : ['--n1-pair-diagnostics'])])
   const closed = new Promise((resolve) => check.child.once('close', resolve))
+  // Both trees come from this invocation, so canonical regeneration remains possible.
+  const input = baseline === null ? xml : `<N1DiagnosticComparison>
+${baseline.slice(baseline.indexOf('<WatchFace'))}
+${xml.slice(xml.indexOf('<WatchFace'))}
+</N1DiagnosticComparison>`
   try {
-    await Promise.all([check, pipeline([xml], check.child.stdin)])
+    await Promise.all([check, pipeline([input], check.child.stdin)])
   } finally {
     await closed
   }
 }
 
 const xml = face()
+const diagnosticXml = face(true)
 
 assertLegacyCutoffs()
 assertNearExhaustedArcs()
 assertLowerContracts()
 await assertConditionTrees(xml)
-await emit(target, xml, 'render-watchface')
+await assertConditionTrees(diagnosticXml, xml)
+const outputFlag = process.argv.indexOf('--n1-pair-diagnostics-output')
+if (outputFlag !== -1) {
+  const path = process.argv[outputFlag + 1]
+  if (!path || path.startsWith('--') || process.argv.includes('--check')) {
+    throw new Error('diagnostic output requires a build-directory path and cannot use --check')
+  }
+  const output = resolve(path)
+  const withinBuild = relative(join(root, 'apps/watchface_wff/build'), output)
+  if (isAbsolute(withinBuild) || withinBuild.startsWith('..') || !withinBuild.endsWith('/raw/watchface.xml')) {
+    throw new Error('diagnostic XML must be a raw/watchface.xml overlay under apps/watchface_wff/build')
+  }
+  await mkdir(dirname(output), { recursive: true })
+  await writeFile(output, diagnosticXml)
+} else {
+  await emit(target, xml, 'render-watchface')
 
-// Textures are rasterized, not compared: ImageMagick stamps metadata that
-// differs between runs on pixel-identical output (see design-output.mjs).
-if (!process.argv.includes('--check')) {
-  await writeTextures()
-  console.log(`wrote ${LAYOUTS.filter(({ name }) => name !== 'Legacy').reduce((total, { count }) => total + count, 0) * TOKENS.length} ring textures to ${drawables}`)
+  // Textures are rasterized, not compared: ImageMagick stamps metadata that
+  // differs between runs on pixel-identical output (see design-output.mjs).
+  if (!process.argv.includes('--check')) {
+    await writeTextures()
+    console.log(`wrote ${LAYOUTS.filter(({ name }) => name !== 'Legacy').reduce((total, { count }) => total + count, 0) * TOKENS.length} ring textures to ${drawables}`)
+  }
 }

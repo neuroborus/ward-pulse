@@ -238,6 +238,14 @@ if (!hasReleaseKey) {
     }
 }
 
+val n1PairDiagnostics = providers.gradleProperty("wardpulseN1PairDiagnostics")
+    .map { it.toBooleanStrict() }.getOrElse(false)
+gradle.taskGraph.whenReady {
+    if (n1PairDiagnostics && allTasks.any { it.name.contains("release", ignoreCase = true) }) {
+        throw GradleException("wardpulseN1PairDiagnostics is debug-only; release requests are forbidden.")
+    }
+}
+
 android {
     namespace = "app.wardpulse.wear"
     compileSdk {
@@ -268,7 +276,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("boolean", "WARDPULSE_N1_PAIR_DIAGNOSTICS", n1PairDiagnostics.toString())
+        }
         release {
+            buildConfigField("boolean", "WARDPULSE_N1_PAIR_DIAGNOSTICS", "false")
             signingConfig =
                 if (hasReleaseKey) {
                     signingConfigs.getByName("release")

@@ -157,6 +157,25 @@ request ID, and sanitized parser reason. They must not include response bodies o
 values.
 Phone-to-watch logs record outcomes only and never include the serialized summary.
 
+The private N1 diagnostic exception is explicitly debug-only and default-off through
+`wardpulseN1PairDiagnostics` in both Wear and legacy-face Gradle owners. `N1PairDiagnostics`
+in `WatchSummaryComplications.kt` admits only the synthetic schema9/mock singleton
+`allowance.codex.plan` / `allowance.codex.spark` pair, ordinal0, both used63. At most four
+records per process expose fixed case/stage labels, bounded actual routing and returned
+VALUE/MIN/MAX, and closed returned-type/value-type/TITLE/ramp categories. Unexpected literals
+and unavailable stages remain categorized or unknown. This exception permits no labels,
+request IDs, exception text, notification keys, credentials, opaque identifiers, serialized
+summaries or private originals; it does not authorize ordinary summary logging.
+
+The diagnostic legacy face uses only a generated build-directory overlay; canonical and Push
+resources stay unchanged, normal builds ignore stale overlays and release diagnostic requests
+fail. Its slot106 consumer can display bounded fields regardless of admission, so Root must
+establish sanitized input and quiet writers before exposing it. Captures stay private, outside
+public guidance and screenshot assets. Root restores normal artifacts before restoring private
+original data and retires diagnostic controls. See
+[private N1 pair diagnostics](../../apps/watchface_wff/README.md#private-n1-pair-diagnostics)
+for stage attribution and cleanup ownership. Diagnostics establish neither repair nor causality.
+
 ## Notification Rules
 
 A notification is read off a locked screen, by whoever is holding the phone. It may carry only

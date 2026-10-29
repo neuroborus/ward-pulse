@@ -1,6 +1,8 @@
 package app.wardpulse.wear.complication
 
+import androidx.wear.watchface.complications.data.ComplicationData
 import androidx.wear.watchface.complications.data.NoDataComplicationData
+import androidx.wear.watchface.complications.data.PlainComplicationText
 import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import app.wardpulse.wear.model.AllowanceSummary
 import app.wardpulse.wear.model.CreditsGlance
@@ -175,6 +177,83 @@ class WatchComplicationTextTest {
         "allowance.codex.plan", "Weekly plan", 18.0, PulseStatus.OK,
         split = RingHalf("allowance.codex.spark", "Spark 5h", 59.0, PulseStatus.OK),
     )
+
+    @Test
+    fun n1DiagnosticsRequireOptInAndTheExactMockCaseAndStopAtTheProcessLimit() {
+        val pair = codexPair.copy(usedPercent = 63.0, split = codexPair.split!!.copy(usedPercent = 63.0))
+        val summary = PreviewWatchDashboardSummary.value.copy(rings = listOf(pair))
+        val records = mutableListOf<String>()
+        val data = rangedComplicationBuilder(37f, "0", RingFamily.CODEX_SPARK, ringCount = 1).build()
+        val route = N1PairDiagnostics.Route(0, 0, 1)
+        N1PairDiagnostics(false, records::add).observe(summary, 0, data, route) {
+            error("Disabled diagnostics must not inspect TITLE")
+        }
+        val observer = N1PairDiagnostics(true, records::add)
+        for (rejected in listOf(
+            null,
+            summary.copy(schemaVersion = 8), summary.copy(dataMode = WatchDataMode.LIVE),
+            summary.copy(rings = emptyList()), summary.copy(rings = listOf(pair, pair)),
+            summary.copy(rings = listOf(pair.copy(id = "allowance.claude.plan"))),
+            summary.copy(rings = listOf(pair.copy(usedPercent = 62.0))),
+            summary.copy(rings = listOf(pair.copy(split = null))),
+            summary.copy(rings = listOf(pair.copy(split = pair.split!!.copy(id = "allowance.codex.other")))),
+            summary.copy(rings = listOf(pair.copy(split = pair.split!!.copy(usedPercent = 62.0)))),
+            summary.copy(rings = listOf(pair.copy(status = PulseStatus.STALE))),
+        )) {
+            observer.observe(rejected, 0, data, route) { error("Rejected case must not inspect TITLE") }
+        }
+        observer.observe(summary, 1, data, route) { error("Second ordinal is outside this case") }
+        assertTrue(records.isEmpty())
+        repeat(N1PairDiagnostics.MAX_RECORDS + 2) {
+            observer.observe(summary, 0, data, route) { actual ->
+                assertSame(data, actual)
+                "0"
+            }
+        }
+        assertEquals(N1PairDiagnostics.MAX_RECORDS, records.size)
+        assertEquals(
+            "case=N1_PAIR stage=service_return ordinal=0 payload=0 outside=0 bands=1 " +
+                "type=ranged_value value=74.0 min=0.0 max=200.0 valueType=undefined title=index0 ramp=spark",
+            records.first(),
+        )
+    }
+
+    @Test
+    fun n1DiagnosticsReportActualFieldsAndKeepUnexpectedLiteralsAndUnavailableStagesClosed() {
+        val pair = codexPair.copy(usedPercent = 63.0, split = codexPair.split!!.copy(usedPercent = 63.0))
+        val summary = PreviewWatchDashboardSummary.value.copy(rings = listOf(pair))
+        fun record(data: ComplicationData?, route: N1PairDiagnostics.Route? = null, title: () -> CharSequence?): String {
+            val records = mutableListOf<String>()
+            N1PairDiagnostics(true, records::add).observe(summary, 0, data, route) { title() }
+            return records.single()
+        }
+        // Constructed observer inputs are not an execution of the Android service boundary.
+        val unexpected = rangedComplicationBuilder(12f, "unexpected", RingFamily.CLAUDE).build()
+        assertTrue(record(unexpected) { "unexpected" }.endsWith(
+            "type=ranged_value value=12.0 min=0.0 max=100.0 valueType=undefined title=other ramp=other",
+        ))
+        for ((literal, category) in listOf(null to "absent", "" to "empty", "1" to "index1", "2" to "index2")) {
+            assertTrue(record(unexpected) { literal }.contains("title=$category "))
+        }
+        assertTrue(record(unexpected) { error("Synthetic unreadable TITLE") }.contains("title=unknown "))
+        val unbounded = RangedValueComplicationData.Builder(
+            value = 901f, min = 0f, max = 1000f,
+            contentDescription = PlainComplicationText.Builder("Synthetic range").build(),
+        ).build()
+        assertTrue(record(unbounded) { null }.contains("value=out_of_range min=0.0 max=out_of_range"))
+        assertTrue(record(unbounded) { null }.endsWith("title=absent ramp=absent"))
+        assertTrue(record(unexpected, N1PairDiagnostics.Route(-1, 8, 4)) { "0" }.contains(
+            "payload=out_of_range outside=out_of_range bands=out_of_range",
+        ))
+        for (data in listOf(null, NoDataComplicationData())) {
+            val result = record(data) { error("Non-ranged data has no TITLE") }
+            assertTrue(result.contains("payload=unknown outside=unknown bands=unknown"))
+            assertTrue(result.endsWith("value=unknown min=unknown max=unknown valueType=unknown title=unknown ramp=unknown"))
+        }
+        // No title, label, request identifier or exception text can pass through a category.
+        assertTrue(!record(unexpected) { "Synthetic label" }.contains("Synthetic"))
+        N1PairDiagnostics(true) { error("Synthetic sink failure") }.observe(summary, 0, unexpected, null) { "0" }
+    }
 
     @Test
     fun outerHalfServicesSelectTheirSplitOrdinalAndMirrorTheBandIndex() {

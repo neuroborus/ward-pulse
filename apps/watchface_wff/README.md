@@ -92,6 +92,52 @@ The dated utility baseline and approved manual-selection capture are integrated;
 face geometry and screenshot bytes were unchanged by that setup-route work. Adaptive
 geometry and its native acceptance are tracked separately above.
 
+## Private N1 pair diagnostics
+
+`wardpulseN1PairDiagnostics` defaults to `false` in both Gradle owners. Root may build
+the Wear producer and legacy face with `-PwardpulseN1PairDiagnostics=true` on their
+respective debug tasks. Any release task in an opted-in graph fails before execution;
+release producer evidence is always disabled. Push packaging continues to consume canonical
+resources and receives no diagnostic overlay.
+
+`GenerateN1PairDiagnostics` in `build.gradle.kts` invokes `tools/render-watchface.mjs` with
+`--n1-pair-diagnostics-output` to produce only
+`build/generated/n1PairDiagnostics/debug/res/raw/watchface.xml`. It never rewrites canonical
+XML or textures. Only the opted-in debug variant registers that generated resource source;
+an ordinary build must ignore it even after an enabled build without cleaning.
+The generator's normal `--check` path also inspects the in-memory diagnostic tree through
+`check_diagnostics` in `tools/check-watchface-structure.py`, including branch containment and
+recovery of the original drawing tree after removing diagnostic additions.
+
+`N1PairDiagnostics` in the Wear `WatchSummaryComplications.kt` observes the actual returned
+object after the single summary load and existing split selection. Its `WardPulseN1Pair`
+log tag admits only schema9/mock, one Codex plan/Spark pair, ordinal0, both used63, and emits
+at most four records per process. Numeric fields are bounded to 0..800; unexpected routing,
+types, titles and ramps use closed categories. A logging failure cannot change the return.
+See [logging rules](../../docs/product/SECURITY_MODEL.md#logging-rules).
+
+Only slot106 receives consumer instrumentation. `V`, `m`, `M` show independently read bounded
+VALUE/MIN/MAX (`?` means outside that readable range); `T0`/`T1`/`T2`/`Tempty`/`Tother` classify
+TITLE without exposing its unexpected literal. `AN1`, `Aother`, `Areject` witness actual
+admission branches; within N1, `Pfull`, `Ptiny`, `Pround`, `Pnone` witness actual paint/no-color
+branches. Paint outside N1 remains unobserved. These readouts stay inside the existing clip
+and below the original incident annulus; unreadable or unavailable readouts remain unknown.
+
+Keep construction, Android wire/Parcel serialization, real service-return, consumer-field,
+branch and original-frame evidence separate. The constructed expected 74/200/TITLE `0`/Spark
+tuple in `AdaptiveRangedComplicationTest.genericEnvelopesRoundTripWithUnscaledHumanSemantics`
+is neither a service observation nor renderer delivery. A branch witness cannot prove stroke
+rasterization or reconstruct the original RED. If instrumentation changes that RED, record
+the qualification without claiming a repair or cause.
+
+Root alone performs HOST builds, official diagnostic XML validation, API tests, release and
+no-clean isolation checks, then the unchanged hash-bound Square N1 case after Runner DONE,
+process retirement and a fresh separate idle observation. Establish sanitized input and quiet
+writers before exposing the consumer; keep frames private. Preserve installed identities,
+signers, instance, bindings and data. Restore normal artifacts **before** private original data,
+verify effective recovery and retire diagnostic controls/artifacts; installation alone proves
+no active reload. Build/runtime/readability and unresolved RED acceptance remain pending HOST.
+
 ## Ownership
 
 - WFF XML resources.

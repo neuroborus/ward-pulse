@@ -6,11 +6,16 @@ import android.os.Parcel
 import android.support.wearable.complications.ComplicationData as WireComplicationData
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.wear.watchface.complications.data.NoDataComplicationData
 import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import androidx.wear.watchface.complications.data.toApiComplicationData
+import app.wardpulse.wear.model.PulseStatus
+import app.wardpulse.wear.model.RingHalf
+import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.ui.RingFamily
 import java.time.Instant
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -66,6 +71,43 @@ class AdaptiveRangedComplicationTest {
             assertEquals(label, restored.text!!.getTextAt(resources, now).toString())
             assertEquals("Plan $amount%", restored.contentDescription!!.getTextAt(resources, now).toString())
             assertEquals(color, restored.colorRamp!!.colors.single())
+        }
+
+        // Constructed/serialized N1 selection evidence only: no service-return or delivery claim.
+        val rings = listOf(RingSummary(
+            "allowance.codex.plan", "Codex plan", 63.0, PulseStatus.OK,
+            split = RingHalf("allowance.codex.spark", "Spark Weekly", 63.0, PulseStatus.OK),
+        ))
+        val selected = outerHalfComplicationData(rings, 0) { half, outside, count ->
+            assertEquals(rings.single().split, half)
+            assertEquals(0, outside)
+            assertEquals(1, count)
+            rangedComplicationBuilder(
+                WatchComplicationText.remainingPercent(half.usedPercent), outside.toString(),
+                RingFamily.colorArgb(half.id), ringCount = count,
+            ).build()
+        } as RangedValueComplicationData
+        assertTrue(outerHalfComplicationData(rings, 1) { _, _, _ ->
+            error("Singleton pair has no second extra")
+        } is NoDataComplicationData)
+        selected.validate()
+        val parcel = Parcel.obtain()
+        val serialized = try {
+            selected.asWireComplicationData().writeToParcel(parcel, 0)
+            parcel.setDataPosition(0)
+            WireComplicationData.CREATOR.createFromParcel(parcel)
+                .toApiComplicationData() as RangedValueComplicationData
+        } finally {
+            parcel.recycle()
+        }
+        serialized.validate()
+        for (data in listOf(selected, serialized)) {
+            assertEquals(74f, data.value)
+            assertEquals(0f, data.min)
+            assertEquals(200f, data.max)
+            assertEquals(RangedValueComplicationData.TYPE_UNDEFINED, data.valueType)
+            assertEquals("0", data.title!!.getTextAt(resources, now).toString())
+            assertEquals(RingFamily.CODEX_SPARK, data.colorRamp!!.colors.single())
         }
     }
 }
