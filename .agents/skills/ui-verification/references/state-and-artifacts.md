@@ -1,6 +1,5 @@
 # State and artifact identity
 
-Use when proving active app/face state after updates, ordering, preference restoration or renderer/cache recovery.
 Keep evidence layer-specific. For UI instrumentation, follow [ownership, result and artifact checks](../../../../docs/ANDROID_TOOLCHAIN.md#routine-verification).
 
 ## Distinguish the layers
@@ -55,15 +54,16 @@ durable product fix by itself. Keep unavailable causal evidence Pending.
 After an authorized install/update, inspect the whole affected native UI again. Updating only the Wear APK
 does not establish that the separately installed face changed, that its active instance refreshed or that old slot bindings were migrated.
 
-After an app/face handoff, join current full-window focus and foreground hierarchy with the full first
-original showing the intended unobscured surface before expanding any native capture batch. Active
-wallpaper/renderer mode or UIAutomator idle alone is not completed compositor handoff or visibility proof.
-If an OS prompt/notification covers the face, stop the batch as an environment obstruction, not Source/UI PASS.
-Use only safe existing dismissal procedures; never reset or provision a watch for capture. Inspect previous-page
-residue with bounded successive observations of the intended settled content, allowing real clock/live-value
-changes rather than byte-identical frames. Mixed/transient or obscured frames stay Pending as diagnostic evidence;
-clean reobservation does not establish a Source cause or product fix. Fixed sleep alone is insufficient;
-input/charging procedures stay with android-devices/android-emulators.
+After each app/Settings launch, navigation transition or app/face handoff, join current full-window focus,
+settled foreground hierarchy and the full first original identifying the expected unobscured page before
+the next input or capture batch. For physical targets, use the
+[launch/navigation guard](../../android-devices/references/commands.md#guard-launches-and-navigation).
+Active wallpaper/renderer mode, UIAutomator idle or launch success alone does not prove compositor handoff.
+If a prompt/notification covers the face, stop as an environment obstruction, not Source/UI PASS. Use only safe
+existing dismissals; never reset or provision for capture. Inspect previous-page residue through bounded
+observations of intended settled content; allow real clock/live-value changes rather than byte-identical frames.
+Mixed/transient or obscured frames stay Pending as diagnostics; clean reobservation does not establish a cause or fix.
+Fixed sleep alone is insufficient; input/charging procedures stay with android-devices/android-emulators.
 
 For AMBIENT acceptance, prove the actual renderer drawMode and intended visible variant.
 Dozing or `isAmbient=true` alone does not distinguish MUTE from AMBIENT; preserve MUTE as

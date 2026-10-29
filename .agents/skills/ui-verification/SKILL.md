@@ -16,6 +16,7 @@ does not establish the actual displayed result. Keep acceptance limited to prove
 | Identify the reported defect and check every selected logical metric | [Semantic and visual checks](references/semantic-checks.md) |
 | Distinguish form input, validation error and action visibility | [Form visibility](references/form-visibility.md) |
 | Prove which artifacts, bindings and state are actually rendered | [State and artifact identity](references/state-and-artifacts.md) |
+| Verify a reported locale/unit defect or explicit unit designation | [Locale and units](references/locale-and-units.md) |
 | Correct a demonstrated coordinator verification mistake | [Mistake maintenance](references/mistake-maintenance.md) |
 
 For device operations, use [android-devices](../android-devices/SKILL.md) or

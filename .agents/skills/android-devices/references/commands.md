@@ -39,6 +39,19 @@ Inspect results privately; retain only relevant lock state, target foreground co
 and task/Activity measurements. A resumed record or visible face is not unlock proof.
 Check the current rendered UI too; charging SystemUI may cover the app.
 
+## Guard launches and navigation
+
+After an app or Settings launch and after every navigation transition, join fresh window
+focus/foreground state with the settled hierarchy or original frame that identifies the
+expected visible page. Verify this before the next input or page capture. An unlocked
+device, resumed Activity or successful `am start -W` result alone does not prove that page.
+
+For menu/page catalogs, stop the navigation batch on an empty hierarchy or unexpected page.
+Retain sanitized actual foreground/page evidence; do not label captures from the intended
+route or continue the planned scroll/tap sequence on another UI. Reobserve through the
+existing supported route and resume only after the expected page is established. Fixed
+delay or command completion alone does not prove settlement.
+
 ## Wake, Home and authorized in-place update
 
 ```sh
@@ -52,37 +65,13 @@ certificate as required by the phone/watch reference; a mismatch does not permit
 
 ## Authorized pattern
 
-Derive the ordered nodes privately from that device's `*_UNLOCK_SECRET`, then resolve
-ephemeral numeric coordinates inside the CURRENT visually verified unlock grid. No stored pixel
-coordinates, secret sequence or secret length is specified here. Fully prepare the batch:
-DOWN is at FIRST; instantiate the NODE MOVE template for each following non-final node,
-in order; the explicit LAST MOVE handles the final node, immediately before UP at LAST.
-
-```sh
-adb -s "$DEVICE_SERIAL" shell input touchscreen motionevent DOWN "$FIRST_X" "$FIRST_Y"
-adb -s "$DEVICE_SERIAL" shell input touchscreen motionevent MOVE "$NODE_X" "$NODE_Y"
-adb -s "$DEVICE_SERIAL" shell input touchscreen motionevent MOVE "$LAST_X" "$LAST_Y"
-adb -s "$DEVICE_SERIAL" shell input touchscreen motionevent UP "$LAST_X" "$LAST_Y"
-```
-
-The NODE line is a template to instantiate as needed, not an extra literal gesture node.
-Never omit the final MOVE. Execute all gesture events, unlock verification and the guarded
-scenario in one bounded operational batch; no model round trip between events. Stop if
-identity, lock-screen geometry or unlocked/foreground state cannot be confirmed.
+Read [authorized pattern input](unlock-input.md#authorized-pattern) before using its
+existing templates to prepare the bounded unlock/scenario batch.
 
 ## Authorized PIN
 
-Use only when the current verified PIN UI accepts digit text and Enter. Privately validate
-`UNLOCK_SECRET` from the selected device's `*_UNLOCK_SECRET` as digits only; preserve leading
-zeroes as text. Do not print it or put its literal value in tool command text.
-
-```sh
-adb -s "$DEVICE_SERIAL" shell input text "$UNLOCK_SECRET"
-adb -s "$DEVICE_SERIAL" shell input keyevent 66
-```
-
-Keep PIN input, verification and the guarded scenario in one bounded batch too. After any
-rejection, stop automated input and inspect the cause; authorization persists, not guessing.
+Read [authorized PIN input](unlock-input.md#authorized-pin) before using its existing
+templates; preserve the current method's authorization and observed UI preconditions.
 
 ## App capture and transient unlock-grid inspection
 

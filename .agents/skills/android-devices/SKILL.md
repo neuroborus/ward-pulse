@@ -56,6 +56,9 @@ owner's explicit task scope; hypothetical risk does not create a new approval fl
 
 ## Verify the actual interaction
 
+Apply the [launch/navigation guard](references/commands.md#guard-launches-and-navigation)
+after launches and each transition, before further input or menu/page catalog capture.
+
 Check keyguard and the visible app immediately before each scenario. A face can be visible
 while locked, and charging SystemUI can cover a resumed Activity. After an authorized
 unlock, perform the scenario and its observations in one bounded sequence; model/tool
