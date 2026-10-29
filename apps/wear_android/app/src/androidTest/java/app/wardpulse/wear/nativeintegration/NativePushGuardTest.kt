@@ -124,8 +124,11 @@ class NativePushGuardTest {
         } catch (failure: NativePending) {
             assertEquals("selection-instance-changed", failure.identity)
         }
-        val root = File.createTempFile("native-journal-", ".tmp",
-            InstrumentationRegistry.getInstrumentation().context.cacheDir)
+        val cacheDir = checkNotNull(InstrumentationRegistry.getInstrumentation().targetContext.cacheDir) {
+            "Target app cache directory must be available"
+        }
+        check(cacheDir.isDirectory && cacheDir.canWrite()) { "Target app cache directory must be writable" }
+        val root = File.createTempFile("native-journal-", ".tmp", cacheDir)
         check(root.delete() && root.mkdir())
         try {
             installedResourceCleanup(root)
