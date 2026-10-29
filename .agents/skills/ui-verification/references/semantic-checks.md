@@ -68,22 +68,23 @@ stray strokes and broken contours around them. Keep border fades, unexpected art
 arcs as separate checks. If a missed artifact is reported after acceptance, preserve the incident frame,
 reopen the review and keep the public capture candidate Pending until actual repair and matched native verification.
 
-Locate controls from a fresh hierarchy and original frame in the current window/page. Inspect both `text`
-and `content-desc`: either may carry target identity while the other is empty. Resolve the matching node
-or its own enabled clickable ancestor, checking that the label/context identifies the intended control
-and that its visible bounds support safe action. Stop absence-driven scrolling once that target is visible;
-reveal a clipped target only as needed for usable bounds. One empty label field, or a selector that ignores
-the populated field, does not establish target absence. Ambiguous matches, disabled controls, stale nodes
-or the wrong window remain unresolved; reobserve or disambiguate within the existing bounded procedure.
-After action, verify the actual settled destination or effective binding; a found node or successful input
-alone is not completion proof. For composite fields, use [Form visibility](form-visibility.md) to check the
-editor, error and actions independently; a wrapper's hit-test result alone does not establish them.
+Immediately before input, revalidate the current page AND a unique enabled visible intended node or its own
+enabled clickable ancestor from a fresh hierarchy and original frame; its label/context and current bounds
+must support safe action. Inspect both `text` and `content-desc`: either may identify the target while the other is empty.
+Do not reuse a picker/modal observation across model/tool round trips; prefer one prepared existing observation/action batch.
+Stop absence-driven scrolling once the target is visible; reveal a clipped target only for usable bounds.
+One empty label field or a selector ignoring the populated field does not prove absence. Ambiguous matches,
+disabled controls, stale nodes or the wrong window stay unresolved; reobserve or disambiguate within the existing bounded procedure.
+If an ephemeral page is dismissed, stop and record it; reopen by the existing ordinary route and observe fresh,
+without blindly replaying input. After action, verify the actual settled destination and relevant resource/instance
+or effective binding. A found node or successful command/input does not prove it reached the intended page.
+For composite fields, use [Form visibility](form-visibility.md) to check the editor, error and actions independently;
+a wrapper's hit-test result alone does not establish them.
 
-Choose gesture extent and commit requirements for the actual component being navigated, using its real
-unclipped viewport and intended gesture region. Neighboring legend bounds, clipped accessibility children
-and another component's remembered successful gesture are not substitutes. After settlement, verify the
-actual destination or reached limit before accepting success or treating an uncommitted gesture as a
-navigation defect. Distinguish actual system font/DPI state from an injected test density or animation scale.
+Choose gesture extent and commit requirements for the actual component being navigated, using its real unclipped viewport
+and intended gesture region. Neighboring legend bounds, clipped accessibility children and another component's remembered
+successful gesture are not substitutes. After settlement, verify the actual destination or reached limit before accepting success
+or treating an uncommitted gesture as a navigation defect. Distinguish actual system font/DPI state from an injected test density or animation scale.
 
 ## Match the case after changes
 
@@ -94,6 +95,5 @@ different percentages, pair membership or a fresh fixture. An observed success c
 After temporary preferences or a fixture are restored, verify actual derived surfaces again using the
 [state/artifact reference](state-and-artifacts.md). Restored file bytes alone do not establish restored complications, widget caches or the active scene.
 
-Healthy public examples follow user-docs. Preserve the incident privately when preparing a clean
-demonstration; do not replace the incident with healthy data and call the bug fixed. Public coherence is
-required independently of the incident's diagnostic value.
+Healthy public examples follow user-docs. Preserve the incident privately when preparing a clean demonstration; do not replace
+the incident with healthy data and call the bug fixed. Public coherence is required independently of the incident's diagnostic value.

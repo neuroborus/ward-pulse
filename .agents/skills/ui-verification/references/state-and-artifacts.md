@@ -14,9 +14,8 @@ Keep evidence layer-specific. For UI instrumentation, follow [ownership, result 
 | Active rendition | Current foreground app/page or face renderer's resource package and instance. |
 | Effective inputs | Delivered summary/order, provider bindings and live values/TITLE where observable. |
 
-A shared versionName, installed package or successful build does not collapse these into
-one proof. For WFF, distinguish the Wear app from the separate legacy/Push face package.
-An installed newer Push face is not evidence that the active legacy instance uses it.
+A shared versionName, installed package or successful build does not collapse these into one proof. For WFF,
+distinguish the Wear app from the separate legacy/Push face package. An installed newer Push face is not evidence that the active legacy instance uses it.
 Static default-provider policy does not prove a retained instance's effective binding.
 
 Record the identities necessary for the claim before/after the action. Never infer an active renderer
@@ -35,9 +34,10 @@ For claims about which complication slot/type dispatched a tap, shared PendingIn
 identity, caller UID, coordinates or a configured binding alone do not identify the hit.
 Join actual renderer hit-event evidence to the current instance/slot, effective provider,
 current data type and successful destination. A DOWN record alone is not completed dispatch.
-Keep canonical/runtime slot IDs distinct; local proxy hashes do not prove cross-process
-token identity. If the required join is unavailable, keep type-specific provenance Pending
-while preserving separately proved common-entry, navigation/cycle and restoration results.
+Keep canonical/runtime slot IDs distinct. Resolve retained APK raw XML through its resource table, not a guessed ZIP path,
+then join its canonical IDs with actual native instance/slot evidence. Numeric IDs alone do not prove that mapping;
+local proxy hashes do not prove cross-process token identity. If the required join is unavailable, keep type-specific
+provenance Pending while preserving separately proved common-entry, navigation/cycle and restoration results.
 
 ## Refresh and retained state
 
