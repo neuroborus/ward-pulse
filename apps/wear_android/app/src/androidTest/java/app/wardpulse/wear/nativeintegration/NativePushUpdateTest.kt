@@ -9,7 +9,6 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.wear.watchfacepush.WatchFacePushManagerFactory
 import java.io.File
 import java.util.Properties
-import java.util.zip.ZipFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
@@ -23,26 +22,32 @@ class NativePushUpdateTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val target = instrumentation.targetContext
     private val expected = NativePushExpectations(InstrumentationRegistry.getArguments())
-    private val device = NativePushDevice(instrumentation)
+    private val diagnostics = NativeDiagnostics()
+    private val device = NativePushDevice(instrumentation, diagnostics)
     private val journal get() = File(target.filesDir, "native_push_update/attempt.json")
 
     @Test
     fun probeBaseline() = sanitized("baseline-probe") {
         device.admit(expected, "probeBaseline")
         nativeGuard(!AttemptJournal(journal).exists(), "no-previous-dispatch")
+        diagnostics.enter(NativePhase.SDK_SUPPORT)
         nativeGuard(WatchFacePushManagerFactory.isSupported(), "push-sdk-support")
         device.baseline(expected)
         val renderer = device.readRenderer(expected)
         runBlocking(Dispatchers.IO) {
+            diagnostics.enter(NativePhase.SDK_MANAGER)
             val manager = WatchFacePushManagerFactory.createWatchFacePushManager(target)
+            diagnostics.enter(NativePhase.SDK_INVENTORY)
             val owned = manager.listWatchFaces().installedWatchFaceDetails
                 .single { it.packageName == CANDIDATE_PACKAGE }
             nativeGuard(owned.versionCode == 3L, "probe-push-3")
+            diagnostics.enter(NativePhase.SDK_ACTIVE)
             nativeGuard(manager.isWatchFaceActive(CANDIDATE_PACKAGE) ==
                 (expected.required("expectedResourcePackage") == CANDIDATE_PACKAGE), "probe-active-ownership")
             report("Preflight identities/provenance only: slotSha256=${owned.slotId.sha256()}, " +
                 "instanceSha256=${renderer.instance.sha256()}, deliveryProvenanceSha256=${renderer.deliveryProvenance.sha256()}. " +
                 "Delivery provenance alone does not prove selection retention or authorize target replacement.")
+            diagnostics.enter(NativePhase.SELECTION_OBSERVATION)
             val configuration = renderer.requirePushConfiguration()
             report("Push selection configurationSha256=${configuration.sha256()}; " +
                 "no update performed; native witness and target replacement Pending.")
@@ -53,59 +58,70 @@ class NativePushUpdateTest {
     fun updateOwnedPush3To4() = sanitized("update") {
         device.admit(expected, "updateOwnedPush3To4")
         nativeGuard(!AttemptJournal(journal).exists(), "no-previous-dispatch")
+        diagnostics.enter(NativePhase.SDK_SUPPORT)
         nativeGuard(WatchFacePushManagerFactory.isSupported(), "push-sdk-support")
         val baseline = device.baseline(expected)
         val renderer = device.renderer(expected)
-        Candidate.open(instrumentation.context, target.cacheDir).use { candidate ->
-            nativeGuard(candidate.signer == expected.hash("expectedPushSignerSha256") &&
-                candidate.hostSigner == expected.hash("expectedHostSignerSha256"), "validated-signers")
-            val manager = WatchFacePushManagerFactory.createWatchFacePushManager(target)
-            // No cancellation timeout around a remote mutation: retain FD ownership until callback.
-            runBlocking(Dispatchers.IO) {
-                val inventory = manager.listWatchFaces()
-                val owned = inventory.installedWatchFaceDetails.singleOrNull { it.packageName == CANDIDATE_PACKAGE }
-                    ?: throw NativePending("owned-push-slot-unavailable")
-                nativeGuard(owned.versionCode == 3L && owned.slotId.sha256() == expected.hash("expectedSlotSha256"),
-                    "owned-push-3-slot")
-                val wasActive = manager.isWatchFaceActive(CANDIDATE_PACKAGE)
-                nativeGuard(wasActive == (expected.required("expectedResourcePackage") == CANDIDATE_PACKAGE),
-                    "active-ownership")
-                // Recheck immediately before arming; a concurrent change is a failed precondition.
-                device.baseline(expected)
-                val currentRenderer = device.renderer(expected)
-                currentRenderer.requireRetainedFrom(renderer)
-                val receipt = baseline.put("slotSha256", owned.slotId.sha256())
-                    .put("instanceSha256", renderer.instance.sha256())
-                    .put("configurationSha256", renderer.configuration.sha256())
-                    .put("resourcePackage", expected.required("expectedResourcePackage"))
-                    .put("runtime", expected.required("expectedRuntime"))
-                    .put("pushConfigurationRetention", "Pending")
-                    .put("targetReplacement", "Pending")
-                    .put("wasActive", wasActive).put("candidateApkSha256", candidate.apkSha256)
-                    .put("candidateResourcesSha256", candidate.resourcesSha256)
-                    .put("candidateSignerSha256", candidate.signer)
-                // Persist before dispatch. A crash or exception after this boundary forbids a retry.
-                AttemptJournal(journal).dispatch(receipt, currentRenderer) {
-                    val result = manager.updateWatchFace(owned.slotId, candidate.descriptor, candidate.token)
-                    receipt.put("state", "result-received; advancement uncertain")
-                        .put("resultCode", result.versionCode).put("resultSlotSha256", result.slotId.sha256())
-                        .put("resultPackageSha256", result.packageName.sha256())
-                    AttemptJournal(journal).persist(receipt)
-                    nativeGuard(result.slotId == owned.slotId && result.packageName == CANDIDATE_PACKAGE &&
-                        result.versionCode == 4L, "returned-identity")
-                    verifyInstalled(candidate.apkSha256, candidate.resourcesSha256, candidate.signer)
-                    val after = manager.listWatchFaces()
-                    nativeGuard(after.remainingSlotCount == inventory.remainingSlotCount &&
-                        after.installedWatchFaceDetails.size == inventory.installedWatchFaceDetails.size &&
-                        after.installedWatchFaceDetails.map { Triple(it.slotId, it.packageName, it.versionCode) }
-                            .toSet() == inventory.installedWatchFaceDetails.map {
-                            Triple(it.slotId, it.packageName, if (it.slotId == owned.slotId) 4L else it.versionCode)
-                        }.toSet(), "retained-owned-inventory")
-                    device.unchangedHost(baseline)
-                    // No post-update isWatchFaceActive call or immediate native-active oracle.
+        Candidate.open(instrumentation.context, target.cacheDir, diagnostics).use { candidate ->
+            diagnostics.recordFailure {
+                nativeGuard(candidate.signer == expected.hash("expectedPushSignerSha256") &&
+                    candidate.hostSigner == expected.hash("expectedHostSignerSha256"), "validated-signers")
+                diagnostics.enter(NativePhase.SDK_MANAGER)
+                val manager = WatchFacePushManagerFactory.createWatchFacePushManager(target)
+                // No cancellation timeout around a remote mutation: retain FD ownership until callback.
+                runBlocking(Dispatchers.IO) {
+                    diagnostics.enter(NativePhase.SDK_INVENTORY)
+                    val inventory = manager.listWatchFaces()
+                    val owned = inventory.installedWatchFaceDetails.singleOrNull { it.packageName == CANDIDATE_PACKAGE }
+                        ?: throw NativePending("owned-push-slot-unavailable")
+                    nativeGuard(owned.versionCode == 3L && owned.slotId.sha256() == expected.hash("expectedSlotSha256"),
+                        "owned-push-3-slot")
+                    diagnostics.enter(NativePhase.SDK_ACTIVE)
+                    val wasActive = manager.isWatchFaceActive(CANDIDATE_PACKAGE)
+                    nativeGuard(wasActive == (expected.required("expectedResourcePackage") == CANDIDATE_PACKAGE),
+                        "active-ownership")
+                    // Recheck immediately before arming; a concurrent change is a failed precondition.
+                    device.baseline(expected)
+                    val currentRenderer = device.renderer(expected)
+                    currentRenderer.requireRetainedFrom(renderer)
+                    val receipt = baseline.put("slotSha256", owned.slotId.sha256())
+                        .put("instanceSha256", renderer.instance.sha256())
+                        .put("configurationSha256", renderer.configuration.sha256())
+                        .put("resourcePackage", expected.required("expectedResourcePackage"))
+                        .put("runtime", expected.required("expectedRuntime"))
+                        .put("pushConfigurationRetention", "Pending")
+                        .put("targetReplacement", "Pending")
+                        .put("wasActive", wasActive).put("candidateApkSha256", candidate.apkSha256)
+                        .put("candidateResourcesSha256", candidate.resourcesSha256)
+                        .put("candidateSignerSha256", candidate.signer)
+                    // Persist before dispatch. A crash or exception after this boundary forbids a retry.
+                    diagnostics.enter(NativePhase.JOURNAL)
+                    AttemptJournal(journal).dispatch(receipt, currentRenderer) {
+                        diagnostics.enter(NativePhase.SDK_UPDATE)
+                        val result = manager.updateWatchFace(owned.slotId, candidate.descriptor, candidate.token)
+                        diagnostics.enter(NativePhase.JOURNAL)
+                        receipt.put("state", "result-received; advancement uncertain")
+                            .put("resultCode", result.versionCode).put("resultSlotSha256", result.slotId.sha256())
+                            .put("resultPackageSha256", result.packageName.sha256())
+                        AttemptJournal(journal).persist(receipt)
+                        nativeGuard(result.slotId == owned.slotId && result.packageName == CANDIDATE_PACKAGE &&
+                            result.versionCode == 4L, "returned-identity")
+                        verifyInstalled(candidate.apkSha256, candidate.resourcesSha256, candidate.signer)
+                        diagnostics.enter(NativePhase.SDK_INVENTORY)
+                        val after = manager.listWatchFaces()
+                        nativeGuard(after.remainingSlotCount == inventory.remainingSlotCount &&
+                            after.installedWatchFaceDetails.size == inventory.installedWatchFaceDetails.size &&
+                            after.installedWatchFaceDetails.map { Triple(it.slotId, it.packageName, it.versionCode) }
+                                .toSet() == inventory.installedWatchFaceDetails.map {
+                                Triple(it.slotId, it.packageName, if (it.slotId == owned.slotId) 4L else it.versionCode)
+                            }.toSet(), "retained-owned-inventory")
+                        device.unchangedHost(baseline)
+                        // No post-update isWatchFaceActive call or immediate native-active oracle.
+                    }
                 }
             }
         }
+        diagnostics.enter(NativePhase.JOURNAL)
         val completed = AttemptJournal(journal).read().put("resourceCleanup", "verified")
         AttemptJournal(journal).persist(completed)
         report("SDK result and installed candidate verified; settled native evidence Pending.")
@@ -115,6 +131,7 @@ class NativePushUpdateTest {
     @Test
     fun observeSettledUpdate() = sanitized("settled-observation") {
         device.admit(expected, "observeSettledUpdate")
+        diagnostics.enter(NativePhase.JOURNAL)
         val receipt = AttemptJournal(journal).read()
         nativeGuard(receipt.getString("state") == "result-verified", "verified-single-update")
         nativeGuard(receipt.optString("resourceCleanup") == "verified", "update-resources-retired")
@@ -131,11 +148,15 @@ class NativePushUpdateTest {
         nativeGuard(renderer.instance.sha256() == receipt.getString("instanceSha256") &&
             renderer.configuration.sha256() == receipt.getString("configurationSha256"), "settled-retention")
         runBlocking(Dispatchers.IO) {
-            val owned = WatchFacePushManagerFactory.createWatchFacePushManager(target).listWatchFaces()
+            diagnostics.enter(NativePhase.SDK_MANAGER)
+            val manager = WatchFacePushManagerFactory.createWatchFacePushManager(target)
+            diagnostics.enter(NativePhase.SDK_INVENTORY)
+            val owned = manager.listWatchFaces()
                 .installedWatchFaceDetails.single { it.packageName == CANDIDATE_PACKAGE }
             nativeGuard(owned.versionCode == 4L && owned.slotId.sha256() == receipt.getString("slotSha256"),
                 "settled-owned-slot")
         }
+        diagnostics.enter(NativePhase.SCREENSHOT)
         val frame = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
         try {
             File(journal.parentFile, "settled-original.png").outputStream().use {
@@ -153,22 +174,20 @@ class NativePushUpdateTest {
     }
 
     private fun verifyInstalled(apk: String, resources: String, signer: String) {
-        val installed = NativePackage.read(target, CANDIDATE_PACKAGE)
+        val installed = NativePackage.read(target, CANDIDATE_PACKAGE, diagnostics)
+        diagnostics.enter(NativePhase.INSTALLED_IDENTITY)
         nativeGuard(installed.code == 4L && installed.apk == apk && installed.signer == signer,
             "installed-candidate-bytes")
-        val info = target.packageManager.getApplicationInfo(CANDIDATE_PACKAGE, 0)
-        val actualResources = ZipFile(info.sourceDir).use { zip ->
-            zip.getInputStream(checkNotNull(zip.getEntry("resources.arsc"))).sha256()
-        }
-        nativeGuard(actualResources == resources, "installed-candidate-resources")
+        nativeGuard(installed.resources == resources, "installed-candidate-resources")
     }
 
     private fun sanitized(phase: String, action: () -> Unit) {
         try {
+            diagnostics.enter(NativePhase.ADMISSION)
             action()
         } catch (failure: Throwable) {
             // SDK/platform exception text may include opaque tokens, payloads, paths or remote causes.
-            val reason = (failure as? NativePending)?.identity ?: "capability-or-operation-unavailable"
+            val reason = diagnostics.failure(failure)
             throw AssertionError("Pending: native Push $phase ($reason); preserve host and private attempt record; do not retry.")
         }
     }
@@ -218,17 +237,22 @@ internal class Candidate(
     val resourcesSha256: String,
     val signer: String,
     val hostSigner: String,
+    private val diagnostics: NativeDiagnostics = NativeDiagnostics(),
 ) : AutoCloseable {
     override fun close() {
-        try {
-            descriptor.close()
-        } finally {
-            nativeGuard(file.delete(), "candidate-cleanup")
+        diagnostics.at(NativePhase.CANDIDATE_CLEANUP) {
+            try {
+                descriptor.close()
+            } finally {
+                nativeGuard(file.delete(), "candidate-cleanup")
+            }
         }
     }
 
     companion object {
-        fun open(context: android.content.Context, cache: File): Candidate {
+        fun open(context: android.content.Context, cache: File,
+            diagnostics: NativeDiagnostics = NativeDiagnostics()): Candidate {
+            diagnostics.enter(NativePhase.CANDIDATE_ARCHIVE)
             val directory = "native_push_candidate/"
             val receipt = Properties().apply {
                 context.assets.open("${directory}identity.properties").use { load(it) }
@@ -258,9 +282,12 @@ internal class Candidate(
                 val signerHash = hash("signerSha256")
                 val hostSignerHash = hash("hostSignerSha256")
                 return Candidate(file, ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY),
-                    token, apkHash, resourcesHash, signerHash, hostSignerHash)
+                    token, apkHash, resourcesHash, signerHash, hostSignerHash, diagnostics)
             } catch (failure: Throwable) {
-                nativeGuard(file.delete(), "candidate-failure-cleanup")
+                diagnostics.failure(failure)
+                diagnostics.at(NativePhase.CANDIDATE_CLEANUP) {
+                    nativeGuard(file.delete(), "candidate-failure-cleanup")
+                }
                 throw failure
             }
         }

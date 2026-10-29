@@ -12,11 +12,14 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.wear.watchface.complications.ComplicationDataSourceInfoRetriever
 import androidx.wear.watchfacepush.WatchFacePushManager
 import java.io.File
+import java.io.IOException
 import java.io.InputStream
 import java.security.MessageDigest
+import java.util.zip.ZipFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -26,6 +29,11 @@ internal const val HOST_PACKAGE = "app.wardpulse"
 internal const val CANDIDATE_PACKAGE = "app.wardpulse.watchfacepush.main"
 internal const val UPDATE_CLASS = "app.wardpulse.wear.nativeintegration.NativePushUpdateTest"
 internal const val RUNTIME_PACKAGE = "com.google.wear.watchface.runtime"
+internal const val INSTALLED_PUSH_PATH_END = "NATIVE_PUSH_PATHS_COMPLETE"
+// UiAutomation uses Runtime.exec(String): the -c script must be a single whitespace-free token.
+// Expand argument separators inside the shell, which also owns the conditional completion marker.
+internal const val INSTALLED_PUSH_PATH_COMMAND =
+    "/system/bin/sh -c /system/bin/pm\${IFS}path\${IFS}$CANDIDATE_PACKAGE&&echo\${IFS}$INSTALLED_PUSH_PATH_END"
 
 internal class NativePending(val identity: String) : IllegalStateException("Pending: native guard $identity")
 
@@ -45,6 +53,101 @@ internal fun InputStream.sha256(): String = use { input ->
 }
 
 internal fun String.sha256() = byteInputStream().sha256()
+
+internal enum class NativePhase {
+    ADMISSION, HOST_IDENTITY, INSTALLED_PATH, INSTALLED_BYTES, INSTALLED_ARCHIVE, INSTALLED_IDENTITY,
+    INSTALLED_RESOURCES, ASSET_ARCHIVE, BASELINE_CLEANUP, SDK_SUPPORT, SDK_MANAGER,
+    SDK_INVENTORY, SDK_ACTIVE, SDK_UPDATE, SELECTION_OBSERVATION, SELECTION_QUERY,
+    SELECTION_CLEANUP, CANDIDATE_ARCHIVE, CANDIDATE_CLEANUP, JOURNAL, SCREENSHOT,
+}
+
+internal enum class NativeFailureCategory { GUARD_REJECTED, ACCESS_DENIED, IO_UNAVAILABLE, CAPABILITY_UNAVAILABLE }
+
+/** Only closed vocabulary is emitted; even guard identities and exception causes are private. */
+internal class NativeDiagnostics(private val emit: (String) -> Unit = { message ->
+    InstrumentationRegistry.getInstrumentation().sendStatus(0, Bundle().apply {
+        putString("stream", "\nNative Push: $message\n")
+    })
+}) {
+    private var current = NativePhase.ADMISSION
+    private var firstFailure: String? = null
+
+    private fun report(message: String) {
+        try {
+            emit(message)
+        } catch (_: Throwable) {
+            // A status-transport failure must never prevent resource cleanup.
+        }
+    }
+
+    fun enter(phase: NativePhase) {
+        current = phase
+        report("phase=${phase.name.lowercase()}")
+    }
+
+    fun failure(failure: Throwable): String {
+        val category = when (failure) {
+            is NativePending -> NativeFailureCategory.GUARD_REJECTED
+            is SecurityException -> NativeFailureCategory.ACCESS_DENIED
+            is IOException -> NativeFailureCategory.IO_UNAVAILABLE
+            else -> NativeFailureCategory.CAPABILITY_UNAVAILABLE
+        }
+        return firstFailure ?: "phase=${current.name.lowercase()}; category=${category.name.lowercase()}"
+            .also { firstFailure = it; report(it) }
+    }
+
+    fun <T> at(phase: NativePhase, action: () -> T): T {
+        enter(phase)
+        return recordFailure(action)
+    }
+
+    inline fun <T> recordFailure(action: () -> T): T {
+        try {
+            return action()
+        } catch (failure: Throwable) {
+            this.failure(failure)
+            throw failure
+        }
+    }
+}
+
+/** EOF-bounded complete enumeration, not an archive's potentially absent split metadata. */
+internal fun readInstalledPushPath(input: InputStream): File = input.use {
+    val bytes = it.readNBytes(4097)
+    nativeGuard(bytes.size <= 4096, "bounded-installed-paths")
+    val match = Regex("package:(/data/app/(?:[A-Za-z0-9_+=.~-]+/){1,2}base\\.apk)\n$INSTALLED_PUSH_PATH_END\n")
+        .matchEntire(bytes.toString(Charsets.US_ASCII))
+        ?: throw NativePending("single-complete-installed-path")
+    val path = match.groupValues[1]
+    nativeGuard(path.split('/').none { part -> part == "." || part == ".." }, "installed-path-components")
+    File(path)
+}
+
+/** A projection of real archive metadata; expected values never fill missing observations. */
+internal data class NativeArchive(
+    val name: String?, val code: Long, val signers: List<String>?, val hasSplits: Boolean,
+) {
+    fun requireIdentity(name: String): String {
+        nativeGuard(this.name == name && code > 0 && !hasSplits, "archive-package-code-splits")
+        val signer = signers?.singleOrNull() ?: throw NativePending("archive-single-signer-unavailable")
+        nativeGuard(signer.matches(Regex("[a-f0-9]{64}")), "archive-signer-identity")
+        return signer
+    }
+
+    companion object {
+        fun fromInfo(info: PackageInfo): NativeArchive = NativeArchive(
+            info.packageName, info.longVersionCode,
+            info.signingInfo?.apkContentsSigners?.map { it.toByteArray().inputStream().sha256() },
+            !info.splitNames.isNullOrEmpty() || !info.applicationInfo?.splitSourceDirs.isNullOrEmpty(),
+        )
+    }
+}
+
+internal fun readNativeResources(zip: ZipFile): String = zip.use {
+    val entries = it.entries().asSequence().filter { entry -> entry.name == "resources.arsc" }.take(2).toList()
+    nativeGuard(entries.size == 1 && !entries.single().isDirectory, "single-resource-table")
+    it.getInputStream(entries.single()).sha256()
+}
 
 /** Expectations come from HOST's independent observation before test-APK provisioning. */
 internal class NativePushExpectations(private val arguments: Bundle) {
@@ -67,30 +170,65 @@ internal class NativePushExpectations(private val arguments: Bundle) {
     }
 }
 
-internal data class NativePackage(val code: Long, val apk: String, val signer: String) {
+internal data class NativePackage(val code: Long, val apk: String, val signer: String,
+    val resources: String? = null) {
     fun json() = JSONObject().put("code", code).put("apk", apk).put("signer", signer)
 
     companion object {
-        fun read(context: Context, name: String): NativePackage {
+        fun read(context: Context, name: String, diagnostics: NativeDiagnostics = NativeDiagnostics()): NativePackage {
+            if (name == CANDIDATE_PACKAGE) {
+                val instrumentation = InstrumentationRegistry.getInstrumentation()
+                nativeGuard(context === instrumentation.targetContext, "installed-target-context")
+                return readInstalled(locate = {
+                    // Existing UiAutomation only locates paths. APK bytes never cross this shell pipe.
+                    instrumentation.uiAutomation.executeShellCommand(
+                        INSTALLED_PUSH_PATH_COMMAND,
+                    ).use { descriptor ->
+                        readInstalledPushPath(ParcelFileDescriptor.AutoCloseInputStream(descriptor))
+                    }
+                }, archive = { file ->
+                    context.packageManager.getPackageArchiveInfo(file.path, PackageManager.GET_SIGNING_CERTIFICATES)
+                        ?.let { NativeArchive.fromInfo(it) }
+                }, diagnostics = diagnostics)
+            }
             val info = context.packageManager.getPackageInfo(name, PackageManager.GET_SIGNING_CERTIFICATES)
+            nativeGuard(info.packageName == name, "installed-package")
             return fromInfo(info)
         }
 
+        internal fun readInstalled(locate: () -> File, archive: (File) -> NativeArchive?,
+            diagnostics: NativeDiagnostics): NativePackage {
+            val file = diagnostics.at(NativePhase.INSTALLED_PATH, locate)
+            val apk = diagnostics.at(NativePhase.INSTALLED_BYTES) { file.inputStream().sha256() }
+            val identity = diagnostics.at(NativePhase.INSTALLED_ARCHIVE) {
+                val info = archive(file) ?: throw NativePending("installed-archive-unavailable")
+                info to info.requireIdentity(CANDIDATE_PACKAGE)
+            }
+            val resources = diagnostics.at(NativePhase.INSTALLED_RESOURCES) { readNativeResources(ZipFile(file)) }
+            diagnostics.at(NativePhase.INSTALLED_BYTES) {
+                nativeGuard(file.inputStream().sha256() == apk, "installed-file-changed")
+            }
+            diagnostics.at(NativePhase.INSTALLED_PATH) {
+                nativeGuard(locate() == file, "installed-path-changed")
+            }
+            // Bracketed observations detect changes; they do not claim atomic package observation.
+            return NativePackage(identity.first.code, apk, identity.second, resources)
+        }
+
         fun fromInfo(info: PackageInfo): NativePackage {
-            nativeGuard(info.applicationInfo?.splitSourceDirs.isNullOrEmpty(), "single-apk")
-            val certificates = info.signingInfo?.apkContentsSigners
-            nativeGuard(certificates?.size == 1, "single-signer")
+            val signer = NativeArchive.fromInfo(info).requireIdentity(info.packageName)
             return NativePackage(
                 info.longVersionCode,
                 File(checkNotNull(info.applicationInfo).sourceDir).inputStream().sha256(),
-                checkNotNull(certificates).single().toByteArray().inputStream().sha256(),
+                signer,
             )
         }
     }
 }
 
 /** Read-only shell calls through the instrumentation's existing UiAutomation owner. */
-internal class NativePushDevice(private val instrumentation: Instrumentation) {
+internal class NativePushDevice(private val instrumentation: Instrumentation,
+    private val diagnostics: NativeDiagnostics = NativeDiagnostics()) {
     private val context = instrumentation.targetContext
 
     fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(
@@ -103,6 +241,7 @@ internal class NativePushDevice(private val instrumentation: Instrumentation) {
 
     fun admit(expected: NativePushExpectations, method: String,
         testClass: String = UPDATE_CLASS, optIn: String = "push-3-to-4") {
+        diagnostics.enter(NativePhase.ADMISSION)
         val avd = shell("getprop ro.boot.qemu.avd_name").ifBlank {
             shell("getprop ro.kernel.qemu.avd_name")
         }
@@ -119,19 +258,23 @@ internal class NativePushDevice(private val instrumentation: Instrumentation) {
         nativeGuard(instrumentation.targetContext.applicationContext.javaClass.name == "android.app.Application",
             "baseline-application")
         // Resolve the exact baseline SDK entry before any manager-changing operation.
+        diagnostics.enter(NativePhase.SDK_SUPPORT)
         WatchFacePushManager::class.java.getMethod("updateWatchFace", String::class.java,
             ParcelFileDescriptor::class.java, String::class.java, kotlin.coroutines.Continuation::class.java)
     }
 
     fun baseline(expected: NativePushExpectations): JSONObject {
-        val host = NativePackage.read(context, HOST_PACKAGE)
+        diagnostics.enter(NativePhase.HOST_IDENTITY)
+        val host = NativePackage.read(context, HOST_PACKAGE, diagnostics)
         nativeGuard(host.code == 4L && host.apk == expected.hash("expectedHostApkSha256") &&
             host.signer == expected.hash("expectedHostSignerSha256"), "original-host")
         val asset = context.assets.open("default_watchface.apk").sha256()
         nativeGuard(asset == expected.hash("expectedAsset3Sha256"), "original-asset-3")
-        val installed = NativePackage.read(context, CANDIDATE_PACKAGE)
+        val installed = NativePackage.read(context, CANDIDATE_PACKAGE, diagnostics)
+        diagnostics.enter(NativePhase.INSTALLED_IDENTITY)
         nativeGuard(installed.code == 3L && installed.apk == expected.hash("expectedPush3ApkSha256") &&
             installed.signer == expected.hash("expectedPushSignerSha256"), "installed-push-3")
+        diagnostics.enter(NativePhase.ASSET_ARCHIVE)
         val file = File.createTempFile("native-baseline-", ".apk", context.cacheDir)
         try {
             context.assets.open("default_watchface.apk").use { input ->
@@ -142,13 +285,19 @@ internal class NativePushDevice(private val instrumentation: Instrumentation) {
             nativeGuard(info.packageName == CANDIDATE_PACKAGE && info.longVersionCode == 3L &&
                 info.signingInfo?.apkContentsSigners?.singleOrNull()?.toByteArray()?.inputStream()?.sha256() ==
                 installed.signer, "asset-3-archive")
+        } catch (failure: Throwable) {
+            diagnostics.failure(failure)
+            throw failure
         } finally {
-            nativeGuard(file.delete(), "baseline-file-cleanup")
+            diagnostics.at(NativePhase.BASELINE_CLEANUP) {
+                nativeGuard(file.delete(), "baseline-file-cleanup")
+            }
         }
         return JSONObject().put("host", host.json()).put("asset", asset)
     }
 
     fun unchangedHost(before: JSONObject) {
+        diagnostics.enter(NativePhase.HOST_IDENTITY)
         val original = before.getJSONObject("host")
         val current = NativePackage.read(context, HOST_PACKAGE)
         nativeGuard(current.code == original.getLong("code") && current.apk == original.getString("apk") &&
@@ -166,34 +315,47 @@ internal class NativePushDevice(private val instrumentation: Instrumentation) {
     }
 
     fun readRenderer(expected: NativePushExpectations): NativeRenderer {
+        diagnostics.enter(NativePhase.SELECTION_OBSERVATION)
         val runtime = expected.required("expectedRuntime")
         nativeGuard(runtime in setOf("DeclarativeWatchFaceRuntime0", "DeclarativeWatchFaceRuntime1"), "runtime")
         val component = ComponentName(RUNTIME_PACKAGE, "$RUNTIME_PACKAGE.$runtime")
         return runBlocking(Dispatchers.IO) {
             readNativeSelections(component, observe = {
+                diagnostics.enter(NativePhase.SELECTION_OBSERVATION)
                 nativeGuard(WallpaperManager.getInstance(context).wallpaperInfo?.component == component,
                     "active-wallpaper")
                 NativeRenderer.parse(shell("dumpsys activity service $RUNTIME_PACKAGE/.$runtime"),
                     expected.required("expectedResourcePackage"))
             }, query = { face, slots ->
-                SelectionQueryContext(context).use { binding ->
-                    // The baseline dependency binds in its constructor, without awaiting a result.
-                    // Track the connection before construction so partial failures also unbind.
-                    ComplicationDataSourceInfoRetriever(binding).use { retriever ->
-                        nativeGuard(binding.bound, "selection-service-unavailable")
-                        withTimeout(5_000) {
-                            retriever.retrieveComplicationDataSourceInfo(face, slots)?.map { result ->
-                                val info = result.info
-                                val provider = if (info == null) null else {
-                                    val name = info.componentName
-                                        ?: throw NativePending("selection-component-unavailable")
-                                    name.flattenToString()
+                diagnostics.enter(NativePhase.SELECTION_QUERY)
+                val records = SelectionQueryContext(context, diagnostics).use { binding ->
+                    diagnostics.recordFailure {
+                        // The baseline dependency binds in its constructor, without awaiting a result.
+                        // Track the connection before construction so partial failures also unbind.
+                        ComplicationDataSourceInfoRetriever(binding).use { retriever ->
+                            try {
+                                diagnostics.recordFailure {
+                                    nativeGuard(binding.bound, "selection-service-unavailable")
+                                    withTimeout(5_000) {
+                                        retriever.retrieveComplicationDataSourceInfo(face, slots)?.map { result ->
+                                            val info = result.info
+                                            val provider = if (info == null) null else {
+                                                val name = info.componentName
+                                                    ?: throw NativePending("selection-component-unavailable")
+                                                name.flattenToString()
+                                            }
+                                            NativeSelectionRecord(result.slotId, provider)
+                                        }
+                                    }
                                 }
-                                NativeSelectionRecord(result.slotId, provider)
+                            } finally {
+                                diagnostics.enter(NativePhase.SELECTION_CLEANUP)
                             }
                         }
                     }
                 }
+                diagnostics.enter(NativePhase.SELECTION_QUERY)
+                records
             })
         }
     }
@@ -220,7 +382,8 @@ internal suspend fun readNativeSelections(
 internal data class NativeSelectionRecord(val slotId: Int, val provider: String?)
 
 /** Owns even a constructor's attempted bind, before a retriever has been returned. */
-private class SelectionQueryContext(context: Context) : ContextWrapper(context), AutoCloseable {
+private class SelectionQueryContext(context: Context, private val diagnostics: NativeDiagnostics) :
+    ContextWrapper(context), AutoCloseable {
     private val connections = linkedSetOf<ServiceConnection>()
     var bound = false
         private set
@@ -242,7 +405,9 @@ private class SelectionQueryContext(context: Context) : ContextWrapper(context),
     }
 
     override fun close() {
-        connections.toList().forEach { unbindService(it) }
+        diagnostics.at(NativePhase.SELECTION_CLEANUP) {
+            connections.toList().forEach { unbindService(it) }
+        }
     }
 }
 

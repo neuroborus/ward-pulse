@@ -253,6 +253,11 @@ installer to recover. The stock update route must not load this application or l
 `ManualNativeIntegration` marks sixteen additional cases: `NativePushGuardTest` has three
 negative/cleanup cases, including candidate file/FD cleanup on either callback outcome;
 the journal case also exercises discovery through fake selection responses into one fake dispatch.
+Those existing cases additionally reject incomplete/ambiguous installed-path enumeration,
+unavailable archive/signing identity and changed files/paths, and check locator/ZIP/stream
+cleanup and sanitized diagnostics through partial failures. A private shell-output fixture
+also exercises the locator's actual `Runtime.exec(String)` launch contract, including success,
+failure and multiple paths, without querying installed packages. They add no discovered test cases.
 `NativePushUpdateTest` has individually selected `probeBaseline`,
 `updateOwnedPush3To4` and `observeSettledUpdate` cases. The datasource classes below add five,
 and the client classes add five.
@@ -275,6 +280,30 @@ or synthetic baseline. After test-only provisioning and the unchanged host/asset
 the read-only stock `probeBaseline` discovers the slot/instance/authoritative configuration
 hashes before SDK dispatch. A first post-provisioning fingerprint does not prove earlier
 full selection retention.
+
+`NativePackage.read` resolves installed Push paths through the instrumentation's existing
+UiAutomation using one fixed package-path command and a success-completion marker. The
+explicit shell receives a single `-c` script argument under UiAutomation's whitespace
+tokenization; argument separators expand inside that script. The output reader reads at most
+4097 bytes, accepts at most 4096, and requires exactly one allowlisted base-APK path
+plus the complete marker; absent, malformed, truncated or additional paths stay Pending.
+This complete enumeration establishes no installed splits independently of archive metadata.
+The shell locates only: the normal target UID streams the actual file's full hash, reads real
+archive package/code/single-signer metadata and hashes `resources.arsc` from that APK. It then
+rehashes and re-resolves the installed path. These observations do not claim atomicity.
+The shared route also serves the unchanged datasource and client probes; post-update resource
+verification uses its result without a second visibility-sensitive application-info lookup.
+Expected hashes, bundled asset 3 and candidate 4 never supply missing installed evidence.
+Unreadable files, denied access or null/incomplete archive/signing evidence remain Pending;
+no manifest query, permission or SDK caller-context change is used. Locator descriptors,
+binary streams and ZIPs close on success/failure, and private asset/candidate copies are cleaned.
+
+`NativeDiagnostics` emits bounded phase names before identity/archive, SDK, selection and
+cleanup operations, with only allowlisted failure categories. It preserves the first failure
+phase across cleanup, omits exception text/causes, paths, tokens, payloads and runtime IDs,
+and cannot prevent cleanup if status transport fails. These new diagnostics do not identify
+the earlier generic stock probe's unknown failure phase or cause; installed archive/signing
+and SDK runtime capability still require fresh HOST evidence.
 
 `NativeRenderer.parse` reads the applicable active runtime's instance, interactive state,
 user style, enabled slots and cached delivered-data provenance. Neither a delivered

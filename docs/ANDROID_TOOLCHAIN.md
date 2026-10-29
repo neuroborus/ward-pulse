@@ -1089,10 +1089,36 @@ before dispatch and through later observation. Use the stock entry
 `app.wardpulse.wear.nativeintegration.NativePushUpdateTest`. The isolated entry would load an
 ABI absent from the baseline; it must not be used here. Never invoke stock discovery/default
 tests. The three `NativePushGuardTest` cases can separately be explicitly selected by class;
-they touch only memory and private temporary files/descriptors, not the manager/live stores.
+they use memory, private temporary files/descriptors and fixed shell-output fixtures, without
+querying installed packages or accessing the manager/live stores.
 The three update-class cases are manual; together with the three Push guard, five
 datasource and five client cases, `IsolatedWearRunner` excludes all sixteen manual cases
 and keeps the original default 40 tests.
+
+After the installed-identity correction, require a fresh complete warm `just check-wear`
+after the last source fix, then test-APK-only provisioning, the private guard cases and the
+corrected stock probe within the existing continuous Push 3 witness. Do not select the face
+again or replace the original host/asset 3. Prior dependency/cache/checksum receipts apply
+only to the unchanged dependency graph; they do not build or exercise corrected source.
+
+`NativePackage.read` in
+[NativePushState.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativePushState.kt)
+uses the existing UiAutomation owner only for a fixed Push package-path enumeration with a
+success-completion marker. Its bounded complete output must contain exactly one allowlisted
+base-APK path and no splits or extra records. Normal target-UID file access then supplies the
+full installed APK hash, real archive package/code/single signer and resource-table hash;
+rehashing and re-resolving detect changes without promising atomic observation. The same
+reader serves later datasource/client callers and post-update resource verification, without
+hidden-package metadata lookups or shell APK copying. A path/hash alone does not prove archive
+or signing capability: null, denied or unavailable evidence leaves the witness Pending before
+dispatch. Keep SDK manager calls on the unchanged target context and retain every slot,
+selection, active-instance, host/asset and one-dispatch guard.
+
+`NativeDiagnostics` reports only bounded phase names and allowlisted failure categories,
+including before cleanup; it excludes raw exception text, paths, tokens and runtime IDs.
+The historical generic probe's phase and cause remain unknown. Fresh corrected archive/probe,
+genuine single update, separate settled evidence, restoration (including original Legacy
+selection/settings) and owner retirement remain HOST obligations, not source-review results.
 
 Supply these fresh HOST expectations as `am instrument -e` strings. SHA-256 values use lowercase
 hex; fingerprint/instance/slot strings are hashed as UTF-8 **without** a trailing newline.

@@ -191,6 +191,15 @@ its assets. The AGP source graph tracks these outputs and their producer inputs.
 APK, receipt or token is checked in or printed. Resource equality plus complete installed APK
 byte equality binds the actual candidate; it is not a renderer observation.
 
+The test-local `NativePackage.read` in
+[NativePushState.kt](../app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativePushState.kt)
+uses a bounded, complete installed-path enumeration only to locate the installed Push APK
+and reject splits. Normal target-UID file/archive access supplies its actual full hash,
+package/code/single signer and resource table; candidate/asset receipts never replace that
+evidence. The later resource check uses the same verified installed-file result, without a
+visibility-sensitive application-info lookup. Unavailable archive/signing capability remains
+Pending, independently of candidate validation and file readability.
+
 Candidate 4 is strictly an integration input. Push's default stays 3, Wear 4, phone 3,
 legacy 2 and common versionName 0.1.0; no product release is prepared. A non-installing
 `:app:assembleDebugAndroidTest` may build local dependencies but never authorizes target
