@@ -29,15 +29,15 @@ do not substitute an emulator or another transport after a failed operation.
 
 ## Read actual lock, window and task state
 
-```sh
-adb -s "$DEVICE_SERIAL" shell dumpsys window policy
-adb -s "$DEVICE_SERIAL" shell dumpsys window windows
-adb -s "$DEVICE_SERIAL" shell dumpsys activity activities
-```
-
-Inspect results privately; retain only relevant lock state, target foreground component
-and task/Activity measurements. A resumed record or visible face is not unlock proof.
-Check the current rendered UI too; charging SystemUI may cover the app.
+Use scoped window-policy, window and task observations to establish the current lock
+state, target foreground component and relevant task/Activity measurements. Apply the
+[diagnostic output privacy guard](../../../../docs/ANDROID_TOOLCHAIN.md#diagnostic-output-privacy)
+before returning or saving output: allowlist needed fields; never echo raw sensitive
+service/environment data, whole matching lines or authentication/registration context.
+Private inspection is not permission to expose incidental secrets. Missing or ambiguous
+fields stay unknown; do not widen the dump to recover them.
+A resumed record or visible face is not unlock proof. Check the current rendered UI too;
+charging SystemUI may cover the app.
 
 ## Guard launches and navigation
 

@@ -61,6 +61,9 @@ fix, repeat the whole final pass, not only the previously failing part. Verify i
 recompute the arithmetic, re-measure on the device, check every cross-reference and every claim
 against the actual source. An author's own report is not independent evidence.
 
+Resume a completed or idle delegated agent with a follow-up turn; a queued message alone does not restart it.
+The coordinator verifies work actually started before waiting for results.
+
 Report to the owner what checked out as well as what did not. A finding list with no account
 of what was verified tells them nothing about how hard anyone looked.
 

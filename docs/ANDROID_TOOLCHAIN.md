@@ -534,6 +534,26 @@ therefore does not contain compositor configuration the way it contains focus an
 input. Confirm the owner's global shortcuts still fire after a session on it, and re-register
 them with `systemctl --user restart plasma-kglobalaccel` rather than restarting the session.
 
+### Diagnostic output privacy
+
+Before service, window/task or environment inspection, identify the exact question and
+allowlist the minimum facts needed. Project them before stdout/stderr reaches tool output,
+logs, saved artifacts or another agent; never return raw sensitive service/environment data
+for later redaction. Peer checks retain connection state, expected peer/role match and
+required bridge-presence results. Compare necessary identities privately and retain match,
+mismatch or unknown when their literals are unnecessary.
+
+A whole matching line or broad search/context excerpt can include authentication or
+push-registration data beside the intended fields. Do not echo full sensitive dumps,
+raw profiles/environments, or such lines; do not retain them through tee or tracing.
+Output limits, truncation and mode-600 files are not redaction. Missing, ambiguous or
+unrecognized fields stay unavailable; do not widen the excerpt or guess a match.
+
+Persist only the allowlisted facts. If an exposure occurs, stop reopening or copying its
+output, restrict the owned saved artifact to a safe summary and report only the category
+and containment performed. Do not recover/quote the credential or claim prior tool output
+was erased. This rule authorizes no account, credential or pairing changes.
+
 ### Pairing the canonical phone and Wear AVDs
 
 The canonical pair was established on **2026-10-06**. These are Wear network node IDs, not
@@ -572,17 +592,11 @@ Pair the two AVDs once. Emulator pairing does not require BLE:
 
    Repeat the tap after capturing the next screen. The coordinate is for a 1080×2400 display.
    Prefer the `uiautomator dump` bounds workflow described above over a fixed coordinate.
-4. After about 30 seconds, the companion reports **Connected**. Verify both services:
-
-   ```sh
-   adb -s "$WEAR_SERIAL" shell dumpsys activity service WearableService \
-     | grep -m1 'Name=network'
-   adb -s "$PHONE_SERIAL" shell dumpsys activity service WearableService \
-     | grep 'Peer:'
-   ```
-
-   The watch must report `IsConnected=true, PeerNodeId=f71537bc`. The phone must report
-   `Role=2, Address=EmulatorAddr-502cc269` and `IsConnected=true`.
+4. After the companion reports **Connected**, verify both `WearableService` views through
+   the [diagnostic output privacy](#diagnostic-output-privacy) guard. Retain connection state
+   and expected peer/role matches, not raw service bodies or whole matching lines. Both
+   sides must be connected to the intended saved pair; absent or conflicting observations
+   remain unproved. Keep literal peer identities private.
 5. ADB-driven consent skips the companion's notification-access prompt, so a pair that reports
    **Connected** still bridges no notifications. Grant the listener explicitly, before saving
    the snapshots:
@@ -616,7 +630,7 @@ their values must match the phone panel.
 
 The pairing record lives on `/data` and survives an emulator restart, including a cold boot
 with `-no-snapshot-load`. After boot, both devices still report their pairing configuration,
-including `Role=2, Address=EmulatorAddr-502cc269` on the phone, but initially report
+with the phone's expected stored peer/role match checked privately, but initially report
 `IsConnected=false` because the assistant's transient port forwarding ended with the previous
 emulator processes.
 
@@ -630,7 +644,8 @@ adb -s "$WEAR_SERIAL" shell am broadcast -a com.google.android.gms.wearable.EMUL
 ```
 
 Google Play services reports `Emulator connection refresh succeeded.` Within a few seconds,
-the watch must return to `IsConnected=true, PeerNodeId=f71537bc`; starting `app.wardpulse` on
+the watch must return to connected with its expected peer match through the safe diagnostic
+observation above; starting `app.wardpulse` on
 the phone must again produce the WardPulse receipt log on the watch. When a known pair reports
 `IsConnected=false`, restore this bridge first. Do not run the pairing flow again.
 

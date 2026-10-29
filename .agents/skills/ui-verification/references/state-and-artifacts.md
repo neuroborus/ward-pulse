@@ -78,22 +78,22 @@ device-preserving operations belong to android-devices/android-emulators, not th
 
 ## Case and evidence continuity
 
-Keep matched expected/observed states with the original native frames and relevant hashes,
-active instance/binding evidence and capture times. Separate emulator, physical-device,
-review-art, fixture and public-image claims. Anonymous display measurements are sufficient;
-do not retain credentials, raw provider payloads or unlock/authentication material.
+While a capture/export session/cell is RUNNING, hold dependent reads/copies/navigation; independent read-only work may continue.
+Await that same operation's terminal result before inspection. After failure, safe attributable failed/partial artifacts may be inspected as diagnostics.
+Report failed/missing output and allow necessary safe cleanup. Diagnostic inspection needs no capture success and does not establish acceptance.
+Acceptance requires success plus the current candidate/file, capture time/hash and actual content; a path, acknowledgement or old file is insufficient.
 
-Derive a capture group's window from minimum/maximum measured per-image timestamps,
-not filenames, array order or a selected first frame. Retain the actual timestamp source
-and timezone; distinguish capture-time observations from file-mtime/export-time evidence.
-Export a capture group from an explicit indexed source/output list; keep diagnostics separate.
-Reconcile actual output names, counts and identities with that cohort before publication.
-A wildcard match or valid image alone does not establish membership; resolve unexpected outputs.
+Keep matched expected/observed states with original native frames/hashes, active instance/binding evidence and capture times.
+Separate emulator, physical-device, review-art, fixture and public-image claims. Anonymous display measurements suffice;
+retain no credentials, raw provider payloads or unlock/authentication material.
 
-For web images, scroll each intended current-theme image into the actual viewport and
-confirm its load and dimensions with bounded observation. Do not await hidden/offscreen
-lazy variants or infer breakage from their unrequested/incomplete state.
+Derive a capture group's window from minimum/maximum measured per-image timestamps, not filenames, array order or one first frame.
+Retain the actual timestamp source and timezone; distinguish capture-time observations from file-mtime/export-time evidence.
+Export from an explicit indexed source/output list; keep diagnostics separate. Reconcile actual output names, counts and identities
+with that cohort before publication. A wildcard match or valid image alone does not prove membership; resolve unexpected outputs.
 
-Record healthy demonstration data as a separate case without erasing the incident. Verify
-shared public capture state through user-docs. A valid fixture cannot compensate for an
-unproved live binding or establish that a reported incident was fixed.
+Scroll each intended current-theme web image into the viewport and confirm its load/dimensions by bounded observation.
+Do not await hidden/offscreen lazy variants or infer breakage from their unrequested/incomplete state.
+
+Record healthy demonstrations separately without erasing the incident; verify shared public capture state through user-docs.
+A valid fixture cannot compensate for an unproved live binding or establish that a reported incident was fixed.
