@@ -7,6 +7,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import app.wardpulse.wear.model.Money
 import app.wardpulse.wear.model.PreviewWatchDashboardSummary
 import app.wardpulse.wear.model.WatchDataMode
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -19,11 +20,15 @@ import org.json.JSONObject
 class WatchSummaryStoreTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val testContext = InstrumentationRegistry.getInstrumentation().context
-    private val preferences = context.getSharedPreferences(
-        "watch_summary_test_${System.nanoTime()}",
-        Context.MODE_PRIVATE,
-    )
+    private val preferencesName = "watch_summary_test_${System.nanoTime()}"
+    private val preferences = context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
     private val store = WatchSummaryStore(preferences)
+
+    @After
+    fun cleanUp() {
+        assertTrue(preferences.edit().clear().commit())
+        assertTrue(context.deleteSharedPreferences(preferencesName))
+    }
 
     @Test
     fun persistsLatestSummary() {

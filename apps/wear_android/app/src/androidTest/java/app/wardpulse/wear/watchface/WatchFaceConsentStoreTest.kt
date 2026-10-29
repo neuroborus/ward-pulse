@@ -12,6 +12,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.runner.lifecycle.ActivityLifecycleCallback
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
 import androidx.test.runner.lifecycle.Stage
+import app.wardpulse.wear.IsolatedActivityRule
 import app.wardpulse.wear.MainActivity
 import app.wardpulse.wear.WatchFaceViewModel
 import java.io.File
@@ -26,12 +27,16 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.xmlpull.v1.XmlPullParser
 
 @RunWith(AndroidJUnit4::class)
 class WatchFaceConsentStoreTest {
+    @get:Rule
+    internal val isolation = IsolatedActivityRule()
+
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val preferencesName = "watch_face_consent_test_${System.nanoTime()}"
@@ -73,9 +78,9 @@ class WatchFaceConsentStoreTest {
 
     @Test
     fun separateStoppedAndResumedActivityOwnersShareExclusiveDurableClaims() {
-        val productionPreferences = context.getSharedPreferences("watch_face_consent", Context.MODE_PRIVATE)
+        val productionPreferences = isolation.scope.consentPreferences
         val originalHistory = productionPreferences.getString("history", null)
-        val executor = Executors.newFixedThreadPool(2)
+        val executor = Executors.newFixedThreadPool(2).also { isolation.scope.track(it) }
         try {
             instrumentation.runOnMainSync {
                 ActivityLifecycleMonitorRegistry.getInstance().addLifecycleCallback(ownerLifecycle)
@@ -116,6 +121,11 @@ class WatchFaceConsentStoreTest {
                 assertNotSame(models[0], models[1])
                 assertNotSame(controllers[0], controllers[1])
                 assertNotSame(stores[0], stores[1])
+                isolation.scope.assertStorageIsPrivate()
+                val backing = WatchFaceConsentStore::class.java.getDeclaredField("preferences").apply {
+                    isAccessible = true
+                }
+                stores.forEach { assertSame(productionPreferences, backing.get(it)) }
             }
 
             instrumentation.runOnMainSync { second.recreate() }
@@ -150,7 +160,7 @@ class WatchFaceConsentStoreTest {
                         val claimed = store.compareAndSet(expected, history)
                         if (claimed) {
                             // Prove durability before allowing the winning owner's effect.
-                            assertEquals(history.name, persistedHistory("watch_face_consent"))
+                            assertEquals(history.name, persistedHistory(isolation.scope.consentName))
                             effects.incrementAndGet()
                         }
                         claimed
@@ -163,7 +173,8 @@ class WatchFaceConsentStoreTest {
                     assertEquals(1, effects.get())
                     stores.forEach { assertEquals(history, it.read()) }
                     assertFalse(stores[0].compareAndSet(expected, history))
-                    assertEquals(history.name, persistedHistory("watch_face_consent"))
+                    assertEquals(history.name, persistedHistory(isolation.scope.consentName))
+                    isolation.scope.assertStorageIsPrivate()
                 } finally {
                     release.countDown()
                     claims.forEach { it.cancel(true) }
@@ -211,6 +222,7 @@ class WatchFaceConsentStoreTest {
             launched = owners.drop(creations).singleOrNull()
             launched?.lifecycle?.currentState == Lifecycle.State.RESUMED
         }
+        instrumentation.runOnMainSync { isolation.scope.assertRefreshDispatched(checkNotNull(launched)) }
         return checkNotNull(launched)
     }
 

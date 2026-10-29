@@ -62,9 +62,9 @@ import androidx.test.runner.lifecycle.ActivityLifecycleCallback
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
 import androidx.test.runner.lifecycle.Stage
 import androidx.wear.compose.material3.AppScaffold
+import app.wardpulse.wear.IsolatedActivityRule
 import app.wardpulse.wear.MainActivity
 import app.wardpulse.wear.WatchFaceViewModel
-import app.wardpulse.wear.data.WatchSummaryStore
 import app.wardpulse.wear.model.AlertSummary
 import app.wardpulse.wear.model.AllowanceSummary
 import app.wardpulse.wear.model.PeriodSummary
@@ -103,11 +103,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class WardPulseNavigationStateTest {
+    @get:Rule
+    internal val isolation = IsolatedActivityRule()
+
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val automation = instrumentation.uiAutomation
     private lateinit var scenario: ActivityScenario<MainActivity>
@@ -227,7 +231,7 @@ class WardPulseNavigationStateTest {
         assertVisible("Alpha alert")
         assertClock(visible = true, anchor = "Alerts")
 
-        WatchSummaryStore(instrumentation.targetContext).save(beta)
+        isolation.scope.saveSummary(beta)
         assertVisible("Beta alert")
         back(toHomePage = 0)
         assertVisible("Codex Beta")
@@ -273,7 +277,7 @@ class WardPulseNavigationStateTest {
         assertProductionOwner(owner)
         assertSame(model, productionModel(owner))
 
-        WatchSummaryStore(instrumentation.targetContext).save(alpha)
+        isolation.scope.saveSummary(alpha)
         awaitHomePage(0)
         assertVisible("Codex Alpha")
         val viewport = checkNotNull(nativeSurface("home-pager")).viewport
@@ -1999,14 +2003,10 @@ class WardPulseNavigationStateTest {
 
     private fun launchProduction(initialSummary: WatchDashboardSummary?, entry: Intent = launcherIntent()) {
         val context = instrumentation.targetContext
-        val preferences = context.getSharedPreferences("watch_summary", Context.MODE_PRIVATE)
+        val preferences = isolation.scope.summaryPreferences
         originalSavedSummary = preferences.getString("latest", null)
         savedSummaryPreferences = preferences
-        if (initialSummary == null) {
-            assertTrue(preferences.edit().remove("latest").commit())
-        } else {
-            WatchSummaryStore(context).save(initialSummary)
-        }
+        isolation.scope.saveSummary(initialSummary)
         // Isolate only this test's task; do not clear or adopt historical retained owners.
         // ActivityScenario filters lifecycle events by the original intent action/categories.
         // Production setIntent() changes those, so track these owners by identity and task instead.
@@ -2108,6 +2108,8 @@ class WardPulseNavigationStateTest {
 
     private fun assertProductionOwner(owner: MainActivity, creations: Int = 1) {
         onActivity { current ->
+            isolation.scope.assertRefreshDispatched(current)
+            isolation.scope.assertStorageIsPrivate()
             assertSame(owner, current)
             assertEquals(productionTaskId, current.taskId)
             assertFalse(current.isFinishing)
@@ -2170,13 +2172,16 @@ class WardPulseNavigationStateTest {
         instrumentation.runOnMainSync { summary = initialSummary }
         scenario = ActivityScenario.launch(MainActivity::class.java)
         scenario.onActivity { activity ->
+            isolation.scope.assertRefreshDispatched(activity)
+            isolation.scope.assertStorageIsPrivate()
             // Public Compose runtime APIs give this content a deterministic, animation-free
             // recomposer without changing device settings or adding a production test hook.
             val context = AndroidUiDispatcher.Main + object : MotionDurationScale {
                 override val scaleFactor = 0f
             }
             compositionScope = CoroutineScope(context)
-            recomposer = Recomposer(context)
+            isolation.scope.track(checkNotNull(compositionScope.coroutineContext[Job]))
+            recomposer = Recomposer(compositionScope.coroutineContext)
             recomposition = compositionScope.launch { recomposer.runRecomposeAndApplyChanges() }
             activity.setContent(parent = recomposer) {
                 val appContent: @Composable () -> Unit = {

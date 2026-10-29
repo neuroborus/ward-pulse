@@ -2,6 +2,7 @@ package app.wardpulse.wear
 
 import android.annotation.SuppressLint
 import android.app.Application
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -33,6 +34,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+internal interface MainActivityDependencies {
+    fun summaryStore(context: Context): WatchSummaryStore = WatchSummaryStore(context)
+    fun consentStore(context: Context): WatchFaceConsentStore = WatchFaceConsentStore(context)
+    fun requestComplicationRefresh(context: Context) = WatchComplicationUpdater.requestUpdate(context)
+}
+
+private object DefaultMainActivityDependencies : MainActivityDependencies
+
+private val Application.mainActivityDependencies: MainActivityDependencies
+    get() = this as? MainActivityDependencies ?: DefaultMainActivityDependencies
+
 class MainActivity : ComponentActivity() {
     private lateinit var store: WatchSummaryStore
     private var summary by mutableStateOf<WatchDashboardSummary?>(null)
@@ -48,7 +60,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        store = WatchSummaryStore(this)
+        store = application.mainActivityDependencies.summaryStore(this)
         summary = currentSummary()
         if (savedInstanceState == null && intent.action == null) faceEntry.request()
 
@@ -97,7 +109,7 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         storeObserver = store.observe(::reloadSummary)
         reloadSummary()
-        WatchComplicationUpdater.requestUpdate(this)
+        application.mainActivityDependencies.requestComplicationRefresh(this)
     }
 
     override fun onStop() {
@@ -135,7 +147,7 @@ internal class FaceEntryViewModel(private val savedState: SavedStateHandle) : Vi
 internal class WatchFaceViewModel(application: Application) : AndroidViewModel(application) {
     private val controller = WatchFaceController(
         AndroidWatchFacePushClient(application),
-        WatchFaceConsentStore(application),
+        application.mainActivityDependencies.consentStore(application),
     )
     val state = controller.state
     private val mutablePermissionRequested = MutableStateFlow(false)

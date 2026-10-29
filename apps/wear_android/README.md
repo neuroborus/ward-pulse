@@ -207,9 +207,47 @@ passed 12 navigation tests. The controller/navigation/manifest sources match the
 preparatory hashes. These use injected lifecycle/installation events; actual Activity
 recreation and real external-installer return remain separate, unverified cases.
 
+## Isolated default instrumentation
+
+`IsolatedWearRunner` selects `IsolatedWearApplication` through `newApplication`, without a
+shared test-application manifest. `MainActivityDependencies` supplies only the Activity's
+summary store, its ViewModel/controller's durable consent store and refresh dispatch.
+Production defaults still use normal preferences and `WatchComplicationUpdater`; production
+datasource services still construct `WatchSummaryStore` from their ordinary context.
+
+`IsolatedActivityRule` scopes the existing navigation and consent cases to uniquely named,
+private preferences. It keeps the real Activity, ViewModel, controller and store construction,
+including retained owners, recreation, resume and synchronous consent claims on disk.
+`onStart` executes normally: the runner verifies one recording-sink dispatch per invocation.
+Assertions check the actual owners' backing stores, private fixture writes and the normal
+datasource-storage constructor. They attribute this suite's effects without requiring live
+phone/Data Layer publications to stop or restoring an older value over a newer publication.
+These assertions do not establish effective renderer delivery or restoration.
+
+The rule encloses test teardown. Every owned Activity must be destroyed and its lifecycle,
+ViewModel and test composition jobs and consent workers retired before the private preferences
+are deleted and isolation is released. A timeout fails the case while retaining isolation
+and private storage; another default Activity cannot fall back to live dependencies. An
+unscoped default launch fails before production store construction. No lifecycle callback
+is suppressed and no existing case becomes opt-in. The default inventory remains **40 tests**
+across the original six classes, including the distinct multi-owner durable-consent assertions.
+
+**Provisioning and acceptance remain Pending.** This runner requires the rebuilt target APK
+containing `MainActivityDependencies`; installing only its test APK cannot isolate the
+baseline host. For item12, first complete the guarded stock-runner Push 3→4 witness against
+the unchanged original host and bundled asset 3, record the result and separate settled native
+observation, restore data and retire that instrumentation owner. Only afterward may ordinary
+artifacts be rebuilt with candidate flags absent and the seam-bearing target be provisioned.
+If that witness fails or is uncertain, preserve the original target and leave default-suite
+acceptance Pending. Do not use a connected suite, `run-wear`, sync recipe or other target
+installer to recover. The stock update route must not load this application or launch
+`MainActivity`. See the [toolchain ordering](../../docs/ANDROID_TOOLCHAIN.md#wear-instrumentation-provisioning-order).
+
 ## Commands
 
 From the repository root:
+
+For item12, the provisioning order above applies before any target-installing command below.
 
 ```sh
 just check-wear

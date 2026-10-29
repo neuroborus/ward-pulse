@@ -979,6 +979,28 @@ platform spend are on by default; any can be hidden via Settings consumption-dis
 if at least one surface remains. The OAuth session stays in phone-secure storage and does not
 require a Codex CLI, local server, or `adb reverse`.
 
+### Wear instrumentation provisioning order
+
+The default Wear runner is `IsolatedWearRunner`. It selects its test-owned application only
+through `newApplication` and requires a rebuilt target containing `MainActivityDependencies`.
+The [isolated default instrumentation](../apps/wear_android/README.md#isolated-default-instrumentation)
+keeps all original 40 tests and real owner/lifecycle/durable-consent guarantees, with private
+fixture stores and a recording refresh sink. Test-APK installation alone does not provide
+that seam on the original installed host. Default-suite acceptance is Pending until actual
+ordered provisioning and native execution; earlier suite results do not validate isolation.
+
+For item12, preserve the original target APK and bundled Push asset 3 through the genuine
+guarded stock-runner Push 3→4 SDK operation, its recorded result and separate settled native
+observation. This route must neither load the isolated application/seam nor launch
+`MainActivity`. Non-installing builds and test-APK-only provisioning are separate from target
+installation. No connected suite, `test-phone-watch-sync`, `run-wear` or other target installer
+may precede that witness. Failure or uncertainty leaves target-installing checks Pending;
+installing the new seam is not recovery. After successful evidence, restoration and retirement
+of that instrumentation owner, rebuild ordinary artifacts without candidate flags, verify
+Wear code 4/bundled asset 3 and compatible signing, then admit target provisioning separately
+from the isolated test bodies' effects. Keep retained Push 4, bindings and active-state checks
+separate from the pre-replacement manager evidence.
+
 Both `just test-wear-device` and the connected suite inside `just test-phone-watch-sync`
 require the shared Wear project policy in `apps/wear_android/gradle.properties`:
 `android.injected.androidTest.leaveApksInstalledAfterRun` must be true. It suppresses

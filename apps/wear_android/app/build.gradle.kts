@@ -198,7 +198,7 @@ android {
         versionCode = 4
         versionName = "0.1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "app.wardpulse.wear.IsolatedWearRunner"
     }
 
     signingConfigs {
