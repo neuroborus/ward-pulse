@@ -3495,9 +3495,10 @@ five lower identities, six updaters including Status and wearer-owned upper choi
 The main-comparison correction keeps each main `isValid` Compare in slots 101/102/105 to
 one stable named full-canvas Group containing the existing selector then strip. The
 Python-standard-library parsed-XML regression runs through the awaited generation route
-before emission in generation and `--check`. Ordinary generation demonstrated RED on the
-baseline's three malformed branches and corrected GREEN, retaining existing semantic
-assertions. The structural defect is proven; its exact native causal effect is still
+before emission in generation and `--check`. Parsing the baseline generated XML with the
+existing structure checker reproduced the three-branch RED; corrected generation in
+`--check` mode returned GREEN, retaining existing semantic assertions. The structural
+defect is proven; its exact native causal effect is still
 unknown. Corrected native rendering must repeat the original controlled N2 blue/green/teal
 witness, including semantic 37 as VALUE148/MAX400, with actual effective responses and frames.
 

@@ -230,8 +230,9 @@ other 218 had one. This violates the documented
 `ringSlot` in `tools/render-watchface.mjs` now wraps each main selector and strip in one
 stable named full-canvas Group. `tools/check-watchface-structure.py` parses actual generated
 XML before emission in both modes, counts direct Compare/Default element children and
-checks that the selector and strip remain below the main tree. Ordinary generation produced
-the baseline three-branch RED and corrected GREEN. This proves the structural repair;
+checks that the selector and strip remain below the main tree. The existing structure checker
+reproduced the three-branch RED by parsing the baseline generated XML; corrected generation
+in `--check` mode returned GREEN. This proves the structural repair;
 its exact native causal effect remains unknown until corrected native observation.
 
 The original controlled N2 input was `[Codex ordinary, Cursor pair]`: Cursor OWN blue at

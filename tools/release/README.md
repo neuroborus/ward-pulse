@@ -141,8 +141,9 @@ reconciliation was needed. Generated output was not edited by hand.
 At that ledger regeneration all four Android versionNames remained `0.1.0`, with
 phone/Wear/legacy/Push codes `1/2/1/1`; native source files were unchanged. That was
 unpublished ledger regeneration, without a native version transition. The later adaptive
-compatibility change allocates `3/4/2/2`, retaining `0.1.0`, package/signing identities and
-`native_state`'s enforced Wear = phone + 1 parity. It performs no release cut/preparation;
+compatibility change initially allocated `3/4/2/2`, retaining `0.1.0`, package/signing identities
+and `native_state`'s enforced Wear = phone + 1 parity. The subsequent structural correction
+sets the current Push default code to `3`; neither change performs a release cut/preparation.
 HOST read-only `just release-status` against final metadata remains Pending. Root/docs remain
 `0.0.0`; Cargo and Dart metadata are independent.
 Local preparation, generated notes, a tag alone or a draft do not prove publication. Verify

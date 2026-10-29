@@ -129,7 +129,7 @@ zero, singleton and obsolete NoData. `AdaptiveRangedComplicationTest`, included 
 legacy and adaptive envelopes, endpoints and fractional semantics. Execution and native
 acceptance are **Pending**; no new test/build/device pass is asserted here.
 
-Current packaging is phone 0.1.0+3/Wear 4/legacy 2/Push default 2, all versionNames 0.1.0. Preserve
+Current packaging is phone 0.1.0+3/Wear 4/legacy 2/Push default 3, all versionNames 0.1.0. Preserve
 package identities, signers and release-tool parity; this is not a release cut. The
 [adaptive revision](../../docs/product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count)
 owns required HOST delivery/retained-binding/transition/true-ambient acceptance and deferred
