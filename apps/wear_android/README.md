@@ -252,10 +252,12 @@ installer to recover. The stock update route must not load this application or l
 
 `ManualNativeIntegration` marks sixteen additional cases: `NativePushGuardTest` has three
 negative/cleanup cases, including candidate file/FD cleanup on either callback outcome;
-the journal case also exercises discovery through fake selection responses into one fake dispatch.
+the journal case also exercises System/controller/native discovery fixtures into one fake dispatch.
 Those existing cases additionally reject incomplete/ambiguous installed-path enumeration,
 unavailable archive/signing identity and changed files/paths, and check locator/ZIP/stream
-cleanup and sanitized diagnostics through partial failures. A private shell-output fixture
+cleanup and sanitized diagnostics through partial failures. Existing subcases cover strict System/
+controller/facade/engine joins, incomplete inventories, transitions, configured-type meaning,
+explicit empty choices and caller diagnostic isolation. A private shell-output fixture
 also exercises the locator's actual `Runtime.exec(String)` launch contract, including success,
 failure and multiple paths, without querying installed packages. They add no discovered test cases.
 `NativePushUpdateTest` has individually selected `probeBaseline`,
@@ -276,10 +278,12 @@ canonical emulator/image/display, original host code 4/APK/signer, actual bundle
 archive and installed Push 3. All manager observations use `targetContext`, retaining the
 host's ownership. Independent HOST observations before test-APK-only provisioning bind the
 original host/asset, APK/signers and selected package/runtime, never a newly installed target
-or synthetic baseline. After test-only provisioning and the unchanged host/asset recheck,
-the read-only stock `probeBaseline` discovers the slot/instance/authoritative configuration
-hashes before SDK dispatch. A first post-provisioning fingerprint does not prove earlier
-full selection retention.
+or synthetic baseline. After the fresh full warm `just check-wear`, candidate/test-APK
+provenance, test-only provisioning, unchanged host/asset recheck and all seven private Android
+guards, exactly one read-only stock `probeBaseline` discovers the slot/instance/authoritative
+configuration hashes before SDK dispatch. That probe itself exercises the changed observer;
+require no additional live observer invocation. A first post-provisioning fingerprint does not
+prove earlier full selection retention.
 
 `NativePackage.read` resolves installed Push paths through the instrumentation's existing
 UiAutomation using one fixed package-path command and a success-completion marker. The
@@ -298,43 +302,48 @@ Unreadable files, denied access or null/incomplete archive/signing evidence rema
 no manifest query, permission or SDK caller-context change is used. Locator descriptors,
 binary streams and ZIPs close on success/failure, and private asset/candidate copies are cleaned.
 
-`NativeDiagnostics` emits bounded phase names before identity/archive, SDK, selection and
-cleanup operations, with only allowlisted failure categories. It preserves the first failure
-phase across cleanup, omits exception text/causes, paths, tokens, payloads and runtime IDs,
-and cannot prevent cleanup if status transport fails. These new diagnostics do not identify
-the earlier generic stock probe's unknown failure phase or cause; installed archive/signing
-and SDK runtime capability still require fresh HOST evidence.
+`NativeDiagnostics` emits closed phase/category names, bounded contemporaneous observation
+byte counts/SHA-256/completeness, inventory counts/completeness and semantic-match flags.
+Caller `WallpaperManager` results are reported only as null/match/mismatch/error; none supplies
+authority, bypasses proof or replaces the first actual failure. That failure survives cleanup.
+No raw dumps, payloads, exception text/causes, tokens, opaque IDs or arbitrary guard strings
+are emitted. Status-transport failure cannot prevent cleanup. The old generic rejection's
+exact cause remains unproved. The unsupported retriever query was never reached; neither a
+query failure nor a server rejection was measured. Installed archive/signing and SDK runtime
+capability still require fresh HOST evidence.
 
-`NativeRenderer.parse` reads the applicable active runtime's instance, interactive state,
-user style, enabled slots and cached delivered-data provenance. Neither a delivered
-`dataSource` nor default datasource policy proves which provider is currently selected.
-`NativeSelections` represents independent selection records for the exact resource package,
-instance and all eight slots, including explicit empty choices. Only those records can supply
-the five fixed lower bindings and three upper choices in the configuration fingerprint.
-Changing a selection while cached delivery remains unchanged fails retention; changing cached
-provenance alone does not change the selection fingerprint.
+`NativePushDevice.readRenderer` uses bounded read-only `am get-current-user`, `dumpsys wallpaper`,
+`dumpsys wear_service` and active-runtime service observations through the existing UiAutomation
+owner, with a 2 MiB bound per record. It observes the current user's System display/component
+and matching live connection, then the native frame, active configuration, native frame and
+System state again. All owned shell streams/descriptors close on success and failure. Caller-visible wallpaper identity and
+the unsupported cross-package `ComplicationDataSourceInfoRetriever` route supply no proof.
 
-`NativePushDevice.readRenderer` queries the baseline's existing
-`ComplicationDataSourceInfoRetriever.retrieveComplicationDataSourceInfo` for slot IDs discovered
-from the actual active runtime. This API returns selected-provider configuration independently
-of cached delivery. Its component-scoped results are accepted only while that same wallpaper
-component has a single native registry/engine instance with matching IDs and resource package
-before and after the query. Multiple instances, transitions, incomplete/null responses,
-missing provider identities or denied access leave configuration retention **Pending before
-dispatch**. A null response is unavailable; a null provider entry in a complete response is an
-explicit empty selection. The five lower selections must still match their required services.
-Caller-supplied expectations cannot supply missing records. Do not select providers, publish
-fixtures or infer selections to make the guard pass.
+The scoped `ComplicationsConfigController.activeConfigs` must join its favorite/resource to
+one IDLE, non-fallback ANDROIDX active facade and its explicit current-engine/wallpaper-component
+chain. The native service's user/display/component, sole registry/engine instance, resource
+package, style and enabled slots must agree with matching semantic System/native frames around
+configuration. Relative dump counters and delivered values are outside that comparison. These
+bracketed observations do not establish atomicity or permanent freshness. Expected arguments
+only compare against independently observed evidence.
 
-The selection query uses a finite timeout without retries and tracks the service connection
-before retriever construction. Closing the retriever and its scoped context releases bindings
-on success, timeout and partial-construction failure. It creates no face instance and adds no
-dependency or permission. Actual service access, API applicability and instance mapping remain
-HOST verification duties. The reader observes only the active renderer: with legacy active it
-cannot verify the inactive Push face's own existing instance/configuration.
-`requirePushConfiguration` leaves legacy-only evidence Pending, without a completed Push
-witness or target replacement. The harness never creates, activates or reselects a face;
-the completed execution's frozen operator no-activation inputs remain unchanged.
+`NativeSelections` requires declared size, actual row count, unique slot coverage and enabled
+states to agree with all eight native slots. Missing, duplicate, conflicting, transitional,
+pending-action or unresolved scoped records remain **Pending/HOLD before dispatch**. System
+fallback/default or lock-only state, caches, databases, history and defaults cannot replace
+missing active evidence. Only an observed `provider=null` is an empty choice. All five exact
+lower bindings and all three upper choices feed the unchanged style/enabled/provider
+fingerprint. Cached `dataSource` is delivery provenance only: changing selections with unchanged
+cached delivery fails retention, while changing cached delivery alone leaves that fingerprint
+unchanged. Configured type is carried as configuration meaning, independently of delivered,
+NoData, supported or overridden types; it adds no cross-domain equality guard.
+
+Favorite and native instance remain separate opaque identities; no `wfId` is constructed from
+a favorite. Configuration row IDs supply neither slots, canonical IDs nor C3 requester IDs;
+requester provenance still requires its separate proof. No new across-update favorite-ID
+guarantee is claimed. Unsupported strict joins stay Pending/HOLD. The reader observes only the
+active renderer: legacy-only evidence cannot verify the inactive Push configuration or
+authorize target replacement. The harness creates, activates and reselects no instance.
 
 **Adopted HOST scope, 2026-10-29.** The post-DONE scope permits **one** ordinary system-picker
 selection of a pre-existing, configured, owned Push 3 instance on the verified canonical
@@ -342,8 +351,9 @@ selection of a pre-existing, configured, owned Push 3 instance on the verified c
 deliberate changed baseline; preserve original host 4/asset 3 through the stock witness.
 Follow the [limited procedure](../../docs/ANDROID_TOOLCHAIN.md#guarded-push-witness) and restore
 exact original Legacy selection/settings while retaining intended Push 4. No instance creation,
-SDK/app activation, new permission or binding/style edit is included. This is a new HOST
-boundary, not retrospective permission for the frozen run or native acceptance.
+SDK/app activation, new permission or binding/style edit is included. That one selection has
+already established the current Push 3/wf16 witness; make no new selection during this correction. Original Legacy15 restoration remains Pending. This HOST
+boundary supplies no native acceptance or retrospective permission for a frozen run.
 
 `AttemptJournal.dispatch` durably arms one SDK call and retains successful or uncertain
 advancement in private `files/native_push_update/attempt.json`. The exact generated APK/token
@@ -402,7 +412,7 @@ be flattened or wrapped in `ComponentInfo{…}`. Current installed-manager expos
 fields is **unverified**. Missing, ambiguous, duplicate or unproved applicable records leave
 the route **Pending before publication**. Neither HOST-supplied IDs, scene IDs 101/102/etc,
 runtime slot numbers alone, cached `dataSource` nor default policy can supply missing mappings.
-The component-scoped selection query is bracketed by unchanged active-instance observations;
+The active configuration is bracketed by matching semantic System/native observations;
 all five lower services must be selected and enabled. Wear 4, asset 3, retained Push 4 and
 legacy 2 identities are guarded. An already-active Push or legacy instance can be observed;
 this harness never activates or reselects either one.

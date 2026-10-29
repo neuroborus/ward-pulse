@@ -4,25 +4,19 @@ import android.app.Instrumentation
 import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.Context
-import android.content.ContextWrapper
-import android.content.Intent
-import android.content.ServiceConnection
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import androidx.test.platform.app.InstrumentationRegistry
-import androidx.wear.watchface.complications.ComplicationDataSourceInfoRetriever
 import androidx.wear.watchfacepush.WatchFacePushManager
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.security.MessageDigest
 import java.util.zip.ZipFile
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 
 internal const val HOST_PACKAGE = "app.wardpulse"
@@ -57,8 +51,9 @@ internal fun String.sha256() = byteInputStream().sha256()
 internal enum class NativePhase {
     ADMISSION, HOST_IDENTITY, INSTALLED_PATH, INSTALLED_BYTES, INSTALLED_ARCHIVE, INSTALLED_IDENTITY,
     INSTALLED_RESOURCES, ASSET_ARCHIVE, BASELINE_CLEANUP, SDK_SUPPORT, SDK_MANAGER,
-    SDK_INVENTORY, SDK_ACTIVE, SDK_UPDATE, SELECTION_OBSERVATION, SELECTION_QUERY,
-    SELECTION_CLEANUP, CANDIDATE_ARCHIVE, CANDIDATE_CLEANUP, JOURNAL, SCREENSHOT,
+    SDK_INVENTORY, SDK_ACTIVE, SDK_UPDATE, SELECTION_OBSERVATION, SYSTEM_BEFORE, NATIVE_BEFORE,
+    ACTIVE_CONFIGURATION, NATIVE_AFTER, SYSTEM_AFTER, SELECTION_MATCH, CANDIDATE_ARCHIVE,
+    CANDIDATE_CLEANUP, JOURNAL, SCREENSHOT,
 }
 
 internal enum class NativeFailureCategory { GUARD_REJECTED, ACCESS_DENIED, IO_UNAVAILABLE, CAPABILITY_UNAVAILABLE }
@@ -95,6 +90,23 @@ internal class NativeDiagnostics(private val emit: (String) -> Unit = { message 
         return firstFailure ?: "phase=${current.name.lowercase()}; category=${category.name.lowercase()}"
             .also { firstFailure = it; report(it) }
     }
+
+    fun observation(kind: NativeObservation, bytes: ByteArray, complete: Boolean) {
+        report("record=${kind.name.lowercase()}; bytes=${bytes.size}; sha256=${bytes.inputStream().sha256()}; complete=$complete")
+    }
+
+    fun caller(read: () -> ComponentName?, authority: ComponentName) {
+        val result = try {
+            when (read()) { null -> "null"; authority -> "match"; else -> "mismatch" }
+        } catch (_: Throwable) { "error" }
+        report("caller_wallpaper=$result")
+    }
+
+    fun inventory(declared: Int, actual: Int, unique: Int, complete: Boolean) {
+        report("inventory_declared=${declared.coerceIn(0, 2097153)}; actual=$actual; unique=$unique; complete=$complete")
+    }
+
+    fun semanticMatch(matches: Boolean) = report("semantic_match=$matches")
 
     fun <T> at(phase: NativePhase, action: () -> T): T {
         enter(phase)
@@ -315,100 +327,208 @@ internal class NativePushDevice(private val instrumentation: Instrumentation,
     }
 
     fun readRenderer(expected: NativePushExpectations): NativeRenderer {
-        diagnostics.enter(NativePhase.SELECTION_OBSERVATION)
-        val runtime = expected.required("expectedRuntime")
-        nativeGuard(runtime in setOf("DeclarativeWatchFaceRuntime0", "DeclarativeWatchFaceRuntime1"), "runtime")
-        val component = ComponentName(RUNTIME_PACKAGE, "$RUNTIME_PACKAGE.$runtime")
-        return runBlocking(Dispatchers.IO) {
-            readNativeSelections(component, observe = {
-                diagnostics.enter(NativePhase.SELECTION_OBSERVATION)
-                nativeGuard(WallpaperManager.getInstance(context).wallpaperInfo?.component == component,
-                    "active-wallpaper")
-                NativeRenderer.parse(shell("dumpsys activity service $RUNTIME_PACKAGE/.$runtime"),
-                    expected.required("expectedResourcePackage"))
-            }, query = { face, slots ->
-                diagnostics.enter(NativePhase.SELECTION_QUERY)
-                val records = SelectionQueryContext(context, diagnostics).use { binding ->
-                    diagnostics.recordFailure {
-                        // The baseline dependency binds in its constructor, without awaiting a result.
-                        // Track the connection before construction so partial failures also unbind.
-                        ComplicationDataSourceInfoRetriever(binding).use { retriever ->
-                            try {
-                                diagnostics.recordFailure {
-                                    nativeGuard(binding.bound, "selection-service-unavailable")
-                                    withTimeout(5_000) {
-                                        retriever.retrieveComplicationDataSourceInfo(face, slots)?.map { result ->
-                                            val info = result.info
-                                            val provider = if (info == null) null else {
-                                                val name = info.componentName
-                                                    ?: throw NativePending("selection-component-unavailable")
-                                                name.flattenToString()
-                                            }
-                                            NativeSelectionRecord(result.slotId, provider)
-                                        }
-                                    }
-                                }
-                            } finally {
-                                diagnostics.enter(NativePhase.SELECTION_CLEANUP)
-                            }
-                        }
-                    }
-                }
-                diagnostics.enter(NativePhase.SELECTION_QUERY)
-                records
-            })
+        fun observation(command: String, kind: NativeObservation): String =
+            instrumentation.uiAutomation.executeShellCommand(command).use { descriptor ->
+                readNativeObservation(ParcelFileDescriptor.AutoCloseInputStream(descriptor), kind, diagnostics)
+            }
+        val renderer = readNativeSelections(system = {
+            val user = observation("am get-current-user", NativeObservation.CURRENT_USER).trim()
+            NativeSystem.parse(user, observation("dumpsys wallpaper", NativeObservation.SYSTEM))
+        }, native = { system ->
+            val component = system.component.flattenToString()
+            val dump = observation("dumpsys activity service $component", NativeObservation.NATIVE)
+            system.renderer(dump)
+        }, configuration = {
+            observation("dumpsys wear_service", NativeObservation.CONFIGURATION)
+        }, caller = { authority ->
+            diagnostics.caller({ WallpaperManager.getInstance(context).wallpaperInfo?.component }, authority)
+        }, diagnostics = diagnostics)
+        diagnostics.at(NativePhase.SELECTION_OBSERVATION) {
+            nativeGuard(renderer.resourcePackage == expected.required("expectedResourcePackage"), "expected-resource-package")
+            nativeGuard(renderer.runtime == expected.required("expectedRuntime"), "expected-runtime")
+        }
+        return renderer
+    }
+}
+
+internal enum class NativeObservation { CURRENT_USER, SYSTEM, NATIVE, CONFIGURATION }
+
+/** EOF-bounded observations own their streams even on partial reads, overflow or close failure. */
+internal fun readNativeObservation(input: InputStream, kind: NativeObservation,
+    diagnostics: NativeDiagnostics): String = input.use {
+    val output = ByteArrayOutputStream()
+    var complete = false
+    try {
+        val buffer = ByteArray(8192)
+        while (output.size() <= 2 * 1024 * 1024) {
+            val count = it.read(buffer, 0, minOf(buffer.size, 2 * 1024 * 1024 + 1 - output.size()))
+            if (count < 0) { complete = true; break }
+            output.write(buffer, 0, count)
+        }
+        nativeGuard(complete, "bounded-complete-observation")
+        output.toString(Charsets.UTF_8.name())
+    } catch (failure: Throwable) {
+        diagnostics.failure(failure)
+        throw failure
+    } finally {
+        diagnostics.observation(kind, output.toByteArray(), complete)
+    }
+}
+
+/** Exact section boundaries and unique fields: no cache/history search or duplicate reduction. */
+private class NativeRecord(dump: String) {
+    val lines = dump.lineSequence().map { it.trim() }.toList()
+    fun one(prefix: String) = lines.filter { it.startsWith(prefix) }.singleOrNull()?.removePrefix(prefix)
+        ?: throw NativePending("unique-native-field")
+    fun section(start: String, end: String): NativeRecord {
+        nativeGuard(lines.count { it == start } == 1 && lines.count { it == end } == 1, "unique-native-section")
+        val first = lines.indexOf(start)
+        val last = lines.indexOf(end)
+        nativeGuard(first < last, "ordered-native-section")
+        return NativeRecord(lines.subList(first + 1, last).joinToString("\n"))
+    }
+    fun after(start: String): NativeRecord {
+        requireLine(start)
+        return NativeRecord(lines.drop(lines.indexOf(start) + 1).joinToString("\n"))
+    }
+    fun requireLine(value: String) {
+        val matches = if ('=' in value) one(value.substringBefore('=') + "=") == value.substringAfter('=')
+            else lines.count { it == value } == 1
+        nativeGuard(matches, "unique-native-state")
+    }
+}
+
+private fun nativeComponent(value: String): ComponentName {
+    nativeGuard(value.matches(Regex("[A-Za-z][A-Za-z0-9_.]*/[A-Za-z_.$][A-Za-z0-9_.$]*")), "component-record")
+    return ComponentName.unflattenFromString(value) ?: throw NativePending("component-record")
+}
+
+/** Current-user System authority, including the live display's matching connection. */
+internal data class NativeSystem(val user: Int, val display: Int, val component: ComponentName,
+    val userRecord: String, val connection: String, val engine: String, val service: String, val token: String) {
+    fun renderer(dump: String): NativeRenderer {
+        val record = NativeRecord(dump)
+        val header = Regex("([^ ]+) [a-f0-9]+ pid=[0-9]+ user=([0-9]+)").matchEntire(record.one("SERVICE "))
+            ?: throw NativePending("native-service-scope")
+        nativeGuard(nativeComponent(header.groupValues[1]) == component && header.groupValues[2].toIntOrNull() == user,
+            "native-user-component")
+        val state = record.one("State of wallpaper ")
+        nativeGuard(state.matches(Regex("${Regex.escape(component.className)}@[a-f0-9]+:")), "native-wallpaper-scope")
+        nativeGuard(record.one("Engine ").matches(Regex("[^ ]+@[a-f0-9]+:")), "single-native-engine")
+        record.requireLine("mInitializing=false mDestroyed=false")
+        val nativeDisplay = record.one("mDisplay=Display id ")
+        val displayInfo = Regex("displayId ([0-9]+),").findAll(nativeDisplay).toList().singleOrNull()
+        nativeGuard(nativeDisplay.startsWith("$display: DisplayInfo{") &&
+            displayInfo?.groupValues?.get(1)?.toIntOrNull() == display, "native-display")
+        return NativeRenderer.parse(dump).copy(runtime = component.className.substringAfterLast('.'),
+            nativeScope = listOf(header.value, state, record.one("Engine ")))
+    }
+
+    companion object {
+        fun parse(currentUser: String, dump: String): NativeSystem {
+            nativeGuard(currentUser.matches(Regex("[0-9]+")), "current-user")
+            val user = currentUser.toIntOrNull() ?: throw NativePending("current-user")
+            val record = NativeRecord(dump).section("System wallpaper state:", "Lock wallpaper state:")
+            record.requireLine("Display state:")
+            val userRecord = record.one("User ")
+            val identity = Regex("([0-9]+): id=[0-9]+: mWhich=([13]): mSystemWasBoth=(true|false): mBindSource=SET_LIVE")
+                .matchEntire(userRecord) ?: throw NativePending("system-wallpaper-identity")
+            nativeGuard(identity.groupValues[1].toIntOrNull() == user && record.one("displayId=") == "0" &&
+                record.one("mDisplayId=") == "0", "system-user-display")
+            fun readComponent(prefix: String): ComponentName {
+                val value = record.one(prefix)
+                val match = Regex("ComponentInfo\\{([^}]+)\\}").matchEntire(value)
+                    ?: throw NativePending("system-component")
+                return nativeComponent(match.groupValues[1])
+            }
+            val component = readComponent("mWallpaperComponent=")
+            nativeGuard(component.packageName == RUNTIME_PACKAGE && component.className in setOf(
+                "$RUNTIME_PACKAGE.DeclarativeWatchFaceRuntime0", "$RUNTIME_PACKAGE.DeclarativeWatchFaceRuntime1"),
+                "system-runtime")
+            nativeGuard(readComponent("mInfo.component=") == component, "system-connection-component")
+            val connection = record.one("Wallpaper connection ")
+            val engine = record.one("mEngine=")
+            val service = record.one("mService=")
+            val token = record.one("mToken=")
+            nativeGuard(connection.matches(Regex("com\\.android\\.server\\.wallpaper\\.WallpaperManagerService[$]WallpaperConnection@[a-f0-9]+:")) &&
+                engine.matches(Regex("android[.]service[.]wallpaper[.]IWallpaperEngine(?:[$][A-Za-z]+)*@[a-f0-9]+")) &&
+                service.matches(Regex("android[.]service[.]wallpaper[.]IWallpaperService(?:[$][A-Za-z]+)*@[a-f0-9]+")) &&
+                token.matches(Regex("android[.]os[.]Binder@[a-f0-9]+")),
+                "live-system-connection")
+            return NativeSystem(user, 0, component, userRecord, connection, engine, service, token)
         }
     }
 }
 
-/** The public selection service is component-scoped; only a sole stable active instance maps it. */
-internal suspend fun readNativeSelections(
-    component: ComponentName,
-    observe: () -> NativeRenderer,
-    query: suspend (ComponentName, IntArray) -> List<NativeSelectionRecord>?,
-): NativeRenderer {
-    val before = observe()
-    val slots = before.enabled.keys.sorted().toIntArray()
-    val records = query(component, slots) ?: throw NativePending("selected-provider-records-unavailable")
-    nativeGuard(records.size == slots.size && records.map { it.slotId }.toSet() == slots.toSet(),
-        "complete-selection-records")
-    val after = observe()
-    nativeGuard(after.resourcePackage == before.resourcePackage && after.instance == before.instance &&
-        after.userStyle == before.userStyle && after.enabled == before.enabled, "selection-instance-changed")
-    return after.copy(selections = NativeSelections(after.resourcePackage, after.instance,
-        records.associate { it.slotId to it.provider }))
+/** Favorite and native instance are independently observed opaque identities, never converted. */
+internal fun readNativeSelections(system: () -> NativeSystem, native: (NativeSystem) -> NativeRenderer,
+    configuration: () -> String, caller: (ComponentName) -> Unit = {},
+    diagnostics: NativeDiagnostics = NativeDiagnostics()): NativeRenderer {
+    val beforeSystem = diagnostics.at(NativePhase.SYSTEM_BEFORE, system)
+    caller(beforeSystem.component)
+    val before = diagnostics.at(NativePhase.NATIVE_BEFORE) { native(beforeSystem) }
+    val selected = diagnostics.at(NativePhase.ACTIVE_CONFIGURATION) {
+        readActiveSelections(configuration(), beforeSystem, before, diagnostics)
+    }
+    val after = diagnostics.at(NativePhase.NATIVE_AFTER) { native(beforeSystem) }
+    val afterSystem = diagnostics.at(NativePhase.SYSTEM_AFTER, system)
+    diagnostics.at(NativePhase.SELECTION_MATCH) {
+        val matches = beforeSystem == afterSystem && before.resourcePackage == after.resourcePackage &&
+            before.instance == after.instance && before.userStyle == after.userStyle && before.enabled == after.enabled &&
+            before.runtime == after.runtime && before.nativeScope == after.nativeScope
+        diagnostics.semanticMatch(matches)
+        nativeGuard(matches, "selection-instance-changed")
+    }
+    return after.copy(selections = selected)
 }
 
-internal data class NativeSelectionRecord(val slotId: Int, val provider: String?)
-
-/** Owns even a constructor's attempted bind, before a retriever has been returned. */
-private class SelectionQueryContext(context: Context, private val diagnostics: NativeDiagnostics) :
-    ContextWrapper(context), AutoCloseable {
-    private val connections = linkedSetOf<ServiceConnection>()
-    var bound = false
-        private set
-
-    override fun bindService(service: Intent, connection: ServiceConnection, flags: Int): Boolean {
-        nativeGuard(connections.isEmpty(), "single-selection-binding")
-        connections += connection
-        return super.bindService(service, connection, flags).also { bound = it }
+private fun readActiveSelections(dump: String, system: NativeSystem, renderer: NativeRenderer,
+    diagnostics: NativeDiagnostics): NativeSelections {
+    val record = NativeRecord(dump)
+    val complications = record.section("Wear Service API: complications", "Wear Service API: watch_faces")
+    val sendingController = complications.section("ComplicationManager", "DeviceLockStateReceiver")
+        .section("ComplicationDataSendingController", "ComplicationUpdateController")
+    val controller = sendingController.section("ComplicationsConfigController",
+        "PreviewComplicationDataCache=${sendingController.one("PreviewComplicationDataCache=")}")
+    val favorite = Regex("WatchFaceFavoriteId\\{mWatchFaceId=(WatchFaceId\\[([^,]+),null\\]), mFavoriteId=([^, ]+), mType=AndroidxWatchFace\\}")
+        .matchEntire(controller.one("activeWatchFaceFavoriteId=")) ?: throw NativePending("active-favorite")
+    val family = favorite.groupValues[1]
+    val resource = favorite.groupValues[2]
+    val favoriteId = favorite.groupValues[3]
+    val watchFaces = record.section("Wear Service API: watch_faces", "Watch Face Favorite Repository (DB)")
+    val facade = watchFaces.section("Active Watch Face Facade:", "Current Active Engine:")
+    for (value in listOf("threadState=IDLE", "isFallbackWatchFace=false", "runningFlow=ANDROIDX")) facade.requireLine(value)
+    nativeGuard(facade.one("activeWatchFaceComponent=") == family && facade.one("favoriteId=") == favoriteId,
+        "active-facade-favorite")
+    val engine = watchFaces.after("Current Active Engine:")
+    for (value in listOf("Engine Type=AndroidX", "Resource Only WatchFace=true", "Runtime Package=$RUNTIME_PACKAGE",
+        "WearServices WatchFace Client=Binder Alive")) engine.requireLine(value)
+    nativeGuard(engine.one("Current Active Watch Face=") == "favId: $favoriteId, family: $family" &&
+        engine.one("Current Wallpaper Component=") == "ComponentInfo{${system.component.flattenToString()}}" &&
+        resource == renderer.resourcePackage, "active-engine-native-chain")
+    val configs = controller.after("activeConfigs: size=${controller.one("activeConfigs: size=")}")
+    val declared = controller.one("activeConfigs: size=").toIntOrNull() ?: throw NativePending("declared-config-size")
+    val rows = configs.lines.filter { it.isNotEmpty() }.map { line ->
+        Regex("id=[0-9]+ slot=([0-9]+) type=([0-9]+) configActionPending=(true|false) provider=(null|ComponentInfo\\{([^}]+)\\}) isEnabled=(true|false)")
+            .matchEntire(line) ?: throw NativePending("complete-active-config-row")
     }
-
-    override fun unbindService(connection: ServiceConnection) {
-        if (connection !in connections) return
-        try {
-            super.unbindService(connection)
-        } catch (_: IllegalArgumentException) {
-            // Android reports no registered connection, including a denied/failed bind.
-        }
-        connections -= connection
+    val slots = rows.map { it.groupValues[1].toIntOrNull() ?: throw NativePending("config-slot") }
+    val rowIds = rows.map { it.value.substringBefore(' ') }
+    val complete = declared == rows.size && rows.size == renderer.enabled.size &&
+        slots.toSet() == renderer.enabled.keys && slots.toSet().size == slots.size && rowIds.toSet().size == rows.size
+    diagnostics.inventory(declared, rows.size, slots.toSet().size, complete)
+    nativeGuard(complete, "complete-selection-records")
+    val types = mutableMapOf<Int, Int>()
+    val providers = mutableMapOf<Int, String?>()
+    rows.forEachIndexed { index, row ->
+        val slot = slots[index]
+        nativeGuard(row.groupValues[3] == "false" && (row.groupValues[6] == "true") == renderer.enabled[slot],
+            "settled-enabled-config")
+        types[slot] = row.groupValues[2].toIntOrNull() ?: throw NativePending("configured-type")
+        providers[slot] = if (row.groupValues[4] == "null") null else row.groupValues[5].also { nativeComponent(it) }
     }
-
-    override fun close() {
-        diagnostics.at(NativePhase.SELECTION_CLEANUP) {
-            connections.toList().forEach { unbindService(it) }
-        }
-    }
+    // Types describe configuration, not delivered/overridden data or requester IDs.
+    return NativeSelections(resource, renderer.instance, providers, types)
 }
 
 /** Authoritative selections must identify the resource package, instance and every slot. */
@@ -417,6 +537,7 @@ internal data class NativeSelections(
     val instance: String,
     // An explicit null means no selected provider; a missing key means unavailable evidence.
     val providers: Map<Int, String?>,
+    val configuredTypes: Map<Int, Int> = emptyMap(),
 )
 
 internal data class NativeRenderer(
@@ -428,6 +549,8 @@ internal data class NativeRenderer(
     val selections: NativeSelections? = null,
     // Kept private by callers: native data may include sensitive producer content.
     val effectiveData: Map<Int, String> = emptyMap(),
+    val runtime: String = "",
+    val nativeScope: List<String> = emptyList(),
 ) {
     val deliveryProvenance: String
         get() = deliveredSources.toSortedMap().entries.joinToString("\n") { (id, source) ->
@@ -461,28 +584,39 @@ internal data class NativeRenderer(
     }
 
     companion object {
-        fun parse(dump: String, resourcePackage: String): NativeRenderer {
-            val lines = dump.lineSequence().map { it.trim() }.toList()
+        fun parse(dump: String): NativeRenderer {
+            val record = NativeRecord(dump)
+            nativeGuard(record.lines.lastOrNull { it.isNotEmpty() } == "HeadlessWatchFace instances:", "no-headless-instances")
+            val manager = record.section("InteractiveInstanceManager instances:", "EditorService:")
+            val registered = manager.section("InteractiveInstanceManager:", "WatchFaceEngine:")
+            val registry = manager.after("WatchFaceEngine:")
+            val lines = registry.lines
             fun single(prefix: String) = lines.filter { it.startsWith(prefix) }.singleOrNull()
                 ?.removePrefix(prefix) ?: throw NativePending("native-record-unavailable")
-            nativeGuard(resourcePackage in setOf(CANDIDATE_PACKAGE, "app.wardpulse.watchface") &&
-                single("Resource only package name ") == resourcePackage, "renderer-package")
+            val resourcePackage = single("Resource only package name ")
+            nativeGuard(resourcePackage in setOf(CANDIDATE_PACKAGE, "app.wardpulse.watchface"), "renderer-package")
+            nativeGuard(registry.one("WatchFaceImpl ") == "(ComponentInfo{$resourcePackage/null}):", "native-implementation-package")
             val instance = single("interactiveInstanceId=")
-            nativeGuard(instance == single("watchFaceInstanceId=") && instance == single("impl.instanceId=") &&
+            nativeGuard(instance == single("watchFaceInstanceId=") && instance == registered.one("impl.instanceId=") &&
                 instance.isNotBlank(), "instance-record")
-            for (value in listOf("mVisible=true mReportedVisible=true", "destroyed=false", "surfaceDestroyed=false",
-                "editorObscuresWatchFace=false", "isVisible=true", "isAmbient=false", "overriddenComplications=null")) {
-                nativeGuard(value in lines, "interactive-native-state")
+            record.requireLine("mVisible=true mReportedVisible=true")
+            for (value in listOf("destroyed=false", "surfaceDestroyed=false",
+                "editorObscuresWatchFace=false", "isVisible=true", "isAmbient=false", "isHeadless=false",
+                "asyncWatchFaceConstructionPending=false", "overriddenComplications=null")) {
+                registry.requireLine(value)
             }
-            val slots = Regex("(?m)^\\s*ComplicationSlot (\\d+):").findAll(dump).toList()
-            nativeGuard(slots.map { it.groupValues[1].toInt() }.toSet() == (11..18).toSet() && slots.size == 8,
+            val style = single("currentUserStyleRepository.userStyle=")
+            nativeGuard(style.isNotBlank(), "native-style")
+            val scopedDump = registry.after("ComplicationSlotsManager:").lines.joinToString("\n")
+            val slots = Regex("(?m)^\\s*ComplicationSlot (\\d+):").findAll(scopedDump).toList()
+            nativeGuard(slots.map { it.groupValues[1].toIntOrNull() }.toSet() == (11..18).toSet() && slots.size == 8,
                 "native-slot-inventory")
             val enabled = mutableMapOf<Int, Boolean>()
             val deliveredSources = mutableMapOf<Int, String?>()
             val effectiveData = mutableMapOf<Int, String>()
             slots.forEachIndexed { index, match ->
                 val id = match.groupValues[1].toInt()
-                val block = dump.substring(match.range.last + 1, slots.getOrNull(index + 1)?.range?.first ?: dump.length)
+                val block = scopedDump.substring(match.range.last + 1, slots.getOrNull(index + 1)?.range?.first ?: scopedDump.length)
                 val data = block.lineSequence().map { it.trim() }.filter { it.startsWith("data=") }.singleOrNull()
                     ?: throw NativePending("effective-data-unavailable")
                 effectiveData[id] = data.removePrefix("data=")
@@ -491,14 +625,13 @@ internal data class NativeRenderer(
                 // Cached provenance is diagnostic only, even when a source is present.
                 deliveredSources[id] = if (data.startsWith("data=NoDataComplicationData") ||
                     data.startsWith("data=EmptyComplicationData")) null else sources.singleOrNull()?.groupValues?.get(1)
-                val active = block.lineSequence().map { it.trim() }.filter { it.startsWith("enabled=") }.single()
+                val active = block.lineSequence().map { it.trim() }.filter { it.startsWith("enabled=") }.singleOrNull()
+                    ?: throw NativePending("unique-enabled-record")
                 nativeGuard(active == "enabled=true" || active == "enabled=false", "enabled-record")
                 enabled[id] = active == "enabled=true"
             }
-            // Selections come from the independent service query in readNativeSelections,
-            // never cached dataSource or defaultDataSourcePolicy from this dump.
-            return NativeRenderer(resourcePackage, instance, single("currentUserStyleRepository.userStyle="),
-                enabled, deliveredSources, effectiveData = effectiveData)
+            // Selections come from scoped controller activeConfigs, never cached native delivery/defaults.
+            return NativeRenderer(resourcePackage, instance, style, enabled, deliveredSources, effectiveData = effectiveData)
         }
     }
 }

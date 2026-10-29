@@ -52,7 +52,7 @@ class NativePushGuardTest {
     @Test
     fun selectionRetentionCannotUseCachedDeliveryOrLegacyOnlyEvidence() {
         val dump = rendererRecord()
-        val observed = NativeRenderer.parse(dump, CANDIDATE_PACKAGE)
+        val observed = NativeRenderer.parse(dump)
         // Independent synthetic selection records; the runtime reader must never infer these from data.
         val selections = NativeSelections(CANDIDATE_PACKAGE, "existing", fixtureProviders())
         val before = observed.copy(selections = selections)
@@ -63,67 +63,39 @@ class NativePushGuardTest {
         assertNotEquals(before.configuration, changed.configuration)
         assertThrows(NativePending::class.java) { changed.requireRetainedFrom(before) }
         // Conversely, older delivered provenance must not override the actual selected provider.
-        val olderDelivery = NativeRenderer.parse(dump.replace("Chosen16", "Earlier16"), CANDIDATE_PACKAGE)
+        val olderDelivery = NativeRenderer.parse(dump.replace("Chosen16", "Earlier16"))
             .copy(selections = selections)
         assertNotEquals(before.deliveryProvenance, olderDelivery.deliveryProvenance)
         olderDelivery.requireRetainedFrom(before)
         assertThrows(NativePending::class.java) { observed.requirePushConfiguration() }
         val legacyPackage = "app.wardpulse.watchface"
-        val legacy = NativeRenderer.parse(dump.replace(CANDIDATE_PACKAGE, legacyPackage), legacyPackage)
+        val legacy = NativeRenderer.parse(dump.replace(CANDIDATE_PACKAGE, legacyPackage))
             .copy(selections = selections.copy(resourcePackage = legacyPackage))
         assertThrows(NativePending::class.java) { legacy.requirePushConfiguration() }
         assertThrows(NativePending::class.java) {
-            NativeRenderer.parse(dump.replace("dataSource=ComponentInfo{provider.test/Chosen16}", ""), CANDIDATE_PACKAGE)
+            NativeRenderer.parse(dump.replace("dataSource=ComponentInfo{provider.test/Chosen16}", ""))
                 .requirePushConfiguration()
         }
         assertThrows(NativePending::class.java) {
-            NativeRenderer.parse(dump.replace("interactiveInstanceId=existing", "interactiveInstanceId=other"), CANDIDATE_PACKAGE)
+            NativeRenderer.parse(dump.replace("interactiveInstanceId=existing", "interactiveInstanceId=other"))
         }
         assertThrows(NativePending::class.java) {
-            NativeRenderer.parse(dump.replace("isAmbient=false", "isAmbient=true"), CANDIDATE_PACKAGE)
+            NativeRenderer.parse(dump.replace("isAmbient=false", "isAmbient=true"))
         }
     }
 
     @Test
     fun dispatchedAttemptCannotRunAgainAfterFailureOrSuccess() = runBlocking {
-        val component = ComponentName(RUNTIME_PACKAGE, "$RUNTIME_PACKAGE.DeclarativeWatchFaceRuntime0")
-        val observed = NativeRenderer.parse(rendererRecord(), CANDIDATE_PACKAGE)
+        val system = NativeSystem.parse("0", systemRecord())
         val selectedProviders = fixtureProviders() + mapOf(17 to null, 18 to null)
         var observations = 0
-        val renderer = readNativeSelections(component, observe = { observations++; observed }) { face, slots ->
-            assertEquals(component, face)
-            assertEquals(observed.enabled.keys, slots.toSet())
-            selectedProviders.map { (id, provider) -> NativeSelectionRecord(id, provider) }
-        }
+        val renderer = readNativeSelections(system = { system }, native = {
+            observations++; it.renderer(rendererRecord())
+        }, configuration = { activeConfigurationRecord(selectedProviders) }, diagnostics = NativeDiagnostics { })
         assertEquals(2, observations)
         assertEquals(selectedProviders, renderer.selections!!.providers)
-        // Service unavailability or a face transition cannot produce a dispatchable snapshot.
-        try {
-            readNativeSelections(component, observe = { observed }) { _, _ -> null }
-            error("Unavailable selections were accepted")
-        } catch (failure: NativePending) {
-            assertEquals("selected-provider-records-unavailable", failure.identity)
-        }
-        try {
-            readNativeSelections(component, observe = { observed }) { _, _ ->
-                selectedProviders.map { (id, provider) -> NativeSelectionRecord(id, provider) }.dropLast(1)
-            }
-            error("Incomplete selections were accepted")
-        } catch (failure: NativePending) {
-            assertEquals("complete-selection-records", failure.identity)
-        }
-        assertThrows(NativePending::class.java) {
-            NativeRenderer.parse(rendererRecord() + "\nimpl.instanceId=another", CANDIDATE_PACKAGE)
-        }
-        var transitionObservation = 0
-        try {
-            readNativeSelections(component, observe = {
-                if (transitionObservation++ == 0) observed else observed.copy(instance = "changed")
-            }) { _, _ -> selectedProviders.map { (id, provider) -> NativeSelectionRecord(id, provider) } }
-            error("Changed instance was accepted")
-        } catch (failure: NativePending) {
-            assertEquals("selection-instance-changed", failure.identity)
-        }
+        assertEquals(2, renderer.selections!!.configuredTypes.getValue(17).toInt())
+        authorityGuards()
         val cacheDir = checkNotNull(InstrumentationRegistry.getInstrumentation().targetContext.cacheDir) {
             "Target app cache directory must be available"
         }
@@ -162,6 +134,181 @@ class NativePushGuardTest {
         } finally {
             check(root.deleteRecursively())
         }
+    }
+
+    private fun authorityGuards() {
+        val messages = mutableListOf<String>()
+        val diagnostics = NativeDiagnostics { messages += it }
+        fun read(systemDump: String = systemRecord(), nativeDump: String = rendererRecord(),
+            config: String = activeConfigurationRecord()) = readNativeSelections(
+            { NativeSystem.parse("0", systemDump) }, { it.renderer(nativeDump) }, { config }, diagnostics = diagnostics)
+        val good = read()
+        val configuration = good.configuration
+        // Favorite is unrelated to native "existing"; row IDs are unrelated to slots and requester IDs.
+        assertEquals(configuration, read(config = activeConfigurationRecord().replace("favorite-a", "unrelated-b")
+            .replace("id=811", "id=9021")).configuration)
+        assertEquals(configuration, read(config = activeConfigurationRecord().replace("PreviewComplicationDataCache=",
+            "PreviewComplicationDataCache=cached-unselected-provider")).configuration)
+        assertEquals(configuration, read(config = activeConfigurationRecord().replace("type=5", "type=10")).configuration)
+        assertEquals(10, read(config = activeConfigurationRecord().replace("type=5", "type=10"))
+            .selections!!.configuredTypes.getValue(11).toInt())
+        val empty = read(config = activeConfigurationRecord(fixtureProviders() + mapOf(17 to null, 18 to null)))
+        assertEquals(null, empty.selections!!.providers[17])
+        assertNotEquals(configuration, empty.configuration)
+        for (dump in listOf("", systemRecord().replace("System wallpaper state:", "Other wallpaper state:"),
+            systemRecord().replace("User 0:", "User 1:"), systemRecord().replace("mWhich=3", "mWhich=2"),
+            systemRecord().replace("SET_LIVE", "INITIALIZE_FALLBACK"), systemRecord().replace("displayId=0", "displayId=1"),
+            systemRecord().replace("mDisplayId=0", "mDisplayId=1"),
+            systemRecord().replace("mInfo.component=ComponentInfo{$RUNTIME_PACKAGE/$RUNTIME_PACKAGE.DeclarativeWatchFaceRuntime0}",
+                "mInfo.component=ComponentInfo{$RUNTIME_PACKAGE/$RUNTIME_PACKAGE.DeclarativeWatchFaceRuntime1}"),
+            systemRecord().replace("mEngine=android.service.wallpaper.IWallpaperEngine@ab", "mEngine=null"),
+            systemRecord().replace("Lock wallpaper state:", "mDisplayId=0\nLock wallpaper state:"))) {
+            assertThrows(NativePending::class.java) { read(systemDump = dump) }
+        }
+        for (dump in listOf("", rendererRecord().replace("user=0", "user=1"),
+            rendererRecord().replace("Display id 0:", "Display id 1:"),
+            rendererRecord().replace("displayId 0,", "displayId 1,"),
+            rendererRecord().replace("userStyle=UserStyle[]", "userStyle="),
+            rendererRecord().replace("Runtime0 ab", "Runtime1 ab"),
+            rendererRecord().replace("WatchFaceEngine:", "WatchFaceEngine:\nWatchFaceEngine:"),
+            rendererRecord().replace("mDestroyed=false", "mDestroyed=true"),
+            rendererRecord().replace("asyncWatchFaceConstructionPending=false", "asyncWatchFaceConstructionPending=true"),
+            rendererRecord().replace("ComplicationSlot 18:", "ComplicationSlot 17:"),
+            rendererRecord().replace("enabled=true", "enabled=true\nenabled=false"),
+            rendererRecord().replace("impl.instanceId=existing", "impl.instanceId=existing\nimpl.instanceId=other"),
+            rendererRecord().replace("impl.instanceId=existing", "impl.instanceId=other"))) {
+            assertThrows(NativePending::class.java) { read(nativeDump = dump) }
+        }
+        val config = activeConfigurationRecord()
+        val row = config.lineSequence().first { it.startsWith("id=") }
+        val favorite = config.lineSequence().single { it.startsWith("activeWatchFaceFavoriteId=") }
+        val cachedFavorite = config.replace("$favorite\n", "").replace("PreviewComplicationDataCache=",
+            "PreviewComplicationDataCache=\n  $favorite")
+        assertEquals(configuration, read(config = config.replace("PreviewComplicationDataCache=",
+            "PreviewComplicationDataCache=\n  activeWatchFaceFavoriteId=unavailable")).configuration)
+        for (dump in listOf("", cachedFavorite, config.replace("activeConfigs:", "cacheEntries:"), config.replace("size=8", "size=7"),
+            config.replace(row + "\n", ""), config.replace(row, "$row\n$row"), config.replace("slot=18", "slot=17"),
+            config.replace("slot=18", "slot=19"), config.replace("id=818", "id=817"),
+            config.replace("configActionPending=false", "configActionPending=true"),
+            config.replace("isEnabled=true", "isEnabled=false"), config.replace("type=5 ", ""),
+            config.replace("provider=ComponentInfo{provider.test/Chosen18}", "provider=nullish"),
+            config.replace("provider=ComponentInfo{provider.test/Chosen18}", "provider=ComponentInfo{invalid}"),
+            config.replace("provider=ComponentInfo{provider.test/Chosen18} ", ""),
+            config.replace("threadState=IDLE", "threadState=BUSY"),
+            config.replace("threadState=IDLE", "threadState=IDLE\nthreadState=BUSY"),
+            config.replace("isFallbackWatchFace=false", "isFallbackWatchFace=true"),
+            config.replace("favoriteId=favorite-a", "favoriteId=other"),
+            config.replace("favId: favorite-a", "favId: other"),
+            config.replace("Current Wallpaper Component=", "Previous Wallpaper Component="),
+            config.replace("Current Wallpaper Component=ComponentInfo{$RUNTIME_PACKAGE/$RUNTIME_PACKAGE.DeclarativeWatchFaceRuntime0}",
+                "Current Wallpaper Component=ComponentInfo{$RUNTIME_PACKAGE/$RUNTIME_PACKAGE.DeclarativeWatchFaceRuntime1}"),
+            config.replace("Active Watch Face Facade:", "Active Watch Face Facade:\nActive Watch Face Facade:"),
+            config.replace("mWatchFaceId=WatchFaceId[$CANDIDATE_PACKAGE,null]", "mWatchFaceId=WatchFaceId[other.package,null]"))) {
+            assertThrows(NativePending::class.java) { read(config = dump) }
+        }
+        // Independent frames detect changes in each identity/style/enabled/connection domain.
+        val system = NativeSystem.parse("0", systemRecord())
+        val native = system.renderer(rendererRecord())
+        for (changed in listOf(native.copy(instance = "other"), native.copy(resourcePackage = "app.wardpulse.watchface"),
+            native.copy(userStyle = "changed"), native.copy(enabled = native.enabled + (18 to false)),
+            native.copy(nativeScope = listOf("other-engine")))) {
+            var count = 0
+            assertThrows(NativePending::class.java) {
+                readNativeSelections({ system }, { if (count++ == 0) native else changed }, { config }, diagnostics = diagnostics)
+            }
+        }
+        var count = 0
+        assertThrows(NativePending::class.java) {
+            readNativeSelections({ if (count++ == 0) system else system.copy(connection = "other") },
+                { native }, { config }, diagnostics = diagnostics)
+        }
+        assertTrue(messages.contains("semantic_match=false"))
+        assertTrue(messages.any { it.startsWith("inventory_declared=") && it.endsWith("complete=false") })
+        // Relative dump counters and cached delivery are outside the semantic identity comparison.
+        count = 0
+        var deliveries = 0
+        readNativeSelections({ NativeSystem.parse("0", systemRecord().replace("mLastDiedTime=-1", "mLastDiedTime=${count++}")) },
+            { if (deliveries++ == 0) native else native.copy(deliveredSources = mapOf(16 to "provider.test/Older")) },
+            { config }, diagnostics = diagnostics)
+        selectionDiagnosticGuards(system, native, config)
+    }
+
+    private fun selectionDiagnosticGuards(system: NativeSystem, native: NativeRenderer, config: String) {
+        for (outcome in listOf("null", "match", "mismatch", "error")) {
+            val messages = mutableListOf<String>()
+            val diagnostic = NativeDiagnostics { messages += it }
+            val caller: (ComponentName) -> Unit = { authority -> diagnostic.caller({
+                when (outcome) {
+                    "null" -> null
+                    "match" -> system.component
+                    "mismatch" -> ComponentName("provider.test", "Other")
+                    else -> throw SecurityException("private caller payload")
+                }
+            }, authority) }
+            readNativeSelections({ system }, { native }, { config }, caller, diagnostic)
+            assertTrue(messages.contains("caller_wallpaper=$outcome"))
+            assertThrows(NativePending::class.java) {
+                readNativeSelections({ system }, { throw NativePending("private real failure") }, { config }, caller, diagnostic)
+            }
+            diagnostic.at(NativePhase.CANDIDATE_CLEANUP) { Unit }
+            assertEquals("phase=native_before; category=guard_rejected", diagnostic.failure(IOException("private cleanup")))
+            assertTrue(messages.contains("semantic_match=true"))
+            assertTrue(messages.contains("inventory_declared=8; actual=8; unique=8; complete=true"))
+            assertTrue(messages.all { it.length < 160 && it.matches(Regex(
+                "phase=[a-z_]+(; category=[a-z_]+)?|caller_wallpaper=(null|match|mismatch|error)|" +
+                    "semantic_match=(true|false)|inventory_declared=[0-9]+; actual=[0-9]+; unique=[0-9]+; complete=(true|false)",
+            )) })
+            assertFalse(messages.any { "private" in it })
+        }
+    }
+
+    private fun systemRecord() = """
+        System wallpaper state:
+        User 0: id=321: mWhich=3: mSystemWasBoth=true: mBindSource=SET_LIVE
+        Display state:
+        displayId=0
+        mWallpaperComponent=ComponentInfo{$RUNTIME_PACKAGE/$RUNTIME_PACKAGE.DeclarativeWatchFaceRuntime0}
+        Wallpaper connection com.android.server.wallpaper.WallpaperManagerService${'$'}WallpaperConnection@ab:
+        mInfo.component=ComponentInfo{$RUNTIME_PACKAGE/$RUNTIME_PACKAGE.DeclarativeWatchFaceRuntime0}
+        mDisplayId=0
+        mEngine=android.service.wallpaper.IWallpaperEngine@ab
+        mService=android.service.wallpaper.IWallpaperService@ab
+        mToken=android.os.Binder@ab
+        mLastDiedTime=-1
+        Lock wallpaper state:
+        Fallback wallpaper state:
+        mWallpaperComponent=ComponentInfo{fallback.test/Default}
+    """.trimIndent() + "\n"
+
+    private fun activeConfigurationRecord(providers: Map<Int, String?> = fixtureProviders()) = buildString {
+        appendLine("Wear Service API: complications")
+        appendLine("ComplicationManager")
+        appendLine("ComplicationDataSendingController")
+        appendLine("ComplicationsConfigController")
+        appendLine("activeWatchFaceFavoriteId=WatchFaceFavoriteId{mWatchFaceId=WatchFaceId[$CANDIDATE_PACKAGE,null], mFavoriteId=favorite-a, mType=AndroidxWatchFace}")
+        appendLine("activeConfigs: size=8")
+        providers.forEach { (slot, provider) ->
+            appendLine("id=${800 + slot} slot=$slot type=${if (provider == null) 2 else 5} configActionPending=false " +
+                "provider=${provider?.let { "ComponentInfo{$it}" } ?: "null"} isEnabled=true")
+        }
+        appendLine("PreviewComplicationDataCache=")
+        appendLine("ComplicationUpdateController")
+        appendLine("DeviceLockStateReceiver")
+        appendLine("Wear Service API: watch_faces")
+        appendLine("Active Watch Face Facade:")
+        appendLine("threadState=IDLE")
+        appendLine("isFallbackWatchFace=false")
+        appendLine("runningFlow=ANDROIDX")
+        appendLine("activeWatchFaceComponent=WatchFaceId[$CANDIDATE_PACKAGE,null]")
+        appendLine("favoriteId=favorite-a")
+        appendLine("Current Active Engine:")
+        appendLine("Engine Type=AndroidX")
+        appendLine("Current Active Watch Face=favId: favorite-a, family: WatchFaceId[$CANDIDATE_PACKAGE,null]")
+        appendLine("Current Wallpaper Component=ComponentInfo{$RUNTIME_PACKAGE/$RUNTIME_PACKAGE.DeclarativeWatchFaceRuntime0}")
+        appendLine("Resource Only WatchFace=true")
+        appendLine("Runtime Package=$RUNTIME_PACKAGE")
+        appendLine("WearServices WatchFace Client=Binder Alive")
+        appendLine("Watch Face Favorite Repository (DB)")
     }
 
     private fun installedIdentityGuards() {
@@ -235,6 +382,41 @@ class NativePushGuardTest {
                 assertThrows(NativePending::class.java) { readInstalledPushPath(input) }
             }
             assertFalse("Locator FD must close on success and parse failure", descriptor.fileDescriptor.valid())
+        }
+        for (output in listOf(rendererRecord(), "incomplete private record")) {
+            locator.writeText(output)
+            val descriptor = ParcelFileDescriptor.open(locator, ParcelFileDescriptor.MODE_READ_ONLY)
+            val observed = readNativeObservation(ParcelFileDescriptor.AutoCloseInputStream(descriptor),
+                NativeObservation.NATIVE, NativeDiagnostics { })
+            if (output == rendererRecord()) NativeRenderer.parse(observed) else {
+                assertThrows(NativePending::class.java) { NativeRenderer.parse(observed) }
+            }
+            assertFalse("Observer FD must close before either parse outcome", descriptor.fileDescriptor.valid())
+        }
+        for (overflow in listOf(false, true)) {
+            val messages = mutableListOf<String>()
+            val diagnostic = NativeDiagnostics { messages += it }
+            var closed = false
+            val input = object : InputStream() {
+                var remaining = if (overflow) 2 * 1024 * 1024 + 1 else 1
+                override fun read(): Int = error("Use bounded buffer reads")
+                override fun read(bytes: ByteArray, offset: Int, length: Int): Int {
+                    if (remaining == 0) throw IOException("private partial read")
+                    val count = minOf(remaining, length)
+                    bytes.fill('x'.code.toByte(), offset, offset + count)
+                    remaining -= count
+                    return count
+                }
+                override fun close() { closed = true; throw SecurityException("private close") }
+            }
+            assertThrows(if (overflow) NativePending::class.java else IOException::class.java) {
+                diagnostic.at(NativePhase.NATIVE_BEFORE) { readNativeObservation(input, NativeObservation.NATIVE, diagnostic) }
+            }
+            assertTrue(closed)
+            assertEquals("phase=native_before; category=${if (overflow) "guard_rejected" else "io_unavailable"}",
+                diagnostic.failure(SecurityException("private cleanup")))
+            assertTrue(messages.any { it.matches(Regex("record=native; bytes=[0-9]+; sha256=[a-f0-9]{64}; complete=false")) })
+            assertFalse(messages.any { "private" in it })
         }
         var locatorClosed = false
         val failingLocator = object : InputStream() {
@@ -353,20 +535,34 @@ class NativePushGuardTest {
     }
 
     private fun rendererRecord() = buildString {
-        appendLine("Resource only package name $CANDIDATE_PACKAGE")
+        appendLine("SERVICE $RUNTIME_PACKAGE/.DeclarativeWatchFaceRuntime0 ab pid=123 user=0")
+        appendLine("State of wallpaper $RUNTIME_PACKAGE.DeclarativeWatchFaceRuntime0@ab:")
+        appendLine("Engine test@ab:")
+        appendLine("mInitializing=false mDestroyed=false")
+        appendLine("mVisible=true mReportedVisible=true")
+        appendLine("mDisplay=Display id 0: DisplayInfo{displayId 0, state ON}")
+        appendLine("InteractiveInstanceManager instances:")
+        appendLine("InteractiveInstanceManager:")
         appendLine("impl.instanceId=existing")
+        appendLine("WatchFaceEngine:")
+        appendLine("WatchFaceImpl (ComponentInfo{$CANDIDATE_PACKAGE/null}):")
+        appendLine("Resource only package name $CANDIDATE_PACKAGE")
         appendLine("interactiveInstanceId=existing")
         appendLine("watchFaceInstanceId=existing")
         appendLine("currentUserStyleRepository.userStyle=UserStyle[]")
-        listOf("mVisible=true mReportedVisible=true", "destroyed=false", "surfaceDestroyed=false",
-            "editorObscuresWatchFace=false", "isVisible=true", "isAmbient=false", "overriddenComplications=null")
+        listOf("destroyed=false", "surfaceDestroyed=false", "asyncWatchFaceConstructionPending=false",
+            "editorObscuresWatchFace=false", "isVisible=true", "isAmbient=false", "isHeadless=false", "overriddenComplications=null")
             .forEach { appendLine(it) }
+        appendLine("ComplicationSlotsManager:")
         for ((id, source) in fixtureProviders()) {
             appendLine("ComplicationSlot $id:")
             appendLine("enabled=true")
+            appendLine("supportedTypes=RANGED_VALUE, EMPTY")
             appendLine("defaultDataSourcePolicy.primaryDataSource=ComponentInfo{provider.test/Unselected}")
             appendLine("data=ShortText(dataSource=ComponentInfo{$source})")
         }
+        appendLine("EditorService:")
+        appendLine("HeadlessWatchFace instances:")
     }
 
     private fun fixtureProviders(): Map<Int, String?> {
