@@ -36,23 +36,31 @@ tree per Compare/Default and preserve main selector/strip containment. The basel
 main branches failed this check; corrected generation passes. Native causal effect remains
 unproved; see the [adaptive incident and update qualification](../../docs/product/RELEASE_CHECKLIST.md#adaptive-integration-qualification-2026-10-28).
 
-`bandArcs` now selects paint in one ordered Condition shared by ordinary bands, inner
-halves and both outer-half slots: positive full (`VALUE > 0 && VALUE >= MAX`), positive
-tiny (`VALUE > 0 && VALUE/MAX <=` the existing geometry cutoff), then round partial
-(`VALUE > 0`). The track precedes this selector; zero matches no colored drawing. Each
-branch retains its existing drawing subtree, with a diagnostic-only Default for `PN`.
-`check_band_paints` in `tools/check-watchface-structure.py` evaluates the actual emitted
-predicates in Compare order and checks drawing ownership across every layout and slot,
-including 74/200, zero, representable tiny values, both sides of each cutoff and near/full
-boundaries. Generator assertions retain the published Legacy/N3 rounded cutoffs and
-analytical full-path/clip checks.
+`outerHalfSlot` in `tools/render-watchface.mjs` combines admission and paint selection in
+one ordered Condition directly inside each extra's RANGED_VALUE complication. For every
+feasible layout/position in slots 106/109, comparisons select positive full, positive tiny,
+round partial, then zero. Each predicate includes the exact range guard and TITLE index.
+Each positive branch owns one named Group containing track then colored drawing; admitted
+zero owns only its track, and rejected input paints nothing. Private `bandTrack` and
+`bandPaint` helpers reuse the same drawings while preserving ordinary/inner `bandArcs`
+emission, geometry, clipping, live colors, cutoffs and ambient/MUTE behavior.
 
-The candidate removes one conditional handoff after diagnostic originals showed
-`V74/m0/M200/T0/A1/PN` with no Spark pixels in the measured annulus. The previous Source
-already tested `VALUE > 0`; arithmetic alone does not explain that observation. Ordered
-first-true comparisons support this candidate, while nested Conditions and repeated names
-in separate Conditions remain valid. Runtime cause, the original normal RED's branch and
-pinned-version enforcement remain unproved.
+`check_band_paints` and `check_extra_decisions` in `tools/check-watchface-structure.py`
+evaluate actual emitted predicates in Compare order and inspect selected drawing content.
+Independent admission and geometry expectations cover both ordinals, every feasible and
+impossible position, 74/200, zero, representable tiny values, neighboring cutoff Floats,
+near/full boundaries, malformed/non-finite fields and exact TITLE rejection. Generator
+assertions retain published Legacy/N3 rounded cutoffs and analytical full-path/clip checks.
+These checks establish declaration semantics, not native repair.
+
+The previous `5c871ac` candidate flattened only `bandArcs`; the normal prefix remained RED,
+with its actual VALUE/TITLE/paint branch unknown. A separate diagnostic case on that Source
+showed `V74/m0/M200/T0/A1/PN` without the expected Spark arc. This candidate removes the
+remaining admission-to-paint conditional handoff at the owning extra slot. That is a repair
+hypothesis, not an established cause. Primary contracts permit ordered first-true selection,
+nested Conditions and repeated names in separate Conditions; neither a nested-tree violation
+nor pinned-version runtime enforcement is proved. Diagnostic witnesses do not establish the
+normal case's fields or branch.
 
 Normal-face acceptance remains **Pending**. After Runner ownership ends, Root must bind
 the actual candidate producer/face artifacts with producer diagnostics disabled, install
@@ -164,7 +172,11 @@ rejects nested content or extra fonts in those cells. Numeric `Template` cells a
 
 VALUE/MIN/MAX remain independent of admission and bounded to 0..800; their `?` fallback
 does not disclose an out-of-range value. TITLE never exposes an unexpected literal. Paint
-in another admitted layout remains unobserved, leaving that cell unavailable. The 10-unit
+in another admitted layout remains unobserved, leaving that cell unavailable. Admission
+witnesses belong to each actual combined decision; N1's PF/PT/PR share the branch that owns
+their colored drawing, and admitted N1 zero shows PN. Rejected admission retains AX/PN.
+Diagnostic Group names remain stable and unique across decisions; stripping additions
+recovers this candidate's complete normal tree. The 10-unit
 bold text uses two rows of 34×12 boxes within the existing r139..171.25 logical footprint
 guard, inside the clip and below the original incident annulus. Neither source font size
 nor an enlarged preview establishes readability. Read all six cells in the original 360px

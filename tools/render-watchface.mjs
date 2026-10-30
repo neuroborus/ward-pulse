@@ -964,8 +964,7 @@ function roundClosureEnvelope(diameter, thickness, start, end) {
   return { inner: along - reach, outer: along + reach }
 }
 
-function assertFullRing(diameter, thickness, markup) {
-  const full = markup.match(/<Compare expression="isFull">([\s\S]*?)<\/Compare>/)?.[1] ?? ''
+function assertFullRing(diameter, thickness, full) {
   const arcs = [...full.matchAll(/<Arc\s+([\s\S]*?)<\/Arc>/g)]
   const attributes = Object.fromEntries(
     [...(arcs[0]?.[1] ?? '').matchAll(/(\w+)="([^"]*)"/g)].map((match) => [match[1], match[2]]),
@@ -1087,7 +1086,8 @@ function assertNearExhaustedArcs() {
     }
 
     const markup = bandArcs(centre, thickness, '')
-    assertFullRing(centre, thickness, markup)
+    assertFullRing(centre, thickness,
+      markup.match(/<Compare expression="isFull">([\s\S]*?)<\/Compare>/)?.[1] ?? '')
     const rawStart = `(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end}`
     const caps = [...markup.matchAll(/cap="(ROUND|BUTT)"/g)].map((match) => match[1])
     if (
@@ -1104,6 +1104,7 @@ function assertNearExhaustedArcs() {
 
   for (const [ordinal, slot] of OUTER_HALVES.entries()) {
     const markup = outerHalfSlot(slot, ordinal)
+    const decisions = emittedExtraDecisions(markup)
     const clip = markup.match(/<BoundingArc\s+([\s\S]*?)\/>/)?.[1] ?? ''
     const attributes = Object.fromEntries(
       [...clip.matchAll(/(\w+)="([^"]*)"/g)].map((match) => [match[1], match[2]]),
@@ -1122,17 +1123,16 @@ function assertNearExhaustedArcs() {
     }
     for (const layout of LAYOUTS) {
       for (let index = 0; index < layout.count; index += 1) {
-        const expression = `is${layout.name}Band${index}`
-        const marker = `<Compare expression="${expression}">`
+        const branch = decisions.find(({ predicate }) => predicate(0, layout.max, layout.max, String(index)))?.body
         if (index >= layout.count - ordinal) {
-          if (markup.includes(marker)) throw new Error(`impossible split ordinal ${ordinal}/${expression}`)
+          if (branch !== undefined) throw new Error(`impossible split ordinal ${ordinal}/${layout.name}/${index}`)
           continue
         }
         const { outer, half } = bandGeometry(layout, index)
-        const branch = markup.split(marker)[1]?.split('</Group>')[0] ?? ''
-        assertFullRing(outer, half, branch)
+        const full = branch?.match(/<PartDraw[^>]*alpha="255">[\s\S]*?<\/PartDraw>/)?.[0] ?? ''
+        assertFullRing(outer, half, full)
         if ((outer - half) / 2 <= envelope.inner || (outer + half) / 2 >= envelope.outer) {
-          throw new Error(`slot ${slot.slotId}/${expression}: entire half must fit inside the clip`)
+          throw new Error(`slot ${slot.slotId}/${layout.name}/${index}: entire half must fit inside the clip`)
         }
       }
     }
@@ -1157,17 +1157,7 @@ function assertNearExhaustedArcs() {
   }
 }
 
-/**
- * Track plus melt for one arc. The melt keeps its own `PartDraw` so ambient can
- * dim it without touching the track underneath.
- *
- * Above the cutoff, the melt is inset by one cap at each end, so the round caps
- * fill exactly the space the inset freed. At or below it, straight ends keep the
- * visible sweep equal to the proportional centreline. Exact full uses neither
- * inset: one almost-closed path keeps the ROUND endpoints together at 12.
- */
-function bandArcs(diameter, thickness, pad, diagnostics = false) {
-  const geometry = meltGeometry(diameter, thickness)
+function bandTrack(diameter, thickness, pad) {
   return `${pad}<PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}">
 ${pad}    <Arc
 ${pad}        centerX="${FACE.center}"
@@ -1178,7 +1168,49 @@ ${pad}        startAngle="${SWEEP.start}"
 ${pad}        endAngle="${SWEEP.end}">
 ${pad}        <Stroke color="${COLOR.track}" thickness="${thickness}" cap="ROUND" />
 ${pad}    </Arc>
-${pad}</PartDraw>
+${pad}</PartDraw>`
+}
+
+/** The same three drawings serve main/inner selectors and combined extra decisions. */
+function bandPaint(diameter, thickness, kind, pad) {
+  const geometry = meltGeometry(diameter, thickness)
+  const end = kind === 'round' ? geometry.insetEnd.toFixed(2) : SWEEP.end
+  const rawStart = `(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end}`
+  const start = kind === 'tiny' ? rawStart
+    : `clamp(${rawStart} + ${geometry.cap}, ${SWEEP.start}, ${end})`
+  const transform = kind === 'full' ? '' : `${pad}        <Transform
+${pad}            target="startAngle"
+${pad}            value="${start}" />
+`
+  return `${pad}<PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
+${pad}    <Variant mode="AMBIENT" target="alpha" value="140" />
+${pad}    <Arc
+${pad}        centerX="${FACE.center}"
+${pad}        centerY="${FACE.center}"
+${pad}        width="${diameter}"
+${pad}        height="${diameter}"
+${pad}        startAngle="${SWEEP.start}"
+${pad}        endAngle="${end}">
+${transform}${pad}        <WeightedStroke
+${pad}            thickness="${thickness}"
+${pad}            colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+${pad}            cap="${kind === 'tiny' ? 'BUTT' : 'ROUND'}" />
+${pad}    </Arc>
+${pad}</PartDraw>`
+}
+
+/**
+ * Track plus melt for one arc. The melt keeps its own `PartDraw` so ambient can
+ * dim it without touching the track underneath.
+ *
+ * Above the cutoff, the melt is inset by one cap at each end, so the round caps
+ * fill exactly the space the inset freed. At or below it, straight ends keep the
+ * visible sweep equal to the proportional centreline. Exact full uses neither
+ * inset: one almost-closed path keeps the ROUND endpoints together at 12.
+ */
+function bandArcs(diameter, thickness, pad) {
+  const geometry = meltGeometry(diameter, thickness)
+  return `${bandTrack(diameter, thickness, pad)}
 ${pad}<Condition>
 ${pad}    <Expressions>
 ${pad}        <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
@@ -1191,69 +1223,18 @@ ${pad}    <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
 ${pad}         endpoints 0.1 degrees apart in one path. A literal 360-degree
 ${pad}         ROUND sweep historically collapsed to a tip on the watch. -->
 ${pad}    <Compare expression="isFull">
-${diagnostics ? n1PaintOpen('full', pad) : ''}${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
-${pad}            <Variant mode="AMBIENT" target="alpha" value="140" />
-${pad}            <Arc
-${pad}                centerX="${FACE.center}"
-${pad}                centerY="${FACE.center}"
-${pad}                width="${diameter}"
-${pad}                height="${diameter}"
-${pad}                startAngle="${SWEEP.start}"
-${pad}                endAngle="${SWEEP.end}">
-${pad}                <WeightedStroke
-${pad}                    thickness="${thickness}"
-${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-${pad}                    cap="ROUND" />
-${pad}            </Arc>
-${pad}        </PartDraw>${diagnostics ? n1PaintClose('full', 'PF', pad) : ''}
+${bandPaint(diameter, thickness, 'full', `${pad}        `)}
 ${pad}    </Compare>
 ${pad}    <!-- The two-cap inset cannot represent a smaller positive remainder:
 ${pad}         its sweep would be zero or negative. Keep the proportional
 ${pad}         centreline without either inset and use straight ends so the
 ${pad}         visible sweep does not overstate the remainder. -->
 ${pad}    <Compare expression="isNearEmpty">
-${diagnostics ? n1PaintOpen('tiny', pad) : ''}${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
-${pad}            <Variant mode="AMBIENT" target="alpha" value="140" />
-${pad}            <Arc
-${pad}                centerX="${FACE.center}"
-${pad}                centerY="${FACE.center}"
-${pad}                width="${diameter}"
-${pad}                height="${diameter}"
-${pad}                startAngle="${SWEEP.start}"
-${pad}                endAngle="${SWEEP.end}">
-${pad}                <Transform
-${pad}                    target="startAngle"
-${pad}                    value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end}" />
-${pad}                <WeightedStroke
-${pad}                    thickness="${thickness}"
-${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-${pad}                    cap="BUTT" />
-${pad}            </Arc>
-${pad}        </PartDraw>${diagnostics ? n1PaintClose('tiny', 'PT', pad) : ''}
+${bandPaint(diameter, thickness, 'tiny', `${pad}        `)}
 ${pad}    </Compare>
 ${pad}    <Compare expression="hasRemaining">
-${diagnostics ? n1PaintOpen('round', pad) : ''}${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
-${pad}            <Variant mode="AMBIENT" target="alpha" value="140" />
-${pad}            <Arc
-${pad}                centerX="${FACE.center}"
-${pad}                centerY="${FACE.center}"
-${pad}                width="${diameter}"
-${pad}                height="${diameter}"
-${pad}                startAngle="${SWEEP.start}"
-${pad}                endAngle="${geometry.insetEnd.toFixed(2)}">
-${pad}                <Transform
-${pad}                    target="startAngle"
-${pad}                    value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end} + ${geometry.cap}, ${SWEEP.start}, ${geometry.insetEnd.toFixed(2)})" />
-${pad}                <WeightedStroke
-${pad}                    thickness="${thickness}"
-${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-${pad}                    cap="ROUND" />
-${pad}            </Arc>
-${pad}        </PartDraw>${diagnostics ? n1PaintClose('round', 'PR', pad) : ''}
-${pad}    </Compare>${diagnostics ? `
-${pad}    <Default>
-${n1Witness('paintNone', 'PN', 2, 1)}
-${pad}    </Default>` : ''}
+${bandPaint(diameter, thickness, 'round', `${pad}        `)}
+${pad}    </Compare>
 ${pad}</Condition>`
 }
 
@@ -1277,14 +1258,6 @@ function n1Group(name, content) {
 
 function n1Witness(name, text, column, row) {
   return n1Group(`add_${name}`, n1Text(text, column, row))
-}
-
-function n1PaintOpen(name, pad) {
-  return `${pad}<Group x="0" y="0" width="450" height="450" name="n1Diag_wrap_${name}">\n`
-}
-
-function n1PaintClose(name, text, pad) {
-  return `\n${n1Witness(`paint_${name}`, text, 2, 1)}\n${pad}</Group>`
 }
 
 /** Fields are independent of admission, with no raw TITLE or unbounded literals. */
@@ -1391,15 +1364,32 @@ function outerHalfSlot({ slotId, service, label }, ordinal, diagnostics = false)
   // Retain the accepted N3 clip, with margin around every new half as well.
   const clipOuter = 207
   const clipInner = 139
-  const expressions = positions.map(({ layout, index }) =>
-    `                        <Expression name="is${layout.name}Band${index}"><![CDATA[${rangeGuard(layout.max)} && [COMPLICATION.TITLE] == "${index}"]]></Expression>`,
-  ).join('\n')
-  const branches = positions.map(({ layout, index }) => {
+  const decisions = positions.flatMap(({ layout, index }) => {
     const { outer, half } = bandGeometry(layout, index)
-    return `                    <Compare expression="is${layout.name}Band${index}">
-                        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="outerHalf${slotId}_${layout.name}_${index + 1}">
-${bandArcs(outer, half, ' '.repeat(28), diagnostics && layout.name === 'N1')}${diagnostics ? `
-${n1Witness(`admit_${layout.name}_${index}`, layout.name === 'N1' ? 'A1' : 'AO', 1, 1)}` : ''}
+    const value = '[COMPLICATION.RANGED_VALUE_VALUE]'
+    const maximum = '[COMPLICATION.RANGED_VALUE_MAX]'
+    return [
+      ['Full', `${value} > 0 && ${value} >= ${maximum}`],
+      ['Tiny', `${value} > 0 && (${value} / ${maximum}) <= ${meltGeometry(outer, half).cutoffLiteral}`],
+      ['Round', `${value} > 0`],
+      ['Zero', `${value} == 0`],
+    ].map(([state, test]) => ({ layout, index, outer, half, state,
+      name: `is${layout.name}Band${index}${state}`,
+      predicate: `${rangeGuard(layout.max)} && [COMPLICATION.TITLE] == "${index}" && (${test})`,
+    }))
+  })
+  const expressions = decisions.map(({ name, predicate }) =>
+    `                        <Expression name="${name}"><![CDATA[${predicate}]]></Expression>`,
+  ).join('\n')
+  const branches = decisions.map(({ layout, index, outer, half, state, name }) => {
+    const kind = state.toLowerCase()
+    const paintToken = { full: 'PF', tiny: 'PT', round: 'PR', zero: 'PN' }[kind]
+    return `                    <Compare expression="${name}">
+                        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="outerHalf${slotId}_${layout.name}_${index + 1}_${kind}">
+${bandTrack(outer, half, ' '.repeat(28))}${kind === 'zero' ? '' : `
+${bandPaint(outer, half, kind, ' '.repeat(28))}`}${diagnostics ? `
+${n1Witness(`admit_${layout.name}_${index}_${kind}`, layout.name === 'N1' ? 'A1' : 'AO', 1, 1)}${layout.name === 'N1' ? `
+${n1Witness(kind === 'zero' ? 'paintNone' : `paint_${kind}`, paintToken, 2, 1)}` : ''}` : ''}
                         </Group>
                     </Compare>`
   }).join('\n')
@@ -1440,21 +1430,29 @@ ${branches}${diagnostics ? `
         </ComplicationSlot>`
 }
 
-/** Exercise the emitted admission expressions, including non-finite wire fields. */
+function emittedExpressions(markup) {
+  return new Map([...markup.matchAll(/<Expression name="([^"]+)"><!\[CDATA\[([\s\S]*?)\]\]><\/Expression>/g)]
+    .map(([, name, expression]) => {
+      const source = expression.replaceAll('[COMPLICATION.RANGED_VALUE_MIN]', 'min')
+        .replaceAll('[COMPLICATION.RANGED_VALUE_MAX]', 'max')
+        .replaceAll('[COMPLICATION.RANGED_VALUE_VALUE]', 'value')
+        .replaceAll('[COMPLICATION.TITLE]', 'title')
+      return [name, new Function('min', 'max', 'value', 'title', `return ${source}`)]
+    }))
+}
+
+/** Normal extras have no nested comparisons; the XML checker enforces that structure. */
+function emittedExtraDecisions(markup) {
+  const predicates = emittedExpressions(markup)
+  return [...markup.matchAll(/<Compare expression="([^"]+)">([\s\S]*?)<\/Compare>/g)]
+    .map(([, name, body]) => ({ predicate: predicates.get(name), body }))
+}
+
+/** Exercise actual ordered decisions, including non-finite wire fields. */
 function assertLowerContracts() {
-  function expressions(markup) {
-    return new Map([...markup.matchAll(/<Expression name="([^"]+)"><!\[CDATA\[([\s\S]*?)\]\]><\/Expression>/g)]
-      .map(([, name, expression]) => {
-        const source = expression.replaceAll('[COMPLICATION.RANGED_VALUE_MIN]', 'min')
-          .replaceAll('[COMPLICATION.RANGED_VALUE_MAX]', 'max')
-          .replaceAll('[COMPLICATION.RANGED_VALUE_VALUE]', 'value')
-          .replaceAll('[COMPLICATION.TITLE]', 'title')
-        return [name, new Function('min', 'max', 'value', 'title', `return ${source}`)]
-      }))
-  }
   for (const [index, ring] of RINGS.entries()) {
     const markup = ringSlot(ring, index)
-    const valid = expressions(markup).get('isValid')
+    const valid = emittedExpressions(markup).get('isValid')
     for (const [max, allowed] of [[100, true], [200, index === 0], [400, index < 2], [800, true]]) {
       if (valid(0, max, 0, 'zero') !== allowed || valid(0, max, max, '') !== allowed) {
         throw new Error(`main ${index}: legacy/adaptive position or endpoint admission drifted`)
@@ -1478,19 +1476,32 @@ function assertLowerContracts() {
     }
   }
   for (const [ordinal, slot] of OUTER_HALVES.entries()) {
-    const predicates = [...expressions(outerHalfSlot(slot, ordinal)).entries()]
-      .filter(([name]) => /^is(?:Legacy|N\d)Band/.test(name)).map(([, predicate]) => predicate)
-    const admitted = (...fields) => predicates.some((predicate) => predicate(...fields))
+    const decisions = emittedExtraDecisions(outerHalfSlot(slot, ordinal))
+    const selected = (...fields) => decisions.find(({ predicate }) => predicate(...fields))?.body
     for (const [max, lastIndex] of [[100, 2], [200, 0], [400, 1], [800, 2]]) {
       for (let index = 0; index < 3; index += 1) {
-        if (admitted(0, max, max / 3, String(index)) !== (index <= lastIndex - ordinal)) {
-          throw new Error(`extra ${ordinal}/${max}/${index}: impossible ordinal or position admitted`)
+        for (const value of [0, max * 2 ** -20, max * 0.37, max * 0.999, max]) {
+          const body = selected(0, max, value, String(index))
+          if ((body !== undefined) !== (index <= lastIndex - ordinal)) {
+            throw new Error(`extra ${ordinal}/${max}/${index}: impossible ordinal or position admitted`)
+          }
+          if (body !== undefined && ((body.match(/<Stroke /g)?.length ?? 0) !== 1 ||
+              (body.match(/<WeightedStroke/g)?.length ?? 0) !== (value > 0 ? 1 : 0) ||
+              body.includes('<Condition>'))) {
+            throw new Error(`extra ${ordinal}: selected decision must own its track and only its paint`)
+          }
         }
       }
     }
-    if ([[0, 300, 50, '0'], [1, 800, 50, '0'], [0, 800, NaN, '0'],
-      [0, 800, Infinity, '0'], [0, 800, -1, '0'], [0, 800, 801, '0'],
-      [0, 800, 50, '00'], [0, 800, 50, '3']].some((fields) => admitted(...fields))) {
+    const malformed = [[0, 300, 50, '0'], [1, 800, 50, '0'],
+      [0, 800, -1, '0'], [0, 800, 801, '0']]
+    for (const invalid of [NaN, Infinity, -Infinity]) {
+      malformed.push([invalid, 800, 50, '0'], [0, invalid, 50, '0'], [0, 800, invalid, '0'])
+    }
+    for (const title of ['', '00', '0.0', ' 0', '0 ', '3', 'split', '0:zero']) {
+      malformed.push([0, 800, 50, title])
+    }
+    if (malformed.some((fields) => selected(...fields) !== undefined)) {
       throw new Error(`extra ${ordinal}: malformed response admitted`)
     }
   }

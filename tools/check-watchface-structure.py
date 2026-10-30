@@ -61,33 +61,52 @@ def check_structure(root):
             or strip.find(".//PartText") is None
         ):
             errors.append(f"slot {slot_id}: main strip lost its well or label")
-    return errors + check_band_paints(root)
+    return errors + check_band_paints(root) + check_extra_decisions(root)
 
 
 def paint_expression(expression):
     """Parse only the arithmetic/boolean subset emitted by the paint selector."""
     source = expression.replace("[COMPLICATION.RANGED_VALUE_VALUE]", "value")
     source = source.replace("[COMPLICATION.RANGED_VALUE_MAX]", "maximum")
+    source = source.replace("[COMPLICATION.RANGED_VALUE_MIN]", "minimum")
+    source = source.replace("[COMPLICATION.TITLE]", "title")
     return ast.parse(source.replace("&&", " and "), mode="eval").body
 
 
-def evaluate_paint(node, value, maximum):
+def evaluate_paint(node, value, maximum, minimum=0, title=""):
+    def evaluate(child):
+        return evaluate_paint(child, value, maximum, minimum, title)
+
     if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.And):
-        return all(evaluate_paint(child, value, maximum) for child in node.values)
+        return all(evaluate(child) for child in node.values)
     if isinstance(node, ast.Compare) and len(node.ops) == len(node.comparators) == 1:
-        left = evaluate_paint(node.left, value, maximum)
-        right = evaluate_paint(node.comparators[0], value, maximum)
+        left = evaluate(node.left)
+        right = evaluate(node.comparators[0])
+        if isinstance(node.ops[0], ast.Eq):
+            return left == right
         if isinstance(node.ops[0], ast.Gt):
             return left > right
         if isinstance(node.ops[0], ast.GtE):
             return left >= right
         if isinstance(node.ops[0], ast.LtE):
             return left <= right
-    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
-        return evaluate_paint(node.left, value, maximum) / evaluate_paint(node.right, value, maximum)
-    if isinstance(node, ast.Name) and node.id in ("value", "maximum"):
-        return value if node.id == "value" else maximum
-    if isinstance(node, ast.Constant) and type(node.value) in (int, float):
+    if isinstance(node, ast.BinOp):
+        left, right = evaluate(node.left), evaluate(node.right)
+        if isinstance(node.op, ast.Div):
+            return left / right
+        if isinstance(node.op, ast.Mult):
+            return left * right
+        if isinstance(node.op, ast.Add):
+            return left + right
+        if isinstance(node.op, ast.Sub):
+            return left - right
+    if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+            and node.func.id == "clamp" and len(node.args) == 3 and not node.keywords):
+        number, lower, upper = (evaluate(arg) for arg in node.args)
+        return min(max(number, lower), upper)
+    if isinstance(node, ast.Name) and node.id in ("value", "maximum", "minimum", "title"):
+        return {"value": value, "maximum": maximum, "minimum": minimum, "title": title}[node.id]
+    if isinstance(node, ast.Constant) and type(node.value) in (int, float, str):
         return node.value
     raise ValueError("unsupported paint expression")
 
@@ -106,9 +125,6 @@ def check_band_paints(root):
         for index in range(count):
             for suffix in ("", "Half"):
                 expected[f"ring{index + 1}{layout}{suffix}"] = maximum
-            for slot, ordinal in ((106, 0), (109, 1)):
-                if index < count - ordinal:
-                    expected[f"outerHalf{slot}_{layout}_{index + 1}"] = maximum
 
     for name, maximum in expected.items():
         groups = root.findall(f".//Group[@name='{name}']")
@@ -164,9 +180,8 @@ def check_band_paints(root):
                 or len(list(group.iter("Stroke"))) != 1):
             errors.append(f"{name}: colored paint escaped its three comparisons")
         fallback = selector.find("Default")
-        if fallback is not None and (name != "outerHalf106_N1_1" or
-                                    fallback.find("Group[@name='n1Diag_add_paintNone']") is None):
-            errors.append(f"{name}: only the diagnostic no-color fallback is allowed")
+        if fallback is not None:
+            errors.append(f"{name}: main/inner paint must have no fallback drawing")
 
         # Use the published geometry boundary independently of the emitted predicates.
         diameter = float(track_arc.get("width"))
@@ -197,6 +212,147 @@ def tree_content(node):
             [tree_content(child) for child in element_children(node)])
 
 
+def check_extra_decisions(root):
+    # Inspect the candidate's normal drawing tree; diagnostics are checked separately.
+    root = without_diagnostics(deepcopy(root))
+    errors = []
+    layouts = (("Legacy", 3, 100, 20), ("N1", 1, 200, 68),
+               ("N2", 2, 400, 32), ("N3", 3, 800, 20))
+    canvas = {"x": "0", "y": "0", "width": "450", "height": "450"}
+    for slot_id, ordinal in ((106, 0), (109, 1)):
+        slot = root.find(f".//ComplicationSlot[@slotId='{slot_id}']")
+        ranged = slot.find("Complication[@type='RANGED_VALUE']") if slot is not None else None
+        if ranged is None or [child.tag for child in ranged] != ["Condition"]:
+            errors.append(f"slot {slot_id}: extra must own one direct combined selector")
+            continue
+        selector = ranged[0]
+        expressions = selector.findall("Expressions/Expression")
+        predicates = {item.get("name"): paint_expression(item.text or "") for item in expressions}
+        branches = selector.findall("Compare")
+        expected = [(layout, index, maximum, thickness / 2,
+                     404 - 2 * index * (thickness + 4) - thickness / 2, kind)
+                    for layout, count, maximum, thickness in layouts
+                    for index in range(count - ordinal)
+                    for kind in ("full", "tiny", "round", "zero")]
+        if (len(expressions) != len(predicates) or len(predicates) != len(expected)
+                or len(branches) != len(expected)
+                or {branch.get("expression") for branch in branches} != set(predicates)
+                or [child.tag for child in selector] != ["Expressions"] + ["Compare"] * len(expected)):
+            errors.append(f"slot {slot_id}: expected ordered full/tiny/round/zero decisions for every feasible position")
+            continue
+        clip = slot.find("BoundingArc")
+        if clip is None or clip.attrib != {
+            "centerX": "225", "centerY": "225", "width": "414", "height": "414",
+            "thickness": "68", "startAngle": "0", "endAngle": "359.9", "isRoundEdge": "TRUE",
+        }:
+            errors.append(f"slot {slot_id}: complete shared round clip changed")
+        paints = []
+        for branch, (layout, index, maximum, thickness, diameter, kind) in zip(branches, expected):
+            name = f"outerHalf{slot_id}_{layout}_{index + 1}_{kind}"
+            children = element_children(branch)
+            group = children[0] if len(children) == 1 else None
+            if group is None or group.tag != "Group" or group.attrib != {**canvas, "name": name}:
+                errors.append(f"{name}: decision must own its stable named full-canvas Group")
+                paints.append(None)
+                continue
+            draws = element_children(group)
+            if [child.tag for child in draws] != ["PartDraw"] * (1 if kind == "zero" else 2):
+                errors.append(f"{name}: decision must own track then only its corresponding paint")
+                paints.append(None)
+                continue
+            track = draws[0]
+            track_arc = track.find("Arc")
+            arc_geometry = {"centerX": "225", "centerY": "225", "width": f"{diameter:g}",
+                            "height": f"{diameter:g}", "startAngle": "0", "endAngle": "359.9"}
+            stroke = track.find("Arc/Stroke")
+            if (track.attrib != canvas or [child.tag for child in track] != ["Arc"]
+                    or track_arc is None or track_arc.attrib != arc_geometry
+                    or [child.tag for child in track_arc] != ["Stroke"]
+                    or stroke is None or stroke.attrib != {
+                        "color": "#ff2e3632", "thickness": f"{thickness:g}", "cap": "ROUND"}):
+                errors.append(f"{name}: admitted decision lost its exact track geometry")
+            # The round clip must contain the complete annulus, including full-path caps.
+            half_gap = math.radians(0.1 / 2)
+            clip_along = 173 * math.cos(half_gap)
+            clip_reach = math.sqrt(34**2 - (173 * math.sin(half_gap))**2)
+            if not clip_along - clip_reach < (diameter - thickness) / 2 < (
+                diameter + thickness
+            ) / 2 < clip_along + clip_reach:
+                errors.append(f"{name}: complete half envelope escapes clip")
+            if kind == "zero":
+                paints.append(None)
+                continue
+            paint = draws[1]
+            arc = paint.find("Arc")
+            weighted = paint.find("Arc/WeightedStroke")
+            cap = round(thickness / diameter * 180 / math.pi, 2)
+            end = 359.9 - cap if kind == "round" else 359.9
+            transforms = [] if arc is None else arc.findall("Transform")
+            if (paint.attrib != {**canvas, "alpha": "255"}
+                    or [child.tag for child in paint] != ["Variant", "Arc"]
+                    or paint[0].attrib != {"mode": "AMBIENT", "target": "alpha", "value": "140"}
+                    or arc is None or arc.attrib != {**arc_geometry, "endAngle": f"{end:.2f}" if kind == "round" else "359.9"}
+                    or [child.tag for child in arc] != ([] if kind == "full" else ["Transform"]) + ["WeightedStroke"]
+                    or weighted is None or weighted.attrib != {
+                        "thickness": f"{thickness:g}", "colors": "[COMPLICATION.RANGED_VALUE_COLORS]",
+                        "cap": "BUTT" if kind == "tiny" else "ROUND"}
+                    or any(set(item.attrib) != {"target", "value"} or item.get("target") != "startAngle"
+                           for item in transforms)):
+                errors.append(f"{name}: selected drawing lost its geometry, caps, family or ambient alpha")
+            paints.append(paint_expression(transforms[0].get("value", "")) if transforms else None)
+            if kind == "full":
+                radius = diameter / 2
+                along = radius * math.cos(half_gap)
+                reach = math.sqrt((thickness / 2)**2 - (radius * math.sin(half_gap))**2)
+                if not (0 <= along - reach - (diameter - thickness) / 2 <= 0.01
+                        and 0 <= (diameter + thickness) / 2 - along - reach <= 0.01):
+                    errors.append(f"{name}: full path no longer closes the complete annulus")
+
+        def selected(value, maximum, minimum=0, title="0"):
+            return next((position for position, branch in enumerate(branches)
+                         if evaluate_paint(predicates[branch.get("expression")], value, maximum, minimum, title)), None)
+
+        for layout, count, maximum, thickness in layouts:
+            for index in range(3):
+                diameter = 404 - 2 * index * (thickness + 4) - thickness / 2
+                cap = round((thickness / 2) / diameter * 180 / math.pi, 2)
+                cutoff = 2 * cap / 359.9
+                if thickness == 20:
+                    cutoff = round(cutoff, 6)
+                values = [0, 2**-20 * maximum, adjacent_float(cutoff * maximum, -1),
+                          adjacent_float(cutoff * maximum, 1), 0.37 * maximum, 0.99 * maximum,
+                          0.996 * maximum, 0.999 * maximum, adjacent_float(maximum, -1), maximum]
+                for value in values:
+                    kind = ("zero" if value == 0 else "full" if value == maximum
+                            else "tiny" if value / maximum <= cutoff else "round")
+                    wanted = (layout, index, maximum, thickness / 2, diameter, kind) if index < count - ordinal else None
+                    position = selected(value, maximum, title=str(index))
+                    actual = expected[position] if position is not None else None
+                    if actual != wanted:
+                        errors.append(f"slot {slot_id}/{layout}/{index}: {value} selected {actual}, expected {wanted}")
+                    elif position is not None and kind in ("tiny", "round"):
+                        transform = paints[position]
+                        start = evaluate_paint(transform, value, maximum) if transform is not None else math.nan
+                        wanted_start = (1 - value / maximum) * 359.9 + (cap if kind == "round" else 0)
+                        if not math.isclose(start, wanted_start, rel_tol=0, abs_tol=1e-9):
+                            errors.append(f"slot {slot_id}/{layout}/{index}: selected {kind} sweep is not proportional")
+                malformed = [(value, maximum, 0, str(index))
+                             for value in (-1, adjacent_float(maximum, 1), math.nan, math.inf, -math.inf)]
+                # Exercise admission in every paint state, including the zero-only track.
+                malformed += [(value, maximum, minimum, str(index))
+                              for minimum in (-1, 1, math.nan, math.inf, -math.inf) for value in values]
+                malformed += [(value, maximum, 0, title)
+                              for title in ("", "00", "01", "+0", "0.0", " 0", "0 ", "3", "-1", "split", "0:zero")
+                              for value in values]
+                if any(selected(value, upper, lower, title) is not None for value, upper, lower, title in malformed):
+                    errors.append(f"slot {slot_id}/{layout}/{index}: malformed input admitted")
+        if any(selected(value, maximum, title=title) is not None
+               for maximum in (0, -1, 50, 150, 300, 900, math.nan, math.inf, -math.inf)
+               for value in (0, 2**-20 * 100, 50, 100, 200, 400, 800) for title in ("0", "1", "2")):
+            errors.append(f"slot {slot_id}: malformed range admitted")
+    return errors
+
+
 def without_diagnostics(node):
     for child in list(node):
         if child.tag == "Default" and len(child) == 1 and (
@@ -207,11 +363,6 @@ def without_diagnostics(node):
             node.remove(child)
         else:
             without_diagnostics(child)
-            if child.get("name", "").startswith("n1Diag_wrap_"):
-                index = list(node).index(child)
-                node.remove(child)
-                for original in reversed(list(child)):
-                    node.insert(index, original)
     return node
 
 
@@ -279,36 +430,48 @@ def check_diagnostics(root, baseline):
             if static_readout(witness) != token:
                 errors.append("consumer TITLE must retain its closed two-character readout")
 
+    expected_additions = {"n1Diag_add_fields", "n1Diag_add_titleOther"}
+    expected_additions.update(f"n1Diag_add_{name}" for field in ("VALUE", "MIN", "MAX")
+                              for name in (f"field_{field}", f"field_{field}_other"))
+    expected_additions.update(f"n1Diag_add_title{index}" for index in range(4))
     for branch in admission.findall("Compare"):
-        expression = branch.get("expression", "")
-        layout, index = expression.removeprefix("is").split("Band")
-        witness = branch.find(f"Group/Group[@name='n1Diag_add_admit_{layout}_{index}']")
+        group = branch.find("Group")
+        if group is None:
+            errors.append("combined decision Group missing")
+            continue
+        _, layout, band, kind = group.get("name", "").split("_")
+        index = int(band) - 1
+        name = f"n1Diag_add_admit_{layout}_{index}_{kind}"
+        expected_additions.add(name)
+        witness = group.find(f"Group[@name='{name}']")
         if static_readout(witness) != ("A1" if layout == "N1" else "AO"):
-            errors.append(f"{expression}: admission witness must belong to the actual branch")
-    n1 = admission.find("Compare[@expression='isN1Band0']/Group")
-    paint = n1.find("Condition") if n1 is not None else None
-    if paint is None:
-        errors.append("N1 original paint selector missing")
-    else:
-        for branch, (name, token) in zip(paint.findall("Compare"),
-                                         (("full", "PF"), ("tiny", "PT"), ("round", "PR"))):
-            wrapper = branch.find(f"Group[@name='n1Diag_wrap_{name}']")
-            if wrapper is None or [child.tag for child in wrapper] != ["PartDraw", "Group"] or (
-                wrapper[1].get("name") != f"n1Diag_add_paint_{name}"
-                or static_readout(wrapper[1]) != token
-            ):
-                errors.append(f"N1 {name}: witness must share its actual colored-paint branch")
-    no_color = n1.find("Condition/Default/Group[@name='n1Diag_add_paintNone']") if n1 is not None else None
-    if static_readout(no_color) != "PN":
-        errors.append("N1 no-color branch witness missing")
+            errors.append(f"{group.get('name')}: admission witness must belong to the actual decision")
+        wanted = ["PartDraw"] * (1 if kind == "zero" else 2) + ["Group"]
+        if layout == "N1":
+            paint_name = "n1Diag_add_paintNone" if kind == "zero" else f"n1Diag_add_paint_{kind}"
+            expected_additions.add(paint_name)
+            paint_witness = group.find(f"Group[@name='{paint_name}']")
+            if static_readout(paint_witness) != {"full": "PF", "tiny": "PT", "round": "PR", "zero": "PN"}[kind]:
+                errors.append(f"N1 {kind}: witness must share its actual paint decision")
+            wanted.append("Group")
+        if [child.tag for child in group] != wanted:
+            errors.append(f"{group.get('name')}: witnesses must follow track and selected drawing")
     rejected = admission.find("Default/Group[@name='n1Diag_add_rejected']")
     if rejected is None or [static_readout(text) for text in rejected] != ["AX", "PN"]:
         errors.append("actual rejected-admission witness missing")
+    expected_additions.add("n1Diag_add_rejected")
+    if set(names) != expected_additions:
+        errors.append("diagnostics must contain only the closed consumer-field and decision witnesses")
 
     # Box corners bound the maximum radius; the nearest box point bounds the minimum.
     readouts = {text for group in additions for text in group.iter("PartText")}
     for text in readouts:
         x, y, width, height = (float(text.get(key)) for key in ("x", "y", "width", "height"))
+        font = text.find("Text/Font")
+        if (x not in (173, 208, 243) or y not in (364, 376) or (width, height) != (34, 12)
+                or font is None or font.attrib != {
+                    "family": "SYNC_TO_DEVICE", "size": "10", "weight": "BOLD", "color": "#fff4fbf8"}):
+            errors.append("diagnostics must preserve the six-cell footprint and readable text style")
         nearest_x = max(x - 225, 225 - (x + width), 0)
         nearest_y = max(y - 225, 225 - (y + height), 0)
         if nearest_x**2 + nearest_y**2 < 139**2 or any(
