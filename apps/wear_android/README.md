@@ -197,7 +197,7 @@ controls retain their separate scope. These are decoder/construction witnesses o
 execution, service delivery and WFF paint remain **Pending**. Android API/Parcel coverage
 retains its separate scope.
 
-`WatchSummaryStoreTest.n3InnerAndMiddleCutoffFixturesKeepExactRadialAndPoolRouting` adds
+`WatchSummaryStoreTest.n3CutoffFixturesKeepExactRadialAndPoolRouting` decodes
 four schema-9 fixtures under `fixtures/snapshots/`:
 `watch_dashboard_summary_n3_middle_pair_below.json`,
 `watch_dashboard_summary_n3_middle_pair_above.json`,
@@ -214,6 +214,23 @@ ordinary remainder keeps VALUE 0.25 and an empty TITLE despite `0%` text. Obsole
 selection and private-store clear/delete cleanup remain covered. These are decoder/construction
 witnesses only; execution, service delivery and WFF paint remain **Pending**. Existing Android
 API/Parcel coverage retains its separate scope.
+
+The same N3 test adds four more schema-9 fixtures under `fixtures/snapshots/`:
+`watch_dashboard_summary_n3_inner_full_below.json`,
+`watch_dashboard_summary_n3_inner_full_above.json`,
+`watch_dashboard_summary_n3_outer_pair_below.json` and
+`watch_dashboard_summary_n3_outer_pair_above.json`.
+They bracket the remaining inner 20-unit full-band and outer 10-unit paired-half cutoffs
+with Float neighbors of the published six-decimal boundaries, preserving the existing
+rounded-boundary clamp qualification. Literal MAX800 oracles retain independent Codex/Spark
+and Cursor Models/Other full/near-full values in the two-pair rows, with Spark at ordinal 0/
+TITLE `1` and Other at ordinal 1/TITLE `0`. The lone outer Cursor pair uses ordinal 0/TITLE
+`0`, and ordinal 1 clears as actual `NoData`; the ordinary tiny Codex value stays positive
+beside true-zero Claude. Decoded identities, order, null Money and credits, family colors,
+unscaled text/descriptions, obsolete main selections and private-store cleanup remain covered.
+These are decoder/construction witnesses only; execution, service delivery and WFF paint
+remain **Pending**. Legacy MAX100 fixed geometry retains its existing declaration/API coverage;
+these adaptive fixtures provide no legacy-count evidence.
 
 Current packaging is phone 0.1.0+3/Wear 4/legacy 2/Push default 3, all versionNames 0.1.0. Preserve
 package identities, signers and release-tool parity; this is not a release cut. The

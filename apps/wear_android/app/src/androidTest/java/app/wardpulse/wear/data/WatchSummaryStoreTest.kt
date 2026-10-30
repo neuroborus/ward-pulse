@@ -839,7 +839,7 @@ class WatchSummaryStoreTest {
 
     /** N3 decoder/construction cutoffs only; no service delivery or WFF paint evidence. */
     @Test
-    fun n3InnerAndMiddleCutoffFixturesKeepExactRadialAndPoolRouting() {
+    fun n3CutoffFixturesKeepExactRadialAndPoolRouting() {
         val expectedRings = linkedMapOf(
             "n3_middle_pair_below" to listOf(
                 RingSummary("allowance.claude.plan", "Claude plan", 99.96875, PulseStatus.OK),
@@ -883,6 +883,44 @@ class WatchSummaryStoreTest {
                     split = RingHalf("allowance.cursor.cursor-plan-other", "Other Models", 0.1, PulseStatus.OK),
                 ),
             ),
+            "n3_inner_full_below" to listOf(
+                RingSummary("allowance.claude.plan", "Claude plan", 97.78830027580261, PulseStatus.OK),
+                RingSummary(
+                    "allowance.codex.plan", "Codex plan", 0.1, PulseStatus.OK,
+                    split = RingHalf("allowance.codex.spark", "Spark", 0.0, PulseStatus.OK),
+                ),
+                RingSummary(
+                    "allowance.cursor.cursor-plan-models", "Cursor Models", 0.0, PulseStatus.OK,
+                    split = RingHalf("allowance.cursor.cursor-plan-other", "Other Models", 0.1, PulseStatus.OK),
+                ),
+            ),
+            "n3_inner_full_above" to listOf(
+                RingSummary("allowance.claude.plan", "Claude plan", 97.78829979896545, PulseStatus.OK),
+                RingSummary(
+                    "allowance.codex.plan", "Codex plan", 0.0, PulseStatus.OK,
+                    split = RingHalf("allowance.codex.spark", "Spark", 0.1, PulseStatus.OK),
+                ),
+                RingSummary(
+                    "allowance.cursor.cursor-plan-models", "Cursor Models", 0.1, PulseStatus.OK,
+                    split = RingHalf("allowance.cursor.cursor-plan-other", "Other Models", 0.0, PulseStatus.OK),
+                ),
+            ),
+            "n3_outer_pair_below" to listOf(
+                RingSummary("allowance.claude.plan", "Claude plan", 100.0, PulseStatus.OK),
+                RingSummary("allowance.codex.plan", "Codex plan", 99.96875, PulseStatus.OK),
+                RingSummary(
+                    "allowance.cursor.cursor-plan-models", "Cursor Models", 99.14980006217957, PulseStatus.OK,
+                    split = RingHalf("allowance.cursor.cursor-plan-other", "Other Models", 99.19420003890991, PulseStatus.OK),
+                ),
+            ),
+            "n3_outer_pair_above" to listOf(
+                RingSummary("allowance.claude.plan", "Claude plan", 100.0, PulseStatus.OK),
+                RingSummary("allowance.codex.plan", "Codex plan", 99.96875, PulseStatus.OK),
+                RingSummary(
+                    "allowance.cursor.cursor-plan-models", "Cursor Models", 99.14979994297028, PulseStatus.OK,
+                    split = RingHalf("allowance.cursor.cursor-plan-other", "Other Models", 99.19419991970062, PulseStatus.OK),
+                ),
+            ),
         )
         // Literal MAX800 values, TITLEs and TEXT: outside-to-inside mains, then split ordinals.
         val expectedRows = mapOf(
@@ -912,18 +950,52 @@ class WatchSummaryStoreTest {
                 Triple(8.536001205444336f, "2", "1"),
                 Triple(799.2000122070312f, "0", "100"),
             ),
+            "n3_inner_full_below" to listOf(
+                Triple(800f, "split:cursor-other", "100% · 100%"),
+                Triple(799.2000122070312f, "split:spark", "100% · 100%"),
+                Triple(17.6935977935791f, "", "2%"),
+                Triple(800f, "1", "100"),
+                Triple(799.2000122070312f, "0", "100"),
+            ),
+            "n3_inner_full_above" to listOf(
+                Triple(799.2000122070312f, "split:cursor-other", "100% · 100%"),
+                Triple(800f, "split:spark", "100% · 100%"),
+                Triple(17.693601608276367f, "", "2%"),
+                Triple(799.2000122070312f, "1", "100"),
+                Triple(800f, "0", "100"),
+            ),
+            "n3_outer_pair_below" to listOf(
+                Triple(6.801599502563477f, "split:cursor-other", "1% · 1%"),
+                Triple(0.25f, "", "0%"),
+                Triple(0f, "zero", "0%"),
+                Triple(6.446399688720703f, "0", "1"),
+            ),
+            "n3_outer_pair_above" to listOf(
+                Triple(6.801600456237793f, "split:cursor-other", "1% · 1%"),
+                Triple(0.25f, "", "0%"),
+                Triple(0f, "zero", "0%"),
+                Triple(6.4464006423950195f, "0", "1"),
+            ),
         )
         val expectedDescriptions = mapOf(
             "n3_middle_pair_below" to listOf("Cursor Models 2%", "Codex plan 1%", "Claude plan 0%", "Spark 1%"),
             "n3_middle_pair_above" to listOf("Cursor Models 2%", "Codex plan 1%", "Claude plan 0%", "Spark 1%"),
             "n3_inner_pair_below" to listOf("Cursor Models 100%", "Claude plan 2%", "Codex plan 1%", "Spark 1%", "Other Models 100%"),
             "n3_inner_pair_above" to listOf("Cursor Models 100%", "Claude plan 2%", "Codex plan 1%", "Spark 1%", "Other Models 100%"),
+            "n3_inner_full_below" to listOf("Cursor Models 100%", "Codex plan 100%", "Claude plan 2%", "Spark 100%", "Other Models 100%"),
+            "n3_inner_full_above" to listOf("Cursor Models 100%", "Codex plan 100%", "Claude plan 2%", "Spark 100%", "Other Models 100%"),
+            "n3_outer_pair_below" to listOf("Cursor Models 1%", "Codex plan 0%", "Claude plan 0%", "Other Models 1%"),
+            "n3_outer_pair_above" to listOf("Cursor Models 1%", "Codex plan 0%", "Claude plan 0%", "Other Models 1%"),
         )
         val expectedColors = mapOf(
             "n3_middle_pair_below" to listOf(RingFamily.CURSOR_OWN, RingFamily.CODEX, RingFamily.CLAUDE, RingFamily.CODEX_SPARK),
             "n3_middle_pair_above" to listOf(RingFamily.CURSOR_OWN, RingFamily.CODEX, RingFamily.CLAUDE, RingFamily.CODEX_SPARK),
             "n3_inner_pair_below" to listOf(RingFamily.CURSOR_OWN, RingFamily.CLAUDE, RingFamily.CODEX, RingFamily.CODEX_SPARK, RingFamily.CURSOR),
             "n3_inner_pair_above" to listOf(RingFamily.CURSOR_OWN, RingFamily.CLAUDE, RingFamily.CODEX, RingFamily.CODEX_SPARK, RingFamily.CURSOR),
+            "n3_inner_full_below" to listOf(RingFamily.CURSOR_OWN, RingFamily.CODEX, RingFamily.CLAUDE, RingFamily.CODEX_SPARK, RingFamily.CURSOR),
+            "n3_inner_full_above" to listOf(RingFamily.CURSOR_OWN, RingFamily.CODEX, RingFamily.CLAUDE, RingFamily.CODEX_SPARK, RingFamily.CURSOR),
+            "n3_outer_pair_below" to listOf(RingFamily.CURSOR_OWN, RingFamily.CODEX, RingFamily.CLAUDE, RingFamily.CURSOR),
+            "n3_outer_pair_above" to listOf(RingFamily.CURSOR_OWN, RingFamily.CODEX, RingFamily.CLAUDE, RingFamily.CURSOR),
         )
         // Payload index / outside index for each split ordinal, independent of production selection.
         val expectedExtraPositions = mapOf(
@@ -931,14 +1003,23 @@ class WatchSummaryStoreTest {
             "n3_middle_pair_above" to listOf(1 to 1),
             "n3_inner_pair_below" to listOf(0 to 2, 2 to 0),
             "n3_inner_pair_above" to listOf(0 to 2, 2 to 0),
+            "n3_inner_full_below" to listOf(1 to 1, 2 to 0),
+            "n3_inner_full_above" to listOf(1 to 1, 2 to 0),
+            "n3_outer_pair_below" to listOf(2 to 0),
+            "n3_outer_pair_above" to listOf(2 to 0),
         )
         // Published six-decimal cutoffs: full384/20, inner326/10, extra346/10 for middle;
         // full336/20, inner278/10, extra298/10 for inner. Keep the rounded-boundary clamp.
+        // The remaining geometries are full288/20 and outer inner374/10, extra394/10.
         val expectedCutoffs = mapOf(
             "n3_middle_pair_below" to listOf(0.016560, 0.009780, null, 0.009225),
             "n3_middle_pair_above" to listOf(0.016560, 0.009780, null, 0.009225),
             "n3_inner_pair_below" to listOf(null, 0.018950, 0.011448, 0.010670, null),
             "n3_inner_pair_above" to listOf(null, 0.018950, 0.011448, 0.010670, null),
+            "n3_inner_full_below" to listOf(null, null, 0.022117, null, null),
+            "n3_inner_full_above" to listOf(null, null, 0.022117, null, null),
+            "n3_outer_pair_below" to listOf(0.008502, null, null, 0.008058),
+            "n3_outer_pair_above" to listOf(0.008502, null, null, 0.008058),
         )
         val resources = context.resources
         val now = Instant.EPOCH
