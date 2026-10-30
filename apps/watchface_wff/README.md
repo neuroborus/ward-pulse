@@ -63,12 +63,12 @@ with its actual VALUE/TITLE/paint branch unknown. A separate diagnostic case on 
 showed `V74/m0/M200/T0/A1/PN` without the expected Spark arc. The subsequent `c36bc1c`
 combined-decision candidate passed the exact N2-plan-pair → original/MUTE → N1ordinary →
 N1pair prefix on one retained normal engine. That is scoped N1 paint success; normal
-VALUE/TITLE/selected branch and the bottom overlay remain unknown.
+VALUE/TITLE/selected branch remain unknown. The known bottom system overlay limits track visibility.
 
 On that same retained normal engine, two N2-two-pairs → N3-two-pairs cases retained wrong
 pair geometry. In the first, later correct geometry followed ambient/clock controls and
-does not establish natural settlement. The second repeated wrong geometry across nine
-samples and a natural clock advance, spanning 77.65 seconds from first to last frame;
+does not establish natural settlement. The second repeated wrong geometry in its first frame
+and nine follow-ups over 77.65 seconds from first to last, including a natural clock advance;
 this is bounded repeated RED, not a continuous or infinite-lifetime claim. Normal consumer
 VALUE/TITLE/selected branch remain unknown. In the second case, the first frame's repeated
 effectiveRanges15 tuples are not one authoritative slot15 record; the separate slot14
@@ -79,7 +79,7 @@ samples are neither unique raster pixels nor exact subpixel stroke measurements.
 A separate fresh diagnostic engine with shorter history did not reproduce the count
 defect. Its first N2 frame was a blocking notification, not acceptance; N2 was qualified
 after snoozing that notification without advancing data. Its N3 first/later frames already
-had correct geometry. Only `N3T2` and `AO/A0` were image-readable; full VALUE/MIN/MAX remain
+had correct geometry. Only `T2` and `AO/A0` were image-readable; full VALUE/MIN/MAX remain
 unknown. AO denotes any non-N1 admitted layout, not exact count/position/paint identity.
 This case cannot erase either normal RED or supply the missing normal fields or a cause.
 

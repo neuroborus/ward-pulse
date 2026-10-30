@@ -86,11 +86,11 @@ prompts or authentication.
 
 ## Observed environment limits
 
-- **`spawnSync python3` is denied (`EPERM`)**, so `just render-designs` can never finish inside
-  a runner step — `tools/render-watch-ring-designs.mjs` shells out to python3 and Pillow in
-  `assertLabelsFit`. Trusted checks execute in a different environment where python3 works,
-  which is why `just check-designs` passes as a gate while the generator behind it cannot be
-  run as work.
+- A historical `spawnSync python3` denial (`EPERM`) blocked `assertLabelsFit` in
+  `tools/render-watch-ring-designs.mjs` inside that Runner executor; a separate trusted
+  `just check-designs` environment ran Python/Pillow successfully. Current `assertLabelsFit`
+  uses asynchronous `runFile` (`execFile`), not `spawnSync`: evaluate it in the actual executor.
+  Neither fact proves current Native generation availability/PASS; preserve the task's Native/HOST division and authorship.
 - **Sockets are denied**, so Gradle never starts: `just check-wear`, `just check-watchface`.
 - **No network**, so a recipe that fetches needs a pinned artifact or it is the owner's.
 
