@@ -54,9 +54,9 @@ durable product fix by itself. Keep unavailable causal evidence Pending.
 After an authorized install/update, inspect the whole affected native UI again. Updating only the Wear APK
 does not establish that the separately installed face changed, that its active instance refreshed or that old slot bindings were migrated.
 
-After each app/Settings launch, navigation transition or app/face handoff, join current full-window focus,
-settled foreground hierarchy and the full first original identifying the expected unobscured page before
-the next input or capture batch. For physical targets, use the
+After each app/Settings launch, navigation transition or app/face handoff, join current full-window focus and settled foreground hierarchy with the full first original identifying the expected unobscured page.
+Return/view the actual image to the model and evaluate it BEFORE the next screen-dependent decision, input, mutation or capture batch, including ordinary planned prefix continuation; queuing view_image/image and those actions inside one functions.exec is not inspection.
+Independent read-only batching and unconditional necessary failure-safe cleanup/recovery need no image gate; ordinary planned prefix progression is not this exception. Recovery establishes neither image inspection/PASS nor permission for further case advance. For physical targets, use the
 [launch/navigation guard](../../android-devices/references/commands.md#guard-launches-and-navigation).
 Active wallpaper/renderer mode, UIAutomator idle or launch success alone does not prove compositor handoff.
 If a prompt/notification covers the face, stop as an environment obstruction, not Source/UI PASS. Use only safe
