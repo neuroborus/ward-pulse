@@ -138,7 +138,8 @@ internal class N1PairDiagnostics(
         route: Route?,
         readTitle: (RangedValueComplicationData) -> CharSequence?,
     ) {
-        if (!enabled || records >= MAX_RECORDS || !isCase(summary, ordinal)) return
+        if (!enabled || records >= MAX_RECORDS) return
+        val case = caseLabel(summary, ordinal) ?: return
         records++
         // Observation failure must not change the service's return or expose an exception.
         try {
@@ -170,6 +171,7 @@ internal class N1PairDiagnostics(
                 val ramp = when {
                     returned.colorRamp == null -> "absent"
                     returned.colorRamp?.colors?.singleOrNull() == RingFamily.CODEX_SPARK -> "spark"
+                    returned.colorRamp?.colors?.singleOrNull() == RingFamily.CURSOR -> "cursor_cyan"
                     else -> "other"
                 }
                 "value=${number(returned.value)} min=${number(returned.min)} max=${number(returned.max)} " +
@@ -178,7 +180,7 @@ internal class N1PairDiagnostics(
                 "value=unknown min=unknown max=unknown valueType=unknown title=unknown ramp=unknown"
             }
             emit(
-                "case=N1_PAIR stage=service_return ordinal=0 " +
+                "case=$case stage=service_return ordinal=0 " +
                     "payload=${routing(route?.payload, 0..2)} outside=${routing(route?.outside, 0..2)} " +
                     "bands=${routing(route?.bands, 1..3)} type=$type $fields",
             )
@@ -187,16 +189,27 @@ internal class N1PairDiagnostics(
         }
     }
 
-    private fun isCase(summary: WatchDashboardSummary?, ordinal: Int): Boolean {
+    private fun caseLabel(summary: WatchDashboardSummary?, ordinal: Int): String? {
         if (ordinal != 0 || summary == null || summary.schemaVersion != 9 || summary.dataMode != WatchDataMode.MOCK) {
-            return false
+            return null
         }
-        val ring = summary.rings.singleOrNull() ?: return false
-        return ring.id == "allowance.codex.plan" && ring.usedPercent == 63.0 &&
-            ring.spent == null && ring.limit == null && ring.status == PulseStatus.OK &&
-            ring.split?.let {
+        val codex = summary.rings.firstOrNull() ?: return null
+        if (codex.id != "allowance.codex.plan" || codex.usedPercent != 63.0 ||
+            codex.spent != null || codex.limit != null || codex.status != PulseStatus.OK
+        ) return null
+        if (summary.rings.size == 1) {
+            return if (codex.split?.let {
                 it.id == "allowance.codex.spark" && it.usedPercent == 63.0 && it.status == PulseStatus.OK
+            } == true) "N1_PAIR" else null
+        }
+        if (summary.rings.size != 2 || codex.split != null) return null
+        val cursor = summary.rings[1]
+        return if (cursor.id == "allowance.cursor.cursor-plan-models" && cursor.usedPercent == 63.0 &&
+            cursor.spent == null && cursor.limit == null && cursor.status == PulseStatus.OK &&
+            cursor.split?.let {
+                it.id == "allowance.cursor.cursor-plan-other" && it.usedPercent == 63.0 && it.status == PulseStatus.OK
             } == true
+        ) "N2_PLAN_PAIR" else null
     }
 
     private fun number(value: Float): String = when {

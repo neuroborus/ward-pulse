@@ -1,11 +1,13 @@
 package app.wardpulse.wear.complication
 
+import androidx.wear.watchface.complications.data.ColorRamp
 import androidx.wear.watchface.complications.data.ComplicationData
 import androidx.wear.watchface.complications.data.NoDataComplicationData
 import androidx.wear.watchface.complications.data.PlainComplicationText
 import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import app.wardpulse.wear.model.AllowanceSummary
 import app.wardpulse.wear.model.CreditsGlance
+import app.wardpulse.wear.model.Money
 import app.wardpulse.wear.model.PreviewWatchDashboardSummary
 import app.wardpulse.wear.model.ProviderSummary
 import app.wardpulse.wear.model.PulseStatus
@@ -178,6 +180,13 @@ class WatchComplicationTextTest {
         split = RingHalf("allowance.codex.spark", "Spark 5h", 59.0, PulseStatus.OK),
     )
 
+    private val n2DiagnosticSummary = PreviewWatchDashboardSummary.value.copy(
+        rings = listOf(
+            codexPair.copy(usedPercent = 63.0, split = null),
+            cursorPair.copy(usedPercent = 63.0, split = cursorPair.split!!.copy(usedPercent = 63.0)),
+        ),
+    )
+
     @Test
     fun n1DiagnosticsRequireOptInAndTheExactMockCaseAndStopAtTheProcessLimit() {
         val pair = codexPair.copy(usedPercent = 63.0, split = codexPair.split!!.copy(usedPercent = 63.0))
@@ -253,6 +262,144 @@ class WatchComplicationTextTest {
         // No title, label, request identifier or exception text can pass through a category.
         assertTrue(!record(unexpected) { "Synthetic label" }.contains("Synthetic"))
         N1PairDiagnostics(true) { error("Synthetic sink failure") }.observe(summary, 0, unexpected, null) { "0" }
+    }
+
+    @Test
+    fun n2DiagnosticsRequireOptInAndTheExactOrderedMockCaseBeforeReadingTitle() {
+        val summary = n2DiagnosticSummary
+        val codex = summary.rings[0]
+        val cursor = summary.rings[1]
+        val money = Money(0, "USD")
+        val records = mutableListOf<String>()
+        val data = rangedComplicationBuilder(12f, "0", RingFamily.CURSOR).build()
+        val route = N1PairDiagnostics.Route(1, 0, 2)
+        var titleReads = 0
+        val readTitle: (RangedValueComplicationData) -> CharSequence? = { actual ->
+            assertSame(data, actual)
+            titleReads++
+            "0"
+        }
+        N1PairDiagnostics(false, records::add).observe(summary, 0, data, route, readTitle)
+        val observer = N1PairDiagnostics(true, records::add)
+        val rejectedRings = listOf(
+            emptyList(), listOf(codex), listOf(cursor), listOf(cursor, codex), listOf(codex, cursor, codex),
+        ) + listOf(
+            codex.copy(id = "allowance.claude.plan"), codex.copy(usedPercent = 62.0),
+            codex.copy(status = PulseStatus.STALE), codex.copy(spent = money), codex.copy(limit = money),
+            codex.copy(split = codexPair.split),
+        ).map { listOf(it, cursor) } + listOf(
+            cursor.copy(id = "allowance.cursor.other"), cursor.copy(usedPercent = 62.0),
+            cursor.copy(status = PulseStatus.STALE), cursor.copy(spent = money), cursor.copy(limit = money),
+            cursor.copy(split = null),
+            cursor.copy(split = cursor.split!!.copy(id = "allowance.codex.spark")),
+            cursor.copy(split = cursor.split!!.copy(usedPercent = 62.0)),
+            cursor.copy(split = cursor.split!!.copy(status = PulseStatus.STALE)),
+        ).map { listOf(codex, it) }
+        for (rejected in listOf(null, summary.copy(schemaVersion = 8), summary.copy(dataMode = WatchDataMode.LIVE)) +
+            rejectedRings.map { summary.copy(rings = it) }
+        ) {
+            observer.observe(rejected, 0, data, route, readTitle)
+        }
+        for (ordinal in listOf(-1, 1)) observer.observe(summary, ordinal, data, route, readTitle)
+        assertTrue(records.isEmpty())
+        assertEquals(0, titleReads)
+        observer.observe(summary, 0, data, route, readTitle)
+        assertEquals(1, titleReads)
+        assertEquals(
+            "case=N2_PLAN_PAIR stage=service_return ordinal=0 payload=1 outside=0 bands=2 " +
+                "type=ranged_value value=12.0 min=0.0 max=100.0 valueType=undefined title=index0 ramp=cursor_cyan",
+            records.single(),
+        )
+    }
+
+    @Test
+    fun n1AndN2DiagnosticsShareOneProcessBudgetAndStopReadingAfterFourRecords() {
+        val pair = codexPair.copy(usedPercent = 63.0, split = codexPair.split!!.copy(usedPercent = 63.0))
+        val n1 = n2DiagnosticSummary.copy(rings = listOf(pair))
+        val records = mutableListOf<String>()
+        val observer = N1PairDiagnostics(true, records::add)
+        val data = rangedComplicationBuilder(12f, "0").build()
+        var titleReads = 0
+        repeat(N1PairDiagnostics.MAX_RECORDS + 2) { index ->
+            observer.observe(if (index % 2 == 0) n1 else n2DiagnosticSummary, 0, data, null) {
+                titleReads++
+                "0"
+            }
+        }
+        assertEquals(4, titleReads)
+        assertEquals(
+            listOf("case=N1_PAIR", "case=N2_PLAN_PAIR", "case=N1_PAIR", "case=N2_PLAN_PAIR"),
+            records.map { it.substringBefore(' ') },
+        )
+    }
+
+    @Test
+    fun n2DiagnosticsCategorizeActualFieldsInsteadOfPredictingTheExpectedReturn() {
+        fun record(data: ComplicationData?, title: CharSequence? = "Synthetic label"): String {
+            val records = mutableListOf<String>()
+            N1PairDiagnostics(true, records::add).observe(
+                n2DiagnosticSummary, 0, data, N1PairDiagnostics.Route(2, 1, 3),
+            ) { title }
+            return records.single()
+        }
+        // Deliberately unlike the predicted N2 tuple; these are constructed observer inputs only.
+        val actual = RangedValueComplicationData.Builder(
+            value = 12f, min = 5f, max = 80f,
+            contentDescription = PlainComplicationText.Builder("Synthetic description").build(),
+        ).setValueType(RangedValueComplicationData.TYPE_RATING)
+            .setColorRamp(ColorRamp(intArrayOf(RingFamily.CURSOR), false))
+            .build()
+        assertEquals(
+            "case=N2_PLAN_PAIR stage=service_return ordinal=0 payload=2 outside=1 bands=3 " +
+                "type=ranged_value value=12.0 min=5.0 max=80.0 valueType=rating title=other ramp=cursor_cyan",
+            record(actual),
+        )
+        for ((colors, category) in listOf(
+            intArrayOf(RingFamily.CODEX_SPARK) to "spark",
+            intArrayOf(RingFamily.CURSOR_OWN) to "other",
+            intArrayOf(RingFamily.CURSOR, RingFamily.CURSOR) to "other",
+        )) {
+            val ramp = rangedComplicationBuilder(12f, "0").setColorRamp(ColorRamp(colors, false)).build()
+            assertTrue(record(ramp, "0").endsWith("title=index0 ramp=$category"))
+        }
+        for ((data, type) in listOf(null to "absent", NoDataComplicationData() to "no_data")) {
+            assertTrue(record(data).endsWith(
+                "type=$type value=unknown min=unknown max=unknown valueType=unknown title=unknown ramp=unknown",
+            ))
+        }
+    }
+
+    @Test
+    fun n2SelectionObservesTheSameObjectDespiteTitleOrSinkFailure() {
+        for (titleFails in listOf(true, false)) {
+            val summary = n2DiagnosticSummary
+            val built = rangedComplicationBuilder(12f, "0", RingFamily.CURSOR).build()
+            var route: N1PairDiagnostics.Route? = null
+            var builds = 0
+            val returned = outerHalfComplicationData(summary.rings, 0) { half, outside, count ->
+                builds++
+                assertSame(summary.rings[1].split, half)
+                route = N1PairDiagnostics.Route(summary.rings.indexOfFirst { it.split === half }, outside, count)
+                built
+            }
+            val records = mutableListOf<String>()
+            var titleReads = 0
+            val observer = N1PairDiagnostics(true) {
+                records.add(it)
+                if (!titleFails) error("Synthetic sink failure")
+            }
+            observer.observe(summary, 0, returned, route) { actual ->
+                titleReads++
+                assertSame(returned, actual)
+                if (titleFails) error("Synthetic TITLE failure")
+                "0"
+            }
+            assertSame(built, returned)
+            assertEquals(1, builds)
+            assertEquals(1, titleReads)
+            assertTrue(records.single().contains("payload=1 outside=0 bands=2"))
+            assertTrue(records.single().endsWith("title=${if (titleFails) "unknown" else "index0"} ramp=cursor_cyan"))
+        }
     }
 
     @Test

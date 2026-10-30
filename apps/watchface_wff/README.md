@@ -111,9 +111,13 @@ recovery of the original drawing tree after removing diagnostic additions.
 
 `N1PairDiagnostics` in the Wear `WatchSummaryComplications.kt` observes the actual returned
 object after the single summary load and existing split selection. Its `WardPulseN1Pair`
-log tag admits only schema9/mock, one Codex plan/Spark pair, ordinal0, both used63, and emits
-at most four records per process. Numeric fields are bounded to 0..800; unexpected routing,
-types, titles and ramps use closed categories. A logging failure cannot change the return.
+log tag admits only schema9/mock, ordinal0: `N1_PAIR` is one Codex plan/Spark pair, both
+used63; `N2_PLAN_PAIR` is exactly two ordered bands, an ordinary Codex plan followed by a
+Cursor own/Other pair, all three used63. All admitted pools are OK and plan money fields
+are null. Both cases share one ceiling of four records per process. Numeric fields are
+bounded to 0..800; unexpected routing, types, titles and ramps use closed categories,
+including `spark` and `cursor_cyan` for those actual single-color ramps. Unrelated shapes
+are rejected before returned-field inspection. A logging failure cannot change the return.
 See [logging rules](../../docs/product/SECURITY_MODEL.md#logging-rules).
 
 Only slot106 receives consumer instrumentation. `V`, `m`, `M` show independently read bounded
@@ -126,13 +130,19 @@ and below the original incident annulus; unreadable or unavailable readouts rema
 Keep construction, Android wire/Parcel serialization, real service-return, consumer-field,
 branch and original-frame evidence separate. The constructed expected 74/200/TITLE `0`/Spark
 tuple in `AdaptiveRangedComplicationTest.genericEnvelopesRoundTripWithUnscaledHumanSemantics`
-is neither a service observation nor renderer delivery. A branch witness cannot prove stroke
-rasterization or reconstruct the original RED. If instrumentation changes that RED, record
-the qualification without claiming a repair or cause.
+is neither a service observation nor renderer delivery. The separate N2 expected
+VALUE148/MIN0/MAX400/TITLE `0`/undefined/Cursor-cyan tuple remains unobserved arithmetic.
+Constructed regressions in `WatchComplicationTextTest` establish observer contracts, not
+actual callback results, delivery or paint; unavailable stages remain Unknown. A branch
+witness cannot prove stroke rasterization or reconstruct the original RED. If instrumentation
+changes that RED, record the qualification without claiming a repair or cause.
 
-Root alone performs HOST builds, official diagnostic XML validation, API tests, release and
-no-clean isolation checks, then the unchanged hash-bound Square N1 case after Runner DONE,
-process retirement and a fresh separate idle observation. Establish sanitized input and quiet
+Root alone performs applicable HOST builds, API tests, release and no-clean isolation checks
+after Runner DONE, process retirement, any owning CLI exit and a fresh separate idle
+observation. N1 consumer-overlay work also requires official diagnostic XML validation and
+the unchanged hash-bound Square N1 case. The exact hash-bound N2 producer observation keeps
+the normal face, instance and bindings unchanged, recording actual callback returns plus
+first eligible and separately settled normal-face originals. Establish sanitized input and quiet
 writers before exposing the consumer; keep frames private. Preserve installed identities,
 signers, instance, bindings and data. Restore normal artifacts **before** private original data,
 verify effective recovery and retire diagnostic controls/artifacts; installation alone proves
