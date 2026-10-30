@@ -36,39 +36,69 @@ tree per Compare/Default and preserve main selector/strip containment. The basel
 main branches failed this check; corrected generation passes. Native causal effect remains
 unproved; see the [adaptive incident and update qualification](../../docs/product/RELEASE_CHECKLIST.md#adaptive-integration-qualification-2026-10-28).
 
-`outerHalfSlot` in `tools/render-watchface.mjs` combines admission and paint selection in
-one ordered Condition directly inside each extra's RANGED_VALUE complication. For every
-feasible layout/position in slots 106/109, comparisons select positive full, positive tiny,
-round partial, then zero. Each predicate includes the exact range guard and TITLE index.
-Each positive branch owns one named Group containing track then colored drawing; admitted
-zero owns only its track, and rejected input paints nothing. Private `bandTrack` and
+`outerHalfSlot` in `tools/render-watchface.mjs` emits fixed sibling Groups directly inside
+each extra's RANGED_VALUE complication. Every feasible layout/position in slots 106/109
+retains its named full, tiny, round and zero Groups in that order. Each starts at alpha 0;
+an XML-escaped ternary Transform sets alpha to 255 or 0 from that response's MIN/MAX/VALUE/TITLE.
+The range guard and exact TITLE index admit exactly one mutually exclusive state: exact
+full, positive partial at/below the existing tiny cutoff, positive partial above it, or zero.
+Each positive Group owns track then colored drawing; admitted zero owns only its track,
+and rejected input paints nothing. Private `bandTrack` and
 `bandPaint` helpers reuse the same drawings while preserving ordinary/inner `bandArcs`
 emission, geometry, clipping, live colors, cutoffs and ambient/MUTE behavior.
 
 `check_band_paints` and `check_extra_decisions` in `tools/check-watchface-structure.py`
-evaluate actual emitted predicates in Compare order and inspect selected drawing content.
+retain main/inner first-true Condition checks and evaluate every emitted extra alpha
+Transform. Extras require exactly one active Group for admitted input and none for rejected
+input, with independent inspection of the corresponding drawing content.
 Independent admission and geometry expectations cover both ordinals, every feasible and
 impossible position, 74/200, zero, representable tiny values, neighboring cutoff Floats,
 near/full boundaries, malformed/non-finite fields and exact TITLE rejection. Generator
 assertions retain published Legacy/N3 rounded cutoffs and analytical full-path/clip checks.
-These checks establish declaration semantics, not native repair.
+N2-to-N3 checks require old 16-unit half Groups to hide and new 10-unit half Groups to appear.
+These checks establish declaration semantics, not retained-renderer behavior or native repair.
 
 The previous `5c871ac` candidate flattened only `bandArcs`; the normal prefix remained RED,
 with its actual VALUE/TITLE/paint branch unknown. A separate diagnostic case on that Source
-showed `V74/m0/M200/T0/A1/PN` without the expected Spark arc. This candidate removes the
-remaining admission-to-paint conditional handoff at the owning extra slot. That is a repair
-hypothesis, not an established cause. Primary contracts permit ordered first-true selection,
-nested Conditions and repeated names in separate Conditions; neither a nested-tree violation
-nor pinned-version runtime enforcement is proved. Diagnostic witnesses do not establish the
-normal case's fields or branch.
+showed `V74/m0/M200/T0/A1/PN` without the expected Spark arc. The subsequent `c36bc1c`
+combined-decision candidate passed the exact N2-plan-pair → original/MUTE → N1ordinary →
+N1pair prefix on one retained normal engine. That is scoped N1 paint success; normal
+VALUE/TITLE/selected branch and the bottom overlay remain unknown.
+
+On that same retained normal engine, two N2-two-pairs → N3-two-pairs cases retained wrong
+pair geometry. In the first, later correct geometry followed ambient/clock controls and
+does not establish natural settlement. The second repeated wrong geometry across nine
+samples and a natural clock advance, spanning 77.65 seconds from first to last frame;
+this is bounded repeated RED, not a continuous or infinite-lifetime claim. Normal consumer
+VALUE/TITLE/selected branch remain unknown. In the second case, the first frame's repeated
+effectiveRanges15 tuples are not one authoritative slot15 record; the separate slot14
+manager range was 0..800. At the 360×360 viewport, N3's intended 10 design units scale to
+about 8 native units; radial
+samples are neither unique raster pixels nor exact subpixel stroke measurements.
+
+A separate fresh diagnostic engine with shorter history did not reproduce the count
+defect. Its first N2 frame was a blocking notification, not acceptance; N2 was qualified
+after snoozing that notification without advancing data. Its N3 first/later frames already
+had correct geometry. Only `N3T2` and `AO/A0` were image-readable; full VALUE/MIN/MAX remain
+unknown. AO denotes any non-N1 admitted layout, not exact count/position/paint identity.
+This case cannot erase either normal RED or supply the missing normal fields or a cause.
+
+The fixed-Group candidate tests whether source-driven appearance updates hide obsolete
+geometry and reveal the new halves without replacing conditional drawing trees. Retained
+subtree activation remains a mechanism hypothesis. Condition's documented first-true
+behavior remains valid; nested Conditions and locally repeated expression names are permitted.
 
 Normal-face acceptance remains **Pending**. After Runner ownership ends, Root must bind
 the actual candidate producer/face artifacts with producer diagnostics disabled, install
-the normal face before guest boot, and run the exact N2 → original/MUTE → N1ordinary →
-N1pair prefix. Correct Spark paint and complete mapping must appear in matched first and
-settled whole originals; diagnostic cases remain separately qualified. Full HOST validation,
-isolation, compatibility and recovery obligations remain open, along with adaptive
-integration and forward-only delivery receipts. This candidate authorizes no version bump.
+the normal face before guest boot, and run the exact N2-plan-pair → original/MUTE →
+N1ordinary → N1pair prefix. Then replay original/MUTE → INTERACTIVE N2-two-pairs → N3-two-pairs
+on that same retained engine with unchanged hash-bound inputs. Inspect both halves' family,
+radius and width in matched first and separately settled whole originals at actual viewport
+scale, observing a bounded natural minute before controls. Stop RED for evidence and safe
+recovery; do not substitute a fresh scene, retry or reset. Diagnostic cases remain separately
+qualified. Full HOST validation, isolation, compatibility and recovery obligations remain
+open, along with item #12, adaptive integration and forward-only delivery receipts.
+This candidate authorizes no version bump.
 
 The Wear app minimum is API 33; the phone minimum is unchanged. The Wear app checks Push
 support before using its manager. Supported Wear OS 6+ devices can install the bundled
@@ -173,8 +203,11 @@ rejects nested content or extra fonts in those cells. Numeric `Template` cells a
 VALUE/MIN/MAX remain independent of admission and bounded to 0..800; their `?` fallback
 does not disclose an out-of-range value. TITLE never exposes an unexpected literal. Paint
 in another admitted layout remains unobserved, leaving that cell unavailable. Admission
-witnesses belong to each actual combined decision; N1's PF/PT/PR share the branch that owns
-their colored drawing, and admitted N1 zero shows PN. Rejected admission retains AX/PN.
+witnesses stay inside each actual alpha-gated drawing Group; N1's PF/PT/PR share the Group
+that owns their colored drawing, and admitted N1 zero shows PN. Rejected admission retains
+AX/PN in its own initially hidden Group, with an alpha Transform complementary to the
+complete admission set. The checker exercises that complement across the same emitted-input
+cases. Consumer fields remain outside those gates.
 Diagnostic Group names remain stable and unique across decisions; stripping additions
 recovers this candidate's complete normal tree. The 10-unit
 bold text uses two rows of 34×12 boxes within the existing r139..171.25 logical footprint
@@ -182,7 +215,8 @@ guard, inside the clip and below the original incident annulus. Neither source f
 nor an enlarged preview establishes readability. Read all six cells in the original 360px
 frame and its attributable crop during the exact prefix's final N1pair stage; unreadable or
 unavailable cells remain Unknown. Shorter tokens do not diagnose the earlier label-rendering
-limit or the original RED.
+limit or the original RED. Prior N1 readability evidence remains scoped to its observed
+artifact; this candidate preserves that layout. N2/N3 readability remains limited as above.
 
 Keep construction, Android wire/Parcel serialization, real service-return, consumer-field,
 branch and original-frame evidence separate. The constructed expected 74/200/TITLE `0`/Spark

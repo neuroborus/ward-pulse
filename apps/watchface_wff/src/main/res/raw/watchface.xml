@@ -3229,47 +3229,8 @@
                 endAngle="359.9"
                 isRoundEdge="TRUE" />
             <Complication type="RANGED_VALUE">
-                <Condition>
-                    <Expressions>
-                        <Expression name="isLegacyBand0Full"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX])]]></Expression>
-                        <Expression name="isLegacyBand0Tiny"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008058)]]></Expression>
-                        <Expression name="isLegacyBand0Round"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0)]]></Expression>
-                        <Expression name="isLegacyBand0Zero"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] == 0)]]></Expression>
-                        <Expression name="isLegacyBand1Full"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX])]]></Expression>
-                        <Expression name="isLegacyBand1Tiny"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009225)]]></Expression>
-                        <Expression name="isLegacyBand1Round"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0)]]></Expression>
-                        <Expression name="isLegacyBand1Zero"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] == 0)]]></Expression>
-                        <Expression name="isLegacyBand2Full"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "2" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX])]]></Expression>
-                        <Expression name="isLegacyBand2Tiny"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "2" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.010670)]]></Expression>
-                        <Expression name="isLegacyBand2Round"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "2" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0)]]></Expression>
-                        <Expression name="isLegacyBand2Zero"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "2" && ([COMPLICATION.RANGED_VALUE_VALUE] == 0)]]></Expression>
-                        <Expression name="isN1Band0Full"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 200 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 200 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX])]]></Expression>
-                        <Expression name="isN1Band0Tiny"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 200 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 200 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.02928591275354265)]]></Expression>
-                        <Expression name="isN1Band0Round"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 200 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 200 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0)]]></Expression>
-                        <Expression name="isN1Band0Zero"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 200 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 200 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] == 0)]]></Expression>
-                        <Expression name="isN2Band0Full"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 400 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 400 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX])]]></Expression>
-                        <Expression name="isN2Band0Tiny"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 400 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 400 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.013114754098360656)]]></Expression>
-                        <Expression name="isN2Band0Round"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 400 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 400 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0)]]></Expression>
-                        <Expression name="isN2Band0Zero"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 400 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 400 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] == 0)]]></Expression>
-                        <Expression name="isN2Band1Full"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 400 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 400 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX])]]></Expression>
-                        <Expression name="isN2Band1Tiny"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 400 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 400 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.01611558766323979)]]></Expression>
-                        <Expression name="isN2Band1Round"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 400 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 400 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0)]]></Expression>
-                        <Expression name="isN2Band1Zero"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 400 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 400 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] == 0)]]></Expression>
-                        <Expression name="isN3Band0Full"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX])]]></Expression>
-                        <Expression name="isN3Band0Tiny"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008058)]]></Expression>
-                        <Expression name="isN3Band0Round"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0)]]></Expression>
-                        <Expression name="isN3Band0Zero"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] == 0)]]></Expression>
-                        <Expression name="isN3Band1Full"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX])]]></Expression>
-                        <Expression name="isN3Band1Tiny"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009225)]]></Expression>
-                        <Expression name="isN3Band1Round"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0)]]></Expression>
-                        <Expression name="isN3Band1Zero"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] == 0)]]></Expression>
-                        <Expression name="isN3Band2Full"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "2" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX])]]></Expression>
-                        <Expression name="isN3Band2Tiny"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "2" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.010670)]]></Expression>
-                        <Expression name="isN3Band2Round"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "2" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0)]]></Expression>
-                        <Expression name="isN3Band2Zero"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "2" && ([COMPLICATION.RANGED_VALUE_VALUE] == 0)]]></Expression>
-                    </Expressions>
-                    <Compare expression="isLegacyBand0Full">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_1_full">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_1_full" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == [COMPLICATION.RANGED_VALUE_MAX])) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3297,9 +3258,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isLegacyBand0Tiny">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_1_tiny">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_1_tiny" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &lt;= 0.008058)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3330,9 +3290,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isLegacyBand0Round">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_1_round">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_1_round" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &gt; 0.008058)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3363,9 +3322,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isLegacyBand0Zero">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_1_zero">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_1_zero" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == 0)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3378,9 +3336,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isLegacyBand1Full">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_2_full">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_2_full" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == [COMPLICATION.RANGED_VALUE_MAX])) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3408,9 +3365,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isLegacyBand1Tiny">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_2_tiny">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_2_tiny" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &lt;= 0.009225)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3441,9 +3397,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isLegacyBand1Round">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_2_round">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_2_round" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &gt; 0.009225)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3474,9 +3429,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isLegacyBand1Zero">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_2_zero">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_2_zero" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == 0)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3489,9 +3443,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isLegacyBand2Full">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_3_full">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_3_full" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;2&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == [COMPLICATION.RANGED_VALUE_MAX])) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3519,9 +3472,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isLegacyBand2Tiny">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_3_tiny">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_3_tiny" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;2&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &lt;= 0.010670)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3552,9 +3504,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isLegacyBand2Round">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_3_round">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_3_round" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;2&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &gt; 0.010670)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3585,9 +3536,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isLegacyBand2Zero">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_3_zero">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_3_zero" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;2&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == 0)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3600,9 +3550,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN1Band0Full">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N1_1_full">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N1_1_full" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 200 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 200 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == [COMPLICATION.RANGED_VALUE_MAX])) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3630,9 +3579,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN1Band0Tiny">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N1_1_tiny">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N1_1_tiny" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 200 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 200 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &lt;= 0.02928591275354265)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3663,9 +3611,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN1Band0Round">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N1_1_round">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N1_1_round" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 200 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 200 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &gt; 0.02928591275354265)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3696,9 +3643,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN1Band0Zero">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N1_1_zero">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N1_1_zero" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 200 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 200 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == 0)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3711,9 +3657,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN2Band0Full">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_1_full">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_1_full" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 400 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 400 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == [COMPLICATION.RANGED_VALUE_MAX])) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3741,9 +3686,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN2Band0Tiny">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_1_tiny">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_1_tiny" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 400 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 400 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &lt;= 0.013114754098360656)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3774,9 +3718,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN2Band0Round">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_1_round">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_1_round" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 400 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 400 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &gt; 0.013114754098360656)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3807,9 +3750,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN2Band0Zero">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_1_zero">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_1_zero" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 400 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 400 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == 0)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3822,9 +3764,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN2Band1Full">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_2_full">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_2_full" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 400 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 400 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == [COMPLICATION.RANGED_VALUE_MAX])) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3852,9 +3793,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN2Band1Tiny">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_2_tiny">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_2_tiny" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 400 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 400 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &lt;= 0.01611558766323979)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3885,9 +3825,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN2Band1Round">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_2_round">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_2_round" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 400 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 400 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &gt; 0.01611558766323979)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3918,9 +3857,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN2Band1Zero">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_2_zero">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_2_zero" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 400 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 400 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == 0)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3933,9 +3871,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band0Full">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_1_full">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_1_full" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == [COMPLICATION.RANGED_VALUE_MAX])) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3963,9 +3900,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band0Tiny">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_1_tiny">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_1_tiny" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &lt;= 0.008058)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -3996,9 +3932,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band0Round">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_1_round">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_1_round" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &gt; 0.008058)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4029,9 +3964,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band0Zero">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_1_zero">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_1_zero" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == 0)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4044,9 +3978,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band1Full">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_2_full">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_2_full" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == [COMPLICATION.RANGED_VALUE_MAX])) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4074,9 +4007,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band1Tiny">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_2_tiny">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_2_tiny" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &lt;= 0.009225)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4107,9 +4039,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band1Round">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_2_round">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_2_round" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &gt; 0.009225)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4140,9 +4071,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band1Zero">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_2_zero">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_2_zero" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == 0)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4155,9 +4085,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band2Full">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_3_full">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_3_full" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;2&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == [COMPLICATION.RANGED_VALUE_MAX])) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4185,9 +4114,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band2Tiny">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_3_tiny">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_3_tiny" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;2&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &lt;= 0.010670)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4218,9 +4146,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band2Round">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_3_round">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_3_round" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;2&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &gt; 0.010670)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4251,9 +4178,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band2Zero">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_3_zero">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_3_zero" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;2&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == 0)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4266,8 +4192,6 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                </Condition>
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>
@@ -4296,31 +4220,8 @@
                 endAngle="359.9"
                 isRoundEdge="TRUE" />
             <Complication type="RANGED_VALUE">
-                <Condition>
-                    <Expressions>
-                        <Expression name="isLegacyBand0Full"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX])]]></Expression>
-                        <Expression name="isLegacyBand0Tiny"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008058)]]></Expression>
-                        <Expression name="isLegacyBand0Round"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0)]]></Expression>
-                        <Expression name="isLegacyBand0Zero"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] == 0)]]></Expression>
-                        <Expression name="isLegacyBand1Full"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX])]]></Expression>
-                        <Expression name="isLegacyBand1Tiny"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009225)]]></Expression>
-                        <Expression name="isLegacyBand1Round"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0)]]></Expression>
-                        <Expression name="isLegacyBand1Zero"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] == 0)]]></Expression>
-                        <Expression name="isN2Band0Full"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 400 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 400 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX])]]></Expression>
-                        <Expression name="isN2Band0Tiny"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 400 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 400 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.013114754098360656)]]></Expression>
-                        <Expression name="isN2Band0Round"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 400 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 400 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0)]]></Expression>
-                        <Expression name="isN2Band0Zero"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 400 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 400 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] == 0)]]></Expression>
-                        <Expression name="isN3Band0Full"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX])]]></Expression>
-                        <Expression name="isN3Band0Tiny"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008058)]]></Expression>
-                        <Expression name="isN3Band0Round"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0)]]></Expression>
-                        <Expression name="isN3Band0Zero"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "0" && ([COMPLICATION.RANGED_VALUE_VALUE] == 0)]]></Expression>
-                        <Expression name="isN3Band1Full"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX])]]></Expression>
-                        <Expression name="isN3Band1Tiny"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009225)]]></Expression>
-                        <Expression name="isN3Band1Round"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] > 0)]]></Expression>
-                        <Expression name="isN3Band1Zero"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && [COMPLICATION.TITLE] == "1" && ([COMPLICATION.RANGED_VALUE_VALUE] == 0)]]></Expression>
-                    </Expressions>
-                    <Compare expression="isLegacyBand0Full">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_1_full">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_1_full" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == [COMPLICATION.RANGED_VALUE_MAX])) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4348,9 +4249,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isLegacyBand0Tiny">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_1_tiny">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_1_tiny" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &lt;= 0.008058)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4381,9 +4281,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isLegacyBand0Round">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_1_round">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_1_round" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &gt; 0.008058)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4414,9 +4313,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isLegacyBand0Zero">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_1_zero">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_1_zero" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == 0)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4429,9 +4327,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isLegacyBand1Full">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_2_full">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_2_full" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == [COMPLICATION.RANGED_VALUE_MAX])) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4459,9 +4356,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isLegacyBand1Tiny">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_2_tiny">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_2_tiny" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &lt;= 0.009225)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4492,9 +4388,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isLegacyBand1Round">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_2_round">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_2_round" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &gt; 0.009225)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4525,9 +4420,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isLegacyBand1Zero">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_2_zero">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_2_zero" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == 0)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4540,9 +4434,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN2Band0Full">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N2_1_full">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N2_1_full" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 400 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 400 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == [COMPLICATION.RANGED_VALUE_MAX])) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4570,9 +4463,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN2Band0Tiny">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N2_1_tiny">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N2_1_tiny" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 400 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 400 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &lt;= 0.013114754098360656)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4603,9 +4495,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN2Band0Round">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N2_1_round">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N2_1_round" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 400 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 400 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &gt; 0.013114754098360656)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4636,9 +4527,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN2Band0Zero">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N2_1_zero">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N2_1_zero" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 400 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 400 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == 0)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4651,9 +4541,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band0Full">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_1_full">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_1_full" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == [COMPLICATION.RANGED_VALUE_MAX])) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4681,9 +4570,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band0Tiny">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_1_tiny">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_1_tiny" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &lt;= 0.008058)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4714,9 +4602,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band0Round">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_1_round">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_1_round" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &gt; 0.008058)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4747,9 +4634,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band0Zero">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_1_zero">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_1_zero" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;0&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == 0)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4762,9 +4648,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band1Full">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_2_full">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_2_full" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == [COMPLICATION.RANGED_VALUE_MAX])) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4792,9 +4677,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band1Tiny">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_2_tiny">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_2_tiny" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &lt;= 0.009225)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4825,9 +4709,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band1Round">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_2_round">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_2_round" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] &gt; 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt; [COMPLICATION.RANGED_VALUE_MAX] &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) &gt; 0.009225)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4858,9 +4741,8 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                    <Compare expression="isN3Band1Zero">
-                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_2_zero">
+                        <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_2_zero" alpha="0">
+                            <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; [COMPLICATION.TITLE] == &quot;1&quot; &amp;&amp; ([COMPLICATION.RANGED_VALUE_VALUE] == 0)) ? 255 : 0" />
                             <PartDraw x="0" y="0" width="450" height="450">
                                 <Arc
                                     centerX="225"
@@ -4873,8 +4755,6 @@
                                 </Arc>
                             </PartDraw>
                         </Group>
-                    </Compare>
-                </Condition>
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>

@@ -1123,11 +1123,13 @@ function assertNearExhaustedArcs() {
     }
     for (const layout of LAYOUTS) {
       for (let index = 0; index < layout.count; index += 1) {
-        const branch = decisions.find(({ predicate }) => predicate(0, layout.max, layout.max, String(index)))?.body
+        const active = decisions.filter(({ alpha }) => alpha(0, layout.max, layout.max, String(index)) !== 0)
         if (index >= layout.count - ordinal) {
-          if (branch !== undefined) throw new Error(`impossible split ordinal ${ordinal}/${layout.name}/${index}`)
+          if (active.length !== 0) throw new Error(`impossible split ordinal ${ordinal}/${layout.name}/${index}`)
           continue
         }
+        if (active.length !== 1) throw new Error(`slot ${slot.slotId}: expected exactly one active full Group`)
+        const branch = active[0].body
         const { outer, half } = bandGeometry(layout, index)
         const full = branch?.match(/<PartDraw[^>]*alpha="255">[\s\S]*?<\/PartDraw>/)?.[0] ?? ''
         assertFullRing(outer, half, full)
@@ -1171,7 +1173,7 @@ ${pad}    </Arc>
 ${pad}</PartDraw>`
 }
 
-/** The same three drawings serve main/inner selectors and combined extra decisions. */
+/** The same three drawings serve main/inner selectors and alpha-gated extra decisions. */
 function bandPaint(diameter, thickness, kind, pad) {
   const geometry = meltGeometry(diameter, thickness)
   const end = kind === 'round' ? geometry.insetEnd.toFixed(2) : SWEEP.end
@@ -1252,8 +1254,16 @@ function n1Text(template, column, row, parameter = null) {
 </PartText>`
 }
 
-function n1Group(name, content) {
-  return `<Group x="0" y="0" width="450" height="450" name="n1Diag_${name}">${content}</Group>`
+function alphaTransform(predicate, pad) {
+  const value = `(${predicate}) ? 255 : 0`.replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
+  return `${pad}<Transform target="alpha" value="${value}" />`
+}
+
+function n1Group(name, content, predicate = null) {
+  const alpha = predicate === null ? '' : ' alpha="0"'
+  const transform = predicate === null ? '' : alphaTransform(predicate, '')
+  return `<Group x="0" y="0" width="450" height="450" name="n1Diag_${name}"${alpha}>${transform}${content}</Group>`
 }
 
 function n1Witness(name, text, column, row) {
@@ -1368,30 +1378,30 @@ function outerHalfSlot({ slotId, service, label }, ordinal, diagnostics = false)
     const { outer, half } = bandGeometry(layout, index)
     const value = '[COMPLICATION.RANGED_VALUE_VALUE]'
     const maximum = '[COMPLICATION.RANGED_VALUE_MAX]'
+    const partial = `${value} > 0 && ${value} < ${maximum}`
+    const cutoff = meltGeometry(outer, half).cutoffLiteral
     return [
-      ['Full', `${value} > 0 && ${value} >= ${maximum}`],
-      ['Tiny', `${value} > 0 && (${value} / ${maximum}) <= ${meltGeometry(outer, half).cutoffLiteral}`],
-      ['Round', `${value} > 0`],
+      ['Full', `${value} == ${maximum}`],
+      ['Tiny', `${partial} && (${value} / ${maximum}) <= ${cutoff}`],
+      ['Round', `${partial} && (${value} / ${maximum}) > ${cutoff}`],
       ['Zero', `${value} == 0`],
     ].map(([state, test]) => ({ layout, index, outer, half, state,
-      name: `is${layout.name}Band${index}${state}`,
       predicate: `${rangeGuard(layout.max)} && [COMPLICATION.TITLE] == "${index}" && (${test})`,
     }))
   })
-  const expressions = decisions.map(({ name, predicate }) =>
-    `                        <Expression name="${name}"><![CDATA[${predicate}]]></Expression>`,
-  ).join('\n')
-  const branches = decisions.map(({ layout, index, outer, half, state, name }) => {
+  const admission = positions.map(({ layout, index }) =>
+    `(${rangeGuard(layout.max)} && [COMPLICATION.TITLE] == "${index}")`,
+  ).join(' || ')
+  const branches = decisions.map(({ layout, index, outer, half, state, predicate }) => {
     const kind = state.toLowerCase()
     const paintToken = { full: 'PF', tiny: 'PT', round: 'PR', zero: 'PN' }[kind]
-    return `                    <Compare expression="${name}">
-                        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="outerHalf${slotId}_${layout.name}_${index + 1}_${kind}">
+    return `                        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="outerHalf${slotId}_${layout.name}_${index + 1}_${kind}" alpha="0">
+${alphaTransform(predicate, ' '.repeat(28))}
 ${bandTrack(outer, half, ' '.repeat(28))}${kind === 'zero' ? '' : `
 ${bandPaint(outer, half, kind, ' '.repeat(28))}`}${diagnostics ? `
 ${n1Witness(`admit_${layout.name}_${index}_${kind}`, layout.name === 'N1' ? 'A1' : 'AO', 1, 1)}${layout.name === 'N1' ? `
 ${n1Witness(kind === 'zero' ? 'paintNone' : `paint_${kind}`, paintToken, 2, 1)}` : ''}` : ''}
-                        </Group>
-                    </Compare>`
+                        </Group>`
   }).join('\n')
   return `        <ComplicationSlot
             x="0"
@@ -1418,37 +1428,34 @@ ${n1Witness(kind === 'zero' ? 'paintNone' : `paint_${kind}`, paintToken, 2, 1)}`
                 isRoundEdge="TRUE" />
             <Complication type="RANGED_VALUE">${diagnostics ? `
 ${n1ConsumerFields()}` : ''}
-                <Condition>
-                    <Expressions>
-${expressions}
-                    </Expressions>
 ${branches}${diagnostics ? `
-                    <Default>${n1Group('add_rejected', `${n1Text('AX', 1, 1)}${n1Text('PN', 2, 1)}`)}</Default>` : ''}
-                </Condition>
+${n1Group('add_rejected', `${n1Text('AX', 1, 1)}${n1Text('PN', 2, 1)}`, `!(${admission})`)}` : ''}
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>`
 }
 
+function emittedValue(expression) {
+  const source = expression.replaceAll('[COMPLICATION.RANGED_VALUE_MIN]', 'min')
+    .replaceAll('[COMPLICATION.RANGED_VALUE_MAX]', 'max')
+    .replaceAll('[COMPLICATION.RANGED_VALUE_VALUE]', 'value')
+    .replaceAll('[COMPLICATION.TITLE]', 'title')
+  return new Function('min', 'max', 'value', 'title', `return ${source}`)
+}
+
 function emittedExpressions(markup) {
   return new Map([...markup.matchAll(/<Expression name="([^"]+)"><!\[CDATA\[([\s\S]*?)\]\]><\/Expression>/g)]
-    .map(([, name, expression]) => {
-      const source = expression.replaceAll('[COMPLICATION.RANGED_VALUE_MIN]', 'min')
-        .replaceAll('[COMPLICATION.RANGED_VALUE_MAX]', 'max')
-        .replaceAll('[COMPLICATION.RANGED_VALUE_VALUE]', 'value')
-        .replaceAll('[COMPLICATION.TITLE]', 'title')
-      return [name, new Function('min', 'max', 'value', 'title', `return ${source}`)]
-    }))
+    .map(([, name, expression]) => [name, emittedValue(expression)]))
 }
 
-/** Normal extras have no nested comparisons; the XML checker enforces that structure. */
+/** Normal extras have fixed drawing Groups; the XML checker enforces that structure. */
 function emittedExtraDecisions(markup) {
-  const predicates = emittedExpressions(markup)
-  return [...markup.matchAll(/<Compare expression="([^"]+)">([\s\S]*?)<\/Compare>/g)]
-    .map(([, name, body]) => ({ predicate: predicates.get(name), body }))
+  return [...markup.matchAll(/<Group [^>]*name="(outerHalf[^"]+)" alpha="0">\s*<Transform target="alpha" value="([^"]+)" \/>([\s\S]*?)<\/Group>/g)]
+    .map(([, name, expression, body]) => ({ name, body, alpha: emittedValue(expression
+      .replaceAll('&quot;', '"').replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&amp;', '&')) }))
 }
 
-/** Exercise actual ordered decisions, including non-finite wire fields. */
+/** Exercise every emitted alpha decision, including non-finite wire fields. */
 function assertLowerContracts() {
   for (const [index, ring] of RINGS.entries()) {
     const markup = ringSlot(ring, index)
@@ -1477,14 +1484,19 @@ function assertLowerContracts() {
   }
   for (const [ordinal, slot] of OUTER_HALVES.entries()) {
     const decisions = emittedExtraDecisions(outerHalfSlot(slot, ordinal))
-    const selected = (...fields) => decisions.find(({ predicate }) => predicate(...fields))?.body
+    const selected = (...fields) => decisions.filter(({ alpha }) => {
+      const value = alpha(...fields)
+      if (value !== 0 && value !== 255) throw new Error(`extra ${ordinal}: gate must emit only 0 or 255`)
+      return value === 255
+    })
     for (const [max, lastIndex] of [[100, 2], [200, 0], [400, 1], [800, 2]]) {
       for (let index = 0; index < 3; index += 1) {
         for (const value of [0, max * 2 ** -20, max * 0.37, max * 0.999, max]) {
-          const body = selected(0, max, value, String(index))
-          if ((body !== undefined) !== (index <= lastIndex - ordinal)) {
+          const active = selected(0, max, value, String(index))
+          if (active.length !== (index <= lastIndex - ordinal ? 1 : 0)) {
             throw new Error(`extra ${ordinal}/${max}/${index}: impossible ordinal or position admitted`)
           }
+          const body = active[0]?.body
           if (body !== undefined && ((body.match(/<Stroke /g)?.length ?? 0) !== 1 ||
               (body.match(/<WeightedStroke/g)?.length ?? 0) !== (value > 0 ? 1 : 0) ||
               body.includes('<Condition>'))) {
@@ -1501,8 +1513,20 @@ function assertLowerContracts() {
     for (const title of ['', '00', '0.0', ' 0', '0 ', '3', 'split', '0:zero']) {
       malformed.push([0, 800, 50, title])
     }
-    if (malformed.some((fields) => selected(...fields) !== undefined)) {
+    if (malformed.some((fields) => selected(...fields).length !== 0)) {
       throw new Error(`extra ${ordinal}: malformed response admitted`)
+    }
+    // These are source-driven gate changes, not proof of retained-engine behavior.
+    for (let index = 0; index < 2 - ordinal; index += 1) {
+      const n2 = selected(0, 400, 148, String(index))
+      const n3 = selected(0, 800, 296, String(index))
+      if (n2.length !== 1 || n3.length !== 1 ||
+          n2[0].name !== `outerHalf${slot.slotId}_N2_${index + 1}_round` ||
+          n3[0].name !== `outerHalf${slot.slotId}_N3_${index + 1}_round` ||
+          n2[0].alpha(0, 800, 296, String(index)) !== 0 ||
+          n3[0].alpha(0, 400, 148, String(index)) !== 0) {
+        throw new Error(`extra ${ordinal}/${index}: N2-to-N3 must hide the old half and reveal the new half`)
+      }
     }
   }
 }

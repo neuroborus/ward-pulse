@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check WFF condition trees in the generator's actual XML on stdin."""
+"""Check WFF condition trees and alpha gates in the generator's actual XML on stdin."""
 
 import ast
 import math
@@ -65,12 +65,19 @@ def check_structure(root):
 
 
 def paint_expression(expression):
-    """Parse only the arithmetic/boolean subset emitted by the paint selector."""
+    """Parse only the arithmetic/boolean/ternary subset emitted by the paint gates."""
     source = expression.replace("[COMPLICATION.RANGED_VALUE_VALUE]", "value")
     source = source.replace("[COMPLICATION.RANGED_VALUE_MAX]", "maximum")
     source = source.replace("[COMPLICATION.RANGED_VALUE_MIN]", "minimum")
     source = source.replace("[COMPLICATION.TITLE]", "title")
-    return ast.parse(source.replace("&&", " and "), mode="eval").body
+    predicate, separator, outcomes = source.partition(" ? ")
+    if separator:
+        when_true, separator, when_false = outcomes.partition(" : ")
+        if not separator:
+            raise ValueError("incomplete alpha ternary")
+        source = f"({when_true}) if ({predicate}) else ({when_false})"
+    source = source.replace("&&", " and ").replace("||", " or ").replace("!(", "not (")
+    return ast.parse(source, mode="eval").body
 
 
 def evaluate_paint(node, value, maximum, minimum=0, title=""):
@@ -79,6 +86,12 @@ def evaluate_paint(node, value, maximum, minimum=0, title=""):
 
     if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.And):
         return all(evaluate(child) for child in node.values)
+    if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or):
+        return any(evaluate(child) for child in node.values)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+        return not evaluate(node.operand)
+    if isinstance(node, ast.IfExp):
+        return evaluate(node.body if evaluate(node.test) else node.orelse)
     if isinstance(node, ast.Compare) and len(node.ops) == len(node.comparators) == 1:
         left = evaluate(node.left)
         right = evaluate(node.comparators[0])
@@ -88,6 +101,8 @@ def evaluate_paint(node, value, maximum, minimum=0, title=""):
             return left > right
         if isinstance(node.ops[0], ast.GtE):
             return left >= right
+        if isinstance(node.ops[0], ast.Lt):
+            return left < right
         if isinstance(node.ops[0], ast.LtE):
             return left <= right
     if isinstance(node, ast.BinOp):
@@ -212,8 +227,26 @@ def tree_content(node):
             [tree_content(child) for child in element_children(node)])
 
 
+def alpha_expression(group):
+    transforms = group.findall("Transform")
+    if (group.get("alpha") != "0" or len(transforms) != 1
+            or set(transforms[0].attrib) != {"target", "value"}
+            or transforms[0].get("target") != "alpha" or len(transforms[0]) != 0
+            or (transforms[0].text or "").strip()):
+        raise ValueError(f"{group.get('name')}: expected one alpha Transform on an initially hidden Group")
+    expression = paint_expression(transforms[0].get("value", ""))
+    if (not isinstance(expression, ast.IfExp)
+            or not isinstance(expression.body, ast.Constant) or expression.body.value != 255
+            or not isinstance(expression.orelse, ast.Constant) or expression.orelse.value != 0):
+        raise ValueError(f"{group.get('name')}: alpha must use a 255-or-zero ternary")
+    return expression
+
+
 def check_extra_decisions(root):
     # Inspect the candidate's normal drawing tree; diagnostics are checked separately.
+    rejected = root.find(".//ComplicationSlot[@slotId='106']/Complication[@type='RANGED_VALUE']"
+                         "/Group[@name='n1Diag_add_rejected']")
+    rejected_alpha = alpha_expression(rejected) if rejected is not None else None
     root = without_diagnostics(deepcopy(root))
     errors = []
     layouts = (("Legacy", 3, 100, 20), ("N1", 1, 200, 68),
@@ -222,22 +255,16 @@ def check_extra_decisions(root):
     for slot_id, ordinal in ((106, 0), (109, 1)):
         slot = root.find(f".//ComplicationSlot[@slotId='{slot_id}']")
         ranged = slot.find("Complication[@type='RANGED_VALUE']") if slot is not None else None
-        if ranged is None or [child.tag for child in ranged] != ["Condition"]:
-            errors.append(f"slot {slot_id}: extra must own one direct combined selector")
+        if ranged is None or any(child.tag != "Group" for child in ranged):
+            errors.append(f"slot {slot_id}: extra must own fixed direct decision Groups")
             continue
-        selector = ranged[0]
-        expressions = selector.findall("Expressions/Expression")
-        predicates = {item.get("name"): paint_expression(item.text or "") for item in expressions}
-        branches = selector.findall("Compare")
+        groups = list(ranged)
         expected = [(layout, index, maximum, thickness / 2,
                      404 - 2 * index * (thickness + 4) - thickness / 2, kind)
                     for layout, count, maximum, thickness in layouts
                     for index in range(count - ordinal)
                     for kind in ("full", "tiny", "round", "zero")]
-        if (len(expressions) != len(predicates) or len(predicates) != len(expected)
-                or len(branches) != len(expected)
-                or {branch.get("expression") for branch in branches} != set(predicates)
-                or [child.tag for child in selector] != ["Expressions"] + ["Compare"] * len(expected)):
+        if len(groups) != len(expected):
             errors.append(f"slot {slot_id}: expected ordered full/tiny/round/zero decisions for every feasible position")
             continue
         clip = slot.find("BoundingArc")
@@ -247,16 +274,16 @@ def check_extra_decisions(root):
         }:
             errors.append(f"slot {slot_id}: complete shared round clip changed")
         paints = []
-        for branch, (layout, index, maximum, thickness, diameter, kind) in zip(branches, expected):
+        alphas = [alpha_expression(group) for group in groups]
+        for group, (layout, index, maximum, thickness, diameter, kind) in zip(groups, expected):
             name = f"outerHalf{slot_id}_{layout}_{index + 1}_{kind}"
-            children = element_children(branch)
-            group = children[0] if len(children) == 1 else None
-            if group is None or group.tag != "Group" or group.attrib != {**canvas, "name": name}:
-                errors.append(f"{name}: decision must own its stable named full-canvas Group")
+            if group.attrib != {**canvas, "name": name, "alpha": "0"}:
+                errors.append(f"{name}: decision must be its stable named full-canvas alpha Group")
                 paints.append(None)
                 continue
-            draws = element_children(group)
-            if [child.tag for child in draws] != ["PartDraw"] * (1 if kind == "zero" else 2):
+            children = element_children(group)
+            draws = children[1:]
+            if [child.tag for child in children] != ["Transform"] + ["PartDraw"] * (1 if kind == "zero" else 2):
                 errors.append(f"{name}: decision must own track then only its corresponding paint")
                 paints.append(None)
                 continue
@@ -308,9 +335,18 @@ def check_extra_decisions(root):
                         and 0 <= (diameter + thickness) / 2 - along - reach <= 0.01):
                     errors.append(f"{name}: full path no longer closes the complete annulus")
 
+        gate_errors = set()
+
         def selected(value, maximum, minimum=0, title="0"):
-            return next((position for position, branch in enumerate(branches)
-                         if evaluate_paint(predicates[branch.get("expression")], value, maximum, minimum, title)), None)
+            values = [evaluate_paint(alpha, value, maximum, minimum, title) for alpha in alphas]
+            if any(alpha not in (0, 255) for alpha in values):
+                gate_errors.add(f"slot {slot_id}: decision alpha must be zero or 255")
+            active = [position for position, alpha in enumerate(values) if alpha != 0]
+            if slot_id == 106 and rejected_alpha is not None:
+                actual = evaluate_paint(rejected_alpha, value, maximum, minimum, title)
+                if actual != (0 if active else 255):
+                    gate_errors.add("slot 106: rejected AX/PN gate must complement actual admission")
+            return active
 
         for layout, count, maximum, thickness in layouts:
             for index in range(3):
@@ -325,13 +361,13 @@ def check_extra_decisions(root):
                 for value in values:
                     kind = ("zero" if value == 0 else "full" if value == maximum
                             else "tiny" if value / maximum <= cutoff else "round")
-                    wanted = (layout, index, maximum, thickness / 2, diameter, kind) if index < count - ordinal else None
-                    position = selected(value, maximum, title=str(index))
-                    actual = expected[position] if position is not None else None
+                    wanted = [(layout, index, maximum, thickness / 2, diameter, kind)] if index < count - ordinal else []
+                    positions = selected(value, maximum, title=str(index))
+                    actual = [expected[position] for position in positions]
                     if actual != wanted:
                         errors.append(f"slot {slot_id}/{layout}/{index}: {value} selected {actual}, expected {wanted}")
-                    elif position is not None and kind in ("tiny", "round"):
-                        transform = paints[position]
+                    elif positions and kind in ("tiny", "round"):
+                        transform = paints[positions[0]]
                         start = evaluate_paint(transform, value, maximum) if transform is not None else math.nan
                         wanted_start = (1 - value / maximum) * 359.9 + (cap if kind == "round" else 0)
                         if not math.isclose(start, wanted_start, rel_tol=0, abs_tol=1e-9):
@@ -344,12 +380,24 @@ def check_extra_decisions(root):
                 malformed += [(value, maximum, 0, title)
                               for title in ("", "00", "01", "+0", "0.0", " 0", "0 ", "3", "-1", "split", "0:zero")
                               for value in values]
-                if any(selected(value, upper, lower, title) is not None for value, upper, lower, title in malformed):
+                if any(selected(value, upper, lower, title) for value, upper, lower, title in malformed):
                     errors.append(f"slot {slot_id}/{layout}/{index}: malformed input admitted")
-        if any(selected(value, maximum, title=title) is not None
+        if any(selected(value, maximum, title=title)
                for maximum in (0, -1, 50, 150, 300, 900, math.nan, math.inf, -math.inf)
                for value in (0, 2**-20 * 100, 50, 100, 200, 400, 800) for title in ("0", "1", "2")):
             errors.append(f"slot {slot_id}: malformed range admitted")
+        # Only declaration behavior is tested here, not a renderer's retained history.
+        for index in range(2 - ordinal):
+            n2 = selected(148, 400, title=str(index))
+            n3 = selected(296, 800, title=str(index))
+            wanted_n2 = f"outerHalf{slot_id}_N2_{index + 1}_round"
+            wanted_n3 = f"outerHalf{slot_id}_N3_{index + 1}_round"
+            if ([groups[position].get("name") for position in n2] != [wanted_n2]
+                    or [groups[position].get("name") for position in n3] != [wanted_n3]
+                    or any(evaluate_paint(alphas[position], 296, 800, title=str(index)) != 0 for position in n2)
+                    or any(evaluate_paint(alphas[position], 148, 400, title=str(index)) != 0 for position in n3)):
+                errors.append(f"slot {slot_id}/{index}: N2-to-N3 must hide old geometry and reveal new geometry")
+        errors.extend(sorted(gate_errors))
     return errors
 
 
@@ -389,6 +437,7 @@ def check_diagnostics(root, baseline):
     if any(group.attrib != {
         "x": "0", "y": "0", "width": root.get("width"), "height": root.get("height"),
         "name": group.get("name"),
+        **({"alpha": "0"} if group.get("name") == "n1Diag_add_rejected" else {}),
     } for group in additions):
         errors.append("diagnostic groups must retain neutral full-canvas coordinates and attributes")
     if len(list(root.iter("ComplicationSlot"))) != 8:
@@ -400,9 +449,17 @@ def check_diagnostics(root, baseline):
     if ranged is None:
         return errors + ["slot 106 ranged consumer missing"]
     fields = ranged.find("Group[@name='n1Diag_add_fields']")
-    admission = ranged.find("Condition")
-    if fields is None or admission is None or list(ranged) != [fields, admission]:
+    decisions = [group for group in ranged.findall("Group") if group.get("name", "").startswith("outerHalf106_")]
+    rejected = ranged.find("Group[@name='n1Diag_add_rejected']")
+    if fields is None or not decisions or rejected is None or list(ranged) != [fields, *decisions, rejected]:
         return errors + ["consumer fields must precede and be independent of admission"]
+    allowed_tags = {"Group", "Condition", "Expressions", "Expression", "Compare", "Default",
+                    "PartText", "Text", "Font", "Template", "Parameter", "Transform"}
+    if any(node.tag not in allowed_tags for group in additions for node in group.iter()
+           if isinstance(node.tag, str)):
+        errors.append("diagnostics may add only consumer text and its gates, never drawing content")
+    if {node for group in additions for node in group.iter("Transform")} != {rejected.find("Transform")}:
+        errors.append("only the rejected diagnostic Group may add a Transform")
 
     for field, label in (("VALUE", "V"), ("MIN", "m"), ("MAX", "M")):
         condition = fields.find(f"Condition/Expressions/Expression[@name='bounded{field}']/../..")
@@ -434,11 +491,7 @@ def check_diagnostics(root, baseline):
     expected_additions.update(f"n1Diag_add_{name}" for field in ("VALUE", "MIN", "MAX")
                               for name in (f"field_{field}", f"field_{field}_other"))
     expected_additions.update(f"n1Diag_add_title{index}" for index in range(4))
-    for branch in admission.findall("Compare"):
-        group = branch.find("Group")
-        if group is None:
-            errors.append("combined decision Group missing")
-            continue
+    for group in decisions:
         _, layout, band, kind = group.get("name", "").split("_")
         index = int(band) - 1
         name = f"n1Diag_add_admit_{layout}_{index}_{kind}"
@@ -446,7 +499,7 @@ def check_diagnostics(root, baseline):
         witness = group.find(f"Group[@name='{name}']")
         if static_readout(witness) != ("A1" if layout == "N1" else "AO"):
             errors.append(f"{group.get('name')}: admission witness must belong to the actual decision")
-        wanted = ["PartDraw"] * (1 if kind == "zero" else 2) + ["Group"]
+        wanted = ["Transform"] + ["PartDraw"] * (1 if kind == "zero" else 2) + ["Group"]
         if layout == "N1":
             paint_name = "n1Diag_add_paintNone" if kind == "zero" else f"n1Diag_add_paint_{kind}"
             expected_additions.add(paint_name)
@@ -456,8 +509,8 @@ def check_diagnostics(root, baseline):
             wanted.append("Group")
         if [child.tag for child in group] != wanted:
             errors.append(f"{group.get('name')}: witnesses must follow track and selected drawing")
-    rejected = admission.find("Default/Group[@name='n1Diag_add_rejected']")
-    if rejected is None or [static_readout(text) for text in rejected] != ["AX", "PN"]:
+    if ([child.tag for child in rejected] != ["Transform", "PartText", "PartText"]
+            or [static_readout(text) for text in rejected.findall("PartText")] != ["AX", "PN"]):
         errors.append("actual rejected-admission witness missing")
     expected_additions.add("n1Diag_add_rejected")
     if set(names) != expected_additions:
@@ -495,7 +548,7 @@ def main():
         errors = check_structure(root)
     if errors:
         sys.exit("\n".join(errors))
-    print("watchface condition trees and main selector/strip containment passed")
+    print("watchface condition trees, alpha gates and drawing containment passed")
 
 
 if __name__ == "__main__":
