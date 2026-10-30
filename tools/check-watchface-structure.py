@@ -130,29 +130,40 @@ def check_diagnostics(root, baseline):
         errors.append("consumer TITLE must use the closed index/empty vocabulary")
     elif len(title.findall("Compare/Group")) != 4 or title.find("Default/Group") is None:
         errors.append("consumer TITLE needs each category and an unknown-literal fallback")
+    else:
+        for path, token in (("Compare[@expression='title0']", "T0"),
+                            ("Compare[@expression='title1']", "T1"),
+                            ("Compare[@expression='title2']", "T2"),
+                            ("Compare[@expression='title3']", "TE"), ("Default", "T?")):
+            witness = title.find(f"{path}/Group")
+            if witness is None or "".join(witness.itertext()).strip() != token:
+                errors.append("consumer TITLE must retain its closed two-character readout")
 
     for branch in admission.findall("Compare"):
         expression = branch.get("expression", "")
         layout, index = expression.removeprefix("is").split("Band")
         witness = branch.find(f"Group/Group[@name='n1Diag_add_admit_{layout}_{index}']")
-        if witness is None or "".join(witness.itertext()).strip() != ("AN1" if layout == "N1" else "Aother"):
+        if witness is None or "".join(witness.itertext()).strip() != ("A1" if layout == "N1" else "AO"):
             errors.append(f"{expression}: admission witness must belong to the actual branch")
     n1 = admission.find("Compare[@expression='isN1Band0']/Group")
     paint = n1.find("Condition/Compare[@expression='hasRemaining']/Condition") if n1 is not None else None
     if paint is None:
         errors.append("N1 original paint selector missing")
     else:
-        for path, name in (("Compare[@expression='isFull']", "full"),
-                           ("Compare[@expression='isNearEmpty']", "tiny"), ("Default", "round")):
+        for path, name, token in (("Compare[@expression='isFull']", "full", "PF"),
+                                  ("Compare[@expression='isNearEmpty']", "tiny", "PT"),
+                                  ("Default", "round", "PR")):
             wrapper = paint.find(f"{path}/Group[@name='n1Diag_wrap_{name}']")
             if wrapper is None or [child.tag for child in wrapper] != ["PartDraw", "Group"] or (
                 wrapper[1].get("name") != f"n1Diag_add_paint_{name}"
-                or "".join(wrapper[1].itertext()).strip() != f"P{name}"
+                or "".join(wrapper[1].itertext()).strip() != token
             ):
                 errors.append(f"N1 {name}: witness must share its actual colored-paint branch")
-    if n1 is None or n1.find("Condition/Default/Group[@name='n1Diag_add_paintNone']") is None:
+    no_color = n1.find("Condition/Default/Group[@name='n1Diag_add_paintNone']") if n1 is not None else None
+    if no_color is None or "".join(no_color.itertext()).strip() != "PN":
         errors.append("N1 no-color branch witness missing")
-    if admission.find("Default/Group[@name='n1Diag_add_rejected']") is None:
+    rejected = admission.find("Default/Group[@name='n1Diag_add_rejected']")
+    if rejected is None or ["".join(text.itertext()).strip() for text in rejected] != ["AX", "PN"]:
         errors.append("actual rejected-admission witness missing")
 
     # Box corners bound the maximum radius; the nearest box point bounds the minimum.

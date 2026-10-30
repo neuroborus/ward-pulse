@@ -1208,7 +1208,7 @@ ${pad}                    thickness="${thickness}"
 ${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
 ${pad}                    cap="ROUND" />
 ${pad}            </Arc>
-${pad}        </PartDraw>${diagnostics ? n1PaintClose('full', 'Pfull', pad) : ''}
+${pad}        </PartDraw>${diagnostics ? n1PaintClose('full', 'PF', pad) : ''}
 ${pad}    </Compare>
 ${pad}    <!-- The two-cap inset cannot represent a smaller positive remainder:
 ${pad}         its sweep would be zero or negative. Keep the proportional
@@ -1232,7 +1232,7 @@ ${pad}                    thickness="${thickness}"
 ${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
 ${pad}                    cap="BUTT" />
 ${pad}            </Arc>
-${pad}        </PartDraw>${diagnostics ? n1PaintClose('tiny', 'Ptiny', pad) : ''}
+${pad}        </PartDraw>${diagnostics ? n1PaintClose('tiny', 'PT', pad) : ''}
 ${pad}    </Compare>
 ${pad}    <Default>
 ${diagnostics ? n1PaintOpen('round', pad) : ''}${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
@@ -1252,12 +1252,12 @@ ${pad}                    thickness="${thickness}"
 ${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
 ${pad}                    cap="ROUND" />
 ${pad}            </Arc>
-${pad}        </PartDraw>${diagnostics ? n1PaintClose('round', 'Pround', pad) : ''}
+${pad}        </PartDraw>${diagnostics ? n1PaintClose('round', 'PR', pad) : ''}
 ${pad}    </Default>
 ${pad}</Condition>
 ${pad}    </Compare>${diagnostics ? `
 ${pad}    <Default>
-${n1Witness('paintNone', 'Pnone', 2, 1)}
+${n1Witness('paintNone', 'PN', 2, 1)}
 ${pad}    </Default>` : ''}
 ${pad}</Condition>`
 }
@@ -1265,9 +1265,9 @@ ${pad}</Condition>`
 // All six readout boxes are inside r139..171.25, below the clock, outside the
 // preserved original-frame r137..159 measurement annulus at 360/450 scale.
 function n1Text(template, column, row, parameter = null) {
-  return `<PartText x="${173 + column * 35}" y="${366 + row * 11}" width="34" height="10">
+  return `<PartText x="${173 + column * 35}" y="${364 + row * 12}" width="34" height="12">
     <Text align="CENTER" ellipsis="TRUE">
-        <Font family="SYNC_TO_DEVICE" size="7" weight="BOLD" color="${COLOR.text}">
+        <Font family="SYNC_TO_DEVICE" size="10" weight="BOLD" color="${COLOR.text}">
             ${parameter === null ? template : `<Template>${template}<Parameter expression="${parameter}" /></Template>`}
         </Font>
     </Text>
@@ -1303,12 +1303,12 @@ function n1ConsumerFields() {
   const titles = ['0', '1', '2', ''].map((title, index) =>
     `<Expression name="title${index}"><![CDATA[[COMPLICATION.TITLE] == "${title}"]]></Expression>`,
   ).join('\n')
-  const branches = ['T0', 'T1', 'T2', 'Tempty'].map((label, index) =>
+  const branches = ['T0', 'T1', 'T2', 'TE'].map((label, index) =>
     `<Compare expression="title${index}">${n1Witness(`title${index}`, label, 0, 1)}</Compare>`,
   ).join('\n')
   return n1Group('add_fields', `${numbers}
 <Condition><Expressions>${titles}</Expressions>${branches}
-    <Default>${n1Witness('titleOther', 'Tother', 0, 1)}</Default>
+    <Default>${n1Witness('titleOther', 'T?', 0, 1)}</Default>
 </Condition>`)
 }
 
@@ -1402,7 +1402,7 @@ function outerHalfSlot({ slotId, service, label }, ordinal, diagnostics = false)
     return `                    <Compare expression="is${layout.name}Band${index}">
                         <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="outerHalf${slotId}_${layout.name}_${index + 1}">
 ${bandArcs(outer, half, ' '.repeat(28), diagnostics && layout.name === 'N1')}${diagnostics ? `
-${n1Witness(`admit_${layout.name}_${index}`, layout.name === 'N1' ? 'AN1' : 'Aother', 1, 1)}` : ''}
+${n1Witness(`admit_${layout.name}_${index}`, layout.name === 'N1' ? 'A1' : 'AO', 1, 1)}` : ''}
                         </Group>
                     </Compare>`
   }).join('\n')
@@ -1436,7 +1436,7 @@ ${n1ConsumerFields()}` : ''}
 ${expressions}
                     </Expressions>
 ${branches}${diagnostics ? `
-                    <Default>${n1Group('add_rejected', `${n1Text('Areject', 1, 1)}${n1Text('Pnone', 2, 1)}`)}</Default>` : ''}
+                    <Default>${n1Group('add_rejected', `${n1Text('AX', 1, 1)}${n1Text('PN', 2, 1)}`)}</Default>` : ''}
                 </Condition>
             </Complication>
             <Complication type="EMPTY" />

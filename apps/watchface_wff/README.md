@@ -120,12 +120,27 @@ including `spark` and `cursor_cyan` for those actual single-color ramps. Unrelat
 are rejected before returned-field inspection. A logging failure cannot change the return.
 See [logging rules](../../docs/product/SECURITY_MODEL.md#logging-rules).
 
-Only slot106 receives consumer instrumentation. `V`, `m`, `M` show independently read bounded
-VALUE/MIN/MAX (`?` means outside that readable range); `T0`/`T1`/`T2`/`Tempty`/`Tother` classify
-TITLE without exposing its unexpected literal. `AN1`, `Aother`, `Areject` witness actual
-admission branches; within N1, `Pfull`, `Ptiny`, `Pround`, `Pnone` witness actual paint/no-color
-branches. Paint outside N1 remains unobserved. These readouts stay inside the existing clip
-and below the original incident annulus; unreadable or unavailable readouts remain unknown.
+Only slot106 receives consumer instrumentation. Its six cells use the following closed
+readouts, with two-character category tokens:
+
+| Cell | Readout |
+| --- | --- |
+| Top left | `V` followed by bounded VALUE, or `V?` |
+| Top middle | `m` followed by bounded MIN, or `m?` |
+| Top right | `M` followed by bounded MAX, or `M?` |
+| Bottom left | `T0` / `T1` / `T2` for those exact TITLE indices; `TE` for empty; `T?` for any other literal |
+| Bottom middle | `A1` for actual N1 admission; `AO` for another admitted layout; `AX` for rejected admission |
+| Bottom right | Within N1, `PF` for full, `PT` for tiny, `PR` for round partial, `PN` for no remaining color; rejected admission also shows `PN` |
+
+VALUE/MIN/MAX remain independent of admission and bounded to 0..800; their `?` fallback
+does not disclose an out-of-range value. TITLE never exposes an unexpected literal. Paint
+in another admitted layout remains unobserved, leaving that cell unavailable. The 10-unit
+bold text uses two rows of 34×12 boxes within the existing r139..171.25 logical footprint
+guard, inside the clip and below the original incident annulus. Neither source font size
+nor an enlarged preview establishes readability. Read all six cells in the original 360px
+frame and its attributable crop during the exact prefix's final N1pair stage; unreadable or
+unavailable cells remain Unknown. Shorter tokens do not diagnose the earlier label-rendering
+limit or the original RED.
 
 Keep construction, Android wire/Parcel serialization, real service-return, consumer-field,
 branch and original-frame evidence separate. The constructed expected 74/200/TITLE `0`/Spark
@@ -139,12 +154,16 @@ changes that RED, record the qualification without claiming a repair or cause.
 
 Root alone performs applicable HOST builds, API tests, release and no-clean isolation checks
 after Runner DONE, process retirement, any owning CLI exit and a fresh separate idle
-observation. N1 consumer-overlay work also requires official diagnostic XML validation and
-the unchanged hash-bound Square N1 case. The exact hash-bound N2 producer observation keeps
-the normal face, instance and bindings unchanged, recording actual callback returns plus
-first eligible and separately settled normal-face originals. Establish sanitized input and quiet
-writers before exposing the consumer; keep frames private. Preserve installed identities,
-signers, instance, bindings and data. Restore normal artifacts **before** private original data,
+observation. Consumer-readout acceptance requires official validation of both actual XML
+variants and artifact-identity and isolation checks before deployment. Keep the normal
+producer unchanged with diagnostics disabled and install the diagnostic consumer before guest
+boot. Run only the accepted hash-bound N2 → original → N1ordinary → N1pair prefix, assessing
+all six cells during its final N1pair stage. Preserve first eligible and separately settled
+original 360px frames and attributable crops; no pilot, extra matrix, post-RED installation or
+retry-until-green. Preserve the original RED and qualify the instrumented case separately,
+whether RED persists or fails to reproduce. Establish sanitized input and quiet writers before
+exposing the consumer; keep frames private. Preserve installed identities, signers, engine,
+instance, bindings and data. Restore normal artifacts **before** private original data,
 verify effective recovery and retire diagnostic controls/artifacts; installation alone proves
 no active reload. Build/runtime/readability and unresolved RED acceptance remain pending HOST.
 
