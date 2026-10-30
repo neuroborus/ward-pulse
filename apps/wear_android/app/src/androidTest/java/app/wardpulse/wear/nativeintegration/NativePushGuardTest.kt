@@ -144,9 +144,12 @@ class NativePushGuardTest {
             { NativeSystem.parse("0", systemDump) }, { it.renderer(nativeDump) }, { config }, diagnostics = diagnostics)
         val good = read()
         val configuration = good.configuration
-        // Favorite is unrelated to native "existing"; row IDs are unrelated to slots and requester IDs.
-        assertEquals(configuration, read(config = activeConfigurationRecord().replace("favorite-a", "unrelated-b")
-            .replace("id=811", "id=9021")).configuration)
+        // Favorite and row IDs stay outside historical configuration fingerprints.
+        val changedRows = read(config = activeConfigurationRecord().replace("favorite-a", "unrelated-b")
+            .replace("id=811", "id=9021"))
+        assertEquals("811", good.selections!!.rowIds.getValue(11))
+        assertEquals("9021", changedRows.selections!!.rowIds.getValue(11))
+        assertEquals(configuration, changedRows.configuration)
         assertEquals(configuration, read(config = activeConfigurationRecord().replace("PreviewComplicationDataCache=",
             "PreviewComplicationDataCache=cached-unselected-provider")).configuration)
         assertEquals(configuration, read(config = activeConfigurationRecord().replace("type=5", "type=10")).configuration)

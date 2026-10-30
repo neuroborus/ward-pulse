@@ -34,15 +34,6 @@ internal fun requireGuardedNativeClientProbe(probed: JSONObject, identity: JSONO
         identity.sameClientIdentity(probed.getJSONObject("identity")), "retained-client-probe-identity")
 }
 
-/** Recovery attempts every affected provider even if an earlier request fails. */
-internal fun requestNormalClientData(providers: List<ComponentName>, request: (ComponentName) -> Unit) {
-    var unavailable = false
-    providers.distinct().forEach {
-        try { request(it) } catch (_: Throwable) { unavailable = true }
-    }
-    nativeGuard(!unavailable, "client-normal-recovery-request-unavailable")
-}
-
 /** Tracks both public bind overloads, including the executor overload used by client 1.2.1. */
 internal class NativeClientBinding(context: Context, private val verifyService: (Intent) -> Unit) :
     ContextWrapper(context), AutoCloseable {

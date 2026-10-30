@@ -577,10 +577,10 @@ private fun readActiveSelections(dump: String, system: NativeSystem, renderer: N
     val configs = controller.after("activeConfigs: size=${controller.one("activeConfigs: size=")}")
     val declared = controller.one("activeConfigs: size=").toIntOrNull() ?: throw NativePending("declared-config-size")
     val rows = configs.lines.filter { it.isNotEmpty() }.map { line ->
-        Regex("id=[0-9]+ slot=([0-9]+) type=([0-9]+) configActionPending=(true|false) provider=(null|ComponentInfo\\{([^}]+)\\}) isEnabled=(true|false)")
+        Regex("id=([0-9]+) slot=([0-9]+) type=([0-9]+) configActionPending=(true|false) provider=(null|ComponentInfo\\{([^}]+)\\}) isEnabled=(true|false)")
             .matchEntire(line) ?: throw NativePending("complete-active-config-row")
     }
-    val slots = rows.map { it.groupValues[1].toIntOrNull() ?: throw NativePending("config-slot") }
+    val slots = rows.map { it.groupValues[2].toIntOrNull() ?: throw NativePending("config-slot") }
     val rowIds = rows.map { it.value.substringBefore(' ') }
     val complete = declared == rows.size && rows.size == renderer.enabled.size &&
         slots.toSet() == renderer.enabled.keys && slots.toSet().size == slots.size && rowIds.toSet().size == rows.size
@@ -590,13 +590,13 @@ private fun readActiveSelections(dump: String, system: NativeSystem, renderer: N
     val providers = mutableMapOf<Int, String?>()
     rows.forEachIndexed { index, row ->
         val slot = slots[index]
-        nativeGuard(row.groupValues[3] == "false" && (row.groupValues[6] == "true") == renderer.enabled[slot],
+        nativeGuard(row.groupValues[4] == "false" && (row.groupValues[7] == "true") == renderer.enabled[slot],
             "settled-enabled-config")
-        types[slot] = row.groupValues[2].toIntOrNull() ?: throw NativePending("configured-type")
-        providers[slot] = if (row.groupValues[4] == "null") null else row.groupValues[5].also { nativeComponent(it) }
+        types[slot] = row.groupValues[3].toIntOrNull() ?: throw NativePending("configured-type")
+        providers[slot] = if (row.groupValues[5] == "null") null else row.groupValues[6].also { nativeComponent(it) }
     }
     // Types describe configuration, not delivered/overridden data or requester IDs.
-    return NativeSelections(resource, renderer.instance, providers, types)
+    return NativeSelections(resource, renderer.instance, providers, types, slots.zip(rows.map { it.groupValues[1] }).toMap())
 }
 
 /** Authoritative selections must identify the resource package, instance and every slot. */
@@ -606,6 +606,8 @@ internal data class NativeSelections(
     // An explicit null means no selected provider; a missing key means unavailable evidence.
     val providers: Map<Int, String?>,
     val configuredTypes: Map<Int, Int> = emptyMap(),
+    // Raw controller row IDs remain separate from slots and from historical configuration fingerprints.
+    val rowIds: Map<Int, String> = emptyMap(),
 )
 
 internal data class NativeRenderer(

@@ -282,9 +282,9 @@ class NativeClientGuardTest {
         assertThrows(NativePending::class.java) { nativeOverrideData("unknown", targets) }
         val recovered = mutableListOf<ComponentName>()
         assertThrows(NativePending::class.java) {
-            requestNormalClientData(targets.map { it.provider }) {
-                recovered += it
-                if (it == targets.first().provider) throw IllegalStateException("Synthetic first-request failure")
+            requestNativeDelivery(targets, targets, org.json.JSONArray(), {}, { targets }, recovery = true) { provider, _ ->
+                recovered += provider
+                if (provider == targets.first().provider) throw NativePending("synthetic-first-request-failure")
             }
         }
         assertEquals(targets.map { it.provider }, recovered)

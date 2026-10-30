@@ -1,6 +1,5 @@
 package app.wardpulse.wear.nativeintegration
 
-import android.content.ComponentName
 import android.content.Context
 import android.graphics.Bitmap
 import android.os.Bundle
@@ -117,6 +116,10 @@ class NativeComplicationOverrideTest {
                         .put("restoration", "Pending")
                     persist()
                     armed = true
+                    retained(before, targets)
+                    quietBridge()
+                    nativeGuard(target.getSharedPreferences("watch_summary", Context.MODE_PRIVATE)
+                        .getString("latest", null) == summary, "producer-changed-before-transport")
                     if (mode == "supplied-bitmap") {
                         val bitmap = client.renderWatchFaceToBitmap(
                             RenderParameters(DrawMode.INTERACTIVE, WatchFaceLayer.ALL_WATCH_FACE_LAYERS, null),
@@ -147,26 +150,14 @@ class NativeComplicationOverrideTest {
                     persist()
                 } finally {
                     if (armed) {
-                        // This must run before client close, on failures and supplied-bitmap paths too.
-                        // updateAll uses current selections instead of reusing possibly obsolete IDs.
+                        // Independent recovery must run before close, including transport failures.
                         val calls = JSONArray()
-                        try {
-                            receipt.put("cleanupRequest", "normal updateAll armed; dispatch uncertain")
-                                .put("cleanupCalls", calls)
-                            persist()
-                        } finally {
-                            requestNormalClientData(targets.filter { it.slot in data }.map { it.provider }) { provider ->
-                                val call = JSONObject().put("providerSha256", provider.flattenToString().sha256())
-                                    .put("state", "armed; dispatch uncertain")
-                                calls.put(call)
-                                try { persist() } finally {
-                                    ComplicationDataSourceUpdateRequester.create(target, provider).requestUpdateAll()
-                                }
-                                call.put("state", "requestUpdateAll returned; effective data Pending")
-                                persist()
-                            }
+                        receipt.put("cleanupRequest", "normal targeted recovery Pending").put("cleanupCalls", calls)
+                        requestNativeDelivery(targets, targets.filter { it.slot in data }, calls, persist,
+                            validate = { quietBridge(); mappings(before) }, recovery = true) { provider, ids ->
+                            ComplicationDataSourceUpdateRequester.create(target, provider).requestUpdate(*ids)
                         }
-                        receipt.put("cleanupRequest", "normal updateAll returned; effective restoration Pending")
+                        receipt.put("cleanupRequest", "normal requestUpdate returned; effective restoration Pending")
                         val current = target.getSharedPreferences("watch_summary", Context.MODE_PRIVATE).getString("latest", null)
                         receipt.put("cleanupSummaryPresent", current != null)
                             .put("cleanupSummarySha256", current?.sha256() ?: JSONObject.NULL)
@@ -190,7 +181,7 @@ class NativeComplicationOverrideTest {
         val directory = File(root, "$mode-$scenario")
         val receipt = AttemptJournal(File(directory, "receipt.json")).read()
         nativeGuard(!receipt.has("laterRestoration") && receipt.optString("cleanupRequest") ==
-            "normal updateAll returned; effective restoration Pending" &&
+            "normal requestUpdate returned; effective restoration Pending" &&
             receipt.optString("interactiveCleanup") == "close returned" &&
             receipt.optString("controlCleanup") == "close returned" &&
             receipt.optString("controlBindingCleanup") == "tracked connections released", "client-retired-before-restoration")
@@ -249,7 +240,7 @@ class NativeComplicationOverrideTest {
         nativeGuard(receipt.optString("laterRestoration") ==
             "recorded; original-frame inspection and response provenance Pending" &&
             receipt.optString("mappingSha256") == targets.fingerprint() &&
-            receipt.optString("cleanupRequest") == "normal updateAll returned; effective restoration Pending" &&
+            receipt.optString("cleanupRequest") == "normal requestUpdate returned; effective restoration Pending" &&
             receipt.optString("restoration") in setOf("original bytes observed", "original bytes restored"),
             "normal-restoration-support")
         nativeGuard(WatchSummaryStore(target).load() != null, "restorable-normal-data")
@@ -286,18 +277,11 @@ class NativeComplicationOverrideTest {
             it.configuration.sha256() == expected.hash("expectedConfigurationSha256"), "client-renderer-identity")
     }
 
-    private fun mappings(before: NativeRenderer): List<NativeDeliveryTarget> {
-        val component = ComponentName(RUNTIME_PACKAGE, "$RUNTIME_PACKAGE.${expected.required("expectedRuntime")}")
-        val records = device.shell("dumpsys activity service com.google.android.wearable.app")
-        val after = renderer()
-        nativeGuard(after.instance == before.instance && after.resourcePackage == before.resourcePackage &&
-            after.configuration == before.configuration, "client-stable-mapping")
-        return discoverDeliveryTargets(records, component, after)
-    }
+    private fun mappings(before: NativeRenderer) = readNativeDeliveryTargets(instrumentation, expected, before)
 
     private fun retained(before: NativeRenderer, targets: List<NativeDeliveryTarget>): NativeRenderer = renderer().also {
-        nativeGuard(it.instance == before.instance && it.resourcePackage == before.resourcePackage &&
-            it.configuration == before.configuration && mappings(it) == targets, "client-retained-state")
+        requireNativeDeliveryScope(it, before)
+        nativeGuard(mappings(it) == targets, "client-retained-state")
     }
 
     private fun fresh(name: String) = File(root, name).also {

@@ -1288,12 +1288,21 @@ Select only one explicit `NativeDatasourceTransitionTest` method using the **sto
 and literal `wardpulseNativeIntegration=normal-delivery`. `probeDelivery` is read-only apart
 from private evidence files; it requires the retained manager-result/native-observation record,
 canonical emulator/image/display, current host 4/asset 3, Push 4, legacy 2 and current active
-instance/configuration identities. The source reads explicit system-manager mapping records
-with `discoverDeliveryTargets`; see
+instance/configuration identities. The shared `readNativeDeliveryTargets` reader uses the
+public typed own-provider producer from `NativeTypedConfigTest` and the existing complete-eight
+`readNativeSelections` chain. `discoverDeliveryTargets` validates system IDs against actual
+controller row IDs, returned slot/resource domains, owned providers and configured types;
+null upper selections and enabled states remain explicit. See
 [mapping and recovery limits](../apps/wear_android/README.md#guarded-normal-datasource-observations).
-Exposure/access/format of applicable system records is unverified until HOST probes it. If
-fields or mappings are unavailable, leave Pending; do not supply guessed IDs, synthesize
+The target's ordinary UID must acquire the public SDK manager and receive typed configs;
+availability, acquisition, callback/result/error and caller/resource/runtime/full-eight brackets
+are recorded separately in private `files/native_read/requester-*/receipt.json`. Own-provider
+metadata is not all-provider selection evidence. Missing, duplicate, foreign, changed or unresolved
+associations stay Pending; do not guess IDs, use numerical/provider-only joins, synthesize
 records, use cached data/default policy, select providers or grant permission to proceed.
+No client acquisition is required. New resource diagnostics distinguish resource-package and
+runtime-package reads without relabeling prior ambiguous `beforeResource` or uninvoked client
+acquisition as a proven denial or package-visibility cause.
 
 Freshly populate the named variables from independent installed/active observations. The
 host hash here is the **post-witness rebuilt** host, distinct from the original manager
@@ -1304,7 +1313,10 @@ adb -s "$WEAR_SERIAL" shell am instrument -w -r \
   -e class app.wardpulse.wear.nativeintegration.NativeDatasourceTransitionTest#probeDelivery \
   -e wardpulseNativeIntegration normal-delivery \
   -e expectedAvd "$NATIVE_AVD" -e expectedFingerprintSha256 "$NATIVE_FINGERPRINT_SHA256" \
+  -e expectedCallerUid "$NATIVE_CALLER_UID" -e expectedHostVersionCode "$NATIVE_HOST_VERSION_CODE" \
   -e expectedHostApkSha256 "$NATIVE_HOST_SHA256" -e expectedHostSignerSha256 "$NATIVE_HOST_SIGNER_SHA256" \
+  -e expectedResourceApkSha256 "$NATIVE_RESOURCE_SHA256" -e expectedResourceSignerSha256 "$NATIVE_RESOURCE_SIGNER_SHA256" \
+  -e expectedRuntimeApkSha256 "$NATIVE_RUNTIME_SHA256" -e expectedRuntimeSignerSha256 "$NATIVE_RUNTIME_SIGNER_SHA256" \
   -e expectedAsset3Sha256 "$NATIVE_ASSET3_SHA256" -e expectedPush4ApkSha256 "$NATIVE_PUSH4_SHA256" \
   -e expectedPushSignerSha256 "$NATIVE_PUSH_SIGNER_SHA256" \
   -e expectedLegacyApkSha256 "$NATIVE_LEGACY_SHA256" -e expectedLegacySignerSha256 "$NATIVE_LEGACY_SIGNER_SHA256" \
@@ -1331,6 +1343,7 @@ explicit method and add all these `-e` strings:
 | `managerWitnessReview` | `complete`, after reviewing the original pre-replacement evidence |
 | `firstFrameReview` | `complete-unobscured`, after inspecting this probe's original |
 | `expectedReviewedFrameSha256` | SHA-256 of that exact private original PNG |
+| `priorDeliveryRestorationReview`, `expectedPriorDeliveryRestorationSha256` | After an earlier case: `complete` and the exact prior receipt hash after its separate effective-restoration review |
 
 One method runs one bounded scenario; its private directory prevents replay. The normal case
 publishes a sanitized pair through `WatchSummaryStore.saveEncoded` and requests the selected
@@ -1344,8 +1357,14 @@ event timeout or the final frame. Redacted native fields can leave semantics una
 `NativeSummaryLease` retains originals opaquely and restores only attributable owned data
 after rechecking quiet writers. A newer publication is preserved and recorded privately;
 unresolved interleaving/transport retains recovery material and stays Pending. There is no
-cross-writer atomic compare-and-set guarantee. Cleanup requests ordinary six-service delivery
-on failure as well as success. Its immediate frame is diagnostic. After actual native
+cross-writer atomic compare-and-set guarantee. Requests and independent normal-data recovery
+use only freshly validated intended targets with `requestUpdate`. Each provider group must be
+durably armed before fresh mapping validation and dispatch; failed persistence prevents dispatch.
+Recovery attempts independent groups even if one fails, preserving newer producer data.
+Unresolved mapping or uncertain dispatch stays Pending without stale-ID reuse, blanket requests
+or retries. A durable latest-case fence requires the prior later-restoration receipt and explicit
+HOST effective-recovery review before another scenario; no scenario can be replayed.
+The immediate frame is diagnostic. After actual native
 settlement, select `observeRestoration` once with the same identity arguments plus
 `deliveryScenario`; it records a separate later original and newer-write status without
 publishing or restoring a snapshot. Verify actual restored normal delivery/rendering, retained
@@ -1570,8 +1589,11 @@ defines cases, API/transport rejection, binding ownership and evidence limits. N
 may supply guessed slot IDs, raw payloads, permission or a new instance. Each mode/scenario
 is single-use, including failure; no retries, resets or deleted receipts to obtain a witness.
 Keep `.bin` summary reference bytes, effective-data records and original frames private.
-No summary is restored from those bytes: cleanup requests **current** normal producer data,
-preserving legitimate newer publications and all existing choices/settings.
+No summary is restored from those bytes: cleanup requests **current** normal producer data
+only for freshly revalidated affected targets, using the shared typed mapping and durable
+per-provider arming. Independent groups are attempted even after another failure; failed
+persistence or unresolved mappings forbid dispatch. No blanket request, stale IDs or retry
+can substitute. Legitimate newer publications and all existing choices/settings are preserved.
 
 After that client owner retires and normal delivery separately settles, select
 `observeRestoration` with the same mode/scenario and identity/artifact arguments. It captures

@@ -17,6 +17,7 @@ import java.io.File
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.FutureTask
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -32,21 +33,101 @@ import org.junit.runner.RunWith
 class NativeDatasourceGuardTest {
     @Test
     fun targetedRequestsNeedActualInstanceMappingsRatherThanCanonicalOrCachedIds() {
-        val component = ComponentName(RUNTIME_PACKAGE, "$RUNTIME_PACKAGE.DeclarativeWatchFaceRuntime0")
-        val provider = "$HOST_PACKAGE/app.wardpulse.wear.complication.TodayComplicationDataSourceService"
-        val selected = NativeSelections(CANDIDATE_PACKAGE, "existing", mapOf(11 to provider))
-        val renderer = NativeRenderer(CANDIDATE_PACKAGE, "existing", "style", mapOf(11 to true),
-            mapOf(11 to provider), selections = selected)
-        val record = "watchFaceComponent=ComponentInfo{${component.flattenToString()}}, " +
-            "watchFaceInstanceId=existing, watchFaceComplicationId=11, " +
-            "complicationInstanceId=407, providerComponent=ComponentInfo{$provider}"
-        assertEquals(407, discoverDeliveryTargets(record, component, renderer).single().systemId)
-        for (unavailable in listOf("", "dataSource=ComponentInfo{$provider}",
-            record.replace("watchFaceInstanceId=existing", "watchFaceInstanceId=other"),
-            record.replace("complicationInstanceId=407, ", ""), "$record\n$record",
-            record.replace("providerComponent=ComponentInfo{$provider}", "providerComponent=ComponentInfo{other/Provider}"))) {
-            assertThrows(NativePending::class.java) { discoverDeliveryTargets(unavailable, component, renderer) }
+        val slots = (11..18).toList()
+        val providers = slots.associateWith { slot -> if (slot <= 15)
+            "$HOST_PACKAGE/app.wardpulse.wear.complication.SyntheticProvider$slot" else null }
+        val rows = slots.zip(listOf(407, 912, 219, 601, 307, 811, 509, 1100).map { it.toString() }).toMap()
+        val types = slots.associateWith { if (it <= 15) 5 else 0 }
+        val selections = NativeSelections(CANDIDATE_PACKAGE, "existing", providers, types, rows)
+        val renderer = NativeRenderer(CANDIDATE_PACKAGE, "existing", "style", slots.associateWith { true },
+            emptyMap(), selections = selections, runtime = "SyntheticRuntime", nativeScope = listOf("engine"))
+        val configs = slots.take(5).map { slot -> NativeTypedConfig(rows.getValue(slot).toInt(), slot,
+            ComponentName.unflattenFromString(providers.getValue(slot)!!), CANDIDATE_PACKAGE, null, 5) }
+        val targets = discoverDeliveryTargets(configs.reversed(), renderer, renderer)
+        assertEquals(listOf(407, 912, 219, 601, 307), targets.map { it.systemId })
+        val legacy = renderer.copy(resourcePackage = "app.wardpulse.watchface",
+            selections = selections.copy(resourcePackage = "app.wardpulse.watchface"))
+        assertEquals(targets, discoverDeliveryTargets(configs.map { it.copy(watchFacePackage = legacy.resourcePackage) },
+            legacy, legacy))
+        val first = configs.first()
+        val badConfigs = listOf(emptyList(), configs.drop(1), configs + first, configs.drop(1) + configs[1],
+            configs.drop(1) + first.copy(id = first.watchFaceSlotId),
+            configs.drop(1) + first.copy(id = configs[1].id), configs.drop(1) + first.copy(id = -1),
+            configs.drop(1) + first.copy(watchFaceSlotId = 101),
+            configs.drop(1) + first.copy(provider = null),
+            configs.drop(1) + first.copy(provider = ComponentName("other", "SyntheticProvider")),
+            configs.drop(1) + first.copy(watchFacePackage = null),
+            configs.drop(1) + first.copy(watchFacePackage = "other.resource"),
+            configs.drop(1) + first.copy(watchFaceClass = "SyntheticFace"),
+            configs.drop(1) + first.copy(dataType = 3))
+        badConfigs.forEach { unavailable ->
+            assertThrows(NativePending::class.java) { discoverDeliveryTargets(unavailable, renderer, renderer) }
         }
+        for (changed in listOf(renderer.copy(instance = "other"), renderer.copy(runtime = "OtherRuntime"),
+            renderer.copy(nativeScope = listOf("other")), renderer.copy(userStyle = "changed"), legacy,
+            renderer.copy(enabled = renderer.enabled + (18 to false)),
+            renderer.copy(selections = selections.copy(providers = providers - 18)),
+            renderer.copy(selections = selections.copy(providers = providers + (18 to providers[11]))),
+            renderer.copy(selections = selections.copy(configuredTypes = types + (18 to 5))),
+            renderer.copy(selections = selections.copy(rowIds = rows + (18 to "1101"))),
+            renderer.copy(selections = selections.copy(rowIds = rows - 18)),
+            renderer.copy(selections = selections.copy(rowIds = rows + (18 to rows.getValue(11)))),
+            renderer.copy(selections = selections.copy(rowIds = rows + (18 to "0407"))),
+            renderer.copy(selections = selections.copy(rowIds = rows + (18 to "unresolved"))))) {
+            assertThrows(NativePending::class.java) { discoverDeliveryTargets(configs, renderer, changed) }
+        }
+        // Persistence failure prevents the request; a durable uncertain arm prevents a retry.
+        var dispatched = 0
+        val calls = JSONArray()
+        assertThrows(java.io.IOException::class.java) {
+            requestNativeDelivery(targets, targets.take(1), calls, { throw java.io.IOException() }, { targets }) { _, _ ->
+                dispatched++
+            }
+        }
+        assertEquals(0, dispatched)
+        assertThrows(NativePending::class.java) {
+            requestNativeDelivery(targets, targets.take(1), calls, {}, { targets }) { _, _ -> dispatched++ }
+        }
+        assertEquals(0, dispatched)
+        for (afterReturn in listOf(false, true)) {
+            val uncertain = JSONArray()
+            var durable = ""
+            val failure = if (afterReturn) java.io.IOException::class.java else IllegalStateException::class.java
+            assertThrows(failure) {
+                requestNativeDelivery(targets, targets.take(1), uncertain, {
+                    if (afterReturn && durable.isNotEmpty()) throw java.io.IOException()
+                    durable = uncertain.toString()
+                }, { targets }) { _, _ ->
+                    dispatched++
+                    if (!afterReturn) throw IllegalStateException("Synthetic transport failure")
+                }
+            }
+            assertEquals("armed; dispatch uncertain", JSONArray(durable).getJSONObject(0).getString("state"))
+            assertThrows(NativePending::class.java) {
+                requestNativeDelivery(targets, targets.take(1), JSONArray(durable), {}, { targets }) { _, _ -> dispatched++ }
+            }
+        }
+        assertEquals(2, dispatched)
+        // Changes during arming never use old IDs; recovery still tries independent intended groups.
+        var validations = 0
+        var mappingChanged = false
+        val recovered = mutableListOf<Int>()
+        assertThrows(NativePending::class.java) {
+            requestNativeDelivery(targets, targets.take(2), JSONArray(), { mappingChanged = true }, {
+                assertTrue(mappingChanged)
+                if (validations++ == 0) targets.drop(1) else targets
+            }, recovery = true) { _, ids -> recovered += ids.toList() }
+        }
+        assertEquals(2, validations)
+        assertEquals(listOf(912), recovered)
+        recovered.clear()
+        val recoveryCalls = JSONArray()
+        assertThrows(java.io.IOException::class.java) {
+            requestNativeDelivery(targets, targets.take(2), recoveryCalls, {
+                if (recoveryCalls.length() == 1) throw java.io.IOException()
+            }, { targets }, recovery = true) { _, ids -> recovered += ids.toList() }
+        }
+        assertEquals(listOf(912), recovered)
         val args = android.os.Bundle().apply {
             putString("class", "$DELIVERY_CLASS#observeDelivery")
             putString("wardpulseNativeIntegration", "normal-delivery")

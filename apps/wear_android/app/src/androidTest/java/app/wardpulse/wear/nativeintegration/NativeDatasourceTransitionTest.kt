@@ -1,6 +1,5 @@
 package app.wardpulse.wear.nativeintegration
 
-import android.content.ComponentName
 import android.content.Context
 import android.graphics.Bitmap
 import android.os.Bundle
@@ -8,7 +7,6 @@ import android.view.accessibility.AccessibilityEvent
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester
-import app.wardpulse.wear.complication.WatchComplicationUpdater
 import java.io.File
 import java.time.Instant
 import java.util.concurrent.TimeoutException
@@ -66,6 +64,7 @@ class NativeDatasourceTransitionTest {
             preflight.getString("instanceSha256") == before.instance.sha256() &&
             preflight.getString("mappingSha256") == targets.fingerprint(), "reviewed-first-original")
         quietBridge()
+        requirePriorRecovery()
         val directory = File(root, scenario)
         val receipt = JSONObject().put("scenario", scenario).put("bridge", "unchanged by instrumentation")
             .put("reviewedFirstFrameSha256", expected.hash("expectedReviewedFrameSha256"))
@@ -73,6 +72,7 @@ class NativeDatasourceTransitionTest {
             .put("effectiveRendering", "Pending").put("events", JSONArray())
         var lease: NativeSummaryLease? = null
         try {
+            AttemptJournal(File(root, "latest.json")).persist(JSONObject().put("case", scenario))
             instrumentation.runOnMainSync {
                 lease = NativeSummaryLease(target.getSharedPreferences("watch_summary", Context.MODE_PRIVATE),
                     directory, receipt)
@@ -96,15 +96,15 @@ class NativeDatasourceTransitionTest {
                 // A matching accessibility event is only an observation boundary, never a delivery ACK.
                 try {
                     val event = instrumentation.uiAutomation.executeAndWaitForEvent({
-                        selected.groupBy { it.provider }.forEach { (provider, rows) ->
-                            val call = JSONObject().put("providerSha256", provider.flattenToString().sha256())
-                                .put("systemIds", JSONArray(rows.map { it.systemId })).put("state", "armed; dispatch uncertain")
-                            entry.getJSONArray("calls").put(call)
-                            AttemptJournal(File(directory, "receipt.json")).persist(receipt)
-                            ComplicationDataSourceUpdateRequester.create(target, provider)
-                                .requestUpdate(*rows.map { it.systemId }.toIntArray())
-                            call.put("state", "requestUpdate returned; delivery Pending")
-                            AttemptJournal(File(directory, "receipt.json")).persist(receipt)
+                        requestNativeDelivery(targets, selected, entry.getJSONArray("calls"),
+                            persist = { AttemptJournal(File(directory, "receipt.json")).persist(receipt) },
+                            validate = {
+                                val fresh = mappings(before)
+                                quietBridge()
+                                instrumentation.runOnMainSync { checkNotNull(lease).requireOwned() }
+                                fresh
+                            }) { provider, ids ->
+                            ComplicationDataSourceUpdateRequester.create(target, provider).requestUpdate(*ids)
                         }
                         entry.put("request", "requestUpdate returned; response Pending")
                         AttemptJournal(File(directory, "receipt.json")).persist(receipt)
@@ -153,18 +153,19 @@ class NativeDatasourceTransitionTest {
                 }
             } finally {
                 if (lease != null) {
-                    // Requests are normal provider delivery, including a preserved newer publication.
-                    // Do not reuse stale system IDs if a selection/instance changed during cleanup.
+                    // Independent normal-data recovery uses only freshly revalidated intended targets.
+                    // An unresolved mapping or dispatch stays Pending; no stale IDs or blanket requests.
                     val summary = target.getSharedPreferences("watch_summary", Context.MODE_PRIVATE).getString("latest", null)
+                    val calls = JSONArray()
                     receipt.put("cleanupSummaryPresent", summary != null)
                         .put("cleanupSummarySha256", summary?.sha256() ?: JSONObject.NULL)
-                        .put("cleanupRequest", "normal updateAll armed; dispatch uncertain")
-                    try {
-                        AttemptJournal(File(directory, "receipt.json")).persist(receipt)
-                    } finally {
-                        WatchComplicationUpdater.requestUpdate(target)
+                        .put("cleanupRequest", "normal targeted recovery Pending").put("cleanupCalls", calls)
+                    requestNativeDelivery(targets, targets, calls,
+                        persist = { AttemptJournal(File(directory, "receipt.json")).persist(receipt) },
+                        validate = { quietBridge(); mappings(before) }, recovery = true) { provider, ids ->
+                        ComplicationDataSourceUpdateRequester.create(target, provider).requestUpdate(*ids)
                     }
-                    receipt.put("cleanupRequest", "normal updateAll returned; effective restoration Pending")
+                    receipt.put("cleanupRequest", "normal requestUpdate returned; effective restoration Pending")
                     AttemptJournal(File(directory, "receipt.json")).persist(receipt)
                     val restored = retained(before, targets)
                     observe(directory, "restoration", restored)
@@ -190,7 +191,7 @@ class NativeDatasourceTransitionTest {
         val journal = AttemptJournal(File(directory, "receipt.json"))
         val receipt = journal.read()
         nativeGuard(!receipt.has("laterRestoration") && receipt.optString("cleanupRequest") ==
-            "normal updateAll returned; effective restoration Pending", "single-later-restoration")
+            "normal requestUpdate returned; effective restoration Pending", "single-later-restoration")
         receipt.put("laterRestoration", "armed; native observation Pending")
         journal.persist(receipt)
         val current = renderer()
@@ -229,6 +230,20 @@ class NativeDatasourceTransitionTest {
             update.optString("candidateApkSha256") == push.apk, "prior-manager-witness")
     }
 
+    private fun requirePriorRecovery() {
+        val latest = AttemptJournal(File(root, "latest.json"))
+        if (!latest.exists()) return
+        val scenario = latest.read().getString("case")
+        nativeGuard(scenario in setOf("normal", "delayed", "obsolete", "recovery"), "prior-delivery-case")
+        val file = File(root, "$scenario/receipt.json")
+        val receipt = AttemptJournal(file).read()
+        nativeGuard(receipt.optString("cleanupRequest") == "normal requestUpdate returned; effective restoration Pending" &&
+            receipt.optString("laterRestoration") == "recorded; original-frame inspection and response provenance Pending" &&
+            expected.required("priorDeliveryRestorationReview") == "complete" &&
+            file.inputStream().sha256() == expected.hash("expectedPriorDeliveryRestorationSha256"),
+            "prior-delivery-recovery-unresolved")
+    }
+
     private fun quietBridge() {
         // Transport/producer quietness requires HOST ownership and independent peer/bridge checks.
         // This service observation cannot establish the absence of future publications.
@@ -240,11 +255,7 @@ class NativeDatasourceTransitionTest {
     }
 
     private fun mappings(before: NativeRenderer): List<NativeDeliveryTarget> {
-        val component = ComponentName(RUNTIME_PACKAGE, "$RUNTIME_PACKAGE.${expected.required("expectedRuntime")}")
-        val records = device.shell("dumpsys activity service com.google.android.wearable.app")
-        val after = renderer()
-        requireRetained(after, before)
-        return discoverDeliveryTargets(records, component, after).also { targets ->
+        return readNativeDeliveryTargets(instrumentation, expected, before).also { targets ->
             val services = targets.map { it.provider.className.substringAfterLast('.') }.toSet()
             nativeGuard(listOf("Today", "Week", "Ring3", "RingSplit", "StripSplit").all {
                 "${it}ComplicationDataSourceService" in services
@@ -264,9 +275,8 @@ class NativeDatasourceTransitionTest {
             it.configuration.sha256() == expected.hash("expectedConfigurationSha256"), "delivery-renderer-identity")
     }
 
-    private fun requireRetained(after: NativeRenderer, before: NativeRenderer) = nativeGuard(
-        after.resourcePackage == before.resourcePackage && after.instance == before.instance &&
-            after.configuration == before.configuration, "retained-delivery-configuration")
+    private fun requireRetained(after: NativeRenderer, before: NativeRenderer) =
+        requireNativeDeliveryScope(after, before)
 
     private fun observe(directory: File, name: String, renderer: NativeRenderer? = null) {
         val file = File(directory, "$name.png")

@@ -574,21 +574,33 @@ excluded from the original default 40. Invoke the manual route only after the ge
 3→4 result, separate settled evidence/restoration and instrumentation retirement, followed by
 ordinary seam-bearing target provisioning. This is not a target installer or a manager retry.
 
-`discoverDeliveryTargets` in
+`readNativeDeliveryTargets` and `discoverDeliveryTargets` in
 [NativeDatasourceState.kt](app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeDatasourceState.kt)
-joins independently selected providers to explicit system-manager records for the actual
-runtime component, existing instance and enabled slot. Its bounded read-only source is
-`dumpsys activity service com.google.android.wearable.app`. A recognized row must co-locate
-`watchFaceComponent`, `watchFaceInstanceId`, `watchFaceComplicationId`,
-`complicationInstanceId` and `providerComponent` as named `key=value` fields; components may
-be flattened or wrapped in `ComponentInfo{…}`. Current installed-manager exposure of these
-fields is **unverified**. Missing, ambiguous, duplicate or unproved applicable records leave
-the route **Pending before publication**. Neither HOST-supplied IDs, scene IDs 101/102/etc,
-runtime slot numbers alone, cached `dataSource` nor default policy can supply missing mappings.
-The active configuration is bracketed by matching semantic System/native observations;
-all five lower services must be selected and enabled. Wear 4, asset 3, retained Push 4 and
-legacy 2 identities are guarded. An already-active Push or legacy instance can be observed;
-this harness never activates or reselects either one.
+reuse the public `readNativeTypedConfigs` producer from
+[NativeTypedConfigTest.kt](app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeTypedConfigTest.kt).
+The actual target UID calls Wear SDK 35.1 `ComplicationsManager.getActiveComplicationConfigsAsync`;
+availability, manager acquisition, callback outcomes and raw typed configs remain separate
+private evidence. This API supplies **own-provider** metadata, not all-provider selections.
+No client access, privilege, reflection, dependency or alternate producer is required.
+
+The existing `readNativeSelections` grammar supplies the complete eight-slot
+controller/favorite/facade/current-engine chain, including explicit null providers, configured
+types and enabled states. Raw controller row IDs are retained separately and do not change
+historical configuration fingerprints. Each typed system ID must match the unique actual
+controller row for its returned slot, owned provider, configured type and resource package
+with null WFF class. Caller UID/package/APK/signer, installed resource/runtime identities,
+System connection and the full native selection scope bracket the typed read. Numerical
+agreement, offsets, ordering, provider-only joins, scene IDs, cached data and default policy
+cannot supply missing authority. Incomplete, duplicate, foreign, changed or unresolved
+associations leave the route **Pending before publication**.
+
+Fresh `files/native_read/requester-*/receipt.json` files retain producer and bracket outcomes.
+New resource reads identify resource-package and runtime-package suboperations separately;
+prior ambiguous `beforeResource` evidence stays unresolved. An uninvoked client acquisition
+is not an access result or evidence of a package-visibility cause. Both datasource and direct-data
+consumers use this same mapping. All five lower services must be selected and enabled.
+Admission also guards Wear 4, asset 3, retained Push 4 and legacy 2 identities. An already-active
+Push or legacy instance can be observed; this harness never activates or reselects either one.
 
 HOST first inspects the single private `probe/first.png` original for a complete unobscured
 frame, then supplies its hash and explicit review/precondition attestations. Before controlled
@@ -607,6 +619,8 @@ summary removes obsolete mains/extras. The delayed case requests mains first and
 after its bounded observation; recovery returns the pair after removal. Every selected
 `ComplicationDataSourceUpdateRequester.requestUpdate` uses discovered **system** IDs and
 records each provider call's armed/returned state separately from accepted-summary hashes.
+Every provider dispatch requires successful durable arming and a fresh typed mapping after
+arming. Persistence failure prevents dispatch; uncertain calls are fenced against retry.
 Withholding a request controls neither OS delivery time nor cross-slot atomicity. A runtime
 accessibility event supplies only a bounded observation boundary; timeout and unavailable
 response provenance stay Pending. Effective native data, NoData observations and original
@@ -637,9 +651,14 @@ does not provide a cross-writer compare-and-set transaction: do not run this rou
 writers or claim concurrency isolation from its comparisons. No restoration blindly overwrites
 a changed value. Original and recovery files remain until HOST reconciliation and native review.
 
-Cleanup requests the normal six-service `WatchComplicationUpdater` even on observation
-failure, without reusing potentially stale selected IDs. The immediate restoration frame is
-diagnostic. HOST separately selects `observeRestoration` once after native settlement; it
+Cleanup independently requests current normal data only for freshly validated intended
+targets with `requestUpdate`, including after observation failure. It attempts each independent
+provider group even when another fails, preserving newer publications. Missing/changed
+mappings or failed durable arming leave recovery Pending without stale IDs, blanket requests
+or retries. The latest-case journal prevents another scenario until the prior separate
+restoration receipt and effective recovery receive explicit HOST review and a bound receipt
+hash; each scenario directory remains single-use. The immediate restoration frame is diagnostic.
+HOST separately selects `observeRestoration` once after native settlement; it
 records a later original and detects newer live data without restoring over it. Equality of
 native dump text is diagnostic, especially with redacted values, and cannot prove semantic
 data restoration or visual acceptance. HOST must reconcile newer publications, inspect actual
@@ -865,10 +884,11 @@ including write failures. Effective native records and frames observe separate i
 
 Before either transport, an opaque private summary reference is persisted; this route never
 writes summary storage. Failure-safe cleanup requests current normal production data with
-each affected provider's `requestUpdateAll` before closing clients, even after a transport
-failure. Every affected provider is attempted even if another request fails; failure stays
-Pending. Requests use current selections, without reusing possibly stale system IDs. It neither
-replays stale renderer data nor overwrites legitimate newer producers. Recovery files, raw
+targeted `requestUpdate` for each affected slot before closing clients, even after a transport
+failure. Each provider group requires durable arming and freshly validated typed/controller
+mappings; independent groups are attempted even if another fails. Failed persistence prevents
+dispatch. Unresolved mapping/recovery stays Pending without stale IDs, blanket requests or retries.
+It neither replays stale renderer data nor overwrites legitimate newer producers. Recovery files, raw
 effective-data records and original frames stay private. A later separately selected
 `observeRestoration` records current normal data after client retirement and compares the
 current summary to cleanup's observed value. HOST must reconcile it, inspect effective

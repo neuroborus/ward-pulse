@@ -97,14 +97,21 @@ internal class NativeReadAdmission(private val instrumentation: Instrumentation,
             .put("callerPackages", JSONArray(packages.sorted())).put("target", host.json())
     }
 
-    fun resourceIdentity(resourcePackage: String): JSONObject {
+    fun resourceIdentity(resourcePackage: String,
+        observe: (String, () -> NativePackage) -> NativePackage = { _, read -> read() }): JSONObject {
         nativeGuard(resourcePackage == expected.required("expectedResourcePackage"), "read-resource-package")
-        val resource = NativePackage.read(context, resourcePackage)
-        nativeGuard(resource.apk == expected.hash("expectedResourceApkSha256") &&
-            resource.signer == expected.hash("expectedResourceSignerSha256"), "read-resource-apk")
-        val runtime = NativePackage.read(context, RUNTIME_PACKAGE)
-        nativeGuard(runtime.apk == expected.hash("expectedRuntimeApkSha256") &&
-            runtime.signer == expected.hash("expectedRuntimeSignerSha256"), "read-runtime-apk")
+        val resource = observe("ResourcePackage") {
+            NativePackage.read(context, resourcePackage).also {
+                nativeGuard(it.apk == expected.hash("expectedResourceApkSha256") &&
+                    it.signer == expected.hash("expectedResourceSignerSha256"), "read-resource-apk")
+            }
+        }
+        val runtime = observe("RuntimePackage") {
+            NativePackage.read(context, RUNTIME_PACKAGE).also {
+                nativeGuard(it.apk == expected.hash("expectedRuntimeApkSha256") &&
+                    it.signer == expected.hash("expectedRuntimeSignerSha256"), "read-runtime-apk")
+            }
+        }
         return JSONObject().put("resourcePackage", resourcePackage).put("resource", resource.json())
             .put("runtimePackage", RUNTIME_PACKAGE).put("runtime", runtime.json())
     }

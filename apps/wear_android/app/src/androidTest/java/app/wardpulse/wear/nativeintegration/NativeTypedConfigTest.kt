@@ -1,6 +1,7 @@
 package app.wardpulse.wear.nativeintegration
 
 import android.content.ComponentName
+import android.content.Context
 import android.os.Bundle
 import android.os.OutcomeReceiver
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -73,7 +74,7 @@ internal fun readNativeTypedConfigs(receipt: JSONObject, persist: () -> Unit, su
     acquire: () -> NativeTypedConfigReader?,
     await: (CompletableFuture<List<NativeTypedConfig>?>) -> List<NativeTypedConfig>? = {
         it.get(5, TimeUnit.SECONDS)
-    }) {
+    }): List<NativeTypedConfig> {
     try {
         nativeClientOperation(receipt, persist, "sdkAvailability", "Sdk", "Wear SDK 35.1 availability") {
             supported().also {
@@ -83,12 +84,13 @@ internal fun readNativeTypedConfigs(receipt: JSONObject, persist: () -> Unit, su
         }
         val reader = nativeClientOperation(receipt, persist, "managerAcquisition", HOST_PACKAGE,
             "ComplicationsManager under actual provider-app UID") { acquire() ?: throw NativeReadEmpty() }
-        nativeClientOperation(receipt, persist, "activeConfigs", HOST_PACKAGE,
+        return nativeClientOperation(receipt, persist, "activeConfigs", HOST_PACKAGE,
             "own-provider typed configs: system id, watchFaceSlotId, provider, WatchFaceId, type") {
             val configs = awaitNativeTypedConfigs(reader, await)
             receipt.put("configs", configs?.let { JSONArray(it.map { config -> config.json() }) } ?: JSONObject.NULL)
                 .put("metadataOutcome", if (configs.isNullOrEmpty()) NativeReadOutcome.EMPTY.value else NativeReadOutcome.ACQUIRED.value)
             if (configs.isNullOrEmpty()) throw NativeReadEmpty()
+            configs
         }
     } catch (failure: Throwable) {
         if (receipt.getString("metadataOutcome") == NativeReadOutcome.NOT_INVOKED.value) {
@@ -105,6 +107,34 @@ internal fun recordNativeTypedBracket(receipt: JSONObject, before: NativeReadFac
     // WatchFaceId supplies no WFF instance. Even stable resource evidence cannot join these ID domains.
     receipt.put("activeFaceAssociation", NativeReadOutcome.UNRESOLVED.value)
 }
+
+/** The same public own-provider producer is used by observation and requester validation. */
+internal fun readNativeTypedConfigs(context: Context, receipt: JSONObject, persist: () -> Unit) =
+    readNativeTypedConfigs(receipt, persist, supported = {
+        Sdk.isApiVersionAtLeast(Sdk.VERSION_CODES.WEAR_VIC_1)
+    }, acquire = {
+        Sdk.getWearManager(context, ComplicationsManager::class.java)?.let { manager ->
+            NativeTypedConfigReader { receiver ->
+                manager.getActiveComplicationConfigsAsync(Executor { it.run() },
+                    object : OutcomeReceiver<List<ActiveComplicationConfig>, Throwable> {
+                        override fun onResult(result: List<ActiveComplicationConfig>?) {
+                            val configs = try {
+                                result?.map { active ->
+                                    val config = active.config
+                                    NativeTypedConfig(config.id, config.watchFaceSlotId, config.providerComponent,
+                                        config.watchFaceId?.packageName, config.watchFaceId?.className, config.dataType)
+                                }
+                            } catch (caught: Throwable) {
+                                receiver.onError(caught)
+                                return
+                            }
+                            receiver.onResult(configs)
+                        }
+                        override fun onError(error: Throwable) { receiver.onError(error) }
+                    })
+            }
+        }
+    })
 
 /** Own-provider metadata only; no update, client acquisition, rendering or message transport. */
 @ManualNativeIntegration
@@ -146,31 +176,7 @@ class NativeTypedConfigTest {
                     admission.resourceIdentity(face.renderer.resourcePackage).also { receipt.put("beforeResource", it) }
                 }
             }
-            readNativeTypedConfigs(receipt, persist, supported = {
-                Sdk.isApiVersionAtLeast(Sdk.VERSION_CODES.WEAR_VIC_1)
-            }, acquire = {
-                Sdk.getWearManager(context, ComplicationsManager::class.java)?.let { manager ->
-                    NativeTypedConfigReader { receiver ->
-                        manager.getActiveComplicationConfigsAsync(Executor { it.run() },
-                            object : OutcomeReceiver<List<ActiveComplicationConfig>, Throwable> {
-                                override fun onResult(result: List<ActiveComplicationConfig>?) {
-                                    val configs = try {
-                                        result?.map { active ->
-                                            val config = active.config
-                                            NativeTypedConfig(config.id, config.watchFaceSlotId, config.providerComponent,
-                                                config.watchFaceId?.packageName, config.watchFaceId?.className, config.dataType)
-                                        }
-                                    } catch (caught: Throwable) {
-                                        receiver.onError(caught)
-                                        return
-                                    }
-                                    receiver.onResult(configs)
-                                }
-                                override fun onError(error: Throwable) { receiver.onError(error) }
-                            })
-                    }
-                }
-            })
+            readNativeTypedConfigs(context, receipt, persist)
         } catch (caught: Throwable) {
             failure = caught
             receipt.put("observationOutcome", nativeReadFailure(caught).value)

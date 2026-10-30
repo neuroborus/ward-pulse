@@ -1,43 +1,169 @@
 package app.wardpulse.wear.nativeintegration
 
+import android.app.Instrumentation
 import android.content.ComponentName
 import android.content.SharedPreferences
 import app.wardpulse.wear.data.WatchSummaryStore
 import java.io.File
+import java.util.UUID
+import org.json.JSONArray
 import org.json.JSONObject
 
 internal const val DELIVERY_CLASS = "app.wardpulse.wear.nativeintegration.NativeDatasourceTransitionTest"
 
 internal data class NativeDeliveryTarget(val slot: Int, val systemId: Int, val provider: ComponentName)
 
-/** Requires explicit system-manager mappings; renderer slot IDs alone cannot authorize a request. */
-internal fun discoverDeliveryTargets(record: String, component: ComponentName,
-    renderer: NativeRenderer): List<NativeDeliveryTarget> {
-    val selections = checkNotNull(renderer.selections)
+/** Compare the entire selected scope, including explicit nulls, types and controller row IDs. */
+internal fun requireNativeDeliveryScope(current: NativeRenderer, before: NativeRenderer) {
+    for (renderer in listOf(before, current)) {
+        val selected = renderer.selections ?: throw NativePending("requester-selections-unavailable")
+        val slots = (11..18).toSet()
+        nativeGuard(renderer.enabled.keys == slots && selected.providers.keys == slots &&
+            selected.configuredTypes.keys == slots && selected.rowIds.keys == slots &&
+            selected.rowIds.values.all { it.toIntOrNull()?.let { id -> id >= 0 } == true } &&
+            selected.rowIds.values.map { it.toIntOrNull() }.toSet().size == slots.size && renderer.runtime.isNotBlank() &&
+            renderer.nativeScope.isNotEmpty() &&
+            selected.resourcePackage == renderer.resourcePackage && selected.instance == renderer.instance,
+            "requester-complete-eight-scope")
+    }
+    nativeGuard(current.resourcePackage == before.resourcePackage && current.instance == before.instance &&
+        current.runtime == before.runtime && current.nativeScope == before.nativeScope &&
+        current.userStyle == before.userStyle && current.enabled == before.enabled &&
+        current.selections == before.selections, "requester-scope-changed")
+}
+
+/** Typed system/slot/resource domains must all join the actual complete controller/native chain. */
+internal fun discoverDeliveryTargets(configs: List<NativeTypedConfig>, before: NativeRenderer,
+    after: NativeRenderer): List<NativeDeliveryTarget> {
+    requireNativeDeliveryScope(after, before)
+    val selections = checkNotNull(after.selections)
     val selected = selections.providers.filter { (slot, provider) ->
-        renderer.enabled[slot] == true && provider?.startsWith("$HOST_PACKAGE/") == true
+        after.enabled[slot] == true && provider?.let(ComponentName::unflattenFromString)?.packageName == HOST_PACKAGE
     }
     nativeGuard(selected.isNotEmpty(), "selected-own-providers")
-    // Accept only explicit, co-located fields in an applicable system record. No canonical-ID,
-    // list-position, cached-dataSource or default-policy fallback exists. Unexposed fields stay Pending.
-    val rows = record.lineSequence().mapNotNull { line ->
-        fun field(name: String) = Regex("(?:^|[\\s,{])$name=(ComponentInfo\\{[^}]+\\}|[^,\\s}]+)")
-            .findAll(line).toList().singleOrNull()?.groupValues?.get(1)
-        fun source(name: String) = field(name)?.removePrefix("ComponentInfo{")?.removeSuffix("}")
-            ?.let(ComponentName::unflattenFromString)
-        if (source("watchFaceComponent") != component ||
-            field("watchFaceInstanceId") != renderer.instance) return@mapNotNull null
-        val slot = field("watchFaceComplicationId")?.toIntOrNull() ?: return@mapNotNull null
-        if (slot !in selected) return@mapNotNull null
-        val systemId = field("complicationInstanceId")?.toIntOrNull()
-            ?: throw NativePending("system-instance-id-unavailable")
-        nativeGuard(systemId >= 0 && source("providerComponent") ==
-            ComponentName.unflattenFromString(selected.getValue(slot)!!), "system-provider-mapping")
-        NativeDeliveryTarget(slot, systemId, checkNotNull(ComponentName.unflattenFromString(selected.getValue(slot)!!)))
-    }.toList()
-    nativeGuard(rows.size == selected.size && rows.map { it.slot }.toSet() == selected.keys &&
-        rows.map { it.systemId }.distinct().size == rows.size, "complete-system-instance-mapping")
-    return rows.sortedBy { it.slot }
+    nativeGuard(configs.size == selected.size && configs.map { it.id }.toSet().size == configs.size &&
+        configs.map { it.watchFaceSlotId }.toSet() == selected.keys, "complete-typed-requester-mapping")
+    return configs.map { config ->
+        val slot = config.watchFaceSlotId
+        val provider = config.provider ?: throw NativePending("typed-provider-unresolved")
+        nativeGuard(provider.packageName == HOST_PACKAGE &&
+            provider == selected[slot]?.let(ComponentName::unflattenFromString) &&
+            config.id >= 0 && config.id.toString() == selections.rowIds[slot] &&
+            config.dataType == selections.configuredTypes[slot] &&
+            config.watchFacePackage == after.resourcePackage && config.watchFaceClass == null,
+            "typed-requester-domain-association")
+        NativeDeliveryTarget(slot, config.id, provider)
+    }.sortedBy { it.slot }
+}
+
+/** Fresh read evidence only. Callers retain separate operation authorization and dispatch custody. */
+internal fun readNativeDeliveryTargets(instrumentation: Instrumentation, expected: NativePushExpectations,
+    intended: NativeRenderer): List<NativeDeliveryTarget> {
+    val context = instrumentation.targetContext
+    val device = NativePushDevice(instrumentation)
+    val admission = NativeReadAdmission(instrumentation, expected)
+    val directory = File(context.filesDir, "native_read/requester-${UUID.randomUUID()}")
+    nativeGuard(directory.mkdirs(), "fresh-private-requester-receipt")
+    val receipt = nativeTypedConfigReceipt().put("kind", "requester-mapping-evidence")
+    val journal = AttemptJournal(File(directory, "receipt.json"))
+    val persist = { journal.persist(receipt) }
+    fun <T> operation(name: String, domain: String, action: () -> T) =
+        nativeClientOperation(receipt, persist, name, "current target UID/native scope", domain, action)
+    fun system() = NativeSystem.parse(device.shell("am get-current-user"), device.shell("dumpsys wallpaper"))
+    fun resource(name: String) = operation(name, "resource/runtime APK and signer identities") {
+        admission.resourceIdentity(intended.resourcePackage) { part, read ->
+            operation("$name$part", "installed package identity", read)
+        }.also { receipt.put(name, it) }
+    }
+    fun face(name: String) = operation(name, "full-eight controller/favorite/facade/native chain") {
+        device.readRenderer(expected).also { renderer ->
+            val selections = renderer.selections ?: throw NativePending("requester-selections-unavailable")
+            receipt.put(name, JSONObject().put("resourcePackage", renderer.resourcePackage)
+                .put("instance", renderer.instance).put("runtime", renderer.runtime)
+                .put("nativeScope", JSONArray(renderer.nativeScope)).put("userStyleSha256", renderer.userStyle.sha256())
+                .put("selections", JSONArray(renderer.enabled.toSortedMap().map { (slot, enabled) ->
+                    JSONObject().put("slot", slot).put("enabled", enabled).put("rowId", selections.rowIds[slot])
+                        .put("provider", selections.providers[slot] ?: JSONObject.NULL)
+                        .put("configuredType", selections.configuredTypes[slot])
+                })))
+        }
+    }
+    try {
+        val identity = operation("beforeIdentity", "caller UID/package/APK/signer") {
+            admission.currentIdentity().also { receipt.put("beforeIdentity", it) }
+        }
+        val beforeSystem = operation("beforeSystem", "current user/display/runtime connection") {
+            system().also { receipt.put("beforeSystemSha256", it.toString().sha256()) }
+        }
+        val before = face("beforeFace")
+        requireNativeDeliveryScope(before, intended)
+        val resources = resource("beforeResource")
+        var configs: List<NativeTypedConfig>? = null
+        var failure: Throwable? = null
+        try { configs = readNativeTypedConfigs(context, receipt, persist) }
+        catch (caught: Throwable) { failure = caught }
+        // Preserve raw producer outcomes even when a later bracket fails; attempt each independent read.
+        fun <T> afterRead(action: () -> T): T? = try { action() } catch (caught: Throwable) {
+            if (failure == null) failure = caught else failure!!.addSuppressed(caught)
+            null
+        }
+        val after = afterRead { face("afterFace") }
+        val afterSystem = afterRead { operation("afterSystem", "current user/display/runtime connection") {
+            system().also { receipt.put("afterSystemSha256", it.toString().sha256()) }
+        } }
+        val afterIdentity = afterRead { operation("afterIdentity", "caller UID/package/APK/signer") {
+            admission.currentIdentity().also { receipt.put("afterIdentity", it) }
+        } }
+        val afterResources = afterRead { resource("afterResource") }
+        return operation("association", "fresh typed/controller/native join; no mutation authority") {
+            receipt.put("stableBracket", false)
+            failure?.let { throw it }
+            val current = after ?: throw NativePending("requester-after-face-unavailable")
+            requireNativeDeliveryScope(current, before)
+            nativeGuard(afterSystem == beforeSystem && afterIdentity?.toString() == identity.toString() &&
+                afterResources?.toString() == resources.toString(), "requester-identity-bracket-changed")
+            receipt.put("stableBracket", true)
+            discoverDeliveryTargets(checkNotNull(configs), before, current).also {
+                receipt.put("activeFaceAssociation", "validated typed/controller/native scope; no mutation authority")
+            }
+        }
+    } catch (failure: Throwable) {
+        receipt.put("mappingOutcome", nativeReadFailure(failure).value)
+        try { persist() } catch (recording: Throwable) { failure.addSuppressed(recording) }
+        throw failure
+    }
+}
+
+/** One dispatch per provider, durably armed and freshly validated. Recovery attempts independent groups. */
+internal fun requestNativeDelivery(intended: List<NativeDeliveryTarget>, selected: List<NativeDeliveryTarget>,
+    calls: JSONArray, persist: () -> Unit, validate: () -> List<NativeDeliveryTarget>,
+    recovery: Boolean = false, request: (ComponentName, IntArray) -> Unit) {
+    nativeGuard(selected.isNotEmpty() && selected.distinct().size == selected.size &&
+        selected.all { it in intended } && intended.map { it.systemId }.distinct().size == intended.size,
+        "bounded-request-targets")
+    var failure: Throwable? = null
+    selected.groupBy { it.provider }.forEach { (provider, rows) ->
+        val call = JSONObject().put("providerSha256", provider.flattenToString().sha256())
+            .put("systemIds", JSONArray(rows.map { it.systemId })).put("state", "validation Pending; no dispatch")
+        try {
+            nativeGuard((0 until calls.length()).none {
+                calls.getJSONObject(it).getString("providerSha256") == provider.flattenToString().sha256()
+            }, "single-provider-dispatch")
+            calls.put(call)
+            call.put("state", "armed; dispatch uncertain")
+            persist() // Never dispatch from finally: failed durable arming forbids this call.
+            nativeGuard(validate() == intended, "fresh-intended-request-targets")
+            request(provider, rows.map { it.systemId }.toIntArray())
+            call.put("state", "requestUpdate returned; delivery Pending")
+            persist()
+        } catch (caught: Throwable) {
+            call.put("failureOutcome", nativeReadFailure(caught).value)
+            try { persist() } catch (recording: Throwable) { caught.addSuppressed(recording) }
+            if (!recovery) throw caught
+            if (failure == null) failure = caught else failure!!.addSuppressed(caught)
+        }
+    }
+    failure?.let { throw it }
 }
 
 internal fun List<NativeDeliveryTarget>.fingerprint() = joinToString("\n") {
