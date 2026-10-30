@@ -1131,8 +1131,8 @@ tests. The three `NativePushGuardTest` cases can separately be explicitly select
 they use memory, private temporary files/descriptors and fixed shell-output fixtures, without
 querying installed packages or accessing the manager/live stores.
 The three update-class cases are manual; together with the three Push guard, five
-datasource and eleven client cases, `IsolatedWearRunner` excludes all twenty-two manual cases
-and keeps the original default 40 tests.
+datasource, eleven client and six typed-config cases, `IsolatedWearRunner` excludes all
+twenty-eight manual cases and keeps the original default 40 tests.
 
 After the system-authority correction, require a fresh complete warm `just check-wear`
 after the last Source fix, rebuild candidate/test-APK provenance, then install only the test
@@ -1410,6 +1410,53 @@ The five new synthetic guard cases require later actual HOST execution; source r
 runtime acceptance, restoration proof or #12 closure. The original historical SDK3→4 admission,
 journal and settled witness remain unchanged.
 
+#### Typed own-provider config observation
+
+Select exactly
+`app.wardpulse.wear.nativeintegration.NativeTypedConfigTest#observeActiveComplicationConfigs`
+on `app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner`, with
+`wardpulseNativeIntegration=typed-configs`. The isolated runner excludes it. Use the stock
+invocation shape above and the independent-read current caller arguments: `expectedAvd`,
+`expectedFingerprintSha256`, `expectedCallerUid`, `expectedHostVersionCode`,
+`expectedHostApkSha256` and `expectedHostSignerSha256`. Actual process/target/package/signer
+checks precede public SDK acquisition; no shell UID is adopted for that call. Historical Push,
+requester, client-artifact and quiet-bridge inputs are not required.
+
+For optional active-face bracketing, additionally supply the independently observed current
+`expectedResourcePackage`, `expectedResourceApkSha256`, `expectedResourceSignerSha256`,
+`expectedRuntime`, `expectedRuntimeApkSha256`, `expectedRuntimeSignerSha256` and
+`expectedInstanceSha256` arguments described above. Missing/inaccessible/changed bracket evidence
+does not suppress own-provider metadata and cannot authorize a join. Preserve raw configs and
+inspect each operation's invocation, target, returned domain and outcome rather than treating an
+instrumentation exit as complete acceptance.
+
+[NativeTypedConfigTest.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeTypedConfigTest.kt)
+checks public Wear SDK 35.1 availability (`WEAR_VIC_1`), acquires `ComplicationsManager` with the
+actual target context and calls `getActiveComplicationConfigsAsync`. Existing platform
+`useLibrary("wear-sdk")` compile wiring supplies the public types absent from the prior test
+compiler classpath; versions and the existing required-library contract are unchanged. Class
+loading, availability and manager acquisition each still need runtime evidence. No reflection,
+hidden API, new Maven dependency, grant or fallback is used.
+
+Inspect fresh private `files/native_read/typed-*/receipt.json` for actual provider/system `id`,
+`watchFaceSlotId`, provider component, resource `WatchFaceId` package/null-or-present class and
+data type. Resource identity is separate from native opaque instance identity. Neither equal
+numbers nor offsets, modulo, ordering, provider-only or stale/default policy establish joins
+with generator/native/flat-row/client/SDK Push slot domains. `activeFaceAssociation` remains
+`ambiguous/domain-unresolved`, including with stable brackets, and read-only receipts cannot
+authorize mutations. The five-second callback wait starts after synchronous invocation returns;
+late/duplicate completions cannot change a terminal receipt, but no platform retirement is inferred.
+
+The five synthetic `NativeTypedConfigGuardTest` cases may later be selected explicitly by class
+on the stock runner, without querying SDK/live state. They test callbacks and records, not an OS
+producer. Actual execution/compilation and runtime capability remain pending HOST evidence,
+after whole Runner DONE, all owned-process retirement, any owning-CLI exit and fresh separate
+public idle. Before watch actions, freshly establish exact runtime identity/custody and reviewed
+test-only provisioning. No phone action, target installation to manufacture access, historical
+replay or state normalization is authorized. Preserve installed Round Wear4/asset3/Push4 separately
+from Source/built Push5 and surface genuine target dependencies. Broader native/restoration/
+artifact/compatibility/public acceptance gaps and whole-#12 closure remain pending.
+
 #### Guarded complication client probe
 
 Use this later HOST route only after the manager witness/restoration/owner retirement and
@@ -1427,8 +1474,9 @@ actual client access remain separate Pending HOST evidence.
 Select exactly one `NativeComplicationOverrideTest` method on the stock runner with
 `wardpulseNativeIntegration=client-probe`. The three guarded native methods, seven synthetic
 `NativeClientGuardTest` cases and independent metadata observation remain excluded by the
-isolated runner; the manual total is twenty-two and the default total stays 40. The guarded
-native methods require the same current host/asset/Push/legacy/renderer identity arguments as the
+isolated runner; with the six typed-config cases the manual total is twenty-eight and the
+default total stays 40. The guarded native methods require the same current
+host/asset/Push/legacy/renderer identity arguments as the
 [datasource probe](#guarded-datasource-observations), plus `managerWitnessReview=complete`,
 `clientArtifactReview=resolved-1.2.1` and `expectedClientArtifactSha256` from the actual resolved
 AAR. Freshly observe identities; do not reuse the pre-replacement host hash. The class checks

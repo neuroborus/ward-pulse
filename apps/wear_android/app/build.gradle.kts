@@ -253,6 +253,7 @@ android {
             minorApiLevel = 1
         }
     }
+    useLibrary("wear-sdk")
 
     defaultConfig {
         applicationId = "app.wardpulse"

@@ -418,7 +418,7 @@ instrumentation, flags and actual private journal; this is not authorization to 
 against installed Push 4. Current Source 5 delivery uses the separately guarded normal UI path
 in the qualification above, with all target operations still held for the capability phase.
 
-`ManualNativeIntegration` marks twenty-two additional cases: `NativePushGuardTest` has three
+`ManualNativeIntegration` marks twenty-eight additional cases: `NativePushGuardTest` has three
 negative/cleanup cases, including candidate file/FD cleanup on either callback outcome;
 the journal case also exercises System/controller/native discovery fixtures into one fake dispatch.
 Those existing cases additionally reject incomplete/ambiguous installed-path enumeration,
@@ -431,7 +431,8 @@ failure and multiple paths, without querying installed packages. They add no dis
 `NativePushUpdateTest` has individually selected `probeBaseline`,
 `updateOwnedPush3To4` and `observeSettledUpdate` cases. The datasource classes below add five,
 and the client classes add eleven (three guarded native methods, seven synthetic guards and
-one independent metadata observation).
+one independent metadata observation). The typed-config classes add six (one observation and
+five synthetic guards).
 `IsolatedWearRunner.onCreate` always
 excludes that annotation, including explicitly selected manual classes. The original default
 inventory remains 40. The stock `androidx.test.runner.AndroidJUnitRunner` entry in the test
@@ -701,6 +702,49 @@ No target installation is authorized to manufacture capability; a genuine target
 must remain visible for later admission. Malformed/delayed/missing-main native coverage,
 restoration, full artifact/compatibility and healthy public acceptance remain pending; this read
 does not close #12.
+
+## Typed own-provider complication configs
+
+`NativeTypedConfigTest.observeActiveComplicationConfigs` is independently selected with
+`wardpulseNativeIntegration=typed-configs` on the stock runner. It uses `NativeReadAdmission`
+for the actual provider-app process UID/package/current target APK/signer and canonical
+emulator/image/display. It requires no historical Push journal, requester mapping, client
+artifact arguments, quiet bridge or active-face join. See the
+[typed-config invocation](../../docs/ANDROID_TOOLCHAIN.md#typed-own-provider-config-observation).
+
+The public `Sdk.isApiVersionAtLeast(Sdk.VERSION_CODES.WEAR_VIC_1)` check precedes
+`Sdk.getWearManager(context, ComplicationsManager::class.java)` and Wear SDK 35.1
+`getActiveComplicationConfigsAsync`. Direct `useLibrary("wear-sdk")` wiring in
+[app/build.gradle.kts](app/build.gradle.kts) supplies the existing platform compiler symbols;
+the dependency's existing required `wear-sdk` manifest contract and all SDK/dependency versions
+remain unchanged. Compiler symbols and a required library do not establish runtime availability
+or access. Unsupported availability, null manager/results, empty configs, denial and callback
+timeout remain distinct from uninvoked operations and successful metadata acquisition.
+
+Fresh private `files/native_read/typed-*/receipt.json` receipts retain actual provider/system
+`id`, `watchFaceSlotId`, provider component, resource `WatchFaceId` package/class and numeric
+data type. WFF's null class is retained explicitly; its package is not an opaque instance ID.
+Generator, native, flat-row, public client, typed and SDK Push manager-slot domains remain
+separate. No offset, modulo, ordering, provider-only or default/stale-policy mapping is inferred.
+
+Optional before/after system/native/resource/instance/configuration and installed APK evidence
+uses the existing read brackets; caller identity is repeated after the read. Missing or changed
+brackets retain raw configs. Even a stable bracket does not supply the missing WFF instance
+identity or a slot mapping: `activeFaceAssociation` stays `ambiguous/domain-unresolved`.
+These separate read-only receipts cannot satisfy override admission. No mutation, rendering,
+restoration, message, activation or permission transport is connected to this route.
+
+The callback wait is bounded to five seconds after the synchronous platform invocation returns;
+it does not bound that invocation or prove platform callback retirement. Completion uses a
+direct executor without an owned worker; only the waiting owner persists results. Timeout
+closes the local result, so late/duplicate callbacks cannot rewrite the terminal receipt.
+`NativeTypedConfigGuardTest` has five deterministic synthetic cases for admission, unavailable/
+null/empty/denied outcomes, distinct ID domains and read-receipt rejection, timeout/late completion
+and changed/missing brackets. They are callback/record tests, not an OS configuration producer.
+All six typed cases carry `ManualNativeIntegration`; default discovery stays 40. Compilation,
+actual guard execution, runtime access and later HOST/device acceptance remain pending under
+the same whole-DONE/retirement/fresh-idle boundary above. This does not close #12 or waive its
+malformed/delayed/missing-main native, restoration, artifact/compatibility or public acceptance gaps.
 
 ## Guarded complication client probe
 
