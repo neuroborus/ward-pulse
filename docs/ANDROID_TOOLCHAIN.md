@@ -1005,39 +1005,58 @@ require a Codex CLI, local server, or `adb reverse`.
 ### Wear instrumentation provisioning order
 
 The default Wear runner is `IsolatedWearRunner`. It selects its test-owned application only
-through `newApplication` and requires a rebuilt target containing `MainActivityDependencies`.
+through `newApplication` and requires a compatible target with the full `MainActivityDependencies` ABI.
 The [isolated default instrumentation](../apps/wear_android/README.md#isolated-default-instrumentation)
 keeps all original 40 tests and real owner/lifecycle/durable-consent guarantees, with private
 fixture stores and a recording refresh sink. Test-APK installation alone does not provide
-that seam on the original installed host. Default-suite acceptance is Pending until actual
-ordered provisioning and native execution; earlier suite results do not validate isolation.
+the target seam. The earlier seam-unavailable observation belongs to its original baseline bytes;
+preserved Wear APK `8f3ec6b2…` defines `MainActivityDependencies` and both `WatchSummaryStore`
+constructors. Class presence proves neither the full required ABI/isolation nor candidate parity.
+Default 40 must validate the current candidate under its permitted target/artifact order; old
+asset-3 target smoke is not built asset-5 candidate acceptance. That acceptance remains Pending
+until compatible ordered provisioning and native execution; no early replacement is authorized.
 Its attribution regressions use private stand-ins for equal and newer normal-store values;
 byte equality is not evidence that a test published to normal storage. Actual backing-store
 identity, constructor routing and recording-sink dispatch remain the isolation evidence.
 
 For item12, preserve installed old Round Wear 4/bundled asset 3/Push 4, Legacy active and the
-actual 3→4 journal for the separately admitted typed-API/guard-phase capability scope. Do not
-replay the historical stock witness or install a new target as recovery. Typed SDK/client/
-NodeClient access is unmeasured: the five-key dump stopped at its requester mapping guard
-before client bind, proving no API denial. Target/test-APK provisioning, `just test-wear-device`,
-live phone 1→3/sync and UI Update/selection remain **HELD** until that scope is resolved.
-The unapplied UI guard requires its separately reviewed correction after successful whole
-execution and before new UI acceptance; no API/harness change belongs to this allocation.
+actual 3→4 journal. Do not replay that witness or install a new target as recovery. Current
+operation-specific order is documented under [datasource observations](#guarded-datasource-observations),
+[client metadata](#independent-client-metadata-observation), [typed configs](#typed-own-provider-config-observation)
+and [inventory/peers](#owned-push-inventory-and-connected-peers). Scoped 2026-10-30 owned-Push,
+connected-peer and typed own-provider reads succeeded. Client acquisition was **uninvoked** after
+ambiguous `beforeResource`; its exact failing suboperation/cause was not established. This is
+not an API denial, requester-mapping acceptance or native paint, and read receipts authorize no mutation.
+The [UI evidence](../.agents/skills/ui-verification/references/state-and-artifacts.md) and
+[finalization reference](../.agents/skills/finalization/references/commit-message.md) corrections were
+applied and reviewed in `5b6486e` and `5b5df97`. Current mapping, default-40 and native acceptance
+remain Pending. Separately reviewed test-only provisioning does not authorize early seam-bearing
+target replacement; expose any genuine target dependency first. Live phone 1→3/sync and UI
+Update/selection still require their operation-specific authority and custody. Before normal UI
+4→5, prove inactive Push 4's eight choices and owned slot; active Legacy's selections do not supply
+that proof. Keep Legacy active during the update and require separate settled retention.
 
-The [current qualification](product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30)
-retains all six compatibility cells, Root-reviewed forward-only reconciliation for unavailable
-history, the sole ordered Native FINALIZE inventory and all nine mandatory HOST duties.
-All HOST starts follow whole nine-step DONE, run-owned process retirement, owning CLI exit
-if used and fresh separate public/OS idle; they never gate Native commits. Nontarget full
+**Historical nine-step allocation (2026-10-30).** The
+[qualification](product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30) retains
+all six compatibility cells, Root-reviewed forward-only reconciliation for unavailable history,
+that allocation's Native inventory and all nine mandatory HOST duties. Separate current runs
+use their own admitted Native inventory. All HOST starts follow the whole owning execution DONE,
+run-owned process retirement, owning CLI exit if used and fresh separate public/OS idle;
+they never gate Native commits. Nontarget full
 `just check-wear`, `just check-watchface`, pure complete `just check-phone` and final docs/
 fixtures/release checks may then run without install/adb or changing installed phone 1.
 Full device tests, both-shape first/separate-settled endpoints/transitions/true-AMBIENT,
 phone retention/sync, recovery and later healthy public guidance/captures remain mandatory.
-Item12 stays open and both extras queued; this allocation claims no check/device acceptance.
+Physical-phone action remains forbidden and physical-watch acceptance deferred. Item12 stays
+open; this historical allocation does not claim current check/device acceptance.
 
-Before native work, retain the ordinary warm `just check-wear` and additionally run that
-complete check on a network-capable HOST with `GRADLE_USER_HOME` pointing to a **new, empty,
-task-owned cache** under `LOCAL_ARTIFACTS/`. Record its exact path and command. Verify the
+**Recorded dependency qualification (2026-10-30, Source `5b5df97`).** Full warm, empty-cache
+and same-cache reuse `just check-wear` completed successfully. Actual resolved client 1.2.1 AAR
+SHA-256 `3392836298972c6820c7a8179c89bb37fc97f461cc991368f4cb001c236bafa0` matched official bytes.
+Retain that evidence; do not repeat unchanged dependency checks for reassurance or infer native access.
+For a newly required qualification, run the complete check on a network-capable HOST with
+`GRADLE_USER_HOME` pointing to a **new, empty, task-owned cache** under `LOCAL_ARTIFACTS/`.
+Record its exact path and command. Verify the
 actual download/resolution of `androidx.wear.watchface:watchface-client:1.2.1`, the resolved
 AAR's SHA-256 against official artifact provenance and complete check success; repeat the
 same check with the same cache to prove reuse. Set `ITEM12_GRADLE_CACHE` to the absolute
@@ -1054,8 +1073,9 @@ Do not seed, delete or repurpose shared caches, substitute the saved sources/POM
 resolution, or claim a successful build proves native access. Record resolution/checksum and
 both full outcomes, including failures. These non-installing HOST checks follow whole Runner
 DONE, process retirement, owning CLI exit where applicable and fresh idle ownership; they are
-not Native-commit prerequisites. All remain Pending until executed. After the separate
-capability/guard scope admits provisioning,
+not Native-commit prerequisites. New or changed qualification remains Pending until executed;
+the recorded completed cache checks above are not pending. After operation-specific identity,
+dependency and retention review admits the required provisioning,
 `just test-wear-device` explicitly provisions the rebuilt seam-bearing target and test APKs
 through `connectedDebugAndroidTest`; verify the retention policy below first, confirm the
 original 40 tests/manual exclusion, then recheck retained Push 4, bindings and active state.
