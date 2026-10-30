@@ -1126,10 +1126,11 @@ class WatchSummaryStoreTest {
         }
     }
 
-    /** N3 decoder/construction endpoints only; no service delivery or WFF paint evidence. */
+    /** N3 decoder/construction endpoints and reorder only; no delivery or WFF paint evidence. */
     @Test
-    fun n3EndpointFixturesKeepZeroIdentitiesAndPositiveTinyValues() {
-        // Finish with ordinary bands after two retained zero pairs in the same private store.
+    fun n3EndpointFixturesKeepExactValuesAndReplaceSameCountSelections() {
+        // Ordinary bands clear retained pairs; the final two inputs reorder the same three bands.
+        // Every input replaces the previous summary in the same private store.
         val expectedRings = linkedMapOf(
             "n3_pairs_zero_tiny" to listOf(
                 RingSummary(
@@ -1188,6 +1189,57 @@ class WatchSummaryStoreTest {
                 RingSummary("allowance.codex.plan", "Codex plan", 99.96875, PulseStatus.OK),
                 RingSummary("allowance.cursor.cursor-plan-models", "Cursor Models", 99.96875, PulseStatus.OK),
             ),
+            "n3_pairs_near_full" to listOf(
+                RingSummary(
+                    "allowance.codex.plan", "Codex plan", 0.1, PulseStatus.OK,
+                    split = RingHalf("allowance.codex.spark", "Spark", 0.0, PulseStatus.OK),
+                ),
+                RingSummary(
+                    "allowance.cursor.cursor-plan-models", "Cursor Models", 0.0, PulseStatus.OK,
+                    split = RingHalf("allowance.cursor.cursor-plan-other", "Other Models", 0.1, PulseStatus.OK),
+                ),
+                RingSummary("allowance.claude.plan", "Claude plan", 0.0, PulseStatus.OK),
+            ),
+            "n3_pairs_full_near" to listOf(
+                RingSummary(
+                    "allowance.codex.plan", "Codex plan", 0.0, PulseStatus.OK,
+                    split = RingHalf("allowance.codex.spark", "Spark", 0.1, PulseStatus.OK),
+                ),
+                RingSummary(
+                    "allowance.cursor.cursor-plan-models", "Cursor Models", 0.1, PulseStatus.OK,
+                    split = RingHalf("allowance.cursor.cursor-plan-other", "Other Models", 0.0, PulseStatus.OK),
+                ),
+                RingSummary("allowance.claude.plan", "Claude plan", 0.0, PulseStatus.OK),
+            ),
+            "n3_full_near_full" to listOf(
+                RingSummary("allowance.claude.plan", "Claude plan", 0.1, PulseStatus.OK),
+                RingSummary("allowance.codex.plan", "Codex plan", 0.1, PulseStatus.OK),
+                RingSummary("allowance.cursor.cursor-plan-models", "Cursor Models", 0.1, PulseStatus.OK),
+            ),
+            "n3_full_full" to listOf(
+                RingSummary("allowance.claude.plan", "Claude plan", 0.0, PulseStatus.OK),
+                RingSummary("allowance.codex.plan", "Codex plan", 0.0, PulseStatus.OK),
+                RingSummary("allowance.cursor.cursor-plan-models", "Cursor Models", 0.0, PulseStatus.OK),
+            ),
+            "n3_reorder_before" to listOf(
+                RingSummary(
+                    "allowance.codex.plan", "Codex plan", 90.0, PulseStatus.OK,
+                    split = RingHalf("allowance.codex.spark", "Spark", 30.0, PulseStatus.OK),
+                ),
+                RingSummary(
+                    "allowance.cursor.cursor-plan-models", "Cursor Models", 70.0, PulseStatus.OK,
+                    split = RingHalf("allowance.cursor.cursor-plan-other", "Other Models", 20.0, PulseStatus.OK),
+                ),
+                RingSummary("allowance.claude.plan", "Claude plan", 10.0, PulseStatus.OK),
+            ),
+            "n3_reorder_after" to listOf(
+                RingSummary("allowance.claude.plan", "Claude plan", 95.0, PulseStatus.OK),
+                RingSummary("allowance.codex.plan", "Codex plan", 55.0, PulseStatus.OK),
+                RingSummary(
+                    "allowance.cursor.cursor-plan-models", "Cursor Models", 25.0, PulseStatus.OK,
+                    split = RingHalf("allowance.cursor.cursor-plan-other", "Other Models", 5.0, PulseStatus.OK),
+                ),
+            ),
         )
         // Literal MAX800 values, TITLEs and TEXT: outside mains, then split ordinals.
         // A tiny positive keeps VALUE 0.25 and gains no zero suffix despite its 0% text.
@@ -1230,6 +1282,43 @@ class WatchSummaryStoreTest {
                 Triple(0.25f, "", "0%"),
                 Triple(0.25f, "", "0%"),
             ),
+            "n3_pairs_near_full" to listOf(
+                Triple(800f, "", "100%"),
+                Triple(800f, "split:cursor-other", "100% · 100%"),
+                Triple(799.2000122070312f, "split:spark", "100% · 100%"),
+                Triple(800f, "2", "100"),
+                Triple(799.2000122070312f, "1", "100"),
+            ),
+            "n3_pairs_full_near" to listOf(
+                Triple(800f, "", "100%"),
+                Triple(799.2000122070312f, "split:cursor-other", "100% · 100%"),
+                Triple(800f, "split:spark", "100% · 100%"),
+                Triple(799.2000122070312f, "2", "100"),
+                Triple(800f, "1", "100"),
+            ),
+            "n3_full_near_full" to listOf(
+                Triple(799.2000122070312f, "", "100%"),
+                Triple(799.2000122070312f, "", "100%"),
+                Triple(799.2000122070312f, "", "100%"),
+            ),
+            "n3_full_full" to listOf(
+                Triple(800f, "", "100%"),
+                Triple(800f, "", "100%"),
+                Triple(800f, "", "100%"),
+            ),
+            "n3_reorder_before" to listOf(
+                Triple(720f, "", "90%"),
+                Triple(240f, "split:cursor-other", "30% · 80%"),
+                Triple(80f, "split:spark", "10% · 70%"),
+                Triple(560f, "2", "70"),
+                Triple(640f, "1", "80"),
+            ),
+            "n3_reorder_after" to listOf(
+                Triple(600f, "split:cursor-other", "75% · 95%"),
+                Triple(360f, "", "45%"),
+                Triple(40f, "", "5%"),
+                Triple(760f, "0", "95"),
+            ),
         )
         val expectedDescriptions = mapOf(
             "n3_pairs_zero_tiny" to listOf("Claude plan 100%", "Cursor Models 0%", "Codex plan 0%", "Spark 0%", "Other Models 0%"),
@@ -1238,6 +1327,12 @@ class WatchSummaryStoreTest {
             "n3_outer_pair_tiny_zero" to listOf("Cursor Models 0%", "Codex plan 0%", "Claude plan 0%", "Other Models 0%"),
             "n3_zero_tracks" to listOf("OpenAI month 0%", "Cursor Models 0%", "Codex plan 0%", "Spark 0%", "Other Models 0%"),
             "n3_full_tiny" to listOf("Cursor Models 0%", "Codex plan 0%", "Claude plan 0%"),
+            "n3_pairs_near_full" to listOf("Claude plan 100%", "Cursor Models 100%", "Codex plan 100%", "Spark 100%", "Other Models 100%"),
+            "n3_pairs_full_near" to listOf("Claude plan 100%", "Cursor Models 100%", "Codex plan 100%", "Spark 100%", "Other Models 100%"),
+            "n3_full_near_full" to listOf("Cursor Models 100%", "Codex plan 100%", "Claude plan 100%"),
+            "n3_full_full" to listOf("Cursor Models 100%", "Codex plan 100%", "Claude plan 100%"),
+            "n3_reorder_before" to listOf("Claude plan 90%", "Cursor Models 30%", "Codex plan 10%", "Spark 70%", "Other Models 80%"),
+            "n3_reorder_after" to listOf("Cursor Models 75%", "Codex plan 45%", "Claude plan 5%", "Other Models 95%"),
         )
         val expectedColors = mapOf(
             "n3_pairs_zero_tiny" to listOf(RingFamily.CLAUDE, RingFamily.CURSOR_OWN, RingFamily.CODEX, RingFamily.CODEX_SPARK, RingFamily.CURSOR),
@@ -1246,6 +1341,12 @@ class WatchSummaryStoreTest {
             "n3_outer_pair_tiny_zero" to listOf(RingFamily.CURSOR_OWN, RingFamily.CODEX, RingFamily.CLAUDE, RingFamily.CURSOR),
             "n3_zero_tracks" to listOf(RingFamily.CODEX, RingFamily.CURSOR_OWN, RingFamily.CODEX, RingFamily.CODEX_SPARK, RingFamily.CURSOR),
             "n3_full_tiny" to listOf(RingFamily.CURSOR_OWN, RingFamily.CODEX, RingFamily.CLAUDE),
+            "n3_pairs_near_full" to listOf(RingFamily.CLAUDE, RingFamily.CURSOR_OWN, RingFamily.CODEX, RingFamily.CODEX_SPARK, RingFamily.CURSOR),
+            "n3_pairs_full_near" to listOf(RingFamily.CLAUDE, RingFamily.CURSOR_OWN, RingFamily.CODEX, RingFamily.CODEX_SPARK, RingFamily.CURSOR),
+            "n3_full_near_full" to listOf(RingFamily.CURSOR_OWN, RingFamily.CODEX, RingFamily.CLAUDE),
+            "n3_full_full" to listOf(RingFamily.CURSOR_OWN, RingFamily.CODEX, RingFamily.CLAUDE),
+            "n3_reorder_before" to listOf(RingFamily.CLAUDE, RingFamily.CURSOR_OWN, RingFamily.CODEX, RingFamily.CODEX_SPARK, RingFamily.CURSOR),
+            "n3_reorder_after" to listOf(RingFamily.CURSOR_OWN, RingFamily.CODEX, RingFamily.CLAUDE, RingFamily.CURSOR),
         )
         // Payload index / outside index for each split ordinal, independent of production selection.
         val expectedExtraPositions = mapOf(
@@ -1255,6 +1356,12 @@ class WatchSummaryStoreTest {
             "n3_outer_pair_tiny_zero" to listOf(2 to 0),
             "n3_zero_tracks" to listOf(0 to 2, 1 to 1),
             "n3_full_tiny" to emptyList(),
+            "n3_pairs_near_full" to listOf(0 to 2, 1 to 1),
+            "n3_pairs_full_near" to listOf(0 to 2, 1 to 1),
+            "n3_full_near_full" to emptyList(),
+            "n3_full_full" to emptyList(),
+            "n3_reorder_before" to listOf(0 to 2, 1 to 1),
+            "n3_reorder_after" to listOf(2 to 0),
         )
         val resources = context.resources
         val now = Instant.EPOCH
@@ -1343,9 +1450,10 @@ class WatchSummaryStoreTest {
                     data.contentDescription!!.getTextAt(resources, now).toString(),
                 )
                 assertEquals(expectedColors.getValue(suffix)[pool], data.colorRamp!!.colors.single())
-            }
-            if (suffix == "n3_pairs_zero_tiny") {
-                assertTrue(mains[0].value < mains[0].max)
+                if (expected.first == 799.2000122070312f) {
+                    // The semantic Float is 99.9000015258789, even when its label rounds to 100%.
+                    assertTrue(data.value < data.max)
+                }
             }
             assertTrue(ringComplicationData(summary.rings, 3) { _, _, _, _ ->
                 error("$suffix: obsolete main 3 must clear")

@@ -232,7 +232,7 @@ These are decoder/construction witnesses only; execution, service delivery and W
 remain **Pending**. Legacy MAX100 fixed geometry retains its existing declaration/API coverage;
 these adaptive fixtures provide no legacy-count evidence.
 
-`WatchSummaryStoreTest.n3EndpointFixturesKeepZeroIdentitiesAndPositiveTinyValues` adds six
+`WatchSummaryStoreTest.n3EndpointFixturesKeepExactValuesAndReplaceSameCountSelections` covers six
 schema-9 fixtures under `fixtures/snapshots/`:
 `watch_dashboard_summary_n3_pairs_zero_tiny.json`,
 `watch_dashboard_summary_n3_pairs_tiny_zero.json`,
@@ -251,6 +251,33 @@ both extras as actual `NoData`. The near-full ordinary Float stays below MAX des
 text. Obsolete main selection and clear/delete cleanup remain covered. These are
 decoder/construction witnesses only; execution, service delivery and WFF paint remain
 **Pending**. Existing Android API/Parcel coverage retains its separate scope.
+
+The same N3 endpoint test adds six schema-9 fixtures under `fixtures/snapshots/`:
+`watch_dashboard_summary_n3_pairs_near_full.json`,
+`watch_dashboard_summary_n3_pairs_full_near.json`,
+`watch_dashboard_summary_n3_full_near_full.json`, `watch_dashboard_summary_n3_full_full.json`,
+`watch_dashboard_summary_n3_reorder_before.json` and `watch_dashboard_summary_n3_reorder_after.json`.
+Literal oracles cover decoded identities, tightest-first tie order, null allowance Money and
+credits, MAX800 values, TITLEs, family colors and unscaled text/descriptions. Both orientations
+of Codex/Spark and Cursor Models/Other preserve independent full/near-full halves; ordinary
+bands cover full and near-full at all three radii. The near-full Float remains
+99.9000015258789 with VALUE 799.2000122070312, below MAX800 despite `100%` text; full is VALUE800.
+The reorder pair is saved and decoded consecutively in the same private store without changing
+the three-band count. All main slots change owners: outside-to-inside Claude/Cursor/Codex becomes
+Cursor/Codex/Claude. Extra ordinal 0 changes from Spark/TITLE `2`/remaining70 to Cursor Other/
+TITLE `0`/remaining95; ordinal 1 changes from Cursor Other/TITLE `1`/remaining80 to actual `NoData`.
+The removed Spark identity, replacement order, obsolete selections and clear/delete cleanup
+remain covered. These are decoder/construction witnesses only; execution, service delivery
+and WFF paint remain **Pending**.
+
+`AdaptiveRangedComplicationTest.creditsAndReorderedExtrasRoundTripWithExactWireContracts`
+adds Android validation and Parcel roundtrips for the production credits-only construction
+(VALUE/MAX100, TITLE `credits`, Codex color, TEXT `500`, description `500 100%`) and the
+three distinct reordered extra envelopes: Spark/TITLE `2`/VALUE560, Cursor Other/TITLE `1`/
+VALUE640 and Cursor Other/TITLE `0`/VALUE760, all extras at MAX800. Literal oracles retain
+unscaled text/descriptions and pool colors, with every Parcel recycled in `finally`.
+Existing envelope tests remain separate; this API coverage establishes neither service
+delivery nor WFF paint, and its execution and native acceptance remain **Pending**.
 
 Current packaging is phone 0.1.0+3/Wear 4/legacy 2/Push default 3, all versionNames 0.1.0. Preserve
 package identities, signers and release-tool parity; this is not a release cut. The

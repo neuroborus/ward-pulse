@@ -9,7 +9,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.wear.watchface.complications.data.NoDataComplicationData
 import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import androidx.wear.watchface.complications.data.toApiComplicationData
+import app.wardpulse.wear.model.AllowanceSummary
+import app.wardpulse.wear.model.CreditsGlance
+import app.wardpulse.wear.model.PreviewWatchDashboardSummary
 import app.wardpulse.wear.model.PulseStatus
+import app.wardpulse.wear.model.Quantity
 import app.wardpulse.wear.model.RingHalf
 import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.ui.RingFamily
@@ -108,6 +112,104 @@ class AdaptiveRangedComplicationTest {
             assertEquals(RangedValueComplicationData.TYPE_UNDEFINED, data.valueType)
             assertEquals("0", data.title!!.getTextAt(resources, now).toString())
             assertEquals(RingFamily.CODEX_SPARK, data.colorRamp!!.colors.single())
+        }
+    }
+
+    /** Distinct constructed wire contracts only; no service delivery or WFF paint evidence. */
+    @Test
+    fun creditsAndReorderedExtrasRoundTripWithExactWireContracts() {
+        val resources = ApplicationProvider.getApplicationContext<Context>().resources
+        val now = Instant.EPOCH
+        val creditsSummary = PreviewWatchDashboardSummary.value.copy(
+            rings = emptyList(),
+            creditsGlance = CreditsGlance("500", "Credits left", "codex"),
+            allowances = listOf(
+                AllowanceSummary(
+                    "purchased", "Codex · Credits", null, Quantity("500", "credits"),
+                    unlimited = false, resetsAt = null, status = PulseStatus.OK,
+                ),
+            ),
+        )
+        val credits = creditsOnlyComplicationData(creditsSummary) { label, color ->
+            assertEquals("500", label)
+            assertEquals(RingFamily.CODEX, color)
+            rangedComplicationBuilder(
+                100f, WatchComplicationText.CREDITS_TOKEN, color, contentDescription = label, text = label,
+            ).build()
+        } as RangedValueComplicationData
+        val before = listOf(
+            RingSummary(
+                "allowance.codex.plan", "Codex plan", 90.0, PulseStatus.OK,
+                split = RingHalf("allowance.codex.spark", "Spark", 30.0, PulseStatus.OK),
+            ),
+            RingSummary(
+                "allowance.cursor.cursor-plan-models", "Cursor Models", 70.0, PulseStatus.OK,
+                split = RingHalf("allowance.cursor.cursor-plan-other", "Other Models", 20.0, PulseStatus.OK),
+            ),
+            RingSummary("allowance.claude.plan", "Claude plan", 10.0, PulseStatus.OK),
+        )
+        val after = listOf(
+            RingSummary("allowance.claude.plan", "Claude plan", 95.0, PulseStatus.OK),
+            RingSummary("allowance.codex.plan", "Codex plan", 55.0, PulseStatus.OK),
+            RingSummary(
+                "allowance.cursor.cursor-plan-models", "Cursor Models", 25.0, PulseStatus.OK,
+                split = RingHalf("allowance.cursor.cursor-plan-other", "Other Models", 5.0, PulseStatus.OK),
+            ),
+        )
+        // Literal payload/outside positions for the Spark, Other, then replacement Other extras.
+        val envelopes = mutableListOf(credits)
+        for ((rings, positions) in listOf(
+            before to listOf(0 to 2, 1 to 1),
+            after to listOf(2 to 0),
+        )) {
+            for ((ordinal, position) in positions.withIndex()) {
+                val selected = outerHalfComplicationData(rings, ordinal) { half, outside, count ->
+                    assertEquals(rings[position.first].split, half)
+                    assertEquals(position.second, outside)
+                    assertEquals(3, count)
+                    rangedComplicationBuilder(
+                        WatchComplicationText.remainingPercent(half.usedPercent), outside.toString(),
+                        RingFamily.colorArgb(half.id), contentDescription = half.label, ringCount = count,
+                    ).build()
+                } as RangedValueComplicationData
+                envelopes += selected
+            }
+            assertTrue(outerHalfComplicationData(rings, positions.size) { _, _, _ ->
+                error("Obsolete extra must clear")
+            } is NoDataComplicationData)
+        }
+        val expectedRows = listOf(
+            Triple(100f, "credits", "500"),
+            Triple(560f, "2", "70"),
+            Triple(640f, "1", "80"),
+            Triple(760f, "0", "95"),
+        )
+        val expectedMaxima = listOf(100f, 800f, 800f, 800f)
+        val expectedColors = listOf(RingFamily.CODEX, RingFamily.CODEX_SPARK, RingFamily.CURSOR, RingFamily.CURSOR)
+        val expectedDescriptions = listOf("500 100%", "Spark 70%", "Other Models 80%", "Other Models 95%")
+        for ((index, original) in envelopes.withIndex()) {
+            original.validate()
+            val parcel = Parcel.obtain()
+            val restored = try {
+                original.asWireComplicationData().writeToParcel(parcel, 0)
+                parcel.setDataPosition(0)
+                WireComplicationData.CREATOR.createFromParcel(parcel)
+                    .toApiComplicationData() as RangedValueComplicationData
+            } finally {
+                parcel.recycle()
+            }
+            restored.validate()
+            for (data in listOf(original, restored)) {
+                val expected = expectedRows[index]
+                assertEquals(RangedValueComplicationData.TYPE_UNDEFINED, data.valueType)
+                assertEquals(0f, data.min)
+                assertEquals(expectedMaxima[index], data.max)
+                assertEquals(expected.first, data.value)
+                assertEquals(expected.second, data.title!!.getTextAt(resources, now).toString())
+                assertEquals(expected.third, data.text!!.getTextAt(resources, now).toString())
+                assertEquals(expectedDescriptions[index], data.contentDescription!!.getTextAt(resources, now).toString())
+                assertEquals(expectedColors[index], data.colorRamp!!.colors.single())
+            }
         }
     }
 }
