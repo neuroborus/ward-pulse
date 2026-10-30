@@ -18,10 +18,10 @@ Static default-provider policy does not prove a retained instance's effective bi
 No-clean semantic isolation remains mandatory: prove actual compiled payloads, effective flags, resources and validated signatures; Source BuildConfig, certificate or versionName alone is insufficient. Cross-build signed-APK byte reproducibility is a separate requirement when the task requires it.
 A whole-APK hash change triggers scoped inspection, not an automatic code-regression verdict. Retain failed diagnostics and unknown variation cause; equal ZIP payloads do not prove signing-block-only variation. Semantic equivalence must never waive a required byte-reproducibility gate.
 Record necessary identities before/after the action; never infer an active renderer from the APK most recently built or installed. Preserve the exact actual built→installed→active SHA-256 identity join; payload equivalence never replaces it.
-Before treating a diagnostic observer as feasible or expanding its harness/matrix, verify actual caller UID/package/context,
-service/component and instance scope against pinned official API preconditions/access. Public API does not mean unrestricted cross-package capability.
-Use a bounded actual minimal probe where needed; distinguish contract support, observed results and unknown enforcement.
-Keep unproved capability Pending: no default/cache substitution, identity swaps, access bypass or unbounded framework growth.
+Before diagnostic stripping, inventory the complete closed footprint, unique names/owners and node/subtree/descendant counts on the unmodified artifact; validate the owning Source's actual predicate, not an error-line/prefix guess.
+Removing a parent also removes descendants, so removed-root counts prove neither missing diagnostics nor complete stripping. Handle diagnostic-only wrappers/carriers by closed rules restoring normal structure, then compare WHOLE normal content including renderable literal padding; never silently discard unmatched content.
+Before treating a diagnostic observer as feasible or expanding its harness/matrix, verify actual caller UID/package/context, service/component and instance scope against pinned official API preconditions/access. Public API does not mean unrestricted cross-package capability.
+Use a bounded actual minimal probe where needed; distinguish contract support, observed results and unknown enforcement. Keep unproved capability Pending: no default/cache substitution, identity swaps, access bypass or unbounded framework growth.
 If diagnostics redact live inputs or omit slot mappings, keep them unproved rather than guessing from internal numeric IDs or a resource filename.
 
 For Activity/task claims, inventory unique relevant ActivityRecord identities and task IDs from a complete
