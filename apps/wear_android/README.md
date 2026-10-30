@@ -161,6 +161,22 @@ unscaled labels/descriptions and private-store cleanup remain covered. These are
 decoder/construction witnesses; service delivery and WFF paint remain **Pending**.
 Existing ordinary44 zero/tiny/full and paired partial controls keep their separate scope.
 
+`WatchSummaryStoreTest.n2CutoffFixturesKeepExactRadialAndPoolRouting` adds six schema-9
+fixtures under `fixtures/snapshots/`: `watch_dashboard_summary_n2_inner_pair_below.json`,
+`watch_dashboard_summary_n2_inner_pair_above.json`,
+`watch_dashboard_summary_n2_inner_full_below.json`,
+`watch_dashboard_summary_n2_inner_full_above.json`,
+`watch_dashboard_summary_n2_outer_pair_below.json` and
+`watch_dashboard_summary_n2_outer_pair_above.json`.
+They bracket every N2 full32/inner16/extra16 cutoff with Float neighbors at both
+outside indices while preserving tightest-first payload order. Literal oracles assert
+decoded identities, usage and null Money, MAX400 values, main selection, Spark ordinal 0
+at outside index 1 or 0, TITLEs, family colors and unscaled text/descriptions. The tiny
+ordinary remainder stays positive despite `0%` text; true zero uses `zero`. Obsolete main
+and ordinal-1 extra selections clear. Private-store cleanup remains unchanged. These are
+decoder/construction witnesses only; execution, service delivery and WFF paint remain
+**Pending**, with Android API/Parcel coverage retaining its separate scope.
+
 Current packaging is phone 0.1.0+3/Wear 4/legacy 2/Push default 3, all versionNames 0.1.0. Preserve
 package identities, signers and release-tool parity; this is not a release cut. The
 [adaptive revision](../../docs/product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count)

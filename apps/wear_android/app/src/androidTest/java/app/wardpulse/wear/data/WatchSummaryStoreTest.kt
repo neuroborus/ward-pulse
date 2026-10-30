@@ -446,6 +446,217 @@ class WatchSummaryStoreTest {
         }
     }
 
+    /** N2 decoder/construction boundaries only; no service delivery or WFF paint evidence. */
+    @Test
+    fun n2CutoffFixturesKeepExactRadialAndPoolRouting() {
+        val expectedRings = linkedMapOf(
+            "n2_inner_pair_below" to listOf(
+                RingSummary(
+                    "allowance.codex.plan", "Codex plan", 98.20505702495575, PulseStatus.OK,
+                    split = RingHalf("allowance.codex.spark", "Spark", 98.38844132423401, PulseStatus.OK),
+                ),
+                RingSummary("allowance.claude.plan", "Claude plan", 97.26035022735596, PulseStatus.OK),
+            ),
+            "n2_inner_pair_above" to listOf(
+                RingSummary(
+                    "allowance.codex.plan", "Codex plan", 98.20505678653717, PulseStatus.OK,
+                    split = RingHalf("allowance.codex.spark", "Spark", 98.38844108581543, PulseStatus.OK),
+                ),
+                RingSummary("allowance.claude.plan", "Claude plan", 97.2603497505188, PulseStatus.OK),
+            ),
+            "n2_inner_full_below" to listOf(
+                RingSummary("allowance.claude.plan", "Claude plan", 96.60461258888245, PulseStatus.OK),
+                RingSummary(
+                    "allowance.codex.plan", "Codex plan", 0.1, PulseStatus.OK,
+                    split = RingHalf("allowance.codex.spark", "Spark", 0.0, PulseStatus.OK),
+                ),
+            ),
+            "n2_inner_full_above" to listOf(
+                RingSummary("allowance.claude.plan", "Claude plan", 96.60461211204529, PulseStatus.OK),
+                RingSummary(
+                    "allowance.codex.plan", "Codex plan", 0.0, PulseStatus.OK,
+                    split = RingHalf("allowance.codex.spark", "Spark", 0.1, PulseStatus.OK),
+                ),
+            ),
+            "n2_outer_pair_below" to listOf(
+                RingSummary("allowance.claude.plan", "Claude plan", 99.96875, PulseStatus.OK),
+                RingSummary(
+                    "allowance.codex.plan", "Codex plan", 98.56626856327057, PulseStatus.OK,
+                    split = RingHalf("allowance.codex.spark", "Spark", 98.68852472305298, PulseStatus.OK),
+                ),
+            ),
+            "n2_outer_pair_above" to listOf(
+                RingSummary("allowance.claude.plan", "Claude plan", 100.0, PulseStatus.OK),
+                RingSummary(
+                    "allowance.codex.plan", "Codex plan", 98.56626832485199, PulseStatus.OK,
+                    split = RingHalf("allowance.codex.spark", "Spark", 98.6885244846344, PulseStatus.OK),
+                ),
+            ),
+        )
+        // Literal MAX400 wire values, TITLEs and TEXT in outside-main/inside-main/extra order.
+        val expectedRows = mapOf(
+            "n2_inner_pair_below" to listOf(
+                Triple(10.958599090576172f, "", "3%"),
+                Triple(7.179771900177002f, "split:spark", "2% · 2%"),
+                Triple(6.446234703063965f, "1", "2"),
+            ),
+            "n2_inner_pair_above" to listOf(
+                Triple(10.958600997924805f, "", "3%"),
+                Triple(7.179772853851318f, "split:spark", "2% · 2%"),
+                Triple(6.446235656738281f, "1", "2"),
+            ),
+            "n2_inner_full_below" to listOf(
+                Triple(399.6000061035156f, "split:spark", "100% · 100%"),
+                Triple(13.581549644470215f, "", "3%"),
+                Triple(400f, "0", "100"),
+            ),
+            "n2_inner_full_above" to listOf(
+                Triple(400f, "split:spark", "100% · 100%"),
+                Triple(13.581551551818848f, "", "3%"),
+                Triple(399.6000061035156f, "0", "100"),
+            ),
+            "n2_outer_pair_below" to listOf(
+                Triple(5.734925746917725f, "split:spark", "1% · 1%"),
+                Triple(0.125f, "", "0%"),
+                Triple(5.245901107788086f, "0", "1"),
+            ),
+            "n2_outer_pair_above" to listOf(
+                Triple(5.734926700592041f, "split:spark", "1% · 1%"),
+                Triple(0f, "zero", "0%"),
+                Triple(5.245902061462402f, "0", "1"),
+            ),
+        )
+        val expectedDescriptions = mapOf(
+            "n2_inner_pair_below" to listOf("Claude plan 3%", "Codex plan 2%", "Spark 2%"),
+            "n2_inner_pair_above" to listOf("Claude plan 3%", "Codex plan 2%", "Spark 2%"),
+            "n2_inner_full_below" to listOf("Codex plan 100%", "Claude plan 3%", "Spark 100%"),
+            "n2_inner_full_above" to listOf("Codex plan 100%", "Claude plan 3%", "Spark 100%"),
+            "n2_outer_pair_below" to listOf("Codex plan 1%", "Claude plan 0%", "Spark 1%"),
+            "n2_outer_pair_above" to listOf("Codex plan 1%", "Claude plan 0%", "Spark 1%"),
+        )
+        val expectedColors = mapOf(
+            "n2_inner_pair_below" to listOf(RingFamily.CLAUDE, RingFamily.CODEX, RingFamily.CODEX_SPARK),
+            "n2_inner_pair_above" to listOf(RingFamily.CLAUDE, RingFamily.CODEX, RingFamily.CODEX_SPARK),
+            "n2_inner_full_below" to listOf(RingFamily.CODEX, RingFamily.CLAUDE, RingFamily.CODEX_SPARK),
+            "n2_inner_full_above" to listOf(RingFamily.CODEX, RingFamily.CLAUDE, RingFamily.CODEX_SPARK),
+            "n2_outer_pair_below" to listOf(RingFamily.CODEX, RingFamily.CLAUDE, RingFamily.CODEX_SPARK),
+            "n2_outer_pair_above" to listOf(RingFamily.CODEX, RingFamily.CLAUDE, RingFamily.CODEX_SPARK),
+        )
+        val expectedSplitPayloadIndices = mapOf(
+            "n2_inner_pair_below" to 0, "n2_inner_pair_above" to 0,
+            "n2_inner_full_below" to 1, "n2_inner_full_above" to 1,
+            "n2_outer_pair_below" to 1, "n2_outer_pair_above" to 1,
+        )
+        val expectedExtraOutsideIndices = mapOf(
+            "n2_inner_pair_below" to 1, "n2_inner_pair_above" to 1,
+            "n2_inner_full_below" to 0, "n2_inner_full_above" to 0,
+            "n2_outer_pair_below" to 0, "n2_outer_pair_above" to 0,
+        )
+        // 2 * round(180w / (pi*d), 2) / 359.9, independently specified per geometry.
+        val expectedCutoffs = mapOf(
+            "n2_inner_pair_below" to listOf(0.02739649902750764, 0.017949430397332593, 0.01611558766323979),
+            "n2_inner_pair_above" to listOf(0.02739649902750764, 0.017949430397332593, 0.01611558766323979),
+            "n2_inner_full_below" to listOf(null, 0.03395387607668797, null),
+            "n2_inner_full_above" to listOf(null, 0.03395387607668797, null),
+            "n2_outer_pair_below" to listOf(0.014337315921089193, null, 0.013114754098360656),
+            "n2_outer_pair_above" to listOf(0.014337315921089193, null, 0.013114754098360656),
+        )
+        val resources = context.resources
+        val now = Instant.EPOCH
+        for ((suffix, rings) in expectedRings) {
+            val encoded = testContext.assets.open("watch_dashboard_summary_$suffix.json")
+                .bufferedReader()
+                .use { it.readText() }
+            assertTrue(suffix, store.saveEncoded(encoded))
+            val summary = requireNotNull(store.load())
+            assertEquals(suffix, rings, summary.rings)
+            assertEquals(9, summary.schemaVersion)
+            assertEquals(WatchDataMode.MOCK, summary.dataMode)
+            assertEquals("2026-06-27T18:42:00.000Z", summary.generatedAt)
+            assertEquals(PulseStatus.OK, summary.overallStatus)
+            assertTrue(summary.manualRefreshAllowed)
+            assertNull(summary.manualRefreshAvailableAt)
+            assertFalse(summary.isStale)
+            assertEquals(
+                PeriodSummary("today", null, null, null, null, null, PulseStatus.UNKNOWN),
+                summary.today,
+            )
+            assertEquals(
+                PeriodSummary("week", null, null, null, null, null, PulseStatus.UNKNOWN),
+                summary.week,
+            )
+            assertEquals(
+                listOf(
+                    ProviderSummary("claude", PulseStatus.OK, null),
+                    ProviderSummary("codex", PulseStatus.OK, null),
+                ),
+                summary.providers,
+            )
+            assertNull(summary.creditsGlance)
+            assertTrue(summary.allowances.isEmpty())
+            assertTrue(summary.alerts.isEmpty())
+
+            val rows = expectedRows.getValue(suffix)
+            val payloadIndices = listOf(1, 0)
+            val mains = (0..1).map { outside ->
+                val payloadIndex = payloadIndices[outside]
+                ringComplicationData(summary.rings, outside) { ring, remaining, title, count ->
+                    assertEquals(rings[payloadIndex], ring)
+                    assertEquals(rows[outside].first / 4f, remaining)
+                    assertEquals(rows[outside].second, title)
+                    assertEquals(2, count)
+                    rangedComplicationBuilder(
+                        remaining, title, RingFamily.colorArgb(ring.id),
+                        contentDescription = ring.label,
+                        text = WatchComplicationText.stripLabel(summary, payloadIndex),
+                        ringCount = count,
+                    ).build()
+                } as RangedValueComplicationData
+            }
+            val expectedHalf = requireNotNull(rings[expectedSplitPayloadIndices.getValue(suffix)].split)
+            val extra = outerHalfComplicationData(summary.rings, 0) { half, outside, count ->
+                assertEquals(expectedHalf, half)
+                assertEquals(expectedExtraOutsideIndices.getValue(suffix), outside)
+                assertEquals(2, count)
+                val remaining = WatchComplicationText.remainingPercent(half.usedPercent)
+                assertEquals(rows[2].first / 4f, remaining)
+                rangedComplicationBuilder(
+                    remaining, outside.toString(), RingFamily.colorArgb(half.id),
+                    contentDescription = half.label, ringCount = count,
+                ).build()
+            } as RangedValueComplicationData
+            for ((pool, data) in (mains + extra).withIndex()) {
+                val expected = rows[pool]
+                assertEquals(suffix, RangedValueComplicationData.TYPE_UNDEFINED, data.valueType)
+                assertEquals(0f, data.min)
+                assertEquals(400f, data.max)
+                assertEquals(expected.first, data.value)
+                assertEquals(expected.second, data.title!!.getTextAt(resources, now).toString())
+                assertEquals(expected.third, data.text!!.getTextAt(resources, now).toString())
+                assertEquals(
+                    expectedDescriptions.getValue(suffix)[pool],
+                    data.contentDescription!!.getTextAt(resources, now).toString(),
+                )
+                assertEquals(expectedColors.getValue(suffix)[pool], data.colorRamp!!.colors.single())
+                expectedCutoffs.getValue(suffix)[pool]?.let { cutoff ->
+                    val ratio = data.value.toDouble() / data.max
+                    if (suffix.endsWith("below")) {
+                        assertTrue(ratio <= cutoff)
+                    } else {
+                        assertTrue(ratio > cutoff)
+                    }
+                }
+            }
+            assertTrue(ringComplicationData(summary.rings, 2) { _, _, _, _ ->
+                error("$suffix: obsolete main 2 must clear")
+            } is NoDataComplicationData)
+            assertNull(WatchComplicationText.stripLabel(summary, 2))
+            assertTrue(outerHalfComplicationData(summary.rings, 1) { _, _, _ ->
+                error("$suffix: obsolete extra 1 must clear")
+            } is NoDataComplicationData)
+        }
+    }
+
     @Test
     fun rejectsNonfiniteCoercedRingValuesWhileKeepingKnownExhaustion() {
         val encoded = testContext.assets.open("watch_dashboard_summary_paired.json")
