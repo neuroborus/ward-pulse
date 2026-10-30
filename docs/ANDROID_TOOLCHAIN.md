@@ -467,6 +467,10 @@ including pipes; host argument quoting alone is insufficient. Keep raw keys/payl
 authentication out of logs. After unsnooze, verify that same notification's presence with a
 fresh separate observation: an immediate false key-list result can be asynchronous. Do not
 declare restoration or accept a covered frame from that first result alone.
+Keep the private undo handle/recovery material until fresh recovery verification completes; a command return
+or failed/ambiguous bounded check does not retire it. If exact identity is unavailable, report that limit
+separately from independently proved effective manager-state recovery. Category/count evidence never
+proves the exact notification's identity; keep these observations under [Diagnostic output privacy](#diagnostic-output-privacy).
 
 Tap coordinates measured off a screenshot are a guess: the image is scaled, and a system dialog
 sits above whatever it covers, so a near miss lands on the screen underneath and quietly changes
