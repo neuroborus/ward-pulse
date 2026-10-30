@@ -103,7 +103,8 @@ See [Sync and notifications](/guide/sync#refresh-now) for request delivery and r
 
 Choose which metrics fill the bands; paired pools can share one band.
 With both the watch app and face updated, one or two available bands widen automatically
-to fill the same ring area; three bands keep their current widths. A pair counts as one
+as fewer bands are shown. A single band leaves more open space toward the centre than
+two bands; three bands keep their current widths. A pair counts as one
 band. Temporarily unavailable data can change the width when it disappears or returns;
 a known exhausted **0%** still occupies its band. An older app or face keeps narrow bands
 until both are updated.

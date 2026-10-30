@@ -64,7 +64,9 @@ centred composition revision **2026-10-27** (historical logo-above-clock layout;
 with 20/18/16 labels); upward-digit revision **2026-10-27** (larger whole clocks retaining
 the 08:08 reference bottoms, 52-unit cells and 64/54-square logos; bounded native evidence below);
 adaptive-band revision **2026-10-28** (resolved counts select 68/32/20-unit bands;
-generic ranged envelopes replace the raw percentage interface; native acceptance Pending)
+generic ranged envelopes replace the raw percentage interface; native acceptance Pending);
+N1-width revision **2026-10-30** (explicit 44/32/20-unit bands; N1 halves are 22;
+new-radius raster fits below; native acceptance Pending)
 — locked visual target for
 Wear OS and Watch Face Format until the next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
@@ -73,7 +75,8 @@ wireframes, large remaining-% heroes, or bordered strip cards.
 The operative layout is
 [upward digits and fixed reference bottoms](#revision-2026-10-27--upward-digits-and-fixed-reference-bottoms), retaining the
 [outward-preserving cell contract](#revision-2026-10-25--preserved-outward-fade-and-50-unit-cells).
-Band widths follow the [adaptive revision](#revision-2026-10-28--adaptive-bands-from-resolved-count).
+Band widths follow the [N1-width revision](#revision-2026-10-30--n1-width-44), retaining the
+[adaptive admission contract](#revision-2026-10-28--adaptive-bands-from-resolved-count).
 The earlier bottom-only/uniform-centre candidate below is superseded, not accepted intent.
 
 Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 13). Asset ownership: `docs/DESIGN_ASSETS.md`.
@@ -83,7 +86,93 @@ Canonical face generator: `tools/render-watchface.mjs` — it writes the shipped
 and the ring-type drawables beside it.  
 Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and sibling variants).
 
+## Revision 2026-10-30 — N1 width 44
+
+The owner approved explicit full/half widths **44/22, 32/16, 20/10**. This replaces only
+the earlier 68/34 N1 dimensions and its texture fits. Keep the unchanged 450 canvas,
+centre 225/225 and outer anchor 202. `LAYOUTS` and `bandGeometry` in
+`tools/render-watchface.mjs` own these dimensions; the analytical and rendering routes in
+`tools/render-watch-ring-designs.mjs` use the same explicit widths, preserving the historical
+N3 review-art model.
+
+| Layout | Full / half | Full centrelines, outside first | Outer / inner pair centrelines | Inner end / aperture bound |
+| --- | --- | --- | --- | --- |
+| N1, MAX200 | 44 / 22 | 180 | 191 / 169 | 158 / 157.8 |
+| N2, MAX400 | 32 / 16 | 186, 150 | 194 / 178; 158 / 142 | 134 / 133.8 |
+| N3, MAX800 | 20 / 10 | 192, 168, 144 | 197 / 187; 173 / 163; 149 / 139 | 134 / 133.8 |
+
+N1 continuously spans 202..158. Its pair halves meet at 180 with no gap. N2/N3 retain
+four-unit inter-band gaps; MAX100 retains fixed legacy positions and is never count proof.
+`assertNearExhaustedArcs` keeps per-layout belt ends and the existing 0.2-unit aperture
+allowance, strict containment within the shared 414/68 round extra-slot clip and the
+0.01-unit ideal full-closure tolerance. These are analytical bounds, not native AA readings.
+
+`BAND_LAYOUTS`, `check_band_envelopes`, `check_band_paints`, `check_paint_endpoints` and
+`check_extra_decisions` in `tools/check-watchface-structure.py` independently inspect the
+actual emitted full/inner/extra arcs: N1 diameters 360/338/382, strokes 44/22/22, radial
+edges, gapless halves, paint ownership and clip envelopes. Emitted predicates and transforms
+are evaluated at zero, proportional positive-tiny values, neighboring wire Floats on both
+sides of each cutoff, ordinary partials, near-full and exact-full. Endpoints and visible
+sweep are checked, including the single 0..359.9 ROUND full path. Legacy/N3 retain their
+published six-decimal cutoffs and historical clamp at a rounded-down boundary; that
+rounding allowance does not apply to the new widths. Both extra ordinals, impossible
+positions, malformed/non-finite inputs and exact TITLE admission remain covered.
+
+**Measured raster fit, 2026-10-30; independent visual/native acceptance Pending.** N1 type
+was rebaked at actual radius 180, not resized from an older band. Keep Noto Sans Bold,
+nominal cap 15.756, derived font size 22.1, alpha 115/63, four diagonal 10° breaks and
+the existing ambient treatment. Pairs have no period texture. Isolated-token angular ink
+envelopes at radius 180 measured D **4.608128°**, 7D **8.824800°**, M **5.990607°**.
+Enumerating every positive count through `floor(80° / span)` gave upper bounds **17/9/13**.
+The largest counts meeting the conservative raster criteria at all three scales were
+**D 11 / 7D 7 / M 9 per sweep**; both `ADAPTIVE_REPEATS` tables carry these counts.
+
+Measurement used the existing named-SVG ImageMagick route at density 96, with each 404px
+texture in its actual (23,23) box on a transparent 450px canvas. Pillow Lanczos downscales
+model 360/384 viewports; this is a documented resampling model, not native renderer proof.
+All nonzero-alpha pixel corners bound each token's angular/radial ink, including faint
+filter fringes. Measure the PNG envelope before mode alpha 115/63; this conservatively
+bounds both modes' ink support, without measuring their contrast. Require positive
+separation, all four breaks at least 10°, radial
+clearance and minimum ink-to-ink arc spacing at radius 180 no tighter than the unchanged
+outer-N3 texture measured by the same method at radius 192 (D 15 / 7D 9 / M 12).
+
+| Period | Minimum gap px, 450 / 360 / 384 | Minimum diagonal break degrees, 450 / 360 / 384 | Minimum radial clearance px, 450 / 360 / 384 |
+| --- | --- | --- | --- |
+| D, 11 | 7.321 / 1.219 / 1.586 | 12.224 / 10.749 / 10.868 | 12.749 / 7.795 / 8.627 |
+| 7D, 7 | 6.837 / 1.365 / 1.744 | 12.146 / 10.789 / 10.989 | 12.377 / 7.597 / 8.245 |
+| M, 9 | 7.905 / 1.809 / 2.498 | 12.578 / 10.963 / 11.367 | 12.553 / 8.026 / 8.627 |
+
+The outer-N3 gap references at 450/360/384 were D **1.991/-1.313/-1.279px**,
+7D **0.828/-1.232/-1.254px**, M **2.308/-1.192/-1.218px**. Negative values mean these
+conservative corner envelopes overlap after downsampling; they are not native legibility
+claims. N1 must additionally retain a strictly positive gap. Every larger bounded count
+was rejected: D 12..17, 7D 8..9 and M 10..13 fail separation and/or diagonal-break clearance
+at a smaller scale. At 450 the selected radial ink envelopes were D **170.883..189.251**,
+7D **170.848..189.623**, M **170.836..189.447**; the nominal cap stays fixed even though
+these conservative raster bounds include antialiasing. The chosen counts establish measured
+spacing and fit under this model, not readability PASS or native cap-height acceptance.
+
+Canonical XML and the three N1 textures are regenerated before the affected N1 boards,
+previews and WFF mirrors. N2/N3/legacy textures, unaffected art and Primary portrait bytes
+remain fixed. Drift checks cover XML/SVG, not raster fit. Inspect D/7D/M active/ambient
+originals independently at viewport scale; central clearance, clipping, first and separately
+settled native geometry and retained-engine transitions remain **Pending**. Preserve the
+completed Alpha selection repair, all eight slots, 52-unit cells, logo/clock/wells/labels/
+fades, zero/tiny/full and ambient/MUTE semantics.
+
+The earlier 68/34 dimensions and receipts below remain historical; old-geometry evidence
+does not accept the new 44/22 bytes or establish a renderer cause. Item 12 integration,
+compatibility, forward-only delivery, phone retention/sync and coherent public-capture
+obligations in the adaptive revision remain open. This change allocates no version and
+does not authorize Push delivery. Required independent review, FINALIZE and later HOST
+acceptance retain their existing ownership; no new owner approval gate is introduced.
+
 ## Revision 2026-10-28 — adaptive bands from resolved count
+
+Historical 68/34 geometry and texture-fit receipt: the
+[2026-10-30 revision](#revision-2026-10-30--n1-width-44) supersedes only N1 width and fit.
+The admission, selection and open integration obligations here remain operative.
 
 This revision supersedes fixed width for accepted adaptive responses. Count validated,
 resolved band entries once each: an ordinary plan, an independent budget, a supported pair

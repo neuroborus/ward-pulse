@@ -29,6 +29,15 @@ legacy/Push update, true-ambient and transition acceptance remains **Pending** u
 [adaptive revision](../../docs/product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count).
 The new face admits only its own response's exact 0/100, 0/200, 0/400, 0/800 envelopes;
 MAX100 always means fixed legacy geometry, and malformed contracts draw no lower component.
+The [N1-width revision](../../docs/product/WATCH_RING_DESIGN.md#revision-2026-10-30--n1-width-44)
+selects explicit full 44 / half 22 for N1: centre radius 180, pair 191/169, continuous span 202..158.
+N2 stays 32/16, N3 and legacy stay 20/10. N1 D/7D/M textures are baked at the new actual radius
+with measured 11/7/9 repeats per sweep, fixed nominal 15.756 caps and alpha 115/63. The owning
+revision records bounded raster fitting at 450/360/384; independent active/ambient visual
+review and native clipping, aperture, readability and retained-transition acceptance remain
+Pending. Old 68/34 receipts do not accept these new bytes; no version or delivery changes
+are made here.
+
 `ringSlot` in `tools/render-watchface.mjs` keeps each main selector and strip beneath one
 named full-canvas Group. Before emission in normal and `--check` modes,
 `tools/check-watchface-structure.py` parses the actual XML to enforce one direct element
@@ -51,7 +60,9 @@ emission, geometry, clipping, live colors, cutoffs and ambient/MUTE behavior.
 retain main/inner first-true Condition checks and evaluate every emitted extra alpha
 Transform. Extras require exactly one active Group for admitted input and none for rejected
 input, with independent inspection of the corresponding drawing content.
-Independent admission and geometry expectations cover both ordinals, every feasible and
+Independent literal design dimensions and evaluated arc endpoints/visible sweeps cover
+ordinary and inner bands as well as extras, including N1 diameters 360/338/382 and
+strokes 44/22/22. Admission and geometry expectations cover both ordinals, every feasible and
 impossible position, 74/200, zero, representable tiny values, neighboring cutoff Floats,
 near/full boundaries, malformed/non-finite fields and exact TITLE rejection. Generator
 assertions retain published Legacy/N3 rounded cutoffs and analytical full-path/clip checks.

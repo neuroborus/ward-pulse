@@ -118,9 +118,8 @@ const BAND_THICKNESS = 20
 /** MAX100 never asserts a resolved count: it always uses the legacy positions. */
 const LAYOUTS = [
   { name: 'Legacy', count: 3, max: 100, thickness: 20 },
-  ...[1, 2, 3].map((count) => ({
-    name: `N${count}`, count, max: 100 * 2 ** count,
-    thickness: (68 - 4 * (count - 1)) / count,
+  ...[44, 32, 20].map((thickness, index) => ({
+    name: `N${index + 1}`, count: index + 1, max: 100 * 2 ** (index + 1), thickness,
   })),
 ]
 
@@ -257,7 +256,8 @@ const TOKENS = [
 ]
 
 const ADAPTIVE_REPEATS = {
-  1: { D: [13], '7D': [8], M: [10] },
+  // Radius-180 raster fits, including 360/384 downscales (2026-10-30 design revision).
+  1: { D: [11], '7D': [7], M: [9] },
   2: { D: [15, 11], '7D': [9, 6], M: [12, 9] },
 }
 
@@ -1140,10 +1140,11 @@ function assertNearExhaustedArcs() {
     }
   }
   for (const layout of LAYOUTS) {
+    const beltEnd = layout.count === 1 ? 158 : 134
     for (let index = 0; index < layout.count; index += 1) {
       const { diameter, full, inner, outer, thickness, half } = bandGeometry(layout, index)
       const edge = diameter / 2
-      if ((full - thickness) / 2 < 133.8 || edge > 202 ||
+      if ((full - thickness) / 2 < beltEnd - 0.2 || edge > 202 ||
           (outer - half) / 2 !== (inner + half) / 2 ||
           (inner - half) / 2 !== edge - thickness ||
           (outer + half) / 2 !== edge) {
@@ -1155,7 +1156,7 @@ function assertNearExhaustedArcs() {
       }
     }
     const last = bandGeometry(layout, layout.count - 1)
-    if ((last.full - last.thickness) / 2 !== 134) throw new Error('belt must end at 134')
+    if ((last.full - last.thickness) / 2 !== beltEnd) throw new Error(`${layout.name}: belt must end at ${beltEnd}`)
   }
 }
 

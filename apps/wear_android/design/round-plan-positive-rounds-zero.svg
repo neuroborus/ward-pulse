@@ -14,12 +14,12 @@
   </defs>
   <rect width="450" height="450" fill="url(#lift)"/>
 
-    <circle cx="225" cy="225" r="168" fill="none" stroke="#2E3632"
-      stroke-width="68" />
-    <circle cx="225" cy="225" r="168" fill="none" stroke="#E8915A"
-      stroke-width="68" stroke-linecap="butt"
-      stroke-dasharray="1.06 1055.58"
-      stroke-dashoffset="-1054.52"
+    <circle cx="225" cy="225" r="180" fill="none" stroke="#2E3632"
+      stroke-width="44" />
+    <circle cx="225" cy="225" r="180" fill="none" stroke="#E8915A"
+      stroke-width="44" stroke-linecap="butt"
+      stroke-dasharray="1.13 1130.97"
+      stroke-dashoffset="-1129.84"
       transform="rotate(-90 225 225)" />
 
     <circle cx="173.0" cy="135.0" r="26.0" fill="#0B0E0C" />

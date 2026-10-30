@@ -14,19 +14,19 @@
   </defs>
   <rect width="450" height="450" fill="url(#lift)"/>
 
-    <circle cx="225" cy="225" r="151" fill="none" stroke="#2E3632"
-      stroke-width="34" />
-    <circle cx="225" cy="225" r="151" fill="none" stroke="#7E93B8"
-      stroke-width="34" stroke-linecap="round"
-      stroke-dasharray="468.84 948.76"
-      stroke-dashoffset="-462.92"
+    <circle cx="225" cy="225" r="169" fill="none" stroke="#2E3632"
+      stroke-width="22" />
+    <circle cx="225" cy="225" r="169" fill="none" stroke="#7E93B8"
+      stroke-width="22" stroke-linecap="round"
+      stroke-dasharray="540.78 1061.86"
+      stroke-dashoffset="-510.07"
       transform="rotate(-90 225 225)" />
-    <circle cx="225" cy="225" r="185" fill="none" stroke="#2E3632"
-      stroke-width="34" />
-    <circle cx="225" cy="225" r="185" fill="none" stroke="#67E8D4"
-      stroke-width="34" stroke-linecap="round"
-      stroke-dasharray="686.68 1162.39"
-      stroke-dashoffset="-458.71"
+    <circle cx="225" cy="225" r="191" fill="none" stroke="#2E3632"
+      stroke-width="22" />
+    <circle cx="225" cy="225" r="191" fill="none" stroke="#67E8D4"
+      stroke-width="22" stroke-linecap="round"
+      stroke-dasharray="722.05 1200.09"
+      stroke-dashoffset="-467.03"
       transform="rotate(-90 225 225)" />
 
     <circle cx="173.0" cy="135.0" r="26.0" fill="#0B0E0C" />

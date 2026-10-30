@@ -9,6 +9,16 @@ from copy import deepcopy
 import xml.etree.ElementTree as ET
 
 
+# Independent design dimensions: (MAX, full stroke, full/inner/outer diameters, belt end).
+# Keep these literal expectations separate from the JavaScript layout calculations.
+BAND_LAYOUTS = {
+    "Legacy": (100, 20, ((384, 374, 394), (336, 326, 346), (288, 278, 298)), 134),
+    "N1": (200, 44, ((360, 338, 382),), 158),
+    "N2": (400, 32, ((372, 356, 388), (300, 284, 316)), 134),
+    "N3": (800, 20, ((384, 374, 394), (336, 326, 346), (288, 278, 298)), 134),
+}
+
+
 def element_children(element):
     return [child for child in element if isinstance(child.tag, str)]
 
@@ -132,21 +142,101 @@ def adjacent_float(value, direction):
     return struct.unpack("!f", struct.pack("!I", bits + direction))[0]
 
 
-def check_band_paints(root):
+def check_band_envelopes(root):
     errors = []
-    expected = {}
-    for layout, count, maximum in (("Legacy", 3, 100), ("N1", 1, 200),
-                                    ("N2", 2, 400), ("N3", 3, 800)):
-        for index in range(count):
-            for suffix in ("", "Half"):
-                expected[f"ring{index + 1}{layout}{suffix}"] = maximum
+    for layout, (_, thickness, diameters, belt_end) in BAND_LAYOUTS.items():
+        previous_inner = None
+        for index, (full, inner, outer) in enumerate(diameters):
+            edges = []
+            for name, diameter, stroke in (
+                (f"ring{index + 1}{layout}", full, thickness),
+                (f"ring{index + 1}{layout}Half", inner, thickness / 2),
+                (f"outerHalf106_{layout}_{index + 1}_full", outer, thickness / 2),
+            ):
+                track = root.find(f".//Group[@name='{name}']/PartDraw/Arc")
+                expected = {"centerX": "225", "centerY": "225", "width": f"{diameter:g}",
+                            "height": f"{diameter:g}", "startAngle": "0", "endAngle": "359.9"}
+                paint = None if track is None else track.find("Stroke")
+                if (track is None or track.attrib != expected or paint is None
+                        or paint.attrib != {"color": "#ff2e3632", "thickness": f"{stroke:g}", "cap": "ROUND"}):
+                    errors.append(f"{name}: emitted track differs from independent design geometry")
+                    continue
+                actual_diameter = float(track.get("width"))
+                actual_stroke = float(paint.get("thickness"))
+                edges.append(((actual_diameter - actual_stroke) / 2,
+                              (actual_diameter + actual_stroke) / 2))
+            if len(edges) != 3:
+                continue
+            full_edges, inner_edges, outer_edges = edges
+            if (inner_edges[0] != full_edges[0] or outer_edges[1] != full_edges[1]
+                    or inner_edges[1] != outer_edges[0] or full_edges[0] < belt_end - 0.2
+                    or (previous_inner is None and full_edges[1] != 202)
+                    or (previous_inner is not None and previous_inner - full_edges[1] != 4)):
+                errors.append(f"{layout}/{index}: emitted radial edges, aperture or gapless halves drifted")
+            previous_inner = full_edges[0]
+        if previous_inner != belt_end:
+            errors.append(f"{layout}: belt must end at {belt_end}")
+    return errors
 
-    for name, maximum in expected.items():
+
+def check_paint_endpoints(arc, kind, diameter, thickness, value, maximum):
+    """Evaluate emitted transforms, not reconstructed generator markup."""
+    if arc is None:
+        return False
+    transforms = arc.findall("Transform")
+    cap = round(thickness / diameter * 180 / math.pi, 2)
+    start = float(arc.get("startAngle"))
+    end = float(arc.get("endAngle"))
+    if transforms:
+        start = evaluate_paint(paint_expression(transforms[0].get("value", "")), value, maximum)
+    wanted_start = 0 if kind == "full" else (1 - value / maximum) * 359.9
+    wanted_end = 359.9
+    if kind == "round":
+        wanted_start += cap
+        wanted_end -= cap
+    # Legacy/N3 publish six-decimal cutoffs. Immediately above a rounded-down
+    # boundary their historical clamp can collapse the centreline, with at most
+    # half a last published digit of excess visible cap. New widths get no allowance.
+    legacy_rounding = (kind == "round" and thickness in (10, 20)
+                       and 0 <= 2 * cap - 359.9 * value / maximum <= 359.9 * 0.0000005)
+    if legacy_rounding:
+        wanted_start = wanted_end
+    visible = end - start + (2 * cap if kind == "round" else 0)
+    if not (len(transforms) == (0 if kind == "full" else 1)
+            and math.isclose(start, wanted_start, rel_tol=0, abs_tol=1e-9)
+            and math.isclose(end, wanted_end, rel_tol=0, abs_tol=1e-9)
+            and (end > start or (legacy_rounding and end == start))
+            and math.isclose(visible, 2 * cap if legacy_rounding else 359.9 * value / maximum,
+                             rel_tol=0, abs_tol=1e-9)):
+        return False
+    if kind == "full":
+        radius = diameter / 2
+        half_gap = math.radians((360 - (end - start)) / 2)
+        along = radius * math.cos(half_gap)
+        reach = math.sqrt((thickness / 2)**2 - (radius * math.sin(half_gap))**2)
+        return (0 <= along - reach - (diameter - thickness) / 2 <= 0.01
+                and 0 <= (diameter + thickness) / 2 - along - reach <= 0.01)
+    return True
+
+
+def check_band_paints(root):
+    errors = check_band_envelopes(root)
+    canvas = {"x": "0", "y": "0", "width": "450", "height": "450"}
+    expected = {}
+    for layout, (maximum, thickness, diameters, _) in BAND_LAYOUTS.items():
+        for index, (full, inner, _) in enumerate(diameters):
+            for suffix in ("", "Half"):
+                expected[f"ring{index + 1}{layout}{suffix}"] = (
+                    maximum, inner if suffix else full, thickness / 2 if suffix else thickness)
+
+    for name, (maximum, diameter, thickness) in expected.items():
         groups = root.findall(f".//Group[@name='{name}']")
         if len(groups) != 1:
             errors.append(f"{name}: expected one owning band Group")
             continue
         group = groups[0]
+        if group.attrib != {**canvas, "name": name} or group.findall("Transform"):
+            errors.append(f"{name}: band owner must retain neutral full-canvas coordinates")
         children = element_children(group)
         if len(children) < 2 or [child.tag for child in children[:2]] != ["PartDraw", "Condition"]:
             errors.append(f"{name}: track must precede the single paint selector")
@@ -154,7 +244,8 @@ def check_band_paints(root):
         track, selector = children[:2]
         track_arc = track.find("Arc")
         track_stroke = track.find("Arc/Stroke")
-        if track_arc is None or track_stroke is None or track_stroke.attrib.get("color") != "#ff2e3632":
+        if (track.attrib != canvas or track_arc is None or track_stroke is None
+                or track_stroke.attrib.get("color") != "#ff2e3632"):
             errors.append(f"{name}: zero must retain its track")
             continue
         expressions = selector.findall("Expressions/Expression")
@@ -177,7 +268,8 @@ def check_band_paints(root):
             kind = "tiny" if stroke.get("cap") == "BUTT" else "round" if transforms else "full"
             kinds.append(kind)
             if (draw.find("Arc") is not arc or arc.find("WeightedStroke") is not stroke
-                    or draw.get("alpha") != "255"
+                    or draw.attrib != {**canvas, "alpha": "255"}
+                    or [child.tag for child in draw] != ["Variant", "Arc"]
                     or draw.find("Variant[@mode='AMBIENT'][@target='alpha'][@value='140']") is None
                     or stroke.get("colors") != "[COMPLICATION.RANGED_VALUE_COLORS]"
                     or stroke.get("thickness") != track_stroke.get("thickness")
@@ -199,8 +291,6 @@ def check_band_paints(root):
             errors.append(f"{name}: main/inner paint must have no fallback drawing")
 
         # Use the published geometry boundary independently of the emitted predicates.
-        diameter = float(track_arc.get("width"))
-        thickness = float(track_stroke.get("thickness"))
         cap = round(thickness / diameter * 180 / math.pi, 2)
         cutoff = 2 * cap / 359.9
         if thickness in (10, 20):
@@ -218,6 +308,10 @@ def check_band_paints(root):
                            if evaluate_paint(predicates[branch.get("expression")], value, maximum)), "none")
             if actual != wanted:
                 errors.append(f"{name}: {value}/{maximum} selected {actual}, expected {wanted}")
+            elif actual != "none":
+                arc = branches[kinds.index(actual)].find(".//Arc")
+                if not check_paint_endpoints(arc, actual, diameter, thickness, value, maximum):
+                    errors.append(f"{name}: {value}/{maximum} lost proportional endpoints or full closure")
     return errors
 
 
@@ -249,8 +343,8 @@ def check_extra_decisions(root):
     rejected_alpha = alpha_expression(rejected) if rejected is not None else None
     root = without_diagnostics(deepcopy(root))
     errors = []
-    layouts = (("Legacy", 3, 100, 20), ("N1", 1, 200, 68),
-               ("N2", 2, 400, 32), ("N3", 3, 800, 20))
+    layouts = [(name, len(diameters), maximum, thickness)
+               for name, (maximum, thickness, diameters, _) in BAND_LAYOUTS.items()]
     canvas = {"x": "0", "y": "0", "width": "450", "height": "450"}
     for slot_id, ordinal in ((106, 0), (109, 1)):
         slot = root.find(f".//ComplicationSlot[@slotId='{slot_id}']")
@@ -259,8 +353,7 @@ def check_extra_decisions(root):
             errors.append(f"slot {slot_id}: extra must own fixed direct decision Groups")
             continue
         groups = list(ranged)
-        expected = [(layout, index, maximum, thickness / 2,
-                     404 - 2 * index * (thickness + 4) - thickness / 2, kind)
+        expected = [(layout, index, maximum, thickness / 2, BAND_LAYOUTS[layout][2][index][2], kind)
                     for layout, count, maximum, thickness in layouts
                     for index in range(count - ordinal)
                     for kind in ("full", "tiny", "round", "zero")]
@@ -350,7 +443,8 @@ def check_extra_decisions(root):
 
         for layout, count, maximum, thickness in layouts:
             for index in range(3):
-                diameter = 404 - 2 * index * (thickness + 4) - thickness / 2
+                # Impossible positions still exercise admission; they own no geometry.
+                diameter = BAND_LAYOUTS[layout][2][index][2] if index < count else 394
                 cap = round((thickness / 2) / diameter * 180 / math.pi, 2)
                 cutoff = 2 * cap / 359.9
                 if thickness == 20:
@@ -366,7 +460,11 @@ def check_extra_decisions(root):
                     actual = [expected[position] for position in positions]
                     if actual != wanted:
                         errors.append(f"slot {slot_id}/{layout}/{index}: {value} selected {actual}, expected {wanted}")
-                    elif positions and kind in ("tiny", "round"):
+                    elif positions and kind != "zero":
+                        arc = groups[positions[0]].findall("PartDraw")[1].find("Arc")
+                        if not check_paint_endpoints(arc, kind, diameter, thickness / 2, value, maximum):
+                            errors.append(f"slot {slot_id}/{layout}/{index}: selected {kind} endpoints or closure drifted")
+                    if positions and kind in ("tiny", "round"):
                         transform = paints[positions[0]]
                         start = evaluate_paint(transform, value, maximum) if transform is not None else math.nan
                         wanted_start = (1 - value / maximum) * 359.9 + (cap if kind == "round" else 0)

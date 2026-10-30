@@ -93,13 +93,19 @@ preview: `apps/wear_android/design/preview-3-plan-credits.png`.
 
 The [upward-digit 2026-10-27 composition](product/WATCH_RING_DESIGN.md#revision-2026-10-27--upward-digits-and-fixed-reference-bottoms)
 owns the preserved centre composition. The
-[adaptive-band revision](product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count)
+[N1-width revision](product/WATCH_RING_DESIGN.md#revision-2026-10-30--n1-width-44), retaining the
+[adaptive admission contract](product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count),
 now owns 40 face boards/previews, 37 WFF mirrors and the shipped portrait. N3 boards,
 previews, portrait and the original nine textures retain their accepted bytes. Nine new
 N1/N2 textures are baked at actual radii with fixed nominal 15.756 glyph caps; no existing
 PNG is stretched. New one/two-band pair and D/7D/M active/ambient boards are generated
 by `adaptiveVariants` in `tools/render-watch-ring-designs.mjs`. Face generation precedes
 review art so the portrait reads current canonical geometry.
+The 2026-10-30 N1 refit uses full 44 / half 22 at radius 180 (pair 191/169), with measured
+D/7D/M counts 11/7/9 per sweep. Only the three N1 textures and affected N1 exports change;
+N2/N3/legacy textures, unaffected art and Primary portrait retain their bytes. The owning
+revision records angular envelopes, bounded count enumeration and 450/360/384 raster
+spacing/clearance. These measurements do not establish independent visual or native acceptance.
 Actual adaptive aperture, clipping, textures, transitions and native acceptance remain
 **known Pending**. Delegated documentation/design work in the same integration owns final
 healthy shared-state public captures, screenshot-index and browser review after native

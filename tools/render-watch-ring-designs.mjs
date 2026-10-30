@@ -164,7 +164,7 @@ const TEXTURE = {
 
 // New-radius fits mirror the face's ADAPTIVE_REPEATS; N3 art stays unchanged.
 const ADAPTIVE_REPEATS = {
-  1: { D: [13], '7D': [8], M: [10] },
+  1: { D: [11], '7D': [7], M: [9] },
   2: { D: [15, 11], '7D': [9, 6], M: [12, 9] },
 }
 
@@ -330,7 +330,7 @@ function assertNearExhaustedArcs() {
   const epsilon = 0.000001
   const tolerance = 0.000000001
   const geometries = [1, 2, 3].flatMap((count) => {
-    const width = (68 - 4 * (count - 1)) / count
+    const width = [44, 32, 20][count - 1]
     return Array.from({ length: count }, (_, index) => {
       // Preserve the accepted measured N3 art, including its ambient model.
       const modes = count === 3 ? [false, true] : [false]
@@ -688,7 +688,7 @@ async function faceSvg({
   if (planLayers.length > 3) throw new Error('the face supports at most three bands')
   if (planLayers.length > 0 && planLayers.length < 3) {
     const scale = size / FACE
-    thickness = ((68 - 4 * (planLayers.length - 1)) / planLayers.length) * scale
+    thickness = [44, 32, 20][planLayers.length - 1] * scale
     outer = 202 * scale - thickness / 2
     gap = 4 * scale
     band = thickness
