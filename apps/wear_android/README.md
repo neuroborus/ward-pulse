@@ -418,7 +418,7 @@ instrumentation, flags and actual private journal; this is not authorization to 
 against installed Push 4. Current Source 5 delivery uses the separately guarded normal UI path
 in the qualification above, with all target operations still held for the capability phase.
 
-`ManualNativeIntegration` marks thirty-eight additional cases: `NativePushGuardTest` has three
+`ManualNativeIntegration` marks forty-one additional cases: `NativePushGuardTest` has three
 negative/cleanup cases, including candidate file/FD cleanup on either callback outcome;
 the journal case also exercises System/controller/native discovery fixtures into one fake dispatch.
 Those existing cases additionally reject incomplete/ambiguous installed-path enumeration,
@@ -430,7 +430,7 @@ also exercises the locator's actual `Runtime.exec(String)` launch contract, incl
 failure and multiple paths, without querying installed packages. They add no discovered test cases.
 `NativePushUpdateTest` has individually selected `probeBaseline`,
 `updateOwnedPush3To4` and `observeSettledUpdate` cases. The datasource classes below add six,
-and the client classes add eleven (three guarded native methods, seven synthetic guards and
+and the client classes add fourteen (three guarded native methods, ten synthetic guards and
 one independent metadata observation). The typed-config classes add six (one observation and
 five synthetic guards). The inventory classes add nine (two observations and seven synthetic guards).
 `IsolatedWearRunner.onCreate` always
@@ -702,6 +702,24 @@ remains distinct from Source/built Push5; Legacy-only Square needs no invented P
 
 `NativeReadAdmission` checks the process UID against the target application's UID and the
 actual packages for that UID, then verifies HOST-observed APK/signer/version expectations.
+Its current `resourceIdentity` runtime read uses the fixed `INSTALLED_RUNTIME_PATH_COMMAND`
+through the existing UiAutomation solely for `pm path com.google.wear.watchface.runtime`.
+`readInstalledRuntimePath` reads at most 4097 bytes, accepts at most 4096 and requires EOF,
+exactly one absolute APK path and the conditional completion marker. Malformed, additional,
+split or incomplete enumeration is rejected. Under the ordinary target UID/context,
+`readNativeRuntimePackage` streams the APK hash and uses `getPackageArchiveInfo` with
+`GET_SIGNING_CERTIFICATES`. It requires actual archive/application package metadata, the exact
+runtime package, a positive observed version, one current signer and no archive/application
+splits. It rehashes the bytes and repeats the complete path discovery, rejects changes and
+compares the observed APK/signer with CURRENT expectations. The parsed version remains in
+runtime identity receipts and outer identity brackets. Arguments, paths, hashes and `sourceDir`
+never fill absent metadata. These brackets detect changes without claiming atomicity.
+No installed-package lookup, shell byte/metadata read, adopted identity, SDK context, manifest
+query or permission change is added. `NativePackage.read`, Candidate and the complete historical
+SDK3→4 route remain unchanged. UID byte readability and synthetic archive observations do not
+prove target Java archive parsing; actual package/hash/signer/version and HOST acceptance
+remain Pending on the preserved target.
+
 `readNativeClientFace` brackets system/native scope around a configuration-dump observation;
 configuration absence or an unresolved configuration producer is recorded without blocking
 client metadata. The after-bracket repeats caller/resource/runtime identities. Raw configuration
@@ -720,7 +738,12 @@ Private receipts use fresh `files/native_read/client-*/receipt.json` directories
 `read-only-client-metadata` kind. Each operation records invocation, target, returned domain
 and outcome: `not-invoked`, `unsupported`, `null/empty`, `denied/inaccessible`, `timeout`,
 `ambiguous/domain-unresolved` or `successful-acquisition`. Empty results and partial acquisition
-retain their own outcomes. These receipts are rejected by the guarded override admission,
+retain their own outcomes. Failures also retain a syntax-validated actual `failureType` of at
+most 192 characters (otherwise `Unknown`) and a fixed `failureSubstage`: `runtime_discovery`,
+`runtime_bytes`, `runtime_archive`, `runtime_identity`, or the operation/recording stages.
+Original outcomes and failing substages survive recording/cleanup failures. No exception
+messages, causes, stacks or sensitive payloads are emitted; the historical thrown class remains
+Unknown. These receipts are rejected by the guarded override admission,
 including when identity and cleanup match. No data, bitmap, screenshot, restoration, message,
 activation or permission transport is invoked by this observation.
 
@@ -732,10 +755,17 @@ prove release of an unreturned control/interactive reference. Unreturned referen
 closes or unresolved custody prevent another acquisition until HOST reconciles the actual owner;
 do not delete/reconstruct evidence or replay history to bypass that fence.
 
-The five added synthetic `NativeClientGuardTest` cases cover current admission separation,
+The current-read synthetic `NativeClientGuardTest` cases cover current admission separation,
 independent client slot domains/read-receipt rejection, operation outcomes, partial/failed cleanup
-and changed-face brackets. Existing parser fixtures remain parser tests, not evidence of an OS
-producer. Compilation, guard execution, actual access/cleanup and runtime acceptance remain
+and changed-face brackets. Three additional runtime cases cover independently supplied archive
+observations despite unavailable installed lookup, missing/foreign metadata, invalid versions/
+signers, splits, complete path enumeration, changed paths/bytes and resource closure. The
+runtime locator also uses fixed shell-output fixtures for its actual String-tokenization and
+conditional-marker contract, without installed-package queries or another discovered case. The
+existing outcome case also checks bounded failure types and original substages through recording
+and cleanup failures without private payloads. Existing parser fixtures remain parser tests,
+not evidence of an OS producer. Compilation, guard execution, actual access/cleanup and runtime
+acceptance remain
 pending later HOST validation after whole Runner DONE, process retirement and fresh public idle.
 No target installation is authorized to manufacture capability; a genuine target dependency
 must remain visible for later admission. Malformed/delayed/missing-main native coverage,
@@ -837,7 +867,8 @@ these observations establish neither universal PASS, physical-device acceptance 
 `NativeComplicationOverrideTest` has three individually selected stock-runner cases:
 `probeClient`, `observeOverride` and `observeRestoration`. `NativeClientGuardTest` retains its two
 synthetic binding/object cases and adds the five read/custody cases above, without real service
-binds or data updates. All carry `ManualNativeIntegration` and remain excluded from the original
+binds or data updates, plus three synthetic runtime-reader cases. All carry
+`ManualNativeIntegration` and remain excluded from the original
 default 40. The three native methods use the current-target admission described above and
 remain HOST-only after whole execution DONE, owned-process retirement and separate fresh public
 idle, with separately reviewed compilation/provisioning. The guarded route never launches

@@ -1151,8 +1151,8 @@ tests. The three `NativePushGuardTest` cases can separately be explicitly select
 they use memory, private temporary files/descriptors and fixed shell-output fixtures, without
 querying installed packages or accessing the manager/live stores.
 The three update-class cases are manual; together with the three Push guard, six
-datasource, eleven client, six typed-config and nine inventory cases, `IsolatedWearRunner`
-excludes all thirty-eight manual cases and keeps the original default 40 tests.
+datasource, fourteen client, six typed-config and nine inventory cases, `IsolatedWearRunner`
+excludes all forty-one manual cases and keeps the original default 40 tests.
 
 After the system-authority correction, require a fresh complete warm `just check-wear`
 after the last Source fix, rebuild candidate/test-APK provenance, then install only the test
@@ -1328,7 +1328,10 @@ associations stay Pending; do not guess IDs, use numerical/provider-only joins, 
 records, use cached data/default policy, select providers or grant permission to proceed.
 No client acquisition is required. New resource diagnostics distinguish resource-package and
 runtime-package reads without relabeling prior ambiguous `beforeResource` or uninvoked client
-acquisition as a proven denial or package-visibility cause.
+acquisition as a proven denial or package-visibility cause. The current runtime reader described
+under [independent client metadata observation](#independent-client-metadata-observation) also
+serves this read; its Java archive parsing and subsequent typed acquisition remain Pending until
+actually reached and verified on the preserved target.
 
 For an active Push target, the reader reuses actual caller-owned inventory before and after
 the typed observation. It retains exact package/version/manager-slot/active/configuration
@@ -1450,9 +1453,31 @@ all these arguments expanded. No candidate flags, manager-witness review, asset-
 Push4 hash, requester IDs or restoration receipt is an input to this read. Actual inaccessible
 APK/service/permission/instance evidence remains an explicit outcome, without grants or fallbacks.
 
+For current `NativeReadAdmission.resourceIdentity` calls, `readNativeRuntimePackage` in
+[NativeReadObservation.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeReadObservation.kt)
+uses existing UiAutomation only for a fixed runtime `pm path` discovery. `readInstalledRuntimePath`
+reads at most 4097 bytes, accepts at most 4096 and requires EOF, a conditional completion marker
+and exactly one absolute APK path. Additional/split, malformed or incomplete output is rejected.
+The ordinary target UID/context reads the APK bytes and calls `getPackageArchiveInfo` with
+`GET_SIGNING_CERTIFICATES`; real archive/application metadata must identify the exact runtime,
+a positive version, one current signer and no splits. Repeated APK hashes and complete path
+discoveries bracket parsing, and observed hash/signer must match current HOST expectations.
+The parsed version is retained in runtime identity receipts and outer brackets. No argument,
+path, hash or archive `sourceDir` supplies missing metadata. No installed-package lookup,
+adopted identity, SDK-context substitution, query/grant/permission or target replacement is added.
+The historical `NativePackage.read`, Candidate and entire SDK3→4 flow remain unchanged.
+Byte readability under the UID and synthetic success do not prove Java archive/signature/version
+parsing. Later HOST must verify actual JUnit/receipt outcomes and package/hash/signer/version
+against independent current provenance; unreached downstream capability remains Pending.
+
 Inspect private `files/native_read/client-*/receipt.json`. `operations` distinguishes uninvoked,
 unsupported, null/empty, denied/inaccessible, timeout, ambiguous/domain-unresolved and acquired
-results. `clientSlots` records actual client keys/enabled states/supported types before matching;
+results. Current failures retain `failureType` (actual class name, syntax-validated and at most
+192 characters, otherwise `Unknown`) and fixed `failureSubstage` values for runtime discovery,
+bytes, archive parsing and identity checks, or operation/recording stages. Outcome classification
+and the original failing substage survive recording/cleanup failures. No exception message,
+cause, stack or sensitive payload is emitted. The historical thrown class remains Unknown.
+`clientSlots` records actual client keys/enabled states/supported types before matching;
 different numbers from native slots are retained. `beforeFace`/`afterFace`, caller identities and
 resource/runtime identities bracket the observation; raw configuration hashes are diagnostic,
 not an invented selected-provider producer. Missing/changed evidence leaves association unresolved
@@ -1463,7 +1488,8 @@ in `files/native_client/acquisition/` fences both old and new client owners. A f
 factory deadline and successful binding cleanup do not release an unreturned remote reference;
 synchronous calls must return, and failed/unresolved custody requires HOST reconciliation before
 another owner. Keep cleanup failures separate from acquisition outcomes and retain evidence.
-The five new synthetic guard cases require later actual HOST execution; source review is not
+The ten synthetic client guard cases, including three runtime-reader additions and expanded
+outcome assertions, require later actual HOST execution; source review is not
 runtime acceptance, restoration proof or #12 closure. The original historical SDK3→4 admission,
 journal and settled witness remain unchanged.
 
@@ -1578,10 +1604,10 @@ or establish unavailable native capability. Corrected compilation, complete buil
 actual client access remain separate Pending HOST evidence.
 
 Select exactly one `NativeComplicationOverrideTest` method on the stock runner with
-`wardpulseNativeIntegration=client-probe`. The three guarded native methods, seven synthetic
+`wardpulseNativeIntegration=client-probe`. The three guarded native methods, ten synthetic
 `NativeClientGuardTest` cases and independent metadata observation remain excluded by the
 isolated runner; with the six typed-config and nine inventory cases the manual total is
-thirty-eight and the default total stays 40. The guarded native methods require the same current
+forty-one and the default total stays 40. The guarded native methods require the same current
 caller/resource/runtime/renderer and applicable owned-Push identity arguments as the
 [datasource probe](#guarded-datasource-observations), plus
 `clientArtifactReview=resolved-1.2.1` and `expectedClientArtifactSha256` from the actual resolved
