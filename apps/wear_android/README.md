@@ -418,7 +418,7 @@ instrumentation, flags and actual private journal; this is not authorization to 
 against installed Push 4. Current Source 5 delivery uses the separately guarded normal UI path
 in the qualification above, with all target operations still held for the capability phase.
 
-`ManualNativeIntegration` marks sixteen additional cases: `NativePushGuardTest` has three
+`ManualNativeIntegration` marks twenty-two additional cases: `NativePushGuardTest` has three
 negative/cleanup cases, including candidate file/FD cleanup on either callback outcome;
 the journal case also exercises System/controller/native discovery fixtures into one fake dispatch.
 Those existing cases additionally reject incomplete/ambiguous installed-path enumeration,
@@ -430,7 +430,8 @@ also exercises the locator's actual `Runtime.exec(String)` launch contract, incl
 failure and multiple paths, without querying installed packages. They add no discovered test cases.
 `NativePushUpdateTest` has individually selected `probeBaseline`,
 `updateOwnedPush3To4` and `observeSettledUpdate` cases. The datasource classes below add five,
-and the client classes add five.
+and the client classes add eleven (three guarded native methods, seven synthetic guards and
+one independent metadata observation).
 `IsolatedWearRunner.onCreate` always
 excludes that annotation, including explicitly selected manual classes. The original default
 inventory remains 40. The stock `androidx.test.runner.AndroidJUnitRunner` entry in the test
@@ -646,14 +647,70 @@ time/font/ambient and bridge state. Unsupported mapping/provenance, unseen trans
 unsafe restoration remain **Pending**. See
 [the manual invocation](../../docs/ANDROID_TOOLCHAIN.md#guarded-datasource-observations).
 
+## Independent client metadata observation
+
+`NativeClientMetadataTest.observeClientMetadata` is separately selected on the stock runner
+with `wardpulseNativeIntegration=client-metadata`. It carries `ManualNativeIntegration` and
+remains excluded from default discovery. See the
+[invocation and current identity arguments](../../docs/ANDROID_TOOLCHAIN.md#independent-client-metadata-observation).
+This current-operation read requires the actual caller UID/package/signer/current target APK,
+canonical emulator/image/display, ordinary Application and current resource/runtime APKs and
+existing native instance. It does not require a Push 3→4 journal, requester-ID mapping, quiet
+bridge, candidate bundle or SDK update-method resolution. The historical admission and
+one-shot update/settled-witness paths remain unchanged. Installed Round Wear4/asset3/Push4
+remains distinct from Source/built Push5; Legacy-only Square needs no invented Push history.
+
+`NativeReadAdmission` checks the process UID against the target application's UID and the
+actual packages for that UID, then verifies HOST-observed APK/signer/version expectations.
+`readNativeClientFace` brackets system/native scope around a configuration-dump observation;
+configuration absence or an unresolved configuration producer is recorded without blocking
+client metadata. The after-bracket repeats caller/resource/runtime identities. Raw configuration
+hashes are diagnostic observations, not a semantic selection join or an atomic snapshot.
+
+`withNativeClientAcquisition` reuses the public resource-only factory and existing-instance
+lookup, including the exported/enabled service and caller-held declared-permission checks.
+The resolved client 1.2.1 AAR and dependency-graph hashes are explicit HOST provenance inputs,
+not Maven provenance established by instrumentation. Returned instance ID, actual client slot
+keys, enabled states and supported types are persisted before any comparison. Client slots
+are retained independently of native, generator and provider/system IDs; no numerical equality,
+offset, ordering or default-provider policy supplies a join. Even a stable bracket and matching
+opaque instance leave slot association `ambiguous/domain-unresolved` in this scope.
+
+Private receipts use fresh `files/native_read/client-*/receipt.json` directories and the
+`read-only-client-metadata` kind. Each operation records invocation, target, returned domain
+and outcome: `not-invoked`, `unsupported`, `null/empty`, `denied/inaccessible`, `timeout`,
+`ambiguous/domain-unresolved` or `successful-acquisition`. Empty results and partial acquisition
+retain their own outcomes. These receipts are rejected by the guarded override admission,
+including when identity and cleanup match. No data, bitmap, screenshot, restoration, message,
+activation or permission transport is invoked by this observation.
+
+Both client routes share `files/native_client/acquisition/owner.lock` and `custody.json`.
+Custody is armed before acquisition and all returned references and tracked bindings are closed
+on exit, with failures recorded separately. A factory deadline bounds only acquisition;
+synchronous remote calls must return before the owner retires. Releasing a binding cannot
+prove release of an unreturned control/interactive reference. Unreturned references, failed
+closes or unresolved custody prevent another acquisition until HOST reconciles the actual owner;
+do not delete/reconstruct evidence or replay history to bypass that fence.
+
+The five added synthetic `NativeClientGuardTest` cases cover current admission separation,
+independent client slot domains/read-receipt rejection, operation outcomes, partial/failed cleanup
+and changed-face brackets. Existing parser fixtures remain parser tests, not evidence of an OS
+producer. Compilation, guard execution, actual access/cleanup and runtime acceptance remain
+pending later HOST validation after whole Runner DONE, process retirement and fresh public idle.
+No target installation is authorized to manufacture capability; a genuine target dependency
+must remain visible for later admission. Malformed/delayed/missing-main native coverage,
+restoration, full artifact/compatibility and healthy public acceptance remain pending; this read
+does not close #12.
+
 ## Guarded complication client probe
 
 `NativeComplicationOverrideTest` has three individually selected stock-runner cases:
-`probeClient`, `observeOverride` and `observeRestoration`. `NativeClientGuardTest` adds two
-synthetic binding/object cases without real service binds or data updates. All five carry
-`ManualNativeIntegration` and remain excluded from the original default 40. This route is
+`probeClient`, `observeOverride` and `observeRestoration`. `NativeClientGuardTest` retains its two
+synthetic binding/object cases and adds the five read/custody cases above, without real service
+binds or data updates. All carry `ManualNativeIntegration` and remain excluded from the original
+default 40. The three native methods in this guarded route are
 HOST-only after the baseline-host Push witness, separate settled evidence/restoration and
-owner retirement, ordinary rebuilding and seam-bearing target provisioning. It never launches
+owner retirement, ordinary rebuilding and seam-bearing target provisioning. The guarded route never launches
 an Activity or supplies the isolation Application. See
 [client invocation and dependency proof](../../docs/ANDROID_TOOLCHAIN.md#guarded-complication-client-probe).
 

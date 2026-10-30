@@ -71,11 +71,7 @@ class NativeComplicationOverrideTest {
         nativeGuard(File(probe, "receipt.json").inputStream().sha256() ==
             expected.hash("expectedClientProbeSha256"), "reviewed-client-probe")
         val probed = AttemptJournal(File(probe, "receipt.json")).read()
-        nativeGuard(probed.optString("state") == "probe returned; first-frame and restoration review Pending" &&
-            !probed.has("outcome") && probed.optString("controlCleanup") == "close returned" &&
-            probed.optString("interactiveCleanup") == "close returned" &&
-            probed.optString("controlBindingCleanup") == "tracked connections released" &&
-            identity(before, targets).sameClientIdentity(probed.getJSONObject("identity")), "retained-client-probe-identity")
+        requireGuardedNativeClientProbe(probed, identity(before, targets))
         nativeGuard(File(probe, "first.png").inputStream().sha256() ==
             expected.hash("expectedReviewedFrameSha256") && probed.getString("firstFrameSha256") ==
             expected.hash("expectedReviewedFrameSha256"), "reviewed-client-first-frame")

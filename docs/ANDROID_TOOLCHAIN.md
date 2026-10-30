@@ -1131,7 +1131,7 @@ tests. The three `NativePushGuardTest` cases can separately be explicitly select
 they use memory, private temporary files/descriptors and fixed shell-output fixtures, without
 querying installed packages or accessing the manager/live stores.
 The three update-class cases are manual; together with the three Push guard, five
-datasource and five client cases, `IsolatedWearRunner` excludes all sixteen manual cases
+datasource and eleven client cases, `IsolatedWearRunner` excludes all twenty-two manual cases
 and keeps the original default 40 tests.
 
 After the system-authority correction, require a fresh complete warm `just check-wear`
@@ -1360,6 +1360,56 @@ provenance, unseen transitions or effective-restoration acceptance. All native o
 Pending until ordered HOST execution and inspection. Retire the instrumentation's single
 UiAutomation owner before another native/hierarchy owner starts.
 
+#### Independent client metadata observation
+
+For the independent read, select exactly
+`app.wardpulse.wear.nativeintegration.NativeClientMetadataTest#observeClientMetadata`
+on `app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner`, with
+`wardpulseNativeIntegration=client-metadata`. The isolated runner excludes it. This is a later
+HOST observation after whole Runner DONE, owned-process retirement, any owning-CLI exit and
+fresh separate public idle, with fresh runtime identity/custody and reviewed test-only provisioning.
+No phone action or target installation to manufacture capability is authorized. Surface any
+genuine target dependency for admission rather than relaxing guards.
+
+The read checks current facts using `NativeReadAdmission` in
+[NativeReadObservation.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeReadObservation.kt),
+without the historical update journal, requester mappings or quiet-bridge admission. Preserve
+the installed Round Wear4/asset3/Push4 identity separately from Source/built Push5. Legacy-only
+Square does not need fabricated Push ownership/history. Supply independently observed values:
+
+| Arguments | Current evidence |
+| --- | --- |
+| `expectedAvd`, `expectedFingerprintSha256` | Canonical emulator and exact current system image |
+| `expectedCallerUid`, `expectedHostVersionCode` | Actual target/provider UID and installed Wear code, without assuming code 4 identifies the APK |
+| `expectedHostApkSha256`, `expectedHostSignerSha256` | Current target APK and signer before and after test-only provisioning |
+| `expectedResourcePackage`, `expectedResourceApkSha256`, `expectedResourceSignerSha256` | Actually active WFF resource package/APK/signer, independent of opaque instance identity |
+| `expectedRuntime`, `expectedRuntimeApkSha256`, `expectedRuntimeSignerSha256` | Active runtime class suffix and installed runtime APK/signer |
+| `expectedInstanceSha256` | Current opaque native instance hash, not a WFF resource WatchFaceId or SDK manager slot |
+| `clientArtifactReview` | `resolved-1.2.1`, after actual resolved AAR/graph review |
+| `expectedClientArtifactSha256`, `expectedClientGraphSha256` | Exact resolved client 1.2.1 AAR and retained dependency-graph receipt hashes; caller assertions alone prove no provenance |
+
+Use the stock invocation shape above with the exact class/method, `client-metadata` opt-in and
+all these arguments expanded. No candidate flags, manager-witness review, asset-3 hash,
+Push4 hash, requester IDs or restoration receipt is an input to this read. Actual inaccessible
+APK/service/permission/instance evidence remains an explicit outcome, without grants or fallbacks.
+
+Inspect private `files/native_read/client-*/receipt.json`. `operations` distinguishes uninvoked,
+unsupported, null/empty, denied/inaccessible, timeout, ambiguous/domain-unresolved and acquired
+results. `clientSlots` records actual client keys/enabled states/supported types before matching;
+different numbers from native slots are retained. `beforeFace`/`afterFace`, caller identities and
+resource/runtime identities bracket the observation; raw configuration hashes are diagnostic,
+not an invented selected-provider producer. Missing/changed evidence leaves association unresolved
+while preserving returned metadata. No data, rendering, restoration or message call is made.
+
+The read-only receipt kind cannot authorize `observeOverride`. The shared acquisition custody
+in `files/native_client/acquisition/` fences both old and new client owners. A five-second
+factory deadline and successful binding cleanup do not release an unreturned remote reference;
+synchronous calls must return, and failed/unresolved custody requires HOST reconciliation before
+another owner. Keep cleanup failures separate from acquisition outcomes and retain evidence.
+The five new synthetic guard cases require later actual HOST execution; source review is not
+runtime acceptance, restoration proof or #12 closure. The original historical SDK3→4 admission,
+journal and settled witness remain unchanged.
+
 #### Guarded complication client probe
 
 Use this later HOST route only after the manager witness/restoration/owner retirement and
@@ -1375,10 +1425,10 @@ or establish unavailable native capability. Corrected compilation, complete buil
 actual client access remain separate Pending HOST evidence.
 
 Select exactly one `NativeComplicationOverrideTest` method on the stock runner with
-`wardpulseNativeIntegration=client-probe`. All five new client cases (three native methods,
-two synthetic `NativeClientGuardTest` cases) remain excluded by the isolated runner; the
-manual total is sixteen and the default total stays 40. The native methods require the same
-current host/asset/Push/legacy/renderer identity arguments as the
+`wardpulseNativeIntegration=client-probe`. The three guarded native methods, seven synthetic
+`NativeClientGuardTest` cases and independent metadata observation remain excluded by the
+isolated runner; the manual total is twenty-two and the default total stays 40. The guarded
+native methods require the same current host/asset/Push/legacy/renderer identity arguments as the
 [datasource probe](#guarded-datasource-observations), plus `managerWitnessReview=complete`,
 `clientArtifactReview=resolved-1.2.1` and `expectedClientArtifactSha256` from the actual resolved
 AAR. Freshly observe identities; do not reuse the pre-replacement host hash. The class checks
