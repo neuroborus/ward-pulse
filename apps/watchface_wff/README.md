@@ -132,6 +132,10 @@ readouts, with two-character category tokens:
 | Bottom middle | `A1` for actual N1 admission; `AO` for another admitted layout; `AX` for rejected admission |
 | Bottom right | Within N1, `PF` for full, `PT` for tiny, `PR` for round partial, `PN` for no remaining color; rejected admission also shows `PN` |
 
+Static category and fallback tokens use compact CDATA inside `Font`, without renderable
+formatting whitespace. The structure checker compares the untrimmed literal content and
+rejects nested content or extra fonts in those cells. Numeric `Template` cells are unchanged.
+
 VALUE/MIN/MAX remain independent of admission and bounded to 0..800; their `?` fallback
 does not disclose an out-of-range value. TITLE never exposes an unexpected literal. Paint
 in another admitted layout remains unobserved, leaving that cell unavailable. The 10-unit

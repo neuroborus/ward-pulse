@@ -1265,11 +1265,13 @@ ${pad}</Condition>`
 // All six readout boxes are inside r139..171.25, below the clock, outside the
 // preserved original-frame r137..159 measurement annulus at 360/450 scale.
 function n1Text(template, column, row, parameter = null) {
+  // Static Font content must not include XML formatting whitespace.
+  const content = parameter === null ? `<![CDATA[${template}]]>` : `
+            <Template>${template}<Parameter expression="${parameter}" /></Template>
+        `
   return `<PartText x="${173 + column * 35}" y="${364 + row * 12}" width="34" height="12">
     <Text align="CENTER" ellipsis="TRUE">
-        <Font family="SYNC_TO_DEVICE" size="10" weight="BOLD" color="${COLOR.text}">
-            ${parameter === null ? template : `<Template>${template}<Parameter expression="${parameter}" /></Template>`}
-        </Font>
+        <Font family="SYNC_TO_DEVICE" size="10" weight="BOLD" color="${COLOR.text}">${content}</Font>
     </Text>
 </PartText>`
 }

@@ -85,6 +85,16 @@ def without_diagnostics(node):
     return node
 
 
+def static_readout(node):
+    """Read one literal Font without hiding renderable padding or nested content."""
+    if node is None:
+        return None
+    fonts = node.findall(".//Font")
+    if len(fonts) != 1 or len(fonts[0]):
+        return None
+    return fonts[0].text
+
+
 def check_diagnostics(root, baseline):
     errors = []
     owners = {node: slot.get("slotId") for slot in root.iter("ComplicationSlot") for node in slot.iter()}
@@ -113,7 +123,7 @@ def check_diagnostics(root, baseline):
     if fields is None or admission is None or list(ranged) != [fields, admission]:
         return errors + ["consumer fields must precede and be independent of admission"]
 
-    for field in ("VALUE", "MIN", "MAX"):
+    for field, label in (("VALUE", "V"), ("MIN", "m"), ("MAX", "M")):
         condition = fields.find(f"Condition/Expressions/Expression[@name='bounded{field}']/../..")
         value = f"[COMPLICATION.RANGED_VALUE_{field}]"
         expression = condition.find("Expressions/Expression") if condition is not None else None
@@ -121,7 +131,7 @@ def check_diagnostics(root, baseline):
         if (
             expression is None or expression.text != f"{value} >= 0 && {value} <= 800"
             or parameter is None or parameter.get("expression") != value
-            or condition.find("Default/Group") is None
+            or static_readout(condition.find("Default/Group")) != f"{label}?"
         ):
             errors.append(f"consumer {field} needs independent bounded actual text and fallback")
     title = fields.find("Condition/Expressions/Expression[@name='title0']/../..")
@@ -136,14 +146,14 @@ def check_diagnostics(root, baseline):
                             ("Compare[@expression='title2']", "T2"),
                             ("Compare[@expression='title3']", "TE"), ("Default", "T?")):
             witness = title.find(f"{path}/Group")
-            if witness is None or "".join(witness.itertext()).strip() != token:
+            if static_readout(witness) != token:
                 errors.append("consumer TITLE must retain its closed two-character readout")
 
     for branch in admission.findall("Compare"):
         expression = branch.get("expression", "")
         layout, index = expression.removeprefix("is").split("Band")
         witness = branch.find(f"Group/Group[@name='n1Diag_add_admit_{layout}_{index}']")
-        if witness is None or "".join(witness.itertext()).strip() != ("A1" if layout == "N1" else "AO"):
+        if static_readout(witness) != ("A1" if layout == "N1" else "AO"):
             errors.append(f"{expression}: admission witness must belong to the actual branch")
     n1 = admission.find("Compare[@expression='isN1Band0']/Group")
     paint = n1.find("Condition/Compare[@expression='hasRemaining']/Condition") if n1 is not None else None
@@ -156,14 +166,14 @@ def check_diagnostics(root, baseline):
             wrapper = paint.find(f"{path}/Group[@name='n1Diag_wrap_{name}']")
             if wrapper is None or [child.tag for child in wrapper] != ["PartDraw", "Group"] or (
                 wrapper[1].get("name") != f"n1Diag_add_paint_{name}"
-                or "".join(wrapper[1].itertext()).strip() != token
+                or static_readout(wrapper[1]) != token
             ):
                 errors.append(f"N1 {name}: witness must share its actual colored-paint branch")
     no_color = n1.find("Condition/Default/Group[@name='n1Diag_add_paintNone']") if n1 is not None else None
-    if no_color is None or "".join(no_color.itertext()).strip() != "PN":
+    if static_readout(no_color) != "PN":
         errors.append("N1 no-color branch witness missing")
     rejected = admission.find("Default/Group[@name='n1Diag_add_rejected']")
-    if rejected is None or ["".join(text.itertext()).strip() for text in rejected] != ["AX", "PN"]:
+    if rejected is None or [static_readout(text) for text in rejected] != ["AX", "PN"]:
         errors.append("actual rejected-admission witness missing")
 
     # Box corners bound the maximum radius; the nearest box point bounds the minimum.
