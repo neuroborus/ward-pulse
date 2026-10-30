@@ -33,10 +33,10 @@ and fresh inventories separate; later observations do not reconstruct unsupporte
 For claims about which complication slot/type dispatched a tap, shared PendingIntent identity, caller UID,
 coordinates or a configured binding alone do not identify the hit. Join actual renderer hit-event evidence to the current
 instance/slot, effective provider, current data type and successful destination; DOWN alone is not completed dispatch.
-Keep canonical/runtime slot IDs distinct. Resolve retained APK raw XML through its resource table, not a guessed ZIP path,
-then join canonical IDs with actual native instance/slot evidence. Numeric IDs alone do not prove that mapping; local proxy
-hashes do not prove cross-process token identity. If the join is unavailable, keep type-specific provenance Pending while preserving
-separately proved common-entry, navigation/cycle and restoration results.
+Keep canonical/runtime slot IDs distinct. Resolve raw resources through EACH actual variant/embedded APK's resource table, or reuse a route bound to the exact same APK bytes; never transfer a debug ZIP path to release/Push.
+Before asserting identity, retain bounded variant and expected-versus-observed resource-route facts. Missing lookup stays Pending; no guessed alternative paths or raw sensitive dumps.
+Join canonical IDs with actual native instance/slot evidence; numeric IDs alone do not prove that mapping, and local proxy hashes do not prove cross-process token identity.
+If the join is unavailable, keep type-specific provenance Pending while preserving separately proved common-entry, navigation/cycle and restoration results.
 
 ## Refresh and retained state
 
