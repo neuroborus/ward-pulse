@@ -24,10 +24,10 @@ and unexpected rendered extras. Use the actual snapshot/summary and owning surfa
 
 Resolve visible band order through `RingSurfaceOrder` and actual effective main/extra bindings before
 family, color or geometry claims; payload/picker order alone is not outer-to-inner order. Map absent paint too.
-Verify the complete mapping against the native frame. Sorting or selection can move a band while a
-retained half stays behind. Check each half's family AND radius, not merely the number of arcs or whether
-a percentage changed. A Cursor secondary half sharing Codex's band while its mate occupies another band
-is wrong even if counts/shapes look plausible. Use the existing locked design/ordering rules; do not invent a new visual convention.
+After count, selection or reorder changes, verify BOTH halves of EVERY selected pair against the current native frame: family, band/position, radius AND width must match the current owning geometry.
+A retained half can keep an earlier count's footprint while its mate moves. A surviving sliver of the expected color, plausible ring count or updated percentage does not establish correct pair geometry.
+When thin adjacent bands are ambiguous, measure radii/widths and overlap at the actual native viewport scale, map both halves to their families, and report unresolved geometry as a finding before PASS; exact-color counts alone do not prove geometry.
+A Cursor secondary half sharing Codex's band while its mate occupies another is wrong even if counts/shapes look plausible. Use the existing locked design/ordering rules; do not invent a new visual convention.
 
 When a pair is removed, reordered or absent, verify that the previously occupied split surface no longer
 draws stale data. Trace both configured split routes, not only the currently visible first pair. Static
@@ -88,9 +88,9 @@ or treating an uncommitted gesture as a navigation defect. Distinguish actual sy
 
 ## Match the case after changes
 
-Preserve the failing input/state and compare like-for-like before/after frames after the candidate is
-installed and active. Record an intentional state change as a separate case; do not silently substitute
-different percentages, pair membership or a fresh fixture. An observed success covers that target/state, not every device or retained-install path.
+Preserve the failing input/state and compare like-for-like before/after frames after the candidate is installed and active; record intentional state changes separately without substituting percentages, pair membership or a fresh fixture.
+Bind EACH frame used for geometry/persistence/change/recovery claims to its own original hash, case joins and measurement. Never borrow the first frame's ROI result or infer persistence from unchanged Source; report each observed temporal result separately, keeping cause distinct and unproved unless established.
+An observed success covers that target/state, not every device or retained-install path.
 
 After temporary preferences or a fixture are restored, verify actual derived surfaces again using the
 [state/artifact reference](state-and-artifacts.md). Restored file bytes alone do not establish restored complications, widget caches or the active scene.

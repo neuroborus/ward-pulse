@@ -78,8 +78,8 @@ device-preserving operations belong to android-devices/android-emulators, not th
 
 ## Case and evidence continuity
 
-While a capture/export session/cell is RUNNING, hold dependent reads/copies/navigation; independent read-only work may continue.
-Await that same operation's terminal result before inspection. After failure, safe attributable failed/partial artifacts may be inspected as diagnostics.
+An awaited tool can return a RUNNING session/cell marker; inspect the actual returned marker and terminal status BEFORE dispatching dependent reads/copies/navigation, even inside one orchestration script.
+While RUNNING, hold dependencies; independent read-only work may continue. Await that same operation's terminal result. After failure, safe attributable failed/partial artifacts may be inspected as diagnostics.
 Report failed/missing output and allow necessary safe cleanup. Diagnostic inspection needs no capture success and does not establish acceptance.
 Acceptance requires success plus the current candidate/file, capture time/hash and actual content; a path, acknowledgement or old file is insufficient.
 
