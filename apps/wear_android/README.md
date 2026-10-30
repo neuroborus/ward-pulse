@@ -197,6 +197,24 @@ controls retain their separate scope. These are decoder/construction witnesses o
 execution, service delivery and WFF paint remain **Pending**. Android API/Parcel coverage
 retains its separate scope.
 
+`WatchSummaryStoreTest.n3InnerAndMiddleCutoffFixturesKeepExactRadialAndPoolRouting` adds
+four schema-9 fixtures under `fixtures/snapshots/`:
+`watch_dashboard_summary_n3_middle_pair_below.json`,
+`watch_dashboard_summary_n3_middle_pair_above.json`,
+`watch_dashboard_summary_n3_inner_pair_below.json` and
+`watch_dashboard_summary_n3_inner_pair_above.json`.
+They bracket the N3 middle/inner 10-unit paired-half cutoffs and outer/middle 20-unit
+ordinary cutoffs with Float neighbors of the published six-decimal boundaries. The existing
+legacy/N3 rounded-boundary clamp qualification remains unchanged. Literal oracles cover
+decoded tightest-first order, independent pool identities and usage, null Money and credits,
+MAX800 envelopes, family colors and unscaled text/descriptions. The middle Spark is ordinal 0
+with TITLE `1`, and ordinal 1 clears; the inner Spark is ordinal 0 with TITLE `2`, alongside
+Cursor Other at ordinal 1/TITLE `0` with independent full/near-full values. A positive 0.03125
+ordinary remainder keeps VALUE 0.25 and an empty TITLE despite `0%` text. Obsolete main
+selection and private-store clear/delete cleanup remain covered. These are decoder/construction
+witnesses only; execution, service delivery and WFF paint remain **Pending**. Existing Android
+API/Parcel coverage retains its separate scope.
+
 Current packaging is phone 0.1.0+3/Wear 4/legacy 2/Push default 3, all versionNames 0.1.0. Preserve
 package identities, signers and release-tool parity; this is not a release cut. The
 [adaptive revision](../../docs/product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count)
