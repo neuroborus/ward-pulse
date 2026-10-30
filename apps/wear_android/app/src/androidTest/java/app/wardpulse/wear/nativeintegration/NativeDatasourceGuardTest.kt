@@ -3,6 +3,7 @@ package app.wardpulse.wear.nativeintegration
 import android.content.ComponentName
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Bundle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.wear.watchface.complications.data.NoDataComplicationData
@@ -31,6 +32,49 @@ import org.junit.runner.RunWith
 @ManualNativeIntegration
 @RunWith(AndroidJUnit4::class)
 class NativeDatasourceGuardTest {
+    @Test
+    fun currentDatasourceMethodsNeedCurrentCallerAndSeparateExactWriteAuthorization() {
+        val arguments = Bundle().apply {
+            putString("expectedAvd", "wardpulse_wear_square_api36_1")
+            putString("expectedCallerUid", "10021")
+            putString("expectedHostVersionCode", "17")
+            putString("expectedHostApkSha256", "a".repeat(64))
+            putString("expectedHostSignerSha256", "b".repeat(64))
+        }
+        val expected = NativePushExpectations(arguments)
+        val operations = listOf("observeDelivery:normal", "observeDelivery:delayed",
+            "observeOverride:active:malformed-title", "observeOverride:supplied-bitmap:malformed-title")
+        for ((testClass, optIn, methods) in listOf(
+            Triple(DELIVERY_CLASS, "normal-delivery", listOf("probeDelivery", "observeDelivery", "observeRestoration")),
+            Triple(CLIENT_CLASS, "client-probe", listOf("probeClient", "observeOverride", "observeRestoration")))) {
+            for (method in methods) {
+                arguments.putString("class", "$testClass#$method")
+                arguments.putString("wardpulseNativeIntegration", optIn)
+                fun admit() = expected.admit(method, "androidx.test.runner.AndroidJUnitRunner",
+                    "wardpulse_wear_square_api36_1", "1", true, testClass, optIn)
+                admit()
+                requireNativeReadCaller(10021, 10021, setOf(HOST_PACKAGE),
+                    NativePackage(17L, "a".repeat(64), "b".repeat(64)), expected)
+                // No historical asset/package/journal/quiet-writer inputs or write authorization exist.
+                operations.forEach { operation ->
+                    assertThrows(NativePending::class.java) { requireNativeDatasourceMutation(expected, operation) }
+                }
+                arguments.putString("class", testClass)
+                assertThrows(NativePending::class.java) { admit() }
+                arguments.putString("class", "$testClass#$method")
+                arguments.putString("wardpulseNativeIntegration", "push-3-to-4")
+                assertThrows(NativePending::class.java) { admit() }
+            }
+        }
+        for (authorized in operations) {
+            arguments.putString("authorizedOperation", authorized)
+            requireNativeDatasourceMutation(expected, authorized)
+            operations.filterNot { it == authorized }.forEach { other ->
+                assertThrows(NativePending::class.java) { requireNativeDatasourceMutation(expected, other) }
+            }
+        }
+    }
+
     @Test
     fun targetedRequestsNeedActualInstanceMappingsRatherThanCanonicalOrCachedIds() {
         val slots = (11..18).toList()

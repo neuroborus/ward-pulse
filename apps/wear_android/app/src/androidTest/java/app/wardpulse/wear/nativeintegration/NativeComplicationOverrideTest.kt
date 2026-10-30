@@ -20,7 +20,7 @@ import org.json.JSONObject
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** Post-witness capability probe. Public client access is not promised on the installed runtime. */
+/** Current-target capability probe. Public client access is not promised on the installed runtime. */
 @ManualNativeIntegration
 @RunWith(AndroidJUnit4::class)
 class NativeComplicationOverrideTest {
@@ -34,9 +34,10 @@ class NativeComplicationOverrideTest {
     fun probeClient() = sanitized {
         admit("probeClient")
         val before = renderer()
-        val targets = mappings(before)
+        val mapping = mappings(before)
+        val targets = mapping.targets
         val directory = fresh("probe")
-        val receipt = JSONObject().put("identity", identity(before, targets)).put("state", "capability Pending")
+        val receipt = JSONObject().put("identity", identity(before, mapping)).put("state", "capability Pending")
         recorded(directory, receipt) { persist ->
             withExistingNativeClient(target, before, receipt, persist) { client ->
                 nativeGuard(targets.all {
@@ -64,20 +65,23 @@ class NativeComplicationOverrideTest {
         nativeGuard(mode in setOf("active", "supplied-bitmap"), "override-mode")
         val scenario = expected.required("overrideScenario")
         nativeGuard(scenario in scenarios, "override-scenario")
+        requireNativeDatasourceMutation(expected, "observeOverride:$mode:$scenario")
         val before = renderer()
-        val targets = mappings(before)
+        val mapping = mappings(before)
+        val targets = mapping.targets
         val probe = File(root, "probe")
         nativeGuard(File(probe, "receipt.json").inputStream().sha256() ==
             expected.hash("expectedClientProbeSha256"), "reviewed-client-probe")
         val probed = AttemptJournal(File(probe, "receipt.json")).read()
-        requireGuardedNativeClientProbe(probed, identity(before, targets))
+        requireGuardedNativeClientProbe(probed, identity(before, mapping))
         nativeGuard(File(probe, "first.png").inputStream().sha256() ==
             expected.hash("expectedReviewedFrameSha256") && probed.getString("firstFrameSha256") ==
             expected.hash("expectedReviewedFrameSha256"), "reviewed-client-first-frame")
-        requireNormalRecovery(targets)
+        requireNormalRecovery(mapping)
         requirePriorClientRecovery()
         val directory = fresh("$mode-$scenario")
-        val receipt = JSONObject().put("identity", identity(before, targets))
+        val receipt = JSONObject().put("identity", identity(before, mapping))
+            .put("authorizedOperation", "observeOverride:$mode:$scenario")
             .put("mode", mode).put("scenario", scenario).put("state", "object construction Pending")
             .put("effectiveRendering", "Pending").put("restoration", "not yet required")
         // No summary is written by this route. Keep opaque recovery/reference bytes private;
@@ -154,7 +158,7 @@ class NativeComplicationOverrideTest {
                         val calls = JSONArray()
                         receipt.put("cleanupRequest", "normal targeted recovery Pending").put("cleanupCalls", calls)
                         requestNativeDelivery(targets, targets.filter { it.slot in data }, calls, persist,
-                            validate = { quietBridge(); mappings(before) }, recovery = true) { provider, ids ->
+                            validate = { quietBridge(); mappings(before).targets }, recovery = true) { provider, ids ->
                             ComplicationDataSourceUpdateRequester.create(target, provider).requestUpdate(*ids)
                         }
                         receipt.put("cleanupRequest", "normal requestUpdate returned; effective restoration Pending")
@@ -189,8 +193,8 @@ class NativeComplicationOverrideTest {
             receipt.put("laterRestoration", "armed; observation Pending")
             persist()
             val current = renderer()
-            val targets = mappings(current)
-            nativeGuard(identity(current, targets).sameClientIdentity(receipt.getJSONObject("identity")), "restoration-identity")
+            val mapping = mappings(current)
+            nativeGuard(identity(current, mapping).sameClientIdentity(receipt.getJSONObject("identity")), "restoration-identity")
             original(directory, "restoration-later")
             privateData(directory, "restoration-later", current)
             val summary = target.getSharedPreferences("watch_summary", Context.MODE_PRIVATE).getString("latest", null)
@@ -203,34 +207,19 @@ class NativeComplicationOverrideTest {
     }
 
     private fun admit(method: String) {
-        device.admit(expected, method, CLIENT_CLASS, "client-probe")
+        NativeReadAdmission(instrumentation, expected).admit(method, CLIENT_CLASS, "client-probe")
         nativeGuard(expected.required("clientArtifactReview") == "resolved-1.2.1", "host-client-resolution-review")
         expected.hash("expectedClientArtifactSha256") // HOST receipt of the actual resolved AAR, not the source JAR.
-        val host = NativePackage.read(target, HOST_PACKAGE)
-        val push = NativePackage.read(target, CANDIDATE_PACKAGE)
-        val legacy = NativePackage.read(target, "app.wardpulse.watchface")
-        nativeGuard(host.code == 4L && host.apk == expected.hash("expectedHostApkSha256") &&
-            host.signer == expected.hash("expectedHostSignerSha256") &&
-            target.assets.open("default_watchface.apk").sha256() == expected.hash("expectedAsset3Sha256"), "client-host-4-asset-3")
-        nativeGuard(push.code == 4L && push.apk == expected.hash("expectedPush4ApkSha256") &&
-            push.signer == expected.hash("expectedPushSignerSha256") && legacy.code == 2L &&
-            legacy.apk == expected.hash("expectedLegacyApkSha256") &&
-            legacy.signer == expected.hash("expectedLegacySignerSha256"), "client-retained-packages")
-        val update = AttemptJournal(File(target.filesDir, "native_push_update/attempt.json")).read()
-        nativeGuard(update.optString("state") == "result-verified" && update.optString("resourceCleanup") == "verified" &&
-            update.optString("pushConfigurationRetention") == "verified from Push-owned selection records" &&
-            update.optString("nativeObservation") == "recorded; original-frame inspection Pending" &&
-            update.optString("candidateApkSha256") == push.apk &&
-            expected.required("managerWitnessReview") == "complete", "client-prior-manager-witness")
     }
 
-    private fun identity(renderer: NativeRenderer, targets: List<NativeDeliveryTarget>) = JSONObject()
+    private fun identity(renderer: NativeRenderer, mapping: NativeDeliveryMapping) = JSONObject()
         .put("hostApkSha256", NativePackage.read(target, HOST_PACKAGE).apk)
         .put("clientArtifactSha256", expected.hash("expectedClientArtifactSha256"))
         .put("instanceSha256", renderer.instance.sha256()).put("configurationSha256", renderer.configuration.sha256())
-        .put("resourcePackage", renderer.resourcePackage).put("mappingSha256", targets.fingerprint())
+        .put("resourcePackage", renderer.resourcePackage).put("mappingSha256", mapping.targets.fingerprint())
+        .put("scopeSha256", mapping.scopeSha256)
 
-    private fun requireNormalRecovery(targets: List<NativeDeliveryTarget>) {
+    private fun requireNormalRecovery(mapping: NativeDeliveryMapping) {
         val scenario = expected.required("normalRestorationScenario")
         nativeGuard(scenario in setOf("normal", "delayed", "obsolete", "recovery"), "normal-restoration-scenario")
         val file = File(target.filesDir, "native_datasource/$scenario/receipt.json")
@@ -239,7 +228,8 @@ class NativeComplicationOverrideTest {
         val receipt = AttemptJournal(file).read()
         nativeGuard(receipt.optString("laterRestoration") ==
             "recorded; original-frame inspection and response provenance Pending" &&
-            receipt.optString("mappingSha256") == targets.fingerprint() &&
+            receipt.optString("mappingSha256") == mapping.targets.fingerprint() &&
+            receipt.optString("scopeSha256") == mapping.scopeSha256 &&
             receipt.optString("cleanupRequest") == "normal requestUpdate returned; effective restoration Pending" &&
             receipt.optString("restoration") in setOf("original bytes observed", "original bytes restored"),
             "normal-restoration-support")
@@ -281,7 +271,7 @@ class NativeComplicationOverrideTest {
 
     private fun retained(before: NativeRenderer, targets: List<NativeDeliveryTarget>): NativeRenderer = renderer().also {
         requireNativeDeliveryScope(it, before)
-        nativeGuard(mappings(it) == targets, "client-retained-state")
+        nativeGuard(mappings(it).targets == targets, "client-retained-state")
     }
 
     private fun fresh(name: String) = File(root, name).also {

@@ -418,7 +418,7 @@ instrumentation, flags and actual private journal; this is not authorization to 
 against installed Push 4. Current Source 5 delivery uses the separately guarded normal UI path
 in the qualification above, with all target operations still held for the capability phase.
 
-`ManualNativeIntegration` marks thirty-six additional cases: `NativePushGuardTest` has three
+`ManualNativeIntegration` marks thirty-eight additional cases: `NativePushGuardTest` has three
 negative/cleanup cases, including candidate file/FD cleanup on either callback outcome;
 the journal case also exercises System/controller/native discovery fixtures into one fake dispatch.
 Those existing cases additionally reject incomplete/ambiguous installed-path enumeration,
@@ -429,10 +429,10 @@ explicit empty choices and caller diagnostic isolation. A private shell-output f
 also exercises the locator's actual `Runtime.exec(String)` launch contract, including success,
 failure and multiple paths, without querying installed packages. They add no discovered test cases.
 `NativePushUpdateTest` has individually selected `probeBaseline`,
-`updateOwnedPush3To4` and `observeSettledUpdate` cases. The datasource classes below add five,
+`updateOwnedPush3To4` and `observeSettledUpdate` cases. The datasource classes below add six,
 and the client classes add eleven (three guarded native methods, seven synthetic guards and
 one independent metadata observation). The typed-config classes add six (one observation and
-five synthetic guards). The inventory classes add eight (two observations and six synthetic guards).
+five synthetic guards). The inventory classes add nine (two observations and seven synthetic guards).
 `IsolatedWearRunner.onCreate` always
 excludes that annotation, including explicitly selected manual classes. The original default
 inventory remains 40. The stock `androidx.test.runner.AndroidJUnitRunner` entry in the test
@@ -568,11 +568,21 @@ does not close the utility-button gap, earlier manager-update gaps or historical
 ## Guarded normal datasource observations
 
 `NativeDatasourceTransitionTest` adds three stock-runner manual cases: `probeDelivery`,
-`observeDelivery` and `observeRestoration`. `NativeDatasourceGuardTest` adds two private
-mapping/cleanup cases, with no live preferences or manager mutation. These five cases remain
-excluded from the original default 40. Invoke the manual route only after the genuine Push
-3→4 result, separate settled evidence/restoration and instrumentation retirement, followed by
-ordinary seam-bearing target provisioning. This is not a target installer or a manager retry.
+`observeDelivery` and `observeRestoration`. `NativeDatasourceGuardTest` adds three private
+admission/mapping/cleanup cases, with no live preferences or manager mutation. These six cases
+remain excluded from the original default 40. HOST compilation, guard execution, provisioning
+and runtime observations follow whole execution DONE, all owned-process retirement and separate
+fresh public idle. Preserve original Round Wear 4/asset 3/Push 4 and Legacy bytes/selections;
+Source asset 5 belongs to the later normal UI Push 4→5 update. A seam-bearing compiled-target
+dependency must be reviewed at that later HOST phase, without installing a replacement to
+manufacture read capability. This harness installs or activates nothing.
+
+Both datasource and guarded client entry points reuse `NativeReadAdmission` for their exact
+method/opt-in, canonical emulator/image/display and actual current caller UID/package/APK/signer.
+Mapping/frame reads require current resource/runtime APK/signer, active instance, complete-eight
+selections and intended targets. They require no historical update entry resolution, update
+journal, old package cohort or quiet writers. The historical `NativePushUpdateTest` SDK 3→4
+path retains its original arguments, guards, witnesses, journal and recovery meaning.
 
 `readNativeDeliveryTargets` and `discoverDeliveryTargets` in
 [NativeDatasourceState.kt](app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeDatasourceState.kt)
@@ -599,8 +609,15 @@ New resource reads identify resource-package and runtime-package suboperations s
 prior ambiguous `beforeResource` evidence stays unresolved. An uninvoked client acquisition
 is not an access result or evidence of a package-visibility cause. Both datasource and direct-data
 consumers use this same mapping. All five lower services must be selected and enabled.
-Admission also guards Wear 4, asset 3, retained Push 4 and legacy 2 identities. An already-active
-Push or legacy instance can be observed; this harness never activates or reselects either one.
+For an active owned Push resource, `readNativeDatasourcePushScope` reuses `readNativeOwnedPush`
+before and after the typed read. It requires stable caller-owned inventory, the actual resource
+version, the independently expected manager-slot hash and active status, and retains the exact
+package/version/manager-slot/active/configuration scope. A Legacy-only read never acquires Push
+inventory or requires Push ownership. Missing ownership for a Push target stays Pending without
+add/update/activation. Private mapping receipts retain raw inventory operations alongside typed
+producer outcomes. `NativeDeliveryMapping.scopeSha256` binds the caller, resource/runtime,
+System, full-eight native and applicable Push scope to first-frame and restoration receipts;
+it supplies evidence, never write authority, and leaves historical configuration fingerprints intact.
 
 HOST first inspects the single private `probe/first.png` original for a complete unobscured
 frame, then supplies its hash and explicit review/precondition attestations. Before controlled
@@ -612,7 +629,10 @@ a receiver, pauses a producer or changes settings itself. These
 observations cannot prove the absence of every future write. Quiet-writer ownership is a HOST
 precondition; concurrent phone/Data Layer publications remain legitimate.
 
-`observeDelivery` selects one finite `normal`, `delayed`, `obsolete` or `recovery` scenario.
+`observeDelivery` selects one finite `normal`, `delayed`, `obsolete` or `recovery` scenario and
+requires explicit `authorizedOperation=observeDelivery:<scenario>` for that exact invocation.
+Read receipts, inventory and peer observations cannot satisfy this authorization or HOST
+quiet-writer/bridge ownership. The reviewed first original must match the fresh full scope.
 Sanitized live-mode summaries pass through the real `WatchSummaryStore.saveEncoded`, unchanged
 schema-9 decoding and normal services. A two-band summary has a main/extra pair; a single-band
 summary removes obsolete mains/extras. The delayed case requests mains first and extras only
@@ -799,10 +819,11 @@ Credentials, summaries, selections, jobs, pairing/bridge, permissions and histor
 are preserved; installed Round Wear4/asset3/Push4 remains distinct from Source/built Push5.
 Legacy-only Square may truthfully return no owned Push package.
 
-The six `NativeInventoryGuardTest` cases cover independent admission/read-receipt rejection,
+The seven `NativeInventoryGuardTest` cases cover independent admission/read-receipt rejection,
 raw domains and active status, absent ownership, unsupported/denied/timeout outcomes, invalid/
-changed inventories and null/empty/failed peers. The fake Push client rejects every bundle,
-mutation and permission effect. All eight cases carry `ManualNativeIntegration`; the default
+changed inventories and null/empty/failed peers, plus exact current datasource Push scope and
+Legacy-only independence. The fake Push client rejects every bundle,
+mutation and permission effect. All nine cases carry `ManualNativeIntegration`; the default
 40 remain unchanged. Compilation, actual guard execution and reviewed watch observations are
 later HOST duties after whole DONE, all owned-process retirement, any owning-CLI exit and fresh
 separate public idle. Fresh runtime identity/custody, reviewed test-only provisioning and cleanup/
@@ -817,9 +838,9 @@ these observations establish neither universal PASS, physical-device acceptance 
 `probeClient`, `observeOverride` and `observeRestoration`. `NativeClientGuardTest` retains its two
 synthetic binding/object cases and adds the five read/custody cases above, without real service
 binds or data updates. All carry `ManualNativeIntegration` and remain excluded from the original
-default 40. The three native methods in this guarded route are
-HOST-only after the baseline-host Push witness, separate settled evidence/restoration and
-owner retirement, ordinary rebuilding and seam-bearing target provisioning. The guarded route never launches
+default 40. The three native methods use the current-target admission described above and
+remain HOST-only after whole execution DONE, owned-process retirement and separate fresh public
+idle, with separately reviewed compilation/provisioning. The guarded route never launches
 an Activity or supplies the isolation Application. See
 [client invocation and dependency proof](../../docs/ANDROID_TOOLCHAIN.md#guarded-complication-client-probe).
 
@@ -857,7 +878,10 @@ reference. Failed close/unresolved ownership forbids another owner until HOST re
 The first probe captures one private original for HOST inspection before further cases.
 Overrides require its exact receipt/frame hashes, retained installed/active identities, explicit
 review, quiet-writer/unpaired-bridge preconditions and an independently reviewed normal
-datasource restoration receipt with matching mappings. No unproved recovery path permits an
+datasource restoration receipt with matching mappings and full scope. They also require explicit
+`authorizedOperation=observeOverride:<mode>:<scenario>`; a read receipt or a successful inventory/
+peer observation cannot authorize either active-data transport or supplied-data rendering.
+No unproved recovery path permits an
 override. Each mode/scenario has a fresh, single-use private directory under `files/native_client/`.
 The private `latest.json` records acquisition ownership before binding. Another case requires
 retired resources and, after any armed transport, a separate later restoration observation

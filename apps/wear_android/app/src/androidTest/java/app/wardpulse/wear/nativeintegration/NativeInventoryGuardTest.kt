@@ -23,6 +23,57 @@ class NativeInventoryGuardTest {
     private val owned = InstalledWatchFace("opaque-manager-slot", CANDIDATE_PACKAGE, 4L)
 
     @Test
+    fun datasourcePushScopeUsesCurrentOwnedInventoryOnlyForAPushTarget() {
+        val slots = (11..18).toSet()
+        val lower = listOf("Today", "Week", "Ring3", "RingSplit", "StripSplit")
+        val providers = slots.associateWith { slot -> lower.getOrNull(slot - 11)?.let {
+            "$HOST_PACKAGE/app.wardpulse.wear.complication.${it}ComplicationDataSourceService"
+        } }
+        val renderer = NativeRenderer(CANDIDATE_PACKAGE, "existing", "style", slots.associateWith { true },
+            emptyMap(), NativeSelections(CANDIDATE_PACKAGE, "existing", providers,
+                slots.associateWith { if (it <= 15) 5 else 0 }, slots.associateWith { (it + 400).toString() }),
+            runtime = "SyntheticRuntime", nativeScope = listOf("engine"))
+        val expected = NativePushExpectations(Bundle().apply {
+            putString("expectedSlotSha256", owned.slotId.sha256())
+        })
+        val legacy = renderer.copy(resourcePackage = "app.wardpulse.watchface",
+            selections = renderer.selections!!.copy(resourcePackage = "app.wardpulse.watchface"))
+        assertEquals(null, readNativeDatasourcePushScope(legacy, 2L, NativePushExpectations(Bundle())) {
+            error("A Legacy-only read must not acquire Push ownership or require its inputs")
+        })
+        fun inventory(face: InstalledWatchFace? = owned, active: Boolean = true): JSONObject {
+            val receipt = nativeInventoryReceipt(NativeInventoryRead.PUSH)
+            val client = ReadOnlyPush(WatchFaceInventory(listOfNotNull(face), 1)).apply { this.active = active }
+            readNativeOwnedPush(receipt, {}, client)
+            return receipt
+        }
+        val receipt = inventory()
+        val scope = readNativeDatasourcePushScope(renderer, 4L, expected) { receipt }!!
+        assertEquals(owned.slotId, scope.getJSONObject("ownedPush").getString("managerSlotId"))
+        assertEquals(4L, scope.getJSONObject("ownedPush").getLong("versionCode"))
+        assertEquals(renderer.configuration.sha256(), scope.getString("configurationSha256"))
+        assertTrue(scope.getBoolean("active"))
+        // Successful inventory/scope observations are still not a guarded direct-data probe.
+        for (read in listOf(receipt, scope, nativeInventoryReceipt(NativeInventoryRead.PEERS))) {
+            assertThrows(NativePending::class.java) {
+                requireGuardedNativeClientProbe(read, JSONObject())
+            }
+        }
+        for (invalid in listOf(inventory(null), inventory(active = false),
+            inventory(owned.copy(versionCode = 5L)), inventory(owned.copy(slotId = "another-slot")),
+            inventory(owned.copy(packageName = "synthetic.other.face")),
+            inventory().put("inventoryStable", false))) {
+            assertThrows(NativePending::class.java) {
+                readNativeDatasourcePushScope(renderer, 4L, expected) { invalid }
+            }
+        }
+        // A current package version is used as observed; no hardcoded Push 4 cohort is imposed.
+        assertEquals(17L, readNativeDatasourcePushScope(renderer, 17L, expected) {
+            inventory(owned.copy(versionCode = 17L))
+        }!!.getJSONObject("ownedPush").getLong("versionCode"))
+    }
+
+    @Test
     fun independentReadsRequireTheirOwnMethodOptInAndCurrentCallerWithoutHistory() {
         for (read in NativeInventoryRead.entries) {
             val arguments = Bundle().apply {
@@ -182,6 +233,7 @@ class NativeInventoryGuardTest {
         var failAt: String? = null
         var failure: Throwable = SecurityException()
         var activePackage: String? = null
+        var active = false
         private fun call(name: String) { calls += name; if (failAt == name) throw failure }
         private fun unexpected(name: String): Nothing { call(name); error("Unexpected effect: $name") }
         override val sdkInt: Int get() = unexpected("sdkInt")
@@ -192,7 +244,7 @@ class NativeInventoryGuardTest {
             return if (first) inventory else after
         }
         override suspend fun isActive(packageName: String): Boolean {
-            call("active"); activePackage = packageName; return false
+            call("active"); activePackage = packageName; return active
         }
         override fun isSeparateFaceInstalled(): Boolean = unexpected("separate-package")
         override fun openBundle(): WatchFaceBundle = unexpected("open-bundle")

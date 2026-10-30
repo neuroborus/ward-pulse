@@ -4,6 +4,7 @@ import android.app.Instrumentation
 import android.content.ComponentName
 import android.content.SharedPreferences
 import app.wardpulse.wear.data.WatchSummaryStore
+import app.wardpulse.wear.watchface.AndroidWatchFacePushClient
 import java.io.File
 import java.util.UUID
 import org.json.JSONArray
@@ -12,6 +13,29 @@ import org.json.JSONObject
 internal const val DELIVERY_CLASS = "app.wardpulse.wear.nativeintegration.NativeDatasourceTransitionTest"
 
 internal data class NativeDeliveryTarget(val slot: Int, val systemId: Int, val provider: ComponentName)
+
+internal data class NativeDeliveryMapping(val targets: List<NativeDeliveryTarget>, val scopeSha256: String)
+
+/** Current owned-Push scope is relevant only when that package is the active resource. */
+internal fun readNativeDatasourcePushScope(renderer: NativeRenderer, resourceVersion: Long,
+    expected: NativePushExpectations, observe: () -> JSONObject): JSONObject? {
+    if (renderer.resourcePackage != CANDIDATE_PACKAGE) return null
+    val receipt = observe()
+    nativeGuard(receipt.optString("metadataOutcome") == NativeReadOutcome.ACQUIRED.value &&
+        receipt.optBoolean("inventoryStable"), "datasource-owned-push-inventory")
+    val owned = receipt.optJSONObject("ownedPush") ?: throw NativePending("datasource-push-ownership-unavailable")
+    nativeGuard(owned.getString("packageName") == renderer.resourcePackage &&
+        owned.getLong("versionCode") == resourceVersion &&
+        owned.getString("managerSlotId").sha256() == expected.hash("expectedSlotSha256") &&
+        receipt.optBoolean("active"), "datasource-current-owned-push")
+    return JSONObject().put("ownedPush", owned).put("active", true)
+        .put("configurationSha256", renderer.configuration.sha256())
+}
+
+/** Read receipts, manager inventory and peer observations cannot supply this authorization. */
+internal fun requireNativeDatasourceMutation(expected: NativePushExpectations, operation: String) {
+    nativeGuard(expected.required("authorizedOperation") == operation, "datasource-exact-operation-authorization")
+}
 
 /** Compare the entire selected scope, including explicit nulls, types and controller row IDs. */
 internal fun requireNativeDeliveryScope(current: NativeRenderer, before: NativeRenderer) {
@@ -58,7 +82,7 @@ internal fun discoverDeliveryTargets(configs: List<NativeTypedConfig>, before: N
 
 /** Fresh read evidence only. Callers retain separate operation authorization and dispatch custody. */
 internal fun readNativeDeliveryTargets(instrumentation: Instrumentation, expected: NativePushExpectations,
-    intended: NativeRenderer): List<NativeDeliveryTarget> {
+    intended: NativeRenderer): NativeDeliveryMapping {
     val context = instrumentation.targetContext
     val device = NativePushDevice(instrumentation)
     val admission = NativeReadAdmission(instrumentation, expected)
@@ -74,6 +98,20 @@ internal fun readNativeDeliveryTargets(instrumentation: Instrumentation, expecte
         admission.resourceIdentity(intended.resourcePackage) { part, read ->
             operation("$name$part", "installed package identity", read)
         }.also { receipt.put(name, it) }
+    }
+    fun ownedPush(name: String, renderer: NativeRenderer, resources: JSONObject): JSONObject? {
+        if (renderer.resourcePackage != CANDIDATE_PACKAGE) {
+            receipt.put("${name}Scope", JSONObject.NULL)
+            return null
+        }
+        return operation(name, "current caller-owned Push package/version/manager-slot/active/configuration scope") {
+            readNativeDatasourcePushScope(renderer, resources.getJSONObject("resource").getLong("code"), expected) {
+                val inventory = nativeInventoryReceipt(NativeInventoryRead.PUSH)
+                receipt.put(name, inventory)
+                readNativeOwnedPush(inventory, persist, AndroidWatchFacePushClient(context))
+                inventory
+            }.also { receipt.put("${name}Scope", it ?: JSONObject.NULL) }
+        }
     }
     fun face(name: String) = operation(name, "full-eight controller/favorite/facade/native chain") {
         device.readRenderer(expected).also { renderer ->
@@ -98,6 +136,7 @@ internal fun readNativeDeliveryTargets(instrumentation: Instrumentation, expecte
         val before = face("beforeFace")
         requireNativeDeliveryScope(before, intended)
         val resources = resource("beforeResource")
+        val pushScope = ownedPush("beforeOwnedPush", before, resources)
         var configs: List<NativeTypedConfig>? = null
         var failure: Throwable? = null
         try { configs = readNativeTypedConfigs(context, receipt, persist) }
@@ -115,17 +154,28 @@ internal fun readNativeDeliveryTargets(instrumentation: Instrumentation, expecte
             admission.currentIdentity().also { receipt.put("afterIdentity", it) }
         } }
         val afterResources = afterRead { resource("afterResource") }
+        val afterPushScope = afterRead {
+            ownedPush("afterOwnedPush", after ?: throw NativePending("requester-after-face-unavailable"),
+                afterResources ?: throw NativePending("requester-after-resource-unavailable"))
+        }
         return operation("association", "fresh typed/controller/native join; no mutation authority") {
             receipt.put("stableBracket", false)
             failure?.let { throw it }
             val current = after ?: throw NativePending("requester-after-face-unavailable")
             requireNativeDeliveryScope(current, before)
             nativeGuard(afterSystem == beforeSystem && afterIdentity?.toString() == identity.toString() &&
-                afterResources?.toString() == resources.toString(), "requester-identity-bracket-changed")
+                afterResources?.toString() == resources.toString() && afterPushScope?.toString() == pushScope?.toString(),
+                "requester-identity-bracket-changed")
             receipt.put("stableBracket", true)
-            discoverDeliveryTargets(checkNotNull(configs), before, current).also {
-                receipt.put("activeFaceAssociation", "validated typed/controller/native scope; no mutation authority")
-            }
+            val targets = discoverDeliveryTargets(checkNotNull(configs), before, current)
+            val scope = JSONObject().put("identity", identity).put("resources", resources)
+                .put("face", receipt.getJSONObject("beforeFace")).put("push", pushScope ?: JSONObject.NULL)
+                .put("systemScopeSha256", beforeSystem.toString().sha256())
+            val mapping = NativeDeliveryMapping(targets, scope.toString().sha256())
+            receipt.put("activeFaceAssociation", "validated typed/controller/native scope; no mutation authority")
+                .put("scopeSha256", mapping.scopeSha256)
+            persist()
+            mapping
         }
     } catch (failure: Throwable) {
         receipt.put("mappingOutcome", nativeReadFailure(failure).value)
