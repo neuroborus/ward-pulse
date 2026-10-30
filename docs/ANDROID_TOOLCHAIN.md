@@ -858,17 +858,21 @@ bundled face through the ordinary graph:
 ./gradlew :app:assembleDebug
 ```
 
-`wardpulsePushVersionCode` defaults to 3 and accepts a positive Android integer. Keep the
+`wardpulsePushVersionCode` defaults to 5 and accepts a positive Android integer. Keep the
 Push package and certificate identical for N/N+1 development builds. This input belongs to
 the independent Push package; it does not set the Wear host version. The adaptive
-compatibility allocation now uses phone 3/Wear 4/legacy 2/Push 3, all versionName 0.1.0;
-the main-comparison correction advances only Push's default 2→3 without a release cut.
+compatibility allocation now uses phone 3/Wear 4/legacy 2/Push 5, all versionName 0.1.0;
+only the guarded Push default advances 3→5 without a release cut. Preserve historical
+candidate 4 flags/instrumentation, the actual 3→4 journal and all release-bridge guards.
 Preserve the actual old code 1 receipt and unobserved new-Wear4/old-Push1 and explicit 1→2
 steps. Installing Wear 4 was followed by Push 2 before explicit update, with an unknown
-trigger. Require an actual explicit manager update from installed Push 2 to candidate 3;
-if delivery advances unexpectedly, preserve it and independently review a strictly newer
-candidate through this same input. Bundled installation is not explicit-update evidence.
-Follow the [forward-only qualification](product/RELEASE_CHECKLIST.md#adaptive-integration-qualification-2026-10-28);
+trigger; the subsequent 2→3 manager update was also unobserved. The later guarded normal UI
+4→5 Update requires fresh installed Push 4/hash/signer, owned manager slot, eight choices and
+quiet-writer proof with Legacy kept active, returned same-slot identity and separate settled
+retention. Unexpected advancement stops that witness: no code 6, replay, downgrade, reset or
+invented button success. Later retained-Push selection/rendering is separate HOST work;
+bundled installation proves no explicit update or activation.
+Follow the [current qualification](product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30);
 never rebuild a synthetic old baseline, downgrade, reinstall or reset. Follow the central [release version scheme](product/RELEASE_CHECKLIST.md#release-versions)
 and [ordinary release flow](#release-artifact-builds). Release needs both host release
 configuration and separate Push release configuration.
@@ -923,8 +927,8 @@ These produce separate phone and Wear AABs for `app.wardpulse` and a legacy WFF 
 `app.wardpulse.watchface`. Each requires the existing ignored root `key.properties` through
 `wardpulseRequireReleaseKey`. Phone includes the Android Rust build. Wear additionally
 requires separate Push release configuration; its ordinary graph signs and validates the
-Push APK, then embeds the exact APK/token pair. The independent Push version defaults to
-1 for this RC; the debug N/N+1 examples above do not change release metadata. Do not bypass
+Push APK, then embeds the exact APK/token pair. The independent guarded Push default is
+5 for the current integration allocation; this does not prepare a release. Do not bypass
 the guards or override build-name/build-number to conceal source versions.
 
 Follow [local signed-RC acceptance](product/RELEASE_CHECKLIST.md#local-signed-rc) for fresh
@@ -1011,17 +1015,25 @@ Its attribution regressions use private stand-ins for equal and newer normal-sto
 byte equality is not evidence that a test published to normal storage. Actual backing-store
 identity, constructor routing and recording-sink dispatch remain the isolation evidence.
 
-For item12, preserve the original target APK and bundled Push asset 3 through the genuine
-guarded stock-runner Push 3→4 SDK operation, its recorded result and separate settled native
-observation. This route must neither load the isolated application/seam nor launch
-`MainActivity`. Non-installing builds and test-APK-only provisioning are separate from target
-installation. No connected suite, `test-phone-watch-sync`, `run-wear` or other target installer
-may precede that witness. Failure or uncertainty leaves target-installing checks Pending;
-installing the new seam is not recovery. After successful evidence, restoration and retirement
-of that instrumentation owner, rebuild ordinary artifacts without candidate flags, verify
-Wear code 4/bundled asset 3 and compatible signing, then admit target provisioning separately
-from the isolated test bodies' effects. Keep retained Push 4, bindings and active-state checks
-separate from the pre-replacement manager evidence.
+For item12, preserve installed old Round Wear 4/bundled asset 3/Push 4, Legacy active and the
+actual 3→4 journal for the separately admitted typed-API/guard-phase capability scope. Do not
+replay the historical stock witness or install a new target as recovery. Typed SDK/client/
+NodeClient access is unmeasured: the five-key dump stopped at its requester mapping guard
+before client bind, proving no API denial. Target/test-APK provisioning, `just test-wear-device`,
+live phone 1→3/sync and UI Update/selection remain **HELD** until that scope is resolved.
+The unapplied UI guard requires its separately reviewed correction after successful whole
+execution and before new UI acceptance; no API/harness change belongs to this allocation.
+
+The [current qualification](product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30)
+retains all six compatibility cells, Root-reviewed forward-only reconciliation for unavailable
+history, the sole ordered Native FINALIZE inventory and all nine mandatory HOST duties.
+All HOST starts follow whole nine-step DONE, run-owned process retirement, owning CLI exit
+if used and fresh separate public/OS idle; they never gate Native commits. Nontarget full
+`just check-wear`, `just check-watchface`, pure complete `just check-phone` and final docs/
+fixtures/release checks may then run without install/adb or changing installed phone 1.
+Full device tests, both-shape first/separate-settled endpoints/transitions/true-AMBIENT,
+phone retention/sync, recovery and later healthy public guidance/captures remain mandatory.
+Item12 stays open and both extras queued; this allocation claims no check/device acceptance.
 
 Before native work, retain the ordinary warm `just check-wear` and additionally run that
 complete check on a network-capable HOST with `GRADLE_USER_HOME` pointing to a **new, empty,
@@ -1042,12 +1054,20 @@ Do not seed, delete or repurpose shared caches, substitute the saved sources/POM
 resolution, or claim a successful build proves native access. Record resolution/checksum and
 both full outcomes, including failures. These non-installing HOST checks follow whole Runner
 DONE, process retirement, owning CLI exit where applicable and fresh idle ownership; they are
-not Native-commit prerequisites. All remain Pending until executed. After the manager witness,
+not Native-commit prerequisites. All remain Pending until executed. After the separate
+capability/guard scope admits provisioning,
 `just test-wear-device` explicitly provisions the rebuilt seam-bearing target and test APKs
 through `connectedDebugAndroidTest`; verify the retention policy below first, confirm the
 original 40 tests/manual exclusion, then recheck retained Push 4, bindings and active state.
 
 #### Guarded Push witness
+
+**Historical candidate 4 / 3→4 contract.** Keep the flags, instrumentation, original receipts
+and actual one-dispatch journal below unchanged. The installed baseline has since reached
+Push 4 with Legacy active. These historical commands are not authorization to replay the
+operation, repeat its picker selection or replace the old host/asset 3. Current Source 5
+uses the separately guarded normal UI path in the qualification above; all target operations
+remain held for the capability/guard phase. The original prospective procedure follows.
 
 This is HOST-only after whole Runner execution DONE, owned-process retirement, owning CLI
 exit where applicable and fresh separate idle ownership. Source/semantic review is not native
@@ -1200,8 +1220,10 @@ supported-type contracts, without a cross-domain equality or rejection guard. Ac
 and SDK ownership proof still needs HOST execution. Never change choices or inject data to
 manufacture preconditions. Legacy-only evidence cannot verify the inactive Push configuration
 or authorize target replacement. The harness never creates, activates or reselects an instance.
-The single adopted picker selection has already established the current Push 3/wf16 baseline;
-make no new selection during this correction. Original Legacy15 restoration remains Pending.
+The single adopted picker selection established the historical Push 3/wf16 baseline;
+preserve subsequent Push 4/Legacy-active and restoration receipts. Make no new selection
+during this allocation. Original Legacy15 settings/choice restoration still needs independent
+verification; active Legacy alone does not prove it.
 
 Only with the actual Push instance and authoritative selection preconditions established may
 one `updateOwnedPush3To4` invocation dispatch. Successful discovery supplies the selection
@@ -1246,10 +1268,11 @@ normal effective data/restoration independently, retain intended version advance
 this instrumentation owner and preserve private receipts. See
 [native integration ownership](../apps/wear_android/README.md#guarded-native-push-integration).
 
-Only after successful witness, separate settled evidence, restoration and owner retirement
-rebuild ordinary artifacts **without candidate flags**, verify Wear 4/asset 3/signing, and
-admit seam-bearing target provisioning under the policies below. Later rebuilt-host evidence
-cannot replace pre-replacement evidence. The 3→4 witness closes neither the utility button nor
+The historical provisioning gate required successful witness, separate settled evidence,
+restoration and owner retirement before ordinary rebuilding **without candidate flags** and
+Wear 4/asset 3/signing verification. Current Source 5 provisioning remains held under the
+qualification above; preserve the original host/asset for capability work. Later rebuilt-host
+evidence cannot replace pre-replacement evidence. The 3→4 witness closes neither the utility button nor
 missing 1→2/2→3 manager evidence, old-Push1 matrix gaps or UNKNOWN historical causality. All
 unexecuted builds, native routes, effective restoration and visual acceptance remain Pending.
 

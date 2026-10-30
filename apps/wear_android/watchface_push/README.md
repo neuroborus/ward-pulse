@@ -69,22 +69,29 @@ builds the current bundled face:
 ./gradlew :app:assembleDebug
 ```
 
-`wardpulsePushVersionCode` currently defaults to 3 and accepts a positive Kotlin/Android integer.
+`wardpulsePushVersionCode` currently defaults to 5 and accepts a positive Kotlin/Android integer.
 It controls the Push package's independent version history, not the Wear host version.
 The [local product bridge](../../../tools/release/README.md#local-version-preparation) advances
 its default by 1 for a genuine product transition, independently of legacy face codes, and
 mirrors the stable product versionName. An unchanged target does not increment it. Keep the
 package/certificate stable and check actual uploaded history before distribution.
 The [current source versions](../../../docs/product/RELEASE_CHECKLIST.md#release-versions)
-are phone 3/Wear 4/legacy 2/Push 3, all versionName 0.1.0. The main-comparison correction
-advances only Push's guarded default from 2 to 3, without a release cut. In the adaptive
-HOST attempt, installing Wear 4 was followed by Push 2 before any explicit update; the
-trigger is unknown. New-Wear4/old-Push1 and explicit 1→2 were not observed. Preserve those
-receipts and gaps; require a genuine explicit **Update watch face** from installed Push 2
-to candidate 3, or reviewed strictly newer input if delivery advances unexpectedly. Bundled
-installation is not explicit-update evidence. Follow the
-[forward-only acceptance record](../../../docs/product/RELEASE_CHECKLIST.md#adaptive-integration-qualification-2026-10-28);
-do not synthesize an old baseline, downgrade, reinstall or reset retained state.
+are phone 3/Wear 4/legacy 2/Push 5, all versionName 0.1.0. This guarded integration allocation
+advances only Push's default 3→5, without a release cut. The earlier main-comparison correction
+allocated 2→3. In the adaptive HOST attempt, installing Wear 4 was followed by Push 2 before
+any explicit update; the trigger is unknown. New-Wear4/old-Push1 and explicit 1→2 were not
+observed. Preserve those
+receipts and unobserved 1→2/2→3 manager-update gaps, plus the real 3→4 journal. Preserve the
+installed Round Wear 4/asset 3/Push 4 baseline for the separately admitted capability/guard
+scope. A later explicit normal **Update watch face** 4→5 requires fresh installed hash/signer,
+owned slot, eight choices and quiet-writer proof while Legacy stays active; verify returned
+same-slot identity and separate settled retention. Unexpected advancement stops that witness:
+no code 6, replay, downgrade, reset or invented button success. Bundled installation proves
+no explicit update or activation; retained-Push selection/rendering is a separate HOST operation.
+The [current qualification](../../../docs/product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30)
+retains all six compatibility cells, Root-reviewed forward-only reconciliation for unavailable
+history, the sole Native FINALIZE inventory and all nine deferred HOST duties. Item12 stays
+open and both extras queued; this allocation claims no check, device, public or release result.
 For a release artifact, Root uses the existing guarded recipe from the repository root:
 
 ```sh
@@ -174,6 +181,11 @@ and no runtime validator or separate download helper is used.
 
 ## Native integration candidate
 
+This section preserves the historical candidate 4 contract and 3→4 witness procedure, not a
+route to replay against retained Push 4 or deliver Source 5. Keep its flags, instrumentation
+and private journal unchanged. Current target provisioning remains held by the
+[guarded qualification](../../../docs/product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30).
+
 `PrepareNativePushCandidate` in the [host build script](../app/build.gradle.kts) is attached
 only to debug AndroidTest assets when **both** `-PwardpulseNativeCandidate=true` and
 `-PwardpulsePushVersionCode=4` are supplied. A different/missing version with opt-in is
@@ -200,9 +212,9 @@ evidence. The later resource check uses the same verified installed-file result,
 visibility-sensitive application-info lookup. Unavailable archive/signing capability remains
 Pending, independently of candidate validation and file readability.
 
-Candidate 4 is strictly an integration input. Push's default stays 3, Wear 4, phone 3,
-legacy 2 and common versionName 0.1.0; no product release is prepared. A non-installing
-`:app:assembleDebugAndroidTest` may build local dependencies but never authorizes target
+Candidate 4 is strictly the historical integration input; the current guarded default is 5.
+Wear 4, phone 3, legacy 2 and common versionName 0.1.0 remain; no product release is prepared.
+A non-installing `:app:assembleDebugAndroidTest` may build local dependencies but never authorizes target
 installation. Follow the [stock-runner provisioning order](../../../docs/ANDROID_TOOLCHAIN.md#guarded-push-witness):
 only the test APK is installed before the actual baseline-host SDK witness. Keep the original
 installed host and asset 3 intact through the result and separate settled native evidence.

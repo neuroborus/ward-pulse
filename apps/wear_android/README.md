@@ -279,11 +279,25 @@ unscaled text/descriptions and pool colors, with every Parcel recycled in `final
 Existing envelope tests remain separate; this API coverage establishes neither service
 delivery nor WFF paint, and its execution and native acceptance remain **Pending**.
 
-Current packaging is phone 0.1.0+3/Wear 4/legacy 2/Push default 3, all versionNames 0.1.0. Preserve
-package identities, signers and release-tool parity; this is not a release cut. The
+Current packaging is phone 0.1.0+3/Wear 4/legacy 2/Push default 5, all versionNames 0.1.0. Only
+the guarded Push default advances 3→5; preserve package identities, signers, positive property
+validation and release-tool guards. Historical candidate 4 flags/instrumentation and the real
+3→4 journal remain intact; this is not a release cut. The
 [adaptive revision](../../docs/product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count)
 owns required HOST delivery/retained-binding/transition/true-ambient acceptance and deferred
 public captures. Native implementation alone does not close that work.
+
+The [current qualification](../../docs/product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30)
+retains all six Push/Legacy compatibility cells, explicit Root-reviewed forward-only
+reconciliation for unavailable history, the sole Native FINALIZE inventory and all nine HOST
+duties after whole DONE/process retirement/CLI exit/fresh idle. Preserve installed Round
+Wear 4/asset 3/Push 4 with Legacy active for the separately admitted typed-API/guard scope;
+target provisioning/device tests/live phone update/sync/UI Update remain held. Before a later
+normal 4→5 Update, freshly bind installed hash/signer, owned manager slot, eight retained
+choices and quiet writers; verify returned same slot and separate settled retention. Unexpected
+advancement stops the witness: no code 6, replay, downgrade, reset or invented button success.
+Later retained-Push selection/rendering is separate HOST work. Item12 stays open and both
+extras queued; this allocation claims no check, device, public or release result.
 
 ## Watch face setup
 
@@ -389,16 +403,20 @@ across the original six classes, including the distinct multi-owner durable-cons
 
 **Provisioning and acceptance remain Pending.** This runner requires the rebuilt target APK
 containing `MainActivityDependencies`; installing only its test APK cannot isolate the
-baseline host. For item12, first complete the guarded stock-runner Push 3→4 witness against
-the unchanged original host and bundled asset 3, record the result and separate settled native
-observation, restore data and retire that instrumentation owner. Only afterward may ordinary
-artifacts be rebuilt with candidate flags absent and the seam-bearing target be provisioned.
-If that witness fails or is uncertain, preserve the original target and leave default-suite
-acceptance Pending. Do not use a connected suite, `run-wear`, sync recipe or other target
-installer to recover. The stock update route must not load this application or launch
-`MainActivity`. See the [toolchain ordering](../../docs/ANDROID_TOOLCHAIN.md#wear-instrumentation-provisioning-order).
+baseline host. For item12, preserve the original host/asset 3, installed Push 4 and real 3→4
+journal for the separately admitted capability/guard phase. Do not replay the historical
+stock update or use target installation as recovery. Target/default-suite provisioning stays
+held under the [current qualification](../../docs/product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30);
+ordinary Source 5 builds require candidate flags absent. The historical stock route must not
+load this application or launch `MainActivity`. See the
+[toolchain ordering](../../docs/ANDROID_TOOLCHAIN.md#wear-instrumentation-provisioning-order).
 
 ## Guarded native Push integration
+
+The following describes the historical candidate 4/Push 3→4 harness contract. Preserve its
+instrumentation, flags and actual private journal; this is not authorization to replay it
+against installed Push 4. Current Source 5 delivery uses the separately guarded normal UI path
+in the qualification above, with all target operations still held for the capability phase.
 
 `ManualNativeIntegration` marks sixteen additional cases: `NativePushGuardTest` has three
 negative/cleanup cases, including candidate file/FD cleanup on either callback outcome;
@@ -501,8 +519,11 @@ selection of a pre-existing, configured, owned Push 3 instance on the verified c
 deliberate changed baseline; preserve original host 4/asset 3 through the stock witness.
 Follow the [limited procedure](../../docs/ANDROID_TOOLCHAIN.md#guarded-push-witness) and restore
 exact original Legacy selection/settings while retaining intended Push 4. No instance creation,
-SDK/app activation, new permission or binding/style edit is included. That one selection has
-already established the current Push 3/wf16 witness; make no new selection during this correction. Original Legacy15 restoration remains Pending. This HOST
+SDK/app activation, new permission or binding/style edit is included. That one selection
+established the historical Push 3/wf16 witness. Preserve the later installed Push 4/Legacy-active
+baseline and actual restoration receipts; make no new selection during this allocation.
+Original Legacy15 settings/choice restoration still needs independent verification; active
+Legacy alone does not prove it. This HOST
 boundary supplies no native acceptance or retrospective permission for a frozen run.
 
 `AttemptJournal.dispatch` durably arms one SDK call and retains successful or uncertain
@@ -711,8 +732,8 @@ single UiAutomation owner. Unsafe or unverified restoration remains **Pending**.
 No native result is claimed by this implementation. All item12 HOST obligations, public
 capture/browser review and Root's whole zero-findings pass remain Pending. A 3→4 result or
 client bitmap cannot close UNKNOWN historical causality, old-Push1 compatibility gaps,
-missing explicit 1→2/2→3 manager evidence or the utility-button gap. Phone 3/Wear 4/legacy 2/
-Push default 3/common 0.1.0 stay unchanged; candidate 4 is solely a test input.
+missing explicit 1→2/2→3 manager evidence or the utility-button gap. Current Source is phone 3/
+Wear 4/legacy 2/Push default 5/common 0.1.0; candidate 4 remains solely the historical test input.
 
 ## Commands
 

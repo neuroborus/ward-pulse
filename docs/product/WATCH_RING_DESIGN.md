@@ -256,17 +256,26 @@ compatibility is unsupported. The older slot 109 marker incompatibility in
 [Split band](#split-band-revised-2026-09-16) remains: stable service names do not repair it.
 
 **Integration acceptance: known Pending.** Generator output and review art are authored,
-not native acceptance. Packaging is phone 0.1.0+3, Wear 4, legacy 2, Push default 3, all
-versionNames 0.1.0 with identities/signers retained; this is not a release cut. HOST owns
-full builds/official validation/API wire tests, both delivery channels, four installed
-app/face combinations and retained lower bindings/upper choices. The original Push path
+not native acceptance. Current packaging is phone 0.1.0+3, Wear 4, legacy 2, Push default 5,
+all versionNames 0.1.0 with identities/signers retained. Only the guarded default advances
+3→5; historical candidate 4 flags/instrumentation and the real 3→4 journal remain intact.
+This is not a release cut. The
+[current qualification](RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30)
+retains the sole Native FINALIZE inventory, all nine deferred HOST duties and all six cells:
+Push old-old/new-old/new-new and Legacy old-old/old-new/new-new. Unavailable historical cells
+require explicit Root-reviewed forward-only reconciliation; retained 4/final 5 cannot recreate
+them. HOST still owns full builds/official validation/API wire tests, both delivery channels
+and retained lower bindings/upper choices. The original Push path
 required old-old, Wear 2→4 retaining Push 1, then explicit **Update watch face** Push 1→2.
 Installing Wear 4 was instead followed by Push 2 before an explicit update; the trigger
-remains unknown. New-Wear4/old-Push1 and explicit 1→2 remain unobserved gaps. The correction
-advances only the guarded Push default 2→3; require a genuine explicit manager update from
-installed Push 2 to candidate 3. If delivery advances unexpectedly, preserve it and
-independently review a strictly newer candidate through the existing version input. Bundled
-installation is not explicit update. The
+remains unknown. New-Wear4/old-Push1 and explicit 1→2 remain unobserved gaps. The earlier
+correction allocated 2→3 without an observed explicit manager update. Preserve those gaps;
+the current guarded path is a later normal UI 4→5 Update, not replay of the old harness.
+Freshly prove installed Push 4/hash/signer, owned manager slot, eight choices and quiet-writer
+custody while Legacy stays active; verify returned same-slot identity and separate settled
+retention. Unexpected advancement stops that witness: no code 6, replay, downgrade, reset or
+invented button success. Later retained-Push selection/rendering is separate HOST work.
+Bundled installation proves neither explicit update nor activation. The
 [incident qualification](RELEASE_CHECKLIST.md#adaptive-integration-qualification-2026-10-28)
 preserves the original N2 missing-main-paint evidence, its unknown exact native cause and
 forward-only compatibility obligations. Legacy still requires old-old, face 1→2 retaining
@@ -279,7 +288,14 @@ Preserve the actual installed Push 1 receipt separately from the calibration APK
 preadaptive N3 continuity. They have different XML bytes. Ratio-consumer eligibility is
 not XML/pixel/runtime equivalence and supplies no new slot 109 compatibility promise.
 
-After execution DONE, owned-process retirement and fresh public/OS idle, HOST must bind
+Target provisioning/device tests/live phone update/sync/UI Update stay held for the separately
+admitted typed-API/guard scope against preserved Round Wear 4/asset 3/Push 4. Item12 remains
+open and both extras queued. These valid fixtures do not cover malformed/delayed/missing
+delivery, absent-summary or preview blockers. Newly evidenced essential renderer scope issues
+require a concrete reviewed finding; no historical no-renderer-change premise is adopted.
+
+After whole execution DONE, owned-process retirement, owning CLI exit if used and fresh
+separate public/OS idle, HOST must bind
 source/canonical/built/installed/active identities, interactive and true-ambient geometry,
 caps/aperture/clipping/textures/N3 continuity on the smallest round and nonround targets,
 and original transient plus settled frames for N3↔N1/N2, pair appearance/removal,

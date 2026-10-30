@@ -3476,22 +3476,61 @@ before implementation and update the applicable privacy guidance.
 
 ### Adaptive watch-face bands — active integration
 
-**2026-10-29 harness support: native acceptance remains Pending.** The
+**2026-10-30 guarded integration allocation: item12 remains OPEN.** The eight fixture cohorts
+add 46 valid schema9 inputs through the existing private decoder/complication/API tests;
+construction evidence proves neither delivery nor WFF paint. Source now allocates only the
+guarded Push default 3→5, retaining phone 3/Wear 4/Legacy 2, all versionNames 0.1.0, identities,
+signers and release-bridge guards. Historical candidate 4 flags/instrumentation, the real 3→4
+journal and accepted N1 44/22, N2 32/16, N3/legacy 20/10 geometry/Alpha remain unchanged.
+Schema/producer/drawing/storage/delivery behavior is unchanged by these prerequisites.
+Newly evidenced essential scope issues still require concrete reviewed findings; no historical
+no-renderer-change statement is a premise.
+
+The [current qualification](product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30)
+retains the sole ordered Native FINALIZE inventory and all nine mandatory HOST duties.
+All HOST starts follow whole nine-step DONE, run-owned process retirement, owning CLI exit
+if used and fresh separate public/OS idle; none gates Native completion or commits. Nontarget
+full check-wear/check-watchface, pure complete check-phone and final docs/fixtures/release
+checks may then run without install/adb or changing installed phone 1. Target/test-APK
+provisioning, test-wear-device, live phone 1→3/sync and UI Update/selection remain held for
+the separately admitted typed-API/guard scope against preserved Round Wear 4/asset 3/Push 4,
+Legacy active. Typed SDK/client/NodeClient access remains unmeasured; the five-key dump stopped
+before client bind at its requester mapping guard, proving no API denial. No API fix is included.
+
+Before later explicit normal UI Update 4→5, freshly prove installed Push 4/hash/signer,
+owned manager slot, eight retained choices and quiet-writer custody. Keep Legacy active;
+verify returned same-slot identity and separate settled retention through the existing
+validated embedded APK/token/client/UI path. Unexpected advancement stops the witness: no
+code 6, replay, downgrade, reset or invented button success. Later retained-Push selection/
+rendering is separate HOST work, not automatic activation. All six cells remain required:
+Push old-old/new-old/new-new and Legacy old-old/old-new/new-new. Unavailable history needs
+explicit Root-reviewed forward-only reconciliation; retained 4/final 5 cannot recreate it.
+Both-shape first/separate-settled endpoints/transitions/true-AMBIENT, malformed/missing/
+delayed delivery, absent-summary/preview capability, phone preservation/sync, restoration
+and later healthy public guidance/captures remain mandatory and separate from valid fixtures.
+
+Both extras stay queued. The ignored/unapplied UI guard requires delegated correction,
+blind test, whole review, validator/docs checks, Root ZERO and a separate commit after
+successful whole execution and before new UI acceptance. Later time-position work follows
+all previous work and requires visible design/preview plus explicit owner approval before
+implementation. No device, update, public acceptance, release or item12 completion is claimed.
+
+**Historical 2026-10-29 harness support: native acceptance remained Pending.** The
 [guarded client probe](../apps/wear_android/README.md#guarded-complication-client-probe)
 adds test-only watchface-client 1.2.1 existing-instance access and bounded unsupported,
 malformed and partial-map observations. Access, permissions and restoration are capability
 gates, not promised override PASS. Supplied-data bitmaps are separate from ordinary active
-publication, transitions and true ambient. Preserve phone 3/Wear 4/legacy 2/Push default 3/
-common 0.1.0; candidate 4 is a test input. First obtain the genuine baseline-host Push 3→4
-result and separate settled observation/restoration, retire that owner, then provision the
-ordinary rebuilt seam-bearing target and confirm the original isolated 40. Warm and fresh
-task-owned empty-cache/reuse dependency checks, remaining builds/official validation,
-release parity, both shapes/four combinations/transitions, native restoration, healthy public
+publication, transitions and true ambient. That stage retained phone 3/Wear 4/legacy 2/Push
+default 3/common 0.1.0; candidate 4 was a test input. Its prospective order required the
+baseline-host Push 3→4 result, separate settled observation/restoration and owner retirement
+before provisioning the ordinary rebuilt seam-bearing target and confirming the original
+isolated 40. Warm and fresh task-owned empty-cache/reuse dependency checks, remaining builds/official validation,
+release parity, both shapes/compatibility cells/transitions, native restoration, healthy public
 captures, docs/browser and Root whole ZERO remain ordered post-DONE HOST work. This neither
 closes UNKNOWN historical causality nor old-Push1 matrix, explicit 1→2/2→3 manager or utility
 button gaps; the older 2→3 requirement below remains an unobserved historical obligation.
 
-**2026-10-28 status: implementation authored; native integration known Pending.** This
+**Historical 2026-10-28 status: implementation authored; native integration known Pending.** This
 supersedes the earlier post-0.1.0 deferral. The
 [dated design revision](product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count)
 owns automatic 68/32/20 full widths and 34/16/10 halves for resolved N1/N2/N3, retaining
@@ -3517,10 +3556,10 @@ defect is proven; its exact native causal effect is still
 unknown. Corrected native rendering must repeat the original controlled N2 blue/green/teal
 witness, including semantic 37 as VALUE148/MAX400, with actual effective responses and frames.
 
-Source packaging is phone 0.1.0+3/Wear 4/legacy 2/Push default 3, common versionName 0.1.0,
+That correction used phone 0.1.0+3/Wear 4/legacy 2/Push default 3, common versionName 0.1.0,
 with signers/identities and native_state parity preserved. Phone UI, core, providers and
-summary/schema/settings/auth remain unchanged. This is one compatibility change, not a
-release cut; only the guarded Push default advances 2→3 in this correction. Producer JVM,
+summary/schema/settings/auth were unchanged. It was one compatibility change, not a
+release cut; only the guarded Push default advanced 2→3. Producer JVM,
 geometry/admission assertions and focused Android API/wire/Parcel coverage are retained;
 corrected full builds and official/native acceptance remain Pending.
 
@@ -3529,11 +3568,11 @@ where applicable and fresh separate public/OS idle. Preserve original APK receip
 installed history. The original smallest-round Push path required old-old, Wear 2→4 retaining
 Push 1, then explicit **Update watch face** Push 1→2. Installing Wear 4 was followed by Push 2
 before any explicit update; the trigger remains unknown. Original new-Wear4/old-Push1 and
-explicit 1→2 were not observed and remain gaps. Require a genuine explicit manager update
-from installed Push 2 to candidate 3. If delivery advances unexpectedly, preserve it and
-independently review a strictly newer candidate through the existing version input; bundled
-installation cannot prove explicit update. Complete the remaining four-combination duties
-through supported, independently reviewed forward-only reconciliation, preserving the
+explicit 1→2 were not observed and remain gaps. The then-required explicit manager update
+from installed Push 2 to candidate 3 was also unobserved. The current guarded 4→5 path above
+supersedes that prospective operation without closing its gap; bundled installation cannot
+prove explicit update. Complete all six compatibility cells through supported, Root-reviewed
+forward-only reconciliation where historical evidence is unavailable, preserving the
 [incident qualification](product/RELEASE_CHECKLIST.md#adaptive-integration-qualification-2026-10-28).
 On nonround legacy: old-old, face 1→2 retaining
 Wear 2, then Wear 2→4. Verify retained bindings/upper choices/signers and source→canonical→

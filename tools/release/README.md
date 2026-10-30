@@ -143,7 +143,9 @@ phone/Wear/legacy/Push codes `1/2/1/1`; native source files were unchanged. That
 unpublished ledger regeneration, without a native version transition. The later adaptive
 compatibility change initially allocated `3/4/2/2`, retaining `0.1.0`, package/signing identities
 and `native_state`'s enforced Wear = phone + 1 parity. The subsequent structural correction
-sets the current Push default code to `3`; neither change performs a release cut/preparation.
+allocated Push default code `3`; the
+[current guarded allocation](../../docs/product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30)
+advances only Push's default to `5`. These scoped changes do not perform a release cut/preparation.
 HOST read-only `just release-status` against final metadata remains Pending. Root/docs remain
 `0.0.0`; Cargo and Dart metadata are independent.
 Local preparation, generated notes, a tag alone or a draft do not prove publication. Verify

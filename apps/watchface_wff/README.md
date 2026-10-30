@@ -22,7 +22,7 @@ resource-only, signed APK dependency of the Wear app, with `hasCode=false` and m
 There is one scene and one generator; do not copy or hand-edit generated XML or drawables.
 Both packages retain complication and launch targets in the host `app.wardpulse`.
 
-The corrected adaptive face uses legacy code 2 and Push default code 3 with Wear 4
+The guarded integration allocation uses legacy code 2 and Push default code 5 with Wear 4
 and phone 0.1.0+3; every versionName stays 0.1.0. Package/signing identities are preserved.
 This is packaging for in-place updates, not a product release cut. Actual retained-binding,
 legacy/Push update, true-ambient and transition acceptance remains **Pending** under the
@@ -36,7 +36,15 @@ with measured 11/7/9 repeats per sweep, fixed nominal 15.756 caps and alpha 115/
 revision records bounded raster fitting at 450/360/384; independent active/ambient visual
 review and native clipping, aperture, readability and retained-transition acceptance remain
 Pending. Old 68/34 receipts do not accept these new bytes; no version or delivery changes
-are made here.
+were made by that width revision. The current allocation changes only Push's default 3→5;
+historical candidate 4 flags/instrumentation and the real 3→4 journal remain intact.
+The [current qualification](../../docs/product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30)
+records all six compatibility cells and Root-reviewed forward-only reconciliation for
+unavailable history; retained 4/final 5 cannot recreate those cells. It also retains the sole
+Native FINALIZE inventory and all nine post-whole-DONE HOST duties. Target provisioning,
+device tests, live phone update/sync and UI Update remain held for the separate capability/
+guard scope against preserved Round Wear 4/asset 3/Push 4. Item12 remains open and both extras
+queued; no new check, device, public or release acceptance is claimed.
 
 `ringSlot` in `tools/render-watchface.mjs` keeps each main selector and strip beneath one
 named full-canvas Group. Before emission in normal and `--check` modes,
@@ -109,7 +117,7 @@ scale, observing a bounded natural minute before controls. Stop RED for evidence
 recovery; do not substitute a fresh scene, retry or reset. Diagnostic cases remain separately
 qualified. Full HOST validation, isolation, compatibility and recovery obligations remain
 open, along with item #12, adaptive integration and forward-only delivery receipts.
-This candidate authorizes no version bump.
+That renderer candidate authorized no version bump; the later guarded allocation above is separate.
 
 The Wear app minimum is API 33; the phone minimum is unchanged. The Wear app checks Push
 support before using its manager. Supported Wear OS 6+ devices can install the bundled
@@ -145,16 +153,19 @@ Owner signing setup:
 ./gradlew :app:assembleDebug
 ```
 
-The positive `wardpulsePushVersionCode` input defaults to 3. Keep the same Push certificate
+The positive `wardpulsePushVersionCode` input defaults to 5. Keep the same Push certificate
 across versions and outside build outputs so `clean` cannot replace it. Debug and release
 Push signing use separate ignored configuration and must differ from the host certificate.
 See [signing inputs](../wear_android/watchface_push/README.md#signing-inputs) and
 [Push validation ownership](../../docs/ANDROID_TOOLCHAIN.md#watch-face-push-builds).
 Never substitute an APK or token manually. The utility's explicit **Update watch face**
-action updates without activation. Require an observed manager update from installed Push 2
-to candidate 3; a bundled installation cannot prove that operation. The earlier unexpected
-Push advance has an unknown trigger and leaves the original compatibility gaps open in the
-qualification above. See [watch setup](../../docs/product/user-guide/WATCH.md).
+action updates without activation. Before a later explicit 4→5 update, freshly prove installed
+Push 4/hash/signer, its owned manager slot, eight retained choices and quiet-writer custody.
+Keep Legacy active; verify returned same-slot identity and separate settled retention.
+Unexpected advancement stops this witness: no code 6, replay, downgrade, reset or invented
+button success. A bundled installation proves no explicit update. Later retained-Push
+selection/rendering is separate HOST work. Preserve the earlier unknown-trigger advancement
+and unobserved manager-update gaps. See [watch setup](../../docs/product/user-guide/WATCH.md).
 
 Local development acceptance recorded **2026-10-16** includes final legacy WFF2/XML
 validation, generator drift, lint/debug APK/AAB builds, and actual API34/canonical API36
