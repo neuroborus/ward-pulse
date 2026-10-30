@@ -144,6 +144,23 @@ TITLEs, family colors, unscaled text/descriptions and obsolete main/extra `NoDat
 This adds decoder/construction coverage only; execution, service delivery and WFF paint
 remain **Pending**. Existing Android API/Parcel coverage retains its separate scope.
 
+`WatchSummaryStoreTest.n1PairedFixturesKeepIndependentEndpointsAndCutoffs` adds seven
+schema-9 singleton Codex/Spark fixtures: `watch_dashboard_summary_n1_pair_zero_full.json`,
+`watch_dashboard_summary_n1_pair_tiny_near_full.json`,
+`watch_dashboard_summary_n1_pair_below_above.json`,
+`watch_dashboard_summary_n1_pair_above_below.json`,
+`watch_dashboard_summary_n1_pair_near_full_tiny.json`,
+`watch_dashboard_summary_n1_pair_full_zero.json` and
+`watch_dashboard_summary_n1_pair_both_zero.json` under `fixtures/snapshots/`.
+Independent oracles cover decoded pool identities and null Money, MAX200 envelopes,
+Codex/Spark colors, literal `split:spark` zero suffixes, extra ordinal 0/TITLE `0`, and
+obsolete main/ordinal-1 `NoData`. Each half brackets its own N1 22-unit cutoff; a positive
+0.03125 remainder retains VALUE 0.0625 and the ordinary paired TITLE despite `0%` text,
+while the near-full Float stays below MAX despite `100%` text. Exact zero/full endpoints,
+unscaled labels/descriptions and private-store cleanup remain covered. These are
+decoder/construction witnesses; service delivery and WFF paint remain **Pending**.
+Existing ordinary44 zero/tiny/full and paired partial controls keep their separate scope.
+
 Current packaging is phone 0.1.0+3/Wear 4/legacy 2/Push default 3, all versionNames 0.1.0. Preserve
 package identities, signers and release-tool parity; this is not a release cut. The
 [adaptive revision](../../docs/product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count)

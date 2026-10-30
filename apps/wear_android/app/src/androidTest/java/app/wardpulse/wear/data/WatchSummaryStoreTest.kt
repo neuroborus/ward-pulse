@@ -20,6 +20,7 @@ import app.wardpulse.wear.model.PreviewWatchDashboardSummary
 import app.wardpulse.wear.model.ProviderSummary
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.Quantity
+import app.wardpulse.wear.model.RingHalf
 import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.WatchDataMode
 import app.wardpulse.wear.ui.RingFamily
@@ -289,6 +290,159 @@ class WatchSummaryStoreTest {
                     error("$suffix: obsolete extra $ordinal must clear")
                 } is NoDataComplicationData)
             }
+        }
+    }
+
+    /** N1 paired decoder/construction witnesses, independent of delivery and native paint. */
+    @Test
+    fun n1PairedFixturesKeepIndependentEndpointsAndCutoffs() {
+        val expectedUsage = linkedMapOf(
+            "n1_pair_zero_full" to (100.0 to 0.0),
+            "n1_pair_tiny_near_full" to (99.96875 to 0.1),
+            "n1_pair_below_above" to (97.92720222473145 to 98.1661571264267),
+            "n1_pair_above_below" to (97.92720174789429 to 98.16615736484528),
+            "n1_pair_near_full_tiny" to (0.1 to 99.96875),
+            "n1_pair_full_zero" to (0.0 to 100.0),
+            "n1_pair_both_zero" to (100.0 to 100.0),
+        )
+        // Literal wire values in main/extra order, not computed by the production decoder.
+        val expectedValues = mapOf(
+            "n1_pair_zero_full" to listOf(0f, 200f),
+            "n1_pair_tiny_near_full" to listOf(0.0625f, 199.8000030517578f),
+            "n1_pair_below_above" to listOf(4.145595550537109f, 3.6676857471466064f),
+            "n1_pair_above_below" to listOf(4.145596504211426f, 3.6676852703094482f),
+            "n1_pair_near_full_tiny" to listOf(199.8000030517578f, 0.0625f),
+            "n1_pair_full_zero" to listOf(200f, 0f),
+            "n1_pair_both_zero" to listOf(0f, 0f),
+        )
+        val expectedTitles = mapOf(
+            "n1_pair_zero_full" to "split:spark:zero-inner",
+            "n1_pair_tiny_near_full" to "split:spark",
+            "n1_pair_below_above" to "split:spark",
+            "n1_pair_above_below" to "split:spark",
+            "n1_pair_near_full_tiny" to "split:spark",
+            "n1_pair_full_zero" to "split:spark:zero-outer",
+            "n1_pair_both_zero" to "split:spark:zero-both",
+        )
+        val expectedAmounts = mapOf(
+            "n1_pair_zero_full" to listOf("0", "100"),
+            "n1_pair_tiny_near_full" to listOf("0", "100"),
+            "n1_pair_below_above" to listOf("2", "2"),
+            "n1_pair_above_below" to listOf("2", "2"),
+            "n1_pair_near_full_tiny" to listOf("100", "0"),
+            "n1_pair_full_zero" to listOf("100", "0"),
+            "n1_pair_both_zero" to listOf("0", "0"),
+        )
+        val resources = context.resources
+        val now = Instant.EPOCH
+        for ((suffix, usage) in expectedUsage) {
+            val encoded = testContext.assets.open("watch_dashboard_summary_$suffix.json")
+                .bufferedReader()
+                .use { it.readText() }
+            assertTrue(suffix, store.saveEncoded(encoded))
+            val summary = requireNotNull(store.load())
+            val expectedHalf = RingHalf("allowance.codex.spark", "Spark", usage.second, PulseStatus.OK)
+            val expectedRing = RingSummary(
+                "allowance.codex.plan", "Codex plan", usage.first, PulseStatus.OK,
+                split = expectedHalf,
+            )
+            assertEquals(suffix, listOf(expectedRing), summary.rings)
+            assertEquals(9, summary.schemaVersion)
+            assertEquals(WatchDataMode.MOCK, summary.dataMode)
+            assertEquals("2026-06-27T18:42:00.000Z", summary.generatedAt)
+            assertEquals(PulseStatus.OK, summary.overallStatus)
+            assertTrue(summary.manualRefreshAllowed)
+            assertNull(summary.manualRefreshAvailableAt)
+            assertFalse(summary.isStale)
+            assertEquals(
+                PeriodSummary("today", null, null, null, null, null, PulseStatus.UNKNOWN),
+                summary.today,
+            )
+            assertEquals(
+                PeriodSummary("week", null, null, null, null, null, PulseStatus.UNKNOWN),
+                summary.week,
+            )
+            assertEquals(listOf(ProviderSummary("codex", PulseStatus.OK, null)), summary.providers)
+            assertNull(summary.creditsGlance)
+            assertTrue(summary.allowances.isEmpty())
+            assertTrue(summary.alerts.isEmpty())
+
+            val values = expectedValues.getValue(suffix)
+            val amounts = expectedAmounts.getValue(suffix)
+            val mainTitle = expectedTitles.getValue(suffix)
+            val main = ringComplicationData(summary.rings, 0) { ring, remaining, title, count ->
+                assertEquals(expectedRing, ring)
+                assertEquals(values[0] / 2f, remaining)
+                assertEquals(mainTitle, title)
+                assertEquals(1, count)
+                rangedComplicationBuilder(
+                    remaining, title, RingFamily.colorArgb(ring.id),
+                    contentDescription = ring.label,
+                    text = WatchComplicationText.stripLabel(summary, 0),
+                    ringCount = count,
+                ).build()
+            } as RangedValueComplicationData
+            val extra = outerHalfComplicationData(summary.rings, 0) { half, outside, count ->
+                assertEquals(expectedHalf, half)
+                assertEquals(0, outside)
+                assertEquals(1, count)
+                val remaining = WatchComplicationText.remainingPercent(half.usedPercent)
+                assertEquals(values[1] / 2f, remaining)
+                rangedComplicationBuilder(
+                    remaining, outside.toString(), RingFamily.colorArgb(half.id),
+                    contentDescription = half.label, ringCount = count,
+                ).build()
+            } as RangedValueComplicationData
+            for ((pool, data) in listOf(main, extra).withIndex()) {
+                assertEquals(suffix, RangedValueComplicationData.TYPE_UNDEFINED, data.valueType)
+                assertEquals(0f, data.min)
+                assertEquals(200f, data.max)
+                assertEquals(values[pool], data.value)
+                assertEquals(
+                    if (pool == 0) mainTitle else "0",
+                    data.title!!.getTextAt(resources, now).toString(),
+                )
+                assertEquals(
+                    if (pool == 0) "${amounts[0]}% · ${amounts[1]}%" else amounts[1],
+                    data.text!!.getTextAt(resources, now).toString(),
+                )
+                assertEquals(
+                    if (pool == 0) "Codex plan ${amounts[0]}%" else "Spark ${amounts[1]}%",
+                    data.contentDescription!!.getTextAt(resources, now).toString(),
+                )
+                assertEquals(
+                    if (pool == 0) RingFamily.CODEX else RingFamily.CODEX_SPARK,
+                    data.colorRamp!!.colors.single(),
+                )
+            }
+            when (suffix) {
+                "n1_pair_tiny_near_full" -> {
+                    assertTrue(main.value > 0f)
+                    assertTrue(extra.value < extra.max)
+                }
+                "n1_pair_near_full_tiny" -> {
+                    assertTrue(main.value < main.max)
+                    assertTrue(extra.value > 0f)
+                }
+                // Inner 338/22 and extra 382/22 have different two-cap cutoffs.
+                "n1_pair_below_above" -> {
+                    assertTrue(main.value.toDouble() / main.max <= 0.020727979994442904)
+                    assertTrue(extra.value.toDouble() / extra.max > 0.018338427340928037)
+                }
+                "n1_pair_above_below" -> {
+                    assertTrue(main.value.toDouble() / main.max > 0.020727979994442904)
+                    assertTrue(extra.value.toDouble() / extra.max <= 0.018338427340928037)
+                }
+            }
+            for (outside in 1..2) {
+                assertTrue(ringComplicationData(summary.rings, outside) { _, _, _, _ ->
+                    error("$suffix: obsolete main $outside must clear")
+                } is NoDataComplicationData)
+                assertNull(WatchComplicationText.stripLabel(summary, outside))
+            }
+            assertTrue(outerHalfComplicationData(summary.rings, 1) { _, _, _ ->
+                error("$suffix: obsolete extra 1 must clear")
+            } is NoDataComplicationData)
         }
     }
 
