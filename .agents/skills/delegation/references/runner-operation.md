@@ -1,6 +1,7 @@
 # Runner operation contract
 
 Read completely before choosing or operating a Runner route from [delegation](../SKILL.md).
+Use [planning research](planning-research.md) to supply primary evidence and require a concrete repair choice during authoring.
 
 ## Actual execution and checks
 
