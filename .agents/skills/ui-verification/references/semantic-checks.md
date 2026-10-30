@@ -52,10 +52,10 @@ neighboring elements are correct because one detail passed. Verify real circle/s
 Classify the complete original's intended visible mode and settled state before using glyph/ROI measurements.
 Renderer metadata alone does not validate a mixed wake/handoff frame or one covered by an overlay.
 
-Before concluding that an artifact is absent or unchanged, inspect the full affected contour or bounds
-proven to cover its geometry, including displaced caps and paired halves. Zero changed pixels in a narrow
-ROI proves only that ROI. The independent reviewer must challenge ROI adequacy and compare the whole
-footprint before dismissing a native artifact. This comparison alone does not establish a renderer cause.
+Before concluding an artifact is absent or unchanged, inspect bounds proven to cover its full geometry, including displaced caps and paired halves.
+Before interpreting counts, bind RGB/ARGB encoding, channel order and alpha convention to the actual owning candidate constant; record exact probe colors, ROI and scale.
+The independent reviewer must challenge apparent zeros for wrong encoding/color and ROI adequacy. Zero changed pixels in a narrow ROI proves only that ROI; compare the whole footprint before dismissing a native artifact.
+Exact-color counts alone do not prove alpha or geometry. The whole-footprint comparison alone does not establish a renderer cause.
 
 For upper face cells, inspect EVERY rim's full contour and its clearance to neighboring cells, time and
 bands in the original native frame, with a magnified view when needed. Compare original outward lighting
