@@ -1131,8 +1131,8 @@ tests. The three `NativePushGuardTest` cases can separately be explicitly select
 they use memory, private temporary files/descriptors and fixed shell-output fixtures, without
 querying installed packages or accessing the manager/live stores.
 The three update-class cases are manual; together with the three Push guard, five
-datasource, eleven client and six typed-config cases, `IsolatedWearRunner` excludes all
-twenty-eight manual cases and keeps the original default 40 tests.
+datasource, eleven client, six typed-config and eight inventory cases, `IsolatedWearRunner`
+excludes all thirty-six manual cases and keeps the original default 40 tests.
 
 After the system-authority correction, require a fresh complete warm `just check-wear`
 after the last Source fix, rebuild candidate/test-APK provenance, then install only the test
@@ -1457,6 +1457,54 @@ replay or state normalization is authorized. Preserve installed Round Wear4/asse
 from Source/built Push5 and surface genuine target dependencies. Broader native/restoration/
 artifact/compatibility/public acceptance gaps and whole-#12 closure remain pending.
 
+#### Owned Push inventory and connected peers
+
+These are separate later HOST observations on the stock
+`app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner` entry. Select exactly one method
+of `app.wardpulse.wear.nativeintegration.NativeInventoryObservationTest`:
+
+| Method | `wardpulseNativeIntegration` | Private receipt |
+| --- | --- | --- |
+| `observeOwnedPushInventory` | `owned-push` | `files/native_read/owned-push-*/receipt.json` |
+| `observeConnectedPeers` | `connected-peers` | `files/native_read/connected-peers-*/receipt.json` |
+
+Use the stock invocation shape in [Guarded Push witness](#guarded-push-witness), substituting
+the exact class/method and opt-in above. Supply only the independent current caller arguments:
+`expectedAvd`, `expectedFingerprintSha256`, `expectedCallerUid`, `expectedHostVersionCode`,
+`expectedHostApkSha256` and `expectedHostSignerSha256`. Neither route adopts shell authority
+for its API call or requires the historical version-3 probe, journal, bundle, active-face/
+resource/instance join, requester mapping or quiet-bridge inputs. The isolated runner excludes
+both methods. Never run default discovery on the stock runner.
+
+[NativeInventoryObservationTest.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeInventoryObservationTest.kt)
+uses the existing Push wrapper's support/list APIs. Inspect actual caller-owned package/version/
+manager-slot rows, remaining capacity, validation outcomes and the second inventory comparison.
+Only a returned owned WardPulse Push package permits its `isActive` read. An absent package
+leaves active status uninvoked; it is not a measured `false`. Active status and manager slots
+do not establish a native-instance or complication-slot join. Raw invalid/changed inventory
+remains retained with unresolved authority. Push reads use five-second cooperative deadlines.
+
+The peer route directly awaits `NodeClient.connectedNodes` for at most five seconds after
+synchronous task acquisition returns, then records remote ID/display name/nearby fields.
+It never calls `requestRefresh` or a message client. Late completion cannot rewrite a terminal
+receipt; no remote-retirement claim follows. Null, empty, denied/inaccessible, unsupported,
+timeout and ambiguous/domain-unresolved outcomes remain distinct from uninvoked/successful
+reads. Empty peers prove neither quiet writers nor lack of queued/local work, and GMS
+connection-category flags are not peer results. Both routes repeat current caller identity.
+Receipts are private read-only evidence and cannot satisfy override admission.
+
+The six synthetic `NativeInventoryGuardTest` cases can later be explicitly selected by class
+on the stock runner; they do not access the SDK, peers or normal stores. Actual guard execution,
+complete `just check-wear`, artifact/graph renewal and applicable RED→GREEN remain HOST work
+after whole Runner DONE, all owned-process retirement, any owning-CLI exit and fresh separate
+public idle. Watch observations additionally require fresh exact runtime identity/custody,
+reviewed test-only provisioning and cleanup/recovery. Expose a genuine target dependency;
+do not replace a target to manufacture access. No phone action is authorized. Keep installed
+Round Wear4/asset3/Push4 separate from Source/built Push5; Legacy-only Square needs no invented
+Push history. Preserve the historical SDK3→4 journal/settled witness and strict mutation guards.
+Malformed/delayed/missing-main native, restoration, comprehensive artifact/compatibility and
+healthy public acceptance remain pending; no universal PASS, physical-device or #12 closure follows.
+
 #### Guarded complication client probe
 
 Use this later HOST route only after the manager witness/restoration/owner retirement and
@@ -1474,8 +1522,8 @@ actual client access remain separate Pending HOST evidence.
 Select exactly one `NativeComplicationOverrideTest` method on the stock runner with
 `wardpulseNativeIntegration=client-probe`. The three guarded native methods, seven synthetic
 `NativeClientGuardTest` cases and independent metadata observation remain excluded by the
-isolated runner; with the six typed-config cases the manual total is twenty-eight and the
-default total stays 40. The guarded native methods require the same current
+isolated runner; with the six typed-config and eight inventory cases the manual total is
+thirty-six and the default total stays 40. The guarded native methods require the same current
 host/asset/Push/legacy/renderer identity arguments as the
 [datasource probe](#guarded-datasource-observations), plus `managerWitnessReview=complete`,
 `clientArtifactReview=resolved-1.2.1` and `expectedClientArtifactSha256` from the actual resolved

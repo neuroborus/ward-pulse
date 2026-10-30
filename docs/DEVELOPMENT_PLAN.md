@@ -3495,7 +3495,29 @@ checks may then run without install/adb or changing installed phone 1. Target/te
 provisioning, test-wear-device, live phone 1→3/sync and UI Update/selection remain held for
 the separately admitted typed-API/guard scope against preserved Round Wear 4/asset 3/Push 4,
 Legacy active. Typed SDK/client/NodeClient access remains unmeasured; the five-key dump stopped
-before client bind at its requester mapping guard, proving no API denial. No API fix is included.
+before client bind at its requester mapping guard, proving no API denial. Those nine commits
+included no API fix.
+
+**2026-10-30 independent read-only harness:** Source now adds separately selected existing-client
+metadata, typed own-provider configs, caller-owned Push inventory/active status and direct
+`NodeClient.connectedNodes` observations. Current caller UID/package/APK/signer admission is
+independent of historical mutation journals, requester mappings and quiet-bridge evidence;
+read-only receipts cannot authorize overrides. Existing-platform `wear-sdk` compile wiring
+retains SDK/dependency versions and the required-library contract. Actual returned domains
+remain separate, unresolved joins keep raw metadata useful, and empty peers prove no producer
+quiescence. See [Wear observations](../apps/wear_android/README.md#owned-push-inventory-and-connected-peers)
+and [invocation/acceptance boundaries](ANDROID_TOOLCHAIN.md#owned-push-inventory-and-connected-peers).
+The historical SDK3→4 path, one-shot journal and settled witness remain unchanged. Source/built
+Push5 does not identify installed Round Wear4/asset3/Push4; Legacy-only Square needs no fabricated
+Push history. Compilation, guard execution/applicable RED→GREEN, complete Wear checks and renewed
+artifact/graph evidence remain later HOST duties after whole DONE, all owned-process retirement,
+any owning-CLI exit and fresh separate public idle. Reviewed watch observations require fresh
+runtime identity/custody, necessary test-only provisioning and cleanup/recovery; expose real target
+dependencies without target replacement to manufacture access. No phone action is authorized by
+this scope. Malformed/delayed/missing-main native coverage, restoration, comprehensive artifact/
+compatibility and healthy public acceptance remain mandatory and pending. API signatures, metadata,
+ACKs, supplied bitmaps and active paint remain separate; no universal PASS, physical-device
+acceptance or whole-#12 closure follows from Source completion.
 
 Before later explicit normal UI Update 4→5, freshly prove installed Push 4/hash/signer,
 owned manager slot, eight retained choices and quiet-writer custody. Keep Legacy active;

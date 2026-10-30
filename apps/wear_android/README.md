@@ -418,7 +418,7 @@ instrumentation, flags and actual private journal; this is not authorization to 
 against installed Push 4. Current Source 5 delivery uses the separately guarded normal UI path
 in the qualification above, with all target operations still held for the capability phase.
 
-`ManualNativeIntegration` marks twenty-eight additional cases: `NativePushGuardTest` has three
+`ManualNativeIntegration` marks thirty-six additional cases: `NativePushGuardTest` has three
 negative/cleanup cases, including candidate file/FD cleanup on either callback outcome;
 the journal case also exercises System/controller/native discovery fixtures into one fake dispatch.
 Those existing cases additionally reject incomplete/ambiguous installed-path enumeration,
@@ -432,7 +432,7 @@ failure and multiple paths, without querying installed packages. They add no dis
 `updateOwnedPush3To4` and `observeSettledUpdate` cases. The datasource classes below add five,
 and the client classes add eleven (three guarded native methods, seven synthetic guards and
 one independent metadata observation). The typed-config classes add six (one observation and
-five synthetic guards).
+five synthetic guards). The inventory classes add eight (two observations and six synthetic guards).
 `IsolatedWearRunner.onCreate` always
 excludes that annotation, including explicitly selected manual classes. The original default
 inventory remains 40. The stock `androidx.test.runner.AndroidJUnitRunner` entry in the test
@@ -745,6 +745,52 @@ All six typed cases carry `ManualNativeIntegration`; default discovery stays 40.
 actual guard execution, runtime access and later HOST/device acceptance remain pending under
 the same whole-DONE/retirement/fresh-idle boundary above. This does not close #12 or waive its
 malformed/delayed/missing-main native, restoration, artifact/compatibility or public acceptance gaps.
+
+## Owned Push inventory and connected peers
+
+`NativeInventoryObservationTest.observeOwnedPushInventory` and `observeConnectedPeers` are
+individually selected on the stock runner with `wardpulseNativeIntegration=owned-push` and
+`connected-peers`, respectively. Both reuse `NativeReadAdmission` for current caller UID/package/
+APK/signer and supported emulator/image/display. Neither requires a version-3 baseline probe,
+historical journal, candidate bundle, requester mapping, quiet bridge or active-face join. See
+the [inventory invocation](../../docs/ANDROID_TOOLCHAIN.md#owned-push-inventory-and-connected-peers).
+
+`readNativeOwnedPush` calls the existing `AndroidWatchFacePushClient.isSupported` and `list`.
+Private `files/native_read/owned-push-*/receipt.json` receipts retain all returned caller-owned
+package/version/opaque manager-slot rows and remaining capacity before validation. Valid rows
+require positive versions, nonblank packages/slots, unique packages/slots and nonnegative capacity.
+Only a returned owned `app.wardpulse.watchfacepush.main` package authorizes its read-only
+`isActive` query; absent ownership leaves that operation uninvoked, without inventing history.
+Active status is recorded separately from inventory. A second list must retain the same rows
+and capacity, independent of order; changed/invalid returns remain private unresolved evidence.
+Manager slots are not client slots, provider/system IDs, WFF resource IDs or native instances.
+
+`readNativeConnectedPeers` reads `Wearable.getNodeClient(context).connectedNodes` directly.
+Private `files/native_read/connected-peers-*/receipt.json` receipts retain actual remote node IDs,
+display names and nearby flags, separately from GMS connection-category flags. No refresh
+requester or message client is called. Null/empty peers do not establish quiet producers,
+absence of queued/local writers, pairing health or successful phone delivery.
+
+Both observations repeat caller/target identity afterward, keep per-operation invocation,
+target/domain and outcome, and cannot authorize mutation. Push suspend reads have five-second
+cooperative coroutine deadlines; the peer task wait is bounded to five seconds after synchronous
+task acquisition returns. Neither bounds a synchronous platform call nor proves remote retirement.
+Late task completion has no receipt writer. No client/control reference or bundle is acquired.
+Credentials, summaries, selections, jobs, pairing/bridge, permissions and historical evidence
+are preserved; installed Round Wear4/asset3/Push4 remains distinct from Source/built Push5.
+Legacy-only Square may truthfully return no owned Push package.
+
+The six `NativeInventoryGuardTest` cases cover independent admission/read-receipt rejection,
+raw domains and active status, absent ownership, unsupported/denied/timeout outcomes, invalid/
+changed inventories and null/empty/failed peers. The fake Push client rejects every bundle,
+mutation and permission effect. All eight cases carry `ManualNativeIntegration`; the default
+40 remain unchanged. Compilation, actual guard execution and reviewed watch observations are
+later HOST duties after whole DONE, all owned-process retirement, any owning-CLI exit and fresh
+separate public idle. Fresh runtime identity/custody, reviewed test-only provisioning and cleanup/
+recovery precede watch actions; a target dependency must be exposed without target replacement
+to manufacture capability. No phone action is authorized. Malformed/delayed/missing-main native,
+restoration, comprehensive artifact/compatibility and healthy public acceptance remain pending;
+these observations establish neither universal PASS, physical-device acceptance nor #12 closure.
 
 ## Guarded complication client probe
 
