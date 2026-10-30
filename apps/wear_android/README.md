@@ -232,6 +232,26 @@ These are decoder/construction witnesses only; execution, service delivery and W
 remain **Pending**. Legacy MAX100 fixed geometry retains its existing declaration/API coverage;
 these adaptive fixtures provide no legacy-count evidence.
 
+`WatchSummaryStoreTest.n3EndpointFixturesKeepZeroIdentitiesAndPositiveTinyValues` adds six
+schema-9 fixtures under `fixtures/snapshots/`:
+`watch_dashboard_summary_n3_pairs_zero_tiny.json`,
+`watch_dashboard_summary_n3_pairs_tiny_zero.json`,
+`watch_dashboard_summary_n3_outer_pair_zero_tiny.json`,
+`watch_dashboard_summary_n3_outer_pair_tiny_zero.json`,
+`watch_dashboard_summary_n3_full_tiny.json` and `watch_dashboard_summary_n3_zero_tracks.json`.
+Literal oracles cover tightest-first tie order, decoded pool identities, null allowance Money
+and credits, MAX800 values, TITLEs, family colors and unscaled text/descriptions. Zero/tiny
+halves at all three radii retain their split identities and exact zero-side suffixes; positive
+0.03125 remainders keep VALUE 0.25 despite `0%` text. Spark uses ordinal 0/TITLE `2` and Cursor
+Other ordinal 1/TITLE `1` in the two-pair rows; the lone outer Cursor Other uses ordinal 0/
+TITLE `0`, and ordinal 1 clears. Both-zero pairs keep `zero-both` suffixes beside the exhausted
+OpenAI month budget, which retains TITLE `M`, USD 10000/10000 minor units and `$100.00/100`
+text. Following that summary with three ordinary tiny bands in the same private store clears
+both extras as actual `NoData`. The near-full ordinary Float stays below MAX despite `100%`
+text. Obsolete main selection and clear/delete cleanup remain covered. These are
+decoder/construction witnesses only; execution, service delivery and WFF paint remain
+**Pending**. Existing Android API/Parcel coverage retains its separate scope.
+
 Current packaging is phone 0.1.0+3/Wear 4/legacy 2/Push default 3, all versionNames 0.1.0. Preserve
 package identities, signers and release-tool parity; this is not a release cut. The
 [adaptive revision](../../docs/product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count)
