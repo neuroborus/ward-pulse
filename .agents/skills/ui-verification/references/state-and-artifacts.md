@@ -13,11 +13,11 @@ Keep evidence layer-specific. For UI instrumentation, follow [ownership, result 
 | Active rendition | Current foreground app/page or face renderer's resource package and instance. |
 | Effective inputs | Delivered summary/order, provider bindings and live values/TITLE where observable. |
 
-A shared versionName, installed package or successful build does not collapse these into one proof. For WFF,
-distinguish the Wear app from the separate legacy/Push face package. An installed newer Push face is not evidence that the active legacy instance uses it.
+A shared versionName, installed package or successful build does not collapse these into one proof. For WFF, distinguish the Wear app from the separate legacy/Push face package. An installed newer Push face is not evidence that the active legacy instance uses it.
 Static default-provider policy does not prove a retained instance's effective binding.
-
-Record necessary identities before/after the action; never infer an active renderer from the APK most recently built or installed.
+No-clean semantic isolation remains mandatory: prove actual compiled payloads, effective flags, resources and validated signatures; Source BuildConfig, certificate or versionName alone is insufficient. Cross-build signed-APK byte reproducibility is a separate requirement when the task requires it.
+A whole-APK hash change triggers scoped inspection, not an automatic code-regression verdict. Retain failed diagnostics and unknown variation cause; equal ZIP payloads do not prove signing-block-only variation. Semantic equivalence must never waive a required byte-reproducibility gate.
+Record necessary identities before/after the action; never infer an active renderer from the APK most recently built or installed. Preserve the exact actual built→installed→active SHA-256 identity join; payload equivalence never replaces it.
 Before treating a diagnostic observer as feasible or expanding its harness/matrix, verify actual caller UID/package/context,
 service/component and instance scope against pinned official API preconditions/access. Public API does not mean unrestricted cross-package capability.
 Use a bounded actual minimal probe where needed; distinguish contract support, observed results and unknown enforcement.
