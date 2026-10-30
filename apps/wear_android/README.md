@@ -129,6 +129,21 @@ zero, singleton and obsolete NoData. `AdaptiveRangedComplicationTest`, included 
 legacy and adaptive envelopes, endpoints and fractional semantics. Execution and native
 acceptance are **Pending**; no new test/build/device pass is asserted here.
 
+`WatchSummaryStoreTest.creditsAndBudgetFixturesBuildExactComplicationEnvelopes` decodes seven
+canonical schema-9 mock fixtures through its private store, retaining clear/delete cleanup:
+`watch_dashboard_summary_credits_only.json`, `watch_dashboard_summary_plan_credits.json`,
+`watch_dashboard_summary_n1_full_below.json`, `watch_dashboard_summary_n1_full_above.json`,
+`watch_dashboard_summary_n1_week_near_full.json`, `watch_dashboard_summary_n2_week_day.json`
+and `watch_dashboard_summary_n2_month_month.json` under `fixtures/snapshots/`.
+The cohort covers the real credits-only MAX100 row (`500`, Codex color, `credits` TITLE,
+current description `500 100%`), per-family purchased credits (`37% · 320` despite aggregate
+400), both Float neighbors of the N1 full44 cutoff, a near-full weekly MAX200 value that
+rounds to `100%`, reversed week/day radial placement and independent month/month IDs and
+Money at MAX400. Literal oracles cover decoded order and nullable fields, selected IDs,
+TITLEs, family colors, unscaled text/descriptions and obsolete main/extra `NoData`.
+This adds decoder/construction coverage only; execution, service delivery and WFF paint
+remain **Pending**. Existing Android API/Parcel coverage retains its separate scope.
+
 Current packaging is phone 0.1.0+3/Wear 4/legacy 2/Push default 3, all versionNames 0.1.0. Preserve
 package identities, signers and release-tool parity; this is not a release cut. The
 [adaptive revision](../../docs/product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count)

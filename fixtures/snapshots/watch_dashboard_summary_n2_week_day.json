@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 9,
+  "dataMode": "mock",
+  "generatedAt": "2026-06-27T18:42:00.000Z",
+  "overallStatus": "ok",
+  "manualRefreshAllowed": true,
+  "manualRefreshAvailableAt": null,
+  "rings": [
+    {
+      "id": "budget.anthropic.platform.week",
+      "label": "Anthropic week",
+      "usedPercent": 75.0,
+      "status": "ok",
+      "spent": {
+        "minorUnits": 7500,
+        "currency": "USD"
+      },
+      "limit": {
+        "minorUnits": 10000,
+        "currency": "USD"
+      },
+      "split": null
+    },
+    {
+      "id": "budget.openai.platform.today",
+      "label": "OpenAI today",
+      "usedPercent": 40.0,
+      "status": "ok",
+      "spent": {
+        "minorUnits": 4000,
+        "currency": "USD"
+      },
+      "limit": {
+        "minorUnits": 10000,
+        "currency": "USD"
+      },
+      "split": null
+    }
+  ],
+  "creditsGlance": null,
+  "today": {
+    "period": "today",
+    "spent": null,
+    "limit": null,
+    "remaining": null,
+    "usedPercent": null,
+    "projectedTotal": null,
+    "status": "unknown"
+  },
+  "week": {
+    "period": "week",
+    "spent": null,
+    "limit": null,
+    "remaining": null,
+    "usedPercent": null,
+    "projectedTotal": null,
+    "status": "unknown"
+  },
+  "allowances": [],
+  "providers": [
+    {
+      "provider": "claude",
+      "status": "ok",
+      "todaySpent": null
+    },
+    {
+      "provider": "openai",
+      "status": "ok",
+      "todaySpent": null
+    }
+  ],
+  "alerts": [],
+  "isStale": false
+}

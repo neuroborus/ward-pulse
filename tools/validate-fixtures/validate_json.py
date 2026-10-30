@@ -32,6 +32,13 @@ FIXTURE_SCHEMAS = {
     "snapshots/dashboard_alerts.json": "dashboard_snapshot.schema.json",
     "snapshots/watch_dashboard_summary.json": "watch_dashboard_summary.schema.json",
     "snapshots/watch_dashboard_summary_paired.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_credits_only.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_plan_credits.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n1_full_below.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n1_full_above.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n1_week_near_full.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_week_day.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_month_month.json": "watch_dashboard_summary.schema.json",
     "snapshots/plan_recovery.json": "plan_recovery.schema.json",
 }
 
