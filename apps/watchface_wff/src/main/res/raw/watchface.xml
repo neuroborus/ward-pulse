@@ -411,15 +411,12 @@
                                         </PartDraw>
                                         <Condition>
                                             <Expressions>
+                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                                <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008502]]></Expression>
                                                 <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                             </Expressions>
-                                            <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                            <Compare expression="hasRemaining">
-                                        <Condition>
-                                            <Expressions>
-                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                                <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008502]]></Expression>
-                                            </Expressions>
+                                            <!-- First true wins: positive full, tiny, then round partial.
+                                                 Zero retains only the track; no coloured arc or cap is drawn. -->
                                             <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                                  endpoints 0.1 degrees apart in one path. A literal 360-degree
                                                  ROUND sweep historically collapsed to a tip on the watch. -->
@@ -464,7 +461,7 @@
                                                     </Arc>
                                                 </PartDraw>
                                             </Compare>
-                                            <Default>
+                                            <Compare expression="hasRemaining">
                                                 <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                                     <Arc
@@ -483,8 +480,6 @@
                                                             cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
-                                            </Default>
-                                        </Condition>
                                             </Compare>
                                         </Condition>
                                     </Group>
@@ -504,15 +499,12 @@
                                         </PartDraw>
                                         <Condition>
                                             <Expressions>
+                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                                <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.016560]]></Expression>
                                                 <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                             </Expressions>
-                                            <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                            <Compare expression="hasRemaining">
-                                        <Condition>
-                                            <Expressions>
-                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                                <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.016560]]></Expression>
-                                            </Expressions>
+                                            <!-- First true wins: positive full, tiny, then round partial.
+                                                 Zero retains only the track; no coloured arc or cap is drawn. -->
                                             <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                                  endpoints 0.1 degrees apart in one path. A literal 360-degree
                                                  ROUND sweep historically collapsed to a tip on the watch. -->
@@ -557,7 +549,7 @@
                                                     </Arc>
                                                 </PartDraw>
                                             </Compare>
-                                            <Default>
+                                            <Compare expression="hasRemaining">
                                                 <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                                     <Arc
@@ -576,8 +568,6 @@
                                                             cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
-                                            </Default>
-                                        </Condition>
                                             </Compare>
                                         </Condition>
                             <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
@@ -630,15 +620,12 @@
                                         </PartDraw>
                                         <Condition>
                                             <Expressions>
+                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                                <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.03584328980272298]]></Expression>
                                                 <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                             </Expressions>
-                                            <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                            <Compare expression="hasRemaining">
-                                        <Condition>
-                                            <Expressions>
-                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                                <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.03584328980272298]]></Expression>
-                                            </Expressions>
+                                            <!-- First true wins: positive full, tiny, then round partial.
+                                                 Zero retains only the track; no coloured arc or cap is drawn. -->
                                             <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                                  endpoints 0.1 degrees apart in one path. A literal 360-degree
                                                  ROUND sweep historically collapsed to a tip on the watch. -->
@@ -683,7 +670,7 @@
                                                     </Arc>
                                                 </PartDraw>
                                             </Compare>
-                                            <Default>
+                                            <Compare expression="hasRemaining">
                                                 <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                                     <Arc
@@ -702,8 +689,6 @@
                                                             cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
-                                            </Default>
-                                        </Condition>
                                             </Compare>
                                         </Condition>
                                     </Group>
@@ -723,15 +708,12 @@
                                         </PartDraw>
                                         <Condition>
                                             <Expressions>
+                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                                <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.06446235065295916]]></Expression>
                                                 <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                             </Expressions>
-                                            <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                            <Compare expression="hasRemaining">
-                                        <Condition>
-                                            <Expressions>
-                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                                <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.06446235065295916]]></Expression>
-                                            </Expressions>
+                                            <!-- First true wins: positive full, tiny, then round partial.
+                                                 Zero retains only the track; no coloured arc or cap is drawn. -->
                                             <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                                  endpoints 0.1 degrees apart in one path. A literal 360-degree
                                                  ROUND sweep historically collapsed to a tip on the watch. -->
@@ -776,7 +758,7 @@
                                                     </Arc>
                                                 </PartDraw>
                                             </Compare>
-                                            <Default>
+                                            <Compare expression="hasRemaining">
                                                 <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                                     <Arc
@@ -795,8 +777,6 @@
                                                             cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
-                                            </Default>
-                                        </Condition>
                                             </Compare>
                                         </Condition>
                             <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
@@ -849,15 +829,12 @@
                                         </PartDraw>
                                         <Condition>
                                             <Expressions>
+                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                                <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.014337315921089193]]></Expression>
                                                 <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                             </Expressions>
-                                            <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                            <Compare expression="hasRemaining">
-                                        <Condition>
-                                            <Expressions>
-                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                                <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.014337315921089193]]></Expression>
-                                            </Expressions>
+                                            <!-- First true wins: positive full, tiny, then round partial.
+                                                 Zero retains only the track; no coloured arc or cap is drawn. -->
                                             <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                                  endpoints 0.1 degrees apart in one path. A literal 360-degree
                                                  ROUND sweep historically collapsed to a tip on the watch. -->
@@ -902,7 +879,7 @@
                                                     </Arc>
                                                 </PartDraw>
                                             </Compare>
-                                            <Default>
+                                            <Compare expression="hasRemaining">
                                                 <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                                     <Arc
@@ -921,8 +898,6 @@
                                                             cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
-                                            </Default>
-                                        </Condition>
                                             </Compare>
                                         </Condition>
                                     </Group>
@@ -942,15 +917,12 @@
                                         </PartDraw>
                                         <Condition>
                                             <Expressions>
+                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                                <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.02739649902750764]]></Expression>
                                                 <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                             </Expressions>
-                                            <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                            <Compare expression="hasRemaining">
-                                        <Condition>
-                                            <Expressions>
-                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                                <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.02739649902750764]]></Expression>
-                                            </Expressions>
+                                            <!-- First true wins: positive full, tiny, then round partial.
+                                                 Zero retains only the track; no coloured arc or cap is drawn. -->
                                             <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                                  endpoints 0.1 degrees apart in one path. A literal 360-degree
                                                  ROUND sweep historically collapsed to a tip on the watch. -->
@@ -995,7 +967,7 @@
                                                     </Arc>
                                                 </PartDraw>
                                             </Compare>
-                                            <Default>
+                                            <Compare expression="hasRemaining">
                                                 <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                                     <Arc
@@ -1014,8 +986,6 @@
                                                             cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
-                                            </Default>
-                                        </Condition>
                                             </Compare>
                                         </Condition>
                             <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
@@ -1068,15 +1038,12 @@
                                         </PartDraw>
                                         <Condition>
                                             <Expressions>
+                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                                <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008502]]></Expression>
                                                 <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                             </Expressions>
-                                            <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                            <Compare expression="hasRemaining">
-                                        <Condition>
-                                            <Expressions>
-                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                                <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008502]]></Expression>
-                                            </Expressions>
+                                            <!-- First true wins: positive full, tiny, then round partial.
+                                                 Zero retains only the track; no coloured arc or cap is drawn. -->
                                             <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                                  endpoints 0.1 degrees apart in one path. A literal 360-degree
                                                  ROUND sweep historically collapsed to a tip on the watch. -->
@@ -1121,7 +1088,7 @@
                                                     </Arc>
                                                 </PartDraw>
                                             </Compare>
-                                            <Default>
+                                            <Compare expression="hasRemaining">
                                                 <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                                     <Arc
@@ -1140,8 +1107,6 @@
                                                             cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
-                                            </Default>
-                                        </Condition>
                                             </Compare>
                                         </Condition>
                                     </Group>
@@ -1161,15 +1126,12 @@
                                         </PartDraw>
                                         <Condition>
                                             <Expressions>
+                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                                <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.016560]]></Expression>
                                                 <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                             </Expressions>
-                                            <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                            <Compare expression="hasRemaining">
-                                        <Condition>
-                                            <Expressions>
-                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                                <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.016560]]></Expression>
-                                            </Expressions>
+                                            <!-- First true wins: positive full, tiny, then round partial.
+                                                 Zero retains only the track; no coloured arc or cap is drawn. -->
                                             <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                                  endpoints 0.1 degrees apart in one path. A literal 360-degree
                                                  ROUND sweep historically collapsed to a tip on the watch. -->
@@ -1214,7 +1176,7 @@
                                                     </Arc>
                                                 </PartDraw>
                                             </Compare>
-                                            <Default>
+                                            <Compare expression="hasRemaining">
                                                 <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                                     <Arc
@@ -1233,8 +1195,6 @@
                                                             cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
-                                            </Default>
-                                        </Condition>
                                             </Compare>
                                         </Condition>
                             <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
@@ -1608,15 +1568,12 @@
                                         </PartDraw>
                                         <Condition>
                                             <Expressions>
+                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                                <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009780]]></Expression>
                                                 <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                             </Expressions>
-                                            <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                            <Compare expression="hasRemaining">
-                                        <Condition>
-                                            <Expressions>
-                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                                <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009780]]></Expression>
-                                            </Expressions>
+                                            <!-- First true wins: positive full, tiny, then round partial.
+                                                 Zero retains only the track; no coloured arc or cap is drawn. -->
                                             <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                                  endpoints 0.1 degrees apart in one path. A literal 360-degree
                                                  ROUND sweep historically collapsed to a tip on the watch. -->
@@ -1661,7 +1618,7 @@
                                                     </Arc>
                                                 </PartDraw>
                                             </Compare>
-                                            <Default>
+                                            <Compare expression="hasRemaining">
                                                 <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                                     <Arc
@@ -1680,8 +1637,6 @@
                                                             cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
-                                            </Default>
-                                        </Condition>
                                             </Compare>
                                         </Condition>
                                     </Group>
@@ -1701,15 +1656,12 @@
                                         </PartDraw>
                                         <Condition>
                                             <Expressions>
+                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                                <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.018950]]></Expression>
                                                 <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                             </Expressions>
-                                            <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                            <Compare expression="hasRemaining">
-                                        <Condition>
-                                            <Expressions>
-                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                                <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.018950]]></Expression>
-                                            </Expressions>
+                                            <!-- First true wins: positive full, tiny, then round partial.
+                                                 Zero retains only the track; no coloured arc or cap is drawn. -->
                                             <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                                  endpoints 0.1 degrees apart in one path. A literal 360-degree
                                                  ROUND sweep historically collapsed to a tip on the watch. -->
@@ -1754,7 +1706,7 @@
                                                     </Arc>
                                                 </PartDraw>
                                             </Compare>
-                                            <Default>
+                                            <Compare expression="hasRemaining">
                                                 <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                                     <Arc
@@ -1773,8 +1725,6 @@
                                                             cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
-                                            </Default>
-                                        </Condition>
                                             </Compare>
                                         </Condition>
                             <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
@@ -1827,15 +1777,12 @@
                                         </PartDraw>
                                         <Condition>
                                             <Expressions>
+                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                                <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.017949430397332593]]></Expression>
                                                 <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                             </Expressions>
-                                            <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                            <Compare expression="hasRemaining">
-                                        <Condition>
-                                            <Expressions>
-                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                                <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.017949430397332593]]></Expression>
-                                            </Expressions>
+                                            <!-- First true wins: positive full, tiny, then round partial.
+                                                 Zero retains only the track; no coloured arc or cap is drawn. -->
                                             <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                                  endpoints 0.1 degrees apart in one path. A literal 360-degree
                                                  ROUND sweep historically collapsed to a tip on the watch. -->
@@ -1880,7 +1827,7 @@
                                                     </Arc>
                                                 </PartDraw>
                                             </Compare>
-                                            <Default>
+                                            <Compare expression="hasRemaining">
                                                 <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                                     <Arc
@@ -1899,8 +1846,6 @@
                                                             cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
-                                            </Default>
-                                        </Condition>
                                             </Compare>
                                         </Condition>
                                     </Group>
@@ -1920,15 +1865,12 @@
                                         </PartDraw>
                                         <Condition>
                                             <Expressions>
+                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                                <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.03395387607668797]]></Expression>
                                                 <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                             </Expressions>
-                                            <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                            <Compare expression="hasRemaining">
-                                        <Condition>
-                                            <Expressions>
-                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                                <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.03395387607668797]]></Expression>
-                                            </Expressions>
+                                            <!-- First true wins: positive full, tiny, then round partial.
+                                                 Zero retains only the track; no coloured arc or cap is drawn. -->
                                             <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                                  endpoints 0.1 degrees apart in one path. A literal 360-degree
                                                  ROUND sweep historically collapsed to a tip on the watch. -->
@@ -1973,7 +1915,7 @@
                                                     </Arc>
                                                 </PartDraw>
                                             </Compare>
-                                            <Default>
+                                            <Compare expression="hasRemaining">
                                                 <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                                     <Arc
@@ -1992,8 +1934,6 @@
                                                             cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
-                                            </Default>
-                                        </Condition>
                                             </Compare>
                                         </Condition>
                             <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
@@ -2046,15 +1986,12 @@
                                         </PartDraw>
                                         <Condition>
                                             <Expressions>
+                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                                <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009780]]></Expression>
                                                 <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                             </Expressions>
-                                            <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                            <Compare expression="hasRemaining">
-                                        <Condition>
-                                            <Expressions>
-                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                                <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009780]]></Expression>
-                                            </Expressions>
+                                            <!-- First true wins: positive full, tiny, then round partial.
+                                                 Zero retains only the track; no coloured arc or cap is drawn. -->
                                             <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                                  endpoints 0.1 degrees apart in one path. A literal 360-degree
                                                  ROUND sweep historically collapsed to a tip on the watch. -->
@@ -2099,7 +2036,7 @@
                                                     </Arc>
                                                 </PartDraw>
                                             </Compare>
-                                            <Default>
+                                            <Compare expression="hasRemaining">
                                                 <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                                     <Arc
@@ -2118,8 +2055,6 @@
                                                             cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
-                                            </Default>
-                                        </Condition>
                                             </Compare>
                                         </Condition>
                                     </Group>
@@ -2139,15 +2074,12 @@
                                         </PartDraw>
                                         <Condition>
                                             <Expressions>
+                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                                <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.018950]]></Expression>
                                                 <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                             </Expressions>
-                                            <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                            <Compare expression="hasRemaining">
-                                        <Condition>
-                                            <Expressions>
-                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                                <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.018950]]></Expression>
-                                            </Expressions>
+                                            <!-- First true wins: positive full, tiny, then round partial.
+                                                 Zero retains only the track; no coloured arc or cap is drawn. -->
                                             <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                                  endpoints 0.1 degrees apart in one path. A literal 360-degree
                                                  ROUND sweep historically collapsed to a tip on the watch. -->
@@ -2192,7 +2124,7 @@
                                                     </Arc>
                                                 </PartDraw>
                                             </Compare>
-                                            <Default>
+                                            <Compare expression="hasRemaining">
                                                 <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                                     <Arc
@@ -2211,8 +2143,6 @@
                                                             cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
-                                            </Default>
-                                        </Condition>
                                             </Compare>
                                         </Condition>
                             <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
@@ -2585,15 +2515,12 @@
                                         </PartDraw>
                                         <Condition>
                                             <Expressions>
+                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                                <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.011448]]></Expression>
                                                 <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                             </Expressions>
-                                            <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                            <Compare expression="hasRemaining">
-                                        <Condition>
-                                            <Expressions>
-                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                                <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.011448]]></Expression>
-                                            </Expressions>
+                                            <!-- First true wins: positive full, tiny, then round partial.
+                                                 Zero retains only the track; no coloured arc or cap is drawn. -->
                                             <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                                  endpoints 0.1 degrees apart in one path. A literal 360-degree
                                                  ROUND sweep historically collapsed to a tip on the watch. -->
@@ -2638,7 +2565,7 @@
                                                     </Arc>
                                                 </PartDraw>
                                             </Compare>
-                                            <Default>
+                                            <Compare expression="hasRemaining">
                                                 <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                                     <Arc
@@ -2657,8 +2584,6 @@
                                                             cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
-                                            </Default>
-                                        </Condition>
                                             </Compare>
                                         </Condition>
                                     </Group>
@@ -2678,15 +2603,12 @@
                                         </PartDraw>
                                         <Condition>
                                             <Expressions>
+                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                                <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.022117]]></Expression>
                                                 <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                             </Expressions>
-                                            <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                            <Compare expression="hasRemaining">
-                                        <Condition>
-                                            <Expressions>
-                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                                <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.022117]]></Expression>
-                                            </Expressions>
+                                            <!-- First true wins: positive full, tiny, then round partial.
+                                                 Zero retains only the track; no coloured arc or cap is drawn. -->
                                             <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                                  endpoints 0.1 degrees apart in one path. A literal 360-degree
                                                  ROUND sweep historically collapsed to a tip on the watch. -->
@@ -2731,7 +2653,7 @@
                                                     </Arc>
                                                 </PartDraw>
                                             </Compare>
-                                            <Default>
+                                            <Compare expression="hasRemaining">
                                                 <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                                     <Arc
@@ -2750,8 +2672,6 @@
                                                             cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
-                                            </Default>
-                                        </Condition>
                                             </Compare>
                                         </Condition>
                             <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
@@ -2804,15 +2724,12 @@
                                         </PartDraw>
                                         <Condition>
                                             <Expressions>
+                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                                <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.011448]]></Expression>
                                                 <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                             </Expressions>
-                                            <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                            <Compare expression="hasRemaining">
-                                        <Condition>
-                                            <Expressions>
-                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                                <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.011448]]></Expression>
-                                            </Expressions>
+                                            <!-- First true wins: positive full, tiny, then round partial.
+                                                 Zero retains only the track; no coloured arc or cap is drawn. -->
                                             <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                                  endpoints 0.1 degrees apart in one path. A literal 360-degree
                                                  ROUND sweep historically collapsed to a tip on the watch. -->
@@ -2857,7 +2774,7 @@
                                                     </Arc>
                                                 </PartDraw>
                                             </Compare>
-                                            <Default>
+                                            <Compare expression="hasRemaining">
                                                 <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                                     <Arc
@@ -2876,8 +2793,6 @@
                                                             cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
-                                            </Default>
-                                        </Condition>
                                             </Compare>
                                         </Condition>
                                     </Group>
@@ -2897,15 +2812,12 @@
                                         </PartDraw>
                                         <Condition>
                                             <Expressions>
+                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                                <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.022117]]></Expression>
                                                 <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                             </Expressions>
-                                            <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                            <Compare expression="hasRemaining">
-                                        <Condition>
-                                            <Expressions>
-                                                <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                                <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.022117]]></Expression>
-                                            </Expressions>
+                                            <!-- First true wins: positive full, tiny, then round partial.
+                                                 Zero retains only the track; no coloured arc or cap is drawn. -->
                                             <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                                  endpoints 0.1 degrees apart in one path. A literal 360-degree
                                                  ROUND sweep historically collapsed to a tip on the watch. -->
@@ -2950,7 +2862,7 @@
                                                     </Arc>
                                                 </PartDraw>
                                             </Compare>
-                                            <Default>
+                                            <Compare expression="hasRemaining">
                                                 <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                                     <Variant mode="AMBIENT" target="alpha" value="140" />
                                                     <Arc
@@ -2969,8 +2881,6 @@
                                                             cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
-                                            </Default>
-                                        </Condition>
                                             </Compare>
                                         </Condition>
                             <!-- Cut-out: the glyphs are holes, so the arc under them keeps the family colour. -->
@@ -3346,15 +3256,12 @@
                             </PartDraw>
                             <Condition>
                                 <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008058]]></Expression>
                                     <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                 </Expressions>
-                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                <Compare expression="hasRemaining">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008058]]></Expression>
-                                </Expressions>
+                                <!-- First true wins: positive full, tiny, then round partial.
+                                     Zero retains only the track; no coloured arc or cap is drawn. -->
                                 <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                      endpoints 0.1 degrees apart in one path. A literal 360-degree
                                      ROUND sweep historically collapsed to a tip on the watch. -->
@@ -3399,7 +3306,7 @@
                                         </Arc>
                                     </PartDraw>
                                 </Compare>
-                                <Default>
+                                <Compare expression="hasRemaining">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
                                         <Arc
@@ -3418,8 +3325,6 @@
                                                 cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                </Default>
-                            </Condition>
                                 </Compare>
                             </Condition>
                         </Group>
@@ -3439,15 +3344,12 @@
                             </PartDraw>
                             <Condition>
                                 <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009225]]></Expression>
                                     <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                 </Expressions>
-                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                <Compare expression="hasRemaining">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009225]]></Expression>
-                                </Expressions>
+                                <!-- First true wins: positive full, tiny, then round partial.
+                                     Zero retains only the track; no coloured arc or cap is drawn. -->
                                 <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                      endpoints 0.1 degrees apart in one path. A literal 360-degree
                                      ROUND sweep historically collapsed to a tip on the watch. -->
@@ -3492,7 +3394,7 @@
                                         </Arc>
                                     </PartDraw>
                                 </Compare>
-                                <Default>
+                                <Compare expression="hasRemaining">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
                                         <Arc
@@ -3511,8 +3413,6 @@
                                                 cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                </Default>
-                            </Condition>
                                 </Compare>
                             </Condition>
                         </Group>
@@ -3532,15 +3432,12 @@
                             </PartDraw>
                             <Condition>
                                 <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.010670]]></Expression>
                                     <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                 </Expressions>
-                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                <Compare expression="hasRemaining">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.010670]]></Expression>
-                                </Expressions>
+                                <!-- First true wins: positive full, tiny, then round partial.
+                                     Zero retains only the track; no coloured arc or cap is drawn. -->
                                 <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                      endpoints 0.1 degrees apart in one path. A literal 360-degree
                                      ROUND sweep historically collapsed to a tip on the watch. -->
@@ -3585,7 +3482,7 @@
                                         </Arc>
                                     </PartDraw>
                                 </Compare>
-                                <Default>
+                                <Compare expression="hasRemaining">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
                                         <Arc
@@ -3604,8 +3501,6 @@
                                                 cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                </Default>
-                            </Condition>
                                 </Compare>
                             </Condition>
                         </Group>
@@ -3625,15 +3520,12 @@
                             </PartDraw>
                             <Condition>
                                 <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.02928591275354265]]></Expression>
                                     <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                 </Expressions>
-                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                <Compare expression="hasRemaining">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.02928591275354265]]></Expression>
-                                </Expressions>
+                                <!-- First true wins: positive full, tiny, then round partial.
+                                     Zero retains only the track; no coloured arc or cap is drawn. -->
                                 <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                      endpoints 0.1 degrees apart in one path. A literal 360-degree
                                      ROUND sweep historically collapsed to a tip on the watch. -->
@@ -3678,7 +3570,7 @@
                                         </Arc>
                                     </PartDraw>
                                 </Compare>
-                                <Default>
+                                <Compare expression="hasRemaining">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
                                         <Arc
@@ -3697,8 +3589,6 @@
                                                 cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                </Default>
-                            </Condition>
                                 </Compare>
                             </Condition>
                         </Group>
@@ -3718,15 +3608,12 @@
                             </PartDraw>
                             <Condition>
                                 <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.013114754098360656]]></Expression>
                                     <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                 </Expressions>
-                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                <Compare expression="hasRemaining">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.013114754098360656]]></Expression>
-                                </Expressions>
+                                <!-- First true wins: positive full, tiny, then round partial.
+                                     Zero retains only the track; no coloured arc or cap is drawn. -->
                                 <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                      endpoints 0.1 degrees apart in one path. A literal 360-degree
                                      ROUND sweep historically collapsed to a tip on the watch. -->
@@ -3771,7 +3658,7 @@
                                         </Arc>
                                     </PartDraw>
                                 </Compare>
-                                <Default>
+                                <Compare expression="hasRemaining">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
                                         <Arc
@@ -3790,8 +3677,6 @@
                                                 cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                </Default>
-                            </Condition>
                                 </Compare>
                             </Condition>
                         </Group>
@@ -3811,15 +3696,12 @@
                             </PartDraw>
                             <Condition>
                                 <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.01611558766323979]]></Expression>
                                     <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                 </Expressions>
-                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                <Compare expression="hasRemaining">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.01611558766323979]]></Expression>
-                                </Expressions>
+                                <!-- First true wins: positive full, tiny, then round partial.
+                                     Zero retains only the track; no coloured arc or cap is drawn. -->
                                 <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                      endpoints 0.1 degrees apart in one path. A literal 360-degree
                                      ROUND sweep historically collapsed to a tip on the watch. -->
@@ -3864,7 +3746,7 @@
                                         </Arc>
                                     </PartDraw>
                                 </Compare>
-                                <Default>
+                                <Compare expression="hasRemaining">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
                                         <Arc
@@ -3883,8 +3765,6 @@
                                                 cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                </Default>
-                            </Condition>
                                 </Compare>
                             </Condition>
                         </Group>
@@ -3904,15 +3784,12 @@
                             </PartDraw>
                             <Condition>
                                 <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008058]]></Expression>
                                     <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                 </Expressions>
-                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                <Compare expression="hasRemaining">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008058]]></Expression>
-                                </Expressions>
+                                <!-- First true wins: positive full, tiny, then round partial.
+                                     Zero retains only the track; no coloured arc or cap is drawn. -->
                                 <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                      endpoints 0.1 degrees apart in one path. A literal 360-degree
                                      ROUND sweep historically collapsed to a tip on the watch. -->
@@ -3957,7 +3834,7 @@
                                         </Arc>
                                     </PartDraw>
                                 </Compare>
-                                <Default>
+                                <Compare expression="hasRemaining">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
                                         <Arc
@@ -3976,8 +3853,6 @@
                                                 cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                </Default>
-                            </Condition>
                                 </Compare>
                             </Condition>
                         </Group>
@@ -3997,15 +3872,12 @@
                             </PartDraw>
                             <Condition>
                                 <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009225]]></Expression>
                                     <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                 </Expressions>
-                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                <Compare expression="hasRemaining">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009225]]></Expression>
-                                </Expressions>
+                                <!-- First true wins: positive full, tiny, then round partial.
+                                     Zero retains only the track; no coloured arc or cap is drawn. -->
                                 <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                      endpoints 0.1 degrees apart in one path. A literal 360-degree
                                      ROUND sweep historically collapsed to a tip on the watch. -->
@@ -4050,7 +3922,7 @@
                                         </Arc>
                                     </PartDraw>
                                 </Compare>
-                                <Default>
+                                <Compare expression="hasRemaining">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
                                         <Arc
@@ -4069,8 +3941,6 @@
                                                 cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                </Default>
-                            </Condition>
                                 </Compare>
                             </Condition>
                         </Group>
@@ -4090,15 +3960,12 @@
                             </PartDraw>
                             <Condition>
                                 <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.010670]]></Expression>
                                     <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                 </Expressions>
-                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                <Compare expression="hasRemaining">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.010670]]></Expression>
-                                </Expressions>
+                                <!-- First true wins: positive full, tiny, then round partial.
+                                     Zero retains only the track; no coloured arc or cap is drawn. -->
                                 <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                      endpoints 0.1 degrees apart in one path. A literal 360-degree
                                      ROUND sweep historically collapsed to a tip on the watch. -->
@@ -4143,7 +4010,7 @@
                                         </Arc>
                                     </PartDraw>
                                 </Compare>
-                                <Default>
+                                <Compare expression="hasRemaining">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
                                         <Arc
@@ -4162,8 +4029,6 @@
                                                 cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                </Default>
-                            </Condition>
                                 </Compare>
                             </Condition>
                         </Group>
@@ -4220,15 +4085,12 @@
                             </PartDraw>
                             <Condition>
                                 <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008058]]></Expression>
                                     <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                 </Expressions>
-                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                <Compare expression="hasRemaining">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008058]]></Expression>
-                                </Expressions>
+                                <!-- First true wins: positive full, tiny, then round partial.
+                                     Zero retains only the track; no coloured arc or cap is drawn. -->
                                 <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                      endpoints 0.1 degrees apart in one path. A literal 360-degree
                                      ROUND sweep historically collapsed to a tip on the watch. -->
@@ -4273,7 +4135,7 @@
                                         </Arc>
                                     </PartDraw>
                                 </Compare>
-                                <Default>
+                                <Compare expression="hasRemaining">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
                                         <Arc
@@ -4292,8 +4154,6 @@
                                                 cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                </Default>
-                            </Condition>
                                 </Compare>
                             </Condition>
                         </Group>
@@ -4313,15 +4173,12 @@
                             </PartDraw>
                             <Condition>
                                 <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009225]]></Expression>
                                     <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                 </Expressions>
-                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                <Compare expression="hasRemaining">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009225]]></Expression>
-                                </Expressions>
+                                <!-- First true wins: positive full, tiny, then round partial.
+                                     Zero retains only the track; no coloured arc or cap is drawn. -->
                                 <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                      endpoints 0.1 degrees apart in one path. A literal 360-degree
                                      ROUND sweep historically collapsed to a tip on the watch. -->
@@ -4366,7 +4223,7 @@
                                         </Arc>
                                     </PartDraw>
                                 </Compare>
-                                <Default>
+                                <Compare expression="hasRemaining">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
                                         <Arc
@@ -4385,8 +4242,6 @@
                                                 cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                </Default>
-                            </Condition>
                                 </Compare>
                             </Condition>
                         </Group>
@@ -4406,15 +4261,12 @@
                             </PartDraw>
                             <Condition>
                                 <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.013114754098360656]]></Expression>
                                     <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                 </Expressions>
-                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                <Compare expression="hasRemaining">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.013114754098360656]]></Expression>
-                                </Expressions>
+                                <!-- First true wins: positive full, tiny, then round partial.
+                                     Zero retains only the track; no coloured arc or cap is drawn. -->
                                 <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                      endpoints 0.1 degrees apart in one path. A literal 360-degree
                                      ROUND sweep historically collapsed to a tip on the watch. -->
@@ -4459,7 +4311,7 @@
                                         </Arc>
                                     </PartDraw>
                                 </Compare>
-                                <Default>
+                                <Compare expression="hasRemaining">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
                                         <Arc
@@ -4478,8 +4330,6 @@
                                                 cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                </Default>
-                            </Condition>
                                 </Compare>
                             </Condition>
                         </Group>
@@ -4499,15 +4349,12 @@
                             </PartDraw>
                             <Condition>
                                 <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008058]]></Expression>
                                     <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                 </Expressions>
-                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                <Compare expression="hasRemaining">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.008058]]></Expression>
-                                </Expressions>
+                                <!-- First true wins: positive full, tiny, then round partial.
+                                     Zero retains only the track; no coloured arc or cap is drawn. -->
                                 <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                      endpoints 0.1 degrees apart in one path. A literal 360-degree
                                      ROUND sweep historically collapsed to a tip on the watch. -->
@@ -4552,7 +4399,7 @@
                                         </Arc>
                                     </PartDraw>
                                 </Compare>
-                                <Default>
+                                <Compare expression="hasRemaining">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
                                         <Arc
@@ -4571,8 +4418,6 @@
                                                 cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                </Default>
-                            </Condition>
                                 </Compare>
                             </Condition>
                         </Group>
@@ -4592,15 +4437,12 @@
                             </PartDraw>
                             <Condition>
                                 <Expressions>
+                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+                                    <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009225]]></Expression>
                                     <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
                                 </Expressions>
-                                <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-                                <Compare expression="hasRemaining">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-                                    <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= 0.009225]]></Expression>
-                                </Expressions>
+                                <!-- First true wins: positive full, tiny, then round partial.
+                                     Zero retains only the track; no coloured arc or cap is drawn. -->
                                 <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
                                      endpoints 0.1 degrees apart in one path. A literal 360-degree
                                      ROUND sweep historically collapsed to a tip on the watch. -->
@@ -4645,7 +4487,7 @@
                                         </Arc>
                                     </PartDraw>
                                 </Compare>
-                                <Default>
+                                <Compare expression="hasRemaining">
                                     <PartDraw x="0" y="0" width="450" height="450" alpha="255">
                                         <Variant mode="AMBIENT" target="alpha" value="140" />
                                         <Arc
@@ -4664,8 +4506,6 @@
                                                 cap="ROUND" />
                                         </Arc>
                                     </PartDraw>
-                                </Default>
-                            </Condition>
                                 </Compare>
                             </Condition>
                         </Group>

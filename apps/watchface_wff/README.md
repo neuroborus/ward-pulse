@@ -36,6 +36,32 @@ tree per Compare/Default and preserve main selector/strip containment. The basel
 main branches failed this check; corrected generation passes. Native causal effect remains
 unproved; see the [adaptive incident and update qualification](../../docs/product/RELEASE_CHECKLIST.md#adaptive-integration-qualification-2026-10-28).
 
+`bandArcs` now selects paint in one ordered Condition shared by ordinary bands, inner
+halves and both outer-half slots: positive full (`VALUE > 0 && VALUE >= MAX`), positive
+tiny (`VALUE > 0 && VALUE/MAX <=` the existing geometry cutoff), then round partial
+(`VALUE > 0`). The track precedes this selector; zero matches no colored drawing. Each
+branch retains its existing drawing subtree, with a diagnostic-only Default for `PN`.
+`check_band_paints` in `tools/check-watchface-structure.py` evaluates the actual emitted
+predicates in Compare order and checks drawing ownership across every layout and slot,
+including 74/200, zero, representable tiny values, both sides of each cutoff and near/full
+boundaries. Generator assertions retain the published Legacy/N3 rounded cutoffs and
+analytical full-path/clip checks.
+
+The candidate removes one conditional handoff after diagnostic originals showed
+`V74/m0/M200/T0/A1/PN` with no Spark pixels in the measured annulus. The previous Source
+already tested `VALUE > 0`; arithmetic alone does not explain that observation. Ordered
+first-true comparisons support this candidate, while nested Conditions and repeated names
+in separate Conditions remain valid. Runtime cause, the original normal RED's branch and
+pinned-version enforcement remain unproved.
+
+Normal-face acceptance remains **Pending**. After Runner ownership ends, Root must bind
+the actual candidate producer/face artifacts with producer diagnostics disabled, install
+the normal face before guest boot, and run the exact N2 → original/MUTE → N1ordinary →
+N1pair prefix. Correct Spark paint and complete mapping must appear in matched first and
+settled whole originals; diagnostic cases remain separately qualified. Full HOST validation,
+isolation, compatibility and recovery obligations remain open, along with adaptive
+integration and forward-only delivery receipts. This candidate authorizes no version bump.
+
 The Wear app minimum is API 33; the phone minimum is unchanged. The Wear app checks Push
 support before using its manager. Supported Wear OS 6+ devices can install the bundled
 face; WFF 2 devices without Push use separate installation and manual selection. API 33
@@ -107,7 +133,7 @@ XML or textures. Only the opted-in debug variant registers that generated resour
 an ordinary build must ignore it even after an enabled build without cleaning.
 The generator's normal `--check` path also inspects the in-memory diagnostic tree through
 `check_diagnostics` in `tools/check-watchface-structure.py`, including branch containment and
-recovery of the original drawing tree after removing diagnostic additions.
+recovery of the candidate's complete normal tree after removing diagnostic additions.
 
 `N1PairDiagnostics` in the Wear `WatchSummaryComplications.kt` observes the actual returned
 object after the single summary load and existing split selection. Its `WardPulseN1Pair`
@@ -160,8 +186,9 @@ Root alone performs applicable HOST builds, API tests, release and no-clean isol
 after Runner DONE, process retirement, any owning CLI exit and a fresh separate idle
 observation. Consumer-readout acceptance requires official validation of both actual XML
 variants and artifact-identity and isolation checks before deployment. Keep the normal
-producer unchanged with diagnostics disabled and install the diagnostic consumer before guest
-boot. Run only the accepted hash-bound N2 → original → N1ordinary → N1pair prefix, assessing
+producer at corresponding candidate Source/build parity with diagnostics disabled; corrected
+embedded Push resources may change its APK identity. Install the diagnostic consumer before
+guest boot. Run only the accepted hash-bound N2 → original → N1ordinary → N1pair prefix, assessing
 all six cells during its final N1pair stage. Preserve first eligible and separately settled
 original 360px frames and attributable crops; no pilot, extra matrix, post-RED installation or
 retry-until-green. Preserve the original RED and qualify the instrumented case separately,

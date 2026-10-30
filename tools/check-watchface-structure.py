@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Check WFF condition trees in the generator's actual XML on stdin."""
 
+import ast
+import math
+import struct
 import sys
 from copy import deepcopy
 import xml.etree.ElementTree as ET
@@ -58,6 +61,133 @@ def check_structure(root):
             or strip.find(".//PartText") is None
         ):
             errors.append(f"slot {slot_id}: main strip lost its well or label")
+    return errors + check_band_paints(root)
+
+
+def paint_expression(expression):
+    """Parse only the arithmetic/boolean subset emitted by the paint selector."""
+    source = expression.replace("[COMPLICATION.RANGED_VALUE_VALUE]", "value")
+    source = source.replace("[COMPLICATION.RANGED_VALUE_MAX]", "maximum")
+    return ast.parse(source.replace("&&", " and "), mode="eval").body
+
+
+def evaluate_paint(node, value, maximum):
+    if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.And):
+        return all(evaluate_paint(child, value, maximum) for child in node.values)
+    if isinstance(node, ast.Compare) and len(node.ops) == len(node.comparators) == 1:
+        left = evaluate_paint(node.left, value, maximum)
+        right = evaluate_paint(node.comparators[0], value, maximum)
+        if isinstance(node.ops[0], ast.Gt):
+            return left > right
+        if isinstance(node.ops[0], ast.GtE):
+            return left >= right
+        if isinstance(node.ops[0], ast.LtE):
+            return left <= right
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+        return evaluate_paint(node.left, value, maximum) / evaluate_paint(node.right, value, maximum)
+    if isinstance(node, ast.Name) and node.id in ("value", "maximum"):
+        return value if node.id == "value" else maximum
+    if isinstance(node, ast.Constant) and type(node.value) in (int, float):
+        return node.value
+    raise ValueError("unsupported paint expression")
+
+
+def adjacent_float(value, direction):
+    """The neighboring positive wire Float, on either side of a rounded boundary."""
+    bits = struct.unpack("!I", struct.pack("!f", value))[0]
+    return struct.unpack("!f", struct.pack("!I", bits + direction))[0]
+
+
+def check_band_paints(root):
+    errors = []
+    expected = {}
+    for layout, count, maximum in (("Legacy", 3, 100), ("N1", 1, 200),
+                                    ("N2", 2, 400), ("N3", 3, 800)):
+        for index in range(count):
+            for suffix in ("", "Half"):
+                expected[f"ring{index + 1}{layout}{suffix}"] = maximum
+            for slot, ordinal in ((106, 0), (109, 1)):
+                if index < count - ordinal:
+                    expected[f"outerHalf{slot}_{layout}_{index + 1}"] = maximum
+
+    for name, maximum in expected.items():
+        groups = root.findall(f".//Group[@name='{name}']")
+        if len(groups) != 1:
+            errors.append(f"{name}: expected one owning band Group")
+            continue
+        group = groups[0]
+        children = element_children(group)
+        if len(children) < 2 or [child.tag for child in children[:2]] != ["PartDraw", "Condition"]:
+            errors.append(f"{name}: track must precede the single paint selector")
+            continue
+        track, selector = children[:2]
+        track_arc = track.find("Arc")
+        track_stroke = track.find("Arc/Stroke")
+        if track_arc is None or track_stroke is None or track_stroke.attrib.get("color") != "#ff2e3632":
+            errors.append(f"{name}: zero must retain its track")
+            continue
+        expressions = selector.findall("Expressions/Expression")
+        predicates = {item.get("name"): paint_expression(item.text or "") for item in expressions}
+        branches = selector.findall("Compare")
+        if (len(expressions) != 3 or len(predicates) != 3 or len(branches) != 3
+                or {branch.get("expression") for branch in branches} != set(predicates)):
+            errors.append(f"{name}: expected three locally bound paint comparisons")
+            continue
+        kinds = []
+        for branch in branches:
+            draws = list(branch.iter("PartDraw"))
+            arcs = list(branch.iter("Arc"))
+            strokes = list(branch.iter("WeightedStroke"))
+            if len(draws) != 1 or len(arcs) != 1 or len(strokes) != 1 or branch.find(".//Condition") is not None:
+                errors.append(f"{name}: each paint comparison must own one drawing subtree")
+                break
+            draw, arc, stroke = draws[0], arcs[0], strokes[0]
+            transforms = arc.findall("Transform")
+            kind = "tiny" if stroke.get("cap") == "BUTT" else "round" if transforms else "full"
+            kinds.append(kind)
+            if (draw.find("Arc") is not arc or arc.find("WeightedStroke") is not stroke
+                    or draw.get("alpha") != "255"
+                    or draw.find("Variant[@mode='AMBIENT'][@target='alpha'][@value='140']") is None
+                    or stroke.get("colors") != "[COMPLICATION.RANGED_VALUE_COLORS]"
+                    or stroke.get("thickness") != track_stroke.get("thickness")
+                    or stroke.get("cap") != ("BUTT" if kind == "tiny" else "ROUND")
+                    or any(arc.get(key) != track_arc.get(key)
+                           for key in ("centerX", "centerY", "width", "height", "startAngle"))
+                    or len(transforms) != (0 if kind == "full" else 1)
+                    or any(item.get("target") != "startAngle" for item in transforms)):
+                errors.append(f"{name}: paint lost its band geometry, family source or ambient alpha")
+        if kinds != ["full", "tiny", "round"]:
+            errors.append(f"{name}: comparisons must own full, tiny, round drawings in that order")
+            continue
+        if (len(list(group.iter("WeightedStroke"))) != 3
+                or len(list(group.iter("PartDraw"))) != 4
+                or len(list(group.iter("Stroke"))) != 1):
+            errors.append(f"{name}: colored paint escaped its three comparisons")
+        fallback = selector.find("Default")
+        if fallback is not None and (name != "outerHalf106_N1_1" or
+                                    fallback.find("Group[@name='n1Diag_add_paintNone']") is None):
+            errors.append(f"{name}: only the diagnostic no-color fallback is allowed")
+
+        # Use the published geometry boundary independently of the emitted predicates.
+        diameter = float(track_arc.get("width"))
+        thickness = float(track_stroke.get("thickness"))
+        cap = round(thickness / diameter * 180 / math.pi, 2)
+        cutoff = 2 * cap / 359.9
+        if thickness in (10, 20):
+            cutoff = round(cutoff, 6)  # Preserve the Legacy/N3 published rounding.
+        cases = [(0, "none"), (2**-20 * maximum, "tiny"),
+                 (adjacent_float(cutoff * maximum, -1), "tiny"),
+                 (adjacent_float(cutoff * maximum, 1), "round"),
+                 (0.37 * maximum, "round"),  # Exactly 74/200 for N1.
+                 (0.99 * maximum, "round"), (0.996 * maximum, "round"),
+                 (0.999 * maximum, "round"), (adjacent_float(maximum, -1), "round"),
+                 (maximum, "full")]
+        for value, wanted in cases:
+            # WFF uses the first true Compare, not expression declaration order.
+            actual = next((kind for branch, kind in zip(branches, kinds)
+                           if evaluate_paint(predicates[branch.get("expression")], value, maximum)), "none")
+            if actual != wanted:
+                errors.append(f"{name}: {value}/{maximum} selected {actual}, expected {wanted}")
     return errors
 
 
@@ -156,14 +286,13 @@ def check_diagnostics(root, baseline):
         if static_readout(witness) != ("A1" if layout == "N1" else "AO"):
             errors.append(f"{expression}: admission witness must belong to the actual branch")
     n1 = admission.find("Compare[@expression='isN1Band0']/Group")
-    paint = n1.find("Condition/Compare[@expression='hasRemaining']/Condition") if n1 is not None else None
+    paint = n1.find("Condition") if n1 is not None else None
     if paint is None:
         errors.append("N1 original paint selector missing")
     else:
-        for path, name, token in (("Compare[@expression='isFull']", "full", "PF"),
-                                  ("Compare[@expression='isNearEmpty']", "tiny", "PT"),
-                                  ("Default", "round", "PR")):
-            wrapper = paint.find(f"{path}/Group[@name='n1Diag_wrap_{name}']")
+        for branch, (name, token) in zip(paint.findall("Compare"),
+                                         (("full", "PF"), ("tiny", "PT"), ("round", "PR"))):
+            wrapper = branch.find(f"Group[@name='n1Diag_wrap_{name}']")
             if wrapper is None or [child.tag for child in wrapper] != ["PartDraw", "Group"] or (
                 wrapper[1].get("name") != f"n1Diag_add_paint_{name}"
                 or static_readout(wrapper[1]) != token

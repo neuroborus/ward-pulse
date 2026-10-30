@@ -1006,9 +1006,14 @@ function assertLegacyCutoffs() {
   // This Float lies between the analytical and published 336/20 cutoffs.
   // Both the old percentage range and binary-scaled N3 must still select BUTT.
   const percent = Math.fround(1.8949854373931885)
+  const expression = bandArcs(336, 20, '').match(/name="isNearEmpty"><!\[CDATA\[([^\n]+)\]\]>/)?.[1] ?? ''
+  const selectsTiny = new Function('value', 'max', `return ${expression
+    .replaceAll('[COMPLICATION.RANGED_VALUE_VALUE]', 'value')
+    .replaceAll('[COMPLICATION.RANGED_VALUE_MAX]', 'max')}`)
   for (const max of [100, 800]) {
-    const ratio = Math.fround(Math.fround(percent * (max / 100)) / max)
-    if (!(ratio <= emittedCutoff(336, 20))) {
+    const value = Math.fround(percent * (max / 100))
+    const ratio = Math.fround(value / max)
+    if (!(ratio <= emittedCutoff(336, 20)) || !selectsTiny(value, max)) {
       throw new Error(`MAX${max}: the preserved boundary remainder must select BUTT`)
     }
   }
@@ -1087,11 +1092,6 @@ function assertNearExhaustedArcs() {
     const caps = [...markup.matchAll(/cap="(ROUND|BUTT)"/g)].map((match) => match[1])
     if (
       !markup.includes(`<= ${geometry.cutoffLiteral}`) ||
-      !markup.includes('<Compare expression="isNearEmpty">') ||
-      !markup.includes('<Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>') ||
-      !markup.includes('<Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>') ||
-      !markup.includes('<Compare expression="hasRemaining">') ||
-      markup.indexOf(`color="${COLOR.track}"`) >= markup.indexOf('<Compare expression="hasRemaining">') ||
       !markup.includes(`value="${rawStart}"`) ||
       !markup.includes(`* ${SWEEP.end} + ${geometry.cap}`) ||
       caps.join(',') !== 'ROUND,ROUND,BUTT,ROUND'
@@ -1181,15 +1181,12 @@ ${pad}    </Arc>
 ${pad}</PartDraw>
 ${pad}<Condition>
 ${pad}    <Expressions>
+${pad}        <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
+${pad}        <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= ${geometry.cutoffLiteral}]]></Expression>
 ${pad}        <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
 ${pad}    </Expressions>
-${pad}    <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-${pad}    <Compare expression="hasRemaining">
-${pad}<Condition>
-${pad}    <Expressions>
-${pad}        <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-${pad}        <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= ${geometry.cutoffLiteral}]]></Expression>
-${pad}    </Expressions>
+${pad}    <!-- First true wins: positive full, tiny, then round partial.
+${pad}         Zero retains only the track; no coloured arc or cap is drawn. -->
 ${pad}    <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
 ${pad}         endpoints 0.1 degrees apart in one path. A literal 360-degree
 ${pad}         ROUND sweep historically collapsed to a tip on the watch. -->
@@ -1234,7 +1231,7 @@ ${pad}                    cap="BUTT" />
 ${pad}            </Arc>
 ${pad}        </PartDraw>${diagnostics ? n1PaintClose('tiny', 'PT', pad) : ''}
 ${pad}    </Compare>
-${pad}    <Default>
+${pad}    <Compare expression="hasRemaining">
 ${diagnostics ? n1PaintOpen('round', pad) : ''}${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
 ${pad}            <Variant mode="AMBIENT" target="alpha" value="140" />
 ${pad}            <Arc
@@ -1253,8 +1250,6 @@ ${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
 ${pad}                    cap="ROUND" />
 ${pad}            </Arc>
 ${pad}        </PartDraw>${diagnostics ? n1PaintClose('round', 'PR', pad) : ''}
-${pad}    </Default>
-${pad}</Condition>
 ${pad}    </Compare>${diagnostics ? `
 ${pad}    <Default>
 ${n1Witness('paintNone', 'PN', 2, 1)}
