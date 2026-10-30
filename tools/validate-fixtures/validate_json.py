@@ -52,6 +52,12 @@ FIXTURE_SCHEMAS = {
     "snapshots/watch_dashboard_summary_n2_inner_full_above.json": "watch_dashboard_summary.schema.json",
     "snapshots/watch_dashboard_summary_n2_outer_pair_below.json": "watch_dashboard_summary.schema.json",
     "snapshots/watch_dashboard_summary_n2_outer_pair_above.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_pairs_zero_tiny.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_pairs_tiny_zero.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_full_zero_tiny.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_full_tiny_near_full.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_full_full.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_full_zero.json": "watch_dashboard_summary.schema.json",
     "snapshots/plan_recovery.json": "plan_recovery.schema.json",
 }
 

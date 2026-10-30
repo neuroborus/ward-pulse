@@ -177,6 +177,26 @@ and ordinal-1 extra selections clear. Private-store cleanup remains unchanged. T
 decoder/construction witnesses only; execution, service delivery and WFF paint remain
 **Pending**, with Android API/Parcel coverage retaining its separate scope.
 
+`WatchSummaryStoreTest.n2EndpointFixturesKeepBothSplitOrdinalsAndClearObsoleteExtras` adds
+six schema-9 fixtures under `fixtures/snapshots/`:
+`watch_dashboard_summary_n2_pairs_zero_tiny.json`,
+`watch_dashboard_summary_n2_pairs_tiny_zero.json`,
+`watch_dashboard_summary_n2_full_zero_tiny.json`,
+`watch_dashboard_summary_n2_full_tiny_near_full.json`,
+`watch_dashboard_summary_n2_full_full.json` and `watch_dashboard_summary_n2_full_zero.json`.
+Literal oracles cover decoded identities, tightest-first tie order, null Money and credits,
+MAX400 values, TITLEs, family colors and unscaled text/descriptions. Both Codex/Spark and
+Cursor Models/Other orientations retain their true-zero suffixes while positive 0.03125
+remainders keep VALUE 0.125 despite `0%` text. Split ordinal 0 is Spark/TITLE `1`; ordinal 1
+is Other Models/TITLE `0`. Each paired input is followed by an ordinary summary in the same
+private store, clearing both extras as actual `NoData` without changing the band count.
+Together with the month/month fixture, the ordinary32 inputs cover zero, tiny, near-full
+and full at both radii; near-full stays below MAX despite `100%` text. Obsolete main
+selection and clear/delete cleanup remain covered. Existing paired16 partial/full/near-full
+controls retain their separate scope. These are decoder/construction witnesses only;
+execution, service delivery and WFF paint remain **Pending**. Android API/Parcel coverage
+retains its separate scope.
+
 Current packaging is phone 0.1.0+3/Wear 4/legacy 2/Push default 3, all versionNames 0.1.0. Preserve
 package identities, signers and release-tool parity; this is not a release cut. The
 [adaptive revision](../../docs/product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count)
