@@ -14,6 +14,9 @@ description: Post-change finalization checklist for WardPulse (Rust core, Flutte
 Complete the applicable sections below; read their linked checklists before deciding what
 applies. Runner steps also follow [agent-runner.md](agent-runner.md) for the task-authoritative
 Native/HOST division. These routes do not waive checks or change authorship/commit authority.
+For Runner review roles, apply the current [owner-selected mode](../delegation/references/owner-selected-mode.md)
+over older independent-Reviewer wording in linked references; coordinator and delegated
+design/documentation reviews remain independent.
 
 ## 1. Scope Review
 

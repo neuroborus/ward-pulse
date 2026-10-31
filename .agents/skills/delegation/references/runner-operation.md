@@ -6,8 +6,8 @@ Use [planning research](planning-research.md) to supply primary evidence and req
 ## Actual execution and checks
 
 Use `plan-authoring` followed by `plan-execution` by default. Code must be authored by an actual
-Agent Runner code-producing execution step and pass the pipeline's independent review steps;
-an approved plan or an author's self-review is not execution or independent review. Outside
+Agent Runner code-producing execution step and pass the [owner-selected mode's](owner-selected-mode.md) required verification;
+an approved plan or self-review is not code-producing execution or independent review. Outside
 Runner, supply requirements, measurements, findings and acceptance criteria, not a prewritten
 implementation patch for Runner merely to apply. Subagents may coordinate, operate, read and
 review Runner work, but may not implement it independently.
@@ -57,9 +57,9 @@ every alias the pipeline needs. Trusted commands execute in the project director
 the runner's environment. `local.properties` in each Android module removes the `ANDROID_HOME`
 dependency for Gradle.
 
-Explicitly select the task-required supported mode; descriptor defaults do not prove effective configuration.
-Verify the resolved mode before accepting work or review; `lazy` cannot satisfy required independent review.
-Use a supported stop on mismatch; a matching mode alone does not prove the required independent review gates.
+Until the owner changes the [2026-10-31 direction](owner-selected-mode.md), explicitly select `lazy` for every fresh `plan-authoring`, `plan-execution` and `polishing` run.
+Verify the resolved mode; defaults are insufficient. Lazy self-review/Worker confirmation is not independent Reviewer evidence.
+Use a supported stop on mismatch; preserve required checks and the coordinator's full independent ZERO.
 
 Before a fresh start, reconcile one self-contained role-facing task/context against the current scoped Native
 catalogue and changed guarantees. Identify its complete Runner Native `requiredChecks` inventory separately

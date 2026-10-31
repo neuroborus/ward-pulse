@@ -14,7 +14,7 @@ This is the owner's standing instruction, clarified 2026-10-13.
 | Work | Owner | Coordinator's job |
 | --- | --- | --- |
 | Design: locked baselines, visual language, mocks, review art | A subagent | Verify to zero findings |
-| Code: source, tests, schemas, build/tool scripts, generator source | Agent Runner execution and independent review steps | Verify to zero findings |
+| Code: source, tests, schemas, build/tool scripts, generator source | Agent Runner execution under the [owner-selected mode](references/owner-selected-mode.md) | Verify to zero findings |
 | Documentation and workflow prose | A delegated subagent | Verify to zero findings |
 | Measurement, device capture, reading sources, running checks | Coordinator | — |
 | Deciding what to build | Owner | Put the choice in front of them |
@@ -30,7 +30,7 @@ That reference owns cohesive commit planning and the coordinating worktree's int
 
 Before choosing or operating a Runner route, read the complete
 [Runner operation contract](references/runner-operation.md). It preserves actual execution
-and independent review, default pipelines, commit boundaries, explicit Native/HOST gates,
+under the [owner-selected mode](references/owner-selected-mode.md), default pipelines, commit boundaries, explicit Native/HOST gates,
 frozen configuration, backend-upgrade recovery and command-alias ownership.
 Outside Runner supply requirements, measurements, findings and acceptance criteria, never
 a prewritten implementation patch or a standalone code fallback.
