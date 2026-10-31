@@ -3,10 +3,12 @@ package app.wardpulse.wear.nativeintegration
 import android.content.Context
 import android.graphics.Bitmap
 import android.os.Bundle
+import android.support.wearable.complications.ComplicationData as WireComplicationData
 import android.view.accessibility.AccessibilityEvent
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester
+import app.wardpulse.wear.data.WatchSummaryStore
 import java.io.File
 import java.time.Instant
 import java.util.concurrent.TimeoutException
@@ -206,6 +208,153 @@ class NativeDatasourceTransitionTest {
         report("Separate restoration original recorded; data provenance, newer-write reconciliation and visual acceptance Pending.")
     }
 
+    /** Separate once-only API36 capability evidence; no update is attempted here. */
+    @Test
+    fun probeDirectCapability() = sanitized {
+        admitDirect("probeDirectCapability")
+        nativeGuard(expected.required("firstFrameReview") == "complete-unobscured", "sdk-direct-first-review")
+        val probe = NativeDatasourceProbe(root, expected.required("deliveryProbeId"))
+        val before = renderer()
+        val mapping = mappings(before)
+        val scope = probeScope(before, mapping)
+        val selected = probe.reviewed(scope, expected.hash("expectedDeliveryProbeSha256"),
+            expected.hash("expectedReviewedFrameSha256"))
+        val directory = File(probe.directory, "sdk-direct-capability")
+        nativeGuard(directory.mkdir(), "single-sdk-direct-capability")
+        val receipt = nativeSdkDirectCapabilityReceipt(scope, selected)
+        val persist = { AttemptJournal(File(directory, "receipt.json")).persist(receipt) }
+        persist()
+        readNativeSdkDirectManager(target, receipt, persist)
+        val current = renderer()
+        requireRetained(current, before)
+        nativeGuard(probeScope(current, mappings(current)) == scope, "sdk-direct-capability-scope-changed")
+        receipt.put("stableScope", true)
+        persist()
+        report("API36 availability/acquisition recorded separately; update, effective data and paint remain Pending.")
+    }
+
+    /** Exactly one authorized finite SDK scenario; no summary writes, client or renderer replacement. */
+    @Test
+    fun observeDirectData() = sanitized {
+        admitDirect("observeDirectData")
+        val scenario = expected.required("directScenario")
+        requireNativeSdkDirectAuthorization(expected, scenario)
+        val probe = NativeDatasourceProbe(root, expected.required("deliveryProbeId"))
+        val before = renderer()
+        val mapping = mappings(before)
+        val scope = probeScope(before, mapping)
+        val selected = probe.reviewed(scope, expected.hash("expectedDeliveryProbeSha256"),
+            expected.hash("expectedReviewedFrameSha256"))
+        val capabilityHash = expected.hash("expectedDirectCapabilitySha256")
+        requireNativeSdkDirectCapability(File(probe.directory, "sdk-direct-capability/receipt.json"),
+            capabilityHash, scope, selected)
+        quietBridge()
+        requireNativeNormalRecovery(target, expected, mapping)
+        requirePriorRecovery()
+        val directory = File(root, "sdk-$scenario")
+        nativeGuard(directory.mkdir(), "single-sdk-direct-case")
+        val receipt = scope.json().put("kind", "sdk-direct-data").put("scenario", scenario)
+            .put("deliveryProbeId", selected.id).put("reviewedProbeSha256", selected.receiptSha256)
+            .put("reviewedFirstFrameSha256", selected.frameSha256).put("capabilitySha256", capabilityHash)
+            .put("authorizedOperation", "observeDirectData:$scenario").put("directArmed", false)
+            .put("effectiveData", "Pending").put("nativePaint", "Pending; independent original-frame review required")
+        val persist = { AttemptJournal(File(directory, "receipt.json")).persist(receipt) }
+        persist()
+        AttemptJournal(File(root, "latest.json")).persist(JSONObject().put("case", directory.name))
+        try {
+            val summary = checkNotNull(normalSummary())
+            File(directory, "summary.bin").outputStream().use {
+                it.write(summary.toByteArray(Charsets.UTF_8)); it.flush(); it.fd.sync()
+            }
+            receipt.put("referenceSummarySha256", summary.sha256())
+            persist()
+            val updates = constructNativeSdkDirectData(scenario, mapping.targets, receipt, persist)
+            nativeGuard(updates.all { before.selections?.configuredTypes?.get(it.target.slot) ==
+                WireComplicationData.TYPE_RANGED_VALUE }, "sdk-direct-ranged-configured-targets")
+            val updater = readNativeSdkDirectManager(target, receipt, persist)
+            observe(directory, "before", before)
+            dispatchNativeSdkDirectData(updates, receipt, persist, validate = { row ->
+                quietBridge()
+                val current = renderer()
+                requireRetained(current, before)
+                val fresh = mappings(current)
+                nativeGuard(row in fresh.targets && probeScope(current, fresh) == scope, "sdk-direct-fresh-full-scope")
+                nativeGuard(normalSummary() == summary, "sdk-direct-producer-changed-before-call")
+            }, updater = updater, recover = { armed ->
+                val calls = JSONArray()
+                receipt.put("cleanupRequest", "normal targeted recovery Pending").put("cleanupCalls", calls)
+                // requestNativeDelivery attempts remaining independent provider groups after a failure.
+                requestNativeDelivery(mapping.targets, armed, calls, persist, validate = {
+                    quietBridge()
+                    val current = renderer()
+                    requireRetained(current, before)
+                    val fresh = mappings(current)
+                    nativeGuard(probeScope(current, fresh) == scope, "sdk-direct-recovery-scope")
+                    val live = checkNotNull(normalSummary())
+                    receipt.put("cleanupSummaryPresent", true).put("cleanupSummarySha256", live.sha256())
+                        .put("newerProducerObserved", receipt.optBoolean("newerProducerObserved") || live != summary)
+                    persist()
+                    fresh.targets
+                }, recovery = true) { provider, ids ->
+                    ComplicationDataSourceUpdateRequester.create(target, provider).requestUpdate(*ids)
+                }
+                receipt.put("cleanupRequest", "normal requestUpdate returned; effective restoration Pending")
+                persist()
+                observe(directory, "restoration-immediate", retained(before, mapping.targets))
+            }, observe = { index ->
+                observe(directory, "direct-$index-bounded", retained(before, mapping.targets))
+                receipt.put("effectiveData", "private bounded native records; causality and semantic review Pending")
+                persist()
+            })
+        } catch (failure: Throwable) {
+            receipt.put("outcome", "Pending").put("failure", nativeReadFailure(failure).value)
+            try { persist() } catch (recording: Throwable) { failure.addSuppressed(recording) }
+            throw failure
+        }
+        report("Finite SDK observation recorded; sequential calls provide no pair atomicity. Later normal restoration and HOST review Pending.")
+    }
+
+    /** Separate later observation, after independent normal recovery; never replays a direct call. */
+    @Test
+    fun observeDirectRestoration() = sanitized {
+        admitDirect("observeDirectRestoration")
+        val scenario = expected.required("directScenario")
+        nativeGuard(scenario in nativeSdkDirectScenarios, "sdk-direct-scenario")
+        val directory = File(root, "sdk-$scenario")
+        val journal = AttemptJournal(File(directory, "receipt.json"))
+        val receipt = journal.read()
+        nativeGuard(receipt.optBoolean("directArmed") && !receipt.has("laterRestoration") &&
+            receipt.optString("cleanupRequest") == "normal requestUpdate returned; effective restoration Pending",
+            "single-sdk-direct-later-restoration")
+        receipt.put("laterRestoration", "armed; native observation Pending")
+        journal.persist(receipt)
+        val current = renderer()
+        val mapping = mappings(current)
+        val scope = probeScope(current, mapping).json()
+        scope.keys().forEach { key ->
+            nativeGuard(receipt.opt(key) == scope.get(key), "sdk-direct-restoration-scope")
+        }
+        val live = checkNotNull(normalSummary())
+        observe(directory, "restoration-later", current)
+        receipt.put("laterRestoration", "recorded; original-frame inspection and response provenance Pending")
+            .put("cleanupSummaryStillCurrent", live.sha256() == receipt.getString("cleanupSummarySha256"))
+            .put("restorationComparison", "reconcile current normal data and newer publications; HOST review Pending")
+        journal.persist(receipt)
+        report("Separate later original recorded; effective normal restoration, retained state and visual acceptance Pending.")
+    }
+
+    private fun admitDirect(method: String) {
+        NativeReadAdmission(instrumentation, expected).admit(method, DELIVERY_CLASS, "sdk-direct-data")
+    }
+
+    private fun normalSummary(): String? {
+        val preferences = target.getSharedPreferences("watch_summary", Context.MODE_PRIVATE)
+        val encoded = preferences.getString("latest", null)
+        nativeGuard(encoded != null && WatchSummaryStore(target).load() != null &&
+            preferences.getString("latest", null) == encoded, "sdk-direct-current-normal-data")
+        return encoded
+    }
+
     private fun admit(method: String) {
         NativeReadAdmission(instrumentation, expected).admit(method, DELIVERY_CLASS, "normal-delivery")
     }
@@ -219,9 +368,22 @@ class NativeDatasourceTransitionTest {
         val latest = AttemptJournal(File(root, "latest.json"))
         if (!latest.exists()) return
         val scenario = latest.read().getString("case")
-        nativeGuard(scenario in setOf("normal", "delayed", "obsolete", "recovery"), "prior-delivery-case")
+        val sdk = scenario in nativeSdkDirectScenarios.map { "sdk-$it" }
+        nativeGuard(sdk || scenario in setOf("normal", "delayed", "obsolete", "recovery"), "prior-delivery-case")
         val file = File(root, "$scenario/receipt.json")
         val receipt = AttemptJournal(file).read()
+        if (sdk) {
+            nativeGuard(receipt.optString("kind") == "sdk-direct-data", "prior-sdk-direct-case")
+            // A constructor rejection has no dispatch/recovery effect to observe. It still needs exact review.
+            if (!receipt.optBoolean("directArmed") && receipt.optString("construction") ==
+                "SDK rejected; no dispatch or renderer effect established") {
+                nativeGuard(expected.required("priorDeliveryRestorationReview") == "complete" &&
+                    file.inputStream().sha256() == expected.hash("expectedPriorDeliveryRestorationSha256"),
+                    "prior-sdk-direct-rejection-unreviewed")
+                return
+            }
+            nativeGuard(receipt.optBoolean("directArmed"), "prior-sdk-direct-arm-unresolved")
+        }
         nativeGuard(receipt.optString("cleanupRequest") == "normal requestUpdate returned; effective restoration Pending" &&
             receipt.optString("laterRestoration") == "recorded; original-frame inspection and response provenance Pending" &&
             expected.required("priorDeliveryRestorationReview") == "complete" &&

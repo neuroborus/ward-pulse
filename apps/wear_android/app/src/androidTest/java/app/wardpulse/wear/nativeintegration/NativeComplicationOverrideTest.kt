@@ -11,7 +11,6 @@ import androidx.wear.watchface.RenderParameters
 import androidx.wear.watchface.complications.data.ComplicationType
 import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester
 import androidx.wear.watchface.style.WatchFaceLayer
-import app.wardpulse.wear.data.WatchSummaryStore
 import java.io.File
 import java.time.Instant
 import java.util.concurrent.TimeoutException
@@ -77,7 +76,7 @@ class NativeComplicationOverrideTest {
         nativeGuard(File(probe, "first.png").inputStream().sha256() ==
             expected.hash("expectedReviewedFrameSha256") && probed.getString("firstFrameSha256") ==
             expected.hash("expectedReviewedFrameSha256"), "reviewed-client-first-frame")
-        requireNormalRecovery(mapping)
+        requireNativeNormalRecovery(target, expected, mapping)
         requirePriorClientRecovery()
         val directory = fresh("$mode-$scenario")
         val receipt = JSONObject().put("identity", identity(before, mapping))
@@ -218,23 +217,6 @@ class NativeComplicationOverrideTest {
         .put("instanceSha256", renderer.instance.sha256()).put("configurationSha256", renderer.configuration.sha256())
         .put("resourcePackage", renderer.resourcePackage).put("mappingSha256", mapping.targets.fingerprint())
         .put("scopeSha256", mapping.scopeSha256)
-
-    private fun requireNormalRecovery(mapping: NativeDeliveryMapping) {
-        val scenario = expected.required("normalRestorationScenario")
-        nativeGuard(scenario in setOf("normal", "delayed", "obsolete", "recovery"), "normal-restoration-scenario")
-        val file = File(target.filesDir, "native_datasource/$scenario/receipt.json")
-        nativeGuard(file.inputStream().sha256() == expected.hash("expectedNormalRestorationReceiptSha256"),
-            "reviewed-normal-restoration")
-        val receipt = AttemptJournal(file).read()
-        nativeGuard(receipt.optString("laterRestoration") ==
-            "recorded; original-frame inspection and response provenance Pending" &&
-            receipt.optString("mappingSha256") == mapping.targets.fingerprint() &&
-            receipt.optString("scopeSha256") == mapping.scopeSha256 &&
-            receipt.optString("cleanupRequest") == "normal requestUpdate returned; effective restoration Pending" &&
-            receipt.optString("restoration") in setOf("original bytes observed", "original bytes restored"),
-            "normal-restoration-support")
-        nativeGuard(WatchSummaryStore(target).load() != null, "restorable-normal-data")
-    }
 
     private fun requirePriorClientRecovery() {
         val latest = AttemptJournal(File(root, "latest.json"))

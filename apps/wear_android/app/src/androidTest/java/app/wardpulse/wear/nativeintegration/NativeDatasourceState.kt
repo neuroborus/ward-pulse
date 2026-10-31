@@ -2,6 +2,7 @@ package app.wardpulse.wear.nativeintegration
 
 import android.app.Instrumentation
 import android.content.ComponentName
+import android.content.Context
 import android.content.SharedPreferences
 import app.wardpulse.wear.data.WatchSummaryStore
 import app.wardpulse.wear.watchface.AndroidWatchFacePushClient
@@ -15,6 +16,26 @@ internal const val DELIVERY_CLASS = "app.wardpulse.wear.nativeintegration.Native
 internal data class NativeDeliveryTarget(val slot: Int, val systemId: Int, val provider: ComponentName)
 
 internal data class NativeDeliveryMapping(val targets: List<NativeDeliveryTarget>, val scopeSha256: String)
+
+/** Shared client/direct-data fence: requests and immediate cleanup are not reviewed recovery. */
+internal fun requireNativeNormalRecovery(context: Context, expected: NativePushExpectations,
+    mapping: NativeDeliveryMapping) {
+    nativeGuard(expected.required("normalRestorationReview") == "complete", "normal-restoration-review")
+    val scenario = expected.required("normalRestorationScenario")
+    nativeGuard(scenario in setOf("normal", "delayed", "obsolete", "recovery"), "normal-restoration-scenario")
+    val file = File(context.filesDir, "native_datasource/$scenario/receipt.json")
+    nativeGuard(file.inputStream().sha256() == expected.hash("expectedNormalRestorationReceiptSha256"),
+        "reviewed-normal-restoration")
+    val receipt = AttemptJournal(file).read()
+    nativeGuard(receipt.optString("laterRestoration") ==
+        "recorded; original-frame inspection and response provenance Pending" &&
+        receipt.optString("mappingSha256") == mapping.targets.fingerprint() &&
+        receipt.optString("scopeSha256") == mapping.scopeSha256 &&
+        receipt.optString("cleanupRequest") == "normal requestUpdate returned; effective restoration Pending" &&
+        receipt.optString("restoration") in setOf("original bytes observed", "original bytes restored"),
+        "normal-restoration-support")
+    nativeGuard(WatchSummaryStore(context).load() != null, "restorable-normal-data")
+}
 
 /** Current owned-Push scope is relevant only when that package is the active resource. */
 internal fun readNativeDatasourcePushScope(renderer: NativeRenderer, resourceVersion: Long,

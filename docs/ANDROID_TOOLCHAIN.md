@@ -866,12 +866,15 @@ only the guarded Push default advances 3→5 without a release cut. Preserve his
 candidate 4 flags/instrumentation, the actual 3→4 journal and all release-bridge guards.
 Preserve the actual old code 1 receipt and unobserved new-Wear4/old-Push1 and explicit 1→2
 steps. Installing Wear 4 was followed by Push 2 before explicit update, with an unknown
-trigger; the subsequent 2→3 manager update was also unobserved. The later guarded normal UI
-4→5 Update requires fresh installed Push 4/hash/signer, owned manager slot, eight choices and
-quiet-writer proof with Legacy kept active, returned same-slot identity and separate settled
-retention. Unexpected advancement stops that witness: no code 6, replay, downgrade, reset or
-invented button success. Later retained-Push selection/rendering is separate HOST work;
-bundled installation proves no explicit update or activation.
+trigger; the subsequent 2→3 manager update was also unobserved. The historical normal UI
+4→5 Update requirement needed fresh installed Push4/hash/signer, owned manager slot, eight
+choices and quiet-writer proof with Legacy kept active, returned same-slot identity and
+separate settled retention. The later full recipe advanced to actual Push5 before tests,
+leaving failed preservation and the ordinary UI witness gap. The recorded current host is
+Wear4/asset5. Current operations must retain actual Push5 and freshly verify installed
+identities; no code 6, replay,
+downgrade, reset or invented button success is authorized. Later retained-Push selection/rendering
+is separate HOST work; bundled installation proves no explicit update or activation.
 Follow the [current qualification](product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30);
 never rebuild a synthetic old baseline, downgrade, reinstall or reset. Follow the central [release version scheme](product/RELEASE_CHECKLIST.md#release-versions)
 and [ordinary release flow](#release-artifact-builds). Release needs both host release
@@ -1096,11 +1099,13 @@ current 47 tests/manual exclusion, then recheck retained actual Push5, bindings 
 #### Guarded Push witness
 
 **Historical candidate 4 / 3→4 contract.** Keep the flags, instrumentation, original receipts
-and actual one-dispatch journal below unchanged. The installed baseline has since reached
-Push 4 with Legacy active. These historical commands are not authorization to replay the
-operation, repeat its picker selection or replace the old host/asset 3. Current Source 5
-uses the separately guarded normal UI path in the qualification above; all target operations
-remain held for the capability/guard phase. The original prospective procedure follows.
+and actual one-dispatch journal below unchanged. Its subsequent Push4/Legacy-active baseline
+is also historical evidence; later provisioning reached Wear4/asset5 and actual Push5. These
+historical commands are not authorization to replay the operation, repeat its picker selection
+or replace the old host/asset3 evidence. Current operations must retain actual Push5, freshly
+verify installed identities and obtain separate admission under the qualification above.
+The missing ordinary UI 4→5 witness cannot be supplied retroactively. The original prospective
+procedure follows.
 
 This is HOST-only after whole Runner execution DONE, owned-process retirement, owning CLI
 exit where applicable and fresh separate idle ownership. Source/semantic review is not native
@@ -1163,10 +1168,10 @@ ABI absent from the baseline; it must not be used here. Never invoke stock disco
 tests. The three `NativePushGuardTest` cases can separately be explicitly selected by class;
 they use memory, private temporary files/descriptors and fixed shell-output fixtures, without
 querying installed packages or accessing the manager/live stores.
-The three update-class cases are manual; together with the three Push guard, seven
+The three update-class cases are manual; together with the three Push guard, thirteen
 datasource, fourteen client, six typed-config and nine inventory cases, `IsolatedWearRunner`
-excludes all **42 manual cases** and keeps **47 default tests** (original40 plus seven
-necessary fixture/API tests). This is verified source-discovery arithmetic, 89 total;
+excludes all **48 manual cases** and keeps **47 default tests** (original40 plus seven
+necessary fixture/API tests). This is verified source-discovery arithmetic, 95 total;
 packaged discovery and execution of new bytes remain separate HOST duties.
 
 After the system-authority correction, require a fresh complete warm `just check-wear`
@@ -1256,9 +1261,10 @@ and SDK ownership proof still needs HOST execution. Never change choices or inje
 manufacture preconditions. Legacy-only evidence cannot verify the inactive Push configuration
 or authorize target replacement. The harness never creates, activates or reselects an instance.
 The single adopted picker selection established the historical Push 3/wf16 baseline;
-preserve subsequent Push 4/Legacy-active and restoration receipts. Make no new selection
-during this allocation. Original Legacy15 settings/choice restoration still needs independent
-verification; active Legacy alone does not prove it.
+preserve the subsequent historical Push4/Legacy-active evidence and restoration receipts.
+Current operations retain actual Push5 with freshly verified installed identities; this
+historical allocation authorizes no new selection. Original Legacy15 settings/choice restoration
+still needs independent verification; active Legacy alone does not prove it.
 
 Only with the actual Push instance and authoritative selection preconditions established may
 one `updateOwnedPush3To4` invocation dispatch. Successful discovery supplies the selection
@@ -1305,9 +1311,11 @@ this instrumentation owner and preserve private receipts. See
 
 The historical provisioning gate required successful witness, separate settled evidence,
 restoration and owner retirement before ordinary rebuilding **without candidate flags** and
-Wear 4/asset 3/signing verification. Current Source 5 provisioning remains held under the
-qualification above; preserve the original host/asset for capability work. Later rebuilt-host
-evidence cannot replace pre-replacement evidence. The 3→4 witness closes neither the utility button nor
+Wear4/asset3/signing verification. Those preservation requirements describe the historical
+cohort; later provisioning reached Wear4/asset5 and actual Push5. Current capability work must
+retain actual Push5, freshly verify installed identities and follow separate admission under
+the qualification above. Preserve original host/asset evidence; later rebuilt-host evidence
+cannot replace pre-replacement evidence. The 3→4 witness closes neither the utility button nor
 missing 1→2/2→3 manager evidence, old-Push1 matrix gaps or UNKNOWN historical causality. All
 unexecuted builds, native routes, effective restoration and visual acceptance remain Pending.
 
@@ -1452,11 +1460,100 @@ cleanup cases. Select the new guard explicitly as
 on the stock runner. It uses private synthetic files only, preserving historical/global
 evidence while checking independent creation, invalid/duplicate IDs, partial/changed captures,
 scope mismatches and exact hash/sidecar rejection; it reviews no real native original.
-The three transition methods and four guard cases are annotation-excluded from the default
-47, bringing the manual total to 42. Neither source completion nor a successful instrumentation
-exit closes unavailable provenance, unseen transitions or effective-restoration acceptance. All native outcomes remain
+The three normal-delivery methods and four datasource guard cases are annotation-excluded from
+the default 47. With the six SDK direct-data cases below, the manual total is 48. Neither source
+completion nor a successful instrumentation exit closes unavailable provenance, unseen transitions
+or effective-restoration acceptance. All native outcomes remain
 Pending until ordered HOST execution and inspection. Retire the instrumentation's single
 UiAutomation owner before another native/hierarchy owner starts.
+
+#### Guarded SDK direct-data observations
+
+The direct route is limited to API36 public SDK updates under the ordinary target UID. It is
+independent of the unresolved historical client route and supplies no client/bitmap PASS.
+Use the stock `app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner` and exactly one
+`app.wardpulse.wear.nativeintegration.NativeDatasourceTransitionTest#probeDirectCapability`,
+`#observeDirectData` or `#observeDirectRestoration` method (the latter two use the same full
+class prefix). All require literal `-e wardpulseNativeIntegration sdk-direct-data`, plus the
+same freshly observed caller, emulator/image/display, host/resource/runtime, active
+instance/configuration and applicable owned-Push identity arguments as the datasource probe.
+Never select the whole class on the stock runner or use the isolated runner for these methods.
+
+Before capability probing, use `probeDelivery` with `normal-delivery` and a NEW explicit
+`deliveryProbeId`. Independently review that current unobscured original and exact hashes;
+the old obscured original is retained without relabeling. For `probeDirectCapability` add:
+
+| `-e` argument | Value |
+| --- | --- |
+| `deliveryProbeId` | Explicit current first-read ID |
+| `firstFrameReview` | `complete-unobscured` after independent review |
+| `expectedDeliveryProbeSha256` | Exact selected `probes/<id>/receipt.json` hash |
+| `expectedReviewedFrameSha256` | Exact selected `probes/<id>/first.png` hash |
+
+The once-only `files/native_datasource/probes/<id>/sdk-direct-capability/receipt.json` records
+`WEAR_BAKLAVA_0` availability, ordinary `targetContext` acquisition and fresh scope retention.
+Failure consumes the directory; no automatic retry, grant or alternate context is allowed.
+API35.1 typed reads do not establish API36 update capability; acquisition establishes neither
+an actual update outcome nor effective data/paint. Independently review the capability receipt.
+
+For exactly one `observeDirectData`, keep those arguments and additionally supply:
+
+| `-e` argument | Value |
+| --- | --- |
+| `directScenario` | `unsupported-range`, `malformed-title`, `partial-no-data-main` or `no-data-main-valid-extra` |
+| `authorizedOperation` | `observeDirectData:<directScenario>` for this exact operation |
+| `expectedDirectCapabilitySha256` | Exact selected capability receipt hash |
+| `quietWriters` | `confirmed-unpaired` after independent quiet-writer/bridge custody |
+| `normalRestorationReview` | `complete` after current targeted normal recovery review |
+| `normalRestorationScenario` | Reviewed `normal`, `delayed`, `obsolete` or `recovery` case |
+| `expectedNormalRestorationReceiptSha256` | Exact normal-case receipt hash, after separate later observation and review |
+| `priorDeliveryRestorationReview`, `expectedPriorDeliveryRestorationSha256` | For a prior global case: `complete` and that exact reviewed receipt hash |
+
+The shared client/direct recovery-support fence requires matching full provenance/mapping,
+successful normal cleanup, original-byte reconciliation, a later observation and current
+normal producer data. Each case directory `files/native_datasource/sdk-<scenario>/` is single-use,
+independent of probe ID. The global `latest.json` fence includes SDK cases. An SDK constructor
+rejection establishes no native effect; its exact receipt still needs review before another case.
+
+See the [finite data and evidence contract](../apps/wear_android/README.md#guarded-sdk-direct-data-observations):
+MAX300/VALUE111 is unsupported range; invalid TITLE uses valid 0/400/148; main-only NoData
+targets Today; the fourth case sends Today NoData then RingSplit 0/400/148/TITLE0 sequentially.
+Public typed builders supply required fields; there are no raw-map or reflection bypasses.
+No pair atomicity or automatic suppression of valid extra data is asserted.
+
+Before the first call, all potentially affected targets are durably armed. Each per-ID call
+freshly validates full typed/system/native joins and unchanged current normal producer data.
+Dispatch return and bounded `OutcomeReceiver` processing/forwarding are recorded separately
+from effective native data and per-ID original PNG/JSON observations. Error/timeout retains
+uncertain effect; late callbacks cannot rewrite terminal evidence. Recovery runs on success
+and failure for every armed target through fresh current normal requests, including uncalled
+targets. Remaining independent provider groups are attempted after failures; newer producer
+data is never overwritten. No uncertain dispatch is automatically retried.
+
+After actual settlement, separately select `observeDirectRestoration` with the same current
+identity arguments and `-e directScenario <scenario>`. It records `restoration-later.png/json`
+and detects newer producer data. HOST must inspect effective normal data, the later original,
+retained bindings/upper choices/consent/settings/time/font/ambient and original bridge state.
+Requests, callbacks and immediate cleanup frames cannot clear recovery; before another case,
+bind explicit review to the final exact prior receipt hash using the prior-delivery arguments.
+Retain all private reference bytes, receipts and originals until reconciliation.
+
+`NativeSdkDirectDataGuardTest` has three explicitly selectable excluded methods:
+`api36AndExactManualAuthorizationCannotBeReplacedByTypedReads`,
+`finitePublicBuildersRetainRangesTitlesAndSequentialPartialTargets` and
+`durableArmingUncertainCallbacksAndIndependentRecoveryCannotBeSkipped`. They use synthetic
+private evidence, public construction and injected dispatch/recovery, without a live update.
+Source inventory is **47 default + 48 manual = 95**; packaged discovery/execution remains HOST.
+After whole execution DONE, owned-process retirement, owning CLI exit when used and fresh
+separate idle, Root reconciles the complete provisioning footprint and candidate order before
+full `just check-wear`, docs confirmation, test-APK provenance/install admission, affected/new
+guards and the full default suite on its correctly provisioned owning candidate. Only then
+admit the NEW current first read and separately authorized capability/finite cases/recovery.
+Preserve actual Push5, the genuine historical 47-test PASS and the separate failed preservation/
+missing UI4→5 witness. No downgrade/reset/replay/code6, retroactive witness, permission/query/
+context bypass or app-only remedy is authorized. Current active identity, viewport/geometry,
+compatibility, public/restoration duties and broader item12 acceptance remain Pending.
+Physical phone use remains forbidden for this scope.
 
 #### Independent client metadata observation
 
@@ -1472,8 +1569,10 @@ genuine target dependency for admission rather than relaxing guards.
 The read checks current facts using `NativeReadAdmission` in
 [NativeReadObservation.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeReadObservation.kt),
 without the historical update journal, requester mappings or quiet-bridge admission. Preserve
-the installed Round Wear4/asset3/Push4 identity separately from Source/built Push5. Legacy-only
-Square does not need fabricated Push ownership/history. Supply independently observed values:
+Round Wear4/asset3/Push4 as historical evidence; the recorded current host is Wear4/asset5.
+Current reads must retain actual Push5 and freshly verify installed identities independently
+of Source/builds. Legacy-only Square does not need fabricated Push ownership/history. Supply
+independently observed values:
 
 | Arguments | Current evidence |
 | --- | --- |
@@ -1574,9 +1673,12 @@ producer. Actual execution/compilation and runtime capability remain pending HOS
 after whole Runner DONE, all owned-process retirement, any owning-CLI exit and fresh separate
 public idle. Before watch actions, freshly establish exact runtime identity/custody and reviewed
 test-only provisioning. No phone action, target installation to manufacture access, historical
-replay or state normalization is authorized. Preserve installed Round Wear4/asset3/Push4 separately
-from Source/built Push5 and surface genuine target dependencies. Broader native/restoration/
-artifact/compatibility/public acceptance gaps and whole-#12 closure remain pending.
+replay or state normalization is authorized. Preserve Round Wear4/asset3/Push4 as historical
+evidence; the recorded current host is Wear4/asset5. Current operations must retain actual
+Push5 and freshly verify installed identities independently of Source/builds. Surface genuine
+target dependencies.
+Broader native/restoration/artifact/compatibility/public acceptance gaps and whole-#12 closure
+remain pending.
 
 #### Owned Push inventory and connected peers
 
@@ -1620,9 +1722,11 @@ complete `just check-wear`, artifact/graph renewal and applicable RED→GREEN re
 after whole Runner DONE, all owned-process retirement, any owning-CLI exit and fresh separate
 public idle. Watch observations additionally require fresh exact runtime identity/custody,
 reviewed test-only provisioning and cleanup/recovery. Expose a genuine target dependency;
-do not replace a target to manufacture access. No phone action is authorized. Keep installed
-Round Wear4/asset3/Push4 separate from Source/built Push5; Legacy-only Square needs no invented
-Push history. Preserve the historical SDK3→4 journal/settled witness and strict mutation guards.
+do not replace a target to manufacture access. No phone action is authorized. Keep Round
+Wear4/asset3/Push4 as historical evidence; the recorded current host is Wear4/asset5. Current
+observations must retain actual Push5 and freshly verify installed identities independently
+of Source/builds; Legacy-only Square needs no invented Push history. Preserve the historical SDK3→4 journal/settled witness
+and strict mutation guards.
 Malformed/delayed/missing-main native, restoration, comprehensive artifact/compatibility and
 healthy public acceptance remain pending; no universal PASS, physical-device or #12 closure follows.
 
@@ -1644,8 +1748,8 @@ actual client access remain separate Pending HOST evidence.
 Select exactly one `NativeComplicationOverrideTest` method on the stock runner with
 `wardpulseNativeIntegration=client-probe`. The three guarded native methods, ten synthetic
 `NativeClientGuardTest` cases and independent metadata observation remain excluded by the
-isolated runner; with the seven datasource, six Push, six typed-config and nine inventory
-cases the manual total is 42 and the default total stays 47. The guarded native methods require
+isolated runner; with the thirteen datasource, six Push, six typed-config and nine inventory
+cases the manual total is 48 and the default total stays 47. The guarded native methods require
 the same current
 caller/resource/runtime/renderer and applicable owned-Push identity arguments as the
 [datasource probe](#guarded-datasource-observations), plus
