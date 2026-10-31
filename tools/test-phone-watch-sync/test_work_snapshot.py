@@ -1,4 +1,4 @@
-"""Cheap metadata/protocol regressions; these do not run Java, DEX or devices."""
+"""Cheap inventory/metadata/protocol regressions; no Java, DEX or devices."""
 
 import json
 from pathlib import Path
@@ -27,6 +27,314 @@ def java_sql(name):
 
 def shell_function(name):
     return re.search(r'^' + name + r'\(\) \{\n.*?^\}', SHELL, re.M | re.S)[0]
+
+
+BOOT_ID = '00000000-0000-0000-0000-000000000001'
+OBSERVER_NAME = 'wardpulse-work-snapshot-7'
+APP_ROW = '10123 41 app.wardpulse'
+OBSERVER_ROW = f'10123 42 {OBSERVER_NAME}'
+
+
+class InventoryTests(unittest.TestCase):
+    def inventory(self, lists=None, starts=None, absence=None, released=1,
+                  observer=True, boots=None, role='phone', header='UID PID NAME'):
+        if lists is None:
+            lists = [APP_ROW + '\n' + OBSERVER_ROW] * 4
+        effects = {'ps': [header + '\n' + rows + '\n' for rows in lists],
+                   'boot': boots or [BOOT_ID] * 2,
+                   'start.41': ['100'] * 4, 'start.42': ['200'] * 4,
+                   'absence': absence or ['absent'] * 4}
+        effects.update(starts or {})
+        with tempfile.TemporaryDirectory(prefix='work-inventory-', dir=OWNER) as scratch:
+            for key, values in effects.items():
+                for index, value in enumerate(values):
+                    if key.startswith('start.') and value is not None:
+                        value = '42 (process) ' + ' '.join(['S'] + ['0'] * 18 + [value])
+                    Path(scratch, f'{key}.{index}').write_text(
+                        '!error' if value is None else value)
+            device = r'''
+take() {
+  local key=$1 index=0 value
+  if [[ -f "$SCENARIO/$key.index" ]]; then read -r index <"$SCENARIO/$key.index"; fi
+  printf '%s\n' "$((index + 1))" >"$SCENARIO/$key.index"
+  value=$(command cat "$SCENARIO/$key.$index") || return 1
+  [[ "$value" != '!error' ]] || return 1
+  printf '%s\n' "$value"
+}
+ps() { take ps; }
+cat() {
+  if [[ "$*" == /proc/sys/kernel/random/boot_id ]]; then take boot
+  else command cat "$@"; fi
+}
+awk() {
+  local path=${!#} value pid
+  if [[ "$path" == /proc/*/stat ]]; then
+    pid=${path#/proc/}; pid=${pid%/stat}
+    value=$(take "start.$pid") || return 1
+    command awk "$1" <<<"$value"
+  else command awk "$@"; fi
+}
+[() {
+  if [[ "$#" == 4 && "$1" == '!' && "$2" == '-e' && "$3" == /proc/* ]]; then
+    local state
+    state=$(take absence) || return 2
+    [[ "$state" == absent ]]
+  else builtin [ "$@"; fi
+}
+'''
+            script = r'''
+set -euo pipefail
+SCENARIO=$1 DEVICE=$2 ROLE=$3
+declare -A UIDS=([phone]=10123 [wear]=10123)
+declare -A BOOT=([phone]=$4 [wear]=$4)
+OBSERVER=$5 OBSERVER_RELEASED=$6 OBSERVING=0
+hold() { printf 'HOLD: %s\n' "$*" >&2; exit 1; }
+adb_on() { bash -c "$DEVICE"$'\n'"$4"$'\n'"$5"; }
+export SCENARIO
+'''
+            result = subprocess.run([
+                'bash', '-c', script + shell_function('processes') + '\n'
+                + shell_function('app_processes') + '\napp_processes device "$ROLE"\n',
+                'work-inventory', scratch, device, role, BOOT_ID,
+                f'42 200 {OBSERVER_NAME}' if observer else '', str(released),
+            ], text=True, capture_output=True, timeout=5)
+            return result
+
+    def test_released_observer_disappears_before_start_lookup(self):
+        result = self.inventory(lists=[APP_ROW + '\n' + OBSERVER_ROW] + [APP_ROW] * 3,
+                                starts={'start.42': [None]})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, '41 100 app.wardpulse')
+
+    def assert_rejected(self, result):
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, '')
+        self.assertIn('HOLD:', result.stderr)
+        self.assertNotIn('No such file', result.stderr)
+
+    def test_retirement_across_inventory_boundaries(self):
+        for live_lists in range(5):
+            with self.subTest(live_lists=live_lists):
+                result = self.inventory(
+                    lists=[APP_ROW + '\n' + OBSERVER_ROW] * live_lists
+                    + [APP_ROW] * (4 - live_lists))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, '41 100 app.wardpulse')
+        for failed_read in range(1, 4):
+            with self.subTest(failed_read=failed_read):
+                result = self.inventory(
+                    lists=[APP_ROW + '\n' + OBSERVER_ROW] * (failed_read + 1)
+                    + [APP_ROW] * (3 - failed_read),
+                    starts={'start.42': ['200'] * failed_read + [None]})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, '41 100 app.wardpulse')
+        result = self.inventory(lists=[''] * 4)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, '')
+
+    def test_pre_go_inventory_is_strict(self):
+        result = self.inventory(released=0)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, '41 100 app.wardpulse')
+        self.assert_rejected(self.inventory(
+            lists=[APP_ROW + '\n' + OBSERVER_ROW] + [APP_ROW] * 3,
+            starts={'start.42': [None]}, released=0))
+        self.assert_rejected(self.inventory(
+            lists=[APP_ROW + '\n' + OBSERVER_ROW, APP_ROW] * 2, released=0))
+
+    def test_retirement_requires_absence_and_stays_retired(self):
+        self.assert_rejected(self.inventory(
+            starts={'start.42': [None]}, absence=['present']))
+        self.assert_rejected(self.inventory(lists=[APP_ROW] * 4, absence=['present']))
+        self.assert_rejected(self.inventory(lists=[APP_ROW] * 4, absence=[None]))
+        for lists, starts in [
+                ([APP_ROW + '\n' + OBSERVER_ROW] * 4, {'start.42': [None]}),
+                ([APP_ROW, APP_ROW + '\n' + OBSERVER_ROW] * 2, {}),
+                ([APP_ROW + '\n' + OBSERVER_ROW, APP_ROW,
+                  APP_ROW + '\n' + OBSERVER_ROW, APP_ROW], {})]:
+            with self.subTest(lists=lists, starts=starts):
+                self.assert_rejected(self.inventory(lists=lists, starts=starts))
+
+    def test_live_observer_identity_must_match(self):
+        for changed_read in range(4):
+            with self.subTest(changed_read=changed_read):
+                self.assert_rejected(self.inventory(
+                    starts={'start.42': ['200'] * changed_read + ['201'] * (4 - changed_read)}))
+        for row in ['10123 42 app.wardpulse', '10124 42 ' + OBSERVER_NAME,
+                    '10123 43 ' + OBSERVER_NAME, '10123 42 wardpulse-work-snapshot-8']:
+            with self.subTest(row=row):
+                self.assert_rejected(self.inventory(
+                    lists=[APP_ROW + '\n' + OBSERVER_ROW] * 3 + [APP_ROW + '\n' + row]))
+
+    def test_every_other_process_remains_strict(self):
+        self.assert_rejected(self.inventory(starts={'start.41': [None]}))
+        self.assert_rejected(self.inventory(starts={'start.41': ['100', '101', '101', '101']}))
+        for live_lists in range(1, 4):
+            with self.subTest(live_lists=live_lists):
+                self.assert_rejected(self.inventory(
+                    lists=[APP_ROW + '\n' + OBSERVER_ROW] * live_lists
+                    + [OBSERVER_ROW] * (4 - live_lists)))
+        for role, observer in [('phone', False), ('wear', True)]:
+            with self.subTest(role=role, observer=observer):
+                self.assert_rejected(self.inventory(role=role, observer=observer))
+        result = self.inventory(lists=[APP_ROW] * 4, observer=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, '41 100 app.wardpulse')
+
+    def test_malformed_and_oversized_inventory(self):
+        rows = [APP_ROW + '\n' + APP_ROW, '10123 nope app.wardpulse',
+                '10123 0 app.wardpulse', '10123 2147483648 app.wardpulse',
+                '10123 41 unknown', '10123 41 app.wardpulse extra',
+                '10123 41 app.wardpulse\r', '10123 41 app.wardpulse:' + 'a' * 128,
+                '010123 41 app.wardpulse',
+                '\n'.join(f'10123 {pid} app.wardpulse' for pid in range(1, 130)),
+                '\n'.join(f'10123 {pid} app.wardpulse:' + 'a' * 110 for pid in range(1, 129))]
+        for row in rows:
+            with self.subTest(row=row[:80]):
+                self.assert_rejected(self.inventory(lists=[row] * 4))
+        for header in ['', 'UID PID', 'UID PID NAME EXTRA']:
+            with self.subTest(header=header):
+                self.assert_rejected(self.inventory(header=header))
+        for start in ['', '0', '-1', '01', '200x', '18446744073709551616']:
+            with self.subTest(start=start):
+                self.assert_rejected(self.inventory(starts={'start.42': [start]}))
+
+    def test_boot_continuity_and_expected_boot(self):
+        other_boot = '00000000-0000-0000-0000-000000000002'
+        for boots in [[BOOT_ID, other_boot], [other_boot] * 2, ['unknown'] * 2]:
+            with self.subTest(boots=boots):
+                self.assert_rejected(self.inventory(boots=boots))
+
+    def test_start_ticks_require_one_record(self):
+        extra_stat = '41 (process) ' + ' '.join(['S'] + ['0'] * 18 + ['100'])
+        self.assert_rejected(self.inventory(
+            starts={'start.41': ['100\n' + extra_stat] * 4}))
+
+
+class ReaderLifecycleTests(unittest.TestCase):
+    def capture(self, mode='complete'):
+        with tempfile.TemporaryDirectory(prefix='work-reader-', dir=OWNER) as scratch:
+            Path(scratch, 'evidence').write_text(evidence())
+            adb = Path(scratch, 'adb')
+            adb.write_text('''#!/bin/bash
+set -eu
+printf 'READER 42 200\\n'
+IFS= read -r go
+[[ "$go" == GO ]] || exit 1
+printf 'go-received\\n' >>"$SCENARIO/trace"
+cat "$SCENARIO/evidence"
+if [[ "$MODE" != missing-end ]]; then printf 'END 42 200\\n'; fi
+if [[ "$MODE" == failed-exit ]]; then exit 5; fi
+''')
+            adb.chmod(0o700)
+            device = r'''
+ps() {
+  printf 'UID PID NAME\n'
+  if [[ -n "$observer" && "$released" == 0 ]]; then
+    local pid ticks name
+    read -r pid ticks name <<<"$observer"
+    printf '%s %s %s\n' "$uid" "$pid" "$name"
+  fi
+}
+awk() {
+  if [[ "${!#}" == /proc/42/stat ]]; then
+    if [[ "$MODE" == changed-start ]]; then printf '201\n'; else printf '200\n'; fi
+  else command awk "$@"; fi
+}
+cat() {
+  if [[ "$*" == /proc/sys/kernel/random/boot_id ]]; then printf '%s\n' "$EXPECTED_BOOT"
+  else command cat "$@"; fi
+}
+[() {
+  if [[ "$#" == 4 && "$1" == '!' && "$2" == '-e' && "$3" == /proc/42 ]]; then return 0
+  else builtin [ "$@"; fi
+}
+'''
+            script = r'''
+set -euo pipefail
+SCRATCH=$1 SCENARIO=$1 ADB=$1/adb MODE=$2 DEVICE=$3 EXPECTED_BOOT=$4 DEVICE_SCRATCH=$1/device
+export SCENARIO MODE EXPECTED_BOOT
+unset SECONDS
+SECONDS=10
+PHONE_SERIAL=phone WEAR_SERIAL=wear
+declare -A UIDS=([phone]=10123 [wear]=10124)
+declare -A BOOT=([phone]=$4 [wear]=$4)
+RETAINING=1 RETENTION_DEADLINE=70 LAST_OBSERVATION=10 PRE_DEATH_DEADLINE=0
+BASELINE=hash BASELINE_METADATA=stat OBSERVER= OBSERVER_RELEASED=0 EVENTS=
+OBSERVING=0
+READER_HOST= READER_DIAG_HOST= READER_DEVICE_PID= READER_STAGE_ACTIVE=0
+READER_INPUT_FD= READER_OUTPUT_FD= READER_STDERR_FD= READER_STDERR_DRAIN_FD=
+READER_DIAG_OUTPUT_FAILED=0 PHONE_ACTIVITY=0
+hold() { printf 'HOLD: %s\n' "$*" >&2; exit 1; }
+barrier() { EVENTS=; }
+installed_apk() { printf 'apk'; }
+reader_diagnostic() { printf "$@" >>"$SCRATCH/trace"; }
+reader_stderr() { :; }
+reader_stderr_collect() { cat >/dev/null; }
+summary_hash() {
+  printf '%s released=%s\n' "$phase" "$OBSERVER_RELEASED" >>"$SCRATCH/trace"
+  printf hash
+}
+summary_metadata() { printf stat; }
+adb_on() {
+  if [[ "$#" == 5 ]]; then bash -c "$DEVICE"$'\n'"$4"$'\n'"$5"
+  else [[ "$MODE" != unproved-retirement ]]; fi
+}
+reconcile_work() { printf 'accepted\n' >>"$SCRATCH/trace"; }
+native_jobs() { : >"$SCRATCH/native.current"; }
+finish() {
+  local status=$? descriptor
+  if [[ -n "$READER_INPUT_FD" ]]; then exec {READER_INPUT_FD}>&-; fi
+  if [[ -n "$READER_OUTPUT_FD" ]]; then exec {READER_OUTPUT_FD}<&-; fi
+  if [[ -n "$READER_STDERR_FD" ]]; then exec {READER_STDERR_FD}>&-; fi
+  if [[ -n "$READER_STDERR_DRAIN_FD" ]]; then exec {READER_STDERR_DRAIN_FD}<&-; fi
+  descriptor=${WORK_READER[1]:-}
+  if [[ -n "$descriptor" ]]; then exec {descriptor}>&-; fi
+  descriptor=${WORK_READER[0]:-}
+  if [[ -n "$descriptor" ]]; then exec {descriptor}<&-; fi
+  if [[ -n "$READER_HOST" ]]; then wait "$READER_HOST" || :; fi
+  if [[ -n "$READER_DIAG_HOST" ]]; then wait "$READER_DIAG_HOST" || :; fi
+  exit "$status"
+}
+trap finish EXIT
+'''
+            script += '\n'.join(shell_function(name) for name in
+                                ['processes', 'app_processes', 'check_separation', 'work_snapshot'])
+            script += '\nwork_snapshot sample\n'
+            result = subprocess.run(['bash', '-c', script, 'work-reader', scratch, mode, device, BOOT_ID],
+                                    text=True, capture_output=True, timeout=5)
+            return result, Path(scratch, 'trace').read_text()
+
+    def test_complete_reader_retirement_and_released_separation(self):
+        result, trace = self.capture()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('sample-before-reader released=0\n', trace)
+        self.assertIn('sample-reader-released released=1\n', trace)
+        self.assertIn('sample-reader-retired released=0\n', trace)
+        self.assertIn('accepted\n', trace)
+        self.assertIn('Bounded logical/native work reconciled: sample', result.stdout)
+
+    def test_pre_go_identity_failure_retires_fixture_children(self):
+        result, trace = self.capture('changed-start')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Cannot identify the actual reader process.', result.stderr)
+        self.assertNotIn('go-received\n', trace)
+        self.assertNotIn('sample-reader-released', trace)
+        self.assertNotIn('accepted\n', trace)
+
+    def test_retirement_tolerance_cannot_accept_incomplete_reader(self):
+        cases = [('missing-end', 'Partial reader evidence.'),
+                 ('failed-exit', 'Reader process failed or did not retire normally.'),
+                 ('unproved-retirement', 'Reader PID is still live or reused.')]
+        for mode, reason in cases:
+            with self.subTest(mode=mode):
+                result, trace = self.capture(mode)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(reason, result.stderr)
+                self.assertIn('sample-reader-released released=1\n', trace)
+                self.assertNotIn('sample-reader-retired', trace)
+                self.assertNotIn('accepted\n', trace)
+                self.assertNotIn('Bounded logical/native work reconciled:', result.stdout)
 
 
 class MappingQueryTests(unittest.TestCase):
@@ -213,4 +521,4 @@ if __name__ == '__main__':
     try:
         unittest.main()
     finally:
-        print(f'Metadata/protocol regression elapsed: {time.monotonic() - started:.3f}s')
+        print(f'Inventory/metadata/protocol regression elapsed: {time.monotonic() - started:.3f}s')

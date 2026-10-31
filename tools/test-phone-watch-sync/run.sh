@@ -169,32 +169,84 @@ resolve_devices() {
 # ps is reconciled twice around /proc start-time reads. No cmdline, environment,
 # private app data or arbitrary process output leaves the device.
 processes() {
-  local uid=${UIDS[$2]}
-  adb_on "$1" shell -n "uid=$uid" '
+  local uid=${UIDS[$2]} observer= released=0
+  [[ "$uid" =~ ^[1-9][0-9]{0,9}$ ]] && (( uid <= 2147483647 )) || return 1
+  if [[ "$2" == phone && -n "$OBSERVER" ]]; then
+    observer=$OBSERVER released=$OBSERVER_RELEASED
+    [[ "$observer" =~ ^[1-9][0-9]*\ [1-9][0-9]*\ wardpulse-work-snapshot-[0-9]+$ &&
+       "$released" =~ ^[01]$ ]] || return 1
+  fi
+  adb_on "$1" shell -n "uid=$uid observer=\"$observer\" released=$released" '
     set -eu
+    observer_pid= observer_start= observer_name= retired=0
+    if [ -n "$observer" ]; then read -r observer_pid observer_start observer_name <<EOF
+$observer
+EOF
+    fi
     list() {
       raw=$(ps -A -o UID,PID,NAME) || exit 1
-      printf "%s\n" "$raw" | awk -v uid="$uid" '\''$1 == uid { print $2, $3 }'\'' | sort
+      [ "${#raw}" -le 1048576 ] || return 1
+      records=$(printf "%s\n" "$raw" | awk -v uid="$uid" -v pid="$observer_pid" -v name="$observer_name" '\''
+        function fail() { bad=1; exit 1 }
+        NR == 1 { if (NF != 3 || $1 != "UID" || $2 != "PID" || $3 != "NAME") fail(); next }
+        $1 == uid || (pid != "" && $2 == pid) {
+          if ($1 != uid || $1 !~ /^[1-9][0-9]*$/ || NF != 3 || $0 ~ /[[:cntrl:]]/ ||
+              ++rows > 128 || (bytes += length($0)+1) > 16384 ||
+              $2 !~ /^[1-9][0-9]*$/ || length($2) > 10 || $2+0 > 2147483647 || seen[$2]++ ||
+              length($3) > 128 || ($2 == pid ? $3 != name : $3 !~ /^app[.]wardpulse(:[a-zA-Z0-9_.]+)?$/)) fail()
+          records[rows]=$2 " " $3
+        }
+        END { if (bad || !NR) exit 1; for (i=1; i<=rows; i++) print records[i] }
+      '\'') || return 1
+      [ -z "$records" ] || printf "%s\n" "$records" | sort
     }
     identities() {
-      before=$(list) || exit 1
-      if [ -n "$before" ]; then
-        printf "%s\n" "$before" | while read -r pid name; do
-          start=$(awk '\''{ sub(/^.*\) /, ""); print $20 }'\'' "/proc/$pid/stat") || exit 1
-          case "$start" in ""|*[!0-9]*) exit 1;; esac
-          printf "%s %s %s\n" "$pid" "$start" "$name"
-        done || return 1
-      fi
-      after=$(list) || exit 1
-      [ "$before" = "$after" ]
+      # Keep retirement state in this shell across both lists and traversals.
+      for boundary in before after; do
+        current=$(list) || return 1
+        inventory= found=0
+        while read -r pid name; do
+          [ -n "$pid" ] || continue
+          if [ "$pid" = "$observer_pid" ]; then
+            [ "$retired" = 0 ] || return 1
+            found=1
+          fi
+          start=$(awk '\''{ sub(/^.*\) /, ""); print $20 }'\'' "/proc/$pid/stat") || {
+            [ "$released" = 1 ] && [ "$pid" = "$observer_pid" ] && [ ! -e "/proc/$pid" ] || return 1
+            retired=1
+            continue
+          }
+          printf "%s\n" "$start" | awk '\''
+            NR != 1 || NF != 1 || $0 !~ /^[1-9][0-9]*$/ || length($0) > 20 ||
+            (length($0) == 20 && ("x" $0) > "x18446744073709551615") { exit 1 }
+          '\'' || return 1
+          if [ "$pid" = "$observer_pid" ]; then
+            [ "$start" = "$observer_start" ] || return 1
+            [ "$released" = 0 ] || continue
+          fi
+          inventory="$inventory$pid $start $name
+"
+        done <<EOF
+$current
+EOF
+        if [ "$released" = 1 ] && [ "$found" = 0 ]; then
+          [ ! -e "/proc/$observer_pid" ] || return 1
+          retired=1
+        fi
+        if [ "$boundary" = before ]; then before=$inventory
+        else [ "$before" = "$inventory" ] || return 1; fi
+      done
     }
     boot=$(cat /proc/sys/kernel/random/boot_id) || exit 1
-    first=$(identities) || exit 1
-    second=$(identities) || exit 1
-    [ "$first" = "$second" ]
+    identities || exit 1
+    first=$inventory
+    identities || exit 1
+    [ "$first" = "$inventory" ]
     [ "$boot" = "$(cat /proc/sys/kernel/random/boot_id)" ]
     printf "boot %s\n" "$boot"
-    [ -z "$first" ] || printf "%s\n" "$first"
+    if [ "$released" = 1 ] && [ "$retired" = 0 ]; then first="$first$observer
+"; fi
+    printf "%s" "$first" | sort
   ' | tr -d '\r'
 }
 
@@ -204,7 +256,7 @@ app_processes() {
   [[ "${snapshot%%$'\n'*}" == "boot ${BOOT[$2]}" ]] || hold 'Device rebooted during measurement.'
   local identities
   identities=$(printf '%s\n' "$snapshot" | sed '1d')
-  # The observer is accounted for separately, only for its verified live identity.
+  # Inventory accounts separately for the attested reader after GO, including retirement.
   if [[ "$2" == phone && -n "$OBSERVER" ]]; then
     identities=$(printf '%s\n' "$identities" | awk -v observer="$OBSERVER" '$0 != observer')
   fi
@@ -1058,6 +1110,7 @@ work_snapshot() {
   local label=$1 apk pid ticks name header line output= end= rejection= reader_in reader_out reader_host
   local before_phone before_wear current phone_live=0 deadline=$((SECONDS + 8))
   local started read_status=0 read_outcome=line header_shape=complete wrapper_status diagnostic_status
+  OBSERVER_RELEASED=0
   if (( RETAINING )); then check_separation "$label-entry"; fi
   barrier phone "$PHONE_SERIAL"
   barrier wear "$WEAR_SERIAL"
@@ -1131,6 +1184,7 @@ work_snapshot() {
   printf 'GO\n' >&"$reader_in"
   exec {reader_in}>&-
   READER_INPUT_FD=
+  OBSERVER_RELEASED=1
   # Only the exact, separately verified reader identity is excluded by app_processes.
   if (( RETAINING )); then check_separation "$label-reader-released"; fi
   while IFS= read -r -t 2 line <&"$reader_out"; do
@@ -1170,6 +1224,7 @@ work_snapshot() {
   (( diagnostic_status == 0 )) || hold 'Reader stderr collector failed or did not retire normally.'
   adb_on "$PHONE_SERIAL" shell -n "test ! -e /proc/$pid" || hold 'Reader PID is still live or reused.'
   READER_DEVICE_PID= OBSERVER=
+  OBSERVER_RELEASED=0
   READER_STAGE_ACTIVE=0
   if (( RETAINING )); then check_separation "$label-reader-retired"; fi
   current=$(app_processes "$PHONE_SERIAL" phone) || hold 'Post-reader phone identity raced.'
@@ -2391,6 +2446,7 @@ declare -A BOOT=() OLD=() RUNNING=() CURSOR=() UIDS=() LIVE=() START_TICKS=() KI
 declare -A PRODUCERS=() PROJECTORS=() OBS_CLOSE=() OBS_CLOSED=()
 MONITORS=()
 SCRATCH= DEVICE_SCRATCH= EVENTS= BASELINE= BASELINE_METADATA= OBSERVER=
+OBSERVER_RELEASED=0
 READER_HOST= READER_DEVICE_PID=
 READER_STAGE_ACTIVE=0 READER_BEFORE_PHONE=
 READER_INPUT_FD='' READER_OUTPUT_FD='' READER_STDERR_FD='' READER_STDERR_DRAIN_FD=''

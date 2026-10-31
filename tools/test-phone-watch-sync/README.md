@@ -383,8 +383,15 @@ The standard-library regressions in [test_work_snapshot.py](test_work_snapshot.p
 the production fixed SQL on neutral in-memory metadata and the production shell/AWK
 consumer. They protect the older/missing distinction, current-generation job selection,
 invalid/ambiguous/mixed metadata and closed count protocol, including rejection diagnostics.
-Run them with `python3 -m unittest discover -s tools/test-phone-watch-sync -p 'test_*.py'`.
-These cheap metadata/protocol regressions provide no Java/DEX/device acceptance.
+They also execute the production inventory functions and device-shell body against controlled
+process lists, start reads and absence results. Cases cover reader disappearance between
+listing and lookup and across reconciliation boundaries, strict pre-GO reads, real-app
+disappearance, PID reuse, unknown identities (including another process with the reader
+name), reappearance, malformed/oversized inventories and boot/UID guards. The enclosing
+reader path must still reject missing END, failed wrapper exit and unproved retirement,
+including during the reader-released separation phase. These sequences need no sleeps or
+timing retries. Run `python3 tools/test-phone-watch-sync/test_work_snapshot.py` to print
+the suite duration. These cheap regressions provide no Java/DEX/device acceptance.
 
 The projection uses explicit `SQLiteDatabase.OPEN_READONLY | NO_LOCALIZED_COLLATORS` with a
 throwing, nondeleting corruption handler and a short `beginTransactionReadOnly` transaction.
@@ -453,6 +460,22 @@ under the app UID, checks normal exit and `/proc` absence, and reconciles surrou
 processes and events. A separate internal watchdog bounds even a lost ADB session. An
 observation-induced app start, publication or work change cannot be concealed as reader
 activity or phone absence. Unproved observer retirement or scoped cleanup is HOLD.
+
+Before GO, inventory verification is strict. Only after GO does the existing inventory
+account separately for the independently attested reader across its repeated before/after
+lists and identity traversals. UID records are validated and bounded before this accounting;
+a live reader must match its attested UID, PID, start and name. A failed reader start read
+permits retirement only with confirmed `/proc` absence. Unreadable-but-present identities,
+changed identity or UID, observed reappearance and another process using the reader name
+remain HOLD. Every other app identity is independently sampled and strictly reconciled.
+The reader-released separation check remains mandatory; tolerating retirement there does
+not accept a work sample. Matching END, normal wrapper exit, actual PID absence and all
+surrounding process/event checks are still required, followed by owned cleanup.
+
+The 2026-10-31 inventory failure remains historical HOLD: later successful cleanup does
+not reconstruct that inventory, exclude intervening reuse/app movement or supply its
+undrained END. This repair and its regressions claim neither an atomic snapshot nor zero
+races or completed device acceptance. A fresh complete ordinary HOST gate remains required.
 
 Logical work samples bracket full instrumentation, both updates, each initial death/launch,
 phone separation and the retention Wear death/relaunch, and completion. They preserve the
