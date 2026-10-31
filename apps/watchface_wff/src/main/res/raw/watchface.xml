@@ -2249,6 +2249,31 @@
                                 </Compare>
                                 <Default>
                                     <Group x="0" y="0" width="450" height="450" name="ring1N1">
+                                        <Group x="0" y="0" width="450" height="450" name="ring1N1BackdropRestore">
+                                            <PartDraw x="0" y="0" width="450" height="450" name="ring1N1BackdropSource" renderMode="SOURCE">
+                                                <Ellipse x="0" y="0" width="450" height="450">
+                                                    <Fill color="#ff101412">
+                                                        <RadialGradient
+                                                            centerX="225"
+                                                            centerY="216"
+                                                            radius="279"
+                                                            colors="#ff18201C #ff101412 #ff0A0D0B"
+                                                            positions="0.0 0.55 1.0" />
+                                                    </Fill>
+                                                </Ellipse>
+                                            </PartDraw>
+                                            <PartDraw x="0" y="0" width="450" height="450" renderMode="MASK">
+                                                <Arc
+                                                    centerX="225"
+                                                    centerY="225"
+                                                    width="387"
+                                                    height="387"
+                                                    startAngle="0"
+                                                    endAngle="359.9">
+                                                    <Stroke color="#ffffffff" thickness="27" cap="ROUND" />
+                                                </Arc>
+                                            </PartDraw>
+                                        </Group>
                                         <PartDraw x="0" y="0" width="450" height="450">
                                             <Arc
                                                 centerX="225"

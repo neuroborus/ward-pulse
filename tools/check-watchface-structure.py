@@ -18,6 +18,8 @@ BAND_LAYOUTS = {
     "N3": (800, 20, ((384, 374, 394), (336, 326, 346), (288, 278, 298)), 134),
 }
 
+N1_RESTORE = "ring1N1BackdropRestore"
+
 
 def element_children(element):
     return [child for child in element if isinstance(child.tag, str)]
@@ -71,7 +73,8 @@ def check_structure(root):
             or strip.find(".//PartText") is None
         ):
             errors.append(f"slot {slot_id}: main strip lost its well or label")
-    return errors + check_band_paints(root) + check_extra_decisions(root) + check_retained_extra_paint(root)
+    return (errors + check_backdrop_restore(root) + check_band_paints(root)
+            + check_extra_decisions(root) + check_retained_extra_paint(root))
 
 
 def paint_expression(expression):
@@ -238,6 +241,9 @@ def check_band_paints(root):
         if group.attrib != {**canvas, "name": name} or group.findall("Transform"):
             errors.append(f"{name}: band owner must retain neutral full-canvas coordinates")
         children = element_children(group)
+        # The isolated backdrop is checked separately; it is not foreground paint.
+        if name == "ring1N1":
+            children = [child for child in children if child.get("name") != N1_RESTORE]
         if len(children) < 2 or [child.tag for child in children[:2]] != ["PartDraw", "Condition"]:
             errors.append(f"{name}: track must precede the single paint selector")
             continue
@@ -282,9 +288,10 @@ def check_band_paints(root):
         if kinds != ["full", "tiny", "round"]:
             errors.append(f"{name}: comparisons must own full, tiny, round drawings in that order")
             continue
-        if (len(list(group.iter("WeightedStroke"))) != 3
-                or len(list(group.iter("PartDraw"))) != 4
-                or len(list(group.iter("Stroke"))) != 1):
+        foreground = [node for child in children for node in child.iter()]
+        if (sum(node.tag == "WeightedStroke" for node in foreground) != 3
+                or sum(node.tag == "PartDraw" for node in foreground) != 4
+                or sum(node.tag == "Stroke" for node in foreground) != 1):
             errors.append(f"{name}: colored paint escaped its three comparisons")
         fallback = selector.find("Default")
         if fallback is not None:
@@ -319,6 +326,67 @@ def tree_content(node):
     """Compare drawing content independently of indentation and XML comments."""
     return (node.tag, node.attrib, (node.text or "").strip(), (node.tail or "").strip(),
             [tree_content(child) for child in element_children(node)])
+
+
+def check_backdrop_restore(root):
+    """Check local declaration coverage, not fractional native raster coverage."""
+    errors = []
+    canvas = {"x": "0", "y": "0", "width": "450", "height": "450"}
+    lift = root.find("Scene/PartDraw[@name='lift']")
+    ellipse = None if lift is None else lift.find("Ellipse")
+    fill = None if ellipse is None else ellipse.find("Fill")
+    gradient = None if fill is None else fill.find("RadialGradient")
+    if (lift is None or lift.attrib != {**canvas, "name": "lift"}
+            or [child.tag for child in lift] != ["Ellipse"]
+            or ellipse is None or ellipse.attrib != canvas
+            or [child.tag for child in ellipse] != ["Fill"]
+            or fill is None or fill.attrib != {"color": "#ff101412"}
+            or [child.tag for child in fill] != ["RadialGradient"]
+            or gradient is None or len(gradient) != 0 or gradient.attrib != {
+                "centerX": "225", "centerY": "216", "radius": "279",
+                "colors": "#ff18201C #ff101412 #ff0A0D0B", "positions": "0.0 0.55 1.0"}):
+        errors.append("backdrop restoration requires the unchanged opaque scene lift")
+
+    restores = root.findall(f".//Group[@name='{N1_RESTORE}']")
+    owner = root.find(
+        ".//ComplicationSlot[@slotId='101']/Complication[@type='RANGED_VALUE']"
+        "/Condition/Compare[@expression='isValid']/Group/Condition/Compare[@expression='isN1']"
+        "/Condition/Default/Group[@name='ring1N1']"
+    )
+    if len(restores) != 1 or owner is None or element_children(owner)[:1] != restores:
+        return errors + ["only admitted unsplit N1 must restore its backdrop before foreground"]
+    restore = restores[0]
+    if (restore.attrib != {**canvas, "name": N1_RESTORE}
+            or [child.tag for child in restore] != ["PartDraw", "PartDraw"]):
+        return errors + ["N1 backdrop restore must isolate only its SOURCE and MASK in a neutral named Group"]
+    source, mask = restore
+    if source.attrib != {**canvas, "name": "ring1N1BackdropSource", "renderMode": "SOURCE"}:
+        errors.append("N1 backdrop must be an opaque full-canvas lift SOURCE")
+    source_copy = deepcopy(source)
+    source_copy.attrib = {**canvas, "name": "lift"}
+    if lift is None or tree_content(source_copy) != tree_content(lift):
+        errors.append("N1 backdrop source must match the scene lift geometry and gradient")
+    arc = mask.find("Arc")
+    stroke = None if arc is None else arc.find("Stroke")
+    if (mask.attrib != {**canvas, "renderMode": "MASK"}
+            or [child.tag for child in mask] != ["Arc"]
+            or arc is None or arc.attrib != {
+                "centerX": "225", "centerY": "225", "width": "387", "height": "387",
+                "startAngle": "0", "endAngle": "359.9"}
+            or [child.tag for child in arc] != ["Stroke"]
+            or stroke is None or len(stroke) != 0 or stroke.attrib != {
+                "color": "#ffffffff", "thickness": "27", "cap": "ROUND"}):
+        return errors + ["N1 restore requires the local white ROUND 180..207 arc MASK"]
+
+    center = float(arc.get("width")) / 2
+    half = float(stroke.get("thickness")) / 2
+    # Include the narrow seam between ROUND endpoints, not just ideal radial edges.
+    half_gap = math.radians((360 - float(arc.get("endAngle"))) / 2)
+    along = center * math.cos(half_gap)
+    reach = math.sqrt(half**2 - (center * math.sin(half_gap))**2)
+    if not (158 < center - half == 180 < along - reach < 202 < along + reach < center + half == 207):
+        errors.append("N1 restore must cross radius 202 with its inner edge inside the opaque track")
+    return errors
 
 
 def alpha_expression(group):
@@ -502,8 +570,8 @@ def check_extra_decisions(root):
 def emitted_band_layers(root, responses):
     """Select actual emitted drawing trees in scene order, with independent slot fields.
 
-    Only usage arcs participate. Strips, textures and diagnostic readouts are outside
-    this analytical family-ownership regression; this is not a native rasterizer.
+    Usage arcs and the separately validated local backdrop mask participate. Strips,
+    textures and diagnostics are outside this declaration model, not a native rasterizer.
     """
     layers = []
 
@@ -535,6 +603,12 @@ def emitted_band_layers(root, responses):
             alpha = alpha * local_alpha / 255
             if alpha == 0:
                 return
+        if node.tag == "Group" and node.get("name") == N1_RESTORE:
+            # Treat the isolated SOURCE/MASK result as backdrop, never a white track.
+            mask = node.find("PartDraw[@renderMode='MASK']/Arc")
+            if mask is not None:
+                visit(mask, fields, "backdrop", alpha)
+            return
         if node.tag == "Arc":
             stroke = node.find("Stroke")
             colored = stroke is None
@@ -548,7 +622,7 @@ def emitted_band_layers(root, responses):
                 start = evaluate_paint(paint_expression(transform.get("value")), **fields)
             layers.append((float(node.get("width")) / 2, float(stroke.get("thickness")),
                            start, float(node.get("endAngle")), stroke.get("cap"),
-                           family if colored else "track", alpha,
+                           family if colored or family == "backdrop" else "track", alpha,
                            stroke.get("colors") if colored else stroke.get("color")))
             return
         for child in node:
@@ -574,7 +648,9 @@ def visible_band_owner(layers, radius, angle):
         if inside:
             if family == "track" and (alpha != 255 or color != "#ff2e3632"):
                 raise ValueError("retained-extra protection requires the emitted opaque track")
-            if family != "track" and color != "[COMPLICATION.RANGED_VALUE_COLORS]":
+            if family == "backdrop" and (alpha != 255 or color != "#ffffffff"):
+                raise ValueError("backdrop restoration requires its opaque local mask")
+            if family not in ("track", "backdrop") and color != "[COMPLICATION.RANGED_VALUE_COLORS]":
                 raise ValueError("family ownership lost its response color source")
             owner = family
     return owner
@@ -583,13 +659,17 @@ def visible_band_owner(layers, radius, angle):
 def check_retained_extra_paint(root):
     errors = []
 
-    def response(value, maximum, title, family):
-        return ({"value": value, "maximum": maximum, "minimum": 0, "title": title}, family)
+    def response(value, maximum, title, family, minimum=0):
+        return ({"value": value, "maximum": maximum, "minimum": minimum, "title": title}, family)
 
     def expect(tree, responses, radius, angle, owner, label):
         actual = visible_band_owner(emitted_band_layers(tree, responses), radius, angle)
         if actual != owner:
             errors.append(f"{label}: visible owner {actual}, expected {owner}")
+
+    def expect_no_restore(responses, label):
+        if any(layer[5] == "backdrop" for layer in emitted_band_layers(root, responses)):
+            errors.append(f"{label}: unsplit N1 restoration escaped its admission")
 
     # Codex37 + Cursor70/Other50. Keep EVERY extra field, including family, unchanged
     # when only the mains become singleton Codex80; NoData is a separate later step.
@@ -614,13 +694,56 @@ def check_retained_extra_paint(root):
     if visible_band_owner(emitted_band_layers(old, changed), 194, 300) != "Other":
         errors.append("retained-extra counterexample no longer exposes the old order")
 
+    # Missing restoration and a mask ending on the foreground edge must both fail.
+    # These are declaration counterexamples, not an antialiasing simulation.
+    for thickness in (None, "17"):
+        broken = deepcopy(root)
+        owner = broken.find(".//Group[@name='ring1N1']")
+        restore = None if owner is None else owner.find(f"Group[@name='{N1_RESTORE}']")
+        if restore is None:
+            errors.append("N1 coverage counterexample requires the emitted restoration")
+            continue
+        if thickness is None:
+            owner.remove(restore)
+        else:
+            restore.find("PartDraw[@renderMode='MASK']/Arc/Stroke").set("thickness", thickness)
+        if not check_backdrop_restore(broken) or visible_band_owner(
+            emitted_band_layers(broken, changed), 203, 300
+        ) == "backdrop":
+            errors.append("missing or insufficient N1 restoration no longer fails the coverage contract")
+
     for slot_id in (106, 109):
-        for value in (0, 2**-20 * 200, 200):
+        for value in (0, 2**-20 * 200, 74, 198, 199.2, 199.8, adjacent_float(200, -1), 200):
             title = "zero" if value == 0 else ""
             state = {101: response(value, 200, title, "Codex"), slot_id: extra}
-            expect(root, state, 194, 300, "Codex" if value == 200 else "track", "zero/tiny/full protection")
-            if 0 < value < 200:
+            expect(root, state, 194, 300, "Codex" if value >= 74 else "track", "zero/tiny/partial/full protection")
+            if 0 < value < 1:
                 expect(root, state, 180, 359.9 - 2**-21 * 359.9, "Codex", "tiny main stays visible")
+            for angle in (0, 30, 180, 300, 359.95):
+                expect(root, state, 203, angle, "backdrop", "restore across outer contour, including seam")
+            expect(root, state, 157.9, 300, None, "restore stays outside aperture")
+            expect(root, state, 207.1, 300, None, "restore stays inside existing extra clip radius")
+
+    for title in ("", "zero", "D", "7D", "M"):
+        for value in (0, 160, 200):
+            expect(root, {101: response(value, 200, title, "Codex")}, 203, 300,
+                   "backdrop", "all admitted unsplit N1 titles retain restoration")
+    for base in ("split", "split:cursor-other", "split:spark"):
+        for suffix in ("", ":zero-inner", ":zero-outer", ":zero-both"):
+            for value in (0, 160, 200):
+                expect_no_restore({101: response(value, 200, base + suffix, "Codex")}, "N1 pair")
+    for maximum in (100, 400, 800):
+        expect_no_restore({101: response(maximum * 0.8, maximum, "", "Codex")}, "other layout")
+    rejected = [response(value, maximum, title, "Codex", minimum)
+                for value, maximum, minimum, title in (
+                    (-1, 200, 0, ""), (201, 200, 0, ""), (math.nan, 200, 0, ""),
+                    (0, 200, 1, ""), (0, 200, math.nan, ""), (0, 0, 0, ""),
+                    (0, math.nan, 0, ""), (160, 200, 0, "split:unknown"),
+                )]
+    for invalid in rejected:
+        expect_no_restore({101: invalid}, "rejected main")
+    for slot_id in (102, 105):
+        expect_no_restore({slot_id: response(160, 200, "", "Codex")}, "impossible N1 position")
 
     # All supported compatible positions and BOTH split ordinals keep adjacent halves.
     for layout, (maximum, _, diameters, _) in BAND_LAYOUTS.items():
@@ -632,6 +755,8 @@ def check_retained_extra_paint(root):
                 state = {main_id: response(maximum * 0.7, maximum, "split:cursor-other", "Cursor"),
                          slot_id: outer_response}
                 label = f"{layout}/ordinal{ordinal}/band{index}"
+                expect_no_restore(state, f"{label} compatible pair")
+                expect_no_restore({slot_id: outer_response}, f"{label} main NoData")
                 expect(root, state, inner / 2, 300, "Cursor", f"{label} compatible inner")
                 expect(root, state, outer / 2, 300, "Other", f"{label} compatible outer")
                 expect(root, {slot_id: outer_response}, outer / 2, 300, "Other", f"{label} main NoData")

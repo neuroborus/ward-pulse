@@ -3540,13 +3540,20 @@ This Source route closes neither the original twelve duties nor broader item12/p
 
 **2026-10-31 retained-extra repair (Source only):** Square's delayed
 Codex37 + Cursor70/Other50 → main-only Codex80 counterexample showed retained Other paint
-overlapping the new band until extra NoData. `face` in `tools/render-watchface.mjs` now
-emits extras before mains so existing opaque main tracks cover that overlap without
-changing admission, geometry, Float precision, MAX semantics, zero/full/tiny, ordinal/family
-placement, credits, periods, ambient treatment or valid extra with main NoData. The emitted-XML
-analytical regression retains every extra field while mains change and distinguishes the
-former order. It proves neither native compositing/antialiasing nor the historical redacted
-TITLE/selected branch. The [owning notes](product/WATCH_RING_DESIGN.md#implementation-repair-2026-10-31--retained-extra-paint)
+overlapping the new band until extra NoData. Ordering extras before mains removed the large
+old teal half in native f5, but matched same-clock main-only/extra-cleared originals still
+differed at **1031 outer-edge pixels**, maximum channel difference **57**, with identical
+main core. Strong-teal classifier zero did not establish fringe acceptance.
+`n1BackdropRestore` in `tools/render-watchface.mjs` now restores the matching opaque lift
+through a local named WFF2 SOURCE/MASK Group before admitted unsplit N1 foreground, including
+zero. Its ROUND 387/27 mask spans radii 180–207 across the unchanged outer contour 202;
+foreground geometry, colors, Float precision, MAX semantics, endpoints, ordinal/family
+placement, credits, periods, ambient treatment and valid extra with main NoData remain fixed.
+Compatible split branches have no restoration. The emitted-XML declaration regression checks
+locality, matching backdrop and coverage, rejects missing/insufficient restoration, retains
+every extra field while mains change and still distinguishes the former scene order. It
+proves neither native compositing/antialiasing nor the historical redacted TITLE/selected
+branch. The [owning notes](product/WATCH_RING_DESIGN.md#implementation-repair-2026-10-31--retained-extra-paint)
 and [manual observation contract](ANDROID_TOOLCHAIN.md#retained-extra-production-payload-observation)
 describe a separately recorded delayed attempt for an explicitly Root-admitted changed
 production XML, with complete reviewed baseline/candidate source/generated/built/installed/
@@ -3556,7 +3563,8 @@ observations, Pending labels and exact recovery receipts remain immutable. Sourc
 does not provision that admission or authorize device action. Shared fixtures, schemas and
 payload versions remain unchanged; no fixture-validator inventory expansion is needed.
 
-The exact corrected-artifact delayed witness remains an acceptance gap. Native required checks
+The new-artifact matched delayed witness remains **Pending**; consumed f5 and its separate
+normal recovery are not acceptance for these bytes. Native required checks
 belong to dedicated FINALIZE; no checks are attested here. After whole execution DONE, owning
 CLI exit, owned-process retirement and a fresh separate idle observation, Root still owns full
 Source review and all original HOST duties: full Wear/watch-face/docs checks, official WFF2 and

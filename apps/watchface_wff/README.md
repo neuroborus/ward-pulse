@@ -77,6 +77,25 @@ assertions retain published Legacy/N3 rounded cutoffs and analytical full-path/c
 N2-to-N3 checks require old 16-unit half Groups to hide and new 10-unit half Groups to appear.
 These checks establish declaration semantics, not retained-renderer behavior or native repair.
 
+`n1BackdropRestore` in `tools/render-watchface.mjs` restores the matching opaque radial lift
+through the isolated named `ring1N1BackdropRestore` SOURCE/MASK Group before the admitted
+unsplit N1 track, family arc and period texture, including zero. Its white ROUND mask spans
+radii 180–207 (diameter 387, thickness 27, centre 225/225, sweep 0–359.9); foreground dimensions
+and colors stay fixed. Pairs and absent/rejected mains contain no restoration. The existing
+extra-before-main order and valid-extra/main-NoData independence remain intact.
+`check_backdrop_restore` and `check_retained_extra_paint` in
+`tools/check-watchface-structure.py` distinguish restoration from foreground and check its
+matching source, local scope, ordering and analytical coverage, with missing/insufficient
+coverage counterexamples. Existing endpoint, ordinal and compatible-pair assertions remain.
+
+Native f5 removed the old large teal overlap, yet matched same-clock main-only/extra-cleared
+originals had 1031 outer-edge pixel differences, maximum channel difference 57, and identical
+main core. Strong-teal classifier zero was insufficient. New-artifact matched native fringe
+acceptance remains **Pending**, with separate later effective-data and ordinary Face/Glance
+recovery required; historical f5 records stay immutable. See the
+[retained-extra repair](../../docs/product/WATCH_RING_DESIGN.md#implementation-repair-2026-10-31--retained-extra-paint)
+for Source/artifact/native boundaries and the existing separately admitted delayed route.
+
 The previous `5c871ac` candidate flattened only `bandArcs`; the normal prefix remained RED,
 with its actual VALUE/TITLE/paint branch unknown. A separate diagnostic case on that Source
 showed `V74/m0/M200/T0/A1/PN` without the expected Spark arc. The subsequent `c36bc1c`

@@ -461,19 +461,20 @@ const HEADER = `<?xml version="1.0" encoding="utf-8"?>
 -->`
 
 /** Radial lift, brighter above centre so the stack reads as sunk into it. */
-function lift() {
-  return `        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="lift">
-            <Ellipse x="0" y="0" width="${FACE.size}" height="${FACE.size}">
-                <Fill color="#ff101412">
-                    <RadialGradient
-                        centerX="${FACE.center}"
-                        centerY="216"
-                        radius="279"
-                        colors="#ff18201C #ff101412 #ff0A0D0B"
-                        positions="0.0 0.55 1.0" />
-                </Fill>
-            </Ellipse>
-        </PartDraw>`
+function lift({ pad = ' '.repeat(8), name = 'lift', renderMode = null } = {}) {
+  const mode = renderMode === null ? '' : ` renderMode="${renderMode}"`
+  return `${pad}<PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}"${mode}>
+${pad}    <Ellipse x="0" y="0" width="${FACE.size}" height="${FACE.size}">
+${pad}        <Fill color="#ff101412">
+${pad}            <RadialGradient
+${pad}                centerX="${FACE.center}"
+${pad}                centerY="216"
+${pad}                radius="279"
+${pad}                colors="#ff18201C #ff101412 #ff0A0D0B"
+${pad}                positions="0.0 0.55 1.0" />
+${pad}        </Fill>
+${pad}    </Ellipse>
+${pad}</PartDraw>`
 }
 
 function cellChromeComment() {
@@ -1174,6 +1175,29 @@ ${pad}    </Arc>
 ${pad}</PartDraw>`
 }
 
+/**
+ * Restore the actual backdrop across the unsplit N1 outer contour before its
+ * foreground. Matching ideal track edges alone left retained-extra fringe paint.
+ * The inner mask edge is inside the opaque track; 207 is the existing extra clip.
+ * This local WFF2 mask leaves foreground geometry and compatible pairs unchanged.
+ */
+function n1BackdropRestore(pad) {
+  return `${pad}<Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="ring1N1BackdropRestore">
+${lift({ pad: `${pad}    `, name: 'ring1N1BackdropSource', renderMode: 'SOURCE' })}
+${pad}    <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" renderMode="MASK">
+${pad}        <Arc
+${pad}            centerX="${FACE.center}"
+${pad}            centerY="${FACE.center}"
+${pad}            width="387"
+${pad}            height="387"
+${pad}            startAngle="${SWEEP.start}"
+${pad}            endAngle="${SWEEP.end}">
+${pad}            <Stroke color="#ffffffff" thickness="27" cap="ROUND" />
+${pad}        </Arc>
+${pad}    </PartDraw>
+${pad}</Group>`
+}
+
 /** The same three drawings serve main/inner selectors and alpha-gated extra decisions. */
 function bandPaint(diameter, thickness, kind, pad) {
   const geometry = meltGeometry(diameter, thickness)
@@ -1297,6 +1321,7 @@ function n1ConsumerFields() {
 function mainBand(layout, index) {
   const { diameter, thickness, full, inner, half } = bandGeometry(layout, index)
   const name = `ring${index + 1}${layout.name}`
+  const restore = layout.name === 'N1' ? `${n1BackdropRestore(' '.repeat(40))}\n` : ''
   return `                        <Compare expression="is${layout.name}">
                             <Condition>
                                 <Expressions>
@@ -1309,7 +1334,7 @@ ${bandArcs(inner, half, ' '.repeat(40))}
                                 </Compare>
                                 <Default>
                                     <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}">
-${bandArcs(full, thickness, ' '.repeat(40))}${ringTexture(diameter, index, layout.count)}
+${restore}${bandArcs(full, thickness, ' '.repeat(40))}${ringTexture(diameter, index, layout.count)}
                                     </Group>
                                 </Default>
                             </Condition>
@@ -1742,7 +1767,7 @@ function face(diagnostics = false) {
       CELLS.map(cellChrome).join('\n\n'),
     ].join('\n'),
     [
-      // Current mains' opaque tracks cover overlapping retained extra paint.
+      // Current main foreground follows extras; unsplit N1 first restores its backdrop.
       // Compatible halves remain adjacent; absent mains still paint nothing.
       OUTER_HALVES.map((slot, ordinal) => outerHalfSlot(slot, ordinal, diagnostics && slot.slotId === 106)).join('\n\n'),
       RINGS.map(ringSlot).join('\n\n'),

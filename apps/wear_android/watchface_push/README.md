@@ -18,6 +18,12 @@ or PNGs. Both packages retain the explicit `app.wardpulse` complication and laun
 The host's affected complication services trust only these two own face packages through
 `android.support.wearable.complications.SAFE_WATCH_FACES`.
 
+The canonical generator's unsplit N1 backdrop restoration is shared by both packages; it
+does not change signing, versions or delivery. Its new-artifact native edge acceptance and
+separate recovery remain Pending under the
+[retained-extra repair](../../../docs/product/WATCH_RING_DESIGN.md#implementation-repair-2026-10-31--retained-extra-paint).
+Official WFF2 validation still does not replace pinned Push semantic validation.
+
 ## Signing inputs
 
 Root provisions/reuses authorized local identities after the Owner resolves existing keys
