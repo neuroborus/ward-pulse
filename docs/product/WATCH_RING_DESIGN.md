@@ -164,6 +164,58 @@ restored ordinary Face/Glance viewing. Unused fixtures, SDK, obsolete or recover
 not replace unseen delayed evidence. Public acceptance follows native acceptance; item12
 and its original compatibility gaps remain open.
 
+## Implementation candidate 2026-10-31 — near-full main paint
+
+On the installed Square cohort, Root and an independent reviewer found the large green
+Codex main/inner arc absent in both original requested and bounded frames for the existing
+singleton Codex/Spark pair: Codex used **0.1**, Spark used **99.96875**. The legend rounded
+to **100/0**. Native VALUE is redacted, MAX is unknown and TITLE is not projected; requests,
+events, types and labels acknowledge neither the selected consumer branch nor its exact
+fields. This is a newly observed paint failure, not a proved regression from an earlier
+product revision or a proved framework/cache fault. Historical originals, reports and
+Pending labels remain unchanged; exact-color counts assign no subpixel trace to a provider.
+
+`bandArcs` in `tools/render-watchface.mjs` replaces only its ordered foreground Condition
+with three stable named full/tiny/round Groups, each initially transparent and driven by a
+mutually exclusive 255-or-zero alpha Transform. Main admission, layout and split selectors
+remain in place. The track stays outside the paint gates; `bandPaint` retains its drawings,
+live response ColorRamp, proportional endpoints, caps and ambient treatment. This adopts
+the existing outer-half paint structure, removing conditional subtree switching from
+main/inner paint selection. The intended 99.9% remainder selects the large ordinary partial;
+effective native values, the historical selected branch and renderer cause remain unknown.
+This is a supported candidate whose native effect still needs acceptance.
+
+`assertLegacyCutoffs` and `assertNearExhaustedArcs` in `tools/render-watchface.mjs`, and
+`check_band_paints` in `tools/check-watchface-structure.py`, inspect emitted alpha decisions
+without first-true selection masking an overlap. They retain endpoint, exact-full/zero,
+ordinary-partial and derived-cutoff assertions across all admitted geometries. The existing
+`check_retained_extra_paint` scene model adds the incident producer's projected wire Floats
+**199.8000030517578 / 200** for Codex and **0.0625 / 200** for Spark, independent family
+ownership and tiny/zero/full outer variants. Suppressed round and overlapping full gate
+counterexamples must fail. These are declaration contracts, not native paint evidence.
+
+WFF2, canvas450/centre225, full/half widths44/22,32/16,20/10, contours, gaps, clip envelopes,
+MAX100/200/400/800 and Float scaling are unchanged. Keep all complete labels, zero/credit/
+budget semantics, family/pool identity, eight slots, services, bindings, taps, central
+composition and interactive/ambient/MUTE distinctions. Extras still precede mains;
+`n1BackdropRestore` remains confined to admitted unsplit N1, preserving valid split extras
+and valid-extra/main-NoData behavior. No shared count, sibling accessor, ACK or diagnostics
+is added. Review art and fixture bytes/timestamps do not change.
+
+**Native repair acceptance remains Pending.** The current incident fixture is consumed;
+this candidate supplies no replay eligibility or device admission. A bounded extension of
+the existing genuine-production-payload observation route for that unchanged fixture belongs
+to the later planned commit, preserving consumed history, complete provenance, payload-bound
+single use, global latest fencing, arm-before-write and exact separate later recovery with
+newer-write protection. After whole execution DONE, actual owning CLI exit, scoped process
+retirement and a fresh separate idle observation, Root still owns complete relevant HOST
+checks, official WFF2 and strict Push semantic validation, affected tests, source/generated/
+built/installed/active joins and a separately reviewed legitimate native witness. Inspect
+every original and effective-data limits, the large green main and independent tiny outer,
+exact restoration and later ordinary Face/Glance recovery. Retained-extra, compatibility,
+delivery, endpoint/cutoff, shape/mode and public-cohort duties remain open; public acceptance
+follows native acceptance. This candidate does not close item12.
+
 ## Revision 2026-10-30 — N1 width 44
 
 The owner approved explicit full/half widths **44/22, 32/16, 20/10**. This replaces only

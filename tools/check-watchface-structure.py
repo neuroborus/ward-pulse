@@ -244,30 +244,28 @@ def check_band_paints(root):
         # The isolated backdrop is checked separately; it is not foreground paint.
         if name == "ring1N1":
             children = [child for child in children if child.get("name") != N1_RESTORE]
-        if len(children) < 2 or [child.tag for child in children[:2]] != ["PartDraw", "Condition"]:
-            errors.append(f"{name}: track must precede the single paint selector")
+        if len(children) < 4 or [child.tag for child in children[:4]] != ["PartDraw"] + ["Group"] * 3:
+            errors.append(f"{name}: track must precede three stable paint Groups")
             continue
-        track, selector = children[:2]
+        track, *decisions = children[:4]
         track_arc = track.find("Arc")
         track_stroke = track.find("Arc/Stroke")
         if (track.attrib != canvas or track_arc is None or track_stroke is None
                 or track_stroke.attrib.get("color") != "#ff2e3632"):
             errors.append(f"{name}: zero must retain its track")
             continue
-        expressions = selector.findall("Expressions/Expression")
-        predicates = {item.get("name"): paint_expression(item.text or "") for item in expressions}
-        branches = selector.findall("Compare")
-        if (len(expressions) != 3 or len(predicates) != 3 or len(branches) != 3
-                or {branch.get("expression") for branch in branches} != set(predicates)):
-            errors.append(f"{name}: expected three locally bound paint comparisons")
-            continue
+        alphas = [alpha_expression(decision) for decision in decisions]
         kinds = []
-        for branch in branches:
-            draws = list(branch.iter("PartDraw"))
-            arcs = list(branch.iter("Arc"))
-            strokes = list(branch.iter("WeightedStroke"))
-            if len(draws) != 1 or len(arcs) != 1 or len(strokes) != 1 or branch.find(".//Condition") is not None:
-                errors.append(f"{name}: each paint comparison must own one drawing subtree")
+        for decision, expected_kind in zip(decisions, ("full", "tiny", "round")):
+            if (decision.attrib != {**canvas, "name": f"{name}_{expected_kind}", "alpha": "0"}
+                    or [child.tag for child in element_children(decision)] != ["Transform", "PartDraw"]):
+                errors.append(f"{name}: each paint gate must be its stable named Group with one drawing")
+                break
+            draws = list(decision.iter("PartDraw"))
+            arcs = list(decision.iter("Arc"))
+            strokes = list(decision.iter("WeightedStroke"))
+            if len(draws) != 1 or len(arcs) != 1 or len(strokes) != 1 or decision.find(".//Condition") is not None:
+                errors.append(f"{name}: each paint gate must own one fixed drawing subtree")
                 break
             draw, arc, stroke = draws[0], arcs[0], strokes[0]
             transforms = arc.findall("Transform")
@@ -286,16 +284,13 @@ def check_band_paints(root):
                     or any(item.get("target") != "startAngle" for item in transforms)):
                 errors.append(f"{name}: paint lost its band geometry, family source or ambient alpha")
         if kinds != ["full", "tiny", "round"]:
-            errors.append(f"{name}: comparisons must own full, tiny, round drawings in that order")
+            errors.append(f"{name}: gates must own full, tiny, round drawings in that order")
             continue
         foreground = [node for child in children for node in child.iter()]
         if (sum(node.tag == "WeightedStroke" for node in foreground) != 3
                 or sum(node.tag == "PartDraw" for node in foreground) != 4
                 or sum(node.tag == "Stroke" for node in foreground) != 1):
-            errors.append(f"{name}: colored paint escaped its three comparisons")
-        fallback = selector.find("Default")
-        if fallback is not None:
-            errors.append(f"{name}: main/inner paint must have no fallback drawing")
+            errors.append(f"{name}: colored paint escaped its three gates")
 
         # Use the published geometry boundary independently of the emitted predicates.
         cap = round(thickness / diameter * 180 / math.pi, 2)
@@ -310,14 +305,13 @@ def check_band_paints(root):
                  (0.999 * maximum, "round"), (adjacent_float(maximum, -1), "round"),
                  (maximum, "full")]
         for value, wanted in cases:
-            # WFF uses the first true Compare, not expression declaration order.
-            actual = next((kind for branch, kind in zip(branches, kinds)
-                           if evaluate_paint(predicates[branch.get("expression")], value, maximum)), "none")
-            if actual != wanted:
-                errors.append(f"{name}: {value}/{maximum} selected {actual}, expected {wanted}")
-            elif actual != "none":
-                arc = branches[kinds.index(actual)].find(".//Arc")
-                if not check_paint_endpoints(arc, actual, diameter, thickness, value, maximum):
+            values = [evaluate_paint(alpha, value, maximum) for alpha in alphas]
+            active = [kind for kind, alpha in zip(kinds, values) if alpha != 0]
+            if any(alpha not in (0, 255) for alpha in values) or active != ([] if wanted == "none" else [wanted]):
+                errors.append(f"{name}: {value}/{maximum} selected {active}, expected {wanted} alone")
+            elif active:
+                arc = decisions[kinds.index(wanted)].find("PartDraw/Arc")
+                if not check_paint_endpoints(arc, wanted, diameter, thickness, value, maximum):
                     errors.append(f"{name}: {value}/{maximum} lost proportional endpoints or full closure")
     return errors
 
@@ -761,6 +755,51 @@ def check_retained_extra_paint(root):
                 expect(root, state, outer / 2, 300, "Other", f"{label} compatible outer")
                 expect(root, {slot_id: outer_response}, outer / 2, 300, "Other", f"{label} main NoData")
                 expect(root, {slot_id: outer_response}, inner / 2, 300, None, f"{label} no invented main")
+
+    # Producer projection of the unchanged near-full/tiny fixture, not observed
+    # native fields: remainingPercent converts to Float before binary N1 scaling.
+    main_value = struct.unpack("!f", struct.pack("!f", 100 - 0.1))[0] * 2
+    tiny_value = 0.0625  # (100 - 99.96875) * 2 is exactly representable.
+    for outer_value in (tiny_value, 0, 200):
+        title = "split:spark:zero-outer" if outer_value == 0 else "split:spark"
+        state = {101: response(main_value, 200, title, "Codex"),
+                 106: response(outer_value, 200, "0", "Spark")}
+        label = f"near-full Codex / Spark{outer_value}"
+        layers = emitted_band_layers(root, state)
+        main_paints = [layer for layer in layers if layer[5] == "Codex"]
+        outer_paints = [layer for layer in layers if layer[5] == "Spark"]
+        if len(main_paints) != 1 or len(outer_paints) != (0 if outer_value == 0 else 1):
+            errors.append(f"{label}: independent main/outer paint must not be suppressed or duplicated")
+        else:
+            center, thickness, start, end, cap, _, alpha, color = main_paints[0]
+            visible = end - start + 2 * round(22 / 338 * 180 / math.pi, 2)
+            if ((center, thickness, cap, alpha, color)
+                    != (169, 22, "ROUND", 255, "[COMPLICATION.RANGED_VALUE_COLORS]")
+                    or not math.isclose(visible, main_value / 200 * 359.9, rel_tol=0, abs_tol=1e-9)):
+                errors.append(f"{label}: actual Float projection lost the proportional main declaration")
+        for angle in (10, 90, 180, 270, 350):
+            expect(root, state, 169, angle, "Codex", f"{label} large inner")
+        expect(root, state, 169, 0, "track", f"{label} main spent gap")
+        expect(root, state, 191, 300, "Spark" if outer_value == 200 else "track", f"{label} outer")
+        if outer_value == tiny_value:
+            expect(root, state, 191, 359.9 - tiny_value / 200 * 359.9 / 2, "Spark", f"{label} tiny outer")
+        expect_no_restore(state, label)
+
+    # The emitted-gate assertions must reject both a suppressed ordinary main
+    # and an overlapping full path, rather than hiding either with first-true selection.
+    for overlap in (False, True):
+        broken = deepcopy(root)
+        round_gate = broken.find(".//Group[@name='ring1N1Half_round']/Transform")
+        full_gate = broken.find(".//Group[@name='ring1N1Half_full']/Transform")
+        if round_gate is None or full_gate is None:
+            errors.append("near-full counterexamples require the emitted stable main gates")
+            continue
+        if overlap:
+            full_gate.set("value", round_gate.get("value"))
+        else:
+            round_gate.set("value", "(0 == 1) ? 255 : 0")
+        if not check_band_paints(broken):
+            errors.append("suppressed or overlapping main paint no longer fails emitted-gate coverage")
     return errors
 
 

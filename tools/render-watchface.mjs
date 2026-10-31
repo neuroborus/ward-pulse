@@ -1000,20 +1000,18 @@ function assertFullRing(diameter, thickness, full) {
 
 /** Legacy and N3 keep the published cutoff, including its six-decimal rounding. */
 function assertLegacyCutoffs() {
-  const emittedCutoff = (diameter, thickness) => Number(
-    bandArcs(diameter, thickness, '').match(/name="isNearEmpty"[^\n]*<= ([\d.]+)/)?.[1],
-  )
+  const tinyDecision = (diameter, thickness) => emittedPaintDecisions(bandArcs(diameter, thickness, ''))
+    .find(({ name }) => name.endsWith('_tiny'))
+  const emittedCutoff = (diameter, thickness) => Number(tinyDecision(diameter, thickness)?.expression
+    .match(/<= ([\d.]+)/)?.[1])
   // This Float lies between the analytical and published 336/20 cutoffs.
   // Both the old percentage range and binary-scaled N3 must still select BUTT.
   const percent = Math.fround(1.8949854373931885)
-  const expression = bandArcs(336, 20, '').match(/name="isNearEmpty"><!\[CDATA\[([^\n]+)\]\]>/)?.[1] ?? ''
-  const selectsTiny = new Function('value', 'max', `return ${expression
-    .replaceAll('[COMPLICATION.RANGED_VALUE_VALUE]', 'value')
-    .replaceAll('[COMPLICATION.RANGED_VALUE_MAX]', 'max')}`)
+  const selectsTiny = tinyDecision(336, 20).alpha
   for (const max of [100, 800]) {
     const value = Math.fround(percent * (max / 100))
     const ratio = Math.fround(value / max)
-    if (!(ratio <= emittedCutoff(336, 20)) || !selectsTiny(value, max)) {
+    if (!(ratio <= emittedCutoff(336, 20)) || selectsTiny(0, max, value, '') !== 255) {
       throw new Error(`MAX${max}: the preserved boundary remainder must select BUTT`)
     }
   }
@@ -1087,12 +1085,24 @@ function assertNearExhaustedArcs() {
     }
 
     const markup = bandArcs(centre, thickness, '')
-    assertFullRing(centre, thickness,
-      markup.match(/<Compare expression="isFull">([\s\S]*?)<\/Compare>/)?.[1] ?? '')
+    const decisions = emittedPaintDecisions(markup)
+    assertFullRing(centre, thickness, decisions.find(({ name }) => name.endsWith('_full'))?.body ?? '')
+    for (const remaining of [0, belowRemaining, aboveRemaining, 0.999, 0.996, 0.99, 0.37, 0.04, 0.01, 0.0000001, 1]) {
+      const active = decisions.filter(({ alpha }) => {
+        const value = alpha(0, 100, remaining * 100, '')
+        if (value !== 0 && value !== 255) throw new Error('main paint gate must emit only 0 or 255')
+        return value === 255
+      })
+      const kind = remaining === 1 ? 'full' : remaining <= geometry.twoCapCutoff ? 'tiny' : 'round'
+      if (decisions.length !== 3 || active.length !== (remaining === 0 ? 0 : 1) ||
+          (active.length === 1 && !active[0].name.endsWith(`_${kind}`))) {
+        throw new Error(`ring ${centre}/${thickness}: emitted paint gates must select only the proportional branch`)
+      }
+    }
     const rawStart = `(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end}`
     const caps = [...markup.matchAll(/cap="(ROUND|BUTT)"/g)].map((match) => match[1])
     if (
-      !markup.includes(`<= ${geometry.cutoffLiteral}`) ||
+      !decisions.find(({ name }) => name.endsWith('_tiny'))?.expression.includes(`<= ${geometry.cutoffLiteral}`) ||
       !markup.includes(`value="${rawStart}"`) ||
       !markup.includes(`* ${SWEEP.end} + ${geometry.cap}`) ||
       caps.join(',') !== 'ROUND,ROUND,BUTT,ROUND'
@@ -1105,7 +1115,7 @@ function assertNearExhaustedArcs() {
 
   for (const [ordinal, slot] of OUTER_HALVES.entries()) {
     const markup = outerHalfSlot(slot, ordinal)
-    const decisions = emittedExtraDecisions(markup)
+    const decisions = emittedPaintDecisions(markup)
     const clip = markup.match(/<BoundingArc\s+([\s\S]*?)\/>/)?.[1] ?? ''
     const attributes = Object.fromEntries(
       [...clip.matchAll(/(\w+)="([^"]*)"/g)].map((match) => [match[1], match[2]]),
@@ -1198,7 +1208,7 @@ ${pad}    </PartDraw>
 ${pad}</Group>`
 }
 
-/** The same three drawings serve main/inner selectors and alpha-gated extra decisions. */
+/** The same three drawings serve alpha-gated main/inner and extra decisions. */
 function bandPaint(diameter, thickness, kind, pad) {
   const geometry = meltGeometry(diameter, thickness)
   const end = kind === 'round' ? geometry.insetEnd.toFixed(2) : SWEEP.end
@@ -1235,34 +1245,23 @@ ${pad}</PartDraw>`
  * visible sweep equal to the proportional centreline. Exact full uses neither
  * inset: one almost-closed path keeps the ROUND endpoints together at 12.
  */
-function bandArcs(diameter, thickness, pad) {
+function bandArcs(diameter, thickness, pad, name = 'band') {
   const geometry = meltGeometry(diameter, thickness)
+  const value = '[COMPLICATION.RANGED_VALUE_VALUE]'
+  const maximum = '[COMPLICATION.RANGED_VALUE_MAX]'
+  const partial = `${value} > 0 && ${value} < ${maximum}`
+  const decisions = [
+    ['full', `${value} > 0 && ${value} >= ${maximum}`],
+    ['tiny', `${partial} && (${value} / ${maximum}) <= ${geometry.cutoffLiteral}`],
+    ['round', `${partial} && (${value} / ${maximum}) > ${geometry.cutoffLiteral}`],
+  ].map(([kind, predicate]) => `${pad}<Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}_${kind}" alpha="0">
+${alphaTransform(predicate, `${pad}    `)}
+${bandPaint(diameter, thickness, kind, `${pad}    `)}
+${pad}</Group>`).join('\n')
   return `${bandTrack(diameter, thickness, pad)}
-${pad}<Condition>
-${pad}    <Expressions>
-${pad}        <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && [COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-${pad}        <Expression name="isNearEmpty"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0 && ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= ${geometry.cutoffLiteral}]]></Expression>
-${pad}        <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
-${pad}    </Expressions>
-${pad}    <!-- First true wins: positive full, tiny, then round partial.
-${pad}         Zero retains only the track; no coloured arc or cap is drawn. -->
-${pad}    <!-- Exact full has no usage gap: omit BOTH cap insets, keeping the
-${pad}         endpoints 0.1 degrees apart in one path. A literal 360-degree
-${pad}         ROUND sweep historically collapsed to a tip on the watch. -->
-${pad}    <Compare expression="isFull">
-${bandPaint(diameter, thickness, 'full', `${pad}        `)}
-${pad}    </Compare>
-${pad}    <!-- The two-cap inset cannot represent a smaller positive remainder:
-${pad}         its sweep would be zero or negative. Keep the proportional
-${pad}         centreline without either inset and use straight ends so the
-${pad}         visible sweep does not overstate the remainder. -->
-${pad}    <Compare expression="isNearEmpty">
-${bandPaint(diameter, thickness, 'tiny', `${pad}        `)}
-${pad}    </Compare>
-${pad}    <Compare expression="hasRemaining">
-${bandPaint(diameter, thickness, 'round', `${pad}        `)}
-${pad}    </Compare>
-${pad}</Condition>`
+${pad}<!-- Stable foreground trees have mutually exclusive alpha gates.
+${pad}     Zero retains only the track; ambient dims each unchanged drawing. -->
+${decisions}`
 }
 
 // All six readout boxes are inside r139..171.25, below the clock, outside the
@@ -1329,12 +1328,12 @@ function mainBand(layout, index) {
                                 </Expressions>
                                 <Compare expression="isSplit">
                                     <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}Half">
-${bandArcs(inner, half, ' '.repeat(40))}
+${bandArcs(inner, half, ' '.repeat(40), `${name}Half`)}
                                     </Group>
                                 </Compare>
                                 <Default>
                                     <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}">
-${restore}${bandArcs(full, thickness, ' '.repeat(40))}${ringTexture(diameter, index, layout.count)}
+${restore}${bandArcs(full, thickness, ' '.repeat(40), name)}${ringTexture(diameter, index, layout.count)}
                                     </Group>
                                 </Default>
                             </Condition>
@@ -1474,11 +1473,14 @@ function emittedExpressions(markup) {
     .map(([, name, expression]) => [name, emittedValue(expression)]))
 }
 
-/** Normal extras have fixed drawing Groups; the XML checker enforces that structure. */
-function emittedExtraDecisions(markup) {
-  return [...markup.matchAll(/<Group [^>]*name="(outerHalf[^"]+)" alpha="0">\s*<Transform target="alpha" value="([^"]+)" \/>([\s\S]*?)<\/Group>/g)]
-    .map(([, name, expression, body]) => ({ name, body, alpha: emittedValue(expression
-      .replaceAll('&quot;', '"').replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&amp;', '&')) }))
+/** Paint gates have fixed drawing Groups; the XML checker enforces that structure. */
+function emittedPaintDecisions(markup) {
+  return [...markup.matchAll(/<Group [^>]*name="([^"]+)" alpha="0">\s*<Transform target="alpha" value="([^"]+)" \/>([\s\S]*?)<\/Group>/g)]
+    .map(([, name, encoded, body]) => {
+      const expression = encoded.replaceAll('&quot;', '"').replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>').replaceAll('&amp;', '&')
+      return { name, body, expression, alpha: emittedValue(expression) }
+    })
 }
 
 /** Exercise every emitted alpha decision, including non-finite wire fields. */
@@ -1509,7 +1511,7 @@ function assertLowerContracts() {
     }
   }
   for (const [ordinal, slot] of OUTER_HALVES.entries()) {
-    const decisions = emittedExtraDecisions(outerHalfSlot(slot, ordinal))
+    const decisions = emittedPaintDecisions(outerHalfSlot(slot, ordinal))
     const selected = (...fields) => decisions.filter(({ alpha }) => {
       const value = alpha(...fields)
       if (value !== 0 && value !== 255) throw new Error(`extra ${ordinal}: gate must emit only 0 or 255`)

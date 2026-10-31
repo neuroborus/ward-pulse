@@ -3573,6 +3573,36 @@ and justified finite observations, exact recovery and restored ordinary Face/Gla
 Unused fixtures, SDK, obsolete or recovery cases cannot replace unseen delayed evidence.
 Public acceptance follows native acceptance; item12 and all historical compatibility gaps stay open.
 
+**2026-10-31 near-full main candidate (Source only):** Root and an independent reviewer
+confirmed the missing large green Codex inner arc in both requested and bounded Square
+originals for the existing singleton pair, Codex used0.1 / Spark used99.96875. Rounded 100/0
+labels, requests/events/types and exact-color counts establish neither effective native
+fields, selected branch nor provider-attributed subpixel paint. The renderer cause and
+whether this is a regression from an earlier product revision remain unknown.
+`bandArcs` in `tools/render-watchface.mjs` now retains three stable named foreground Groups
+with mutually exclusive alpha gates for full/tiny/ordinary-partial, following the outer-half
+structure. Tracks stay outside the gates and `bandPaint`, main admission/layout/split
+selectors, geometry, palette, Float/MAX scaling, semantic labels, modes, services and eight
+slots are unchanged. Extras still precede mains and only admitted unsplit N1 restores its
+backdrop. Emitted-declaration assertions retain all cutoff/endpoint cases, reject suppressed
+or overlapping foreground gates and model the incident's projected Floats with independent
+tiny/zero/full outer variants. This proves declarations, not restored native paint. See the
+[dated candidate contract](product/WATCH_RING_DESIGN.md#implementation-candidate-2026-10-31--near-full-main-paint).
+
+**Native acceptance remains Pending.** The consumed incident fixture and all prior evidence
+remain immutable. Its necessary bounded genuine-production-payload admission extension is
+the later planned commit; this source candidate creates no replay or device permission.
+Native required checks belong solely to dedicated FINALIZE and are not attested here.
+After whole DONE, actual owning CLI exit, scoped process retirement and fresh separate idle,
+Root retains complete relevant HOST gates, official WFF2/strict Push semantic validation,
+affected tests, source/generated/built/installed/active joins, separately reviewed witness
+admission and inspection of every original with effective-data limits. Confirm the large
+green main and tiny outer independently, exact restoration, separate later recovery and
+ordinary Face/Glance recovery. The retained-extra witness, all original item12 compatibility,
+delivery, split, endpoint/cutoff, shape/mode, phone-retention and public-cohort obligations
+remain open. Root repeats its full independent pass after the last correction; public
+acceptance follows native acceptance. No item12 completion is claimed.
+
 Before later explicit normal UI Update 4→5, freshly prove installed Push 4/hash/signer,
 owned manager slot, eight retained choices and quiet-writer custody. Keep Legacy active;
 verify returned same-slot identity and separate settled retention through the existing
