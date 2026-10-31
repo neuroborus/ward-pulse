@@ -26,6 +26,7 @@ A Cursor secondary half sharing Codex's band while its mate occupies another is 
 When a pair is removed, reordered or absent, verify that the previously occupied split surface no longer
 draws stale data. Trace both configured split routes, not only the currently visible first pair. Static
 arithmetic or a correct TITLE branch is producer/resource evidence, not proof of the value delivered to the live bound renderer.
+A constructible SDK object is not by itself an adequate positive paint control: preserve and verify the actual consumer's required inputs, including ColorRamp when used; absent optional SDK data proves no platform default. Negative controls must retain unrelated consumed inputs, changing only the intended invalid field/envelope.
 
 ## Inspect actual original frames
 
