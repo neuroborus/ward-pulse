@@ -699,9 +699,9 @@ change, including Codex37 + Cursor70/Other50 → Codex80, then separate extra No
 Native compositing/antialiasing and the historically redacted TITLE/selected branch remain
 unproved. See the [owning implementation notes](../../docs/product/WATCH_RING_DESIGN.md#implementation-repair-2026-10-31--retained-extra-paint).
 
-The consumed Square `normal`, `fixture-n1_pair_zero_full` and `delayed` records and their
-exact recovery receipts are never reopened or rewritten. A proposed **separate** delayed
-observation requires Root's explicit admission of a genuinely different production WFF
+The consumed Square `normal`, `fixture-n1_pair_zero_full`, `fixture-n1_pair_near_full_tiny`
+and `delayed` records and their exact recovery receipts are never reopened or rewritten.
+A proposed **separate** observation requires Root's explicit admission of a genuinely different production WFF
 XML, with a reviewed private `files/native_datasource/retained-extra-admission.json` record
 and its exact `expectedRetainedExtraAdmissionSha256`. Source preparation grants neither
 record provisioning nor device mutation. Missing baseline/candidate provenance blocks the
@@ -710,17 +710,25 @@ binds reviewed generator source, generated XML, built APK payload, installed res
 active renderer. APK/signature, test, probe, instance or configuration changes alone do not
 qualify. No new product schema, format, slot, dependency or producer behavior is introduced.
 
-`observeDelivery` still selects `deliveryScenario=delayed`, with exact authorization
-`observeDelivery:delayed-payload-<production-XML-SHA256>` for the admitted artifact. It uses
-the original delayed stages and the same summary lease/targeted service requests. The new
-directory `delayed-payload-<production-XML-SHA256>/` is reserved durably before any summary
+`observeDelivery` selects `deliveryScenario=delayed` or, with the **2026-10-31 near-full
+extension**, exactly `fixture-n1_pair_near_full_tiny`. The reviewed admission's scenario
+must match. Exact authorization is `observeDelivery:<scenario>-payload-<production-XML-SHA256>`;
+the delayed route keeps its original identifier and stages. The near-full route requires a
+debug target and `expectedFixtureSha256=4aa6180f44dcb5c920a15f12ef5f5dd4167d87ab1e9ff7ee8b86bd2b8d97f4e8`.
+It publishes the unchanged packaged `watch_dashboard_summary_n1_pair_near_full_tiny.json`
+through the same summary lease/store and targeted services, with the ordinary single
+`fixture` stage. Its consumed baseline receipt must identify exactly that asset/hash, exact
+original-byte restoration and a separately recorded later recovery. No other fixture gains
+production-payload admission. The directory `<scenario>-payload-<production-XML-SHA256>/`
+is reserved once per scenario/payload, durably before any summary
 publication or request, with the global `latest.json` armed first. Partial attempts fence
 later work; an already reserved payload cannot be replayed, even after recovery or with
 new probe/admission bytes. The reservation is outside the receipt-writing failure handler,
 so rejection cannot overwrite the first attempt. Original scenario paths continue to
 resolve unchanged. Prior-recovery checks accept the new receipt only with its payload
-identity, exact reviewed receipt hash and separate later restoration; normal-recovery
-consumers may explicitly select that same payload-bound case. `observeRestoration` requires
+identity, exact reviewed receipt hash and separate later restoration. Normal-recovery
+consumers may explicitly select a delayed payload case; fixture payloads never qualify as
+normal controls. `observeRestoration` requires
 the same admission and latest case, and leaves native/frame review Pending. The existing
 newer-publication protection remains in force for reserved attempts. SDK/client normal-recovery
 consumers also enforce exact prior recovery whenever a candidate is globally latest, so an
@@ -730,7 +738,7 @@ Synthetic private coverage extends
 `NativeDatasourceGuardTest.explicitProbeSelectionRetainsHistoryAndRejectsReusedOrChangedEvidence`
 and `failedPublicationRestoresOnlyOwnedDataAndRetainsUnresolvedRecovery`; no methods or default
 exclusions change. Execution of these tests remains a later HOST duty. This contract evolution
-is neither admission nor acceptance. The exact corrected-artifact delayed witness remains
+is neither admission nor acceptance. The exact corrected-artifact delayed and near-full witnesses remain
 Pending until separately admitted and observed after whole DONE, owning CLI exit, owned-process
 retirement and a fresh separate idle observation. Complete Source/HOST review, native artifact
 joins, justified finite cases, exact recovery and restored ordinary Face/Glance verification
@@ -750,7 +758,7 @@ assets. In this table each suffix means `watch_dashboard_summary_<suffix>.json` 
 | `credits_only`, `plan_credits`, `n1_week_near_full`, `n2_week_day`, `n2_month_month` | `WatchSummaryStoreTest.creditsAndBudgetFixturesBuildExactComplicationEnvelopes`: credits-only 500, matching Codex strip 320 (aggregate 400), Week/Day order and Month radii |
 | `n3_reorder` | One lease publishes `n3_reorder_before` then `n3_reorder_after`; the N3 endpoint oracle retains mains 720/240/80 → 600/360/40, extras 560@2 and 640@1 → 760@0, and obsolete second-extra NoData |
 
-Fixture publication requires a debug build, exact
+The original finite-catalog fixture route requires a debug build, exact
 `authorizedOperation=observeDelivery:<deliveryScenario>` and an independently supplied
 `expectedFixtureSha256`. The reorder additionally requires `expectedReorderAfterSha256`;
 `readNativeDeliveryFixtures` verifies **both** original byte arrays before any case write or
@@ -761,7 +769,7 @@ normal decoder behavior stay intact. These inputs establish no healthy public co
 
 Each fixture requests the same freshly joined intended provider groups through normal services.
 Reorder records `reorder-before` and `reorder-after` independently within the same lease;
-single inputs use stage `fixture`. The private `files/native_datasource/<scenario>/receipt.json`
+single inputs use stage `fixture`. The original route's private `files/native_datasource/<scenario>/receipt.json`
 retains all selected asset names/hashes and initially Pending stages in `fixtureInputs`, separate
 publication states/hashes in `publications`, and bounded request/event/effective-data records in
 `events`. `observeNativeDeliveryStage` joins each stage's exact fixture/accepted-summary hashes,
@@ -778,7 +786,9 @@ effective delivery or paint. No later frame substitutes for an unseen reorder-be
 
 Catalog cases share the global single-use/latest-case and separate later-restoration review
 fences with normal and SDK cases. `requireNativeNormalRecovery` still accepts only the four
-reviewed normal controls for SDK/client admission. A new probe ID never reopens a fixture case.
+reviewed normal controls and separately admitted delayed payload cases for SDK/client
+admission. The near-full payload case also fences later mutations while globally latest,
+but never qualifies as a normal control. A new probe ID never reopens a fixture case.
 The existing four datasource guard methods add finite-catalog/path and exact authorization/hash
 rejection, unchanged-byte publication, global fencing and newer-write-safe targeted recovery
 using private preferences and injected requests. The existing cleanup guard also exercises the

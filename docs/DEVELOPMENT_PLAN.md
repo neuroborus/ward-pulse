@@ -3590,8 +3590,7 @@ tiny/zero/full outer variants. This proves declarations, not restored native pai
 [dated candidate contract](product/WATCH_RING_DESIGN.md#implementation-candidate-2026-10-31--near-full-main-paint).
 
 **Native acceptance remains Pending.** The consumed incident fixture and all prior evidence
-remain immutable. Its necessary bounded genuine-production-payload admission extension is
-the later planned commit; this source candidate creates no replay or device permission.
+remain immutable. This source candidate creates no replay or device permission.
 Native required checks belong solely to dedicated FINALIZE and are not attested here.
 After whole DONE, actual owning CLI exit, scoped process retirement and fresh separate idle,
 Root retains complete relevant HOST gates, official WFF2/strict Push semantic validation,
@@ -3602,6 +3601,27 @@ ordinary Face/Glance recovery. The retained-extra witness, all original item12 c
 delivery, split, endpoint/cutoff, shape/mode, phone-retention and public-cohort obligations
 remain open. Root repeats its full independent pass after the last correction; public
 acceptance follows native acceptance. No item12 completion is claimed.
+
+**2026-10-31 near-full witness support (Source only):** The existing production-payload
+admission path in `NativeDatasourceState.kt` and `NativeDatasourceTransitionTest` now admits
+exactly `fixture-n1_pair_near_full_tiny` alongside the unchanged delayed route. It requires
+that scenario's separately reviewed consumed-baseline receipt/recovery, complete reviewed
+baseline/candidate source/generated/built/installed/active joins, genuinely changed generator
+and production XML, and the existing packaged fixture's fixed SHA-256
+`4aa6180f44dcb5c920a15f12ef5f5dd4167d87ab1e9ff7ee8b86bd2b8d97f4e8` before reservation/effects.
+The fixture's bytes and timestamp pass unchanged through the existing lease/store/targeted
+services. Exact scenario/payload authorization, durable once-only reservation, global latest,
+partial-attempt and arm-before-write fencing, separate later recovery and newer-write
+protection remain in force. Incident payload receipts fence subsequent writes but never
+qualify as normal controls. All consumed history stays consumed; identifier churn or the
+same XML confers no eligibility. Existing guard methods add bounded rejection, unchanged-byte
+publication and reserved failure/newer-write recovery coverage; discovery/exclusions are unchanged.
+The [owning observation contract](../apps/wear_android/README.md#guarded-normal-datasource-observations)
+and [invocation/recovery arguments](ANDROID_TOOLCHAIN.md#retained-extra-production-payload-observation)
+describe the extension. No admission is provisioned or witness run here. Kotlin execution
+remains HOST-owned; required Native checks belong only to FINALIZE, with no PASS attested.
+Near-full paint, artifact identity joins, exact/later and ordinary Face/Glance recovery,
+retained-extra and every broader item12/public-cohort duty above remain **Pending**.
 
 Before later explicit normal UI Update 4→5, freshly prove installed Push 4/hash/signer,
 owned manager slot, eight retained choices and quiet-writer custody. Keep Legacy active;

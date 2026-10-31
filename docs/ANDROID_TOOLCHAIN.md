@@ -1411,7 +1411,7 @@ For one `observeDelivery` invocation, retain the same identity arguments and sel
 | Argument | Required value |
 | --- | --- |
 | `deliveryScenario` | One of `normal`, `delayed`, `obsolete`, `recovery`, or the 18 finite `fixture-*` scenarios in the [catalog](../apps/wear_android/README.md#guarded-normal-datasource-observations) |
-| `authorizedOperation` | `observeDelivery:<deliveryScenario>`, explicitly authorizing this exact scenario's publications, bounded requests and recovery |
+| `authorizedOperation` | `observeDelivery:<deliveryScenario>`, or the separately admitted production-payload operation below, explicitly authorizing this exact scenario's publications, bounded requests and recovery |
 | `quietWriters` | `confirmed-unpaired`, after establishing the HOST precondition |
 | `firstFrameReview` | `complete-unobscured`, after inspecting this probe's original |
 | `expectedDeliveryProbeSha256` | SHA-256 of the exact selected `probes/<id>/receipt.json` |
@@ -1440,15 +1440,17 @@ event timeout or the final frame. Redacted native fields can leave semantics una
 
 This 2026-10-31 test-contract extension is Source support only. It grants no early
 provisioning, device write or native acceptance. Square `normal`,
-`fixture-n1_pair_zero_full` and `delayed` remain consumed, with original frames, historical
-Pending labels and exact old recovery receipts unchanged. Root must separately admit both
+`fixture-n1_pair_zero_full`, `fixture-n1_pair_near_full_tiny` and `delayed` remain consumed,
+with original frames, historical Pending labels and exact old recovery receipts unchanged.
+Root must separately admit both
 the actual changed **production** WFF payload and its observation, after whole execution
 DONE, owning CLI exit, owned-process retirement and a fresh separate idle observation.
-Unused fixture, SDK, obsolete and recovery cases do not replace the delayed witness.
+Unused fixture, SDK, obsolete and recovery cases do not replace either required witness.
 
-Keep `deliveryScenario=delayed` and the same probe/identity/recovery arguments above. Only
-this scenario permits `expectedRetainedExtraAdmissionSha256`, the exact SHA-256 of the
-Root-reviewed private `files/native_datasource/retained-extra-admission.json`. Its bytes
+Keep the same probe/identity/recovery arguments above. The **2026-10-31 near-full extension**
+permits exactly `deliveryScenario=fixture-n1_pair_near_full_tiny` alongside retained `delayed`
+support. Only these two scenarios permit `expectedRetainedExtraAdmissionSha256`, the exact
+SHA-256 of the Root-reviewed private `files/native_datasource/retained-extra-admission.json`. Its bytes
 must already be present through separately authorized HOST provisioning. The code accepts
 no caller-selected path, automatic baseline, migration or provenance fallback. Sidecars,
 missing/changed bytes, incomplete joins or missing historical evidence block observation.
@@ -1458,17 +1460,17 @@ checks the record before reservation, publication or requests. Its private recor
 
 | Field | Required meaning |
 | --- | --- |
-| `kind`, `scenario` | Exactly `retained-extra-production-payload`, `delayed` |
+| `kind`, `scenario` | Exactly `retained-extra-production-payload` and the selected `delayed` or `fixture-n1_pair_near_full_tiny` scenario |
 | `baseline`, `candidate` | Separate artifact objects, with every field below |
 | `sourceSha256` | SHA-256 of that artifact's reviewed `tools/render-watchface.mjs` source |
 | `generatedXmlSha256`, `builtXmlSha256`, `installedXmlSha256` | Identical SHA-256 digests of canonical generated XML, the actual built production APK's raw `watchface.xml`, and the installed resource bytes for that artifact |
 | `builtApkSha256`, `resourceApkSha256` | Identical SHA-256 digests of the built and installed resource APK |
 | `resourcePackage` | The actual Legacy or owned Push resource package |
 | `instanceSha256`, `configurationSha256`, `scopeSha256` | Artifact's actual active renderer instance/configuration hashes and complete delivery mapping provenance scope hash |
-| `baseline.receiptSha256` | Exact immutable original `delayed/receipt.json` hash, including its separate later restoration; its scope must equal the baseline scope |
+| `baseline.receiptSha256` | Exact immutable original `<scenario>/receipt.json` hash, including its separate later restoration; its scenario and scope must equal the admission scenario and baseline scope |
 
 All digests are lowercase 64-character SHA-256 strings. Root's review binds the baseline
-source/generated/built/installed/active evidence to the original delayed receipt, and
+source/generated/built/installed/active evidence to that scenario's original consumed receipt, and
 the candidate joins to the actual production artifact. The hash-pinned record is an explicit
 owner attestation of historical/source/build joins; the instrumentation cannot independently
 reconstruct historical installed bytes or inspect the host checkout. Missing evidence must
@@ -1485,20 +1487,31 @@ match the ordinary `expectedResourceApkSha256`/`expectedResourceSignerSha256` ar
 Package access or an unresolved artifact join is a real capability gap, never permission
 to replace the target or change the XML identity to manufacture admission.
 
-Set `authorizedOperation=observeDelivery:delayed-payload-<candidate.generatedXmlSha256>`.
-The payload digest alone keys the separate attempt directory, regardless of admission/test/
-probe changes. `reserveNativeRetainedExtraCase` arms global `latest.json`, creates that fresh
+For the near-full scenario, also supply
+`expectedFixtureSha256=4aa6180f44dcb5c920a15f12ef5f5dd4167d87ab1e9ff7ee8b86bd2b8d97f4e8`
+and a debug target. The baseline receipt must contain exactly one `fixtureInputs` entry for
+`watch_dashboard_summary_n1_pair_near_full_tiny.json` with that hash and exact original-byte
+restoration. Instrumentation verifies the actual packaged bytes before reservation, then
+passes the original UTF-8 string, mock mode and historical timestamp unchanged through the
+existing summary lease/store and targeted services. It records the existing single `fixture`
+stage. No other fixture or arbitrary asset/path is admitted by this extension.
+
+Set `authorizedOperation=observeDelivery:<scenario>-payload-<candidate.generatedXmlSha256>`.
+The delayed operation/path remains unchanged; the near-full prefix is exactly
+`fixture-n1_pair_near_full_tiny-payload-`. Scenario and payload digest key the separate attempt
+directory, regardless of admission/test/probe changes. `reserveNativeRetainedExtraCase` arms global `latest.json`, creates that fresh
 directory and durably persists its receipt before the summary lease can publish or dispatch.
 A partial reservation fences later mutations through the global prior-recovery gate; a
-reserved payload cannot replay after failure or recovery. Candidate receipts retain the reviewed
+reserved scenario/payload cannot replay after failure or recovery. Candidate receipts retain the reviewed
 admission content/hash and production XML digest. Legacy recovery resolution is unchanged.
 `normalRestorationScenario` may explicitly select `delayed-payload-<digest>` when a later
-SDK/client route needs that exact separately reviewed normal recovery.
+SDK/client route needs that exact separately reviewed normal recovery. A near-full fixture
+payload receipt never qualifies as a normal control; existing normal qualifications are unchanged.
 While a candidate is globally latest, both normal-recovery consumers also require its
 `priorDeliveryRestorationReview=complete` and exact `expectedPriorDeliveryRestorationSha256`;
 an older normal receipt cannot bypass a partial or unresolved candidate attempt.
 
-Run separate `observeRestoration` only with the same admission/hash and `deliveryScenario=delayed`.
+Run separate `observeRestoration` only with the same admission/hash and selected `deliveryScenario`.
 It must still be the global latest case; the saved admission hash and current artifact joins
 must match before its one later frame is armed. The existing lease preserves newer producer
 data and independent targeted cleanup. Immediate cleanup is not later restoration or paint
@@ -1512,7 +1525,11 @@ covers synthetic admission/history/replay/partial-attempt rejection; the existin
 under failure and newer publication. These extend existing methods, preserving default/manual
 discovery counts. Their execution, native compositing/antialiasing, original effective-data/frame
 review, candidate joins, justified finite cases, exact recovery and restored ordinary Face/Glance
-verification remain later HOST duties. Corrected-artifact delayed acceptance is **Pending**;
+verification remain later HOST duties. For near-full acceptance, inspect every original and
+actual effective-data limits, the large green Codex main proportion and independent tiny Spark
+outer. Requests/events/types and rounded 100/0 labels establish neither the native fields,
+selected branch nor repaired paint. Verify exact restoration, separate later recovery and
+ordinary Face/Glance recovery. Corrected-artifact delayed and near-full acceptance is **Pending**;
 this route is neither an admission, waiver nor PASS. All original item12 compatibility and
 acceptance obligations remain required; public acceptance follows native acceptance.
 

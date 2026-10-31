@@ -38,15 +38,27 @@ internal fun nativeDeliveryAssets(scenario: String): List<String> {
 
 internal data class NativeDeliveryFixture(val asset: String, val sha256: String, val encoded: String)
 
+private const val NEAR_FULL_SCENARIO = "fixture-n1_pair_near_full_tiny"
+private const val NEAR_FULL_FIXTURE_SHA256 = "4aa6180f44dcb5c920a15f12ef5f5dd4167d87ab1e9ff7ee8b86bd2b8d97f4e8"
+private val nativeRetainedExtraScenarios = setOf("delayed", NEAR_FULL_SCENARIO)
+private val nativeRetainedExtraCasePattern = Regex("(delayed|$NEAR_FULL_SCENARIO)-payload-[a-f0-9]{64}")
+
 /** Validate every selected byte/hash before any case, lease, publication or provider effect. */
 internal fun readNativeDeliveryFixtures(scenario: String, expected: NativePushExpectations, debug: Boolean,
+    admission: JSONObject? = null,
     read: (String) -> ByteArray): List<NativeDeliveryFixture> {
     val assets = nativeDeliveryAssets(scenario)
-    requireNativeDatasourceMutation(expected, "observeDelivery:$scenario")
+    val case = if (admission == null) scenario else {
+        nativeGuard(admission.getString("scenario") == scenario, "retained-extra-fixture-scenario")
+        nativeRetainedExtraCase(admission)
+    }
+    requireNativeDatasourceMutation(expected, "observeDelivery:$case")
     if (assets.isEmpty()) return emptyList()
     nativeGuard(debug, "debug-fixture-delivery")
     val hashes = listOf(expected.hash("expectedFixtureSha256")) +
         if (assets.size == 2) listOf(expected.hash("expectedReorderAfterSha256")) else emptyList()
+    if (admission != null) nativeGuard(scenario == NEAR_FULL_SCENARIO &&
+        hashes == listOf(NEAR_FULL_FIXTURE_SHA256), "retained-extra-fixture-sha256")
     return assets.zip(hashes).map { (asset, hash) ->
         val bytes = read(asset)
         nativeGuard(bytes.inputStream().sha256() == hash, "delivery-fixture-sha256")
@@ -67,8 +79,10 @@ internal fun readNativeRetainedExtraAdmission(root: File, expected: NativePushEx
     installed: () -> Pair<NativePackage, String>): JSONObject {
     val file = File(root, "retained-extra-admission.json")
     val admission = readNativeReviewedRecord(file, expected.hash("expectedRetainedExtraAdmissionSha256"))
+    val scenario = admission.getString("scenario")
     nativeGuard(admission.getString("kind") == "retained-extra-production-payload" &&
-        admission.getString("scenario") == "delayed", "retained-extra-admission-kind")
+        scenario in nativeRetainedExtraScenarios && scenario == expected.required("deliveryScenario"),
+        "retained-extra-admission-kind")
     val baseline = admission.getJSONObject("baseline")
     val candidate = admission.getJSONObject("candidate")
     fun hash(record: JSONObject, key: String) = record.optString(key).also {
@@ -83,12 +97,17 @@ internal fun readNativeRetainedExtraAdmission(root: File, expected: NativePushEx
             "retained-extra-artifact-join")
         listOf("instanceSha256", "configurationSha256", "scopeSha256").forEach { hash(artifact, it) }
     }
-    val original = readNativeReviewedRecord(File(root, "delayed/receipt.json"), hash(baseline, "receiptSha256"))
-    nativeGuard(original.getString("scenario") == "delayed" &&
+    val original = readNativeReviewedRecord(File(root, "$scenario/receipt.json"), hash(baseline, "receiptSha256"))
+    nativeGuard(original.getString("scenario") == scenario &&
         original.getString("scopeSha256") == baseline.getString("scopeSha256") &&
         original.optString("cleanupRequest") == "normal requestUpdate returned; effective restoration Pending" &&
         original.optString("laterRestoration") == "recorded; original-frame inspection and response provenance Pending",
         "retained-extra-baseline-recovery")
+    if (scenario == NEAR_FULL_SCENARIO) {
+        requireNativeNearFullFixture(original)
+        nativeGuard(original.optString("restoration") in setOf("original bytes observed", "original bytes restored"),
+            "retained-extra-baseline-restoration")
+    }
     nativeGuard(candidate.getString("generatedXmlSha256") != baseline.getString("generatedXmlSha256") &&
         candidate.getString("sourceSha256") != baseline.getString("sourceSha256"),
         "retained-extra-production-change")
@@ -114,21 +133,31 @@ private fun readNativeReviewedRecord(file: File, sha256: String): JSONObject {
     return JSONObject(bytes.toString(Charsets.UTF_8))
 }
 
-internal fun nativeRetainedExtraCase(admission: JSONObject): String =
-    "delayed-payload-${admission.getJSONObject("candidate").getString("generatedXmlSha256")}".also {
-        nativeGuard(it.matches(Regex("delayed-payload-[a-f0-9]{64}")), "retained-extra-case")
-    }
+internal fun nativeRetainedExtraCase(admission: JSONObject): String = nativeRetainedExtraCase(
+    admission.getString("scenario"), admission.getJSONObject("candidate").getString("generatedXmlSha256"))
+
+private fun nativeRetainedExtraCase(scenario: String, payload: String): String = "$scenario-payload-$payload".also {
+    nativeGuard(scenario in nativeRetainedExtraScenarios && it.matches(nativeRetainedExtraCasePattern),
+        "retained-extra-case")
+}
+
+private fun requireNativeNearFullFixture(receipt: JSONObject) {
+    val inputs = receipt.optJSONArray("fixtureInputs")
+    nativeGuard(inputs != null && inputs.length() == 1 &&
+        inputs.getJSONObject(0).optString("asset") == nativeDeliveryFixtureAssets.getValue(NEAR_FULL_SCENARIO).single() &&
+        inputs.getJSONObject(0).optString("sha256") == NEAR_FULL_FIXTURE_SHA256, "retained-extra-fixture-identity")
+}
 
 /** Resolve original recovery paths unchanged; candidate paths must carry their real payload identity. */
 internal fun nativeDeliveryReceipt(root: File, name: String): File {
-    if (name.matches(Regex("delayed-payload-[a-f0-9]{64}"))) {
+    if (name.matches(nativeRetainedExtraCasePattern)) {
         val file = File(root, "$name/receipt.json")
         nativeGuard(AttemptJournal(file).exists(), "retained-extra-reservation-unresolved")
         val receipt = AttemptJournal(file).read()
-        nativeGuard(receipt.optString("scenario") == "delayed" &&
-            receipt.optString("productionXmlSha256") == name.removePrefix("delayed-payload-") &&
+        nativeGuard(name == nativeRetainedExtraCase(receipt.optString("scenario"), receipt.optString("productionXmlSha256")) &&
             receipt.optString("candidateAdmissionSha256").matches(Regex("[a-f0-9]{64}")),
             "retained-extra-receipt-identity")
+        if (receipt.getString("scenario") == NEAR_FULL_SCENARIO) requireNativeNearFullFixture(receipt)
         return file
     }
     if (name !in nativeSdkDirectScenarios.map { "sdk-$it" }) nativeDeliveryAssets(name)
@@ -137,8 +166,9 @@ internal fun nativeDeliveryReceipt(root: File, name: String): File {
 
 /** Arm global recovery first: a partial reservation blocks subsequent effects, even for another payload. */
 internal fun reserveNativeRetainedExtraCase(root: File, name: String, receipt: JSONObject): File {
-    nativeGuard(name == "delayed-payload-${receipt.getString("productionXmlSha256")}" &&
-        name.matches(Regex("delayed-payload-[a-f0-9]{64}")), "retained-extra-reservation-identity")
+    nativeGuard(name == nativeRetainedExtraCase(receipt.getString("scenario"), receipt.getString("productionXmlSha256")),
+        "retained-extra-reservation-identity")
+    if (receipt.getString("scenario") == NEAR_FULL_SCENARIO) requireNativeNearFullFixture(receipt)
     val directory = File(root, name)
     nativeGuard(!directory.exists(), "single-retained-extra-payload")
     AttemptJournal(File(root, "latest.json")).persist(JSONObject().put("case", name))
@@ -180,12 +210,14 @@ internal fun requireNativeNormalRecovery(context: Context, expected: NativePushE
     mapping: NativeDeliveryMapping) {
     val root = File(context.filesDir, "native_datasource")
     val latest = AttemptJournal(File(root, "latest.json"))
-    if (latest.exists() && latest.read().optString("case").startsWith("delayed-payload-")) {
+    val latestCase = if (latest.exists()) latest.read().optString("case") else ""
+    if (nativeRetainedExtraScenarios.any { latestCase.startsWith("$it-payload-") }) {
         // A client/direct route must not bypass an unresolved candidate using an older normal receipt.
         requireNativePriorDeliveryRecovery(root, expected)
     }
     nativeGuard(expected.required("normalRestorationReview") == "complete", "normal-restoration-review")
     val scenario = expected.required("normalRestorationScenario")
+    // A fixture observation fences later writes but never qualifies as a normal control.
     nativeGuard(scenario in setOf("normal", "delayed", "obsolete", "recovery") ||
         scenario.matches(Regex("delayed-payload-[a-f0-9]{64}")), "normal-restoration-scenario")
     val file = nativeDeliveryReceipt(root, scenario)

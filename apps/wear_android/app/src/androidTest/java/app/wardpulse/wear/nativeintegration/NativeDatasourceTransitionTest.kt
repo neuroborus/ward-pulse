@@ -52,12 +52,6 @@ class NativeDatasourceTransitionTest {
             expected.required("firstFrameReview") == "complete-unobscured", "host-delivery-preconditions")
         val scenario = expected.required("deliveryScenario")
         val candidateSelected = arguments.containsKey("expectedRetainedExtraAdmissionSha256")
-        nativeGuard(!candidateSelected || scenario == "delayed", "retained-extra-delayed-only")
-        val fixtures = if (candidateSelected) emptyList() else {
-            readNativeDeliveryFixtures(scenario, expected, BuildConfig.DEBUG) { asset ->
-                instrumentation.context.assets.open(asset).use { it.readBytes() }
-            }
-        }
         val before = renderer()
         val mapping = mappings(before)
         val targets = mapping.targets
@@ -69,6 +63,9 @@ class NativeDatasourceTransitionTest {
         val case = admission?.let(::nativeRetainedExtraCase) ?: scenario
         val operation = "observeDelivery:$case"
         requireNativeDatasourceMutation(expected, operation)
+        val fixtures = readNativeDeliveryFixtures(scenario, expected, BuildConfig.DEBUG, admission) { asset ->
+            instrumentation.context.assets.open(asset).use { it.readBytes() }
+        }
         val directory = if (admission == null) requireNativeDeliveryCase(root, scenario) else File(root, case)
         val receipt = JSONObject().put("scenario", scenario).put("bridge", "unchanged by instrumentation")
             .put("deliveryProbeId", selected.id).put("reviewedProbeSha256", selected.receiptSha256)
@@ -227,7 +224,6 @@ class NativeDatasourceTransitionTest {
         val scenario = expected.required("deliveryScenario")
         nativeDeliveryAssets(scenario)
         val candidateSelected = arguments.containsKey("expectedRetainedExtraAdmissionSha256")
-        nativeGuard(!candidateSelected || scenario == "delayed", "retained-extra-delayed-only")
         val current = renderer()
         val mapping = mappings(current)
         val admission = if (candidateSelected) retainedExtraAdmission(current, mapping) else null
