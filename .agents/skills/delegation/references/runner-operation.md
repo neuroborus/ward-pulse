@@ -64,8 +64,9 @@ Use a supported stop on mismatch; a matching mode alone does not prove the requi
 Before a fresh start, reconcile one self-contained role-facing task/context against the current scoped Native
 catalogue and changed guarantees. Identify its complete Runner Native `requiredChecks` inventory separately
 from mandatory post-DONE HOST obligations; historical inventories are provenance, not competing catalogues.
-Every selected command enters discovery and needs legitimate scope applicability; remove unrelated
-selections only before that new run. Unused definitions are not selections.
+Every selected command enters discovery and needs legitimate scope applicability; remove unrelated selections only before that new run. Unused definitions are not selections.
+At the FIRST role's structured Native `requiredChecks`, use a supported stop/reconciliation immediately for any admitted-check/applicability mismatch; never treat extra HOST checks as informational or wait for merge/writable work.
+Independently verify actual merged `requiredChecks` AND per-step `validationSchedule` against admitted scope before accepting it; matching prose or role counts alone are insufficient.
 Put read-only discovery versus workspace-write FINALIZE and real extra-authority needs in that task/context;
 local operator guidance is not injected. Report genuine Native needs truthfully, never force empty reports.
 A check assigned solely to HOST stays mandatory outside Native inventory/capability/environment-blocker
