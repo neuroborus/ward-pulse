@@ -12,7 +12,9 @@ generation/write times with their origins/timezones. Record whether writer custo
 the interval, authorized writes if any, and known attribution or Unknown. Capture these
 facts before the accept/reject decision; a failure message may reference the retained trace.
 If collection fails, retain the facts obtained and that failure; missing actual data is Unknown.
-Keep secrets/raw normal payloads out of diagnostics. Do not move or mutate state to collect them.
+Keep secrets/raw normal payloads out of diagnostics; extract ONLY the exact intended fields from their owning record BEFORE any output, following [diagnostic output privacy](../../../../docs/ANDROID_TOOLCHAIN.md#diagnostic-output-privacy).
+A substring match inside a payload/container is not projection; never emit aggregate complication-data or timeline bodies. Missing/ambiguous fields stay Unknown; do not widen output.
+Do not move or mutate state to collect them.
 
 A later observation is its own timed sample. Never reconstruct an unretained failing actual
 hash/state from that sample. Content/timing that differs from private fixtures can qualify
