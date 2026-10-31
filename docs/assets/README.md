@@ -12,7 +12,7 @@ watch PNGs are 500×500px with transparent corners outside the circular screen.
 
 ## Screenshot index
 
-The library contains 35 screenshots. The Dashboard theme pair, Watchface-selection theme
+The library contains 37 screenshots. The Dashboard theme pair, Watchface-selection theme
 pair, healthy Glance, Plan windows and watch face form one shared-state group captured on
 2026-10-27. Widget selection and resize examples form a separate 2026-10-25 session.
 The Dashboard warning pair, clock-free Stale Glance and historical manual-selection setup
@@ -28,6 +28,10 @@ themes, shared data, filled default cells and exported frames were reviewed. Bro
 placement and served-image checks for this session passed within the scope recorded below;
 earlier browser results retain their recorded scope. Remaining fixture/device acceptance
 stays separate.
+
+Two fixed-dark face examples captured on 2026-10-31 show separate one-band and two-band
+selections from one live snapshot. They illustrate adaptive widths in the Watch guide;
+the dated three-band gallery and its seven-image group remain unchanged.
 
 The Providers, Budget limits and Alert thresholds theme pairs form a separate six-frame
 phone task group captured on 2026-10-27. Their unsaved examples share unchanged saved
@@ -80,7 +84,45 @@ image or its placement changes.
 | [wear-glance.png](wear-glance.png) | Clock-free Stale example: Claude Weekly 1%, Codex Weekly 4%, Cursor Models 50%; amber !OK, Alerts 0 disabled. | Fixed dark | 2026-10-14 | 2026-10-24 | 2026-10-24 | 500×500 | WardPulse Wear | Watch guide, refresh-status explanation of Stale / !OK only |
 | [wear-plan-windows.png](wear-plan-windows.png) | Shared-state first window: Claude 5-hour session, 21% left, back at 17:20; the next row is partly visible below. | Fixed dark | 2026-10-14 | 2026-10-27 | 2026-10-27 | 500×500 | WardPulse Wear | Watch guide in both themes |
 | [wear-watch-face.png](wear-watch-face.png) | Enlarged-clock face: Claude 21% inner band, Codex 23% / 59.5K credits middle, Cursor 100%/64% outer; default day, temperature and UV cells filled. | Fixed dark | 2026-10-14 | 2026-10-27 | 2026-10-27 | 500×500 | WardPulse watch face | Both landing/README themes and Watch guide |
+| [wear-watch-face-one-band.png](wear-watch-face-one-band.png) | One widened ordinary band: Cursor Models 100% left; actual default day, temperature and UV cells filled. | Fixed dark | 2026-10-31 | 2026-10-31 | 2026-10-31 | 500×500 | WardPulse watch face | Watch guide, one-band example in both themes |
+| [wear-watch-face-two-bands.png](wear-watch-face-two-bands.png) | Two widened bands: Claude 34% inside, Cursor Models 100% / Other Models 64% sharing the outer band; actual default upper cells filled. | Fixed dark | 2026-10-31 | 2026-10-31 | 2026-10-31 | 500×500 | WardPulse watch face | Watch guide, two-band example in both themes |
 | [wear-watch-face-utility.png](wear-watch-face-utility.png) | Historical manual-selection guidance after Don’t allow; Source-backed UI reuse. | Fixed dark | 2026-10-16 | 2026-10-16 | 2026-10-18 | 500×500 | WardPulse Wear | Watch guide in both themes |
+
+## Band-count examples, 2026-10-31
+
+These two face-only examples were captured on the canonical round Wear AVD at
+**22:15:02.772731–22:17:28.890852 UTC**, using the minimum and maximum per-image capture
+observations. Both use schema-9 live data generated at **22:05:56 UTC**. The selected
+metrics were OK, and the recorded summary was not stale; device-clock ages were 546 seconds
+for two bands and 692 seconds for one band. These are actual anonymous live captures,
+not Mock/demo data. The full snapshot retained an unselected Codex warning, so these
+face examples do not claim that every Dashboard provider was healthy.
+
+The one-band frame selects only Cursor Models, with 100% left. The two-band frame selects
+Claude with 34% left and Cursor's two pools with 100% / 64% left; the latter is the displayed
+rounding of 64.1%. The shared Cursor reading agrees across these intentionally different
+selections. Both show actual Sat, 63°F and UV 1 default upper data, the WardPulse watermark
+and an unobscured ordinary face, without visible error, warning or Stale indicators.
+
+The recorded source commit is `4587e3f95056f631f1c370cae787af1012c847b6`, Legacy APK SHA-256
+`19a1607793e98c7f8e54bc302a3ffeb5a4b2b936e4962e3088c910d51008ca10` and installed XML SHA-256
+`f109be2d3f0902aa461c17859a3e13ed8a6beecfc4a55493327b72a359e17ad6`.
+The capture context identifies the Legacy Runtime0 renderer; both per-image records identify
+`wfId-15`, INTERACTIVE and nonambient. This records the pictured artifacts, not overall backlog,
+release, Push or physical-device acceptance.
+
+The explicit capture cohort contains only the two originals below; the earlier unmatched
+preliminary image is excluded. Originals were proportionally resized from 384×384 to
+500×500, using only the existing approved `wear-watch-face.png` outside-circle alpha mask.
+No UI, values or colours were retouched. Fixed-dark exports are reused in both guide themes.
+The other 35 PNGs, the October 27 seven-image group and the Overview/README gallery are
+unchanged. New image placement and browser verification remain separate from native-frame
+and export review.
+
+| Public file | Captured UTC | Original SHA-256 | Export SHA-256 |
+| --- | --- | --- | --- |
+| `wear-watch-face-one-band.png` | 2026-10-31T22:17:28.890852Z | `994314e294c777b6515b1925b2c0bd66704f255cbf1aba19eb6fc926bb6f4057` | `23a3d5c57cf110f66e92b53c716c7059fdda55e4d878670eabe694192805a963` |
+| `wear-watch-face-two-bands.png` | 2026-10-31T22:15:02.772731Z | `e0eed84b62287465a19b746ed79e21e4aa00138b6b7684cfcd925cd9bfdd1946` | `47206f491d08a7c04c7477de90b9f309822fd908cafb1618d66a35207478be0e` |
 
 ## Cursor recovery capture refresh, 2026-10-28
 

@@ -109,6 +109,18 @@ band. Temporarily unavailable data can change the width when it disappears or re
 a known exhausted **0%** still occupies its band. An older app or face keeps narrow bands
 until both are updated.
 
+These two examples use the same usage readings with different selections. They are
+separate from the three-band selection shown above.
+
+![One widened band showing Cursor Models with 100% left.](/screenshots/wear-watch-face-one-band.png)
+
+**One band:** Cursor Models has **100% left**.
+
+![Two widened bands: Claude with 34% left inside a paired Cursor band showing 100% and 64% left.](/screenshots/wear-watch-face-two-bands.png)
+
+**Two bands:** Claude has **34% left**. Cursor Models **100%** and Other Models **64% left**
+share the outer band.
+
 ### Display order
 
 Among selected known metrics, the lowest remaining percentage appears first on Glance and
