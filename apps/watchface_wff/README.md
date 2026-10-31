@@ -46,11 +46,16 @@ device tests, live phone update/sync and UI Update remain held for the separate 
 guard scope against preserved Round Wear 4/asset 3/Push 4. Item12 remains open and both extras
 queued; no new check, device, public or release acceptance is claimed.
 
-`ringSlot` in `tools/render-watchface.mjs` keeps each main selector and strip beneath one
-named full-canvas Group. Before emission in normal and `--check` modes,
+`ringSlot` in `tools/render-watchface.mjs` keeps each main's fixed geometry Groups and strip
+beneath one named full-canvas Group and its existing admission gate. `mainBand` emits each
+feasible layout's paired and ordinary forms as stable named Groups, initially at alpha 0.
+Their mutually exclusive alpha Transforms use only that response's exact range guard and
+closed TITLE vocabulary. Credits-only data still admits its strip without any band.
+Tracks, foreground paint gates, textures and unsplit-N1 restoration retain their drawings.
+Before emission in normal and `--check` modes,
 `tools/check-watchface-structure.py` parses the actual XML to enforce one direct element
-tree per Compare/Default and preserve main selector/strip containment. The baseline's three
-main branches failed this check; corrected generation passes. Native causal effect remains
+tree per Compare/Default and preserve main geometry/strip containment. The earlier wrapper
+repair rejected the baseline's three malformed main branches. Native causal effect remains
 unproved; see the [adaptive incident and update qualification](../../docs/product/RELEASE_CHECKLIST.md#adaptive-integration-qualification-2026-10-28).
 
 `outerHalfSlot` in `tools/render-watchface.mjs` emits fixed sibling Groups directly inside
@@ -64,10 +69,11 @@ and rejected input paints nothing. Private `bandTrack` and
 `bandPaint` helpers reuse the same drawings while preserving ordinary/inner `bandArcs`
 emission, geometry, clipping, live colors, cutoffs and ambient/MUTE behavior.
 
-`check_band_paints` and `check_extra_decisions` in `tools/check-watchface-structure.py`
-retain main/inner first-true Condition checks and evaluate every emitted extra alpha
-Transform. Extras require exactly one active Group for admitted input and none for rejected
-input, with independent inspection of the corresponding drawing content.
+`check_main_decisions`, `check_band_paints` and `check_extra_decisions` in
+`tools/check-watchface-structure.py` evaluate emitted geometry and paint alpha Transforms
+independently, so first-true selection cannot hide overlaps. Main geometry and extras require
+exactly one active Group for admitted band input and none for rejected input, with independent
+inspection of the corresponding drawing content. Credits admit no main geometry.
 Independent literal design dimensions and evaluated arc endpoints/visible sweeps cover
 ordinary and inner bands as well as extras, including N1 diameters 360/338/382 and
 strokes 44/22/22. Admission and geometry expectations cover both ordinals, every feasible and
@@ -76,6 +82,15 @@ near/full boundaries, malformed/non-finite fields and exact TITLE rejection. Gen
 assertions retain published Legacy/N3 rounded cutoffs and analytical full-path/clip checks.
 N2-to-N3 checks require old 16-unit half Groups to hide and new 10-unit half Groups to appear.
 These checks establish declaration semantics, not retained-renderer behavior or native repair.
+
+`check_count_change_pair` uses the producer-projected Cursor100/Other64.1 responses at N3
+and N2. Only the current geometry may activate: N2's full blue main occupies radii 170–186
+and the independent teal extra 186–202, each 16 units. An ordinary full N2 instead occupies
+the whole 170–202 band. Overlapping ordinary geometry and suppressed paired full paint
+counterexamples must fail this declaration witness. The persistent normal-phone incident
+still needs matched first-transition and separate settled native originals; these checks
+acknowledge neither consumed scalar/TITLE fields nor a renderer cause. See the
+[stable main geometry candidate](../../docs/product/WATCH_RING_DESIGN.md#implementation-candidate-2026-10-31--stable-main-geometry).
 
 `n1BackdropRestore` in `tools/render-watchface.mjs` restores the matching opaque radial lift
 through the isolated named `ring1N1BackdropRestore` SOURCE/MASK Group before the admitted

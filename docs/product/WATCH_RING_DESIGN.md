@@ -177,11 +177,12 @@ Pending labels remain unchanged; exact-color counts assign no subpixel trace to 
 
 `bandArcs` in `tools/render-watchface.mjs` replaces only its ordered foreground Condition
 with three stable named full/tiny/round Groups, each initially transparent and driven by a
-mutually exclusive 255-or-zero alpha Transform. Main admission, layout and split selectors
-remain in place. The track stays outside the paint gates; `bandPaint` retains its drawings,
-live response ColorRamp, proportional endpoints, caps and ambient treatment. This adopts
-the existing outer-half paint structure, removing conditional subtree switching from
-main/inner paint selection. The intended 99.9% remainder selects the large ordinary partial;
+mutually exclusive 255-or-zero alpha Transform. At that candidate, main admission, layout
+and split selectors remained in place; the later stable-main-geometry candidate below
+changes only layout/split selection. The track stays outside the paint gates; `bandPaint`
+retains its drawings, live response ColorRamp, proportional endpoints, caps and ambient
+treatment. This adopts the existing outer-half paint structure, removing conditional subtree
+switching from main/inner paint selection. The intended 99.9% remainder selects the large ordinary partial;
 effective native values, the historical selected branch and renderer cause remain unknown.
 This is a supported candidate whose native effect still needs acceptance.
 
@@ -215,6 +216,56 @@ every original and effective-data limits, the large green main and independent t
 exact restoration and later ordinary Face/Glance recovery. Retained-extra, compatibility,
 delivery, endpoint/cutoff, shape/mode and public-cohort duties remain open; public acceptance
 follows native acceptance. This candidate does not close item12.
+
+## Implementation candidate 2026-10-31 — stable main geometry
+
+The normal phone Watchface UI removed only Codex from Claude, Cursor own/other and Codex,
+changing N3 to N2 on the Round watch. The sixteen-frame native burst reached settled N2 with
+a whole blue outer band and no visible teal arc; a separate INTERACTIVE frame about 2.5 minutes later retained
+the defect. The strip showed 100/64 and its far teal marker. The current producer projection
+is Cursor 100%/Other 64.1% remaining with Claude 34%. Native scalar/range/TITLE fields and
+selected-branch acknowledgment remain unavailable or redacted. The visible omission is
+persistent bounded evidence, not a proved cache, expression-name or occlusion cause; nested
+Conditions remain valid WFF Source.
+
+`mainBand` and `ringSlot` in `tools/render-watchface.mjs` replace only nested layout/split
+selection with fixed sibling geometry Groups under the existing main admission tree.
+Each feasible layout keeps its named paired/ordinary forms, initially at alpha zero with
+mutually exclusive response-local range/TITLE alpha Transforms. Credits-only input keeps
+its existing strip without activating geometry. `bandArcs` foreground gates and drawings,
+period textures and `n1BackdropRestore` remain inside their corresponding forms unchanged.
+This extends the existing stable-alpha approach to geometry; it is a repair candidate whose
+native effect still needs acceptance.
+
+`check_main_decisions` in `tools/check-watchface-structure.py` evaluates every emitted
+geometry gate independently, including closed paired zero spellings, ordinary periods,
+feasible positions, endpoints and rejected/credits-only input. `check_count_change_pair`
+models the source-projected Cursor100/Other64.1 responses before and after N3→N2. Obsolete
+geometry must become inactive; N2 main radii **170–186** and extra **186–202** remain adjacent
+16-unit halves. An ordinary full N2 remains the whole 32-unit band. Counterexamples that
+activate ordinary geometry over the pair or suppress its exact-full main must fail.
+Existing endpoint, retained-extra, admission and normal/diagnostic gates remain intact.
+These are declaration checks, not retained-scene simulation or native repair evidence.
+
+The 450-unit canvas, centre 225/225, full/half widths 44/22, 32/16, 20/10, contours, gaps, colors,
+identities, complete labels, periods, credits, ambient treatment, eight slots/services/ordinals
+and MAX100/200/400/800 remain fixed. Extras still precede mains; unsplit N1 alone restores its
+backdrop. Main and extra responses remain independent, including valid-extra/main-NoData.
+No common count, atomic delivery, field-cache guarantee, observer, schema, fixture, version
+or provider/phone/transport change is introduced. Historical evidence and Pending labels
+keep their measured scope; TinyTail/cutoff RED remains the owner's absolute-last item.
+
+**Native repair acceptance remains Pending.** After whole execution DONE, owning CLI exit
+where used, all run-owned processes retired and fresh quiescent ownership, Root owns full
+affected HOST Wear/watch-face checks, official WFF2 and pinned Push semantic/resource checks,
+and the matched current normal N3→N2 before/after witness. Bind source/generated/built/
+installed/active bytes, current instance, effective eight choices, mode, viewport and actual
+frame inputs. Inspect complete first-transition and separately settled originals for both
+halves and legend, then necessary normal recovery. Preserve the current incident until
+deliberate Root custody, retain newer publications and restore admitted state through normal
+UI without reset, rebinding or scene recreation. Redacted fields stay Unknown. Retain the
+passing session 51293's 47-test paired-gate evidence without an unjustified rerun and require
+Root's full independent zero-findings pass; remaining item12 duties are not closed here.
 
 ## Revision 2026-10-30 — N1 width 44
 
@@ -349,13 +400,14 @@ uncounted previews retain MAX100; credits never establish a usage band. Main TIT
 the existing empty/zero, period and closed split/zero vocabulary; no count suffix is added.
 
 Each main `isValid` Compare in slots 101/102/105 holds one stable named full-canvas Group
-(`ring1_main` / `ring2_main` / `ring3_main`), containing the existing layout selector then
-its strip. `ringSlot` in `tools/render-watchface.mjs` preserves their admission, order,
+(`ring1_main` / `ring2_main` / `ring3_main`), containing fixed paired/ordinary layout Groups
+then its strip under the stable-main-geometry candidate above. `ringSlot` in
+`tools/render-watchface.mjs` preserves their admission, order,
 geometry, clipping and ambient behavior. The awaited Python-standard-library regression
 in `tools/check-watchface-structure.py` parses actual XML before emission in generation and
-`--check`, enforcing one direct element tree per Compare/Default and main selector/strip
-containment. It rejects the baseline's three malformed branches and passes corrected
-generation; this establishes structure, not corrected native rendering.
+`--check`, enforcing one direct element tree per Compare/Default and main geometry/strip
+containment. The earlier wrapper repair rejected the baseline's three malformed branches;
+that structural evidence does not establish corrected native rendering.
 
 Each response derives count, selection, pools, semantic fields and scaling from one accepted
 summary load. A valid delivered extra survives an absent delivered main without inventing

@@ -428,6 +428,7 @@ const SPLIT_TITLES = SPLIT_BASE_TITLES.flatMap((base) => [
   base,
   ...ZERO_STATES.map((state) => `${base}${TOKEN_SEPARATOR}${state}`),
 ])
+const ORDINARY_TITLES = ['', ZERO_TOKEN, ...TOKENS.map(({ title }) => title)]
 
 /** Every slot names a service in the Wear app; nothing else may fill them. */
 function provider(service) {
@@ -1321,34 +1322,22 @@ function mainBand(layout, index) {
   const { diameter, thickness, full, inner, half } = bandGeometry(layout, index)
   const name = `ring${index + 1}${layout.name}`
   const restore = layout.name === 'N1' ? `${n1BackdropRestore(' '.repeat(40))}\n` : ''
-  return `                        <Compare expression="is${layout.name}">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isSplit"><![CDATA[${titleEquals(...SPLIT_TITLES)}]]></Expression>
-                                </Expressions>
-                                <Compare expression="isSplit">
-                                    <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}Half">
+  return `                                    <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}Half" alpha="0">
+${alphaTransform(`${rangeGuard(layout.max)} && (${titleEquals(...SPLIT_TITLES)})`, ' '.repeat(40))}
 ${bandArcs(inner, half, ' '.repeat(40), `${name}Half`)}
                                     </Group>
-                                </Compare>
-                                <Default>
-                                    <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}">
+                                    <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}" alpha="0">
+${alphaTransform(`${rangeGuard(layout.max)} && (${titleEquals(...ORDINARY_TITLES)})`, ' '.repeat(40))}
 ${restore}${bandArcs(full, thickness, ' '.repeat(40), name)}${ringTexture(diameter, index, layout.count)}
-                                    </Group>
-                                </Default>
-                            </Condition>
-                        </Compare>`
+                                    </Group>`
 }
 
 function ringSlot({ slotId, service }, index) {
   const layouts = LAYOUTS.filter(({ count }) => index < count)
-  const titles = titleEquals('', ZERO_TOKEN, ...TOKENS.map(({ title }) => title), ...SPLIT_TITLES)
+  const titles = titleEquals(...ORDINARY_TITLES, ...SPLIT_TITLES)
   const credits = index === CREDITS_RING_INDEX
     ? ` || (${rangeGuard(100)} && ${titleEquals(CREDITS_TOKEN)})` : ''
-  const expressions = layouts.map(({ name, max }) =>
-    `                        <Expression name="is${name}"><![CDATA[${rangeGuard(max)} && (${titles})]]></Expression>`,
-  ).join('\n')
-  // Keep existing subtree whitespace stable when adding the single-tree wrapper.
+  // Keep drawing serialization stable; only the geometry selection changes.
   return `        <ComplicationSlot
             x="0"
             y="0"
@@ -1372,12 +1361,7 @@ function ringSlot({ slotId, service }, index) {
                     <!-- Invalid range, value, TITLE or position paints nothing, including the well. -->
                     <Compare expression="isValid">
                         <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="ring${index + 1}_main">
-                        <Condition>
-                            <Expressions>
-${expressions}
-                            </Expressions>
 ${layouts.map((layout) => mainBand(layout, index)).join('\n')}
-                        </Condition>
 ${stripRow(index, ' '.repeat(24))}
                         </Group>
                     </Compare>

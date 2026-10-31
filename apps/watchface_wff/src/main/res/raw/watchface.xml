@@ -1938,20 +1938,8 @@
                     <!-- Invalid range, value, TITLE or position paints nothing, including the well. -->
                     <Compare expression="isValid">
                         <Group x="0" y="0" width="450" height="450" name="ring1_main">
-                        <Condition>
-                            <Expressions>
-                        <Expression name="isLegacy"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && ([COMPLICATION.TITLE] == "" || [COMPLICATION.TITLE] == "zero" || [COMPLICATION.TITLE] == "D" || [COMPLICATION.TITLE] == "7D" || [COMPLICATION.TITLE] == "M" || [COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both")]]></Expression>
-                        <Expression name="isN1"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 200 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 200 && ([COMPLICATION.TITLE] == "" || [COMPLICATION.TITLE] == "zero" || [COMPLICATION.TITLE] == "D" || [COMPLICATION.TITLE] == "7D" || [COMPLICATION.TITLE] == "M" || [COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both")]]></Expression>
-                        <Expression name="isN2"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 400 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 400 && ([COMPLICATION.TITLE] == "" || [COMPLICATION.TITLE] == "zero" || [COMPLICATION.TITLE] == "D" || [COMPLICATION.TITLE] == "7D" || [COMPLICATION.TITLE] == "M" || [COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both")]]></Expression>
-                        <Expression name="isN3"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && ([COMPLICATION.TITLE] == "" || [COMPLICATION.TITLE] == "zero" || [COMPLICATION.TITLE] == "D" || [COMPLICATION.TITLE] == "7D" || [COMPLICATION.TITLE] == "M" || [COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both")]]></Expression>
-                            </Expressions>
-                        <Compare expression="isLegacy">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
-                                </Expressions>
-                                <Compare expression="isSplit">
-                                    <Group x="0" y="0" width="450" height="450" name="ring1LegacyHalf">
+                                    <Group x="0" y="0" width="450" height="450" name="ring1LegacyHalf" alpha="0">
+                                        <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; ([COMPLICATION.TITLE] == &quot;split&quot; || [COMPLICATION.TITLE] == &quot;split:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:zero-both&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-both&quot; || [COMPLICATION.TITLE] == &quot;split:spark&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-both&quot;)) ? 255 : 0" />
                                         <PartDraw x="0" y="0" width="450" height="450">
                                             <Arc
                                                 centerX="225"
@@ -2026,9 +2014,8 @@
                                             </PartDraw>
                                         </Group>
                                     </Group>
-                                </Compare>
-                                <Default>
-                                    <Group x="0" y="0" width="450" height="450" name="ring1Legacy">
+                                    <Group x="0" y="0" width="450" height="450" name="ring1Legacy" alpha="0">
+                                        <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; ([COMPLICATION.TITLE] == &quot;&quot; || [COMPLICATION.TITLE] == &quot;zero&quot; || [COMPLICATION.TITLE] == &quot;D&quot; || [COMPLICATION.TITLE] == &quot;7D&quot; || [COMPLICATION.TITLE] == &quot;M&quot;)) ? 255 : 0" />
                                         <PartDraw x="0" y="0" width="450" height="450">
                                             <Arc
                                                 centerX="225"
@@ -2129,16 +2116,8 @@
                                 </Compare>
                             </Condition>
                                     </Group>
-                                </Default>
-                            </Condition>
-                        </Compare>
-                        <Compare expression="isN1">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
-                                </Expressions>
-                                <Compare expression="isSplit">
-                                    <Group x="0" y="0" width="450" height="450" name="ring1N1Half">
+                                    <Group x="0" y="0" width="450" height="450" name="ring1N1Half" alpha="0">
+                                        <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 200 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 200 &amp;&amp; ([COMPLICATION.TITLE] == &quot;split&quot; || [COMPLICATION.TITLE] == &quot;split:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:zero-both&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-both&quot; || [COMPLICATION.TITLE] == &quot;split:spark&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-both&quot;)) ? 255 : 0" />
                                         <PartDraw x="0" y="0" width="450" height="450">
                                             <Arc
                                                 centerX="225"
@@ -2213,9 +2192,8 @@
                                             </PartDraw>
                                         </Group>
                                     </Group>
-                                </Compare>
-                                <Default>
-                                    <Group x="0" y="0" width="450" height="450" name="ring1N1">
+                                    <Group x="0" y="0" width="450" height="450" name="ring1N1" alpha="0">
+                                        <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 200 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 200 &amp;&amp; ([COMPLICATION.TITLE] == &quot;&quot; || [COMPLICATION.TITLE] == &quot;zero&quot; || [COMPLICATION.TITLE] == &quot;D&quot; || [COMPLICATION.TITLE] == &quot;7D&quot; || [COMPLICATION.TITLE] == &quot;M&quot;)) ? 255 : 0" />
                                         <Group x="0" y="0" width="450" height="450" name="ring1N1BackdropRestore">
                                             <PartDraw x="0" y="0" width="450" height="450" name="ring1N1BackdropSource" renderMode="SOURCE">
                                                 <Ellipse x="0" y="0" width="450" height="450">
@@ -2341,16 +2319,8 @@
                                 </Compare>
                             </Condition>
                                     </Group>
-                                </Default>
-                            </Condition>
-                        </Compare>
-                        <Compare expression="isN2">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
-                                </Expressions>
-                                <Compare expression="isSplit">
-                                    <Group x="0" y="0" width="450" height="450" name="ring1N2Half">
+                                    <Group x="0" y="0" width="450" height="450" name="ring1N2Half" alpha="0">
+                                        <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 400 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 400 &amp;&amp; ([COMPLICATION.TITLE] == &quot;split&quot; || [COMPLICATION.TITLE] == &quot;split:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:zero-both&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-both&quot; || [COMPLICATION.TITLE] == &quot;split:spark&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-both&quot;)) ? 255 : 0" />
                                         <PartDraw x="0" y="0" width="450" height="450">
                                             <Arc
                                                 centerX="225"
@@ -2425,9 +2395,8 @@
                                             </PartDraw>
                                         </Group>
                                     </Group>
-                                </Compare>
-                                <Default>
-                                    <Group x="0" y="0" width="450" height="450" name="ring1N2">
+                                    <Group x="0" y="0" width="450" height="450" name="ring1N2" alpha="0">
+                                        <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 400 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 400 &amp;&amp; ([COMPLICATION.TITLE] == &quot;&quot; || [COMPLICATION.TITLE] == &quot;zero&quot; || [COMPLICATION.TITLE] == &quot;D&quot; || [COMPLICATION.TITLE] == &quot;7D&quot; || [COMPLICATION.TITLE] == &quot;M&quot;)) ? 255 : 0" />
                                         <PartDraw x="0" y="0" width="450" height="450">
                                             <Arc
                                                 centerX="225"
@@ -2528,16 +2497,8 @@
                                 </Compare>
                             </Condition>
                                     </Group>
-                                </Default>
-                            </Condition>
-                        </Compare>
-                        <Compare expression="isN3">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
-                                </Expressions>
-                                <Compare expression="isSplit">
-                                    <Group x="0" y="0" width="450" height="450" name="ring1N3Half">
+                                    <Group x="0" y="0" width="450" height="450" name="ring1N3Half" alpha="0">
+                                        <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; ([COMPLICATION.TITLE] == &quot;split&quot; || [COMPLICATION.TITLE] == &quot;split:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:zero-both&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-both&quot; || [COMPLICATION.TITLE] == &quot;split:spark&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-both&quot;)) ? 255 : 0" />
                                         <PartDraw x="0" y="0" width="450" height="450">
                                             <Arc
                                                 centerX="225"
@@ -2612,9 +2573,8 @@
                                             </PartDraw>
                                         </Group>
                                     </Group>
-                                </Compare>
-                                <Default>
-                                    <Group x="0" y="0" width="450" height="450" name="ring1N3">
+                                    <Group x="0" y="0" width="450" height="450" name="ring1N3" alpha="0">
+                                        <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; ([COMPLICATION.TITLE] == &quot;&quot; || [COMPLICATION.TITLE] == &quot;zero&quot; || [COMPLICATION.TITLE] == &quot;D&quot; || [COMPLICATION.TITLE] == &quot;7D&quot; || [COMPLICATION.TITLE] == &quot;M&quot;)) ? 255 : 0" />
                                         <PartDraw x="0" y="0" width="450" height="450">
                                             <Arc
                                                 centerX="225"
@@ -2715,10 +2675,6 @@
                                 </Compare>
                             </Condition>
                                     </Group>
-                                </Default>
-                            </Condition>
-                        </Compare>
-                        </Condition>
                         <Group x="159" y="313" width="132" height="26" name="ring1_strip" alpha="255">
                             <Variant mode="AMBIENT" target="alpha" value="90" />
                             <PartDraw x="0" y="0" width="132" height="26">
@@ -3033,19 +2989,8 @@
                     <!-- Invalid range, value, TITLE or position paints nothing, including the well. -->
                     <Compare expression="isValid">
                         <Group x="0" y="0" width="450" height="450" name="ring2_main">
-                        <Condition>
-                            <Expressions>
-                        <Expression name="isLegacy"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && ([COMPLICATION.TITLE] == "" || [COMPLICATION.TITLE] == "zero" || [COMPLICATION.TITLE] == "D" || [COMPLICATION.TITLE] == "7D" || [COMPLICATION.TITLE] == "M" || [COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both")]]></Expression>
-                        <Expression name="isN2"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 400 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 400 && ([COMPLICATION.TITLE] == "" || [COMPLICATION.TITLE] == "zero" || [COMPLICATION.TITLE] == "D" || [COMPLICATION.TITLE] == "7D" || [COMPLICATION.TITLE] == "M" || [COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both")]]></Expression>
-                        <Expression name="isN3"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && ([COMPLICATION.TITLE] == "" || [COMPLICATION.TITLE] == "zero" || [COMPLICATION.TITLE] == "D" || [COMPLICATION.TITLE] == "7D" || [COMPLICATION.TITLE] == "M" || [COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both")]]></Expression>
-                            </Expressions>
-                        <Compare expression="isLegacy">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
-                                </Expressions>
-                                <Compare expression="isSplit">
-                                    <Group x="0" y="0" width="450" height="450" name="ring2LegacyHalf">
+                                    <Group x="0" y="0" width="450" height="450" name="ring2LegacyHalf" alpha="0">
+                                        <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; ([COMPLICATION.TITLE] == &quot;split&quot; || [COMPLICATION.TITLE] == &quot;split:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:zero-both&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-both&quot; || [COMPLICATION.TITLE] == &quot;split:spark&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-both&quot;)) ? 255 : 0" />
                                         <PartDraw x="0" y="0" width="450" height="450">
                                             <Arc
                                                 centerX="225"
@@ -3120,9 +3065,8 @@
                                             </PartDraw>
                                         </Group>
                                     </Group>
-                                </Compare>
-                                <Default>
-                                    <Group x="0" y="0" width="450" height="450" name="ring2Legacy">
+                                    <Group x="0" y="0" width="450" height="450" name="ring2Legacy" alpha="0">
+                                        <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; ([COMPLICATION.TITLE] == &quot;&quot; || [COMPLICATION.TITLE] == &quot;zero&quot; || [COMPLICATION.TITLE] == &quot;D&quot; || [COMPLICATION.TITLE] == &quot;7D&quot; || [COMPLICATION.TITLE] == &quot;M&quot;)) ? 255 : 0" />
                                         <PartDraw x="0" y="0" width="450" height="450">
                                             <Arc
                                                 centerX="225"
@@ -3223,16 +3167,8 @@
                                 </Compare>
                             </Condition>
                                     </Group>
-                                </Default>
-                            </Condition>
-                        </Compare>
-                        <Compare expression="isN2">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
-                                </Expressions>
-                                <Compare expression="isSplit">
-                                    <Group x="0" y="0" width="450" height="450" name="ring2N2Half">
+                                    <Group x="0" y="0" width="450" height="450" name="ring2N2Half" alpha="0">
+                                        <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 400 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 400 &amp;&amp; ([COMPLICATION.TITLE] == &quot;split&quot; || [COMPLICATION.TITLE] == &quot;split:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:zero-both&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-both&quot; || [COMPLICATION.TITLE] == &quot;split:spark&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-both&quot;)) ? 255 : 0" />
                                         <PartDraw x="0" y="0" width="450" height="450">
                                             <Arc
                                                 centerX="225"
@@ -3307,9 +3243,8 @@
                                             </PartDraw>
                                         </Group>
                                     </Group>
-                                </Compare>
-                                <Default>
-                                    <Group x="0" y="0" width="450" height="450" name="ring2N2">
+                                    <Group x="0" y="0" width="450" height="450" name="ring2N2" alpha="0">
+                                        <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 400 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 400 &amp;&amp; ([COMPLICATION.TITLE] == &quot;&quot; || [COMPLICATION.TITLE] == &quot;zero&quot; || [COMPLICATION.TITLE] == &quot;D&quot; || [COMPLICATION.TITLE] == &quot;7D&quot; || [COMPLICATION.TITLE] == &quot;M&quot;)) ? 255 : 0" />
                                         <PartDraw x="0" y="0" width="450" height="450">
                                             <Arc
                                                 centerX="225"
@@ -3410,16 +3345,8 @@
                                 </Compare>
                             </Condition>
                                     </Group>
-                                </Default>
-                            </Condition>
-                        </Compare>
-                        <Compare expression="isN3">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
-                                </Expressions>
-                                <Compare expression="isSplit">
-                                    <Group x="0" y="0" width="450" height="450" name="ring2N3Half">
+                                    <Group x="0" y="0" width="450" height="450" name="ring2N3Half" alpha="0">
+                                        <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; ([COMPLICATION.TITLE] == &quot;split&quot; || [COMPLICATION.TITLE] == &quot;split:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:zero-both&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-both&quot; || [COMPLICATION.TITLE] == &quot;split:spark&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-both&quot;)) ? 255 : 0" />
                                         <PartDraw x="0" y="0" width="450" height="450">
                                             <Arc
                                                 centerX="225"
@@ -3494,9 +3421,8 @@
                                             </PartDraw>
                                         </Group>
                                     </Group>
-                                </Compare>
-                                <Default>
-                                    <Group x="0" y="0" width="450" height="450" name="ring2N3">
+                                    <Group x="0" y="0" width="450" height="450" name="ring2N3" alpha="0">
+                                        <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; ([COMPLICATION.TITLE] == &quot;&quot; || [COMPLICATION.TITLE] == &quot;zero&quot; || [COMPLICATION.TITLE] == &quot;D&quot; || [COMPLICATION.TITLE] == &quot;7D&quot; || [COMPLICATION.TITLE] == &quot;M&quot;)) ? 255 : 0" />
                                         <PartDraw x="0" y="0" width="450" height="450">
                                             <Arc
                                                 centerX="225"
@@ -3597,10 +3523,6 @@
                                 </Compare>
                             </Condition>
                                     </Group>
-                                </Default>
-                            </Condition>
-                        </Compare>
-                        </Condition>
                         <Group x="159" y="286" width="132" height="26" name="ring2_strip" alpha="255">
                             <Variant mode="AMBIENT" target="alpha" value="90" />
                             <PartDraw x="0" y="0" width="132" height="26">
@@ -3915,18 +3837,8 @@
                     <!-- Invalid range, value, TITLE or position paints nothing, including the well. -->
                     <Compare expression="isValid">
                         <Group x="0" y="0" width="450" height="450" name="ring3_main">
-                        <Condition>
-                            <Expressions>
-                        <Expression name="isLegacy"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 100 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 100 && ([COMPLICATION.TITLE] == "" || [COMPLICATION.TITLE] == "zero" || [COMPLICATION.TITLE] == "D" || [COMPLICATION.TITLE] == "7D" || [COMPLICATION.TITLE] == "M" || [COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both")]]></Expression>
-                        <Expression name="isN3"><![CDATA[[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == 800 && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= 800 && ([COMPLICATION.TITLE] == "" || [COMPLICATION.TITLE] == "zero" || [COMPLICATION.TITLE] == "D" || [COMPLICATION.TITLE] == "7D" || [COMPLICATION.TITLE] == "M" || [COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both")]]></Expression>
-                            </Expressions>
-                        <Compare expression="isLegacy">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
-                                </Expressions>
-                                <Compare expression="isSplit">
-                                    <Group x="0" y="0" width="450" height="450" name="ring3LegacyHalf">
+                                    <Group x="0" y="0" width="450" height="450" name="ring3LegacyHalf" alpha="0">
+                                        <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; ([COMPLICATION.TITLE] == &quot;split&quot; || [COMPLICATION.TITLE] == &quot;split:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:zero-both&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-both&quot; || [COMPLICATION.TITLE] == &quot;split:spark&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-both&quot;)) ? 255 : 0" />
                                         <PartDraw x="0" y="0" width="450" height="450">
                                             <Arc
                                                 centerX="225"
@@ -4001,9 +3913,8 @@
                                             </PartDraw>
                                         </Group>
                                     </Group>
-                                </Compare>
-                                <Default>
-                                    <Group x="0" y="0" width="450" height="450" name="ring3Legacy">
+                                    <Group x="0" y="0" width="450" height="450" name="ring3Legacy" alpha="0">
+                                        <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 100 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 100 &amp;&amp; ([COMPLICATION.TITLE] == &quot;&quot; || [COMPLICATION.TITLE] == &quot;zero&quot; || [COMPLICATION.TITLE] == &quot;D&quot; || [COMPLICATION.TITLE] == &quot;7D&quot; || [COMPLICATION.TITLE] == &quot;M&quot;)) ? 255 : 0" />
                                         <PartDraw x="0" y="0" width="450" height="450">
                                             <Arc
                                                 centerX="225"
@@ -4104,16 +4015,8 @@
                                 </Compare>
                             </Condition>
                                     </Group>
-                                </Default>
-                            </Condition>
-                        </Compare>
-                        <Compare expression="isN3">
-                            <Condition>
-                                <Expressions>
-                                    <Expression name="isSplit"><![CDATA[[COMPLICATION.TITLE] == "split" || [COMPLICATION.TITLE] == "split:zero-inner" || [COMPLICATION.TITLE] == "split:zero-outer" || [COMPLICATION.TITLE] == "split:zero-both" || [COMPLICATION.TITLE] == "split:cursor-other" || [COMPLICATION.TITLE] == "split:cursor-other:zero-inner" || [COMPLICATION.TITLE] == "split:cursor-other:zero-outer" || [COMPLICATION.TITLE] == "split:cursor-other:zero-both" || [COMPLICATION.TITLE] == "split:spark" || [COMPLICATION.TITLE] == "split:spark:zero-inner" || [COMPLICATION.TITLE] == "split:spark:zero-outer" || [COMPLICATION.TITLE] == "split:spark:zero-both"]]></Expression>
-                                </Expressions>
-                                <Compare expression="isSplit">
-                                    <Group x="0" y="0" width="450" height="450" name="ring3N3Half">
+                                    <Group x="0" y="0" width="450" height="450" name="ring3N3Half" alpha="0">
+                                        <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; ([COMPLICATION.TITLE] == &quot;split&quot; || [COMPLICATION.TITLE] == &quot;split:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:zero-both&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:cursor-other:zero-both&quot; || [COMPLICATION.TITLE] == &quot;split:spark&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-inner&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-outer&quot; || [COMPLICATION.TITLE] == &quot;split:spark:zero-both&quot;)) ? 255 : 0" />
                                         <PartDraw x="0" y="0" width="450" height="450">
                                             <Arc
                                                 centerX="225"
@@ -4188,9 +4091,8 @@
                                             </PartDraw>
                                         </Group>
                                     </Group>
-                                </Compare>
-                                <Default>
-                                    <Group x="0" y="0" width="450" height="450" name="ring3N3">
+                                    <Group x="0" y="0" width="450" height="450" name="ring3N3" alpha="0">
+                                        <Transform target="alpha" value="([COMPLICATION.RANGED_VALUE_MIN] == 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_MAX] == 800 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &gt;= 0 &amp;&amp; [COMPLICATION.RANGED_VALUE_VALUE] &lt;= 800 &amp;&amp; ([COMPLICATION.TITLE] == &quot;&quot; || [COMPLICATION.TITLE] == &quot;zero&quot; || [COMPLICATION.TITLE] == &quot;D&quot; || [COMPLICATION.TITLE] == &quot;7D&quot; || [COMPLICATION.TITLE] == &quot;M&quot;)) ? 255 : 0" />
                                         <PartDraw x="0" y="0" width="450" height="450">
                                             <Arc
                                                 centerX="225"
@@ -4291,10 +4193,6 @@
                                 </Compare>
                             </Condition>
                                     </Group>
-                                </Default>
-                            </Condition>
-                        </Compare>
-                        </Condition>
                         <Group x="159" y="259" width="132" height="26" name="ring3_strip" alpha="255">
                             <Variant mode="AMBIENT" target="alpha" value="90" />
                             <PartDraw x="0" y="0" width="132" height="26">

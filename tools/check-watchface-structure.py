@@ -40,7 +40,7 @@ def check_structure(root):
                 f"found {len(children)} ({', '.join(child.tag for child in children)})"
             )
 
-    # Main admission must retain the layout selector followed by its own strip.
+    # Main admission owns fixed geometry Groups followed by its own strip.
     for slot_id, ring in (("101", 1), ("102", 2), ("105", 3)):
         gates = root.findall(
             f".//ComplicationSlot[@slotId='{slot_id}']/Complication[@type='RANGED_VALUE']"
@@ -59,21 +59,18 @@ def check_structure(root):
         }:
             errors.append(f"slot {slot_id}: main tree must be its named full-canvas Group")
         children = element_children(tree)
-        if len(children) != 2 or [child.tag for child in children] != ["Condition", "Group"]:
-            errors.append(f"slot {slot_id}: main tree must contain selector then strip")
+        if len(children) < 3 or any(child.tag != "Group" for child in children):
+            errors.append(f"slot {slot_id}: main tree must contain geometry Groups then strip")
             continue
-        selector, strip = children
-        if (
-            selector.find("Expressions/Expression") is None or not selector.findall("Compare")
-            or selector.find(".//Arc") is None
-        ):
-            errors.append(f"slot {slot_id}: main layout selector lost its band drawing")
+        *geometries, strip = children
+        if any(group.find(".//Arc") is None for group in geometries):
+            errors.append(f"slot {slot_id}: main geometry lost its band drawing")
         if (
             strip.get("name") != f"ring{ring}_strip" or strip.find(".//RoundRectangle") is None
             or strip.find(".//PartText") is None
         ):
             errors.append(f"slot {slot_id}: main strip lost its well or label")
-    return (errors + check_backdrop_restore(root) + check_band_paints(root)
+    return (errors + check_main_decisions(root) + check_backdrop_restore(root) + check_band_paints(root)
             + check_extra_decisions(root) + check_retained_extra_paint(root))
 
 
@@ -238,9 +235,13 @@ def check_band_paints(root):
             errors.append(f"{name}: expected one owning band Group")
             continue
         group = groups[0]
-        if group.attrib != {**canvas, "name": name} or group.findall("Transform"):
-            errors.append(f"{name}: band owner must retain neutral full-canvas coordinates")
+        if group.attrib != {**canvas, "name": name, "alpha": "0"}:
+            errors.append(f"{name}: band owner must retain initially hidden full-canvas coordinates")
         children = element_children(group)
+        if not children or children[0].tag != "Transform":
+            errors.append(f"{name}: geometry alpha must precede the unchanged drawings")
+            continue
+        children = children[1:]
         # The isolated backdrop is checked separately; it is not foreground paint.
         if name == "ring1N1":
             children = [child for child in children if child.get("name") != N1_RESTORE]
@@ -344,10 +345,9 @@ def check_backdrop_restore(root):
     restores = root.findall(f".//Group[@name='{N1_RESTORE}']")
     owner = root.find(
         ".//ComplicationSlot[@slotId='101']/Complication[@type='RANGED_VALUE']"
-        "/Condition/Compare[@expression='isValid']/Group/Condition/Compare[@expression='isN1']"
-        "/Condition/Default/Group[@name='ring1N1']"
+        "/Condition/Compare[@expression='isValid']/Group/Group[@name='ring1N1']"
     )
-    if len(restores) != 1 or owner is None or element_children(owner)[:1] != restores:
+    if len(restores) != 1 or owner is None or element_children(owner)[1:2] != restores:
         return errors + ["only admitted unsplit N1 must restore its backdrop before foreground"]
     restore = restores[0]
     if (restore.attrib != {**canvas, "name": N1_RESTORE}
@@ -396,6 +396,75 @@ def alpha_expression(group):
             or not isinstance(expression.orelse, ast.Constant) or expression.orelse.value != 0):
         raise ValueError(f"{group.get('name')}: alpha must use a 255-or-zero ternary")
     return expression
+
+
+def check_main_decisions(root):
+    """Evaluate every geometry gate; first-true selection must not hide overlaps."""
+    errors = []
+    canvas = {"x": "0", "y": "0", "width": "450", "height": "450"}
+    ordinary = ("", "zero", "D", "7D", "M")
+    paired = tuple(base + suffix for base in ("split", "split:cursor-other", "split:spark")
+                   for suffix in ("", ":zero-inner", ":zero-outer", ":zero-both"))
+    for index, slot_id in enumerate((101, 102, 105)):
+        owner = root.find(f".//Group[@name='ring{index + 1}_main']")
+        if owner is None:
+            errors.append(f"slot {slot_id}: main geometry owner missing")
+            continue
+        groups = [group for group in owner.findall("Group")
+                  if group.get("name") != f"ring{index + 1}_strip"]
+        names = [group.get("name") for group in groups]
+        expected = [f"ring{index + 1}{layout}{suffix}"
+                    for layout, (_, _, diameters, _) in BAND_LAYOUTS.items() if index < len(diameters)
+                    for suffix in ("Half", "")]
+        if names != expected or any(group.attrib != {**canvas, "name": name, "alpha": "0"}
+                                    for group, name in zip(groups, names)):
+            errors.append(f"slot {slot_id}: expected stable paired/ordinary alpha Groups for each feasible layout")
+            continue
+        alphas = [alpha_expression(group) for group in groups]
+        gate_errors = set()
+
+        def selected(value, maximum, minimum=0, title=""):
+            values = [evaluate_paint(alpha, value, maximum, minimum, title) for alpha in alphas]
+            if any(alpha not in (0, 255) for alpha in values):
+                gate_errors.add(f"slot {slot_id}: geometry alpha must be zero or 255")
+            return [name for name, alpha in zip(names, values) if alpha != 0]
+
+        # Geometry depends on envelope and TITLE, not on the foreground paint state.
+        # Existing paint checks cover cutoff neighbors and proportional endpoints.
+        for layout, (maximum, _, diameters, _) in BAND_LAYOUTS.items():
+            for title in (*ordinary, *paired):
+                suffix = "Half" if title in paired else ""
+                wanted = [f"ring{index + 1}{layout}{suffix}"] if index < len(diameters) else []
+                if any(selected(value, maximum, title=title) != wanted for value in (0, maximum)):
+                    errors.append(f"slot {slot_id}/{layout}: {title!r} lost exclusive geometry admission")
+            rejected = [(value, maximum, minimum, title) for value, minimum, title in (
+                (-1, 0, ""), (maximum + 1, 0, "split:cursor-other"),
+                (math.nan, 0, ""), (math.inf, 0, ""),
+                (maximum, 1, ""), (maximum, math.nan, "split"),
+                (maximum, 0, "credits"), (maximum, 0, "split:unknown"),
+                (maximum, 0, "split:cursor-other:zero"), (maximum, 0, "split:spark:zero-both:extra"),
+            )]
+            if any(selected(value, upper, lower, title) for value, upper, lower, title in rejected):
+                errors.append(f"slot {slot_id}/{layout}: malformed or credits-only input selected geometry")
+        if any(selected(0, maximum) for maximum in (0, 50, 150, 300, 900, math.nan, math.inf)):
+            errors.append(f"slot {slot_id}: unsupported envelope selected geometry")
+        errors.extend(sorted(gate_errors))
+
+    errors.extend(check_count_change_pair(root))
+    # The focused declaration witness must detect ordinary overpaint and a missing
+    # exact-full paired foreground, not merely the new selector's XML shape.
+    for overlap in (False, True):
+        broken = deepcopy(root)
+        paired_gate = broken.find(".//Group[@name='ring1N2Half']/Transform")
+        target = broken.find(".//Group[@name='ring1N2']/Transform" if overlap else
+                             ".//Group[@name='ring1N2Half_full']/Transform")
+        if paired_gate is None or target is None:
+            errors.append("count-change counterexamples require the emitted geometry and full-paint gates")
+            continue
+        target.set("value", paired_gate.get("value") if overlap else "(0 == 1) ? 255 : 0")
+        if not check_count_change_pair(broken):
+            errors.append("overlapping ordinary geometry or suppressed paired full paint escaped the count-change regression")
+    return errors
 
 
 def check_extra_decisions(root):
@@ -648,6 +717,59 @@ def visible_band_owner(layers, radius, angle):
                 raise ValueError("family ownership lost its response color source")
             owner = family
     return owner
+
+
+def check_count_change_pair(root):
+    """Source-projected Cursor100/Other64.1 declarations, not retained native state."""
+    errors = []
+    remaining = struct.unpack("!f", struct.pack("!f", 100 - 35.9))[0]
+    main = root.find(".//Group[@name='ring1_main']")
+    extra = root.find(".//ComplicationSlot[@slotId='106']/Complication[@type='RANGED_VALUE']")
+    if main is None or extra is None:
+        return ["count-change pair requires its independent main and extra consumers"]
+    main_groups = [group for group in main.findall("Group") if group.get("name") != "ring1_strip"]
+    extra_groups = [group for group in extra.findall("Group")
+                    if group.get("name", "").startswith("outerHalf106_")]
+
+    def response(value, maximum, title, family):
+        return ({"value": value, "maximum": maximum, "minimum": 0, "title": title}, family)
+
+    def selected(groups, fields):
+        return [group.get("name") for group in groups
+                if evaluate_paint(alpha_expression(group), **fields) != 0]
+
+    for layout, maximum, inner_edges, outer_edges in (
+        ("N3", 800, (182, 192), (192, 202)),
+        ("N2", 400, (170, 186), (186, 202)),
+    ):
+        state = {101: response(maximum, maximum, "split:cursor-other", "Cursor"),
+                 106: response(remaining * (maximum / 100), maximum, "0", "Other")}
+        if (selected(main_groups, state[101][0]) != [f"ring1{layout}Half"]
+                or selected(extra_groups, state[106][0]) != [f"outerHalf106_{layout}_1_round"]):
+            errors.append(f"{layout} Cursor100/Other64.1 must activate only its current paired geometry")
+        layers = emitted_band_layers(root, state)
+        for family, edges in (("Cursor", inner_edges), ("Other", outer_edges)):
+            paints = [layer for layer in layers if layer[5] == family]
+            if len(paints) != 1:
+                errors.append(f"{layout}: {family} must retain one independent foreground")
+                continue
+            center, thickness, start, end, cap, _, alpha, color = paints[0]
+            if ((center - thickness / 2, center + thickness / 2) != edges
+                    or alpha != 255 or color != "[COMPLICATION.RANGED_VALUE_COLORS]"
+                    or (family == "Cursor" and (start, end, cap) != (0, 359.9, "ROUND"))):
+                errors.append(f"{layout}: {family} lost its intended half-width/full-main declaration")
+            if visible_band_owner(layers, sum(edges) / 2, 300) != family:
+                errors.append(f"{layout}: {family} is covered by another geometry")
+        if visible_band_owner(layers, sum(outer_edges) / 2, 90) != "track":
+            errors.append(f"{layout}: full main must not fill the extra's spent region")
+
+    ordinary = response(400, 400, "", "Cursor")
+    layers = emitted_band_layers(root, {101: ordinary})
+    paints = [layer for layer in layers if layer[5] == "Cursor"]
+    if (selected(main_groups, ordinary[0]) != ["ring1N2"] or len(paints) != 1
+            or paints[0][:5] != (186, 32, 0, 359.9, "ROUND")):
+        errors.append("ordinary full N2 must occupy its whole 170..202 band, unlike the paired full main")
+    return errors
 
 
 def check_retained_extra_paint(root):
