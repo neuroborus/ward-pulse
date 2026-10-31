@@ -78,7 +78,7 @@ device-preserving operations belong to android-devices/android-emulators, not th
 
 ## Case and evidence continuity
 
-An awaited tool can return a RUNNING session/cell marker; inspect the actual returned marker and terminal status BEFORE dispatching dependent reads/copies/navigation, even inside one orchestration script.
+An awaited tool can return RUNNING or a failed terminal result; explicitly branch on the actual returned status and output presence BEFORE dependent reads/copies/navigation, even inside one orchestration script. RUNNING holds dependencies; after failure, artifact inspection routes only to existing validated attributable diagnostics, never assumed expected outputs. Printing the result is not a control-flow gate.
 While RUNNING, hold dependencies; independent read-only work may continue. Await that same operation's terminal result. After failure, safe attributable failed/partial artifacts may be inspected as diagnostics.
 Before viewing/indexing transferred native output as PNG/JSON, validate PNG signature and decoding or JSON parsing/expected case content: `adb exec-out ... run-as ... cat` can exit 0 with missing-file diagnostics instead. Report missing output as missing; preserve error bytes under a diagnostic text extension and allow necessary safe cleanup.
 Diagnostic inspection needs no capture success and does not establish acceptance. Acceptance requires success plus the current candidate/file, capture time/hash and actual content; a path, acknowledgement or old file is insufficient.
