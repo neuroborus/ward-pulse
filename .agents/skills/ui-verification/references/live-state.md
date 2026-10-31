@@ -6,8 +6,11 @@ does not freeze a normal live store or establish ownership of later writes.
 
 ## Record before deciding
 
-Before evaluating a shared-state equality guard, retain bounded expected AND actual presence/hashes, state
-source and relevant target identity, operation/phase, snapshot/read times and available
+Before shared-state hash equality/drift classification, bind BOTH expected and actual to
+the exact required object/path or named field AND byte representation (container XML versus decoded value).
+Compare matching domains; missing bindings stay Unknown. Hashes of different representations alone do not prove drift, a writer or corruption.
+Keep applicable byte guards exact: decoded-value equality cannot replace a required container-byte guard; never canonicalize or add tolerance to obtain equality.
+Retain bounded expected AND actual presence/hashes, state source and relevant target identity, operation/phase, snapshot/read times and available
 generation/write times with their origins/timezones. Record whether writer custody covered
 the interval, authorized writes if any, and known attribution or Unknown. Capture these
 facts before the accept/reject decision; a failure message may reference the retained trace.
