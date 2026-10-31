@@ -680,6 +680,50 @@ PASS. Requested frames precede the potentially slow selection lookup; native rec
 images observe separate instants. No sleep, repeated gesture, timing retry or final-frame
 substitute is used.
 
+The same `observeDelivery` method also admits exactly **18** `fixture-*` scenarios from
+`nativeDeliveryFixtureAssets` in `NativeDatasourceState.kt`, using **19 existing** packaged
+assets. In this table each suffix means `watch_dashboard_summary_<suffix>.json` in
+`fixtures/snapshots/`, packaged at the instrumentation context's asset root:
+
+| Scenario suffixes (prefix each with `fixture-`) | Existing source oracle |
+| --- | --- |
+| `n1_pair_zero_full`, `n1_pair_full_zero`, `n1_pair_both_zero`, `n1_pair_tiny_near_full`, `n1_pair_near_full_tiny`, `n1_pair_below_above`, `n1_pair_above_below` | `WatchSummaryStoreTest.n1PairedFixturesKeepIndependentEndpointsAndCutoffs`: MAX200, reversed endpoints, zero tokens, tiny/near-full and both cutoff sides |
+| `n2_pairs_zero_tiny`, `n2_pairs_tiny_zero` | `WatchSummaryStoreTest.n2EndpointFixturesKeepBothSplitOrdinalsAndClearObsoleteExtras`: MAX400, exact 0 versus 0.125 and both split ordinals |
+| `n3_pairs_near_full`, `n3_pairs_full_near`, `n3_zero_tracks` | `WatchSummaryStoreTest.n3EndpointFixturesKeepExactValuesAndReplaceSameCountSelections`: exact envelopes, titles, colors and positions |
+| `credits_only`, `plan_credits`, `n1_week_near_full`, `n2_week_day`, `n2_month_month` | `WatchSummaryStoreTest.creditsAndBudgetFixturesBuildExactComplicationEnvelopes`: credits-only 500, matching Codex strip 320 (aggregate 400), Week/Day order and Month radii |
+| `n3_reorder` | One lease publishes `n3_reorder_before` then `n3_reorder_after`; the N3 endpoint oracle retains mains 720/240/80 → 600/360/40, extras 560@2 and 640@1 → 760@0, and obsolete second-extra NoData |
+
+Fixture publication requires a debug build, exact
+`authorizedOperation=observeDelivery:<deliveryScenario>` and an independently supplied
+`expectedFixtureSha256`. The reorder additionally requires `expectedReorderAfterSha256`;
+`readNativeDeliveryFixtures` verifies **both** original byte arrays before any case write or
+lease. Arbitrary paths, other assets, malformed/mismatched hashes and missing authorization
+are rejected before publication or requests. The original UTF-8 strings pass unchanged through
+`NativeSummaryLease` to `WatchSummaryStore.saveEncoded`; mock mode, historical timestamps and
+normal decoder behavior stay intact. These inputs establish no healthy public cohort.
+
+Each fixture requests the same freshly joined intended provider groups through normal services.
+Reorder records `reorder-before` and `reorder-after` independently within the same lease;
+single inputs use stage `fixture`. The private `files/native_datasource/<scenario>/receipt.json`
+retains all selected asset names/hashes and initially Pending stages in `fixtureInputs`, separate
+publication states/hashes in `publications`, and bounded request/event/effective-data records in
+`events`. Each reached stage retains `<stage>-requested.{png,json}` and
+`<stage>-bounded.{png,json}` alongside `before` and restoration originals. A fixture-stage event
+timeout records its bound, stops further publications and runs targeted recovery; any unreached
+reorder stage stays Pending. Even an observed event proves no service callback provenance,
+effective delivery or paint. No final frame substitutes for either reorder stage.
+
+Catalog cases share the global single-use/latest-case and separate later-restoration review
+fences with normal and SDK cases. `requireNativeNormalRecovery` still accepts only the four
+reviewed normal controls for SDK/client admission. A new probe ID never reopens a fixture case.
+The existing four datasource guard methods add finite-catalog/path and exact authorization/hash
+rejection, unchanged-byte publication, global fencing and newer-write-safe targeted recovery
+using private preferences and injected requests. No test method or default exclusion changes:
+source discovery remains expected at 47 default + 48 manual; packaged discovery is a separate
+HOST verification. Compilation, guards, default tests, delivery, paint, quiet custody and settled
+restoration of these new paths remain unrun/Pending until their ordered HOST phase. Invocation
+arguments are in [the manual invocation](../../docs/ANDROID_TOOLCHAIN.md#guarded-datasource-observations).
+
 `NativeDatasourceGuardTest.failedPublicationRestoresOnlyOwnedDataAndRetainsUnresolvedRecovery`
 also checks both actual `deliverySummary` outputs against the schema-9 property/type contract,
 including explicit nullable root, full-ring and budget fields and the distinct four-property
@@ -694,8 +738,9 @@ publication, plus owned/reconciliation values and receipts under app-private
 by the unmodified UTF-8 string. They and native records/frames must remain private. Recovery
 runs on failure as well as success, unregisters its preference listener and makes queued
 callbacks inert. It compares current data to this instrumentation's issued values before
-restoring original bytes or original absence. After persisting an armed publication, it
-rechecks ownership before saving the fixture. A newer value is preserved, including a
+restoring original bytes or original absence. `armPublication` persists before a fresh
+full-scope mapping read off the main thread, then `publish` rechecks ownership on the main
+thread before saving the exact armed bytes. A newer value is preserved, including a
 producer write during persistence; observed interleaving or unreestablished quiet writers
 retain recovery material and remain Pending. SharedPreferences
 does not provide a cross-writer compare-and-set transaction: do not run this route with active

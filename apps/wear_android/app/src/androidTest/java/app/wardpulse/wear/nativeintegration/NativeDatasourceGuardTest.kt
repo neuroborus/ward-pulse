@@ -14,11 +14,13 @@ import app.wardpulse.wear.complication.outerHalfComplicationData
 import app.wardpulse.wear.complication.rangedComplicationBuilder
 import app.wardpulse.wear.complication.ringComplicationData
 import app.wardpulse.wear.data.WatchSummaryStore
+import app.wardpulse.wear.model.WatchDataMode
 import app.wardpulse.wear.ui.RingFamily
 import java.io.File
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.FutureTask
+import java.util.concurrent.TimeoutException
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -175,6 +177,40 @@ class NativeDatasourceGuardTest {
             // Selecting/creating another first read cannot namespace, clear or rewrite global case/recovery state.
             assertEquals(originals, retained.associateWith { it.readText() })
             assertEquals(setOf("first.png", "first.json", "receipt.json"), historical.list()!!.toSet())
+
+            val cases = File(root, "case-fence").also { check(it.mkdir()) }
+            val scenario = "fixture-n3_reorder"
+            val directory = requireNativeDeliveryCase(cases, scenario).also { check(it.mkdir()) }
+            val latest = AttemptJournal(File(cases, "latest.json"))
+            latest.persist(JSONObject().put("case", scenario))
+            val file = File(directory, "receipt.json")
+            val journal = AttemptJournal(file)
+            val receipt = JSONObject().put("scenario", scenario).put("cleanupRequest", "Pending")
+            journal.persist(receipt)
+            val args = Bundle()
+            val expected = NativePushExpectations(args)
+            for (id in listOf("fresh-before-review", "another-first")) {
+                val probe = NativeDatasourceProbe(cases, id)
+                probe.create(scope, { capture(it) }, { scope })
+                read(probe)
+                assertThrows(NativePending::class.java) { requireNativePriorDeliveryRecovery(cases, expected) }
+                assertThrows(NativePending::class.java) { requireNativeDeliveryCase(cases, scenario) }
+            }
+            receipt.put("cleanupRequest", "normal requestUpdate returned; effective restoration Pending")
+            journal.persist(receipt)
+            args.putString("priorDeliveryRestorationReview", "complete")
+            args.putString("expectedPriorDeliveryRestorationSha256", hash(file))
+            // Immediate cleanup, even explicitly reviewed, cannot stand in for the separate later read.
+            assertThrows(NativePending::class.java) { requireNativePriorDeliveryRecovery(cases, expected) }
+            receipt.put("laterRestoration", "recorded; original-frame inspection and response provenance Pending")
+            journal.persist(receipt)
+            assertThrows(NativePending::class.java) { requireNativePriorDeliveryRecovery(cases, expected) }
+            args.putString("expectedPriorDeliveryRestorationSha256", hash(file))
+            requireNativePriorDeliveryRecovery(cases, expected)
+            assertThrows(NativePending::class.java) { requireNativeDeliveryCase(cases, scenario) }
+            // Path/unknown cases cannot escape the catalog through the latest-case journal either.
+            latest.persist(JSONObject().put("case", "../normal"))
+            assertThrows(NativePending::class.java) { requireNativePriorDeliveryRecovery(cases, expected) }
         } finally {
             check(root.deleteRecursively()) { "Private probe-test resources must be deleted" }
         }
@@ -191,6 +227,7 @@ class NativeDatasourceGuardTest {
         }
         val expected = NativePushExpectations(arguments)
         val operations = listOf("observeDelivery:normal", "observeDelivery:delayed",
+            "observeDelivery:fixture-n1_pair_zero_full", "observeDelivery:fixture-n3_reorder",
             "observeOverride:active:malformed-title", "observeOverride:supplied-bitmap:malformed-title")
         for ((testClass, optIn, methods) in listOf(
             Triple(DELIVERY_CLASS, "normal-delivery", listOf("probeDelivery", "observeDelivery", "observeRestoration")),
@@ -220,6 +257,85 @@ class NativeDatasourceGuardTest {
             operations.filterNot { it == authorized }.forEach { other ->
                 assertThrows(NativePending::class.java) { requireNativeDatasourceMutation(expected, other) }
             }
+        }
+
+        val suffixes = listOf("n1_pair_zero_full", "n1_pair_full_zero", "n1_pair_both_zero",
+            "n1_pair_tiny_near_full", "n1_pair_near_full_tiny", "n1_pair_below_above", "n1_pair_above_below",
+            "n2_pairs_zero_tiny", "n2_pairs_tiny_zero", "n3_pairs_near_full", "n3_pairs_full_near",
+            "n3_zero_tracks", "credits_only", "plan_credits", "n1_week_near_full", "n2_week_day", "n2_month_month")
+        val catalog = suffixes.associate { "fixture-$it" to listOf("watch_dashboard_summary_$it.json") } +
+            mapOf("fixture-n3_reorder" to listOf("watch_dashboard_summary_n3_reorder_before.json",
+                "watch_dashboard_summary_n3_reorder_after.json"))
+        assertEquals(catalog, nativeDeliveryFixtureAssets)
+        assertEquals(18, catalog.size)
+        val assets = catalog.values.flatten().associateWith { asset ->
+            InstrumentationRegistry.getInstrumentation().context.assets.open(asset).use { it.readBytes() }
+        }
+        assertEquals(19, assets.size)
+        val args = Bundle()
+        val fixtureExpected = NativePushExpectations(args)
+        var reads = 0
+        var admittedPublications = 0
+        fun read(scenario: String, debug: Boolean = true): List<NativeDeliveryFixture> =
+            readNativeDeliveryFixtures(scenario, fixtureExpected, debug) { asset ->
+                reads++
+                assets.getValue(asset)
+            }.also { admittedPublications += it.size }
+        fun authorize(scenario: String) {
+            args.clear()
+            args.putString("authorizedOperation", "observeDelivery:$scenario")
+            val selected = catalog.getValue(scenario)
+            args.putString("expectedFixtureSha256", assets.getValue(selected.first()).inputStream().sha256())
+            if (selected.size == 2) args.putString("expectedReorderAfterSha256",
+                assets.getValue(selected.last()).inputStream().sha256())
+        }
+        for (invalid in listOf("", "../normal", "fixture-../n1_pair_zero_full", "fixture-n1_pair_zero_full/extra",
+            "fixture-n1_pair_zero_full\\extra", "fixture-paired", "fixture-n2_inner_pair_below",
+            "fixture-n3_reorder_before", "watch_dashboard_summary_credits_only.json", "Fixture-credits_only")) {
+            assertThrows(NativePending::class.java) { read(invalid) }
+        }
+        val single = "fixture-n1_pair_zero_full"
+        authorize(single)
+        assertThrows(NativePending::class.java) { read(single, debug = false) }
+        for (other in listOf("observeDelivery:normal", "observeDelivery:fixture-n1_pair_full_zero", "observeDelivery")) {
+            args.putString("authorizedOperation", other)
+            assertThrows(NativePending::class.java) { read(single) }
+        }
+        authorize(single)
+        args.remove("expectedFixtureSha256")
+        assertThrows(NativePending::class.java) { read(single) }
+        for (malformed in listOf("abc", "A".repeat(64))) {
+            args.putString("expectedFixtureSha256", malformed)
+            assertThrows(NativePending::class.java) { read(single) }
+        }
+        assertEquals(0, reads)
+        authorize(single)
+        args.putString("expectedFixtureSha256", "f".repeat(64))
+        assertThrows(NativePending::class.java) { read(single) }
+        authorize("fixture-n3_reorder")
+        args.remove("expectedReorderAfterSha256")
+        val beforeMissingHash = reads
+        assertThrows(NativePending::class.java) { read("fixture-n3_reorder") }
+        assertEquals(beforeMissingHash, reads)
+        authorize("fixture-n3_reorder")
+        args.putString("expectedReorderAfterSha256", args.getString("expectedFixtureSha256"))
+        assertThrows(NativePending::class.java) { read("fixture-n3_reorder") }
+        assertEquals(0, admittedPublications) // Even a valid first input cannot escape a bad second hash.
+        catalog.forEach { (scenario, names) ->
+            authorize(scenario)
+            val fixtures = read(scenario)
+            assertEquals(names, fixtures.map { it.asset })
+            fixtures.forEach { fixture ->
+                assertTrue(assets.getValue(fixture.asset).contentEquals(fixture.encoded.toByteArray(Charsets.UTF_8)))
+                assertEquals(assets.getValue(fixture.asset).inputStream().sha256(), fixture.sha256)
+            }
+        }
+        assertEquals(19, admittedPublications)
+        for (scenario in listOf("normal", "delayed", "obsolete", "recovery")) {
+            args.putString("authorizedOperation", "observeDelivery:$scenario")
+            val beforeNormal = reads
+            assertTrue(read(scenario, debug = false).isEmpty())
+            assertEquals(beforeNormal, reads)
         }
     }
 
@@ -342,6 +458,16 @@ class NativeDatasourceGuardTest {
         val directory = File(context.cacheDir, name)
         check(directory.mkdir())
         try {
+            val assets = nativeDeliveryAssets("fixture-n3_reorder").associateWith { asset ->
+                instrumentation.context.assets.open(asset).use { it.readBytes() }
+            }
+            val args = Bundle().apply {
+                putString("authorizedOperation", "observeDelivery:fixture-n3_reorder")
+                putString("expectedFixtureSha256", assets.values.first().inputStream().sha256())
+                putString("expectedReorderAfterSha256", assets.values.last().inputStream().sha256())
+            }
+            val fixtures = readNativeDeliveryFixtures("fixture-n3_reorder", NativePushExpectations(args), true,
+                assets::getValue)
             instrumentation.runOnMainSync {
                 val original = checkedDeliverySummary(false, "2026-01-01T00:00:00Z", preferences)
                 val own = checkedDeliverySummary(true, "2026-01-01T00:01:00Z", preferences)
@@ -404,6 +530,80 @@ class NativeDatasourceGuardTest {
                         check(producerStarted)
                         assertEquals(newer,
                             File(recovery, "newer.bin").readBytes().drop(1).toByteArray().toString(Charsets.UTF_8))
+                    }
+                }
+
+                // One two-stage lease, with no conversion of packaged mock bytes or timestamps.
+                val targets = listOf(NativeDeliveryTarget(11, 407, ComponentName(HOST_PACKAGE, "SyntheticMain")),
+                    NativeDeliveryTarget(14, 601, ComponentName(HOST_PACKAGE, "SyntheticExtra")))
+                for (outcome in listOf("reorder", "timeout", "newer", "mapping-changed", "wrong-armed-bytes")) {
+                    check(WatchSummaryStore(preferences).saveEncoded(original))
+                    val recovery = File(directory, "fixture-$outcome")
+                    val receipt = JSONObject()
+                    val lease = NativeSummaryLease(preferences, recovery, receipt)
+                    val recovered = mutableListOf<Int>()
+                    try {
+                        val first = fixtures.first()
+                        lease.armPublication(first.encoded)
+                        assertEquals(original, preferences.getString("latest", null))
+                        assertEquals("armed; acceptance Pending", AttemptJournal(File(recovery, "receipt.json"))
+                            .read().getJSONArray("publications").getJSONObject(0).getString("state"))
+                        if (outcome == "mapping-changed") throw NativePending("synthetic-mapping-changed")
+                        if (outcome == "wrong-armed-bytes") lease.publish(fixtures.last().encoded)
+                        lease.publish(first.encoded)
+                        assertEquals(first.encoded, preferences.getString("latest", null))
+                        assertEquals(WatchDataMode.MOCK, WatchSummaryStore(preferences).load()!!.dataMode)
+                        assertEquals(JSONObject(first.encoded).getString("generatedAt"),
+                            WatchSummaryStore(preferences).load()!!.generatedAt)
+                        if (outcome == "timeout") throw TimeoutException()
+                        if (outcome == "newer") check(WatchSummaryStore(preferences).saveEncoded(newer))
+                        lease.armPublication(fixtures.last().encoded)
+                        lease.publish(fixtures.last().encoded)
+                        assertEquals("reorder", outcome)
+                        assertEquals(fixtures.last().encoded, preferences.getString("latest", null))
+                        assertEquals(WatchDataMode.MOCK, WatchSummaryStore(preferences).load()!!.dataMode)
+                        assertEquals(JSONObject(fixtures.last().encoded).getString("generatedAt"),
+                            WatchSummaryStore(preferences).load()!!.generatedAt)
+                    } catch (failure: NativePending) {
+                        assertEquals(when (outcome) {
+                            "newer" -> "quiet-summary-writer"
+                            "mapping-changed" -> "synthetic-mapping-changed"
+                            "wrong-armed-bytes" -> "armed-publication-bytes"
+                            else -> throw failure
+                        }, failure.identity)
+                    } catch (failure: TimeoutException) {
+                        assertEquals("timeout", outcome)
+                    } finally {
+                        try { lease.close(quietWriter = true) } finally {
+                            val calls = JSONArray()
+                            receipt.put("cleanupCalls", calls)
+                            val recover = {
+                                requestNativeDelivery(targets, targets, calls,
+                                    { AttemptJournal(File(recovery, "receipt.json")).persist(receipt) },
+                                    { targets }, recovery = true) { _, ids ->
+                                    recovered += ids.toList()
+                                    if (outcome == "timeout" && ids.single() == 407) throw java.io.IOException()
+                                }
+                            }
+                            if (outcome == "timeout") assertThrows(java.io.IOException::class.java) { recover() }
+                            else recover()
+                        }
+                    }
+                    assertEquals(listOf(407, 601), recovered)
+                    assertEquals(if (outcome == "newer") newer else original, preferences.getString("latest", null))
+                    assertEquals(original, File(recovery, "original.bin").readBytes().drop(1).toByteArray()
+                        .toString(Charsets.UTF_8))
+                    assertTrue(assets.getValue(fixtures.first().asset).contentEquals(
+                        File(recovery, "owned-0.bin").readBytes().drop(1).toByteArray()))
+                    if (outcome == "reorder") {
+                        assertTrue(assets.getValue(fixtures.last().asset).contentEquals(
+                            File(recovery, "owned-1.bin").readBytes().drop(1).toByteArray()))
+                        assertEquals(2, receipt.getJSONArray("publications").length())
+                    } else assertEquals(1, receipt.getJSONArray("publications").length())
+                    if (outcome == "newer") {
+                        assertEquals(newer, File(recovery, "newer.bin").readBytes().drop(1).toByteArray()
+                            .toString(Charsets.UTF_8))
+                        assertTrue(receipt.getString("restoration").contains("Pending"))
                     }
                 }
             }

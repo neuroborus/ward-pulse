@@ -17,6 +17,76 @@ internal data class NativeDeliveryTarget(val slot: Int, val systemId: Int, val p
 
 internal data class NativeDeliveryMapping(val targets: List<NativeDeliveryTarget>, val scopeSha256: String)
 
+/** Only existing packaged inputs reviewed for normal-service observation; never caller-supplied paths. */
+internal val nativeDeliveryFixtureAssets = listOf(
+    "n1_pair_zero_full", "n1_pair_full_zero", "n1_pair_both_zero", "n1_pair_tiny_near_full",
+    "n1_pair_near_full_tiny", "n1_pair_below_above", "n1_pair_above_below",
+    "n2_pairs_zero_tiny", "n2_pairs_tiny_zero", "n3_pairs_near_full", "n3_pairs_full_near",
+    "n3_zero_tracks", "credits_only", "plan_credits", "n1_week_near_full", "n2_week_day", "n2_month_month",
+).associate { "fixture-$it" to listOf("watch_dashboard_summary_$it.json") } + mapOf(
+    "fixture-n3_reorder" to listOf("watch_dashboard_summary_n3_reorder_before.json",
+        "watch_dashboard_summary_n3_reorder_after.json"),
+)
+
+internal fun nativeDeliveryAssets(scenario: String): List<String> {
+    nativeDeliveryFixtureAssets[scenario]?.let { return it }
+    nativeGuard(scenario in setOf("normal", "delayed", "obsolete", "recovery"), "delivery-scenario")
+    return emptyList()
+}
+
+internal data class NativeDeliveryFixture(val asset: String, val sha256: String, val encoded: String)
+
+/** Validate every selected byte/hash before any case, lease, publication or provider effect. */
+internal fun readNativeDeliveryFixtures(scenario: String, expected: NativePushExpectations, debug: Boolean,
+    read: (String) -> ByteArray): List<NativeDeliveryFixture> {
+    val assets = nativeDeliveryAssets(scenario)
+    requireNativeDatasourceMutation(expected, "observeDelivery:$scenario")
+    if (assets.isEmpty()) return emptyList()
+    nativeGuard(debug, "debug-fixture-delivery")
+    val hashes = listOf(expected.hash("expectedFixtureSha256")) +
+        if (assets.size == 2) listOf(expected.hash("expectedReorderAfterSha256")) else emptyList()
+    return assets.zip(hashes).map { (asset, hash) ->
+        val bytes = read(asset)
+        nativeGuard(bytes.inputStream().sha256() == hash, "delivery-fixture-sha256")
+        val encoded = bytes.toString(Charsets.UTF_8)
+        nativeGuard(encoded.toByteArray(Charsets.UTF_8).contentEquals(bytes), "delivery-fixture-utf8")
+        NativeDeliveryFixture(asset, hash, encoded)
+    }
+}
+
+internal fun requireNativeDeliveryCase(root: File, scenario: String): File {
+    nativeDeliveryAssets(scenario)
+    return File(root, scenario).also { nativeGuard(!it.exists(), "single-delivery-case") }
+}
+
+/** Global case history is independent of the selected first-read probe. */
+internal fun requireNativePriorDeliveryRecovery(root: File, expected: NativePushExpectations) {
+    val latest = AttemptJournal(File(root, "latest.json"))
+    if (!latest.exists()) return
+    val scenario = latest.read().getString("case")
+    val sdk = scenario in nativeSdkDirectScenarios.map { "sdk-$it" }
+    if (!sdk) nativeDeliveryAssets(scenario)
+    val file = File(root, "$scenario/receipt.json")
+    val receipt = AttemptJournal(file).read()
+    if (sdk) {
+        nativeGuard(receipt.optString("kind") == "sdk-direct-data", "prior-sdk-direct-case")
+        // Constructor rejection still needs exact review, but has no dispatch/recovery to observe.
+        if (!receipt.optBoolean("directArmed") && receipt.optString("construction") ==
+            "SDK rejected; no dispatch or renderer effect established") {
+            nativeGuard(expected.required("priorDeliveryRestorationReview") == "complete" &&
+                file.inputStream().sha256() == expected.hash("expectedPriorDeliveryRestorationSha256"),
+                "prior-sdk-direct-rejection-unreviewed")
+            return
+        }
+        nativeGuard(receipt.optBoolean("directArmed"), "prior-sdk-direct-arm-unresolved")
+    }
+    nativeGuard(receipt.optString("cleanupRequest") == "normal requestUpdate returned; effective restoration Pending" &&
+        receipt.optString("laterRestoration") == "recorded; original-frame inspection and response provenance Pending" &&
+        expected.required("priorDeliveryRestorationReview") == "complete" &&
+        file.inputStream().sha256() == expected.hash("expectedPriorDeliveryRestorationSha256"),
+        "prior-delivery-recovery-unresolved")
+}
+
 /** Shared client/direct-data fence: requests and immediate cleanup are not reviewed recovery. */
 internal fun requireNativeNormalRecovery(context: Context, expected: NativePushExpectations,
     mapping: NativeDeliveryMapping) {
@@ -257,6 +327,7 @@ internal class NativeSummaryLease(
     private var foreignValue: String? = null
     private var restoring = false
     private var closed = false
+    private var armedPublication: JSONObject? = null
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (!closed && key == "latest") {
             val current = preferences.getString("latest", null)
@@ -277,7 +348,8 @@ internal class NativeSummaryLease(
 
     // All lease operations and preference callbacks use the main thread. Production writers are
     // not locked by this test: HOST must establish quiet writers, and every changed value stops it.
-    fun publish(encoded: String) {
+    fun armPublication(encoded: String) {
+        nativeGuard(!closed && armedPublication == null, "single-armed-publication")
         nativeGuard(!foreignWrite && preferences.getString("latest", null) == (owned ?: original),
             "quiet-summary-writer")
         nativeGuard(store.load() != null || original == null, "restorable-original-summary")
@@ -289,6 +361,14 @@ internal class NativeSummaryLease(
         publications.put(publication)
         receipt.put("publication", "armed; acceptance Pending").put("ownedSha256", encoded.sha256())
         persistReceipt(receipt)
+        armedPublication = publication
+    }
+
+    fun publish(encoded: String) {
+        nativeGuard(!closed, "open-summary-lease")
+        if (armedPublication == null) armPublication(encoded)
+        val publication = checkNotNull(armedPublication)
+        nativeGuard(publication.getString("sha256") == encoded.sha256(), "armed-publication-bytes")
         // A background publication during persistence can precede its queued main-thread notification.
         nativeGuard(!foreignWrite && preferences.getString("latest", null) == (owned ?: original),
             "quiet-summary-writer")
@@ -300,6 +380,7 @@ internal class NativeSummaryLease(
         receipt.put("publication", "accepted by normal store; delivery Pending")
         publication.put("state", "accepted by normal store; delivery Pending")
         persistReceipt(receipt)
+        armedPublication = null
     }
 
     fun requireOwned() = nativeGuard(!foreignWrite &&

@@ -1410,12 +1410,14 @@ For one `observeDelivery` invocation, retain the same identity arguments and sel
 
 | Argument | Required value |
 | --- | --- |
-| `deliveryScenario` | One of `normal`, `delayed`, `obsolete`, `recovery` |
+| `deliveryScenario` | One of `normal`, `delayed`, `obsolete`, `recovery`, or the 18 finite `fixture-*` scenarios in the [catalog](../apps/wear_android/README.md#guarded-normal-datasource-observations) |
 | `authorizedOperation` | `observeDelivery:<deliveryScenario>`, explicitly authorizing this exact scenario's publications, bounded requests and recovery |
 | `quietWriters` | `confirmed-unpaired`, after establishing the HOST precondition |
 | `firstFrameReview` | `complete-unobscured`, after inspecting this probe's original |
 | `expectedDeliveryProbeSha256` | SHA-256 of the exact selected `probes/<id>/receipt.json` |
 | `expectedReviewedFrameSha256` | SHA-256 of that exact private original PNG |
+| `expectedFixtureSha256` | For every `fixture-*` scenario: independently supplied SHA-256 of the original packaged asset bytes; requires a debug target |
+| `expectedReorderAfterSha256` | Additionally for `fixture-n3_reorder`: independently supplied SHA-256 of `watch_dashboard_summary_n3_reorder_after.json` |
 | `priorDeliveryRestorationReview`, `expectedPriorDeliveryRestorationSha256` | After an earlier case: `complete` and the exact prior receipt hash after its separate effective-restoration review |
 
 Neither the probe receipt nor inventory/peer reads authorize these writes or establish quiet
@@ -1434,12 +1436,71 @@ state, a runtime accessibility event, cached native data and effective rendering
 evidence. No callback provenance or transition PASS follows from request return, event arrival,
 event timeout or the final frame. Redacted native fields can leave semantics unavailable.
 
+The fixture route uses only the 19 existing assets across 18 scenarios listed in the catalog.
+All names are fixed in `nativeDeliveryFixtureAssets` in
+[NativeDatasourceState.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeDatasourceState.kt);
+no argument accepts a path or arbitrary payload. Single-input scenario names are
+`fixture-<suffix>`; `fixture-n3_reorder` alone selects two inputs, in before/after order.
+The bytes come from the instrumentation context's packaged assets, not a device file push.
+Hash both independently approved originals and reconcile the actual test APK's packaged inputs
+before admission. `readNativeDeliveryFixtures` requires exact authorization and all selected
+hashes before any case write/publication. Neither timestamps nor mock mode are rewritten;
+the normal store/services retain their decoder behavior. Historical mock inputs supply no
+healthy public-cohort evidence.
+
+For example, after the separate provisioning, current-first review and quiet-custody admission,
+the exact two-input invocation shape is below. Populate every variable from independent current
+evidence. If a previous case exists, also supply
+`-e priorDeliveryRestorationReview complete -e expectedPriorDeliveryRestorationSha256 "$NATIVE_PRIOR_RESTORATION_SHA256"`
+after its separate settled review; this applies across all normal, fixture and SDK cases.
+
+```sh
+adb -s "$WEAR_SERIAL" shell am instrument -w -r \
+  -e class app.wardpulse.wear.nativeintegration.NativeDatasourceTransitionTest#observeDelivery \
+  -e wardpulseNativeIntegration normal-delivery \
+  -e deliveryScenario fixture-n3_reorder \
+  -e authorizedOperation observeDelivery:fixture-n3_reorder \
+  -e expectedFixtureSha256 "$NATIVE_REORDER_BEFORE_SHA256" \
+  -e expectedReorderAfterSha256 "$NATIVE_REORDER_AFTER_SHA256" \
+  -e deliveryProbeId "$NATIVE_DELIVERY_PROBE_ID" \
+  -e expectedDeliveryProbeSha256 "$NATIVE_PROBE_RECEIPT_SHA256" \
+  -e expectedReviewedFrameSha256 "$NATIVE_FIRST_FRAME_SHA256" \
+  -e firstFrameReview complete-unobscured -e quietWriters confirmed-unpaired \
+  -e expectedAvd "$NATIVE_AVD" -e expectedFingerprintSha256 "$NATIVE_FINGERPRINT_SHA256" \
+  -e expectedCallerUid "$NATIVE_CALLER_UID" -e expectedHostVersionCode "$NATIVE_HOST_VERSION_CODE" \
+  -e expectedHostApkSha256 "$NATIVE_HOST_SHA256" -e expectedHostSignerSha256 "$NATIVE_HOST_SIGNER_SHA256" \
+  -e expectedResourceApkSha256 "$NATIVE_RESOURCE_SHA256" -e expectedResourceSignerSha256 "$NATIVE_RESOURCE_SIGNER_SHA256" \
+  -e expectedRuntimeApkSha256 "$NATIVE_RUNTIME_SHA256" -e expectedRuntimeSignerSha256 "$NATIVE_RUNTIME_SIGNER_SHA256" \
+  -e expectedRuntime "$NATIVE_RUNTIME" -e expectedResourcePackage "$NATIVE_RESOURCE_PACKAGE" \
+  -e expectedInstanceSha256 "$NATIVE_INSTANCE_SHA256" -e expectedConfigurationSha256 "$NATIVE_CONFIG_SHA256" \
+  app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+For an active owned Push resource also supply its freshly read `expectedSlotSha256`, as above.
+For a single fixture replace `deliveryScenario` and `authorizedOperation` with that exact catalog
+scenario, supply its `expectedFixtureSha256` and omit `expectedReorderAfterSha256`.
+This example grants no current publication authority: quiet custody remains independently
+unproved until HOST establishes it. Restored radios or a connected bridge prove no quietness.
+
+`files/native_datasource/<scenario>/receipt.json` retains original asset names/hashes and
+Pending publication/observation stages in `fixtureInputs`, plus separate `publications` and
+`events`. Single fixtures record `fixture-requested.{png,json}` and
+`fixture-bounded.{png,json}`; reorder records `reorder-before-*` and `reorder-after-*`
+separately in the same directory/lease. A fixture event timeout stops further publications and
+attempts independent targeted recovery; unreached stages stay Pending. A bounded event is no
+delivery ACK, and a later after-frame proves no unseen before-stage behavior. Inspect both
+stages against the existing literal fixture/API oracles, including titles, zero tokens, colors,
+exact ranges, extra positions and obsolete NoData. Accepted bytes, request return, event boundary,
+effective data and paint remain separate. These are manual cases, never an automatic matrix.
+
 `NativeSummaryLease` retains originals opaquely and restores only attributable owned data
 after rechecking quiet writers. A newer publication is preserved and recorded privately;
 unresolved interleaving/transport retains recovery material and stays Pending. There is no
 cross-writer atomic compare-and-set guarantee. Requests and independent normal-data recovery
 use only freshly validated intended targets with `requestUpdate`. Each provider group must be
 durably armed before fresh mapping validation and dispatch; failed persistence prevents dispatch.
+Publications also arm durably before a fresh full-scope mapping read and the main-thread
+ownership recheck/save; slow native reads run off the main thread.
 Recovery attempts independent groups even if one fails, preserving newer producer data.
 Unresolved mapping or uncertain dispatch stays Pending without stale-ID reuse, blanket requests
 or retries. A durable latest-case fence requires the prior later-restoration receipt and explicit

@@ -3519,6 +3519,25 @@ compatibility and healthy public acceptance remain mandatory and pending. API si
 ACKs, supplied bitmaps and active paint remain separate; no universal PASS, physical-device
 acceptance or whole-#12 closure follows from Source completion.
 
+**2026-10-31 finite normal fixture route (Source only):** the existing manual
+`NativeDatasourceTransitionTest.observeDelivery`/`observeRestoration` path now admits exactly
+19 already-packaged assets as 18 `fixture-*` scenarios through `NativeSummaryLease`, the
+normal store and targeted services. The [finite catalog and evidence layout](../apps/wear_android/README.md#guarded-normal-datasource-observations)
+and [exact invocation](ANDROID_TOOLCHAIN.md#guarded-datasource-observations) retain independent
+input hashes, original bytes/mock timestamps, current caller/resource/runtime/full-eight/system-ID
+provenance, selected first receipt/PNG hashes, global single-use/prior-recovery fences and
+newer-data-safe recovery. N3 reorder publishes both inputs in one lease with separate bounded
+stages; unseen stages stay Pending. Existing SDK/client and four normal controls remain distinct.
+No test methods/default exclusions change; expected source discovery stays 47 default + 48 manual,
+with packaged counts still requiring HOST verification. Native required checks remain pending
+their dedicated FINALIZE gate. Compilation, affected guards, unchanged defaults, test-APK
+provenance/provisioning, current native reads, quiet custody, finite delivery/paint and separate
+settled restoration remain unrun/Pending for this change. These HOST duties retain the
+post-whole-DONE/retirement/CLI-exit/fresh-idle order above. Actual Push5,
+the separate UI4→5 witness gap and historical SDK3→4 remain qualified; no device mutation,
+target replacement, replay, downgrade/reset/code6 or physical-phone action is admitted here.
+This Source route closes neither the original twelve duties nor broader item12/public acceptance.
+
 Before later explicit normal UI Update 4→5, freshly prove installed Push 4/hash/signer,
 owned manager slot, eight retained choices and quiet-writer custody. Keep Legacy active;
 verify returned same-slot identity and separate settled retention through the existing
