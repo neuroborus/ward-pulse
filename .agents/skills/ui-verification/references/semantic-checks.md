@@ -69,15 +69,15 @@ arcs as separate checks. If a missed artifact is reported after acceptance, pres
 reopen the review and keep the public capture candidate Pending until actual repair and matched native verification.
 
 Immediately before input, revalidate the current page AND a unique enabled visible intended node or its own
-enabled clickable ancestor from a fresh hierarchy and original frame; its label/context and current bounds
-must support safe action. Inspect both `text` and `content-desc`: either may identify the target while the other is empty.
+enabled clickable ancestor from a fresh hierarchy and original frame; its current bounds and actual operation
+must support the intended action, established from current semantic labels/resource identity or a primary contract. Icon shape alone is insufficient: arrows can reorder instead of navigating/activating. Inspect both `text` and `content-desc`: either may identify the target while the other is empty.
 Do not reuse a picker/modal observation across model/tool round trips; prefer one prepared existing observation/action batch.
 Stop absence-driven scrolling once the target is visible; reveal a clipped target only for usable bounds.
 One empty label field or a selector ignoring the populated field does not prove absence. Ambiguous matches,
 disabled controls, stale nodes or the wrong window stay unresolved; reobserve or disambiguate within the existing bounded procedure.
 If an ephemeral page is dismissed, stop and record it; reopen by the existing ordinary route and observe fresh,
 without blindly replaying input. After action, verify the actual settled destination and relevant resource/instance
-or effective binding. A found node or successful command/input does not prove it reached the intended page.
+or effective binding. After a wrong action, inventory affected state and restore against a proved baseline through an authorized route, or retain Unknown. Unchanged foreground/active face does not prove unchanged order or other state. A found node or successful command/input does not prove it reached the intended page.
 For composite fields, use [Form visibility](form-visibility.md) to check the editor, error and actions independently;
 a wrapper's hit-test result alone does not establish them.
 
