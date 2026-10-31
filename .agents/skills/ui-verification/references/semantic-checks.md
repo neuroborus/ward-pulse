@@ -1,22 +1,16 @@
 # Semantic and visual checks
 
-Use before visual acceptance. Start from the owner's actual wording and original native frame. State
-the requested mismatch before selecting a fix or changing data. A full-ring seam and a cyan pool drawn
+Use before visual acceptance. Start from the owner's actual wording and original native frame. State the requested mismatch before selecting a fix or changing data. A full-ring seam and a cyan pool drawn
 on another provider's band are different defects; solving one does not close the other. Resolve ambiguity from the available evidence before guessing.
 
-Before approving geometry or implementation requirements, check each target attribute's type/range in
-the owning schema and primary documentation for the intended format/version. Confirm representable
-sizes and origins, including integer centre/size parity where required; correct floating arithmetic alone
-is insufficient. Apply integer constraints only to the attributes that require them; legitimate floating properties and transforms remain allowed.
-For WFF, inspect the actual emitted XML tree against the primary content model for that version,
-including child cardinality. [Condition](https://developer.android.com/reference/wear-os/wff/common/condition)
-permits one element tree per `Compare`/`Default`. A passing official validator or template containment
-check does not establish that structural contract.
+Before approving geometry or implementation requirements, check each target attribute's type/range in the owning schema and primary documentation for the intended format/version. Confirm representable
+sizes and origins, including integer centre/size parity where required; correct floating arithmetic alone is insufficient. Apply integer constraints only to the attributes that require them; legitimate floating properties and transforms remain allowed.
+For WFF, inspect the actual emitted XML tree against the primary content model for that version, including child cardinality. [Condition](https://developer.android.com/reference/wear-os/wff/common/condition)
+permits one element tree per `Compare`/`Default`. A passing official validator or template containment check does not establish that structural contract.
 
 ## Map meaning before judging appearance
 
-Build a compact expected/observed mapping for every selected metric or pair, accounting for missing items
-and unexpected rendered extras. Use the actual snapshot/summary and owning surface contract. Include:
+Build a compact expected/observed mapping for every selected metric or pair, accounting for missing items and unexpected rendered extras. Use the actual snapshot/summary and owning surface contract. Include:
 
 - provider family and logical metric ID, selected window/pool and its paired mate;
 - family/half color, expected band/position and which side of a shared band it owns;
@@ -51,6 +45,11 @@ neighboring elements are correct because one detail passed. Verify real circle/s
 
 Classify the complete original's intended visible mode and settled state before using glyph/ROI measurements.
 Renderer metadata alone does not validate a mixed wake/handoff frame or one covered by an overlay.
+
+Before a causal claim or system correction, identify the emitting component and actual metric owner (watch, peer or other source); compare a current authoritative observation for that owner.
+A visible label/content description proves displayed UI state, not the underlying metric or cause. Retain conflicting timed/identified samples separately and leave unresolved ownership/cause Unknown.
+Do not choose power changes, clearing or restarting from the label alone. This does not block independently authorized read-only observation or capability work.
+Existing mutation, custody and recovery safeguards remain in force.
 
 Before concluding an artifact is absent or unchanged, inspect bounds proven to cover its full geometry, including displaced caps and paired halves.
 Before interpreting counts, bind RGB/ARGB encoding, channel order and alpha convention to the actual owning candidate constant; record exact probe colors, ROI and scale.
