@@ -25,25 +25,19 @@ class NativeDatasourceTransitionTest {
     private val expected = NativePushExpectations(arguments)
     private val device = NativePushDevice(instrumentation)
     private val root get() = File(target.filesDir, "native_datasource")
-    private val probe get() = File(root, "probe")
 
     /** Exactly one first original. HOST must inspect it before authorizing a bounded scenario. */
     @Test
     fun probeDelivery() = sanitized {
         admit("probeDelivery")
-        val renderer = renderer()
-        val mapping = mappings(renderer)
-        val targets = mapping.targets
-        nativeGuard(probe.mkdirs(), "fresh-delivery-probe")
-        val receipt = JSONObject().put("configurationSha256", renderer.configuration.sha256())
-            .put("mappingSha256", targets.fingerprint()).put("instanceSha256", renderer.instance.sha256())
-            .put("scopeSha256", mapping.scopeSha256)
-            .put("hostApkSha256", NativePackage.read(target, HOST_PACKAGE).apk)
-            .put("frameReview", "Pending")
-        AttemptJournal(File(probe, "receipt.json")).persist(receipt)
-        observe(probe, "first", renderer)
-        receipt.put("frameSha256", File(probe, "first.png").inputStream().sha256())
-        AttemptJournal(File(probe, "receipt.json")).persist(receipt)
+        val probe = NativeDatasourceProbe(root, expected.required("deliveryProbeId"))
+        val before = renderer()
+        val mapping = mappings(before)
+        probe.create(probeScope(before, mapping), capture = { observe(it, "first", before) }, currentScope = {
+            val current = renderer()
+            requireRetained(current, before)
+            probeScope(current, mappings(current))
+        })
         report("Read-only mapping probe recorded; first original-frame inspection and delivery remain Pending.")
     }
 
@@ -51,6 +45,7 @@ class NativeDatasourceTransitionTest {
     @Test
     fun observeDelivery() = sanitized {
         admit("observeDelivery")
+        val probe = NativeDatasourceProbe(root, expected.required("deliveryProbeId"))
         nativeGuard(expected.required("quietWriters") == "confirmed-unpaired" &&
             expected.required("firstFrameReview") == "complete-unobscured", "host-delivery-preconditions")
         val scenario = expected.required("deliveryScenario")
@@ -59,19 +54,15 @@ class NativeDatasourceTransitionTest {
         val before = renderer()
         val mapping = mappings(before)
         val targets = mapping.targets
-        val preflight = AttemptJournal(File(probe, "receipt.json")).read()
-        nativeGuard(preflight.getString("frameSha256") == expected.hash("expectedReviewedFrameSha256") &&
-            File(probe, "first.png").inputStream().sha256() == expected.hash("expectedReviewedFrameSha256") &&
-            preflight.getString("hostApkSha256") == NativePackage.read(target, HOST_PACKAGE).apk &&
-            preflight.getString("configurationSha256") == before.configuration.sha256() &&
-            preflight.getString("instanceSha256") == before.instance.sha256() &&
-            preflight.getString("scopeSha256") == mapping.scopeSha256 &&
-            preflight.getString("mappingSha256") == targets.fingerprint(), "reviewed-first-original")
+        val selected = probe.reviewed(probeScope(before, mapping), expected.hash("expectedDeliveryProbeSha256"),
+            expected.hash("expectedReviewedFrameSha256"))
         quietBridge()
         requirePriorRecovery()
         val directory = File(root, scenario)
+        nativeGuard(!directory.exists(), "single-delivery-case")
         val receipt = JSONObject().put("scenario", scenario).put("bridge", "unchanged by instrumentation")
-            .put("reviewedFirstFrameSha256", expected.hash("expectedReviewedFrameSha256"))
+            .put("deliveryProbeId", selected.id).put("reviewedProbeSha256", selected.receiptSha256)
+            .put("reviewedFirstFrameSha256", selected.frameSha256)
             .put("mappingSha256", targets.fingerprint()).put("scopeSha256", mapping.scopeSha256)
             .put("authorizedOperation", "observeDelivery:$scenario").put("responseProvenance", "Pending")
             .put("effectiveRendering", "Pending").put("events", JSONArray())
@@ -218,6 +209,11 @@ class NativeDatasourceTransitionTest {
     private fun admit(method: String) {
         NativeReadAdmission(instrumentation, expected).admit(method, DELIVERY_CLASS, "normal-delivery")
     }
+
+    private fun probeScope(renderer: NativeRenderer, mapping: NativeDeliveryMapping) = NativeDatasourceProbeScope(
+        NativePackage.read(target, HOST_PACKAGE).apk, renderer.instance.sha256(), renderer.configuration.sha256(),
+        mapping.targets.fingerprint(), mapping.scopeSha256,
+    )
 
     private fun requirePriorRecovery() {
         val latest = AttemptJournal(File(root, "latest.json"))

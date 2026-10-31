@@ -1007,20 +1007,31 @@ require a Codex CLI, local server, or `adb reverse`.
 The default Wear runner is `IsolatedWearRunner`. It selects its test-owned application only
 through `newApplication` and requires a compatible target with the full `MainActivityDependencies` ABI.
 The [isolated default instrumentation](../apps/wear_android/README.md#isolated-default-instrumentation)
-keeps all original 40 tests and real owner/lifecycle/durable-consent guarantees, with private
-fixture stores and a recording refresh sink. Test-APK installation alone does not provide
+keeps all original 40 tests plus seven necessary fixture/API tests (**47 defaults**) and real
+owner/lifecycle/durable-consent guarantees, with private fixture stores and a recording refresh
+sink. Test-APK installation alone does not provide
 the target seam. The earlier seam-unavailable observation belongs to its original baseline bytes;
 preserved Wear APK `8f3ec6b2…` defines `MainActivityDependencies` and both `WatchSummaryStore`
 constructors. Class presence proves neither the full required ABI/isolation nor candidate parity.
-Default 40 must validate the current candidate under its permitted target/artifact order; old
-asset-3 target smoke is not built asset-5 candidate acceptance. That acceptance remains Pending
-until compatible ordered provisioning and native execution; no early replacement is authorized.
+Default 47 must validate new test bytes on the correctly provisioned owning candidate under
+its permitted target/artifact order. The later full recipe genuinely passed 47, with manual
+cases excluded, while advancing Push 4→5 before tests. Preserve that PASS separately from
+native/UI acceptance and from the failed preservation and absent ordinary UI 4→5 witness.
+Current installed Wear4/asset5 APK `097c337f…` and retained Push5 APK `4ed262fa…` do not replace
+the old host/asset3 or historical SDK 3→4 originals/receipts. No downgrade, reset, code6, replay
+or retroactive UI witness is authorized. Current native viewport, active artifact identity,
+geometry and broader item12 acceptance remain Pending.
 Its attribution regressions use private stand-ins for equal and newer normal-store values;
 byte equality is not evidence that a test published to normal storage. Actual backing-store
 identity, constructor routing and recording-sink dispatch remain the isolation evidence.
 
-For item12, preserve installed old Round Wear 4/bundled asset 3/Push 4, Legacy active and the
-actual 3→4 journal. Do not replay that witness or install a new target as recovery. Current
+For item12, retain actual Push5 and preserve the old Round host/asset3/Push4 evidence, old
+Legacy originals and actual 3→4 journal unchanged. Do not replay that witness or install a
+new target as recovery. Before any later provisioning, reconcile its full direct/implicit
+package and platform-reaction footprint and candidate order, then admit actual test-APK
+provenance/installation, affected/new guards and full default-suite execution on its owning
+candidate. The empty Push-module AGP runner skip is established; app-only is not a proved
+remedy. Do not replace a target to bypass scope or manufacture capability. Current
 operation-specific order is documented under [datasource observations](#guarded-datasource-observations),
 [client metadata](#independent-client-metadata-observation), [typed configs](#typed-own-provider-config-observation)
 and [inventory/peers](#owned-push-inventory-and-connected-peers). Scoped 2026-10-30 owned-Push,
@@ -1029,12 +1040,14 @@ ambiguous `beforeResource`; its exact failing suboperation/cause was not establi
 not an API denial, requester-mapping acceptance or native paint, and read receipts authorize no mutation.
 The [UI evidence](../.agents/skills/ui-verification/references/state-and-artifacts.md) and
 [finalization reference](../.agents/skills/finalization/references/commit-message.md) corrections were
-applied and reviewed in `5b6486e` and `5b5df97`. Current mapping, default-40 and native acceptance
-remain Pending. Separately reviewed test-only provisioning does not authorize early seam-bearing
-target replacement; expose any genuine target dependency first. Live phone 1→3/sync and UI
-Update/selection still require their operation-specific authority and custody. Before normal UI
-4→5, prove inactive Push 4's eight choices and owned slot; active Legacy's selections do not supply
-that proof. Keep Legacy active during the update and require separate settled retention.
+applied and reviewed in `5b6486e` and `5b5df97`. New current mapping, default-47 and native acceptance
+remain Pending, separately from the recorded 47-test PASS. Separately reviewed test-only
+provisioning does not authorize early seam-bearing target replacement; expose any genuine
+target dependency first. Phone-emulator sync and UI Update/selection still require their
+operation-specific authority and custody; physical-phone action remains forbidden. The earlier
+ordinary UI 4→5 requirement needed inactive Push4's full-eight choices and owned slot, retained
+Legacy activity and separate settled retention. Active Legacy's selections and the later stable
+owned-Push5 inventory do not fill that failed-preservation/UI-witness gap.
 
 **Historical nine-step allocation (2026-10-30).** The
 [qualification](product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30) retains
@@ -1078,7 +1091,7 @@ the recorded completed cache checks above are not pending. After operation-speci
 dependency and retention review admits the required provisioning,
 `just test-wear-device` explicitly provisions the rebuilt seam-bearing target and test APKs
 through `connectedDebugAndroidTest`; verify the retention policy below first, confirm the
-original 40 tests/manual exclusion, then recheck retained Push 4, bindings and active state.
+current 47 tests/manual exclusion, then recheck retained actual Push5, bindings and active state.
 
 #### Guarded Push witness
 
@@ -1150,9 +1163,11 @@ ABI absent from the baseline; it must not be used here. Never invoke stock disco
 tests. The three `NativePushGuardTest` cases can separately be explicitly selected by class;
 they use memory, private temporary files/descriptors and fixed shell-output fixtures, without
 querying installed packages or accessing the manager/live stores.
-The three update-class cases are manual; together with the three Push guard, six
+The three update-class cases are manual; together with the three Push guard, seven
 datasource, fourteen client, six typed-config and nine inventory cases, `IsolatedWearRunner`
-excludes all forty-one manual cases and keeps the original default 40 tests.
+excludes all **42 manual cases** and keeps **47 default tests** (original40 plus seven
+necessary fixture/API tests). This is verified source-discovery arithmetic, 89 total;
+packaged discovery and execution of new bytes remain separate HOST duties.
 
 After the system-authority correction, require a fresh complete warm `just check-wear`
 after the last Source fix, rebuild candidate/test-APK provenance, then install only the test
@@ -1299,17 +1314,22 @@ unexecuted builds, native routes, effective restoration and visual acceptance re
 #### Guarded datasource observations
 
 These are later HOST-only observations, after whole execution DONE, all owned-process
-retirement and separate fresh public idle. Compilation, guard execution and any seam-bearing
-target provisioning require separately reviewed HOST order. Preserve original Round Wear 4/
-asset 3/Push 4 and Legacy bytes/selections; Source asset 5 belongs to the later normal UI
-Push 4→5 update. Expose a genuine compiled-target dependency and blocked phase without
-installing a replacement to manufacture read capability. Production schema, normalization,
-settings, consent and datasource behavior stay unchanged.
+retirement, owning CLI exit if used and separate fresh idle. Compilation, guard execution and
+any seam-bearing target provisioning require the full footprint/candidate-order reconciliation
+above. Retain actual Push5 and historical old-host obscured probe/originals/receipts unchanged.
+Expose a genuine compiled-target dependency without installing a replacement to manufacture
+read capability. Production schema, normalization, settings, consent and datasource behavior
+stay unchanged.
 
 Select only one explicit `NativeDatasourceTransitionTest` method using the **stock** runner
 and literal `wardpulseNativeIntegration=normal-delivery`. `probeDelivery` is read-only apart
-from private evidence files. `NativeReadAdmission` requires canonical emulator/image/display
-and actual current caller UID/package/APK/signer. The shared mapping reader checks current
+from private evidence files. `probeDelivery` and `observeDelivery` require explicit `deliveryProbeId` matching
+`[a-z0-9][a-z0-9_-]{0,63}`. It selects only `files/native_datasource/probes/<id>/`; there is no
+preferred/latest scan, historical fallback or migration from `native_datasource/probe/`.
+The selected directory is created once, and even partial/failed captures consume the ID.
+`first.png`, `first.json` and final `receipt.json` are retained without overwrite or automatic
+retry. The full current scope is revalidated after capture. `NativeReadAdmission` requires
+canonical emulator/image/display and actual current caller UID/package/APK/signer. The shared mapping reader checks current
 resource/runtime APK/signer, active instance/configuration, full-eight selections and intended
 targets. Current mapping/frame reads require no historical SDK-update entry resolution,
 journal, old package cohort or quiet
@@ -1350,6 +1370,7 @@ first-frame Legacy probe is:
 adb -s "$WEAR_SERIAL" shell am instrument -w -r \
   -e class app.wardpulse.wear.nativeintegration.NativeDatasourceTransitionTest#probeDelivery \
   -e wardpulseNativeIntegration normal-delivery \
+  -e deliveryProbeId "$NATIVE_DELIVERY_PROBE_ID" \
   -e expectedAvd "$NATIVE_AVD" -e expectedFingerprintSha256 "$NATIVE_FINGERPRINT_SHA256" \
   -e expectedCallerUid "$NATIVE_CALLER_UID" -e expectedHostVersionCode "$NATIVE_HOST_VERSION_CODE" \
   -e expectedHostApkSha256 "$NATIVE_HOST_SHA256" -e expectedHostSignerSha256 "$NATIVE_HOST_SIGNER_SHA256" \
@@ -1364,16 +1385,20 @@ For an already-active owned Push resource, use its actual resource identity and 
 `-e expectedSlotSha256 "$NATIVE_SLOT_SHA256"`, freshly obtained from its caller-owned
 inventory. Do not infer the manager slot from native, resource or requester IDs.
 
-Inspect the original private `files/native_datasource/probe/first.png` before batching. Require
-a complete unobscured native frame; an overlay is not accepted evidence. Record its SHA-256.
+Choose `NATIVE_DELIVERY_PROBE_ID` explicitly for this new current-scope read; never reuse an
+existing ID. Inspect the selected private `files/native_datasource/probes/<id>/first.png`
+independently before batching. Require a complete unobscured native frame; an overlay is not
+accepted evidence. Record that PNG's SHA-256 and the exact selected `receipt.json` SHA-256.
+The immutable receipt retains `frameReview=Pending`; independent review does not rewrite it.
+Do not relabel the historical old-host obscured original as a current accepted first read.
 HOST must establish quiet summary writers and quiet/unpaired transport, record the original
 bridge/peer configuration, and restore it after reconciliation. Absence of connected nodes or
 a running listener alone cannot prove that no producer has future work. Do not disable the
 listener, freeze live preferences, clear state or overwrite a newer publication to create
 these preconditions. If quiet ownership cannot be established, leave the mutation route Pending.
 
-For one `observeDelivery` invocation, retain the same identity arguments, change only the
-explicit method and add all these `-e` strings:
+For one `observeDelivery` invocation, retain the same identity arguments and selected
+`deliveryProbeId`, change the explicit method and add all these `-e` strings:
 
 | Argument | Required value |
 | --- | --- |
@@ -1381,12 +1406,18 @@ explicit method and add all these `-e` strings:
 | `authorizedOperation` | `observeDelivery:<deliveryScenario>`, explicitly authorizing this exact scenario's publications, bounded requests and recovery |
 | `quietWriters` | `confirmed-unpaired`, after establishing the HOST precondition |
 | `firstFrameReview` | `complete-unobscured`, after inspecting this probe's original |
+| `expectedDeliveryProbeSha256` | SHA-256 of the exact selected `probes/<id>/receipt.json` |
 | `expectedReviewedFrameSha256` | SHA-256 of that exact private original PNG |
 | `priorDeliveryRestorationReview`, `expectedPriorDeliveryRestorationSha256` | After an earlier case: `complete` and the exact prior receipt hash after its separate effective-restoration review |
 
 Neither the probe receipt nor inventory/peer reads authorize these writes or establish quiet
-writers. The reviewed first original must match the fresh full-scope hash. One method runs
-one bounded scenario; its private directory prevents replay. The normal case
+writers. Selection requires the exact receipt/PNG hashes, its native-record hash and matching
+current host, instance, configuration, mapping and full provenance scope. Incomplete, changed,
+cross-scope or ambiguous sidecar evidence is rejected without repair or fallback. The case
+receipt retains `deliveryProbeId`, `reviewedProbeSha256` and `reviewedFirstFrameSha256`.
+A new read grants no publication authority. One method runs one bounded scenario; its global
+`files/native_datasource/<scenario>/` directory prevents replay independently of probe ID.
+The normal case
 publishes a sanitized pair through `WatchSummaryStore.saveEncoded` and requests the selected
 system IDs. Delayed stages withhold extra requests until after the main observation; obsolete
 removes secondary mains/extras, and recovery restores the pair. Inspect every original
@@ -1405,6 +1436,8 @@ Recovery attempts independent groups even if one fails, preserving newer produce
 Unresolved mapping or uncertain dispatch stays Pending without stale-ID reuse, blanket requests
 or retries. A durable latest-case fence requires the prior later-restoration receipt and explicit
 HOST effective-recovery review before another scenario; no scenario can be replayed.
+`files/native_datasource/latest.json` remains global, outside `probes/<id>/`. Selecting a
+different current first read cannot reopen a case or bypass prior-recovery review.
 The immediate frame is diagnostic. After actual native
 settlement, select `observeRestoration` once with the same identity arguments plus
 `deliveryScenario`; it records a separate later original and newer-write status without
@@ -1413,10 +1446,15 @@ instance/bindings/upper choices/consent/settings/time/font/ambient and the origi
 state; reconcile newer data instead of forcing the old digest. Keep `.bin` originals,
 reconciliation bytes, raw records and frames app-private until recovery/review is resolved.
 
-`NativeDatasourceGuardTest` has two separately selectable private mapping/cleanup cases.
-The three transition methods and two guard cases are annotation-excluded from the default
-40. Neither source completion nor a successful instrumentation exit closes unavailable
-provenance, unseen transitions or effective-restoration acceptance. All native outcomes remain
+`NativeDatasourceGuardTest` has four separately selectable private admission/selection/mapping/
+cleanup cases. Select the new guard explicitly as
+`app.wardpulse.wear.nativeintegration.NativeDatasourceGuardTest#explicitProbeSelectionRetainsHistoryAndRejectsReusedOrChangedEvidence`
+on the stock runner. It uses private synthetic files only, preserving historical/global
+evidence while checking independent creation, invalid/duplicate IDs, partial/changed captures,
+scope mismatches and exact hash/sidecar rejection; it reviews no real native original.
+The three transition methods and four guard cases are annotation-excluded from the default
+47, bringing the manual total to 42. Neither source completion nor a successful instrumentation
+exit closes unavailable provenance, unseen transitions or effective-restoration acceptance. All native outcomes remain
 Pending until ordered HOST execution and inspection. Retire the instrumentation's single
 UiAutomation owner before another native/hierarchy owner starts.
 
@@ -1606,8 +1644,9 @@ actual client access remain separate Pending HOST evidence.
 Select exactly one `NativeComplicationOverrideTest` method on the stock runner with
 `wardpulseNativeIntegration=client-probe`. The three guarded native methods, ten synthetic
 `NativeClientGuardTest` cases and independent metadata observation remain excluded by the
-isolated runner; with the six typed-config and nine inventory cases the manual total is
-forty-one and the default total stays 40. The guarded native methods require the same current
+isolated runner; with the seven datasource, six Push, six typed-config and nine inventory
+cases the manual total is 42 and the default total stays 47. The guarded native methods require
+the same current
 caller/resource/runtime/renderer and applicable owned-Push identity arguments as the
 [datasource probe](#guarded-datasource-observations), plus
 `clientArtifactReview=resolved-1.2.1` and `expectedClientArtifactSha256` from the actual resolved

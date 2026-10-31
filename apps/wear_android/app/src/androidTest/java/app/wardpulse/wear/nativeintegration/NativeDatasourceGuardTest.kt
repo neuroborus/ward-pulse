@@ -3,6 +3,7 @@ package app.wardpulse.wear.nativeintegration
 import android.content.ComponentName
 import android.content.Context
 import android.content.SharedPreferences
+import android.graphics.Bitmap
 import android.os.Bundle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -32,6 +33,153 @@ import org.junit.runner.RunWith
 @ManualNativeIntegration
 @RunWith(AndroidJUnit4::class)
 class NativeDatasourceGuardTest {
+    /** Only synthetic private files: this never captures a native frame or reviews real recovery. */
+    @Test
+    fun explicitProbeSelectionRetainsHistoryAndRejectsReusedOrChangedEvidence() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val root = File(context.cacheDir, "native_probe_guard_${UUID.randomUUID()}")
+        check(root.mkdir())
+        try {
+            val historical = File(root, "probe").also { check(it.mkdir()) }
+            val retained = listOf(File(historical, "first.png"), File(historical, "first.json"),
+                File(historical, "receipt.json"), File(root, "latest.json"),
+                File(root, "normal/receipt.json"))
+            retained.forEachIndexed { index, file ->
+                check(file.parentFile!!.isDirectory || file.parentFile!!.mkdirs())
+                file.writeText("retained synthetic evidence $index")
+            }
+            val originals = retained.associateWith { it.readText() }
+            val scope = NativeDatasourceProbeScope("a".repeat(64), "b".repeat(64), "c".repeat(64),
+                "d".repeat(64), "e".repeat(64))
+            var captures = 0
+            fun capture(directory: File, selected: NativeDatasourceProbeScope = scope) {
+                captures++
+                val bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+                try {
+                    bitmap.eraseColor(android.graphics.Color.BLACK)
+                    File(directory, "first.png").outputStream().use {
+                        check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+                    }
+                } finally { bitmap.recycle() }
+                File(directory, "first.json").writeText(JSONObject()
+                    .put("instanceSha256", selected.instanceSha256)
+                    .put("configurationSha256", selected.configurationSha256)
+                    .put("nativeRecordAcquired", "before frame").put("effectiveData", JSONObject())
+                    .put("responseProvenance", "Pending").put("visualAcceptance", "Pending").toString())
+            }
+            fun hash(file: File) = file.inputStream().sha256()
+            fun read(probe: NativeDatasourceProbe, selected: NativeDatasourceProbeScope = scope) =
+                probe.reviewed(selected, hash(File(probe.directory, "receipt.json")),
+                    hash(File(probe.directory, "first.png")))
+
+            for (invalid in listOf("", ".", "..", "../probe", "nested/read", "nested\\read", "UPPER", " white",
+                "trailing ", "a\nb", "é", "x".repeat(65))) {
+                assertThrows(NativePending::class.java) { NativeDatasourceProbe(root, invalid) }
+            }
+            val first = NativeDatasourceProbe(root, "current-first")
+            first.create(scope, { capture(it) }, { scope })
+            val receiptFile = File(first.directory, "receipt.json")
+            val frameFile = File(first.directory, "first.png")
+            val recordFile = File(first.directory, "first.json")
+            val receiptBytes = receiptFile.readBytes()
+            val frameBytes = frameFile.readBytes()
+            val recordBytes = recordFile.readBytes()
+            val selected = read(first)
+            assertEquals("current-first", selected.id)
+            assertEquals(hash(receiptFile), selected.receiptSha256)
+            assertEquals(hash(frameFile), selected.frameSha256)
+            assertEquals("Pending", JSONObject(receiptFile.readText()).getString("frameReview"))
+            assertThrows(NativePending::class.java) { first.create(scope, { capture(it) }, { scope }) }
+            assertEquals(1, captures)
+            assertEquals(selected, read(first))
+            for ((receiptHash, frameHash) in listOf("" to selected.frameSha256,
+                selected.receiptSha256 to "", "f".repeat(64) to selected.frameSha256,
+                selected.receiptSha256 to "f".repeat(64))) {
+                assertThrows(NativePending::class.java) { first.reviewed(scope, receiptHash, frameHash) }
+            }
+
+            // No preferred/latest/historical fallback, including when the explicitly selected ID is absent.
+            val missing = NativeDatasourceProbe(root, "absent")
+            assertThrows(NativePending::class.java) {
+                missing.reviewed(scope, selected.receiptSha256, selected.frameSha256)
+            }
+            assertFalse(missing.directory.exists())
+            val next = NativeDatasourceProbe(root, "next-first")
+            next.create(scope, { capture(it) }, { scope })
+            assertEquals("next-first", read(next).id)
+            assertThrows(NativePending::class.java) {
+                next.reviewed(scope, selected.receiptSha256, selected.frameSha256)
+            }
+            val newScope = scope.copy(hostApkSha256 = "f".repeat(64), scopeSha256 = "1".repeat(64))
+            val currentHost = NativeDatasourceProbe(root, "current-host")
+            currentHost.create(newScope, { capture(it, newScope) }, { newScope })
+            assertEquals("current-host", read(currentHost, newScope).id)
+            assertEquals(selected, read(first))
+            for (changed in listOf(newScope, scope.copy(instanceSha256 = "f".repeat(64)),
+                scope.copy(configurationSha256 = "f".repeat(64)), scope.copy(mappingSha256 = "f".repeat(64)),
+                scope.copy(scopeSha256 = "f".repeat(64)), scope.copy(scopeSha256 = ""))) {
+                assertThrows(NativePending::class.java) { read(first, changed) }
+            }
+
+            val copied = NativeDatasourceProbe(root, "copied")
+            check(copied.directory.mkdir())
+            File(copied.directory, "receipt.json").writeBytes(receiptBytes)
+            File(copied.directory, "first.png").writeBytes(frameBytes)
+            File(copied.directory, "first.json").writeBytes(recordBytes)
+            assertThrows(NativePending::class.java) { read(copied) }
+            for (file in listOf(receiptFile, frameFile, recordFile)) {
+                val original = file.readBytes()
+                file.appendText("changed")
+                assertThrows(NativePending::class.java) {
+                    first.reviewed(scope, selected.receiptSha256, selected.frameSha256)
+                }
+                file.writeBytes(original) // Restore only this synthetic negative-test input.
+                for (suffix in listOf(".bak", ".new")) {
+                    val ambiguous = File("${file.path}$suffix")
+                    check(ambiguous.createNewFile())
+                    assertThrows(NativePending::class.java) { read(first) }
+                    check(ambiguous.delete())
+                }
+                val held = File(first.directory, "held")
+                check(file.renameTo(held))
+                assertThrows(NativePending::class.java) {
+                    first.reviewed(scope, selected.receiptSha256, selected.frameSha256)
+                }
+                check(held.renameTo(file))
+            }
+            // Even newly supplied hashes cannot turn an incomplete or cross-scope record into a first read.
+            receiptFile.writeText(JSONObject(receiptBytes.toString(Charsets.UTF_8)).put("state", "Pending").toString())
+            assertThrows(NativePending::class.java) { read(first) }
+            receiptFile.writeBytes(receiptBytes)
+            recordFile.writeText(JSONObject(recordBytes.toString(Charsets.UTF_8))
+                .put("instanceSha256", "f".repeat(64)).toString())
+            receiptFile.writeText(JSONObject(receiptBytes.toString(Charsets.UTF_8))
+                .put("nativeRecordSha256", hash(recordFile)).toString())
+            assertThrows(NativePending::class.java) { read(first) }
+            recordFile.writeBytes(recordBytes)
+            receiptFile.writeBytes(receiptBytes)
+
+            val partial = NativeDatasourceProbe(root, "partial")
+            assertThrows(NativePending::class.java) {
+                partial.create(scope, { File(it, "first.png").writeBytes(frameBytes) }, { scope })
+            }
+            assertFalse(File(partial.directory, "receipt.json").exists())
+            assertThrows(NativePending::class.java) { partial.create(scope, { capture(it) }, { scope }) }
+            val changedBracket = NativeDatasourceProbe(root, "changed-bracket")
+            assertThrows(NativePending::class.java) {
+                changedBracket.create(scope, { capture(it) }, { newScope })
+            }
+            assertFalse(File(changedBracket.directory, "receipt.json").exists())
+            assertThrows(NativePending::class.java) { changedBracket.create(scope, { capture(it) }, { scope }) }
+            assertEquals(selected, read(first))
+            // Selecting/creating another first read cannot namespace, clear or rewrite global case/recovery state.
+            assertEquals(originals, retained.associateWith { it.readText() })
+            assertEquals(setOf("first.png", "first.json", "receipt.json"), historical.list()!!.toSet())
+        } finally {
+            check(root.deleteRecursively()) { "Private probe-test resources must be deleted" }
+        }
+    }
+
     @Test
     fun currentDatasourceMethodsNeedCurrentCallerAndSeparateExactWriteAuthorization() {
         val arguments = Bundle().apply {

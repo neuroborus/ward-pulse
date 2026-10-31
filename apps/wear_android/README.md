@@ -398,27 +398,39 @@ ViewModel and test composition jobs and consent workers retired before the priva
 are deleted and isolation is released. A timeout fails the case while retaining isolation
 and private storage; another default Activity cannot fall back to live dependencies. An
 unscoped default launch fails before production store construction. No lifecycle callback
-is suppressed and no existing case becomes opt-in. The default inventory remains **40 tests**
-across the original six classes, including the distinct multi-owner durable-consent assertions.
+is suppressed and no existing case becomes opt-in. The current default inventory is **47 tests**
+across the original six classes: original40 plus seven necessary fixture/API tests, retaining
+the distinct multi-owner durable-consent assertions.
 
-**Provisioning and acceptance remain Pending.** This runner requires the rebuilt target APK
-containing `MainActivityDependencies`; installing only its test APK cannot isolate the
-baseline host. For item12, preserve the original host/asset 3, installed Push 4 and real 3→4
-journal for the separately admitted capability/guard phase. Do not replay the historical
-stock update or use target installation as recovery. Target/default-suite provisioning stays
-held under the [current qualification](../../docs/product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30);
-ordinary Source 5 builds require candidate flags absent. The historical stock route must not
-load this application or launch `MainActivity`. See the
+**Recorded PASS and current acceptance are separate.** The later full recipe genuinely passed
+47 tests, excluding manual cases, and advanced Push 4→5 before tests. Current installed Wear4/
+asset5 APK `097c337f…` and retained Push5 APK `4ed262fa…` are distinct from the old host/asset3
+and real SDK 3→4 journal. Preserve all historical originals/receipts. The failed preservation
+and missing ordinary UI 4→5 witness remain separate gaps; no downgrade, reset, code6, replay
+or retroactive UI witness is authorized. That PASS does not validate new test bytes or native
+paint. Current native viewport, active artifact identity, geometry and broader item12 acceptance
+remain Pending.
+
+This runner requires a compatible target APK containing `MainActivityDependencies`; installing
+only its test APK cannot provide a missing seam. After whole execution DONE, owned-process
+retirement, owning CLI exit if used and fresh separate idle, HOST must reconcile the complete
+direct/implicit provisioning footprint and candidate order before actual test-APK provenance/
+install admission and default-suite execution on the correctly provisioned owning candidate.
+The empty Push-module AGP runner skip is established; app-only is not a proved remedy. Do not
+replace a target to manufacture read capability or use target installation as recovery.
+Ordinary Source 5 builds require candidate flags absent. The historical stock route must not
+load this application or launch `MainActivity`. Retain the
+[historical qualification](../../docs/product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30) and see the
 [toolchain ordering](../../docs/ANDROID_TOOLCHAIN.md#wear-instrumentation-provisioning-order).
 
 ## Guarded native Push integration
 
 The following describes the historical candidate 4/Push 3→4 harness contract. Preserve its
 instrumentation, flags and actual private journal; this is not authorization to replay it
-against installed Push 4. Current Source 5 delivery uses the separately guarded normal UI path
-in the qualification above, with all target operations still held for the capability phase.
+against retained Push 5. Current delivery uses the separately guarded current-target path
+below; the historical contract grants no current operation authority.
 
-`ManualNativeIntegration` marks forty-one additional cases: `NativePushGuardTest` has three
+`ManualNativeIntegration` marks **42** additional cases: `NativePushGuardTest` has three
 negative/cleanup cases, including candidate file/FD cleanup on either callback outcome;
 the journal case also exercises System/controller/native discovery fixtures into one fake dispatch.
 Those existing cases additionally reject incomplete/ambiguous installed-path enumeration,
@@ -429,13 +441,14 @@ explicit empty choices and caller diagnostic isolation. A private shell-output f
 also exercises the locator's actual `Runtime.exec(String)` launch contract, including success,
 failure and multiple paths, without querying installed packages. They add no discovered test cases.
 `NativePushUpdateTest` has individually selected `probeBaseline`,
-`updateOwnedPush3To4` and `observeSettledUpdate` cases. The datasource classes below add six,
+`updateOwnedPush3To4` and `observeSettledUpdate` cases. The datasource classes below add seven,
 and the client classes add fourteen (three guarded native methods, ten synthetic guards and
 one independent metadata observation). The typed-config classes add six (one observation and
 five synthetic guards). The inventory classes add nine (two observations and seven synthetic guards).
 `IsolatedWearRunner.onCreate` always
-excludes that annotation, including explicitly selected manual classes. The original default
-inventory remains 40. The stock `androidx.test.runner.AndroidJUnitRunner` entry in the test
+excludes that annotation, including explicitly selected manual classes. Source discovery is
+47 default + 42 manual = 89 tests; packaged discovery/execution of these bytes remains a HOST
+duty. The stock `androidx.test.runner.AndroidJUnitRunner` entry in the test
 manifest follows the configured isolated runner, because AGP applies its runner name to the
 first instrumentation element. Verify both entries in the packaged test manifest during HOST.
 The stock entry never substitutes `IsolatedWearApplication`. Never invoke the stock
@@ -568,14 +581,13 @@ does not close the utility-button gap, earlier manager-update gaps or historical
 ## Guarded normal datasource observations
 
 `NativeDatasourceTransitionTest` adds three stock-runner manual cases: `probeDelivery`,
-`observeDelivery` and `observeRestoration`. `NativeDatasourceGuardTest` adds three private
-admission/mapping/cleanup cases, with no live preferences or manager mutation. These six cases
-remain excluded from the original default 40. HOST compilation, guard execution, provisioning
-and runtime observations follow whole execution DONE, all owned-process retirement and separate
-fresh public idle. Preserve original Round Wear 4/asset 3/Push 4 and Legacy bytes/selections;
-Source asset 5 belongs to the later normal UI Push 4→5 update. A seam-bearing compiled-target
-dependency must be reviewed at that later HOST phase, without installing a replacement to
-manufacture read capability. This harness installs or activates nothing.
+`observeDelivery` and `observeRestoration`. `NativeDatasourceGuardTest` has four private
+admission/selection/mapping/cleanup cases, with no live preferences or manager mutation. These
+seven cases remain excluded from the current 47 defaults. HOST compilation, guard execution,
+provisioning and runtime observations follow whole execution DONE, all owned-process retirement,
+owning CLI exit if used and separate fresh idle. Preserve historical old-host obscured probe
+originals/receipts unchanged and retain actual Push5. Reconcile current provisioning as above;
+this harness installs or activates nothing.
 
 Both datasource and guarded client entry points reuse `NativeReadAdmission` for their exact
 method/opt-in, canonical emulator/image/display and actual current caller UID/package/APK/signer.
@@ -619,8 +631,22 @@ producer outcomes. `NativeDeliveryMapping.scopeSha256` binds the caller, resourc
 System, full-eight native and applicable Push scope to first-frame and restoration receipts;
 it supplies evidence, never write authority, and leaves historical configuration fingerprints intact.
 
-HOST first inspects the single private `probe/first.png` original for a complete unobscured
-frame, then supplies its hash and explicit review/precondition attestations. Before controlled
+`NativeDatasourceProbe` in
+[NativeDatasourceProbe.kt](app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeDatasourceProbe.kt)
+requires explicit `deliveryProbeId` for both `probeDelivery` and `observeDelivery`. IDs match
+`[a-z0-9][a-z0-9_-]{0,63}`. `probeDelivery` reserves `files/native_datasource/probes/<id>/`
+once, capturing `first.png`, `first.json` and a final `receipt.json`. A failed/partial read
+consumes that ID; there is no overwrite, automatic retry, preferred-probe scan or fallback.
+The historical `files/native_datasource/probe/` is never read, migrated or rewritten by this
+selector. Each new first read checks the full current provenance again after capture.
+
+HOST independently inspects the selected private `probes/<id>/first.png` for a complete
+unobscured frame, then supplies `expectedDeliveryProbeSha256` for that exact receipt and
+`expectedReviewedFrameSha256` for that exact PNG, plus explicit review/precondition attestations.
+Selection verifies both hashes, the native-record digest and current host/instance/configuration/
+mapping/full-scope provenance. Incomplete, ambiguous sidecar, changed or cross-scope evidence
+is rejected. The immutable receipt's `frameReview=Pending` stays unchanged: review is an
+independent HOST duty. New read evidence supplies no publication authority. Before controlled
 writes, HOST must independently establish quiet summary producers, an unpaired bridge with no
 connected nodes and no in-flight `WatchSummaryListenerService`; record and later restore the
 original HOST bridge configuration. The test rechecks its explicit HOST precondition and
@@ -632,7 +658,8 @@ precondition; concurrent phone/Data Layer publications remain legitimate.
 `observeDelivery` selects one finite `normal`, `delayed`, `obsolete` or `recovery` scenario and
 requires explicit `authorizedOperation=observeDelivery:<scenario>` for that exact invocation.
 Read receipts, inventory and peer observations cannot satisfy this authorization or HOST
-quiet-writer/bridge ownership. The reviewed first original must match the fresh full scope.
+quiet-writer/bridge ownership. The reviewed first original must match the fresh full scope;
+the case receipt retains its selected ID, exact probe receipt hash and original PNG hash.
 Sanitized live-mode summaries pass through the real `WatchSummaryStore.saveEncoded`, unchanged
 schema-9 decoding and normal services. A two-band summary has a main/extra pair; a single-band
 summary removes obsolete mains/extras. The delayed case requests mains first and extras only
@@ -677,7 +704,9 @@ provider group even when another fails, preserving newer publications. Missing/c
 mappings or failed durable arming leave recovery Pending without stale IDs, blanket requests
 or retries. The latest-case journal prevents another scenario until the prior separate
 restoration receipt and effective recovery receive explicit HOST review and a bound receipt
-hash; each scenario directory remains single-use. The immediate restoration frame is diagnostic.
+hash; each scenario directory remains single-use. These directories and `latest.json` remain
+global under `native_datasource`, outside `probes/<id>`: changing probe IDs neither reopens
+a scenario nor bypasses prior-recovery review. The immediate restoration frame is diagnostic.
 HOST separately selects `observeRestoration` once after native settlement; it
 records a later original and detects newer live data without restoring over it. Equality of
 native dump text is diagnostic, especially with redacted values, and cannot prove semantic
@@ -686,6 +715,11 @@ normal effective data/frames and verify retained bindings, upper choices, consen
 time/font/ambient and bridge state. Unsupported mapping/provenance, unseen transitions and
 unsafe restoration remain **Pending**. See
 [the manual invocation](../../docs/ANDROID_TOOLCHAIN.md#guarded-datasource-observations).
+
+The excluded `NativeDatasourceGuardTest.explicitProbeSelectionRetainsHistoryAndRejectsReusedOrChangedEvidence`
+uses only private synthetic originals to cover retained history/global state, independent fresh
+creation, invalid/duplicate selectors, partial/changed captures, exact hashes and provenance
+rejection. It neither reviews a native frame nor establishes current delivery/recovery acceptance.
 
 ## Independent client metadata observation
 
@@ -810,7 +844,7 @@ closes the local result, so late/duplicate callbacks cannot rewrite the terminal
 `NativeTypedConfigGuardTest` has five deterministic synthetic cases for admission, unavailable/
 null/empty/denied outcomes, distinct ID domains and read-receipt rejection, timeout/late completion
 and changed/missing brackets. They are callback/record tests, not an OS configuration producer.
-All six typed cases carry `ManualNativeIntegration`; default discovery stays 40. Compilation,
+All six typed cases carry `ManualNativeIntegration`; default discovery stays 47. Compilation,
 actual guard execution, runtime access and later HOST/device acceptance remain pending under
 the same whole-DONE/retirement/fresh-idle boundary above. This does not close #12 or waive its
 malformed/delayed/missing-main native, restoration, artifact/compatibility or public acceptance gaps.
@@ -853,9 +887,10 @@ The seven `NativeInventoryGuardTest` cases cover independent admission/read-rece
 raw domains and active status, absent ownership, unsupported/denied/timeout outcomes, invalid/
 changed inventories and null/empty/failed peers, plus exact current datasource Push scope and
 Legacy-only independence. The fake Push client rejects every bundle,
-mutation and permission effect. All nine cases carry `ManualNativeIntegration`; the default
-40 remain unchanged. Compilation, actual guard execution and reviewed watch observations are
-later HOST duties after whole DONE, all owned-process retirement, any owning-CLI exit and fresh
+mutation and permission effect. All nine cases carry `ManualNativeIntegration`; the 47 defaults
+retain original40 plus the seven fixture/API cases. Compilation, actual guard execution and
+reviewed watch observations are later HOST duties after whole DONE, all owned-process retirement,
+any owning-CLI exit and fresh
 separate public idle. Fresh runtime identity/custody, reviewed test-only provisioning and cleanup/
 recovery precede watch actions; a target dependency must be exposed without target replacement
 to manufacture capability. No phone action is authorized. Malformed/delayed/missing-main native,
@@ -868,8 +903,8 @@ these observations establish neither universal PASS, physical-device acceptance 
 `probeClient`, `observeOverride` and `observeRestoration`. `NativeClientGuardTest` retains its two
 synthetic binding/object cases and adds the five read/custody cases above, without real service
 binds or data updates, plus three synthetic runtime-reader cases. All carry
-`ManualNativeIntegration` and remain excluded from the original
-default 40. The three native methods use the current-target admission described above and
+`ManualNativeIntegration` and remain excluded from the current default 47. The three native
+methods use the current-target admission described above and
 remain HOST-only after whole execution DONE, owned-process retirement and separate fresh public
 idle, with separately reviewed compilation/provisioning. The guarded route never launches
 an Activity or supplies the isolation Application. See
