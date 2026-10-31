@@ -620,6 +620,15 @@ agreement, offsets, ordering, provider-only joins, scene IDs, cached data and de
 cannot supply missing authority. Incomplete, duplicate, foreign, changed or unresolved
 associations leave the route **Pending before publication**.
 
+`NativeRenderer.configuration` in
+[NativePushState.kt](app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativePushState.kt)
+requires one current selected component for each Today, Week, Ring3, RingSplit and StripSplit
+role, independent of native slot order. Its fingerprint still serializes the actual eight
+per-slot selections and enabled states, including explicit nulls. A reordered controller
+observation does not complete the fresh typed/controller/native SDK association above;
+configured types establish neither delivered values nor NoData, and neither observation
+establishes delivery or paint evidence.
+
 Fresh `files/native_read/requester-*/receipt.json` files retain producer and bracket outcomes.
 New resource reads identify resource-package and runtime-package suboperations separately;
 prior ambiguous `beforeResource` evidence stays unresolved. An uninvoked client acquisition

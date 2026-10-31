@@ -56,6 +56,23 @@ class NativePushGuardTest {
         // Independent synthetic selection records; the runtime reader must never infer these from data.
         val selections = NativeSelections(CANDIDATE_PACKAGE, "existing", fixtureProviders())
         val before = observed.copy(selections = selections)
+        for (slot in 11..15) {
+            val provider = selections.providers.getValue(slot)!!
+            for (invalid in listOf(selections.providers - slot,
+                selections.providers + (slot to null),
+                selections.providers + (slot to "invalid"),
+                selections.providers + (slot to provider.replace(HOST_PACKAGE + "/", "other.package/")),
+                selections.providers + (16 to provider),
+                selections.providers + (16 to provider.replace("/$HOST_PACKAGE.", "/.")))) {
+                assertThrows(NativePending::class.java) {
+                    before.copy(selections = selections.copy(providers = invalid)).configuration
+                }
+            }
+        }
+        for (invalid in listOf(selections.copy(resourcePackage = "other.resource"),
+            selections.copy(instance = "other"))) {
+            assertThrows(NativePending::class.java) { before.copy(selections = invalid).configuration }
+        }
         val changed = observed.copy(selections = selections.copy(
             providers = selections.providers + (16 to "provider.test/Changed16"),
         ))

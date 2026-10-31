@@ -485,10 +485,11 @@ class NativeDatasourceGuardTest {
     @Test
     fun targetedRequestsNeedActualInstanceMappingsRatherThanCanonicalOrCachedIds() {
         val slots = (11..18).toList()
+        val roles = listOf("Today", "Week", "Ring3", "RingSplit", "StripSplit")
         val providers = slots.associateWith { slot -> if (slot <= 15)
-            "$HOST_PACKAGE/app.wardpulse.wear.complication.SyntheticProvider$slot" else null }
+            "$HOST_PACKAGE/app.wardpulse.wear.complication.${roles[slot - 11]}ComplicationDataSourceService" else null }
         val rows = slots.zip(listOf(407, 912, 219, 601, 307, 811, 509, 1100).map { it.toString() }).toMap()
-        val types = slots.associateWith { if (it <= 15) 5 else 0 }
+        val types = slots.associateWith { if (it <= 15) 5 else 1 }
         val selections = NativeSelections(CANDIDATE_PACKAGE, "existing", providers, types, rows)
         val renderer = NativeRenderer(CANDIDATE_PACKAGE, "existing", "style", slots.associateWith { true },
             emptyMap(), selections = selections, runtime = "SyntheticRuntime", nativeScope = listOf("engine"))
@@ -500,6 +501,71 @@ class NativeDatasourceGuardTest {
             selections = selections.copy(resourcePackage = "app.wardpulse.watchface"))
         assertEquals(targets, discoverDeliveryTargets(configs.map { it.copy(watchFacePackage = legacy.resourcePackage) },
             legacy, legacy))
+        val historicalConfiguration = """
+            style
+            11|enabled=true|app.wardpulse/app.wardpulse.wear.complication.TodayComplicationDataSourceService
+            12|enabled=true|app.wardpulse/app.wardpulse.wear.complication.WeekComplicationDataSourceService
+            13|enabled=true|app.wardpulse/app.wardpulse.wear.complication.Ring3ComplicationDataSourceService
+            14|enabled=true|app.wardpulse/app.wardpulse.wear.complication.RingSplitComplicationDataSourceService
+            15|enabled=true|app.wardpulse/app.wardpulse.wear.complication.StripSplitComplicationDataSourceService
+            16|enabled=true|<none>
+            17|enabled=true|<none>
+            18|enabled=true|<none>
+        """.trimIndent()
+        assertEquals(historicalConfiguration, renderer.configuration)
+        assertEquals(historicalConfiguration.sha256(), renderer.configuration.sha256())
+        val reordered = providers + mapOf(11 to providers[14], 12 to providers[15], 13 to providers[11],
+            14 to providers[12], 15 to providers[13])
+        val layouts = listOf(
+            providers to listOf(11 to 407, 12 to 912, 13 to 219, 14 to 601, 15 to 307),
+            reordered to listOf(13 to 219, 14 to 601, 15 to 307, 11 to 407, 12 to 912),
+        )
+        for ((layout, expectedRoles) in layouts) {
+            val order = listOf(15, 12, 18, 11, 16, 14, 17, 13)
+            val currentSelections = selections.copy(providers = order.associateWith { layout.getValue(it) },
+                configuredTypes = order.associateWith { types.getValue(it) },
+                rowIds = order.associateWith { rows.getValue(it) })
+            val current = renderer.copy(selections = currentSelections)
+            val configuration = current.configuration
+            assertEquals(9, configuration.lines().size)
+            assertEquals(slots.toSet(), currentSelections.providers.keys)
+            assertTrue((16..18).all { currentSelections.providers.containsKey(it) &&
+                currentSelections.providers[it] == null })
+            assertEquals(renderer.enabled, current.enabled)
+            assertEquals(configuration, current.copy(selections = currentSelections.copy(providers = layout)).configuration)
+            assertEquals(configuration, current.copy(selections = currentSelections.copy(
+                rowIds = rows.mapValues { (_, id) -> (id.toInt() + 2000).toString() },
+                configuredTypes = types.mapValues { 10 })).configuration)
+            val disabled = current.copy(enabled = current.enabled + (18 to false))
+            assertEquals(configuration.replace("18|enabled=true|<none>", "18|enabled=false|<none>"), disabled.configuration)
+            if (layout == providers) {
+                assertEquals(historicalConfiguration, configuration)
+            } else {
+                assertFalse(historicalConfiguration.sha256() == configuration.sha256())
+            }
+            val typed = configs.reversed().map { config -> config.copy(
+                provider = ComponentName.unflattenFromString(layout.getValue(config.watchFaceSlotId)!!)) }
+            if (layout != providers) {
+                assertThrows(NativePending::class.java) { current.requireRetainedFrom(renderer) }
+                assertThrows(NativePending::class.java) { discoverDeliveryTargets(typed, renderer, current) }
+            }
+            val joined = discoverDeliveryTargets(typed, current, current)
+            assertEquals(expectedRoles, roles.map { service ->
+                val component = ComponentName(HOST_PACKAGE,
+                    "app.wardpulse.wear.complication.${service}ComplicationDataSourceService")
+                joined.single { it.provider == component }.let { it.slot to it.systemId }
+            })
+            val (mainSlot, mainId) = expectedRoles[0]
+            val (extraSlot, extraId) = expectedRoles[3]
+            val client = nativeOverrideData("no-data-main-valid-extra", joined.reversed())
+            assertEquals(setOf(mainSlot, extraSlot), client.keys)
+            assertTrue(client.getValue(mainSlot) is NoDataComplicationData)
+            assertTrue(client.getValue(extraSlot) is RangedValueComplicationData)
+            val sdk = nativeSdkDirectData("no-data-main-valid-extra", joined.reversed())
+            assertEquals(listOf(mainSlot to mainId, extraSlot to extraId), sdk.map { it.target.slot to it.target.systemId })
+            assertEquals(android.support.wearable.complications.ComplicationData.TYPE_NO_DATA, sdk[0].data.type)
+            assertEquals(android.support.wearable.complications.ComplicationData.TYPE_RANGED_VALUE, sdk[1].data.type)
+        }
         val first = configs.first()
         val badConfigs = listOf(emptyList(), configs.drop(1), configs + first, configs.drop(1) + configs[1],
             configs.drop(1) + first.copy(id = first.watchFaceSlotId),

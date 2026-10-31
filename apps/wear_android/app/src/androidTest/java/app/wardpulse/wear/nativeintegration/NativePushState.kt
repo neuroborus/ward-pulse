@@ -633,10 +633,13 @@ internal data class NativeRenderer(
             nativeGuard(selected.resourcePackage == resourcePackage && selected.instance == instance,
                 "selection-instance-mapping")
             nativeGuard(selected.providers.keys == enabled.keys, "complete-selection-records")
+            // Resolve roles from current components without changing per-slot fingerprints.
+            val providers = selected.providers.mapValues { (_, provider) -> provider?.let(::nativeComponent) }
             val lower = listOf("Today", "Week", "Ring3", "RingSplit", "StripSplit")
-            lower.forEachIndexed { index, service ->
-                nativeGuard(selected.providers[index + 11] ==
-                    "$HOST_PACKAGE/app.wardpulse.wear.complication.${service}ComplicationDataSourceService", "lower-binding")
+            lower.forEach { service ->
+                val component = ComponentName(HOST_PACKAGE,
+                    "app.wardpulse.wear.complication.${service}ComplicationDataSourceService")
+                nativeGuard(providers.entries.singleOrNull { it.value == component } != null, "lower-binding")
             }
             return (listOf(userStyle) + enabled.toSortedMap().map { (id, active) ->
                 "$id|enabled=$active|${selected.providers[id] ?: "<none>"}"
