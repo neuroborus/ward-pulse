@@ -1486,9 +1486,17 @@ unproved until HOST establishes it. Restored radios or a connected bridge prove 
 Pending publication/observation stages in `fixtureInputs`, plus separate `publications` and
 `events`. Single fixtures record `fixture-requested.{png,json}` and
 `fixture-bounded.{png,json}`; reorder records `reorder-before-*` and `reorder-after-*`
-separately in the same directory/lease. A fixture event timeout stops further publications and
-attempts independent targeted recovery; unreached stages stay Pending. A bounded event is no
-delivery ACK, and a later after-frame proves no unseen before-stage behavior. Inspect both
+separately in the same directory/lease. `observeNativeDeliveryStage` records selected-event
+availability separately from stage acquisition within the unchanged five-second wait. Each stage
+joins its exact fixture and accepted-summary hashes, current full scope and intended targets to
+the actual PNG/sidecar names and hashes. Complete originals, valid native metadata, fresh scope/
+ownership checks and successful persistence are required to record acquisition. Event absence
+alone does not stop later publication when that independent evidence exists; missing, invalid or
+unseen evidence remains Pending/failure. Genuine request, capture, mapping, ownership and
+persistence errors, including timeout-shaped action failures, stop the invocation and attempt
+independent targeted recovery while preserving the first failure if cleanup also fails.
+A selected event or successfully acquired originals prove no input-specific delivery or paint,
+and a later after-frame proves no unseen before-stage behavior. Inspect both
 stages against the existing literal fixture/API oracles, including titles, zero tokens, colors,
 exact ranges, extra positions and obsolete NoData. Accepted bytes, request return, event boundary,
 effective data and paint remain separate. These are manual cases, never an automatic matrix.
@@ -1524,7 +1532,12 @@ scope mismatches and exact hash/sidecar rejection; it reviews no real native ori
 The three normal-delivery methods and four datasource guard cases are annotation-excluded from
 the default 47. With the six SDK direct-data cases below, the manual total is 48. Neither source
 completion nor a successful instrumentation exit closes unavailable provenance, unseen transitions
-or effective-restoration acceptance. All native outcomes remain
+or effective-restoration acceptance. The existing cleanup guard exercises the shared stage path
+with synthetic private originals: event presence/absence, missing/invalid evidence, unseen-before
+versus later evidence, persistence failure and genuine action failures with independent recovery.
+This changes no discovered method or default exclusion and supplies no native paint/restoration
+proof. Compilation, affected guards, packaged counts and new native observations remain unrun.
+All native outcomes remain
 Pending until ordered HOST execution and inspection. Retire the instrumentation's single
 UiAutomation owner before another native/hierarchy owner starts.
 

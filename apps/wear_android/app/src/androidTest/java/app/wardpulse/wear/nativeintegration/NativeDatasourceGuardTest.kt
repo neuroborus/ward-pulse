@@ -536,66 +536,176 @@ class NativeDatasourceGuardTest {
                 // One two-stage lease, with no conversion of packaged mock bytes or timestamps.
                 val targets = listOf(NativeDeliveryTarget(11, 407, ComponentName(HOST_PACKAGE, "SyntheticMain")),
                     NativeDeliveryTarget(14, 601, ComponentName(HOST_PACKAGE, "SyntheticExtra")))
-                for (outcome in listOf("reorder", "timeout", "newer", "mapping-changed", "wrong-armed-bytes")) {
+                val scope = NativeDatasourceProbeScope("a".repeat(64), "b".repeat(64), "c".repeat(64),
+                    targets.fingerprint(), "e".repeat(64))
+                for (outcome in listOf("reorder", "event-absent", "missing-requested", "invalid-bounded",
+                    "unseen-before", "action-failure", "timeout", "persistence", "newer", "mapping-changed",
+                    "wrong-armed-bytes")) {
                     check(WatchSummaryStore(preferences).saveEncoded(original))
                     val recovery = File(directory, "fixture-$outcome")
-                    val receipt = JSONObject()
+                    val receipt = JSONObject().put("events", JSONArray())
                     val lease = NativeSummaryLease(preferences, recovery, receipt)
                     val recovered = mutableListOf<Int>()
-                    try {
-                        val first = fixtures.first()
-                        lease.armPublication(first.encoded)
-                        assertEquals(original, preferences.getString("latest", null))
-                        assertEquals("armed; acceptance Pending", AttemptJournal(File(recovery, "receipt.json"))
-                            .read().getJSONArray("publications").getJSONObject(0).getString("state"))
-                        if (outcome == "mapping-changed") throw NativePending("synthetic-mapping-changed")
-                        if (outcome == "wrong-armed-bytes") lease.publish(fixtures.last().encoded)
-                        lease.publish(first.encoded)
-                        assertEquals(first.encoded, preferences.getString("latest", null))
-                        assertEquals(WatchDataMode.MOCK, WatchSummaryStore(preferences).load()!!.dataMode)
-                        assertEquals(JSONObject(first.encoded).getString("generatedAt"),
-                            WatchSummaryStore(preferences).load()!!.generatedAt)
-                        if (outcome == "timeout") throw TimeoutException()
-                        if (outcome == "newer") check(WatchSummaryStore(preferences).saveEncoded(newer))
-                        lease.armPublication(fixtures.last().encoded)
-                        lease.publish(fixtures.last().encoded)
-                        assertEquals("reorder", outcome)
-                        assertEquals(fixtures.last().encoded, preferences.getString("latest", null))
-                        assertEquals(WatchDataMode.MOCK, WatchSummaryStore(preferences).load()!!.dataMode)
-                        assertEquals(JSONObject(fixtures.last().encoded).getString("generatedAt"),
-                            WatchSummaryStore(preferences).load()!!.generatedAt)
-                    } catch (failure: NativePending) {
-                        assertEquals(when (outcome) {
+                    val actionFailure = if (outcome == "timeout") TimeoutException() else java.io.IOException()
+                    val persistenceFailure = java.io.IOException()
+                    val cleanupFailure = java.io.IOException()
+                    var failedPersistence = false
+                    var firstStageBeforeRecovery: String? = null
+                    fun stage(fixture: NativeDeliveryFixture, stage: String) = observeNativeDeliveryStage(
+                        recovery, stage, targets, targets, scope, receipt, fixture, persist = {
+                            if (outcome == "persistence" && !failedPersistence &&
+                                receipt.getJSONArray("events").getJSONObject(0).getString("observation") != "Pending") {
+                                failedPersistence = true
+                                throw persistenceFailure
+                            }
+                            AttemptJournal(File(recovery, "receipt.json")).persist(receipt)
+                        }, validate = { lease.requireOwned(); scope }, awaitEvent = { action ->
+                            // A generic event without the command cannot establish the before stage.
+                            if (outcome != "unseen-before" || stage != "reorder-before") action()
+                            if (outcome == "event-absent") throw TimeoutException()
+                        }, request = { _, _ ->
+                            if (outcome in setOf("timeout", "action-failure")) throw actionFailure
+                        }, capture = { label, bounded ->
+                            if (outcome != "missing-requested" || bounded) {
+                                val bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+                                try {
+                                    bitmap.eraseColor(android.graphics.Color.BLACK)
+                                    File(recovery, "$label.png").outputStream().use {
+                                        check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+                                    }
+                                } finally { bitmap.recycle() }
+                                File(recovery, "$label.json").writeText(JSONObject()
+                                    .put("instanceSha256", scope.instanceSha256)
+                                    .put("configurationSha256", if (outcome == "invalid-bounded" && bounded)
+                                        "f".repeat(64) else scope.configurationSha256)
+                                    .put("nativeRecordAcquired", if (bounded) "before frame" else "after frame")
+                                    .put("effectiveData", JSONObject().put("11", "NoDataComplicationData()"))
+                                    .put("responseProvenance", "Pending").put("visualAcceptance", "Pending").toString())
+                            }
+                        })
+                    val result = runCatching {
+                        var primary: Throwable? = null
+                        try {
+                            val first = fixtures.first()
+                            lease.armPublication(first.encoded)
+                            assertEquals(original, preferences.getString("latest", null))
+                            assertEquals("armed; acceptance Pending", AttemptJournal(File(recovery, "receipt.json"))
+                                .read().getJSONArray("publications").getJSONObject(0).getString("state"))
+                            if (outcome == "mapping-changed") throw NativePending("synthetic-mapping-changed")
+                            if (outcome == "wrong-armed-bytes") lease.publish(fixtures.last().encoded)
+                            lease.publish(first.encoded)
+                            assertEquals(first.encoded, preferences.getString("latest", null))
+                            assertEquals(WatchDataMode.MOCK, WatchSummaryStore(preferences).load()!!.dataMode)
+                            assertEquals(JSONObject(first.encoded).getString("generatedAt"),
+                                WatchSummaryStore(preferences).load()!!.generatedAt)
+                            val unseen = if (outcome == "unseen-before") assertThrows(NativePending::class.java) {
+                                stage(first, "reorder-before")
+                            } else { stage(first, "reorder-before"); null }
+                            if (outcome == "newer") check(WatchSummaryStore(preferences).saveEncoded(newer))
+                            lease.armPublication(fixtures.last().encoded)
+                            lease.publish(fixtures.last().encoded)
+                            assertTrue(outcome in setOf("reorder", "event-absent", "unseen-before"))
+                            assertEquals(fixtures.last().encoded, preferences.getString("latest", null))
+                            assertEquals(WatchDataMode.MOCK, WatchSummaryStore(preferences).load()!!.dataMode)
+                            assertEquals(JSONObject(fixtures.last().encoded).getString("generatedAt"),
+                                WatchSummaryStore(preferences).load()!!.generatedAt)
+                            stage(fixtures.last(), "reorder-after")
+                            // Later valid evidence cannot backfill the deliberately unseen first stage.
+                            unseen?.let { throw it }
+                        } catch (caught: Throwable) {
+                            primary = caught
+                            throw caught
+                        } finally {
+                            firstStageBeforeRecovery = receipt.getJSONArray("events").optJSONObject(0)?.toString()
+                            try {
+                                try { lease.close(quietWriter = true) } finally {
+                                    val calls = JSONArray()
+                                    receipt.put("cleanupCalls", calls)
+                                    requestNativeDelivery(targets, targets, calls,
+                                        { AttemptJournal(File(recovery, "receipt.json")).persist(receipt) },
+                                        { targets }, recovery = true) { _, ids ->
+                                        recovered += ids.toList()
+                                        if (outcome in setOf("timeout", "action-failure") && ids.single() == 407)
+                                            throw cleanupFailure
+                                    }
+                                }
+                            } catch (cleanup: Throwable) {
+                                if (primary == null) throw cleanup else primary.addSuppressed(cleanup)
+                            }
+                        }
+                    }
+                    val failure = result.exceptionOrNull()
+                    when (outcome) {
+                        "reorder", "event-absent" -> assertTrue(result.isSuccess)
+                        "timeout", "action-failure" -> {
+                            assertSame(actionFailure, failure)
+                            assertTrue(failure!!.suppressed.contains(cleanupFailure))
+                        }
+                        "persistence" -> { assertSame(persistenceFailure, failure); assertTrue(failedPersistence) }
+                        else -> assertEquals(when (outcome) {
+                            "missing-requested" -> "complete-delivery-stage-original"
+                            "invalid-bounded" -> "delivery-stage-native-record-scope"
+                            "unseen-before" -> "delivery-stage-command-unobserved"
                             "newer" -> "quiet-summary-writer"
                             "mapping-changed" -> "synthetic-mapping-changed"
                             "wrong-armed-bytes" -> "armed-publication-bytes"
-                            else -> throw failure
-                        }, failure.identity)
-                    } catch (failure: TimeoutException) {
-                        assertEquals("timeout", outcome)
-                    } finally {
-                        try { lease.close(quietWriter = true) } finally {
-                            val calls = JSONArray()
-                            receipt.put("cleanupCalls", calls)
-                            val recover = {
-                                requestNativeDelivery(targets, targets, calls,
-                                    { AttemptJournal(File(recovery, "receipt.json")).persist(receipt) },
-                                    { targets }, recovery = true) { _, ids ->
-                                    recovered += ids.toList()
-                                    if (outcome == "timeout" && ids.single() == 407) throw java.io.IOException()
+                            else -> error("Unknown guard subcase")
+                        }, (failure as? NativePending)?.identity)
+                    }
+                    val events = receipt.getJSONArray("events")
+                    assertEquals(when (outcome) {
+                        "mapping-changed", "wrong-armed-bytes" -> 0
+                        "reorder", "event-absent", "unseen-before" -> 2
+                        else -> 1
+                    }, events.length())
+                    assertEquals(firstStageBeforeRecovery, events.optJSONObject(0)?.toString())
+                    if (events.length() > 0) {
+                        val entry = events.getJSONObject(0)
+                        assertEquals(fixtures.first().sha256, entry.getString("fixtureSha256"))
+                        assertEquals(fixtures.first().sha256, entry.getString("acceptedSummarySha256"))
+                        assertEquals(scope.scopeSha256, entry.getString("scopeSha256"))
+                        assertEquals(scope.mappingSha256, entry.getString("mappingSha256"))
+                        assertEquals(407, entry.getJSONArray("targets").getJSONObject(0).getInt("systemId"))
+                        assertEquals("Pending", entry.getString("responseProvenance"))
+                        assertEquals("Pending", entry.getString("visualAcceptance"))
+                        assertEquals(5_000, entry.getInt("eventWaitMillis"))
+                        if (outcome in setOf("missing-requested", "invalid-bounded", "unseen-before", "persistence")) {
+                            assertEquals("Pending", entry.getString("observation"))
+                            assertEquals("runtime content event observed; provenance Pending", entry.getString("event"))
+                        }
+                        if (outcome in setOf("timeout", "action-failure")) {
+                            assertEquals("Pending", entry.getString("observation"))
+                            assertEquals("request", entry.getString("failureSubstage"))
+                            assertEquals(nativeReadFailure(actionFailure).value, entry.getString("failureOutcome"))
+                            assertTrue(entry.getString("event").startsWith("Pending"))
+                        }
+                        for (index in 0 until events.length()) {
+                            val reached = events.getJSONObject(index)
+                            if (outcome in setOf("reorder", "event-absent", "newer") || index == 1) {
+                                assertTrue(reached.getString("observation").startsWith("requested and bounded originals recorded"))
+                                assertEquals(if (outcome == "event-absent") "unavailable within bound; transition Pending"
+                                    else "runtime content event observed; provenance Pending", reached.getString("event"))
+                                for (key in listOf("requestedOriginal", "boundedOriginal")) {
+                                    val captured = reached.getJSONObject(key)
+                                    assertEquals(File(recovery, captured.getString("frame")).inputStream().sha256(),
+                                        captured.getString("frameSha256"))
+                                    assertEquals(File(recovery, captured.getString("nativeRecord")).inputStream().sha256(),
+                                        captured.getString("nativeRecordSha256"))
                                 }
+                                assertEquals(11, reached.getJSONArray("noDataSlotsObserved").getInt(0))
+                                assertEquals(fixtures[index].sha256, reached.getString("fixtureSha256"))
                             }
-                            if (outcome == "timeout") assertThrows(java.io.IOException::class.java) { recover() }
-                            else recover()
                         }
                     }
+                    assertEquals(firstStageBeforeRecovery, AttemptJournal(File(recovery, "receipt.json")).read()
+                        .getJSONArray("events").optJSONObject(0)?.toString())
                     assertEquals(listOf(407, 601), recovered)
                     assertEquals(if (outcome == "newer") newer else original, preferences.getString("latest", null))
                     assertEquals(original, File(recovery, "original.bin").readBytes().drop(1).toByteArray()
                         .toString(Charsets.UTF_8))
                     assertTrue(assets.getValue(fixtures.first().asset).contentEquals(
                         File(recovery, "owned-0.bin").readBytes().drop(1).toByteArray()))
-                    if (outcome == "reorder") {
+                    if (outcome in setOf("reorder", "event-absent", "unseen-before")) {
                         assertTrue(assets.getValue(fixtures.last().asset).contentEquals(
                             File(recovery, "owned-1.bin").readBytes().drop(1).toByteArray()))
                         assertEquals(2, receipt.getJSONArray("publications").length())

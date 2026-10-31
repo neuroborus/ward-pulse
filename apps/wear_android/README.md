@@ -672,10 +672,12 @@ after its bounded observation; recovery returns the pair after removal. Every se
 records each provider call's armed/returned state separately from accepted-summary hashes.
 Every provider dispatch requires successful durable arming and a fresh typed mapping after
 arming. Persistence failure prevents dispatch; uncertain calls are fenced against retry.
-Withholding a request controls neither OS delivery time nor cross-slot atomicity. A runtime
-accessibility event supplies only a bounded observation boundary; timeout and unavailable
-response provenance stay Pending. Effective native data, NoData observations and original
-requested/bounded frames are separate private evidence, never a callback ACK or a renderer
+Withholding a request controls neither OS delivery time nor cross-slot atomicity. Selected runtime
+accessibility-event availability is recorded separately within the unchanged five-second wait;
+event absence alone does not invalidate independently acquired stage evidence. Event arrival
+supplies no input-specific delivery or paint ACK; response provenance stays Pending. Effective
+native data, NoData observations and original requested/bounded frames are separate private
+evidence, never a callback ACK or a renderer
 PASS. Requested frames precede the potentially slow selection lookup; native records and
 images observe separate instants. No sleep, repeated gesture, timing retry or final-frame
 substitute is used.
@@ -707,19 +709,29 @@ Reorder records `reorder-before` and `reorder-after` independently within the sa
 single inputs use stage `fixture`. The private `files/native_datasource/<scenario>/receipt.json`
 retains all selected asset names/hashes and initially Pending stages in `fixtureInputs`, separate
 publication states/hashes in `publications`, and bounded request/event/effective-data records in
-`events`. Each reached stage retains `<stage>-requested.{png,json}` and
-`<stage>-bounded.{png,json}` alongside `before` and restoration originals. A fixture-stage event
-timeout records its bound, stops further publications and runs targeted recovery; any unreached
-reorder stage stays Pending. Even an observed event proves no service callback provenance,
-effective delivery or paint. No final frame substitutes for either reorder stage.
+`events`. `observeNativeDeliveryStage` joins each stage's exact fixture/accepted-summary hashes,
+current full scope and intended targets to the names and hashes of its actual
+`<stage>-requested.{png,json}` and `<stage>-bounded.{png,json}` originals, alongside `before`
+and restoration originals. Acquisition is recorded only after complete PNGs and native sidecars,
+fresh scope/ownership checks and persistence succeed. Selected-event availability is independent:
+a wait expiry alone permits the next fixture publication when actual stage evidence was acquired.
+Missing, invalid or unseen stage evidence stays Pending/failure and stops the invocation;
+request, capture, mapping, ownership and persistence failures (including timeout-shaped action
+failures) still attempt independent targeted recovery. Recovery errors retain the primary failure.
+Even an observed event or successfully acquired originals prove no service callback provenance,
+effective delivery or paint. No later frame substitutes for an unseen reorder-before stage.
 
 Catalog cases share the global single-use/latest-case and separate later-restoration review
 fences with normal and SDK cases. `requireNativeNormalRecovery` still accepts only the four
 reviewed normal controls for SDK/client admission. A new probe ID never reopens a fixture case.
 The existing four datasource guard methods add finite-catalog/path and exact authorization/hash
 rejection, unchanged-byte publication, global fencing and newer-write-safe targeted recovery
-using private preferences and injected requests. No test method or default exclusion changes:
-source discovery remains expected at 47 default + 48 manual; packaged discovery is a separate
+using private preferences and injected requests. The existing cleanup guard also exercises the
+shared stage path with absent/present events, missing/invalid originals, an unseen before-stage
+despite later evidence, persistence failure and genuine request failures with independent recovery.
+These synthetic originals establish no native paint or settled restoration. No test method or
+default exclusion changes: source discovery remains expected at 47 default + 48 manual;
+packaged discovery is a separate
 HOST verification. Compilation, guards, default tests, delivery, paint, quiet custody and settled
 restoration of these new paths remain unrun/Pending until their ordered HOST phase. Invocation
 arguments are in [the manual invocation](../../docs/ANDROID_TOOLCHAIN.md#guarded-datasource-observations).

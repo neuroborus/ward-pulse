@@ -4,10 +4,12 @@ import android.app.Instrumentation
 import android.content.ComponentName
 import android.content.Context
 import android.content.SharedPreferences
+import android.graphics.BitmapFactory
 import app.wardpulse.wear.data.WatchSummaryStore
 import app.wardpulse.wear.watchface.AndroidWatchFacePushClient
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.TimeoutException
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -270,6 +272,112 @@ internal fun readNativeDeliveryTargets(instrumentation: Instrumentation, expecte
         }
     } catch (failure: Throwable) {
         receipt.put("mappingOutcome", nativeReadFailure(failure).value)
+        try { persist() } catch (recording: Throwable) { failure.addSuppressed(recording) }
+        throw failure
+    }
+}
+
+/** Selected events and independently acquired originals are separate evidence, never a paint ACK. */
+internal fun observeNativeDeliveryStage(directory: File, name: String, intended: List<NativeDeliveryTarget>,
+    selected: List<NativeDeliveryTarget>, scope: NativeDatasourceProbeScope, receipt: JSONObject,
+    fixture: NativeDeliveryFixture? = null, persist: () -> Unit, validate: () -> NativeDatasourceProbeScope,
+    awaitEvent: (() -> Unit) -> Unit, request: (ComponentName, IntArray) -> Unit,
+    capture: (String, Boolean) -> Unit): JSONObject {
+    val entry = scope.json().put("stage", name).put("request", "armed; dispatch Pending")
+        .put("acceptedSummarySha256", receipt.getString("ownedSha256")).put("calls", JSONArray())
+        .put("targets", JSONArray(selected.map { row -> JSONObject().put("slot", row.slot)
+            .put("systemId", row.systemId).put("providerSha256", row.provider.flattenToString().sha256()) }))
+        .put("eventWaitMillis", 5_000).put("event", "Pending; selected runtime content event unrecorded")
+        .put("observation", "Pending").put("responseProvenance", "Pending").put("visualAcceptance", "Pending")
+    fixture?.let { entry.put("asset", it.asset).put("fixtureSha256", it.sha256) }
+    receipt.getJSONArray("events").put(entry)
+    var substage = "scope"
+    fun current() = nativeGuard(validate() == scope, "delivery-stage-current-scope")
+    fun original(label: String, order: String): JSONObject {
+        fun file(suffix: String) = File(directory, "$label.$suffix").also {
+            nativeGuard(it.isFile && it.length() > 0 &&
+                it.canonicalFile == File(directory.canonicalFile, "$label.$suffix") &&
+                !File("${it.path}.bak").exists() && !File("${it.path}.new").exists(),
+                "complete-delivery-stage-original")
+        }
+        val frame = file("png")
+        val dimensions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(frame.path, dimensions)
+        nativeGuard(dimensions.outWidth > 0 && dimensions.outHeight > 0 && dimensions.outMimeType == "image/png",
+            "delivery-stage-original-png")
+        val record = file("json")
+        val bytes = record.readBytes()
+        val metadata = JSONObject(bytes.toString(Charsets.UTF_8))
+        nativeGuard(metadata.opt("instanceSha256") == scope.instanceSha256 &&
+            metadata.opt("configurationSha256") == scope.configurationSha256 &&
+            metadata.opt("nativeRecordAcquired") == order && metadata.optJSONObject("effectiveData") != null &&
+            metadata.opt("responseProvenance") == "Pending" && metadata.opt("visualAcceptance") == "Pending",
+            "delivery-stage-native-record-scope")
+        entry.put(if (order == "after frame") "requestedOriginal" else "boundedOriginal", JSONObject()
+            .put("frame", frame.name).put("frameSha256", frame.inputStream().sha256())
+            .put("nativeRecord", record.name).put("nativeRecordSha256", bytes.inputStream().sha256()))
+        return metadata
+    }
+    try {
+        nativeGuard(receipt.optString("publication") == "accepted by normal store; delivery Pending" &&
+            (fixture == null || fixture.sha256 == fixture.encoded.sha256() &&
+                fixture.sha256 == entry.getString("acceptedSummarySha256")), "delivery-stage-accepted-input")
+        current()
+        persist()
+        var actionFailure: Throwable? = null
+        var actionCompleted = false
+        try {
+            awaitEvent {
+                try {
+                    substage = "request"
+                    requestNativeDelivery(intended, selected, entry.getJSONArray("calls"), persist, {
+                        current()
+                        intended
+                    }, request = request)
+                    entry.put("request", "requestUpdate returned; response Pending")
+                    persist()
+                    substage = "requested-original"
+                    capture("$name-requested", false)
+                    current()
+                    actionCompleted = true
+                    substage = "event-wait"
+                } catch (caught: Throwable) {
+                    actionFailure = caught
+                    throw caught
+                }
+            }
+            actionFailure?.let { throw it }
+            entry.put("event", "runtime content event observed; provenance Pending")
+            nativeGuard(actionCompleted, "delivery-stage-command-unobserved")
+        } catch (caught: Throwable) {
+            // A timeout from request, capture or persistence is an action failure, not wait expiry.
+            actionFailure?.let { throw it }
+            if (caught !is TimeoutException) throw caught
+            nativeGuard(actionCompleted, "delivery-stage-command-unobserved")
+            entry.put("event", "unavailable within bound; transition Pending")
+        }
+        persist()
+        substage = "requested-original"
+        original("$name-requested", "after frame")
+        substage = "bounded-original"
+        current()
+        capture("$name-bounded", true)
+        val data = original("$name-bounded", "before frame").getJSONObject("effectiveData")
+        entry.put("noDataSlotsObserved", JSONArray(intended.filter { row ->
+            data.optString(row.slot.toString()).startsWith("NoDataComplicationData(")
+        }.map { it.slot })).put("effectiveDataSha256", data.toString().sha256())
+        substage = "persistence"
+        persist()
+        substage = "final-scope"
+        current()
+        substage = "persistence"
+        entry.put("observation", "requested and bounded originals recorded; response provenance and paint Pending")
+        persist()
+        return entry
+    } catch (failure: Throwable) {
+        entry.put("observation", "Pending").put("failureOutcome", nativeReadFailure(failure).value)
+            .put("failureType", nativeReadExceptionType(failure.javaClass.name)).put("failureSubstage", substage)
+        (failure as? NativePending)?.let { entry.put("failureGuard", it.identity) }
         try { persist() } catch (recording: Throwable) { failure.addSuppressed(recording) }
         throw failure
     }

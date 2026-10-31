@@ -12,7 +12,6 @@ import app.wardpulse.wear.BuildConfig
 import app.wardpulse.wear.data.WatchSummaryStore
 import java.io.File
 import java.time.Instant
-import java.util.concurrent.TimeoutException
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Test
@@ -75,6 +74,7 @@ class NativeDatasourceTransitionTest {
                     .put("publication", "Pending").put("observation", "Pending")
             }))
         var lease: NativeSummaryLease? = null
+        var failure: Throwable? = null
         try {
             AttemptJournal(File(root, "latest.json")).persist(JSONObject().put("case", scenario))
             instrumentation.runOnMainSync {
@@ -93,52 +93,28 @@ class NativeDatasourceTransitionTest {
                     "fresh-publication-scope")
                 instrumentation.runOnMainSync { checkNotNull(lease).publish(encoded) }
             }
-            fun stage(name: String, selected: List<NativeDeliveryTarget>): Boolean {
-                retained(before, targets)
-                instrumentation.runOnMainSync { checkNotNull(lease).requireOwned() }
-                val entry = JSONObject().put("stage", name).put("request", "armed; dispatch Pending")
-                    .put("acceptedSummarySha256", receipt.getString("ownedSha256")).put("calls", JSONArray())
-                    .put("targets", JSONArray(selected.map { row -> JSONObject().put("slot", row.slot)
-                        .put("systemId", row.systemId).put("providerSha256", row.provider.flattenToString().sha256()) }))
-                receipt.getJSONArray("events").put(entry)
-                AttemptJournal(File(directory, "receipt.json")).persist(receipt)
-                // A matching accessibility event is only an observation boundary, never a delivery ACK.
-                var boundaryObserved = false
-                try {
-                    val event = instrumentation.uiAutomation.executeAndWaitForEvent({
-                        requestNativeDelivery(targets, selected, entry.getJSONArray("calls"),
-                            persist = { AttemptJournal(File(directory, "receipt.json")).persist(receipt) },
-                            validate = {
-                                val fresh = mappings(before)
-                                nativeGuard(fresh.scopeSha256 == mapping.scopeSha256, "fresh-request-scope")
-                                quietBridge()
-                                instrumentation.runOnMainSync { checkNotNull(lease).requireOwned() }
-                                fresh.targets
-                            }) { provider, ids ->
-                            ComplicationDataSourceUpdateRequester.create(target, provider).requestUpdate(*ids)
-                        }
-                        entry.put("request", "requestUpdate returned; response Pending")
-                        AttemptJournal(File(directory, "receipt.json")).persist(receipt)
-                        observe(directory, "$name-requested")
-                    }, { event -> event.packageName?.toString() == RUNTIME_PACKAGE &&
-                        event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED }, 5_000)
-                    try {
-                        entry.put("event", "runtime content event observed; provenance Pending")
-                        boundaryObserved = true
-                    } finally { event.recycle() }
-                } catch (_: TimeoutException) {
-                    entry.put("event", "unavailable within bound; transition Pending")
-                }
-                val observed = retained(before, targets)
-                instrumentation.runOnMainSync { checkNotNull(lease).requireOwned() }
-                observe(directory, "$name-bounded", observed)
-                entry.put("noDataSlotsObserved", JSONArray(targets.filter { row ->
-                    observed.effectiveData[row.slot]?.startsWith("NoDataComplicationData(") == true
-                }.map { it.slot })).put("effectiveDataSha256", JSONObject(observed.effectiveData.mapKeys { it.key.toString() })
-                    .toString().sha256())
-                AttemptJournal(File(directory, "receipt.json")).persist(receipt)
-                return boundaryObserved
-            }
+            fun stage(name: String, selected: List<NativeDeliveryTarget>, fixture: NativeDeliveryFixture? = null) =
+                observeNativeDeliveryStage(directory, name, targets, selected, probeScope(before, mapping), receipt,
+                    fixture, persist = { AttemptJournal(File(directory, "receipt.json")).persist(receipt) },
+                    validate = {
+                        quietBridge()
+                        val current = renderer()
+                        requireRetained(current, before)
+                        val fresh = mappings(current)
+                        nativeGuard(fresh.targets == targets, "retained-runtime-mapping")
+                        instrumentation.runOnMainSync { checkNotNull(lease).requireOwned() }
+                        probeScope(current, fresh)
+                    }, awaitEvent = { action ->
+                        val event = instrumentation.uiAutomation.executeAndWaitForEvent({ action() },
+                            { event -> event.packageName?.toString() == RUNTIME_PACKAGE &&
+                                event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED }, 5_000)
+                        // Availability only; this event has no input-specific provenance.
+                        event.recycle()
+                    }, request = { provider, ids ->
+                        ComplicationDataSourceUpdateRequester.create(target, provider).requestUpdate(*ids)
+                    }, capture = { original, bounded ->
+                        observe(directory, original, if (bounded) retained(before, targets) else null)
+                    })
             if (fixtures.isNotEmpty()) {
                 fixtures.forEachIndexed { index, fixture ->
                     val input = receipt.getJSONArray("fixtureInputs").getJSONObject(index)
@@ -146,12 +122,9 @@ class NativeDatasourceTransitionTest {
                     input.put("publication", "accepted by normal store; delivery Pending")
                     AttemptJournal(File(directory, "receipt.json")).persist(receipt)
                     val name = input.getString("stage")
-                    val boundaryObserved = stage(name, targets)
-                    input.put("observation", if (boundaryObserved)
-                        "bounded originals recorded; response provenance and paint Pending" else "Pending; event unavailable within bound")
+                    val observation = stage(name, targets, fixture)
+                    input.put("observation", observation.getString("observation"))
                     AttemptJournal(File(directory, "receipt.json")).persist(receipt)
-                    // An unseen first reorder stage cannot be replaced by a later final frame.
-                    nativeGuard(boundaryObserved, "fixture-stage-boundary-unavailable")
                 }
             } else {
                 publish(deliverySummary(true, Instant.now().toString()))
@@ -169,20 +142,35 @@ class NativeDatasourceTransitionTest {
                     }
                 }
             }
+        } catch (caught: Throwable) {
+            failure = caught
+            receipt.put("failureOutcome", nativeReadFailure(caught).value)
+                .put("failureType", nativeReadExceptionType(caught.javaClass.name))
+            (caught as? NativePending)?.let { receipt.put("failureGuard", it.identity) }
+            try { AttemptJournal(File(directory, "receipt.json")).persist(receipt) }
+            catch (recording: Throwable) { caught.addSuppressed(recording) }
+            throw caught
         } finally {
             // No failing observation, timeout or requester can bypass normal-data recovery.
-            try {
-                var quiet = false
-                try {
-                    if (lease != null) {
-                        quietBridge()
-                        quiet = true
-                    }
-                } finally {
-                    instrumentation.runOnMainSync { lease?.close(quiet) }
+            val primary = failure
+            fun cleanup(action: () -> Unit) {
+                try { action() } catch (caught: Throwable) {
+                    if (failure == null) {
+                        failure = caught
+                        receipt.put("failureOutcome", nativeReadFailure(caught).value)
+                            .put("failureType", nativeReadExceptionType(caught.javaClass.name))
+                            .put("failureSubstage", "cleanup")
+                        (caught as? NativePending)?.let { receipt.put("failureGuard", it.identity) }
+                        try { AttemptJournal(File(directory, "receipt.json")).persist(receipt) }
+                        catch (recording: Throwable) { caught.addSuppressed(recording) }
+                    } else failure!!.addSuppressed(caught)
                 }
-            } finally {
-                if (lease != null) {
+            }
+            if (lease != null) {
+                var quiet = false
+                cleanup { quietBridge(); quiet = true }
+                cleanup { instrumentation.runOnMainSync { lease?.close(quiet) } }
+                cleanup {
                     // Independent normal-data recovery uses only freshly revalidated intended targets.
                     // An unresolved mapping or dispatch stays Pending; no stale IDs or blanket requests.
                     val summary = target.getSharedPreferences("watch_summary", Context.MODE_PRIVATE).getString("latest", null)
@@ -209,6 +197,7 @@ class NativeDatasourceTransitionTest {
                     AttemptJournal(File(directory, "receipt.json")).persist(receipt)
                 }
             }
+            if (primary == null) failure?.let { throw it }
         }
         nativeGuard(receipt.getString("restoration") in setOf("original bytes observed", "original bytes restored"),
             "summary-restoration-reconciliation")
