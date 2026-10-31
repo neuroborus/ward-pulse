@@ -25,12 +25,9 @@ Establish the actual OS/API producer of required evidence and its supported type
 Apply guards to the actual operation/phase: requester calls require proved system-ID/provider/current active-target identity; independently authorized read-only acquisition/slot reads do not inherit that join unless their contract requires it. Other mutations retain their documented ID/ownership/current-target/custody guards. Distinguish not-invoked, unavailable evidence, denied/rejected, domain-unresolved, forwarded/processed and painted; never infer a later stage from an earlier one.
 Use a bounded actual minimal probe where needed; distinguish contract support, observed results and unknown enforcement. Keep unproved capability Pending: no default/cache substitution, identity swaps, access bypass or unbounded framework growth. Redacted inputs/missing mappings stay unproved; no guessed internal numeric IDs or resource-filename joins.
 
-For Activity/task claims, inventory unique relevant ActivityRecord identities and task IDs from a complete current native snapshot. Cross-check relevant top/resumed records; repeated references are not additional
-instances. Hold instance-count claims when the dump/projection is incomplete or contradictory, including a top/resumed owner omitted by the parser, until fresh complete observation resolves it. Keep historical
-and fresh inventories separate; later observations do not reconstruct unsupported earlier stage counts.
+For Activity/task claims, inventory unique relevant ActivityRecord identities and task IDs from a complete current native snapshot. Cross-check relevant top/resumed records; repeated references are not additional instances. Hold instance-count claims when the dump/projection is incomplete or contradictory, including a top/resumed owner omitted by the parser, until fresh complete observation resolves it. Keep historical and fresh inventories separate; later observations do not reconstruct unsupported earlier stage counts.
 
-For claims about which complication slot/type dispatched a tap, shared PendingIntent identity, caller UID,
-coordinates or a configured binding alone do not identify the hit. Join actual renderer hit-event evidence to the current
+For claims about which complication slot/type dispatched a tap, shared PendingIntent identity, caller UID, coordinates or a configured binding alone do not identify the hit. Join actual renderer hit-event evidence to the current
 instance/slot, effective provider, current data type and successful destination; DOWN alone is not completed dispatch.
 Keep canonical/runtime slot IDs distinct. Resolve raw resources through EACH actual variant/embedded APK's resource table, or reuse a route bound to the exact same APK bytes; never transfer a debug ZIP path to release/Push.
 Read metadata from the exact owning element and named field VALUE in its actual emitted representation; nearby IDs/substrings or assumed encoding are not attribute proof. Parser failure stays Unknown, never an inferred default.
@@ -51,6 +48,9 @@ supported diagnostics and normal app/renderer operations. A corrected image afte
 recreation supports a stale-layer hypothesis; it does not identify that layer or prove a
 durable product fix by itself. Keep unavailable causal evidence Pending.
 
+Before an installer/device recipe touches a protected artifact cohort, inspect expanded commands, aggregate task/module installs AND possible implicit platform updates from bundled/default assets; reconcile EVERY affected package with the authorized phase, not only the main APK.
+Hold unreconciled module/package or implicit-update effects; use a supported scoped owner route or return the recipe/provisioning finding to actual Runner. Do not assume a narrower task prevents platform reactions.
+Record actual affected installed versions/hashes before and after; unexpected advancement remains a failed preservation gate/gap, never a UI Update witness inferred from test success. Keep cause unproved unless established independently; task membership or installer attribution alone is insufficient.
 After an authorized install/update, inspect the whole affected native UI again. Updating only the Wear APK
 does not establish that the separately installed face changed, that its active instance refreshed or that old slot bindings were migrated.
 
