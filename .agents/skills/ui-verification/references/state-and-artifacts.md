@@ -9,7 +9,7 @@ Keep evidence layer-specific. For UI instrumentation, follow [ownership, result 
 | Source | Owning commit/dirty content and generator/provider symbols. |
 | Generated resources | Exact XML/images produced for that candidate; drift checks. |
 | Built artifact | APK/resource hash, package/version code and signing identity. |
-| Installed artifact | Actual installed APK/resource identity on the selected target. |
+| Installed artifact | Actual installed APK/resource identity on the selected target, using the uniquely resolved package-manager APK path; never assume a basename or take the first match. Missing/split/multiple paths remain unresolved. |
 | Active rendition | Current foreground app/page or face renderer's resource package and instance. |
 | Effective inputs | Delivered summary/order, provider bindings and live values/TITLE where observable. |
 
