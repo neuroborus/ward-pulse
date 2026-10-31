@@ -746,9 +746,16 @@ manager acquisition and a fresh full-scope bracket in `receipt.json`. A failed a
 that capability directory. Acquisition records no update, delivery or paint result; HOST must
 review its exact receipt hash before authorizing mutation. Historical originals stay unchanged.
 
-Only four `directScenario` values are admitted; builders use typed public setters and required
-fields. Targets require configured ranged-value types and freshly joined Today/RingSplit
-**system** IDs, never guessed slot IDs.
+Only four `directScenario` values are admitted. `nativeSdkDirectData` uses typed public setters
+for complete deterministic ranged inputs: generic `RangedValueComplicationData.TYPE_UNDEFINED`,
+an explicit noninterpolated single-color ramp, short text `37%` and content description
+`Test percentage`, alongside the exact ranges and titles below. Mains use `RingFamily.CODEX`;
+the valid RingSplit extra uses `RingFamily.CODEX_SPARK`. Emitted-object checks and
+`NativeSdkDirectDataGuardTest.finitePublicBuildersRetainRangesTitlesAndSequentialPartialTargets`
+verify field presence and exact values, preserving each negative's unrelated valid channels.
+Main-only NoData construction remains independent of ranged inputs and a RingSplit target.
+Targets require configured ranged-value types and freshly joined Today/RingSplit **system**
+IDs, never guessed slot IDs. Construction supplies no observed delivery or paint acceptance.
 
 | Scenario | Ordered SDK data |
 | --- | --- |

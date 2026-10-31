@@ -1518,8 +1518,16 @@ rejection establishes no native effect; its exact receipt still needs review bef
 See the [finite data and evidence contract](../apps/wear_android/README.md#guarded-sdk-direct-data-observations):
 MAX300/VALUE111 is unsupported range; invalid TITLE uses valid 0/400/148; main-only NoData
 targets Today; the fourth case sends Today NoData then RingSplit 0/400/148/TITLE0 sequentially.
-Public typed builders supply required fields; there are no raw-map or reflection bypasses.
-No pair atomicity or automatic suppression of valid extra data is asserted.
+`nativeSdkDirectData` supplies complete deterministic ranged inputs through public typed
+setters: explicit generic `RangedValueComplicationData.TYPE_UNDEFINED`, a single-color ramp
+with interpolation explicitly false, short text `37%` and content description `Test percentage`.
+Mains use `RingFamily.CODEX`; the valid RingSplit extra uses `RingFamily.CODEX_SPARK`.
+Emitted-object checks and the existing finite-builder guard verify presence and exact content
+alongside the scenario's range, title and ordered targets. Each negative retains valid unrelated
+channels; main-only NoData remains independent of ranged inputs and a RingSplit target.
+This construction establishes no observed nonpaint, delivery or paint acceptance. There are
+no raw-map or reflection bypasses. No pair atomicity or automatic suppression of valid extra
+data is asserted.
 
 Before the first call, all potentially affected targets are durably armed. Each per-ID call
 freshly validates full typed/system/native joins and unchanged current normal producer data.

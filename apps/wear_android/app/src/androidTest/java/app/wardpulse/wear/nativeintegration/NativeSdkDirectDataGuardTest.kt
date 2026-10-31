@@ -6,12 +6,15 @@ import android.os.OutcomeReceiver
 import android.support.wearable.complications.ComplicationData as WireComplicationData
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.wear.watchface.complications.data.RangedValueComplicationData
+import app.wardpulse.wear.ui.RingFamily
 import com.google.wear.services.complications.PlainComplicationText
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.TimeoutException
 import org.json.JSONArray
 import org.json.JSONObject
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
@@ -123,13 +126,25 @@ class NativeSdkDirectDataGuardTest {
                     assertEquals(0f, data.rangedMinValue, 0f)
                     assertEquals(if (scenario == "unsupported-range") 300f else 400f, data.rangedMaxValue, 0f)
                     assertEquals(if (scenario == "unsupported-range") 111f else 148f, data.rangedValue, 0f)
+                    assertTrue(data.hasRangedValueType())
+                    assertEquals(RangedValueComplicationData.TYPE_UNDEFINED, data.rangedValueType)
+                    assertTrue(data.hasColorRamp())
+                    assertArrayEquals(intArrayOf(if (index == 1) RingFamily.CODEX_SPARK else RingFamily.CODEX), data.colorRamp)
+                    assertTrue(data.hasIsColorRampInterpolated())
+                    assertFalse(data.isColorRampInterpolated)
+                    assertTrue(data.hasShortTitle())
                     assertEquals(when { index == 1 -> "0"; scenario == "malformed-title" -> "invalid"; else -> "" },
                         (data.shortTitle as PlainComplicationText).text.toString())
                     assertTrue(data.hasContentDescription())
+                    assertEquals("Test percentage", (data.contentDescription as PlainComplicationText).text.toString())
                     assertTrue(data.hasShortText())
+                    assertEquals("37%", (data.shortText as PlainComplicationText).text.toString())
                 }
             }
         }
+        val mainOnly = nativeSdkDirectData("partial-no-data-main", targets.take(1)).single()
+        assertEquals(targets.first(), mainOnly.target)
+        assertEquals(WireComplicationData.TYPE_NO_DATA, mainOnly.data.type)
         assertThrows(NativePending::class.java) { nativeSdkDirectData("out-of-range", targets) }
         assertThrows(NativePending::class.java) { nativeSdkDirectData("no-data-main-valid-extra", targets.take(1)) }
         assertThrows(NativePending::class.java) { nativeSdkDirectData("unsupported-range", targets + targets.first()) }

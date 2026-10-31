@@ -4,6 +4,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.os.OutcomeReceiver
 import android.support.wearable.complications.ComplicationData as WireComplicationData
+import androidx.wear.watchface.complications.data.RangedValueComplicationData
+import app.wardpulse.wear.ui.RingFamily
 import com.google.wear.Sdk
 import com.google.wear.services.complications.ComplicationData
 import com.google.wear.services.complications.ComplicationsManager
@@ -96,16 +98,25 @@ internal fun nativeSdkDirectData(scenario: String, targets: List<NativeDeliveryT
         it.provider == ComponentName(HOST_PACKAGE, "app.wardpulse.wear.complication.${service}ComplicationDataSourceService")
     } ?: throw NativePending("sdk-direct-selected-target-unmapped")
     val main = target("Today")
-    fun ranged(value: Float = 148f, max: Float = 400f, title: String = "") =
+    fun ranged(value: Float = 148f, max: Float = 400f, title: String = "", color: Int = RingFamily.CODEX) =
         ComplicationData.Builder(WireComplicationData.TYPE_RANGED_VALUE)
             .setRangedMinValue(0f).setRangedMaxValue(max).setRangedValue(value)
+            .setRangedValueType(RangedValueComplicationData.TYPE_UNDEFINED)
+            .setColorRamp(intArrayOf(color)).setColorRampInterpolated(false)
             .setShortText(PlainComplicationText("37%"))
             .setShortTitle(PlainComplicationText(title))
             .setContentDescription(PlainComplicationText("Test percentage"))
             .build().also {
                 nativeGuard(it.type == WireComplicationData.TYPE_RANGED_VALUE && it.rangedMinValue == 0f &&
                     it.rangedMaxValue == max && it.rangedValue == value &&
-                    (it.shortTitle as? PlainComplicationText)?.text?.toString() == title, "sdk-direct-object-normalized")
+                    it.hasRangedValueType() && it.rangedValueType == RangedValueComplicationData.TYPE_UNDEFINED &&
+                    it.hasColorRamp() && it.colorRamp?.contentEquals(intArrayOf(color)) == true &&
+                    it.hasIsColorRampInterpolated() && !it.isColorRampInterpolated &&
+                    it.hasShortTitle() && (it.shortTitle as? PlainComplicationText)?.text?.toString() == title &&
+                    it.hasShortText() && (it.shortText as? PlainComplicationText)?.text?.toString() == "37%" &&
+                    it.hasContentDescription() &&
+                    (it.contentDescription as? PlainComplicationText)?.text?.toString() == "Test percentage",
+                    "sdk-direct-object-normalized")
             }
     fun noData() = ComplicationData.Builder(WireComplicationData.TYPE_NO_DATA).build().also {
         nativeGuard(it.type == WireComplicationData.TYPE_NO_DATA, "sdk-direct-object-normalized")
@@ -114,7 +125,8 @@ internal fun nativeSdkDirectData(scenario: String, targets: List<NativeDeliveryT
         "unsupported-range" -> listOf(NativeSdkDirectUpdate(main, ranged(111f, 300f)))
         "malformed-title" -> listOf(NativeSdkDirectUpdate(main, ranged(title = "invalid")))
         "partial-no-data-main" -> listOf(NativeSdkDirectUpdate(main, noData()))
-        else -> listOf(NativeSdkDirectUpdate(main, noData()), NativeSdkDirectUpdate(target("RingSplit"), ranged(title = "0")))
+        else -> listOf(NativeSdkDirectUpdate(main, noData()),
+            NativeSdkDirectUpdate(target("RingSplit"), ranged(title = "0", color = RingFamily.CODEX_SPARK)))
     }
 }
 
