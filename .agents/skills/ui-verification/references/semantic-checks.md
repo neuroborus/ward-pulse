@@ -10,7 +10,7 @@ permits one element tree per `Compare`/`Default`. A passing official validator o
 
 ## Map meaning before judging appearance
 
-Build a compact expected/observed mapping for every selected metric or pair, accounting for missing items and unexpected rendered extras. Use the actual snapshot/summary and owning surface contract. Include:
+Before invocation or measurement, build a compact expected/observed mapping for every selected metric or pair, accounting for missing items and unexpected rendered extras. Bind the exact selected fixture/input identity and recorded hash to the actual snapshot/summary, metric pairs/families and owning surface/palette. A filename, scenario or copied expected label is not an oracle; reconcile disagreement with recorded input metrics before choosing RGB/ROI or making claims. Include:
 
 - provider family and logical metric ID, selected window/pool and its paired mate;
 - family/half color, expected band/position and which side of a shared band it owns;
@@ -52,9 +52,9 @@ A visible label/content description proves displayed UI state, not the underlyin
 Do not choose power changes, clearing or restarting from the label alone. This does not block independently authorized read-only observation or capability work.
 Existing mutation, custody and recovery safeguards remain in force.
 
-Before concluding an artifact is absent or unchanged, inspect bounds proven to cover its full geometry, including displaced caps and paired halves.
+Before concluding an artifact is absent or unchanged, bind the owning geometry to the actual viewport scale and inspect bounds proven to cover the metric's full footprint, including displaced caps and paired halves; same-color legend pixels are not arc geometry.
 Before interpreting counts, bind RGB/ARGB encoding, channel order and alpha convention to the actual owning candidate constant; record exact probe colors, ROI and scale.
-The independent reviewer must challenge apparent zeros for wrong encoding/color and ROI adequacy. Zero changed pixels in a narrow ROI proves only that ROI; compare the whole footprint before dismissing a native artifact.
+The independent reviewer must challenge apparent zeros for wrong input/family, encoding/color and ROI adequacy. Wrong-color zeros establish no absence; hold conclusions until input, palette and metric footprint agree. Zero changed pixels in a narrow ROI proves only that ROI; compare the whole footprint before dismissing a native artifact.
 Exact-color counts alone do not prove alpha or geometry. The whole-footprint comparison alone does not establish a renderer cause.
 
 For upper face cells, inspect EVERY rim's full contour and its clearance to neighboring cells, time and
