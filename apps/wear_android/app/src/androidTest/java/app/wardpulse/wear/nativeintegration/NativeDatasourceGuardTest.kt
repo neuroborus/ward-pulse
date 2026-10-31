@@ -2,6 +2,7 @@ package app.wardpulse.wear.nativeintegration
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.os.Bundle
@@ -211,9 +212,150 @@ class NativeDatasourceGuardTest {
             // Path/unknown cases cannot escape the catalog through the latest-case journal either.
             latest.persist(JSONObject().put("case", "../normal"))
             assertThrows(NativePending::class.java) { requireNativePriorDeliveryRecovery(cases, expected) }
+            retainedExtraProductionAdmissionKeepsOriginalHistory(File(root, "artifact-fence"))
         } finally {
             check(root.deleteRecursively()) { "Private probe-test resources must be deleted" }
         }
+    }
+
+    /** Synthetic provenance only: this neither admits a real payload nor witnesses delayed paint. */
+    private fun retainedExtraProductionAdmissionKeepsOriginalHistory(directory: File) {
+        check(directory.mkdir())
+        val root = File(directory, "native_datasource").also { check(it.mkdir()) }
+        val providers = listOf("Today", "Week", "Ring3", "RingSplit", "StripSplit").mapIndexed { index, service ->
+            index + 11 to "$HOST_PACKAGE/app.wardpulse.wear.complication.${service}ComplicationDataSourceService"
+        }.toMap()
+        val renderer = NativeRenderer("app.wardpulse.watchface", "existing", "style",
+            providers.keys.associateWith { true }, emptyMap(),
+            NativeSelections("app.wardpulse.watchface", "existing", providers,
+                providers.keys.associateWith { 5 }, providers.keys.associateWith { it.toString() }))
+        val mapping = NativeDeliveryMapping(emptyList(), "a".repeat(64))
+        val originalFile = File(root, "delayed/receipt.json")
+        check(originalFile.parentFile!!.mkdir())
+        val original = JSONObject().put("scenario", "delayed").put("scopeSha256", "b".repeat(64))
+            .put("cleanupRequest", "normal requestUpdate returned; effective restoration Pending")
+            .put("laterRestoration", "recorded; original-frame inspection and response provenance Pending")
+        originalFile.writeText(original.toString())
+        val immutable = listOf(originalFile, File(root, "normal/receipt.json"),
+            File(root, "fixture-n1_pair_zero_full/receipt.json"))
+        immutable.drop(1).forEach { file ->
+            check(file.parentFile!!.mkdir())
+            file.writeText("synthetic immutable recovery")
+        }
+        val originals = immutable.associateWith { it.readText() }
+        fun hash(file: File) = file.inputStream().sha256()
+        fun artifact(payload: String, source: String, scope: String, apk: String) = JSONObject()
+            .put("sourceSha256", source).put("generatedXmlSha256", payload)
+            .put("builtXmlSha256", payload).put("installedXmlSha256", payload)
+            .put("builtApkSha256", apk).put("resourceApkSha256", apk)
+            .put("resourcePackage", renderer.resourcePackage).put("instanceSha256", renderer.instance.sha256())
+            .put("configurationSha256", renderer.configuration.sha256()).put("scopeSha256", scope)
+        val baseline = artifact("c".repeat(64), "d".repeat(64), "b".repeat(64), "e".repeat(64))
+            .put("receiptSha256", hash(originalFile))
+        val candidate = artifact("f".repeat(64), "1".repeat(64), mapping.scopeSha256, "2".repeat(64))
+        val admission = JSONObject().put("kind", "retained-extra-production-payload").put("scenario", "delayed")
+            .put("baseline", baseline).put("candidate", candidate)
+        val file = File(root, "retained-extra-admission.json")
+        val args = Bundle().apply {
+            putString("expectedResourceApkSha256", "2".repeat(64))
+            putString("expectedResourceSignerSha256", "3".repeat(64))
+        }
+        val expected = NativePushExpectations(args)
+        val resource = NativePackage(2, "2".repeat(64), "3".repeat(64))
+        AttemptJournal(File(root, "latest.json")).persist(JSONObject().put("case", "delayed"))
+        args.putString("priorDeliveryRestorationReview", "complete")
+        args.putString("expectedPriorDeliveryRestorationSha256", hash(originalFile))
+        requireNativePriorDeliveryRecovery(root, expected)
+        var reads = 0
+        fun select(record: JSONObject = admission) {
+            file.writeText(record.toString())
+            args.putString("expectedRetainedExtraAdmissionSha256", hash(file))
+        }
+        fun read(current: NativeRenderer = renderer, installedXml: String = "f".repeat(64),
+            installedApk: NativePackage = resource) =
+            readNativeRetainedExtraAdmission(root, expected, current, mapping) {
+                reads++
+                installedApk to installedXml
+            }
+        select()
+        read()
+        val admittedReads = reads
+        for (owner in listOf("baseline", "candidate")) {
+            for (key in listOf("sourceSha256", "generatedXmlSha256", "builtXmlSha256", "installedXmlSha256",
+                "builtApkSha256", "resourceApkSha256", "instanceSha256", "configurationSha256", "scopeSha256")) {
+                val incomplete = JSONObject(admission.toString())
+                incomplete.getJSONObject(owner).remove(key)
+                select(incomplete)
+                assertThrows(NativePending::class.java) { read() }
+            }
+        }
+        // APK/test/probe/instance/config churn cannot qualify unchanged production XML.
+        val samePayload = JSONObject(admission.toString())
+        for (key in listOf("generatedXmlSha256", "builtXmlSha256", "installedXmlSha256")) {
+            samePayload.getJSONObject("candidate").put(key, baseline.getString(key))
+        }
+        select(samePayload)
+        assertThrows(NativePending::class.java) { read() }
+        val wrongJoin = JSONObject(admission.toString())
+        wrongJoin.getJSONObject("candidate").put("builtXmlSha256", "4".repeat(64))
+        select(wrongJoin)
+        assertThrows(NativePending::class.java) { read() }
+        select()
+        file.appendText(" ")
+        assertThrows(NativePending::class.java) { read() }
+        select()
+        val held = File(root, "held-baseline")
+        check(originalFile.renameTo(held))
+        assertThrows(NativePending::class.java) { read() }
+        check(held.renameTo(originalFile))
+        assertEquals(admittedReads, reads)
+        assertThrows(NativePending::class.java) { read(renderer.copy(instance = "changed")) }
+        assertThrows(NativePending::class.java) { read(installedXml = "4".repeat(64)) }
+        assertThrows(NativePending::class.java) { read(installedApk = resource.copy(apk = "4".repeat(64))) }
+        assertThrows(NativePending::class.java) { read(installedApk = resource.copy(signer = "4".repeat(64))) }
+        val selected = read()
+        val case = nativeRetainedExtraCase(selected)
+        val receipt = JSONObject().put("scenario", "delayed").put("productionXmlSha256", "f".repeat(64))
+            .put("candidateAdmissionSha256", hash(file))
+        val attemptDirectory = reserveNativeRetainedExtraCase(root, case, receipt)
+        val reserved = File(attemptDirectory, "receipt.json").readText()
+        assertEquals(case, AttemptJournal(File(root, "latest.json")).read().getString("case"))
+        assertThrows(NativePending::class.java) { requireNativePriorDeliveryRecovery(root, expected) }
+        assertThrows(NativePending::class.java) { reserveNativeRetainedExtraCase(root, case, receipt) }
+        assertThrows(NativePending::class.java) {
+            reserveNativeRetainedExtraCase(root, case, JSONObject(receipt.toString())
+                .put("candidateAdmissionSha256", "6".repeat(64)))
+        }
+        assertEquals(reserved, File(attemptDirectory, "receipt.json").readText())
+        val journal = AttemptJournal(nativeDeliveryReceipt(root, case))
+        receipt.put("cleanupRequest", "normal requestUpdate returned; effective restoration Pending")
+        journal.persist(receipt)
+        args.putString("priorDeliveryRestorationReview", "complete")
+        args.putString("expectedPriorDeliveryRestorationSha256", hash(File(attemptDirectory, "receipt.json")))
+        assertThrows(NativePending::class.java) { requireNativePriorDeliveryRecovery(root, expected) }
+        receipt.put("laterRestoration", "recorded; original-frame inspection and response provenance Pending")
+        journal.persist(receipt)
+        assertThrows(NativePending::class.java) { requireNativePriorDeliveryRecovery(root, expected) }
+        args.putString("expectedPriorDeliveryRestorationSha256", hash(File(attemptDirectory, "receipt.json")))
+        requireNativePriorDeliveryRecovery(root, expected)
+        assertThrows(NativePending::class.java) { reserveNativeRetainedExtraCase(root, case, receipt) }
+        assertThrows(NativePending::class.java) { requireNativeDeliveryCase(root, "delayed") }
+        // A crash between global arming and the receipt consumes the payload and fences all later work.
+        val partial = "delayed-payload-${"5".repeat(64)}"
+        check(File(root, partial).mkdir())
+        AttemptJournal(File(root, "latest.json")).persist(JSONObject().put("case", partial))
+        assertThrows(NativePending::class.java) { requireNativePriorDeliveryRecovery(root, expected) }
+        val privateContext = object : ContextWrapper(InstrumentationRegistry.getInstrumentation().targetContext) {
+            override fun getFilesDir(): File = root.parentFile!!
+        }
+        assertEquals("retained-extra-reservation-unresolved", assertThrows(NativePending::class.java) {
+            requireNativeNormalRecovery(privateContext, expected, mapping)
+        }.identity)
+        assertThrows(NativePending::class.java) {
+            reserveNativeRetainedExtraCase(root, partial, JSONObject(receipt.toString())
+                .put("productionXmlSha256", "5".repeat(64)))
+        }
+        assertEquals(originals, immutable.associateWith { it.readText() })
     }
 
     @Test
@@ -227,6 +369,7 @@ class NativeDatasourceGuardTest {
         }
         val expected = NativePushExpectations(arguments)
         val operations = listOf("observeDelivery:normal", "observeDelivery:delayed",
+            "observeDelivery:delayed-payload-${"f".repeat(64)}",
             "observeDelivery:fixture-n1_pair_zero_full", "observeDelivery:fixture-n3_reorder",
             "observeOverride:active:malformed-title", "observeOverride:supplied-bitmap:malformed-title")
         for ((testClass, optIn, methods) in listOf(
@@ -476,10 +619,15 @@ class NativeDatasourceGuardTest {
                     check(preferences.edit().clear().commit())
                     if (outcome != "absent") check(WatchSummaryStore(preferences).saveEncoded(original))
                     val receipt = JSONObject()
-                    val recovery = File(directory, outcome)
+                    val reserved = outcome in setOf("failure", "newer")
+                    val recovery = if (reserved) {
+                        receipt.put("scenario", "delayed").put("productionXmlSha256", outcome.sha256())
+                            .put("candidateAdmissionSha256", "a".repeat(64))
+                        reserveNativeRetainedExtraCase(directory, "delayed-payload-${outcome.sha256()}", receipt)
+                    } else File(directory, outcome)
                     val journal = AttemptJournal(File(recovery, "receipt.json"))
                     var producerStarted = false
-                    val lease = NativeSummaryLease(preferences, recovery, receipt) { persisted ->
+                    val lease = NativeSummaryLease(preferences, recovery, receipt, reserved = reserved) { persisted ->
                         journal.persist(persisted)
                         if (outcome == "during-persistence" && !producerStarted &&
                             persisted.optString("publication") == "armed; acceptance Pending") {

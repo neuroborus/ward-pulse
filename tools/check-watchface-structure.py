@@ -71,7 +71,7 @@ def check_structure(root):
             or strip.find(".//PartText") is None
         ):
             errors.append(f"slot {slot_id}: main strip lost its well or label")
-    return errors + check_band_paints(root) + check_extra_decisions(root)
+    return errors + check_band_paints(root) + check_extra_decisions(root) + check_retained_extra_paint(root)
 
 
 def paint_expression(expression):
@@ -496,6 +496,146 @@ def check_extra_decisions(root):
                     or any(evaluate_paint(alphas[position], 148, 400, title=str(index)) != 0 for position in n3)):
                 errors.append(f"slot {slot_id}/{index}: N2-to-N3 must hide old geometry and reveal new geometry")
         errors.extend(sorted(gate_errors))
+    return errors
+
+
+def emitted_band_layers(root, responses):
+    """Select actual emitted drawing trees in scene order, with independent slot fields.
+
+    Only usage arcs participate. Strips, textures and diagnostic readouts are outside
+    this analytical family-ownership regression; this is not a native rasterizer.
+    """
+    layers = []
+
+    def visit(node, fields, family, alpha=255):
+        if not isinstance(node.tag, str):
+            return
+        if node.tag == "Group" and (node.get("name", "").endswith("_strip")
+                                    or node.get("name", "").startswith("n1Diag_")):
+            return
+        if node.tag == "Condition":
+            predicates = {item.get("name"): paint_expression(item.text or "")
+                          for item in node.findall("Expressions/Expression")}
+            for branch in node.findall("Compare"):
+                if evaluate_paint(predicates[branch.get("expression")], **fields):
+                    for child in branch:
+                        visit(child, fields, family, alpha)
+                    return
+            fallback = node.find("Default")
+            if fallback is not None:
+                for child in fallback:
+                    visit(child, fields, family, alpha)
+            return
+        if node.tag in ("Group", "PartDraw"):
+            local_alpha = int(node.get("alpha", "255"))
+            transform = node.find("Transform[@target='alpha']")
+            if transform is not None:
+                # A Transform replaces this node's initial alpha, rather than multiplying it.
+                local_alpha = evaluate_paint(paint_expression(transform.get("value")), **fields)
+            alpha = alpha * local_alpha / 255
+            if alpha == 0:
+                return
+        if node.tag == "Arc":
+            stroke = node.find("Stroke")
+            colored = stroke is None
+            if colored:
+                stroke = node.find("WeightedStroke")
+            if stroke is None:
+                return
+            start = float(node.get("startAngle"))
+            transform = node.find("Transform[@target='startAngle']")
+            if transform is not None:
+                start = evaluate_paint(paint_expression(transform.get("value")), **fields)
+            layers.append((float(node.get("width")) / 2, float(stroke.get("thickness")),
+                           start, float(node.get("endAngle")), stroke.get("cap"),
+                           family if colored else "track", alpha,
+                           stroke.get("colors") if colored else stroke.get("color")))
+            return
+        for child in node:
+            visit(child, fields, family, alpha)
+
+    for slot in root.findall("Scene/ComplicationSlot"):
+        response = responses.get(int(slot.get("slotId")))
+        if response is not None:
+            fields, family = response
+            ranged = slot.find("Complication[@type='RANGED_VALUE']")
+            if ranged is not None:
+                visit(ranged, fields, family)
+    return layers
+
+
+def visible_band_owner(layers, radius, angle):
+    owner = None
+    for center, thickness, start, end, cap, family, alpha, color in layers:
+        inside = start <= angle <= end and abs(radius - center) <= thickness / 2
+        if cap == "ROUND":
+            inside |= any(radius**2 + center**2 - 2 * radius * center * math.cos(
+                math.radians(angle - endpoint)) <= (thickness / 2)**2 for endpoint in (start, end))
+        if inside:
+            if family == "track" and (alpha != 255 or color != "#ff2e3632"):
+                raise ValueError("retained-extra protection requires the emitted opaque track")
+            if family != "track" and color != "[COMPLICATION.RANGED_VALUE_COLORS]":
+                raise ValueError("family ownership lost its response color source")
+            owner = family
+    return owner
+
+
+def check_retained_extra_paint(root):
+    errors = []
+
+    def response(value, maximum, title, family):
+        return ({"value": value, "maximum": maximum, "minimum": 0, "title": title}, family)
+
+    def expect(tree, responses, radius, angle, owner, label):
+        actual = visible_band_owner(emitted_band_layers(tree, responses), radius, angle)
+        if actual != owner:
+            errors.append(f"{label}: visible owner {actual}, expected {owner}")
+
+    # Codex37 + Cursor70/Other50. Keep EVERY extra field, including family, unchanged
+    # when only the mains become singleton Codex80; NoData is a separate later step.
+    extra = response(200, 400, "0", "Other")
+    paired = {101: response(280, 400, "split:cursor-other", "Cursor"),
+              102: response(148, 400, "", "Codex"), 106: extra}
+    expect(root, paired, 194, 300, "Other", "original pair outer half")
+    expect(root, paired, 178, 300, "Cursor", "original pair inner half")
+    expect(root, paired, 150, 300, "Codex", "original Codex37")
+    changed = {101: response(160, 200, "", "Codex"), 106: extra}
+    for radius in (186.1, 194, 201.9):
+        expect(root, changed, radius, 300, "Codex", "main-only Codex80 with retained Other50")
+        expect(root, changed, radius, 30, "track", "main-only spent region")
+        expect(root, {101: changed[101]}, radius, 300, "Codex", "later extra NoData")
+    # Prove this behavioral regression distinguishes the former scene order.
+    old = deepcopy(root)
+    scene = old.find("Scene")
+    for slot in list(scene):
+        if slot.tag == "ComplicationSlot" and slot.get("slotId") in ("106", "109"):
+            scene.remove(slot)
+            scene.append(slot)
+    if visible_band_owner(emitted_band_layers(old, changed), 194, 300) != "Other":
+        errors.append("retained-extra counterexample no longer exposes the old order")
+
+    for slot_id in (106, 109):
+        for value in (0, 2**-20 * 200, 200):
+            title = "zero" if value == 0 else ""
+            state = {101: response(value, 200, title, "Codex"), slot_id: extra}
+            expect(root, state, 194, 300, "Codex" if value == 200 else "track", "zero/tiny/full protection")
+            if 0 < value < 200:
+                expect(root, state, 180, 359.9 - 2**-21 * 359.9, "Codex", "tiny main stays visible")
+
+    # All supported compatible positions and BOTH split ordinals keep adjacent halves.
+    for layout, (maximum, _, diameters, _) in BAND_LAYOUTS.items():
+        for ordinal, slot_id in enumerate((106, 109)):
+            for index in range(len(diameters) - ordinal):
+                _, inner, outer = diameters[index]
+                main_id = (101, 102, 105)[index]
+                outer_response = response(maximum / 2, maximum, str(index), "Other")
+                state = {main_id: response(maximum * 0.7, maximum, "split:cursor-other", "Cursor"),
+                         slot_id: outer_response}
+                label = f"{layout}/ordinal{ordinal}/band{index}"
+                expect(root, state, inner / 2, 300, "Cursor", f"{label} compatible inner")
+                expect(root, state, outer / 2, 300, "Other", f"{label} compatible outer")
+                expect(root, {slot_id: outer_response}, outer / 2, 300, "Other", f"{label} main NoData")
+                expect(root, {slot_id: outer_response}, inner / 2, 300, None, f"{label} no invented main")
     return errors
 
 

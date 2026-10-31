@@ -1742,8 +1742,10 @@ function face(diagnostics = false) {
       CELLS.map(cellChrome).join('\n\n'),
     ].join('\n'),
     [
-      RINGS.map(ringSlot).join('\n\n'),
+      // Current mains' opaque tracks cover overlapping retained extra paint.
+      // Compatible halves remain adjacent; absent mains still paint nothing.
       OUTER_HALVES.map((slot, ordinal) => outerHalfSlot(slot, ordinal, diagnostics && slot.slotId === 106)).join('\n\n'),
+      RINGS.map(ringSlot).join('\n\n'),
     ].join('\n\n'),
     clock(),
     wordmark(),

@@ -66,7 +66,8 @@ the 08:08 reference bottoms, 52-unit cells and 64/54-square logos; bounded nativ
 adaptive-band revision **2026-10-28** (resolved counts select 68/32/20-unit bands;
 generic ranged envelopes replace the raw percentage interface; native acceptance Pending);
 N1-width revision **2026-10-30** (explicit 44/32/20-unit bands; N1 halves are 22;
-new-radius raster fits below; native acceptance Pending)
+new-radius raster fits below; native acceptance Pending); retained-extra compositing repair
+**2026-10-31** (extras precede main tracks; native acceptance Pending)
 — locked visual target for
 Wear OS and Watch Face Format until the next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
@@ -85,6 +86,50 @@ Canonical review generator: `tools/render-watch-ring-designs.mjs`
 Canonical face generator: `tools/render-watchface.mjs` — it writes the shipped `watchface.xml`
 and the ring-type drawables beside it.  
 Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and sibling variants).
+
+## Implementation repair 2026-10-31 — retained extra paint
+
+Square's delayed Codex37 + Cursor70/Other50 → main-only Codex80 observation showed old
+Other teal overlapping the new main band until extra NoData removed it. The original
+frames, redacted TITLE/value/text, historical Pending labels and exact recovery receipts
+remain immutable. They establish neither the selected historical branch nor a cache or
+framework fault. This repair changes scene order, with no new geometry or measured fit.
+
+`face` in `tools/render-watchface.mjs` emits slots 106/109 before main slots 101/102/105.
+Each admitted main draws its existing opaque track over overlapping retained extra paint,
+then its current family arc. The source-derived old N2 outer half spans radii 186–202;
+the new full N1 band spans 158–202 and contains it. Zero and tiny mains retain the same
+track protection. Compatible split halves remain adjacent, and an absent main paints
+nothing, preserving its valid extra. MAX100/200/400/800, Float scaling, ordinal/family
+placement, endpoints, credits, periods, ambient treatment, eight slots and producer
+behavior are unchanged. No sibling accessor, shared count, transaction or paint ACK is
+introduced. Other independently delivered mixed counts still require native review.
+
+`check_retained_extra_paint` in `tools/check-watchface-structure.py` evaluates actual
+emitted predicates, tracks, arc geometry and scene order. It keeps every extra field
+unchanged while updating only the mains, then removes the extra separately. The former
+scene order must expose Other paint; zero/tiny/full, compatible splits, both ordinals,
+legacy envelopes and main NoData retain distinct assertions. This analytical model is
+not native compositing, clipping or antialiasing evidence.
+
+The [guarded observation extension](../../apps/wear_android/README.md#guarded-normal-datasource-observations)
+requires separate Root admission of an actually changed production XML payload with
+complete baseline/candidate provenance. Consumed Square `normal`,
+`fixture-n1_pair_zero_full` and `delayed` cases remain consumed. Its separately recorded,
+payload-bound delayed attempt cannot be enabled by test/APK/signature/probe/instance/config
+churn alone. It preserves global latest-attempt and exact recovery fencing, including
+partial attempts, and uses the existing newer-data-safe lease and separate later restoration.
+Missing provenance blocks observation; this source change supplies no real admission record.
+
+**Corrected-artifact delayed acceptance remains Pending.** After whole execution DONE,
+owning CLI exit, owned-process retirement and a fresh separate idle observation, Root
+still owns full Source review and all original HOST gates: complete Wear/watch-face/docs
+checks, official WFF2 and Push semantic validation, affected tests, source/generated/built/
+installed/active joins, the exact delayed witness, justified finite cases and exact recovery.
+Inspect original frames and effective data independently of requests/events, then verify
+restored ordinary Face/Glance viewing. Unused fixtures, SDK, obsolete or recovery cases do
+not replace unseen delayed evidence. Public acceptance follows native acceptance; item12
+and its original compatibility gaps remain open.
 
 ## Revision 2026-10-30 — N1 width 44
 

@@ -3538,6 +3538,33 @@ the separate UI4→5 witness gap and historical SDK3→4 remain qualified; no de
 target replacement, replay, downgrade/reset/code6 or physical-phone action is admitted here.
 This Source route closes neither the original twelve duties nor broader item12/public acceptance.
 
+**2026-10-31 retained-extra repair (Source only):** Square's delayed
+Codex37 + Cursor70/Other50 → main-only Codex80 counterexample showed retained Other paint
+overlapping the new band until extra NoData. `face` in `tools/render-watchface.mjs` now
+emits extras before mains so existing opaque main tracks cover that overlap without
+changing admission, geometry, Float precision, MAX semantics, zero/full/tiny, ordinal/family
+placement, credits, periods, ambient treatment or valid extra with main NoData. The emitted-XML
+analytical regression retains every extra field while mains change and distinguishes the
+former order. It proves neither native compositing/antialiasing nor the historical redacted
+TITLE/selected branch. The [owning notes](product/WATCH_RING_DESIGN.md#implementation-repair-2026-10-31--retained-extra-paint)
+and [manual observation contract](ANDROID_TOOLCHAIN.md#retained-extra-production-payload-observation)
+describe a separately recorded delayed attempt for an explicitly Root-admitted changed
+production XML, with complete reviewed baseline/candidate source/generated/built/installed/
+active provenance, durable reservation, same-payload/partial-attempt/global-latest fencing,
+newer-data-safe recovery and separate later restoration. Original consumed Square scenarios,
+observations, Pending labels and exact recovery receipts remain immutable. Source preparation
+does not provision that admission or authorize device action. Shared fixtures, schemas and
+payload versions remain unchanged; no fixture-validator inventory expansion is needed.
+
+The exact corrected-artifact delayed witness remains an acceptance gap. Native required checks
+belong to dedicated FINALIZE; no checks are attested here. After whole execution DONE, owning
+CLI exit, owned-process retirement and a fresh separate idle observation, Root still owns full
+Source review and all original HOST duties: full Wear/watch-face/docs checks, official WFF2 and
+Push semantic validation, affected tests, candidate artifact joins/build/install, exact delayed
+and justified finite observations, exact recovery and restored ordinary Face/Glance viewing.
+Unused fixtures, SDK, obsolete or recovery cases cannot replace unseen delayed evidence.
+Public acceptance follows native acceptance; item12 and all historical compatibility gaps stay open.
+
 Before later explicit normal UI Update 4→5, freshly prove installed Push 4/hash/signer,
 owned manager slot, eight retained choices and quiet-writer custody. Keep Legacy active;
 verify returned same-slot identity and separate settled retention through the existing

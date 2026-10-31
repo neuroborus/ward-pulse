@@ -682,6 +682,52 @@ PASS. Requested frames precede the potentially slow selection lookup; native rec
 images observe separate instants. No sleep, repeated gesture, timing retry or final-frame
 substitute is used.
 
+**2026-10-31 retained-extra repair (Source only; corrected-artifact native acceptance Pending):**
+the WFF generator now emits extras before mains, allowing each main's opaque track to cover
+overlapping retained paint. Admission and geometry are unchanged; valid extra with main
+NoData remains visible. Analytical coverage retains the entire extra response while mains
+change, including Codex37 + Cursor70/Other50 → Codex80, then separate extra NoData.
+Native compositing/antialiasing and the historically redacted TITLE/selected branch remain
+unproved. See the [owning implementation notes](../../docs/product/WATCH_RING_DESIGN.md#implementation-repair-2026-10-31--retained-extra-paint).
+
+The consumed Square `normal`, `fixture-n1_pair_zero_full` and `delayed` records and their
+exact recovery receipts are never reopened or rewritten. A proposed **separate** delayed
+observation requires Root's explicit admission of a genuinely different production WFF
+XML, with a reviewed private `files/native_datasource/retained-extra-admission.json` record
+and its exact `expectedRetainedExtraAdmissionSha256`. Source preparation grants neither
+record provisioning nor device mutation. Missing baseline/candidate provenance blocks the
+route. The [manual argument and record contract](../../docs/ANDROID_TOOLCHAIN.md#retained-extra-production-payload-observation)
+binds reviewed generator source, generated XML, built APK payload, installed resource and
+active renderer. APK/signature, test, probe, instance or configuration changes alone do not
+qualify. No new product schema, format, slot, dependency or producer behavior is introduced.
+
+`observeDelivery` still selects `deliveryScenario=delayed`, with exact authorization
+`observeDelivery:delayed-payload-<production-XML-SHA256>` for the admitted artifact. It uses
+the original delayed stages and the same summary lease/targeted service requests. The new
+directory `delayed-payload-<production-XML-SHA256>/` is reserved durably before any summary
+publication or request, with the global `latest.json` armed first. Partial attempts fence
+later work; an already reserved payload cannot be replayed, even after recovery or with
+new probe/admission bytes. The reservation is outside the receipt-writing failure handler,
+so rejection cannot overwrite the first attempt. Original scenario paths continue to
+resolve unchanged. Prior-recovery checks accept the new receipt only with its payload
+identity, exact reviewed receipt hash and separate later restoration; normal-recovery
+consumers may explicitly select that same payload-bound case. `observeRestoration` requires
+the same admission and latest case, and leaves native/frame review Pending. The existing
+newer-publication protection remains in force for reserved attempts. SDK/client normal-recovery
+consumers also enforce exact prior recovery whenever a candidate is globally latest, so an
+older normal receipt cannot bypass an unresolved candidate attempt.
+
+Synthetic private coverage extends
+`NativeDatasourceGuardTest.explicitProbeSelectionRetainsHistoryAndRejectsReusedOrChangedEvidence`
+and `failedPublicationRestoresOnlyOwnedDataAndRetainsUnresolvedRecovery`; no methods or default
+exclusions change. Execution of these tests remains a later HOST duty. This contract evolution
+is neither admission nor acceptance. The exact corrected-artifact delayed witness remains
+Pending until separately admitted and observed after whole DONE, owning CLI exit, owned-process
+retirement and a fresh separate idle observation. Complete Source/HOST review, native artifact
+joins, justified finite cases, exact recovery and restored ordinary Face/Glance verification
+remain required. Unused fixtures/SDK/obsolete/recovery cases cannot substitute; all original
+item12 and historical compatibility obligations stay open, with public acceptance afterward.
+
 The same `observeDelivery` method also admits exactly **18** `fixture-*` scenarios from
 `nativeDeliveryFixtureAssets` in `NativeDatasourceState.kt`, using **19 existing** packaged
 assets. In this table each suffix means `watch_dashboard_summary_<suffix>.json` in

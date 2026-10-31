@@ -51,8 +51,12 @@ class NativeDatasourceTransitionTest {
         nativeGuard(expected.required("quietWriters") == "confirmed-unpaired" &&
             expected.required("firstFrameReview") == "complete-unobscured", "host-delivery-preconditions")
         val scenario = expected.required("deliveryScenario")
-        val fixtures = readNativeDeliveryFixtures(scenario, expected, BuildConfig.DEBUG) { asset ->
-            instrumentation.context.assets.open(asset).use { it.readBytes() }
+        val candidateSelected = arguments.containsKey("expectedRetainedExtraAdmissionSha256")
+        nativeGuard(!candidateSelected || scenario == "delayed", "retained-extra-delayed-only")
+        val fixtures = if (candidateSelected) emptyList() else {
+            readNativeDeliveryFixtures(scenario, expected, BuildConfig.DEBUG) { asset ->
+                instrumentation.context.assets.open(asset).use { it.readBytes() }
+            }
         }
         val before = renderer()
         val mapping = mappings(before)
@@ -61,25 +65,36 @@ class NativeDatasourceTransitionTest {
             expected.hash("expectedReviewedFrameSha256"))
         quietBridge()
         requireNativePriorDeliveryRecovery(root, expected)
-        val directory = requireNativeDeliveryCase(root, scenario)
+        val admission = if (candidateSelected) retainedExtraAdmission(before, mapping) else null
+        val case = admission?.let(::nativeRetainedExtraCase) ?: scenario
+        val operation = "observeDelivery:$case"
+        requireNativeDatasourceMutation(expected, operation)
+        val directory = if (admission == null) requireNativeDeliveryCase(root, scenario) else File(root, case)
         val receipt = JSONObject().put("scenario", scenario).put("bridge", "unchanged by instrumentation")
             .put("deliveryProbeId", selected.id).put("reviewedProbeSha256", selected.receiptSha256)
             .put("reviewedFirstFrameSha256", selected.frameSha256)
             .put("mappingSha256", targets.fingerprint()).put("scopeSha256", mapping.scopeSha256)
-            .put("authorizedOperation", "observeDelivery:$scenario").put("responseProvenance", "Pending")
+            .put("authorizedOperation", operation).put("responseProvenance", "Pending")
             .put("effectiveRendering", "Pending").put("events", JSONArray())
             .put("fixtureInputs", JSONArray(fixtures.mapIndexed { index, fixture ->
                 JSONObject().put("asset", fixture.asset).put("sha256", fixture.sha256)
                     .put("stage", if (fixtures.size == 1) "fixture" else if (index == 0) "reorder-before" else "reorder-after")
                     .put("publication", "Pending").put("observation", "Pending")
             }))
+        if (admission != null) {
+            receipt.put("candidateAdmissionSha256", expected.hash("expectedRetainedExtraAdmissionSha256"))
+                .put("productionXmlSha256", admission.getJSONObject("candidate").getString("generatedXmlSha256"))
+                .put("artifactAdmission", admission)
+        }
         var lease: NativeSummaryLease? = null
         var failure: Throwable? = null
+        // A rejected replay must not enter the catch path that persists this attempt's receipt.
+        if (admission != null) reserveNativeRetainedExtraCase(root, case, receipt)
         try {
-            AttemptJournal(File(root, "latest.json")).persist(JSONObject().put("case", scenario))
+            if (admission == null) AttemptJournal(File(root, "latest.json")).persist(JSONObject().put("case", case))
             instrumentation.runOnMainSync {
                 lease = NativeSummaryLease(target.getSharedPreferences("watch_summary", Context.MODE_PRIVATE),
-                    directory, receipt)
+                    directory, receipt, reserved = admission != null)
             }
             observe(directory, "before", before)
             fun publish(encoded: String) {
@@ -211,15 +226,23 @@ class NativeDatasourceTransitionTest {
         admit("observeRestoration")
         val scenario = expected.required("deliveryScenario")
         nativeDeliveryAssets(scenario)
-        val directory = File(root, scenario)
+        val candidateSelected = arguments.containsKey("expectedRetainedExtraAdmissionSha256")
+        nativeGuard(!candidateSelected || scenario == "delayed", "retained-extra-delayed-only")
+        val current = renderer()
+        val mapping = mappings(current)
+        val admission = if (candidateSelected) retainedExtraAdmission(current, mapping) else null
+        val case = admission?.let(::nativeRetainedExtraCase) ?: scenario
+        nativeGuard(AttemptJournal(File(root, "latest.json")).read().getString("case") == case,
+            "latest-delivery-restoration")
+        val directory = nativeDeliveryReceipt(root, case).parentFile!!
         val journal = AttemptJournal(File(directory, "receipt.json"))
         val receipt = journal.read()
+        if (admission != null) nativeGuard(receipt.getString("candidateAdmissionSha256") ==
+            expected.hash("expectedRetainedExtraAdmissionSha256"), "retained-extra-restoration-admission")
         nativeGuard(!receipt.has("laterRestoration") && receipt.optString("cleanupRequest") ==
             "normal requestUpdate returned; effective restoration Pending", "single-later-restoration")
         receipt.put("laterRestoration", "armed; native observation Pending")
         journal.persist(receipt)
-        val current = renderer()
-        val mapping = mappings(current)
         nativeGuard(mapping.targets.fingerprint() == receipt.getString("mappingSha256") &&
             mapping.scopeSha256 == receipt.getString("scopeSha256"), "restoration-mapping")
         val summary = target.getSharedPreferences("watch_summary", Context.MODE_PRIVATE).getString("latest", null)
@@ -415,6 +438,19 @@ class NativeDatasourceTransitionTest {
         nativeGuard(mappings(current).targets == targets, "retained-runtime-mapping")
         return current
     }
+
+    private fun retainedExtraAdmission(before: NativeRenderer, mapping: NativeDeliveryMapping): JSONObject =
+        readNativeRetainedExtraAdmission(root, expected, before, mapping) {
+            val resource = NativePackage.read(target, before.resourcePackage)
+            val resources = target.packageManager.getResourcesForApplication(before.resourcePackage)
+            val id = resources.getIdentifier("watchface", "raw", before.resourcePackage)
+            nativeGuard(id != 0, "retained-extra-installed-xml")
+            val xml = resources.openRawResource(id).use { it.sha256() }
+            nativeGuard(NativePackage.read(target, before.resourcePackage) == resource,
+                "retained-extra-resource-changed")
+            retained(before, mapping.targets)
+            resource to xml
+        }
 
     private fun renderer() = device.readRenderer(expected).also {
         nativeGuard(it.instance.sha256() == expected.hash("expectedInstanceSha256") &&

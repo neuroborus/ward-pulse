@@ -1436,6 +1436,86 @@ state, a runtime accessibility event, cached native data and effective rendering
 evidence. No callback provenance or transition PASS follows from request return, event arrival,
 event timeout or the final frame. Redacted native fields can leave semantics unavailable.
 
+##### Retained-extra production payload observation
+
+This 2026-10-31 test-contract extension is Source support only. It grants no early
+provisioning, device write or native acceptance. Square `normal`,
+`fixture-n1_pair_zero_full` and `delayed` remain consumed, with original frames, historical
+Pending labels and exact old recovery receipts unchanged. Root must separately admit both
+the actual changed **production** WFF payload and its observation, after whole execution
+DONE, owning CLI exit, owned-process retirement and a fresh separate idle observation.
+Unused fixture, SDK, obsolete and recovery cases do not replace the delayed witness.
+
+Keep `deliveryScenario=delayed` and the same probe/identity/recovery arguments above. Only
+this scenario permits `expectedRetainedExtraAdmissionSha256`, the exact SHA-256 of the
+Root-reviewed private `files/native_datasource/retained-extra-admission.json`. Its bytes
+must already be present through separately authorized HOST provisioning. The code accepts
+no caller-selected path, automatic baseline, migration or provenance fallback. Sidecars,
+missing/changed bytes, incomplete joins or missing historical evidence block observation.
+`readNativeRetainedExtraAdmission` in
+[NativeDatasourceState.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeDatasourceState.kt)
+checks the record before reservation, publication or requests. Its private record contains:
+
+| Field | Required meaning |
+| --- | --- |
+| `kind`, `scenario` | Exactly `retained-extra-production-payload`, `delayed` |
+| `baseline`, `candidate` | Separate artifact objects, with every field below |
+| `sourceSha256` | SHA-256 of that artifact's reviewed `tools/render-watchface.mjs` source |
+| `generatedXmlSha256`, `builtXmlSha256`, `installedXmlSha256` | Identical SHA-256 digests of canonical generated XML, the actual built production APK's raw `watchface.xml`, and the installed resource bytes for that artifact |
+| `builtApkSha256`, `resourceApkSha256` | Identical SHA-256 digests of the built and installed resource APK |
+| `resourcePackage` | The actual Legacy or owned Push resource package |
+| `instanceSha256`, `configurationSha256`, `scopeSha256` | Artifact's actual active renderer instance/configuration hashes and complete delivery mapping provenance scope hash |
+| `baseline.receiptSha256` | Exact immutable original `delayed/receipt.json` hash, including its separate later restoration; its scope must equal the baseline scope |
+
+All digests are lowercase 64-character SHA-256 strings. Root's review binds the baseline
+source/generated/built/installed/active evidence to the original delayed receipt, and
+the candidate joins to the actual production artifact. The hash-pinned record is an explicit
+owner attestation of historical/source/build joins; the instrumentation cannot independently
+reconstruct historical installed bytes or inspect the host checkout. Missing evidence must
+block that attestation. Do not fabricate a baseline or qualify a diagnostic/test overlay as
+production. Preserve the original recovery receipt exactly; the admission is a separate file.
+
+Both generator source and production XML digests must differ from the baseline. APK,
+signature, test, probe, instance or configuration churn alone cannot qualify unchanged
+XML. Candidate package/instance/configuration/full provenance scope must match the current
+renderer and mapping. Instrumentation independently reads that package's installed raw
+`watchface` resource, compares its XML digest, and brackets it with identical installed APK/
+signer identities and a retained renderer/mapping read. The installed APK/signer must also
+match the ordinary `expectedResourceApkSha256`/`expectedResourceSignerSha256` arguments.
+Package access or an unresolved artifact join is a real capability gap, never permission
+to replace the target or change the XML identity to manufacture admission.
+
+Set `authorizedOperation=observeDelivery:delayed-payload-<candidate.generatedXmlSha256>`.
+The payload digest alone keys the separate attempt directory, regardless of admission/test/
+probe changes. `reserveNativeRetainedExtraCase` arms global `latest.json`, creates that fresh
+directory and durably persists its receipt before the summary lease can publish or dispatch.
+A partial reservation fences later mutations through the global prior-recovery gate; a
+reserved payload cannot replay after failure or recovery. Candidate receipts retain the reviewed
+admission content/hash and production XML digest. Legacy recovery resolution is unchanged.
+`normalRestorationScenario` may explicitly select `delayed-payload-<digest>` when a later
+SDK/client route needs that exact separately reviewed normal recovery.
+While a candidate is globally latest, both normal-recovery consumers also require its
+`priorDeliveryRestorationReview=complete` and exact `expectedPriorDeliveryRestorationSha256`;
+an older normal receipt cannot bypass a partial or unresolved candidate attempt.
+
+Run separate `observeRestoration` only with the same admission/hash and `deliveryScenario=delayed`.
+It must still be the global latest case; the saved admission hash and current artifact joins
+must match before its one later frame is armed. The existing lease preserves newer producer
+data and independent targeted cleanup. Immediate cleanup is not later restoration or paint
+acceptance. `priorDeliveryRestorationReview=complete` and the exact candidate receipt hash
+remain necessary before subsequent mutations. Missing/failed separate restoration stays Pending.
+
+The existing private
+`NativeDatasourceGuardTest.explicitProbeSelectionRetainsHistoryAndRejectsReusedOrChangedEvidence`
+covers synthetic admission/history/replay/partial-attempt rejection; the existing
+`failedPublicationRestoresOnlyOwnedDataAndRetainsUnresolvedRecovery` exercises reserved leases
+under failure and newer publication. These extend existing methods, preserving default/manual
+discovery counts. Their execution, native compositing/antialiasing, original effective-data/frame
+review, candidate joins, justified finite cases, exact recovery and restored ordinary Face/Glance
+verification remain later HOST duties. Corrected-artifact delayed acceptance is **Pending**;
+this route is neither an admission, waiver nor PASS. All original item12 compatibility and
+acceptance obligations remain required; public acceptance follows native acceptance.
+
 The fixture route uses only the 19 existing assets across 18 scenarios listed in the catalog.
 All names are fixed in `nativeDeliveryFixtureAssets` in
 [NativeDatasourceState.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeDatasourceState.kt);
@@ -1579,7 +1659,7 @@ For exactly one `observeDirectData`, keep those arguments and additionally suppl
 | `expectedDirectCapabilitySha256` | Exact selected capability receipt hash |
 | `quietWriters` | `confirmed-unpaired` after independent quiet-writer/bridge custody |
 | `normalRestorationReview` | `complete` after current targeted normal recovery review |
-| `normalRestorationScenario` | Reviewed `normal`, `delayed`, `obsolete` or `recovery` case |
+| `normalRestorationScenario` | Reviewed `normal`, `delayed`, `obsolete`, `recovery` or separately admitted `delayed-payload-<digest>` case |
 | `expectedNormalRestorationReceiptSha256` | Exact normal-case receipt hash, after separate later observation and review |
 | `priorDeliveryRestorationReview`, `expectedPriorDeliveryRestorationSha256` | For a prior global case: `complete` and that exact reviewed receipt hash |
 
@@ -1869,12 +1949,13 @@ Only after a successful probe and supported recovery, select `observeOverride` o
 | `firstFrameReview` | `complete-unobscured` |
 | `expectedReviewedFrameSha256` | SHA-256 of the inspected client probe original |
 | `quietWriters` | `confirmed-unpaired`; preserve/restore the original HOST bridge state |
-| `normalRestorationScenario` | The previously reviewed `normal`, `delayed`, `obsolete` or `recovery` datasource case |
+| `normalRestorationScenario` | The previously reviewed `normal`, `delayed`, `obsolete`, `recovery` or separately admitted `delayed-payload-<digest>` datasource case |
 | `expectedNormalRestorationReceiptSha256` | Exact completed datasource receipt after separate later restoration observation and effective-data review |
 | `overrideMode` | `active` or `supplied-bitmap` |
 | `overrideScenario` | One of the six cases in `nativeOverrideData` in [NativeClientProbe.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeClientProbe.kt) |
 | `authorizedOperation` | `observeOverride:<overrideMode>:<overrideScenario>`, explicit authorization for this exact direct-data operation and bounded normal-data recovery; read receipts are insufficient |
 | `priorClientRestorationReview`, `expectedPriorClientRestorationSha256` | After a previous armed client transport: `complete` and the exact prior case receipt hash following separate effective-restoration review |
+| `priorDeliveryRestorationReview`, `expectedPriorDeliveryRestorationSha256` | When a payload-bound candidate is globally latest: `complete` and its exact reviewed receipt hash after separate later restoration; an older normal receipt cannot bypass it |
 
 The [component contract](../apps/wear_android/README.md#guarded-complication-client-probe)
 defines cases, API/transport rejection, binding ownership and evidence limits. No argument
