@@ -92,8 +92,8 @@ Retain the actual timestamp source and timezone; distinguish capture-time observ
 For indexed capture views/exports, resolve requested members from the actual completed manifest or indexed source/output list and verify each file exists BEFORE dispatch; planned maxima, printed counts/lists or catching missing files afterward do not prove membership. Keep diagnostics separate. Reconcile actual output names, counts and identities
 with that cohort before publication. A wildcard match or valid image alone does not prove membership; resolve unexpected outputs.
 
-Scroll each intended current-theme web image into the viewport and confirm its load/dimensions by bounded observation.
-Do not await hidden/offscreen lazy variants or infer breakage from their unrequested/incomplete state.
+Before each web capture, measure the current browser session's actual viewport and match it to the intended capture target; after reconnect/emulation reset when applicable, reapply required emulation and remeasure. A mismatch is diagnostic, never evidence for the intended viewport. Scroll each intended current-theme image into view and boundedly confirm viewport intersection, complete=true and positive naturalWidth/naturalHeight before decoding or capturing.
+Do not await hidden/offscreen lazy variants or infer breakage from their unrequested/incomplete state; decode only the individually observed loaded image, then inspect its capture at the measured viewport before acceptance.
 
 Record healthy demonstrations separately without erasing the incident; verify shared public capture state through user-docs.
 A valid fixture cannot compensate for an unproved live binding or establish that a reported incident was fixed.
