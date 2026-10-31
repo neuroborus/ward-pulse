@@ -235,7 +235,7 @@ class NativeClientGuardTest {
         }
         info.splitNames = arrayOf("synthetic")
         assertTrue(NativeRuntimeArchive.fromInfo(info).archive.hasSplits)
-        info.splitNames = null
+        info.splitNames = emptyArray()
         info.applicationInfo!!.splitSourceDirs = arrayOf("/synthetic/split.apk")
         assertTrue(NativeRuntimeArchive.fromInfo(info).archive.hasSplits)
         for (key in listOf("expectedRuntimeApkSha256", "expectedRuntimeSignerSha256")) {
