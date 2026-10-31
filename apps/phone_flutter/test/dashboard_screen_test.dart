@@ -335,12 +335,94 @@ void main() {
     expect(find.text('Other Models'), findsOneWidget);
     expect(find.text('53% left'), findsOneWidget);
     expect(find.text('0% left'), findsOneWidget);
+    for (final (label, color, value) in const [
+      ('Cursor Models', Color(0xFF7E93B8), 0.53),
+      ('Other Models', Color(0xFF67E8D4), 0.0),
+    ]) {
+      final progress = tester.widget<LinearProgressIndicator>(
+        find.descendant(
+          of: find.widgetWithText(AllowanceSummaryCard, label),
+          matching: find.byType(LinearProgressIndicator),
+        ),
+      );
+      expect(progress.color, color, reason: label);
+      expect(progress.value, value, reason: label);
+    }
     expect(find.byIcon(Icons.speed), findsOneWidget);
     // A card marks a deviation, never health, and the header says how many
     // deviate below it (PHONE_DASHBOARD_DESIGN.md).
     expect(_pillsInCardOf(find.text('Cursor Models')), findsNothing);
     expect(_pillsInCardOf(find.text('Other Models')), findsOneWidget);
     expect(find.widgetWithText(Badge, '1'), findsOneWidget);
+  });
+
+  testWidgets('Cursor pool colors follow provider, source and stable ID', (
+    tester,
+  ) async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final ownPool = {
+      'id': 'cursor-plan-models',
+      'source': 'plan',
+      'label': 'Renamed pool',
+      'usedPercent': 25.0,
+      'used': null,
+      'limit': null,
+      'remaining': null,
+      'unlimited': false,
+      'windowMinutes': null,
+      'resetsAt': null,
+      'status': 'warning',
+    };
+    final cursor =
+        source.primaryAccount!.toJson()
+          ..['accountId'] = 'cursor-local'
+          ..['provider'] = 'cursor'
+          ..['allowances'] = [
+            {...ownPool, 'id': 'cursor-plan-unknown', 'label': 'Cursor Models'},
+            {...ownPool, 'source': 'purchased', 'label': 'Purchased credits'},
+            ownPool,
+          ]
+          ..['buckets'] = <Object>[]
+          ..['modelBreakdown'] = <Object>[];
+    final nonCursor = {
+      ...cursor,
+      'accountId': 'codex-local',
+      'provider': 'codex',
+      'allowances': [
+        {...ownPool, 'label': 'Non-Cursor pool'},
+      ],
+    };
+    final dashboard = source.toJson()..['accounts'] = [cursor, nonCursor];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: wardPulseLightTheme,
+        home: Scaffold(
+          body: DashboardScreen(
+            onRefresh: _noRefresh,
+            snapshot: DashboardSnapshot.fromJson(dashboard),
+          ),
+        ),
+      ),
+    );
+
+    for (final (label, color, value) in const [
+      ('Cursor Models', Color(0xFF67E8D4), 0.75),
+      ('Purchased credits', Color(0xFF67E8D4), 0.25),
+      ('Renamed pool', Color(0xFF7E93B8), 0.75),
+      ('Non-Cursor pool', Color(0xFF65D78A), 0.75),
+    ]) {
+      final progress = tester.widget<LinearProgressIndicator>(
+        find.descendant(
+          of: find.widgetWithText(AllowanceSummaryCard, label),
+          matching: find.byType(LinearProgressIndicator),
+        ),
+      );
+      expect(progress.color, color, reason: label);
+      expect(progress.value, value, reason: label);
+    }
   });
 
   testWidgets('always shows platform spend when budgets are available', (

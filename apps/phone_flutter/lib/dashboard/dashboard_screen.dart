@@ -386,7 +386,7 @@ class AllowanceSummaryCard extends StatelessWidget {
 
   final AllowanceState allowance;
 
-  /// Provider family tint for the progress fill; defaults to theme primary.
+  /// Metric identity tint for the progress fill; defaults to theme primary.
   final Color? accent;
 
   @override
@@ -938,7 +938,15 @@ class _ProviderDashboardSourceView extends StatelessWidget {
   Widget build(BuildContext context) {
     final cards = [
       for (final allowance in account.allowances)
-        AllowanceSummaryCard(allowance: allowance, accent: accent),
+        AllowanceSummaryCard(
+          allowance: allowance,
+          accent:
+              account.provider == 'cursor' &&
+                      allowance.source == AllowanceSource.plan &&
+                      allowance.id == 'cursor-plan-models'
+                  ? familyCursorOwnColor
+                  : accent,
+        ),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

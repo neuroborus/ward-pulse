@@ -23,6 +23,9 @@ its source. Remaining percentages do not set the Dashboard order. The
 
 - **Plan** percentages speak in capacity **left**. A fuller plan bar means more remaining
   capacity. For example, 20% left means 80% has been used.
+- **Cursor Models** uses a blue plan fill; **Other Models** uses teal. These colors identify
+  the plan pools. The provider header identifies the family; status marks show each pool's
+  state.
 - **Purchased** allowance bars track the amount **used**. Their headline can show a remaining
   balance, **Unlimited**, a percent used, or **Balance unavailable**, depending on the report.
 - Read the units beside credits or purchased balances. A credit count is not a dollar amount.

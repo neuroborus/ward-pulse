@@ -59,6 +59,12 @@ The Dashboard nests three scopes, and each has a different job:
 7. **Glyphs stay distinct per status** — rate limit, key, clock, warning, error. The vocabulary
    is not the problem and does not need replacing; repeating one entry of it down the screen is.
 
+**Pool metric identity — clarification 2026-11-01.** Cursor plan-bar fills use the existing
+`docs/DESIGN_ASSETS.md` metric colors: Cursor Models (`cursor-plan-models`) is `#7E93B8`, and
+Other Models (`cursor-plan-other`) is `#67E8D4`. Match the Cursor provider and raw plan
+allowance ID, independent of label, order, status, percentage or sibling presence. Family
+accents, status marks and non-pool allowance fallbacks keep their existing meanings.
+
 **Implemented 2026-10-11 — the rules are in the code.** Until today this document told its
 reader the marks were unbuilt: *one badge widget renders at every level, at one size*. That was
 true when the rules were locked on 2026-08-13; the sentence outlived the defect it described.
