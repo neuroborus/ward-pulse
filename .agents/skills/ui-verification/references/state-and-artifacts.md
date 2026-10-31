@@ -80,8 +80,8 @@ device-preserving operations belong to android-devices/android-emulators, not th
 
 An awaited tool can return a RUNNING session/cell marker; inspect the actual returned marker and terminal status BEFORE dispatching dependent reads/copies/navigation, even inside one orchestration script.
 While RUNNING, hold dependencies; independent read-only work may continue. Await that same operation's terminal result. After failure, safe attributable failed/partial artifacts may be inspected as diagnostics.
-Report failed/missing output and allow necessary safe cleanup. Diagnostic inspection needs no capture success and does not establish acceptance.
-Acceptance requires success plus the current candidate/file, capture time/hash and actual content; a path, acknowledgement or old file is insufficient.
+Before viewing/indexing transferred native output as PNG/JSON, validate PNG signature and decoding or JSON parsing/expected case content: `adb exec-out ... run-as ... cat` can exit 0 with missing-file diagnostics instead. Report missing output as missing; preserve error bytes under a diagnostic text extension and allow necessary safe cleanup.
+Diagnostic inspection needs no capture success and does not establish acceptance. Acceptance requires success plus the current candidate/file, capture time/hash and actual content; a path, acknowledgement or old file is insufficient.
 
 Keep matched expected/observed states with original native frames/hashes, active instance/binding evidence and capture times.
 Separate emulator, physical-device, review-art, fixture and public-image claims. Anonymous display measurements suffice;
