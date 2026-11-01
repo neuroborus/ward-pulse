@@ -7,5 +7,5 @@
     <string name="ward_pulse_widget_resize">Resize widget</string>
     <string name="ward_pulse_widget_percent_remaining">%1$s remaining</string>
     <string name="ward_pulse_widget_purchased_credits">%1$s purchased credits</string>
-    <string name="ward_pulse_widget_preview_description" formatted="false">Widget preview. Claude, Weekly plan, 22% remaining, 80 purchased credits. Claude, 5-hour session, 46% remaining, 320 purchased credits. Cursor Models, 71% remaining, 2.1K purchased credits.</string>
+    <string name="ward_pulse_widget_preview_description" formatted="false">Widget preview. Illustrative example only. Cursor, Other Models, 0% remaining, Reset 12 Feb 09:15. Claude, 5-hour session, 22% remaining, Reset 10 Feb 11:45. Codex, Weekly plan, 46% remaining, 32.4K purchased credits, Reset 17 Feb 14:30. Claude, Weekly plan, 71% remaining. Codex, 5-hour session, 85% remaining, 32.4K purchased credits, Reset 10 Feb 16:00. Cursor, Models, 100% remaining, Reset 12 Feb 09:15.</string>
 </resources>

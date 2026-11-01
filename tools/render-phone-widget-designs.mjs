@@ -18,11 +18,12 @@
  *     --own-font-bold /usr/share/fonts/truetype/noto/NotoSans-Bold.ttf
  * The parent must exist; the new directory must resolve inside LOCAL_ARTIFACTS.
  * Preview flags cannot use --check. Fonts must match the pinned host files below;
- * nothing is bundled. ImageMagick renders at 72dpi: these are preview units only.
+ * this archived proposal route uses host fonts. ImageMagick renders at 72dpi: preview units only.
  * Full labels and proposed absolute resets use fixed mixed-source illustrative inputs.
  * Root reviews the complete original and measurements before showing the board.
  * Sample ink fit proves neither universal text coverage nor native/device fit.
- * Root must SHOW this board and obtain approval before separate runtime adoption.
+ * The original hash-specific board is approved provenance; new proposals still require approval.
+ * Default exports below use the bundled fonts and stay separate from that historical board.
  */
 
 import assert from 'node:assert/strict'
@@ -42,295 +43,237 @@ const resDir = join(root, 'apps/phone_flutter/android/app/src/main/res')
 const runFile = promisify(execFile)
 const ownFontPreview = parseOwnFontPreview(process.argv.slice(2))
 
-const FONT = 'Noto Sans, sans-serif'
-
-/** Family accents, matching `RingFamily` on the phone. */
+/** Family accents follow the widget payload palette. */
 const FAMILY = {
-  codex: '#65D78A',
-  claude: '#E8915A',
-  cursor: '#67E8D4',
-  // A Cursor plan's own models keep a color of their own; the external pool
-  // stays the family teal (`WATCH_RING_DESIGN.md`, palette).
-  cursorOwn: '#7E93B8',
+  codex: '#65D78A', claude: '#E8915A', cursor: '#67E8D4', cursorOwn: '#7E93B8',
 }
 
-/** `#AARRGGBB` from Android resources → SVG colour plus separate opacity. */
 function argb(value) {
   if (value.length === 9) {
-    return {
-      color: `#${value.slice(3)}`,
-      opacity: Number((parseInt(value.slice(1, 3), 16) / 255).toFixed(2)),
-    }
+    return { color: `#${value.slice(3)}`,
+      opacity: Number((parseInt(value.slice(1, 3), 16) / 255).toFixed(2)) }
   }
   return { color: value, opacity: 1 }
 }
 
 async function loadTheme(variant) {
-  const file = join(resDir, variant, 'colors_widget.xml')
-  const xml = await readFile(file, 'utf8')
+  const xml = await readFile(join(resDir, variant, 'colors_widget.xml'), 'utf8')
   const read = (name) => {
-    const match = xml.match(
-      new RegExp(`<color name="ward_pulse_widget_${name}">(#[0-9A-Fa-f]+)</color>`),
-    )
-    if (!match) {
-      throw new Error(`missing ward_pulse_widget_${name} in ${file}`)
-    }
+    const match = xml.match(new RegExp(`<color name="ward_pulse_widget_${name}">(#[0-9A-Fa-f]+)</color>`))
+    if (!match) throw new Error(`missing widget ${name} in ${variant}`)
     return match[1]
   }
   const outline = argb(read('outline'))
-  return {
-    surface: read('surface'),
-    onSurface: read('on_surface'),
-    muted: read('muted'),
-    stale: read('stale'),
-    outlineColor: outline.color,
-    outlineOpacity: outline.opacity,
-  }
+  return { surface: read('surface'), onSurface: read('on_surface'), muted: read('muted'),
+    stale: read('stale'), outlineColor: outline.color, outlineOpacity: outline.opacity,
+    watermark: read('watermark') }
 }
 
-function esc(text) {
-  return String(text)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-}
-
-/** Quiet face watermark, top-end beside the first row. */
-function watermark({ x, y, color, opacity }) {
-  return `  <g transform="translate(${x}, ${y})" opacity="${opacity}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round">
-    <text x="18" y="0" font-family="${FONT}" font-size="5" font-weight="700" letter-spacing="0.5" fill="${color}" stroke="none" text-anchor="middle">WARDPULSE</text>
-    <path d="M2 10 L8 10 L12 4 L18 14 L24 8 L30 8"/>
-  </g>`
-}
-
-/**
- * One metric row. `family` is null when the pool name already carries it
- * (`Cursor Models`), which keeps the second line empty instead of repeating.
- */
-function row({ theme, geometry, y, entry }) {
-  const { padX, percentX, labelX, creditsX, fontSize, lineGap } = geometry
-  // Baseline centred in the two-line block, so single-line rows line up with it.
-  const centerY = y + (fontSize + lineGap) / 2
-  const parts = [
-    `  <rect x="${padX}" y="${y - fontSize + 3}" width="3" height="${
-      fontSize * 2 + lineGap - 4
-    }" rx="1" fill="${entry.color}"/>`,
-    `  <text x="${percentX}" y="${centerY}" font-family="${FONT}" font-size="${fontSize}" fill="${
-      theme.onSurface
-    }">${esc(entry.percent)}</text>`,
-  ]
-  if (entry.family) {
-    parts.push(
-      `  <text x="${labelX}" y="${y}" font-family="${FONT}" font-size="${fontSize}" fill="${
-        theme.onSurface
-      }" text-anchor="middle">${esc(entry.family)}</text>`,
-      `  <text x="${labelX}" y="${y + fontSize + lineGap}" font-family="${FONT}" font-size="${fontSize}" fill="${
-        theme.onSurface
-      }" text-anchor="middle">${esc(entry.pool)}</text>`,
-    )
-  } else {
-    parts.push(
-      `  <text x="${labelX}" y="${centerY}" font-family="${FONT}" font-size="${fontSize}" fill="${
-        theme.onSurface
-      }" text-anchor="middle">${esc(entry.pool)}</text>`,
-    )
-  }
-  if (entry.credits) {
-    parts.push(
-      `  <text x="${creditsX}" y="${centerY}" font-family="${FONT}" font-size="${fontSize}" fill="${
-        theme.muted
-      }" text-anchor="end">${esc(entry.credits)}</text>`,
-    )
-  }
-  return parts.join('\n')
-}
-
-function board({ theme, label, width, height, body }) {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(
-    label,
-  )}">
-  <rect width="${width}" height="${height}" rx="20" fill="${theme.surface}" stroke="${
-    theme.outlineColor
-  }" stroke-opacity="${theme.outlineOpacity}"/>
-${body}
-</svg>
-`
-}
-
-function metricsBoard({ theme, label, geometry, rows, staleBadge = false }) {
-  const { padX, top, pitch, width } = geometry
-  // Review-scale illustration; runtime measures its current 11sp badge line plus 2dp.
-  const staleInset = staleBadge ? 17 : 0
-  const height = top + staleInset + rows.length * pitch + 10
-  const body = [
-    watermark({
-      x: width - 50,
-      y: 12,
-      color: theme.muted,
-      opacity: 0.4,
-    }),
-    staleBadge
-      ? `  <text x="${
-          padX
-        }" y="22" font-family="${FONT}" font-size="11" font-weight="700" letter-spacing="1" fill="${theme.stale}" text-anchor="start">STALE</text>`
-      : null,
-    ...rows.map((entry, index) =>
-      row({
-        theme,
-        geometry,
-        y: top + staleInset + index * pitch,
-        entry,
-      }),
-    ),
-  ]
-    .filter(Boolean)
-    .join('\n')
-  return board({ theme, label, width, height, body })
-}
-
-/** Medium board geometry; the small board is the same table, one size down. */
-function geometryFor(width, fontSize) {
-  return {
-    width,
-    padX: 14,
-    percentX: 24,
-    labelX: Math.round(width * 0.5),
-    creditsX: width - 28,
-    top: 34,
-    fontSize,
-    lineGap: 3,
-    pitch: fontSize * 2 + 12,
-  }
-}
-
-/**
- * Two providers with the same pool name sit next to each other on purpose —
- * that collision is why the label carries its family.
- */
-const MEDIUM_ROWS = [
-  {
-    percent: '22%',
-    family: 'Claude',
-    pool: 'Weekly plan',
-    credits: '80',
-    color: FAMILY.claude,
-  },
-  {
-    percent: '46%',
-    family: 'Codex',
-    pool: 'Weekly plan',
-    credits: '320',
-    color: FAMILY.codex,
-  },
-  {
-    percent: '71%',
-    family: null,
-    pool: 'Cursor Models',
-    credits: '2.1K',
-    color: FAMILY.cursorOwn,
-  },
+/** Sanitized illustration only; these values never enter a runtime payload. */
+const REVIEW_ROWS = [
+  { family: 'Cursor', pool: 'Other Models', percent: '0%', color: FAMILY.cursor,
+    reset: 'Reset 12 Feb 09:15' },
+  { family: 'Claude', pool: '5-hour session', percent: '22%', color: FAMILY.claude,
+    reset: 'Reset 10 Feb 11:45' },
+  { family: 'Codex', pool: 'Weekly plan', percent: '46%', credits: '32.4K', color: FAMILY.codex,
+    reset: 'Reset 17 Feb 14:30' },
+  { family: 'Claude', pool: 'Weekly plan', percent: '71%', color: FAMILY.claude },
+  { family: 'Codex', pool: '5-hour session', percent: '85%', credits: '32.4K', color: FAMILY.codex,
+    reset: 'Reset 10 Feb 16:00' },
+  { family: 'Cursor', pool: 'Models', percent: '100%', color: FAMILY.cursorOwn,
+    reset: 'Reset 12 Feb 09:15' },
 ]
 
 const light = await loadTheme('values')
 const dark = await loadTheme('values-night')
-
 const variants = [
-  {
-    file: 'widget-medium.svg',
-    svg: () =>
-      metricsBoard({
-        theme: light,
-        label: 'Phone widget · medium · light · tightest-first',
-        geometry: geometryFor(280, 12),
-        rows: MEDIUM_ROWS,
-      }),
-  },
-  {
-    file: 'widget-dark.svg',
-    svg: () =>
-      metricsBoard({
-        theme: dark,
-        label: 'Phone widget · medium · dark · tightest-first',
-        geometry: geometryFor(280, 12),
-        rows: MEDIUM_ROWS,
-      }),
-  },
-  {
-    file: 'widget-small.svg',
-    svg: () =>
-      metricsBoard({
-        theme: light,
-        label: 'Phone widget · small · light · tightest-first',
-        geometry: geometryFor(240, 11),
-        rows: MEDIUM_ROWS.slice(0, 2),
-      }),
-  },
-  {
-    file: 'widget-stale.svg',
-    svg: () =>
-      metricsBoard({
-        theme: light,
-        label: 'Phone widget · stale',
-        geometry: geometryFor(240, 11),
-        rows: MEDIUM_ROWS.slice(0, 2).map((entry) => ({ ...entry, credits: null })),
-        staleBadge: true,
-      }),
-  },
-  {
-    file: 'widget-stale-dark.svg',
-    svg: () =>
-      metricsBoard({
-        theme: dark,
-        label: 'Phone widget · stale · dark',
-        geometry: geometryFor(240, 11),
-        rows: MEDIUM_ROWS.slice(0, 2).map((entry) => ({ ...entry, credits: null })),
-        staleBadge: true,
-      }),
-  },
-  {
-    file: 'widget-stale-narrow.svg',
-    svg: () =>
-      metricsBoard({
-        theme: light,
-        label: 'Phone widget · stale · percent column only',
-        geometry: geometryFor(125, 11),
-        rows: MEDIUM_ROWS.slice(0, 2).map((entry) => ({
-          ...entry, family: null, pool: '', credits: null,
-        })),
-        staleBadge: true,
-      }),
-  },
-  {
-    file: 'widget-stale-short.svg',
-    svg: () =>
-      board({
-        theme: light,
-        label: 'Phone widget · stale · no complete metric row fits',
-        width: 130,
-        height: 56,
-        body: [
-          watermark({ x: 80, y: 12, color: light.muted, opacity: 0.4 }),
-          `  <text x="14" y="22" font-family="${FONT}" font-size="11" font-weight="700" letter-spacing="1" fill="${light.stale}">STALE</text>`,
-          `  <text x="14" y="44" font-family="${FONT}" font-size="13" fill="${light.muted}">Resize widget</text>`,
-        ].join('\n'),
-      }),
-  },
-  {
-    file: 'widget-empty.svg',
-    svg: () =>
-      board({
-        theme: light,
-        label: 'Phone widget · empty',
-        width: 220,
-        height: 88,
-        body: [
-          watermark({ x: 150, y: 20, color: light.muted, opacity: 0.28 }),
-          `  <text x="14" y="46" font-family="${FONT}" font-size="13" fill="${light.muted}">No metrics</text>`,
-        ].join('\n'),
-      }),
-  },
+  { file: 'widget-medium.svg', theme: light, width: 360, height: 344, columns: 3, rows: 6 },
+  { file: 'widget-dark.svg', theme: dark, width: 360, height: 344, columns: 3, rows: 6 },
+  { file: 'widget-small.svg', theme: light, width: 266, height: 184, columns: 2, rows: 3 },
+  { file: 'widget-narrow.svg', theme: light, width: 150, height: 184, columns: 1, rows: 3 },
+  { file: 'widget-empty.svg', theme: light, width: 220, height: 88, columns: 1, rows: 0,
+    message: 'No metrics' },
+  { file: 'widget-stale.svg', theme: light, width: 360, height: 344, columns: 3, rows: 5, stale: true },
+  { file: 'widget-stale-dark.svg', theme: dark, width: 360, height: 344, columns: 3, rows: 5, stale: true },
+  { file: 'widget-stale-narrow.svg', theme: light, width: 150, height: 184, columns: 1, rows: 2, stale: true },
+  { file: 'widget-stale-short.svg', theme: light, width: 150, height: 88, columns: 1, rows: 0,
+    stale: true, message: 'Resize widget' },
 ]
+
+async function renderDefaults() {
+  const fonts = Object.fromEntries(['regular', 'bold'].map((weight) =>
+    [weight, join(resDir, '../assets/fonts', `NotoSans-${weight === 'bold' ? 'Bold' : 'Regular'}.ttf`)]))
+  for (const weight of ['regular', 'bold']) {
+    assert.equal(await hashFile(fonts[weight]), OWN_FONT_HASHES[weight],
+      `default review art requires the bundled ${weight} font`)
+  }
+  // Pillow already owns font measurement in the design gate. Rasterize glyphs into
+  // SVG images too, so a viewer cannot silently substitute its own font family.
+  const renderer = String.raw`
+import base64, html, io, json, sys
+from PIL import Image, ImageColor, ImageDraw, ImageFont
+
+config = json.loads(sys.argv[1])
+scale = 3
+fonts, glyphs = {}, {}
+
+def rgba(color):
+    if len(color) == 9:
+        return tuple(int(color[i:i+2], 16) for i in (3, 5, 7, 1))
+    return ImageColor.getrgb(color) + (255,)
+
+def encoded(image):
+    output = io.BytesIO()
+    image.save(output, format='PNG', compress_level=9)
+    return base64.b64encode(output.getvalue()).decode('ascii')
+
+def glyph(value, size, weight, color):
+    key = (value, size, weight, color)
+    if key not in glyphs:
+        if (size, weight) not in fonts:
+            fonts[(size, weight)] = ImageFont.truetype(config['fonts'][weight], size * scale)
+        font = fonts[(size, weight)]
+        left, top, right, bottom = font.getbbox(value, anchor='ls')
+        left, top, right, bottom = left - 1, top - 1, right + 1, bottom + 1
+        image = Image.new('RGBA', (right-left, bottom-top))
+        ImageDraw.Draw(image).text((-left, -top), value, font=font, anchor='ls', fill=rgba(color))
+        glyphs[key] = {'image': image, 'png': encoded(image), 'w': image.width/scale, 'h': image.height/scale}
+    return glyphs[key]
+
+logo = Image.open(config['mark']).convert('RGBA')
+logo = logo.crop(logo.getchannel('A').getbbox())
+frames = []
+for frame in config['variants']:
+    width, height, theme = frame['width'], frame['height'], frame['theme']
+    canvas = Image.new('RGBA', (width*scale, height*scale))
+    draw = ImageDraw.Draw(canvas)
+    outline = rgba(theme['outlineColor'])[:3] + (round(theme['outlineOpacity']*255),)
+    draw.rounded_rectangle((1, 1, width*scale-2, height*scale-2), radius=20*scale,
+        fill=rgba(theme['surface']), outline=outline, width=scale)
+    label = 'Illustrative bundled-font widget review: ' + frame['file']
+    svg = ['<?xml version="1.0" encoding="UTF-8"?>',
+        '<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" role="img" aria-label="%s">' % (width, height, width, height, html.escape(label, quote=True)),
+        '<title>Illustrative review art; not native device acceptance or live provider data</title>',
+        '<rect x="0.5" y="0.5" width="%s" height="%s" rx="20" fill="%s" stroke="%s" stroke-opacity="%s"/>' % (width-1, height-1, theme['surface'], theme['outlineColor'], theme['outlineOpacity'])]
+    boxes = []
+    def place(item, x, y, bounds):
+        assert x >= bounds[0] and y >= bounds[1] and x+item['w'] <= bounds[2]+0.01 and y+item['h'] <= bounds[3]+0.01, 'complete review glyph must fit'
+        svg.append('<image x="%.3f" y="%.3f" width="%.3f" height="%.3f" href="data:image/png;base64,%s"/>' % (x, y, item['w'], item['h'], item['png']))
+        canvas.alpha_composite(item['image'], (round(x*scale), round(y*scale)))
+        boxes.append((x, y, x+item['w'], y+item['h']))
+    tint = rgba(theme['watermark'])
+    mark = Image.new('RGBA', logo.size, tint[:3]+(255,))
+    mark.putalpha(logo.getchannel('A').point(lambda value: round(value*tint[3]/255*0.55)))
+    mark_width, mark_height = 36, 36*mark.height/mark.width
+    mark_box = (width-16-mark_width, 2, width-16, 2+mark_height)
+    mark_item = {'image': mark.resize((round(mark_width*scale), round(mark_height*scale)), Image.Resampling.LANCZOS),
+        'png': encoded(mark), 'w': mark_width, 'h': mark_height}
+    place(mark_item, mark_box[0], mark_box[1], (0, 0, width, height))
+    row_height, row_gap, top, bottom = 44, 8, 19, 16
+    badge_inset = 0
+    if frame.get('stale'):
+        badge = glyph('STALE', 11, 'bold', theme['stale'])
+        badge_font = fonts[(11, 'bold')]
+        ascent, descent = badge_font.getmetrics()
+        badge_inset = (ascent+descent)/scale + 2
+        place(badge, 16, top, (0, 0, width, top+badge_inset))
+    start = top + badge_inset
+    if frame['rows'] == 0:
+        message = glyph(frame['message'], 12, 'regular', theme['muted'])
+        place(message, (width-message['w'])/2, start+(height-start-bottom-message['h'])/2,
+            (16, start, width-16, height-bottom))
+    else:
+        rows = config['rows'][:frame['rows']]
+        measured = []
+        for row in rows:
+            measured.append({
+                'percent': glyph(row['percent'], 30, 'bold', theme['onSurface']),
+                'family': glyph(row['family'], 18, 'bold', theme['onSurface']),
+                'pool': glyph(row['pool'], 16, 'regular', theme['muted']),
+                'credits': glyph(row['credits'], 26, 'bold', theme['onSurface']) if row.get('credits') else None,
+                'reset': glyph(row['reset'], 11, 'regular', theme['muted']) if row.get('reset') else None})
+        percent_width = max(item['percent']['w'] for item in measured)
+        label_width = max(max(item['family']['w'], item['pool']['w']) for item in measured)
+        detail_width = max([item[k]['w'] for item in measured for k in ('credits', 'reset') if item[k]] or [0])
+        columns = frame['columns']
+        group_width = 12+percent_width + (6+label_width if columns >= 2 else 0) + (6+detail_width if columns == 3 else 0)
+        group_height = len(rows)*row_height + (len(rows)-1)*row_gap
+        x = (width-group_width)/2
+        y = start+(height-start-bottom-group_height)/2
+        assert x >= 16 and y >= start and y+group_height <= height-bottom, 'complete review rows and columns must fit'
+        for row, item in zip(rows, measured):
+            draw.rounded_rectangle((round(x*scale), round((y+2)*scale), round((x+3)*scale), round((y+row_height-2)*scale)), radius=1.5*scale, fill=rgba(row['color']))
+            svg.append('<rect x="%.3f" y="%.3f" width="3" height="40" rx="1.5" fill="%s"/>' % (x, y+2, row['color']))
+            place(item['percent'], x+12, y+(row_height-item['percent']['h'])/2, (x+12, y, x+12+percent_width, y+row_height))
+            if columns >= 2:
+                label_x = x+12+percent_width+6
+                family, pool = item['family'], item['pool']
+                label_y = y+(row_height-family['h']-3-pool['h'])/2
+                place(family, label_x+(label_width-family['w'])/2, label_y, (label_x, y, label_x+label_width, y+row_height))
+                place(pool, label_x+(label_width-pool['w'])/2, label_y+family['h']+3, (label_x, y, label_x+label_width, y+row_height))
+            if columns == 3:
+                end = x+group_width
+                if item['credits']:
+                    credit = item['credits']
+                    credit_y = y+29-3-credit['h'] if item['reset'] else y+(row_height-credit['h'])/2
+                    place(credit, end-credit['w'], credit_y, (end-detail_width, y, end, y+row_height))
+                if item['reset']:
+                    reset = item['reset']
+                    place(reset, end-reset['w'], y+29, (end-detail_width, y, end, y+row_height))
+            y += row_height+row_gap
+    # Actual ink boxes must stay disjoint from one another and the quiet mark.
+    for index, a in enumerate(boxes):
+        for b in boxes[index+1:]:
+            assert a[2] <= b[0]+0.01 or b[2] <= a[0]+0.01 or a[3] <= b[1]+0.01 or b[3] <= a[1]+0.01, 'review ink collision'
+    svg.append('</svg>')
+    frames.append({'file': frame['file'], 'svg': '\n'.join(svg)+'\n', 'png': encoded(canvas),
+        'picker': encoded(canvas.resize((width*2, height*2), Image.Resampling.LANCZOS)) if frame['file'] in ('widget-medium.svg', 'widget-dark.svg') else None})
+print(json.dumps(frames))
+`
+  const { stdout, stderr } = await runFile('python3', ['-B', '-c', renderer, JSON.stringify({
+    fonts, rows: REVIEW_ROWS, variants,
+    mark: join(resDir, 'drawable/wardpulse_mono.png'),
+  })], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
+  assert.equal(stderr.trim(), '', 'default review rendering must not hide font/image warnings')
+  const frames = JSON.parse(stdout)
+  const checking = process.argv.includes('--check')
+  for (const frame of frames) {
+    await emit(join(designDir, frame.file), frame.svg, 'render-designs')
+    if (!checking) {
+      await writeFile(join(designDir, frame.file.replace('.svg', '.png')), Buffer.from(frame.png, 'base64'))
+      if (frame.picker) {
+        const variant = frame.file === 'widget-dark.svg' ? 'drawable-night-nodpi' : 'drawable-nodpi'
+        await mkdir(join(resDir, variant), { recursive: true })
+        await writeFile(join(resDir, variant, 'ward_pulse_widget_preview_image.png'), Buffer.from(frame.picker, 'base64'))
+      }
+    }
+  }
+  await emit(join(resDir, 'layout/ward_pulse_app_widget_preview.xml'), `<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated by tools/render-phone-widget-designs.mjs; illustrative picker art. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:contentDescription="@string/ward_pulse_widget_preview_description">
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:src="@drawable/ward_pulse_widget_preview_image"
+        android:scaleType="fitCenter"
+        android:importantForAccessibility="no"
+        android:contentDescription="@null" />
+</FrameLayout>
+`, 'render-designs')
+  const stringsPath = join(resDir, 'values/strings_widget.xml')
+  const strings = await readFile(stringsPath, 'utf8')
+  const description = 'Widget preview. Illustrative example only. ' + REVIEW_ROWS.map((row) =>
+    `${row.family}, ${row.pool}, ${row.percent} remaining` +
+    (row.credits ? `, ${row.credits} purchased credits` : '') +
+    (row.reset ? `, ${row.reset}` : '')).join('. ') + '.'
+  const pattern = /<string name="ward_pulse_widget_preview_description"[^>]*>[^<]*<\/string>/
+  assert.ok(pattern.test(strings), 'picker accessibility description must retain its owning resource')
+  await emit(stringsPath, strings.replace(pattern,
+    `<string name="ward_pulse_widget_preview_description" formatted="false">${description}</string>`), 'render-designs')
+}
 
 /** One mixed-source illustrative selection, not a matched provider/native snapshot. */
 const OWN_FONT_ROWS = [
@@ -354,7 +297,7 @@ const OWN_FONT_ROWS = [
     resetsAt: '2026-11-13T12:00:00Z' },
 ]
 
-// Exact existing host inputs, not runtime font selection or license/asset adoption.
+// Exact approved binaries shared by bundled defaults and the historical proposal route.
 const OWN_FONT_HASHES = {
   regular: '89c3c497f618fdaa0b2d1e98fef93582f28c71debd2c4a8cdf41f190ced2909d',
   bold: 'e83493c945848ecd4a9ad0f6d19164541a0d3e23a9c952304a00a46e00272ac5',
@@ -460,7 +403,14 @@ async function renderOwnFontPreview(options) {
   const { stdout: imageMagickVersion } = await runFile(convert, ['-version'], { encoding: 'utf8' })
   const watermarkPath = 'apps/phone_flutter/android/app/src/main/res/drawable/wardpulse_mono.png'
   const protectedPaths = [
-    ...variants.map(({ file }) => relative(root, join(designDir, file))),
+    ...variants.flatMap(({ file }) => [file, file.replace('.svg', '.png')]
+      .map((name) => relative(root, join(designDir, name)))),
+    ...['drawable-nodpi/ward_pulse_widget_preview_image.png',
+      'drawable-night-nodpi/ward_pulse_widget_preview_image.png', 'values/strings_widget.xml']
+      .map((path) => relative(root, join(resDir, path))),
+    'apps/phone_flutter/android/app/src/main/kotlin/app/wardpulse/PhoneWidgetRenderer.kt',
+    ...['NotoSans-Regular.ttf', 'NotoSans-Bold.ttf', 'OFL.txt'].map((name) =>
+      `apps/phone_flutter/android/app/src/main/assets/fonts/${name}`),
     'tools/design-output.mjs',
     'docs/product/PHONE_WIDGET_DESIGN.md',
     'apps/phone_flutter/lib/widget/phone_widget_payload.dart',
@@ -709,7 +659,5 @@ async function renderOwnFontPreview(options) {
 if (ownFontPreview) {
   await renderOwnFontPreview(ownFontPreview)
 } else {
-  for (const variant of variants) {
-    await emit(join(designDir, variant.file), variant.svg(), 'render-designs')
-  }
+  await renderDefaults()
 }

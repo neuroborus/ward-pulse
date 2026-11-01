@@ -102,8 +102,12 @@ Do not clear credentials or reset pairing as the first response to a delayed sum
 
 - Check **Widget** metric choices and whether those metrics have known provider data. **No metrics**
   can be a valid empty selection.
-- If you see **Resize widget**, increase its height. For missing labels/credits, increase width;
-  smaller sizes deliberately show fewer complete columns or rows.
+- If you see **Resize widget**, increase its width or height. For missing labels, purchased
+  balances or reset times, increase width; smaller allocations omit complete columns/rows.
+  A reset can disappear before a valid balance. Missing reset data is omitted, and the
+  displayed time uses the phone's local timezone; it is not a live capacity guarantee.
+- The widget keeps its own text size when system font size or bold text changes. Resize it
+  rather than reducing the phone's text settings to make room.
 - Open and refresh WardPulse on the phone. A **STALE** widget can keep earlier rows after a
   failed report; the background interval is approximate and Android may delay it.
 

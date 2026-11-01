@@ -207,7 +207,10 @@ Quiet branding on WFF — not a second hero. Locked with the concentric face bas
   no new fade. The pulse remains quiet beside the time and metrics.
 - Eye placement matches the color mark; pupil stays inside the almond rim.
 - **Phone home widget** reuses the same faded mono PNG (`wardpulse_mono`), tinted for
-  day/night olive chrome, quiet overlay top-end (does not reserve a header band).
+  day/night olive chrome. The 2026-11-01 renderer crops only transparent margins before
+  placing the quiet overlay at the frame edge, clear of the complete content. The widget
+  review generator owns its SVG/PNG illustrations and light/dark picker rasters/layout;
+  those use the exact Android-bundled Noto fonts and do not replace native captures.
 
 Canonical preview: `apps/watchface_wff/src/main/res/drawable/preview.png`, the face's own
 shipped portrait, generated.

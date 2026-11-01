@@ -2053,6 +2053,21 @@ When multi-profile lands, same-provider rings need hatch/pattern as well as fami
 
 ### Phase 14 — Watchface / Widget tabs and phone home-screen widget
 
+**Current widget revision 2026-11-01 — visual baseline approved; replacement native acceptance pending.**
+The phone-private payload carries structured family/pool labels and only the selected
+allowance's real optional reset. The native widget fills its actual allocation with
+complete measured content, bundled Noto Regular/Bold typography and bounded decorative
+bitmap layers. Keep six selections, expanded windows, IDs/migrations, ordering, known 0%,
+unavailable omission, purchased eligibility, root accessibility and Dashboard taps.
+The generator owns the updated review/picker exports. The owning baseline records the
+approved image and measurements; nominal examples are not universal host thresholds.
+Full phone checks, x64 build/install identity, bounded font/resize/theme/data/a11y/navigation
+acceptance and necessary healthy public captures remain POST-RUN work after whole Runner
+DONE, actual CLI exit, owned-process retirement and fresh separate idle. Earlier evidence
+below describes the former renderer and proves no acceptance of the replacement.
+
+**Historical former-renderer record — 2026-07-27 through 2026-10-25.**
+
 Status: largely landed (2026-07-27). Primary nav, Watchface + Widget tabs, locked
 `PHONE_WIDGET_DESIGN.md` review art, and the Android App Widget surface are in tree.
 Large (6-slot) prefs unlocked; launcher hugs complete rows/columns (1–6 by height;
@@ -2114,6 +2129,8 @@ acceptance cases. The zero-row resize prompt versus an empty selection has JVM c
 its screen output was not exercised in this audit. These observations do not extend the
 widget's failed-refresh marker into an age-based freshness rule.
 
+**Current phase contract, including the 2026-11-01 widget revision.**
+
 Rationale: glance configuration is a first-class product surface, not a Settings footnote.
 Watchface and Widget each get a primary tab between Dashboard and Providers. The phone
 launcher also needs the same glanceable “pulse” as Wear/WFF, but a round watch composition
@@ -2148,8 +2165,9 @@ Deliverables:
 - Android App Widget hosted by the Flutter phone shell (`home_widget` + RemoteViews);
 - Widget tab selects which metrics appear (same catalog idea as Watchface: provider plan
   windows, purchased/credit % when available, per-connection local budgets);
-- small→tall resize shows 1–6 complete column-rows by allocated height (olive card hugs
-  rows/columns; width drops credits→label→%); day/night chrome + overlay face watermark;
+- the card fills the actual allocation with up to six complete measured rows; width omits
+  crowded resets, then whole detail and label columns; day/night chrome + quiet overlay mark;
+  own bundled typography stays independent of system font/bold settings;
   prefs cap `phoneWidgetSlotCount = 6`; Claude windows stay expanded; exhausted pools as
   `0%`; compact purchased balances end-aligned (label centered), with spoken units retained;
 - render only configured, available metrics (exhausted stay as `0%`); omit empty
@@ -2162,8 +2180,8 @@ Deliverables:
 - tap opens the phone app (Dashboard);
 - no credentials, account ids, or raw provider payloads on the widget surface or in widget
   logs;
-- widget payload unit tests; emulator smoke for at least one size; review art in
-  `apps/phone_flutter/design/`.
+- widget payload/layout regressions; bounded native acceptance as recorded in
+  `PHONE_WIDGET_DESIGN.md`; generated review art in `apps/phone_flutter/design/`.
 
 Acceptance:
 
@@ -2174,7 +2192,8 @@ Providers owns connection catalog, credentials, and connection alert thresholds
 Settings is systemic only (polling, diagnostics, legal)
 Widget tab owns widget prefs independently of Watchface
 PHONE_WIDGET_DESIGN.md baseline locked with review art for small/medium
-widget shows configured available metrics (exhausted as 0%); hugs complete rows/columns
+widget shows configured available metrics (exhausted as 0%); full card with complete measured rows/columns
+real optional allowance resets use device-local English; missing/budget resets are not invented
 remaining-% / family colors match the product palette
 tap opens the phone app; no credential UI on the widget
 failed refresh retains existing widget data and marks it stale; no age-based window is defined

@@ -14,15 +14,27 @@ background sync, transport, storage, diagnostics and build work.
   status, Providers connection hub, and Settings.
 - Phase 14 primary tabs: Dashboard → Watchface → Widget → Providers → Settings. Watchface owns
   Wear/WFF ring-slot prefs; Widget owns phone home-widget prefs and the Android App Widget
-  (`PHONE_WIDGET_DESIGN.md` locked). Phone widget **hugs** complete rows/columns inside
-  the resize cell (olive `wrap_content`; hide trailing rows and right-hand columns that
-  would clip — credits → label → `%`; unused cell area is wallpaper until the user shrinks
-  the span), vertical+horizontal resize (default ~3 cells), day/night chrome, overlay face
-  watermark (no header band), expands Claude windows, keeps exhausted plan pools as
-  `0%`, and appends per-provider purchased credits as bare compact balances end-aligned
-  (label centered). Native numeric columns omit visible `left` / `credits`; accessibility
-  retains remaining and purchased-credit meaning. Descriptive cached strings and Widget-tab
-  language stay unchanged.
+  (`PHONE_WIDGET_DESIGN.md`, revised 2026-11-01). The phone widget fills the actual
+  launcher allocation and centers compact complete rows/columns, up to six selections.
+  Keep expanded Claude/Codex windows, stable IDs/migrations, tightest-first ordering,
+  exhausted `0%`, unavailable omission and finite purchased-credit eligibility.
+  Render every visible string with the exact bundled Noto Regular/Bold through the bounded
+  native bitmap route (30/26/18/16/11 hierarchy; 12 Regular for complete empty/no-fit copy),
+  independent of fontScale, system family and force-bold. Measure actual glyphs; omit a reset
+  that crowds a valid balance, then whole detail and label columns by width and trailing
+  rows by height. Preserve two-line family/pool names, including Cursor/Models; never
+  ellipsize, shrink typography, substitute a system face or mutate host-owned options.
+  Keep the quiet mark clear; stale fitting and painting share the measured 11 Bold padded
+  line plus 2dp. Exceptionally tiny hosts retain an accessible fallback without clipped text.
+  Carry only the selected allowance's real optional reset through the phone-private cache;
+  clear absent/removed fields and safely retain old flat-label caches. Use device-local
+  English `Reset DD MMM HH:mm`, with no inferred budget reset, ticker or fabricated rollover.
+  Keep one root accessibility summary with full identity for every visible row, omit hidden
+  rows and announce purchased/reset meaning only when displayed. Keep the image decorative
+  and preserve cold/warm Dashboard tap/readiness behavior. Descriptive Widget-tab language,
+  credentials, fetching and phone-watch transport stay with their existing owners.
+  Regenerate review/picker art through `tools/render-phone-widget-designs.mjs`; illustrative
+  values and former-renderer captures are not replacement native acceptance.
   Watchface still collapses Claude, choosing the tightest known window including zero;
   exhausted selected watch metrics remain visible after the 2026-10-13 revision. Do not keep
   those controls in Settings.
