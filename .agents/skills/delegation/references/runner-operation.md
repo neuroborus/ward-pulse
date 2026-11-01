@@ -64,8 +64,8 @@ Use a supported stop on mismatch; preserve required checks and the coordinator's
 Before a fresh start, reconcile one self-contained role-facing task/context against the current scoped Native
 catalogue and changed guarantees. Identify its complete Runner Native `requiredChecks` inventory separately
 from mandatory post-DONE HOST obligations; historical inventories are provenance, not competing catalogues.
-Every selected command enters discovery and needs legitimate scope applicability; remove unrelated selections only before that new run. Unused definitions are not selections.
-At the FIRST role's structured Native `requiredChecks`, use a supported stop/reconciliation immediately for any admitted-check/applicability mismatch; never treat extra HOST checks as informational or wait for merge/writable work.
+The discovery catalogue is the union of Native commands applicable somewhere in the complete canonical plan, not all repository recipes; per-step assignment follows separately. Every selected command enters discovery and needs that global relevance; remove unrelated selections only before the fresh run. Unused definitions are not selections.
+Inspect the FIRST role's published discovery `requiredChecks` immediately (`plan-execution`: `bootstrapProgress.worker.work.discovery.requiredChecks`, before `workerValidation`). Use a supported stop/reconciliation for an admitted-check/global-relevance mismatch; never treat extra HOST checks as informational or wait for merge/writable work.
 Independently verify actual merged `requiredChecks` AND per-step `validationSchedule` against admitted scope before accepting it; matching prose or role counts alone are insufficient.
 Put read-only discovery versus workspace-write FINALIZE and real extra-authority needs in that task/context;
 local operator guidance is not injected. Report genuine Native needs truthfully, never force empty reports.
