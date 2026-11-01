@@ -365,6 +365,15 @@ both `4` and `3` open the launcher, and `4` from the launcher lands back on the 
 keys leave you stranded in the launcher, `am force-stop com.google.android.wearable.sysui`
 restarts the system UI on the watch face.
 
+**Measured AVD-only editor workaround, 2026-11-01.** On the canonical Round 384/API36 AVD,
+picker/editor pages repeatedly returned to the face between roughly 15-second round trips;
+the exact timer/cause was not measured. With periodic `adb -s "$WEAR_SERIAL" shell input keyevent 0`
+(`KEYCODE_UNKNOWN`), the existing editor remained open across a 20-second delay without OS
+preference/time/charging/radio/font/locale changes. Verify the canonical serial/current foreground,
+own and bound any repetition, and retain fresh page/target/original-image guards. Stop owned input
+and await actual termination before Sleep/AMBIENT and before ending work; leave no background input.
+This is an observed AVD workaround, not a physical-device procedure; never target a physical phone.
+
 To put a chosen summary on the face, write the app's prefs and then **start the app once**:
 
 ```sh
