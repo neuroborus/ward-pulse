@@ -195,6 +195,7 @@ class DashboardSnapshot {
     required this.monthTotal,
     required this.alerts,
     required this.watchSummary,
+    this.alertConditions = const [],
     this.syncIssue,
     this.syncDetails,
     Map<String, Map<String, String>> connectionVersions = const {},
@@ -212,6 +213,7 @@ class DashboardSnapshot {
   final BudgetState weekTotal;
   final BudgetState monthTotal;
   final List<AlertSummary> alerts;
+  final List<AlertCondition> alertConditions;
   final WatchSummary watchSummary;
   final DashboardSyncIssue? syncIssue;
   final String? syncDetails;
@@ -266,6 +268,10 @@ class DashboardSnapshot {
       weekTotal: BudgetState.fromJson(_jsonMap(json['weekTotal'])),
       monthTotal: BudgetState.fromJson(_jsonMap(json['monthTotal'])),
       alerts: _jsonList(json['alerts'], AlertSummary.fromJson),
+      alertConditions:
+          json['alertConditions'] == null
+              ? const []
+              : _jsonList(json['alertConditions'], AlertCondition.fromJson),
       watchSummary: WatchSummary.fromJson(_jsonMap(json['watchSummary'])),
     );
   }
@@ -280,6 +286,9 @@ class DashboardSnapshot {
     'weekTotal': weekTotal.toJson(),
     'monthTotal': monthTotal.toJson(),
     'alerts': alerts.map((alert) => alert.toJson()).toList(),
+    if (alertConditions.isNotEmpty)
+      'alertConditions':
+          alertConditions.map((condition) => condition.toJson()).toList(),
     'watchSummary': watchSummary.toJson(),
   };
 
@@ -301,6 +310,7 @@ class DashboardSnapshot {
       weekTotal: weekTotal,
       monthTotal: monthTotal,
       alerts: alerts,
+      alertConditions: alertConditions,
       watchSummary: watchSummary._withStatus(ProviderStatus.stale),
       syncIssue: syncIssue,
       syncDetails: syncDetails,
@@ -318,6 +328,7 @@ class DashboardSnapshot {
       weekTotal: weekTotal,
       monthTotal: monthTotal,
       alerts: alerts,
+      alertConditions: alertConditions,
       watchSummary: watchSummary,
       syncIssue: issue,
       syncDetails: details,
@@ -336,6 +347,7 @@ class DashboardSnapshot {
     weekTotal: weekTotal,
     monthTotal: monthTotal,
     alerts: alerts,
+    alertConditions: alertConditions,
     watchSummary: watchSummary,
     syncIssue: syncIssue,
     syncDetails: syncDetails,
@@ -353,6 +365,7 @@ class DashboardSnapshot {
     weekTotal: weekTotal,
     monthTotal: monthTotal,
     alerts: alerts,
+    alertConditions: alertConditions,
     watchSummary: watchSummary,
     syncIssue: syncIssue,
     syncDetails: syncDetails,
@@ -906,6 +919,148 @@ class AlertSummary {
   }
 
   Map<String, dynamic> toJson() => {'severity': severity, 'message': message};
+}
+
+enum AlertBudgetPeriod { today, week, month }
+
+sealed class AlertConditionTarget {
+  const AlertConditionTarget();
+
+  factory AlertConditionTarget.fromJson(Map<String, dynamic> json) {
+    return switch (json['kind']) {
+      'allowance' => AllowanceAlertTarget(
+        source: AllowanceSource.values.byName(json['source'] as String),
+        id: json['id'] as String,
+      ),
+      'budget' => BudgetAlertTarget(
+        period: AlertBudgetPeriod.values.byName(json['period'] as String),
+      ),
+      _ => throw const FormatException('Unknown alert condition target.'),
+    };
+  }
+
+  Map<String, dynamic> toJson();
+}
+
+final class AllowanceAlertTarget extends AlertConditionTarget {
+  const AllowanceAlertTarget({required this.source, required this.id});
+
+  final AllowanceSource source;
+  final String id;
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'kind': 'allowance',
+    'source': source.name,
+    'id': id,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is AllowanceAlertTarget && other.source == source && other.id == id;
+
+  @override
+  int get hashCode => Object.hash(source, id);
+}
+
+final class BudgetAlertTarget extends AlertConditionTarget {
+  const BudgetAlertTarget({required this.period});
+
+  final AlertBudgetPeriod period;
+
+  @override
+  Map<String, dynamic> toJson() => {'kind': 'budget', 'period': period.name};
+
+  @override
+  bool operator ==(Object other) =>
+      other is BudgetAlertTarget && other.period == period;
+
+  @override
+  int get hashCode => period.hashCode;
+}
+
+/// Structural identity supplied by Rust, including its resolved connection key.
+final class AlertConditionKey {
+  const AlertConditionKey({
+    required this.provider,
+    required this.accountId,
+    required this.connection,
+    required this.target,
+  });
+
+  final String provider;
+  final String accountId;
+  final String connection;
+  final AlertConditionTarget target;
+
+  factory AlertConditionKey.fromJson(Map<String, dynamic> json) =>
+      AlertConditionKey(
+        provider: json['provider'] as String,
+        accountId: json['accountId'] as String,
+        connection: json['connection'] as String,
+        target: AlertConditionTarget.fromJson(_jsonMap(json['target'])),
+      );
+
+  Map<String, dynamic> toJson() => {
+    'provider': provider,
+    'accountId': accountId,
+    'connection': connection,
+    'target': target.toJson(),
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is AlertConditionKey &&
+      other.provider == provider &&
+      other.accountId == accountId &&
+      other.connection == connection &&
+      other.target == target;
+
+  @override
+  int get hashCode => Object.hash(provider, accountId, connection, target);
+}
+
+enum AlertConditionState { crossed, clear, unknown }
+
+/// Rust's observation only; decoding never evaluates a threshold in Dart.
+final class AlertCondition {
+  const AlertCondition.crossed({required this.key, required AlertSummary alert})
+    : state = AlertConditionState.crossed,
+      alert = alert;
+
+  const AlertCondition.clear({required this.key})
+    : state = AlertConditionState.clear,
+      alert = null;
+
+  const AlertCondition.unknown({required this.key})
+    : state = AlertConditionState.unknown,
+      alert = null;
+
+  final AlertConditionKey key;
+  final AlertConditionState state;
+  final AlertSummary? alert;
+
+  factory AlertCondition.fromJson(Map<String, dynamic> json) {
+    final key = AlertConditionKey.fromJson(_jsonMap(json['key']));
+    final state = AlertConditionState.values.byName(json['state'] as String);
+    if (state != AlertConditionState.crossed && json.containsKey('alert')) {
+      throw const FormatException('Only a crossed condition carries an alert.');
+    }
+    return switch (state) {
+      AlertConditionState.crossed => AlertCondition.crossed(
+        key: key,
+        alert: AlertSummary.fromJson(_jsonMap(json['alert'])),
+      ),
+      AlertConditionState.clear => AlertCondition.clear(key: key),
+      AlertConditionState.unknown => AlertCondition.unknown(key: key),
+    };
+  }
+
+  Map<String, dynamic> toJson() => {
+    'key': key.toJson(),
+    'state': state.name,
+    if (alert != null) 'alert': alert!.toJson(),
+  };
 }
 
 class WatchSummary {

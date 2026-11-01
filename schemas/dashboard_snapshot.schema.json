@@ -17,15 +17,11 @@
     "monthTotal": { "$ref": "budget_state.schema.json" },
     "alerts": {
       "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["severity", "message"],
-        "properties": {
-          "severity": { "enum": ["info", "warning", "error"] },
-          "message": { "type": "string" }
-        }
-      }
+      "items": { "$ref": "#/$defs/alert" }
+    },
+    "alertConditions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/alertCondition" }
     },
     "watchSummary": {
       "type": "object",
@@ -39,6 +35,71 @@
     }
   },
   "$defs": {
+    "alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["severity", "message"],
+      "properties": {
+        "severity": { "enum": ["info", "warning", "error"] },
+        "message": { "type": "string" }
+      }
+    },
+    "alertConditionKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "accountId", "connection", "target"],
+      "properties": {
+        "provider": { "$ref": "#/$defs/providerKind" },
+        "accountId": { "type": "string" },
+        "connection": { "type": "string" },
+        "target": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "source", "id"],
+              "properties": {
+                "kind": { "const": "allowance" },
+                "source": { "$ref": "#/$defs/allowanceSource" },
+                "id": { "type": "string" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "period"],
+              "properties": {
+                "kind": { "const": "budget" },
+                "period": { "enum": ["today", "week", "month"] }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "alertCondition": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key", "state", "alert"],
+          "properties": {
+            "key": { "$ref": "#/$defs/alertConditionKey" },
+            "state": { "const": "crossed" },
+            "alert": { "$ref": "#/$defs/alert" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key", "state"],
+          "properties": {
+            "key": { "$ref": "#/$defs/alertConditionKey" },
+            "state": { "enum": ["clear", "unknown"] }
+          }
+        }
+      ]
+    },
     "providerStatus": {
       "enum": ["ok", "warning", "error", "rateLimited", "authRequired", "stale", "unknown"]
     },

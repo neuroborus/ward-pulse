@@ -488,6 +488,12 @@ mod tests {
         .expect("parse golden dashboard snapshot");
 
         assert_eq!(actual, expected);
+        let legacy: DashboardSnapshot = serde_json::from_value(expected).unwrap();
+        assert!(legacy.alert_conditions.is_empty());
+        assert!(serde_json::to_value(legacy)
+            .unwrap()
+            .get("alertConditions")
+            .is_none());
     }
 
     /// The golden both sides read: this crate builds it, and the phone parses
@@ -762,6 +768,16 @@ mod tests {
         let alerts = applied["alerts"].as_array().expect("alerts");
         assert_eq!(alerts.len(), 1);
         assert_eq!(alerts[0]["severity"], "warning");
+        let condition = &applied["alertConditions"][0];
+        assert_eq!(condition["state"], "crossed");
+        assert_eq!(condition["alert"], alerts[0]);
+        assert_eq!(
+            condition["key"],
+            serde_json::json!({
+                "provider": "mock", "accountId": "mock-local", "connection": "mock.plan",
+                "target": {"kind": "budget", "period": "today"}
+            })
+        );
 
         unsafe { ward_pulse_string_free(value) };
     }
@@ -781,20 +797,27 @@ mod tests {
         unknown["id"] = serde_json::json!("dynamic-window/42");
         unknown["usedPercent"] = serde_json::Value::Null;
         unknown["status"] = serde_json::json!("unknown");
+        let mut zero = unknown.clone();
+        zero["id"] = serde_json::json!("zero-window");
+        zero["usedPercent"] = serde_json::json!(0.0);
+        zero["status"] = serde_json::json!("ok");
         account["allowances"]
             .as_array_mut()
             .unwrap()
-            .extend([extra, unknown]);
+            .extend([extra, unknown, zero]);
 
-        for (rules, alert_count, statuses, budget_status) in [
+        for (rules, alert_count, statuses, budget_status, condition_states) in [
             (
                 serde_json::json!({
                     "plan": {"warnAt": 80}, "purchased": {"at": 80},
                     "today": {"at": 50}, "budget": {"today": 100}
                 }),
                 4,
-                ["warning", "warning", "warning", "unknown"],
+                ["warning", "warning", "warning", "unknown", "ok"],
                 "warning",
+                vec![
+                    "crossed", "crossed", "crossed", "crossed", "unknown", "clear",
+                ],
             ),
             (
                 serde_json::json!({
@@ -803,8 +826,9 @@ mod tests {
                     "purchased": {"at": 80}, "today": {"at": 50}, "budget": {"today": 100}
                 }),
                 3,
-                ["ok", "warning", "warning", "unknown"],
+                ["ok", "warning", "warning", "unknown", "ok"],
                 "warning",
+                vec!["crossed", "crossed", "crossed", "unknown", "clear"],
             ),
             (
                 serde_json::json!({
@@ -815,8 +839,9 @@ mod tests {
                     "budget": {"today": 100}
                 }),
                 1,
-                ["warning", "ok", "ok", "unknown"],
+                ["warning", "ok", "ok", "unknown", "ok"],
                 "ok",
+                vec!["crossed", "unknown"],
             ),
         ] {
             let request = CString::new(
@@ -843,6 +868,24 @@ mod tests {
                 serde_json::from_str(result["dashboardJson"].as_str().expect("dashboard JSON"))
                     .expect("parse dashboard JSON");
             assert_eq!(applied["alerts"].as_array().unwrap().len(), alert_count);
+            let conditions = applied["alertConditions"].as_array().unwrap();
+            assert_eq!(
+                conditions
+                    .iter()
+                    .map(|condition| condition["state"].as_str().unwrap())
+                    .collect::<Vec<_>>(),
+                condition_states
+            );
+            assert_eq!(
+                conditions
+                    .iter()
+                    .filter_map(|condition| condition.get("alert"))
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                *applied["alerts"].as_array().unwrap()
+            );
+            let decoded: DashboardSnapshot = serde_json::from_value(applied.clone()).unwrap();
+            assert_eq!(serde_json::to_value(decoded).unwrap(), applied);
             let account = &applied["accounts"][0];
             assert_eq!(account["status"], "warning");
             assert_eq!(account["today"]["usedPercent"], 50.0);

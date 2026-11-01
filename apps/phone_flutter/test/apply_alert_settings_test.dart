@@ -9,6 +9,18 @@ import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 
 void main() {
+  const condition = AlertCondition.crossed(
+    key: AlertConditionKey(
+      provider: 'codex',
+      accountId: 'account-a',
+      connection: 'openai.plan',
+      target: AllowanceAlertTarget(
+        source: AllowanceSource.plan,
+        id: 'window-a',
+      ),
+    ),
+    alert: AlertSummary(severity: 'warning', message: 'configured alert'),
+  );
   final version = CredentialVersion({
     'generation': 'g1',
     'revision': 'r1',
@@ -25,67 +37,72 @@ void main() {
     ProviderConnections.openAiPlatform.storageKey: version.values,
   };
 
-  test(
-    'default-off and Off-only settings clear leftover alerts without FFI',
-    () {
-      final snapshot = DashboardSnapshot.empty().withSyncIssue(
-        DashboardSyncIssue.rateLimited,
-        details: 'provider floor',
-      );
-      final withAlerts = DashboardSnapshot(
-        generatedAt: snapshot.generatedAt,
-        overallStatus: snapshot.overallStatus,
-        accounts: snapshot.accounts,
-        todayTotal: snapshot.todayTotal,
-        weekTotal: snapshot.weekTotal,
-        monthTotal: snapshot.monthTotal,
-        alerts: const [
-          AlertSummary(severity: 'warning', message: 'stale auto-fire'),
-        ],
-        watchSummary: snapshot.watchSummary,
-        syncIssue: snapshot.syncIssue,
-        syncDetails: snapshot.syncDetails,
-        connectionVersions: versions,
-        reportingOutcomes: [outcome],
-      );
+  for (final includeAlerts in [false, true]) {
+    test(
+      'disabled rules clear observations without FFI (alerts: $includeAlerts)',
+      () {
+        final snapshot = DashboardSnapshot.empty().withSyncIssue(
+          DashboardSyncIssue.rateLimited,
+          details: 'provider floor',
+        );
+        final withAlerts = DashboardSnapshot(
+          generatedAt: snapshot.generatedAt,
+          overallStatus: snapshot.overallStatus,
+          accounts: snapshot.accounts,
+          todayTotal: snapshot.todayTotal,
+          weekTotal: snapshot.weekTotal,
+          monthTotal: snapshot.monthTotal,
+          alerts: includeAlerts ? [condition.alert!] : const [],
+          alertConditions: const [condition],
+          watchSummary: snapshot.watchSummary,
+          syncIssue: snapshot.syncIssue,
+          syncDetails: snapshot.syncDetails,
+          connectionVersions: versions,
+          reportingOutcomes: [outcome],
+        );
 
-      final applied = applyUserAlertSettings(
-        withAlerts,
-        const AlertThresholdPreferences(
-          connections: {
-            'openai.plan': ConnectionAlertThresholds(
-              planWindows: {'unavailable': AlertPercentThreshold()},
-            ),
-          },
-        ),
-        applyJson: (_, _) => throw StateError('Disabled effect was invoked.'),
-      );
-
-      expect(applied.alerts, isEmpty);
-      expect(applied.syncIssue, DashboardSyncIssue.rateLimited);
-      expect(applied.syncDetails, 'provider floor');
-      expect(applied.reportingOutcomes, [outcome]);
-      expect(applied.connectionVersions, versions);
-      expect(applied.toJson(), {...withAlerts.toJson(), 'alerts': <Object>[]});
-      expect(
-        applyUserAlertSettings(
-          applied,
-          const AlertThresholdPreferences(),
+        final applied = applyUserAlertSettings(
+          withAlerts,
+          const AlertThresholdPreferences(
+            connections: {
+              'openai.plan': ConnectionAlertThresholds(
+                planWindows: {'unavailable': AlertPercentThreshold()},
+              ),
+            },
+          ),
           applyJson: (_, _) => throw StateError('Disabled effect was invoked.'),
-        ),
-        same(applied),
-      );
-      const ApplyAlertSettings compatible = applyUserAlertSettings;
-      expect(
-        compatible(withAlerts, const AlertThresholdPreferences()).alerts,
-        isEmpty,
-      );
-      expect(
-        compatible(applied, const AlertThresholdPreferences()),
-        same(applied),
-      );
-    },
-  );
+        );
+
+        expect(applied.alerts, isEmpty);
+        expect(applied.alertConditions, isEmpty);
+        expect(applied.syncIssue, DashboardSyncIssue.rateLimited);
+        expect(applied.syncDetails, 'provider floor');
+        expect(applied.reportingOutcomes, [outcome]);
+        expect(applied.connectionVersions, versions);
+        final expected = withAlerts.toJson()..remove('alertConditions');
+        expected['alerts'] = <Object>[];
+        expect(applied.toJson(), expected);
+        expect(
+          applyUserAlertSettings(
+            applied,
+            const AlertThresholdPreferences(),
+            applyJson:
+                (_, _) => throw StateError('Disabled effect was invoked.'),
+          ),
+          same(applied),
+        );
+        const ApplyAlertSettings compatible = applyUserAlertSettings;
+        expect(
+          compatible(withAlerts, const AlertThresholdPreferences()).alerts,
+          isEmpty,
+        );
+        expect(
+          compatible(applied, const AlertThresholdPreferences()),
+          same(applied),
+        );
+      },
+    );
+  }
 
   for (final withSyncIssue in [false, true]) {
     test('enabled effect restores metadata (sync issue: $withSyncIssue)', () {
@@ -131,6 +148,7 @@ void main() {
             'alerts': [
               {'severity': 'warning', 'message': 'configured alert'},
             ],
+            'alertConditions': [condition.toJson()],
           };
           return jsonEncode(transformed);
         },

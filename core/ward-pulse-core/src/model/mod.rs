@@ -281,6 +281,42 @@ pub struct Alert {
     pub message: String,
 }
 
+/// Structural threshold identity, independent of its label and configured value.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlertConditionKey {
+    pub provider: ProviderKind,
+    pub account_id: AccountId,
+    /// Resolved connection key, including the legacy provider fallback.
+    pub connection: String,
+    pub target: AlertConditionTarget,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AlertConditionTarget {
+    Allowance { source: AllowanceSource, id: String },
+    Budget { period: BudgetPeriod },
+}
+
+/// A crossed observation carries the exact alert emitted by the evaluator.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(tag = "state", rename_all = "camelCase")]
+pub enum AlertConditionState {
+    Crossed { alert: Alert },
+    Clear,
+    Unknown,
+}
+
+/// One enabled threshold observed in the snapshot; absence is not clearance.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlertCondition {
+    pub key: AlertConditionKey,
+    #[serde(flatten)]
+    pub state: AlertConditionState,
+}
+
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WatchSummary {
@@ -299,6 +335,8 @@ pub struct DashboardSnapshot {
     pub week_total: BudgetState,
     pub month_total: BudgetState,
     pub alerts: Vec<Alert>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alert_conditions: Vec<AlertCondition>,
     pub watch_summary: WatchSummary,
 }
 

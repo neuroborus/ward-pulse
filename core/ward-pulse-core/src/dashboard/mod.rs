@@ -26,7 +26,7 @@ pub fn build_dashboard_snapshot(
     // bury Ok provider sync behind a misleading Unknown chrome.
     let overall_status = ProviderStatus::worst(accounts.iter().map(|account| account.status));
 
-    // Alerts stay empty until the shell applies user rules via calculate_alerts.
+    // Alerts and observations stay empty until the shell applies user rules.
     let watch_summary = WatchSummary {
         today_used_percent: today_total.used_percent,
         week_used_percent: week_total.used_percent,
@@ -41,6 +41,7 @@ pub fn build_dashboard_snapshot(
         week_total,
         month_total,
         alerts: Vec::new(),
+        alert_conditions: Vec::new(),
         watch_summary,
     }
 }
