@@ -383,10 +383,11 @@ const CELL_RING_FADE = [
  *
  * Both expressions yield a bare number, so the template is what makes the
  * reading legible — `51` alone says neither degrees nor anything else. The
- * temperature takes its device-provided scale: TEMPERATURE_UNIT is an integer
- * enum, 1 for Celsius and 2 for Fahrenheit, so a condition selects the glyph.
- * An unsupported value keeps just the degree sign instead of guessing a scale
- * (`WATCH_RING_DESIGN.md`, Upper cells, revision 2026-10-13).
+ * temperature defaults to its device-provided scale: TEMPERATURE_UNIT is an
+ * integer enum, 1 for Celsius and 2 for Fahrenheit. The face-local editor
+ * choice converts only a known opposite scale, rounding the original integer
+ * to whole degrees. Unsupported units keep just the degree sign without
+ * conversion (`WATCH_RING_DESIGN.md`, Upper cells, revision 2026-11-01).
  *
  * Centre the complete reading, including its scale, just as the UV name is
  * centred with its number. The former two-unit degree-only correction would
@@ -398,6 +399,8 @@ const CELL_CHROME = [
   { template: '%s°', expression: '[WEATHER.TEMPERATURE]', unit: '[WEATHER.TEMPERATURE_UNIT]' },
   { template: 'UV %s', expression: '[WEATHER.UV_INDEX]' },
 ]
+
+const TEMPERATURE_CONFIGURATION = 'temperatureUnit'
 
 /** Closed vocabulary shared with WatchComplicationText.splitPoolToken. */
 const SPLIT_POOLS = [
@@ -513,21 +516,31 @@ ${pad}    </Text>
 ${pad}</PartText>`
 }
 
-/** Select the scale from the weather source, whose unit is an integer enum. */
+/** Convert only known source units; Auto and matching units keep the original integer. */
 function cellReadingText({ template, expression, unit }, pad) {
-  const reading = (template, pad) => cellSizedText(
-    template, expression, pad,
-    unit ? `${expression} < 0 || ${expression} >= 100` : `${expression} >= 10`,
-    unit ? `${expression} <= -100` : 'false',
+  const reading = (template, pad, value = expression) => cellSizedText(
+    template, value, pad,
+    unit ? `${value} < 0 || ${value} >= 100` : `${value} >= 10`,
+    unit ? `${value} <= -100` : 'false',
   )
   if (!unit) {
     return reading(template, pad)
   }
+  const selection = `[CONFIGURATION.${TEMPERATURE_CONFIGURATION}]`
+  // Condition chooses the first match, so conversions precede the source-unit branches.
   return `${pad}<Condition>
 ${pad}    <Expressions>
+${pad}        <Expression name="convertToCelsius"><![CDATA[${selection} == "celsius" && ${unit} == 2]]></Expression>
+${pad}        <Expression name="convertToFahrenheit"><![CDATA[${selection} == "fahrenheit" && ${unit} == 1]]></Expression>
 ${pad}        <Expression name="isCelsius"><![CDATA[${unit} == 1]]></Expression>
 ${pad}        <Expression name="isFahrenheit"><![CDATA[${unit} == 2]]></Expression>
 ${pad}    </Expressions>
+${pad}    <Compare expression="convertToCelsius">
+${reading('%s°C', `${pad}        `, `round((${expression} - 32) * 5 / 9)`)}
+${pad}    </Compare>
+${pad}    <Compare expression="convertToFahrenheit">
+${reading('%s°F', `${pad}        `, `round(${expression} * 9 / 5 + 32)`)}
+${pad}    </Compare>
 ${pad}    <Compare expression="isCelsius">
 ${reading('%s°C', `${pad}        `)}
 ${pad}    </Compare>
@@ -1769,6 +1782,14 @@ function face(diagnostics = false) {
 <WatchFace width="${FACE.size}" height="${FACE.size}">
     <Metadata key="CLOCK_TYPE" value="DIGITAL" />
     <Metadata key="PREVIEW_TIME" value="10:08:00" />
+
+    <UserConfigurations>
+        <ListConfiguration id="${TEMPERATURE_CONFIGURATION}" displayName="@string/temperature" defaultValue="auto">
+            <ListOption id="auto" displayName="@string/temperature_auto" />
+            <ListOption id="celsius" displayName="@string/temperature_celsius" />
+            <ListOption id="fahrenheit" displayName="@string/temperature_fahrenheit" />
+        </ListConfiguration>
+    </UserConfigurations>
 
     <Scene backgroundColor="${COLOR.background}">
 ${body}

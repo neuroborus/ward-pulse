@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Check WFF condition trees and alpha gates in the generator's actual XML on stdin."""
+"""Check WFF condition trees, weather readings and paint gates in generated XML on stdin."""
 
 import ast
 import math
 import struct
 import sys
 from copy import deepcopy
+from pathlib import Path
 import xml.etree.ElementTree as ET
 
 
@@ -71,7 +72,7 @@ def check_structure(root):
         ):
             errors.append(f"slot {slot_id}: main strip lost its well or label")
     return (errors + check_main_decisions(root) + check_backdrop_restore(root) + check_band_paints(root)
-            + check_extra_decisions(root) + check_retained_extra_paint(root))
+            + check_extra_decisions(root) + check_retained_extra_paint(root) + check_temperature(root))
 
 
 def paint_expression(expression):
@@ -100,6 +101,8 @@ def evaluate_paint(node, value, maximum, minimum=0, title=""):
         return any(evaluate(child) for child in node.values)
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
         return not evaluate(node.operand)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+        return -evaluate(node.operand)
     if isinstance(node, ast.IfExp):
         return evaluate(node.body if evaluate(node.test) else node.orelse)
     if isinstance(node, ast.Compare) and len(node.ops) == len(node.comparators) == 1:
@@ -129,11 +132,184 @@ def evaluate_paint(node, value, maximum, minimum=0, title=""):
             and node.func.id == "clamp" and len(node.args) == 3 and not node.keywords):
         number, lower, upper = (evaluate(arg) for arg in node.args)
         return min(max(number, lower), upper)
+    if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+            and len(node.args) == 1 and not node.keywords):
+        if node.func.id == "round":
+            # Integer weather conversions have no exact half-degree ties.
+            return math.floor(evaluate(node.args[0]) + 0.5)
+        if node.func.id == "textLength":
+            return len(evaluate(node.args[0]))
     if isinstance(node, ast.Name) and node.id in ("value", "maximum", "minimum", "title"):
         return {"value": value, "maximum": maximum, "minimum": minimum, "title": title}[node.id]
-    if isinstance(node, ast.Constant) and type(node.value) in (int, float, str):
+    if isinstance(node, ast.Name) and node.id in ("true", "false"):
+        return node.id == "true"
+    if isinstance(node, ast.Constant) and type(node.value) in (int, float, str, bool):
         return node.value
     raise ValueError("unsupported paint expression")
+
+
+def cell_value(expression, fields):
+    """Evaluate the actual emitted expressions with explicit, synthetic source values."""
+    for source, value in fields.items():
+        expression = expression.replace(source, repr(value))
+    return evaluate_paint(paint_expression(expression), 0, 0)
+
+
+def cell_readouts(element, fields):
+    """Follow WFF's first-true Condition branches, including the availability gate."""
+    if element.tag == "Condition":
+        predicates = {item.get("name"): item.text or "" for item in element.findall("Expressions/Expression")}
+        for branch in element.findall("Compare"):
+            if cell_value(predicates[branch.get("expression")], fields):
+                return cell_readouts(branch, fields)
+        fallback = element.find("Default")
+        return [] if fallback is None else cell_readouts(fallback, fields)
+    if element.tag == "PartText":
+        font = element.find("Text/Font")
+        template = font.find("Template")
+        parameters = template.findall("Parameter")
+        if len(parameters) != 1:
+            raise ValueError("cell reading requires exactly one template parameter")
+        return [(template.text.strip(), cell_value(parameters[0].get("expression", ""), fields),
+                 int(font.get("size")))]
+    return [reading for child in element_children(element) for reading in cell_readouts(child, fields)]
+
+
+def check_temperature(root):
+    errors = []
+    configurations = root.findall("UserConfigurations")
+    if (len(configurations) != 1 or [child.tag for child in configurations[0]] != ["ListConfiguration"]):
+        return ["expected one face-local Temperature list configuration"]
+    configuration = configurations[0][0]
+    if configuration.attrib != {
+        "id": "temperatureUnit", "displayName": "@string/temperature", "defaultValue": "auto",
+    }:
+        errors.append("Temperature must default to Auto using the canonical editor label")
+    expected_options = [
+        {"id": "auto", "displayName": "@string/temperature_auto"},
+        {"id": "celsius", "displayName": "@string/temperature_celsius"},
+        {"id": "fahrenheit", "displayName": "@string/temperature_fahrenheit"},
+    ]
+    if ([child.tag for child in configuration] != ["ListOption"] * 3
+            or [child.attrib for child in configuration] != expected_options):
+        errors.append("Temperature options must be Auto, Celsius and Fahrenheit with string IDs")
+    strings_path = Path(__file__).resolve().parents[1] / "apps/watchface_wff/src/main/res/values/strings.xml"
+    strings = {item.get("name"): item.text for item in ET.parse(strings_path).getroot().findall("string")}
+    for name, label in (("temperature", "Temperature"), ("temperature_auto", "Auto"),
+                        ("temperature_celsius", "Celsius (°C)"), ("temperature_fahrenheit", "Fahrenheit (°F)")):
+        if strings.get(name) != label:
+            errors.append(f"missing canonical temperature editor label: {name}")
+
+    scene = root.find("Scene")
+    slots = scene.findall("ComplicationSlot")
+    if sorted(slot.get("slotId") for slot in slots) != ["101", "102", "105", "106", "109", "201", "202", "203"]:
+        errors.append("temperature configuration must preserve all eight complication slots")
+    chrome = scene.find("Group[@name='cell2Chrome']")
+    if chrome is None:
+        return errors + ["missing built-in temperature chrome"]
+    for label in ("cell2", "cell3"):
+        group = scene.find(f"Group[@name='{label}Chrome']")
+        if group is None:
+            errors.append(f"missing {label} weather chrome")
+            continue
+        gate = group.find("Condition/Expressions/Expression[@name='hasWeather']")
+        if (gate is None or gate.text != "[WEATHER.IS_AVAILABLE]"
+                or group.find("Condition/Compare[@expression='hasWeather']") is None
+                or group.find(f"Condition/Default/Group[@name='{label}Bare']") is None):
+            errors.append(f"{label}: preserve the weather availability gate and bare recess")
+        if any(list(scene).index(group) >= list(scene).index(slot) for slot in slots):
+            errors.append(f"{label}: built-in weather must remain beneath every complication slot")
+
+    def expect_reading(temperature, unit, selection, value, suffix, size):
+        fields = {"[WEATHER.TEMPERATURE]": temperature, "[WEATHER.TEMPERATURE_UNIT]": unit,
+                  "[WEATHER.IS_AVAILABLE]": True, "[CONFIGURATION.temperatureUnit]": selection}
+        actual = cell_readouts(chrome, fields)
+        if actual != [(f"%s°{suffix}", value, size)] or any(type(item[1]) is not int for item in actual):
+            errors.append(f"temperature {temperature}/{unit}/{selection}: {actual}, expected {value}°{suffix} at {size}")
+
+    try:
+        # Literal expected results are independent of the generator's conversion expressions.
+        for temperature, unit, selection, value, suffix, size in (
+            (0, 1, "fahrenheit", 32, "F", 18),
+            (1, 1, "fahrenheit", 34, "F", 18),
+            (-18, 1, "fahrenheit", 0, "F", 18),
+            (-19, 1, "fahrenheit", -2, "F", 14),
+            (-40, 1, "fahrenheit", -40, "F", 14),
+            (37, 1, "fahrenheit", 99, "F", 18),
+            (38, 1, "fahrenheit", 100, "F", 14),
+            (100, 1, "fahrenheit", 212, "F", 14),
+            (-73, 1, "fahrenheit", -99, "F", 14),
+            (-74, 1, "fahrenheit", -101, "F", 12),
+            (32, 2, "celsius", 0, "C", 18),
+            (31, 2, "celsius", -1, "C", 14),
+            (33, 2, "celsius", 1, "C", 18),
+            (68, 2, "celsius", 20, "C", 18),
+            (0, 2, "celsius", -18, "C", 14),
+            (-40, 2, "celsius", -40, "C", 14),
+            (211, 2, "celsius", 99, "C", 18),
+            (212, 2, "celsius", 100, "C", 14),
+            (-147, 2, "celsius", -99, "C", 14),
+            (-148, 2, "celsius", -100, "C", 12),
+            (-149, 2, "celsius", -101, "C", 12),
+        ):
+            expect_reading(temperature, unit, selection, value, suffix, size)
+        # Auto and matching selections must preserve the original integer, including size boundaries.
+        for unit, suffix, matching in ((1, "C", "celsius"), (2, "F", "fahrenheit")):
+            for selection in ("auto", matching):
+                for temperature, size in ((-101, 12), (-100, 12), (-99, 14), (-1, 14), (0, 18), (99, 18), (100, 14)):
+                    expect_reading(temperature, unit, selection, temperature, suffix, size)
+        for selection in ("auto", "celsius", "fahrenheit"):
+            for unit in (-1, 0, 3):
+                for temperature, size in ((-100, 12), (0, 18), (100, 14)):
+                    expect_reading(temperature, unit, selection, temperature, "", size)
+            # Unavailable weather must not evaluate missing temperature/unit values or draw a label.
+            if cell_readouts(chrome, {"[WEATHER.IS_AVAILABLE]": False, "[CONFIGURATION.temperatureUnit]": selection}):
+                errors.append(f"unavailable weather must retain its bare recess for {selection}")
+    except (ValueError, SyntaxError, KeyError, TypeError, AttributeError) as error:
+        errors.append(f"could not evaluate emitted temperature conditions/parameters: {error}")
+
+    for slot_id, provider, kind in (("201", "DAY_OF_WEEK", "SHORT_TEXT"), ("202", "EMPTY", "EMPTY"),
+                                    ("203", "EMPTY", "EMPTY")):
+        slot = scene.find(f"ComplicationSlot[@slotId='{slot_id}']")
+        if slot is None:
+            continue  # Slot ownership was already reported.
+        policy = slot.find("DefaultProviderPolicy")
+        if policy is None or policy.attrib != {"defaultSystemProvider": provider, "defaultSystemProviderType": kind}:
+            errors.append(f"slot {slot_id}: temperature selection must preserve provider defaults")
+        if slot.get("supportedTypes") != "SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY" or slot.get("isCustomizable") != "TRUE":
+            errors.append(f"slot {slot_id}: preserve supported provider types and customization")
+        for expression in slot.iter():
+            contents = (expression.text or "") + " ".join(expression.attrib.values())
+            if "CONFIGURATION." in contents or "WEATHER." in contents:
+                errors.append(f"slot {slot_id}: face-local temperature must not alter assigned providers")
+        for complication in slot.findall("Complication"):
+            kind = complication.get("type")
+            if kind == "EMPTY":
+                continue
+            group = complication.find("Group")
+            well = group.find("PartDraw") if group is not None else None
+            fill = well.find("Ellipse/Fill") if well is not None else None
+            if (fill is None or fill.get("color") != "#ff0b0e0c" or group.get("alpha", "255") != "255"
+                    or group.find("Variant") is not None or well.get("alpha", "255") != "255"
+                    or well.find("Variant") is not None):
+                errors.append(f"slot {slot_id}/{kind}: provider well must remain opaque in every mode")
+            if kind not in ("SHORT_TEXT", "RANGED_VALUE"):
+                continue
+            templates = complication.findall(".//Template")
+            if len(templates) != 3 or any(
+                template.text.strip() != "%s" or len(template.findall("Parameter")) != 1
+                or template.find("Parameter").attrib != {"expression": "[COMPLICATION.TEXT]"}
+                for template in templates
+            ):
+                errors.append(f"slot {slot_id}/{kind}: provider text must remain verbatim")
+            try:
+                for selection in ("auto", "celsius", "fahrenheit"):
+                    if cell_readouts(complication, {"[COMPLICATION.TEXT]": "7°",
+                                                   "[CONFIGURATION.temperatureUnit]": selection}) != [("%s", "7°", 18)]:
+                        errors.append(f"slot {slot_id}/{kind}: selected-provider degrees must remain untouched")
+            except (ValueError, SyntaxError, KeyError, TypeError, AttributeError) as error:
+                errors.append(f"slot {slot_id}/{kind}: could not evaluate emitted provider text: {error}")
+    return errors
 
 
 def adjacent_float(value, direction):
@@ -1072,7 +1248,7 @@ def main():
         errors = check_structure(root)
     if errors:
         sys.exit("\n".join(errors))
-    print("watchface condition trees, alpha gates and drawing containment passed")
+    print("watchface condition trees, temperature semantics, alpha gates and drawing containment passed")
 
 
 if __name__ == "__main__":

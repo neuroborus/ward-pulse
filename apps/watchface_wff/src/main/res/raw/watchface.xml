@@ -27,6 +27,14 @@
     <Metadata key="CLOCK_TYPE" value="DIGITAL" />
     <Metadata key="PREVIEW_TIME" value="10:08:00" />
 
+    <UserConfigurations>
+        <ListConfiguration id="temperatureUnit" displayName="@string/temperature" defaultValue="auto">
+            <ListOption id="auto" displayName="@string/temperature_auto" />
+            <ListOption id="celsius" displayName="@string/temperature_celsius" />
+            <ListOption id="fahrenheit" displayName="@string/temperature_fahrenheit" />
+        </ListConfiguration>
+    </UserConfigurations>
+
     <Scene backgroundColor="#ff0a0d0b">
         <PartDraw x="0" y="0" width="450" height="450" name="lift">
             <Ellipse x="0" y="0" width="450" height="450">
@@ -94,9 +102,99 @@
                         </PartDraw>
                         <Condition>
                             <Expressions>
+                                <Expression name="convertToCelsius"><![CDATA[[CONFIGURATION.temperatureUnit] == "celsius" && [WEATHER.TEMPERATURE_UNIT] == 2]]></Expression>
+                                <Expression name="convertToFahrenheit"><![CDATA[[CONFIGURATION.temperatureUnit] == "fahrenheit" && [WEATHER.TEMPERATURE_UNIT] == 1]]></Expression>
                                 <Expression name="isCelsius"><![CDATA[[WEATHER.TEMPERATURE_UNIT] == 1]]></Expression>
                                 <Expression name="isFahrenheit"><![CDATA[[WEATHER.TEMPERATURE_UNIT] == 2]]></Expression>
                             </Expressions>
+                            <Compare expression="convertToCelsius">
+                                <Condition>
+                                    <Expressions>
+                                        <Expression name="smallText"><![CDATA[round(([WEATHER.TEMPERATURE] - 32) * 5 / 9) <= -100]]></Expression>
+                                        <Expression name="mediumText"><![CDATA[!(round(([WEATHER.TEMPERATURE] - 32) * 5 / 9) <= -100) && (round(([WEATHER.TEMPERATURE] - 32) * 5 / 9) < 0 || round(([WEATHER.TEMPERATURE] - 32) * 5 / 9) >= 100)]]></Expression>
+                                    </Expressions>
+                                    <Compare expression="smallText">
+                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                                            <Text align="CENTER" ellipsis="TRUE">
+                                                <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                                    <Template>%s°C
+                                                        <Parameter expression="round(([WEATHER.TEMPERATURE] - 32) * 5 / 9)" />
+                                                    </Template>
+                                                </Font>
+                                            </Text>
+                                        </PartText>
+                                    </Compare>
+                                    <Compare expression="mediumText">
+                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                                            <Text align="CENTER" ellipsis="TRUE">
+                                                <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                    <Template>%s°C
+                                                        <Parameter expression="round(([WEATHER.TEMPERATURE] - 32) * 5 / 9)" />
+                                                    </Template>
+                                                </Font>
+                                            </Text>
+                                        </PartText>
+                                    </Compare>
+                                    <Default>
+                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                                            <Text align="CENTER" ellipsis="TRUE">
+                                                <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                    <Template>%s°C
+                                                        <Parameter expression="round(([WEATHER.TEMPERATURE] - 32) * 5 / 9)" />
+                                                    </Template>
+                                                </Font>
+                                            </Text>
+                                        </PartText>
+                                    </Default>
+                                </Condition>
+                            </Compare>
+                            <Compare expression="convertToFahrenheit">
+                                <Condition>
+                                    <Expressions>
+                                        <Expression name="smallText"><![CDATA[round([WEATHER.TEMPERATURE] * 9 / 5 + 32) <= -100]]></Expression>
+                                        <Expression name="mediumText"><![CDATA[!(round([WEATHER.TEMPERATURE] * 9 / 5 + 32) <= -100) && (round([WEATHER.TEMPERATURE] * 9 / 5 + 32) < 0 || round([WEATHER.TEMPERATURE] * 9 / 5 + 32) >= 100)]]></Expression>
+                                    </Expressions>
+                                    <Compare expression="smallText">
+                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                                            <Text align="CENTER" ellipsis="TRUE">
+                                                <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                                    <Template>%s°F
+                                                        <Parameter expression="round([WEATHER.TEMPERATURE] * 9 / 5 + 32)" />
+                                                    </Template>
+                                                </Font>
+                                            </Text>
+                                        </PartText>
+                                    </Compare>
+                                    <Compare expression="mediumText">
+                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                                            <Text align="CENTER" ellipsis="TRUE">
+                                                <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                    <Template>%s°F
+                                                        <Parameter expression="round([WEATHER.TEMPERATURE] * 9 / 5 + 32)" />
+                                                    </Template>
+                                                </Font>
+                                            </Text>
+                                        </PartText>
+                                    </Compare>
+                                    <Default>
+                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                            <Variant mode="AMBIENT" target="alpha" value="140" />
+                                            <Text align="CENTER" ellipsis="TRUE">
+                                                <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                    <Template>%s°F
+                                                        <Parameter expression="round([WEATHER.TEMPERATURE] * 9 / 5 + 32)" />
+                                                    </Template>
+                                                </Font>
+                                            </Text>
+                                        </PartText>
+                                    </Default>
+                                </Condition>
+                            </Compare>
                             <Compare expression="isCelsius">
                                 <Condition>
                                     <Expressions>

@@ -68,7 +68,9 @@ generic ranged envelopes replace the raw percentage interface; native acceptance
 N1-width revision **2026-10-30** (explicit 44/32/20-unit bands; N1 halves are 22;
 new-radius raster fits below; native acceptance Pending); retained-extra compositing repair
 **2026-10-31** (extras precede main tracks; unsplit N1 restores the local backdrop;
-new-artifact native acceptance Pending)
+new-artifact native acceptance Pending); temperature-choice revision **2026-11-01**
+(one face-local Auto/Celsius/Fahrenheit editor
+choice for built-in weather only, default Auto; current-candidate native acceptance Pending)
 — locked visual target for
 Wear OS and Watch Face Format until the next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
@@ -1854,6 +1856,42 @@ called this band the "upper aperture"; it is the same band.
     is what puts it under every slot's content. Nothing is declared beneath the left cell, so
     its chrome is the graded well of rule 10 whenever the wearer clears it.
 
+    **Face-local Temperature revision 2026-11-01.** The owner's 2026-10-30 decision adds one
+    **Temperature** choice to the existing system watch-face editor: **Auto**, **Celsius (°C)**
+    and **Fahrenheit (°F)**, default **Auto**. The WFF2 `ListConfiguration` uses string option
+    IDs `auto`, `celsius` and `fahrenheit`; these are distinct from the numeric weather-unit
+    enum. Labels belong to the canonical Android strings shared by Legacy and Push. No phone
+    preference, sync field, weather service or additional complication slot is involved.
+
+    Auto preserves the source integer and scale: unit **1** draws `%s°C`, unit **2** draws
+    `%s°F`. A matching explicit selection also preserves that integer. Only a known opposite
+    unit converts the original `[WEATHER.TEMPERATURE]`: Celsius to Fahrenheit uses
+    `round(t * 9 / 5 + 32)`; Fahrenheit to Celsius uses `round((t - 32) * 5 / 9)`. The display
+    stays at whole degrees with the explicit target suffix, reflecting the integer precision
+    supplied by WEATHER. Never convert an already displayed value or infer a unit from locale,
+    preview text, bare degrees or a plausible number. Unsupported source units keep the original
+    `%s°` fallback even with an explicit selection; unavailable weather keeps the existing bare
+    recess. The existing 18/14/12 branches use the **displayed** integer: 14 below zero or at
+    least 100, with 12 taking precedence at −100 or below, otherwise 18. Geometry, centring,
+    fonts, colours and ambient treatment stay unchanged.
+
+    This choice controls only built-in weather chrome. An assigned upper-cell provider keeps
+    its verbatim `COMPLICATION.TEXT`, existing taps and opaque well covering that chrome;
+    Temperature neither configures nor converts the provider. Clearing the middle assignment
+    reveals the built-in reading again when weather is available. The illustrative `18°C`
+    review art remains an Auto example with a known Celsius source, not a Celsius default.
+
+    `check_temperature` in `tools/check-watchface-structure.py`, invoked by `assertConditionTrees`
+    in `tools/render-watchface.mjs`, exercises the emitted list, canonical labels, conditions,
+    parameters, numerical/rounding/size boundaries, unknown/unavailable fallback, provider text,
+    opaque wells and eight-slot ownership. This is source regression coverage, not native editor,
+    rendering or persistence proof. Current-candidate editor/default/save-and-reopen behavior,
+    meaningful known-source conversion with an explicit suffix, active-artifact identity and
+    settings/assignment restoration remain **Pending** for scoped HOST acceptance. Observe Auto,
+    provider and availability behavior where the existing route supports it; record unavailable
+    source evidence honestly. Physical/OEM confirmation remains deferred, and earlier Fahrenheit
+    observations below do not accept this selector.
+
     So the default costs the wearer nothing. All three cells stay theirs: the moment one is
     filled, its opaque well covers the chrome under it and that reading is gone; empty it again
     and the reading comes back. Measured 2026-10-09 — a cell bound to `DAY_OF_WEEK` drew `Tue`
@@ -1882,13 +1920,12 @@ called this band the "upper aperture"; it is the same band.
     the cells read **`51`** and **`0`**, and the owner could not tell what either was — a
     number with no unit, and a number with no subject.
 
-    **The unit follows the wearer, and the face neither converts nor chooses.** That AVD is
-    `en-US` by `ro.product.locale`, and `51` is Fahrenheit, about 10.6 °C. A metric device
-    delivers the metric number from the same expression. The format also carries
+    **The source-unit baseline, retained by Auto.** Locale and the earlier bare `51` alone
+    cannot establish a source unit. The format carries
     `WEATHER.TEMPERATURE_UNIT`, an integer enum: **1 is Celsius and 2 is Fahrenheit**, available
     in format version 2. The face selects `C` or `F` from that enum instead of printing the
     integer or inferring a scale from locale. The value already follows the wearer's unit, so
-    no conversion is applied. These meanings are specified in the official
+    Auto applies no conversion. These meanings are specified in the official
     [Android data-source reference](https://developer.android.com/reference/wear-os/wff/common/attributes/source-type).
 
     **The face drew the marks nowhere, and the design had shown them all along.** From
@@ -1907,7 +1944,7 @@ called this band the "upper aperture"; it is the same band.
     still draws the empty recess rather than a label.
 
     The primary board and its generated previews show `18°C`, the weather-available Celsius
-    example. The scale follows the weather source rather than the preview. Verified after
+    example. In Auto, the scale follows the weather source rather than the preview. Verified after
     installation on **2026-10-13**, before the three-unit lowering, on
     `wardpulse_wear_round_api36_1`, `emulator-5554`,
     **384×384**: the live reading was **`50°F`**, fully visible. Its bright ink bounds were

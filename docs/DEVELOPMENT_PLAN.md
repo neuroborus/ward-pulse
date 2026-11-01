@@ -2708,6 +2708,23 @@ matched unchanged generators in the separate throwaway HOST correspondence check
 Earlier failed generation/candidate records and measurements below apply to their dated
 builds. This face refinement adds no widget feature and does not close Phase 17's paired gate.
 
+**Face-local temperature choice 2026-11-01 — implementation, native acceptance pending.**
+`face` and `cellReadingText` in `tools/render-watchface.mjs` add one WFF2 Temperature editor list,
+default Auto, with Celsius and Fahrenheit options using canonical strings shared by Legacy
+and Push. Auto and matching units preserve the original integer; a known opposite WEATHER
+unit converts that original value to whole degrees with an explicit target suffix and sizing
+from the displayed value. Unknown units keep the degree-only fallback, availability retains
+the bare recess, and assigned-provider text/opaque wells/assignments/taps remain unchanged.
+There is no phone preference, new weather service, schema/transport change or additional slot.
+`check_temperature` in `tools/check-watchface-structure.py` covers emitted configuration and
+numerical/fallback/provider contracts through the existing generator invocation. Illustrative
+Auto/Celsius art stays illustrative. Required Native checks and Lazy Worker confirmation remain
+with the owning execution; HOST full WFF/Wear validation and installed-active editor/default,
+save/reopen persistence, meaningful known-unit conversion/explicit suffix and state recovery
+remain Pending after whole DONE and ownership retirement. Unavailable native source evidence
+must be recorded separately from passes; physical/OEM confirmation stays deferred. See
+[Upper cells](product/WATCH_RING_DESIGN.md#upper-cells-revision-2026-10-09) for the locked behavior.
+
 **Selected-zero revision 2026-10-13.** The retained-zero ring and legend treatment changes
 no upper-cell geometry. That build used the complete cells
 at integer origins `(152,114)`, `(204,100)`, `(256,114)`, the three-unit downward move, full

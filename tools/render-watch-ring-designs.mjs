@@ -37,8 +37,8 @@ const CELL_RIM = '#242A27'
 
 /**
  * The cells above the clock, in the face's own units. The readings are the
- * shipped default: the day of the week is a complication, the temperature and
- * the UV index are the face's own chrome and cost no slot.
+ * illustrative Auto state with a known Celsius source: the day of the week is
+ * a complication, the temperature and UV are the face's own chrome and cost no slot.
  */
 const CELL = {
   size: 52,

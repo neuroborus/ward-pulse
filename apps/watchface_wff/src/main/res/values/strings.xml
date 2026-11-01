@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="watch_face_name">WardPulse</string>
+    <string name="temperature">Temperature</string>
+    <string name="temperature_auto">Auto</string>
+    <string name="temperature_celsius">Celsius (°C)</string>
+    <string name="temperature_fahrenheit">Fahrenheit (°F)</string>
     <string name="ring1_complication">Ring 1 (outer)</string>
     <string name="ring2_complication">Ring 2</string>
     <string name="ring3_complication">Ring 3</string>

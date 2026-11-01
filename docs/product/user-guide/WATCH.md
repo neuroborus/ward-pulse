@@ -202,5 +202,15 @@ the watch's edit/customize action for WardPulse and select an upper cell to choo
 complication provider. Exact controls and available providers vary with the watch's system.
 These cells are separate from the usage rings selected in the phone's Watchface tab.
 
+In the same editor, **Temperature** offers **Auto**, **Celsius (°C)** and **Fahrenheit (°F)**.
+Auto is the default and keeps the watch's built-in weather unit. Celsius or Fahrenheit converts
+that built-in reading to whole degrees when its source unit is known. An unrecognized source
+unit keeps the original number with a degree sign; unavailable weather leaves the empty recess.
+
+Leave the middle upper cell unassigned to see the face's built-in temperature. If you assign a
+weather complication there, its provider supplies the displayed text and covers the built-in
+reading. **Temperature** does not change that provider's units; use the provider's own settings
+where available. Clearing the assignment reveals the built-in reading again when weather is available.
+
 Choose usage rings on the phone. Watch weather and other system complications depend on
 their own available data; refreshing provider usage does not itself update watch weather.
