@@ -1,5 +1,6 @@
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/provider_status_color.dart';
+import '../providers/provider_connection.dart';
 import '../settings/watch_ring_preferences.dart';
 import '../sync/credit_request_runway.dart';
 import '../sync/watch_credits_glance.dart';
@@ -12,10 +13,21 @@ final class PhoneWidgetRow {
     required this.remainingPercent,
     required this.accentArgb,
     this.creditsSuffix,
+    this.familyLabel,
+    this.poolLabel,
+    this.resetsAt,
   });
 
+  /// Complete identity retained for old caches and descriptive payload strings.
   final String label;
   final int remainingPercent;
+
+  /// Explicit display lines; absent when only a legacy flat label is available.
+  final String? familyLabel;
+  final String? poolLabel;
+
+  /// The selected allowance's reported boundary, never an inferred budget end.
+  final DateTime? resetsAt;
 
   /// ARGB int for the family accent bar.
   final int accentArgb;
@@ -59,14 +71,40 @@ PhoneWidgetPayload buildPhoneWidgetPayload(
   return PhoneWidgetPayload(
     stale: snapshot.overallStatus == ProviderStatus.stale,
     rows: [
-      for (final metric in metrics)
-        PhoneWidgetRow(
-          label: metric.catalogTitle,
-          remainingPercent: metric.remainingPercent!.round(),
-          accentArgb: phoneWidgetAccentArgb(metric.id),
-          creditsSuffix: phoneWidgetCreditsSuffix(snapshot, metric.id),
-        ),
+      for (final metric in metrics) _phoneWidgetRow(snapshot, metric),
     ],
+  );
+}
+
+PhoneWidgetRow _phoneWidgetRow(
+  DashboardSnapshot snapshot,
+  WatchRingMetric metric,
+) {
+  final provider = providerFromRingId(metric.id);
+  final connection = connectionFromBudgetRingId(metric.id);
+  final String? family;
+  if (connection != null) {
+    final name = providerFamilyLabel(connection.provider);
+    family = '$name ${connectionKindLabel(connection.kind)}';
+  } else if (provider != null) {
+    family = providerDisplayLabel(provider);
+  } else {
+    family = null;
+  }
+  // This legacy pool label already includes its family. Other pool names stay
+  // whole, including spaces and separators that are part of their real label.
+  final pool =
+      metric.id == cursorOwnPoolId && metric.label == 'Cursor Models'
+          ? 'Models'
+          : metric.label;
+  return PhoneWidgetRow(
+    label: metric.catalogTitle,
+    familyLabel: family,
+    poolLabel: family == null ? null : pool,
+    remainingPercent: metric.remainingPercent!.round(),
+    accentArgb: phoneWidgetAccentArgb(metric.id),
+    creditsSuffix: phoneWidgetCreditsSuffix(snapshot, metric.id),
+    resetsAt: _phoneWidgetAllowance(snapshot, metric.id)?.resetsAt,
   );
 }
 
@@ -80,7 +118,8 @@ String? phoneWidgetCreditsSuffix(DashboardSnapshot snapshot, String metricId) {
   if (provider == null) {
     return null;
   }
-  if (_isPurchasedMeterMetric(snapshot, provider, metricId)) {
+  if (_phoneWidgetAllowance(snapshot, metricId)?.source ==
+      AllowanceSource.purchased) {
     return null;
   }
   final remaining = purchasedCreditsRemainingForProvider(snapshot, provider);
@@ -90,16 +129,15 @@ String? phoneWidgetCreditsSuffix(DashboardSnapshot snapshot, String metricId) {
   return '${compactCreditCount(remaining)} credits';
 }
 
-bool _isPurchasedMeterMetric(
+AllowanceState? _phoneWidgetAllowance(
   DashboardSnapshot snapshot,
-  String provider,
   String metricId,
 ) {
-  const prefix = 'allowance.';
-  final stem = '$prefix$provider.';
-  if (!metricId.startsWith(stem)) {
-    return false;
+  final provider = providerFromRingId(metricId);
+  if (provider == null) {
+    return null;
   }
+  final stem = 'allowance.$provider.';
   final allowanceId = metricId.substring(stem.length);
   for (final account in snapshot.accounts) {
     if (account.provider != provider) {
@@ -107,11 +145,11 @@ bool _isPurchasedMeterMetric(
     }
     for (final allowance in account.allowances) {
       if (allowance.id == allowanceId) {
-        return allowance.source == AllowanceSource.purchased;
+        return allowance;
       }
     }
   }
-  return false;
+  return null;
 }
 
 /// Family accent matching [providerFamilyColor]; neutral grey when no family is

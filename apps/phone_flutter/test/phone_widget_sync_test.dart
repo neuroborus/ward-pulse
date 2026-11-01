@@ -17,9 +17,16 @@ void main() {
     ),
   );
 
-  test(
-    'stale marker preserves every retained row and redraws Android provider',
-    () async {
+  for (final identity in <Map<String, Object?>>[
+    {},
+    {
+      'row_0_family': 'Claude',
+      'row_0_pool': 'plan',
+      'row_0_resets_at': '2028-02-10T09:15:00.000Z',
+    },
+  ]) {
+    final format = identity.isEmpty ? 'legacy' : 'structured';
+    test('stale marker preserves $format rows and redraws Android', () async {
       final data = <String, Object?>{
         'row_count': 1,
         'empty': '0',
@@ -28,6 +35,7 @@ void main() {
         'row_0_label': 'Claude plan',
         'row_0_credits': '320 credits',
         'row_0_color': 'ff91c4b1',
+        ...identity,
       };
       final original = Map<String, Object?>.from(data);
       final calls = <MethodCall>[];
@@ -39,8 +47,106 @@ void main() {
         (redraw.arguments as Map)['qualifiedAndroidName'],
         phoneWidgetQualifiedAndroidName,
       );
-    },
-  );
+    });
+  }
+
+  test('upgrades a legacy cache with identity and UTC reset', () async {
+    final data = <String, Object?>{
+      'row_count': 1,
+      'empty': '0',
+      'row_0_percent': '0% left',
+      'row_0_label': 'Cursor Models',
+      'row_0_credits': '320 credits',
+      'row_0_color': 'ff91c4b1',
+    };
+    final calls = <MethodCall>[];
+    _bindWidgetStorage(data, calls: calls);
+
+    await HomeWidgetPhoneWidgetSyncService.writeHomeWidgetPayload(
+      PhoneWidgetPayload(
+        rows: [
+          PhoneWidgetRow(
+            label: 'Cursor Models',
+            familyLabel: 'Cursor',
+            poolLabel: 'Models',
+            remainingPercent: 0,
+            accentArgb: 0xff91c4b1,
+            creditsSuffix: '320 credits',
+            resetsAt: DateTime.parse('2028-02-10T14:45:00+05:30'),
+          ),
+        ],
+        stale: false,
+      ),
+    );
+
+    expect(data['row_count'], 1);
+    expect(data['empty'], '0');
+    expect(data['stale'], '0');
+    expect(data['row_0_percent'], '0% left');
+    expect(data['row_0_label'], 'Cursor Models');
+    expect(data['row_0_credits'], '320 credits');
+    expect(data['row_0_color'], 'ff91c4b1');
+    expect(data['row_0_family'], 'Cursor');
+    expect(data['row_0_pool'], 'Models');
+    expect(data['row_0_resets_at'], '2028-02-10T09:15:00.000Z');
+    expect(calls.where((call) => call.method == 'updateWidget'), hasLength(1));
+  });
+
+  test('clears absent optional fields and every removed slot', () async {
+    const rowFields = [
+      'percent',
+      'credits',
+      'label',
+      'family',
+      'pool',
+      'resets_at',
+      'color',
+    ];
+    final data = <String, Object?>{
+      'row_count': phoneWidgetSlotCount,
+      'empty': '0',
+      for (var i = 0; i < phoneWidgetSlotCount; i++)
+        for (final field in rowFields) 'row_${i}_$field': 'previous',
+    };
+    final calls = <MethodCall>[];
+    _bindWidgetStorage(data, calls: calls);
+
+    await HomeWidgetPhoneWidgetSyncService.writeHomeWidgetPayload(
+      const PhoneWidgetPayload(
+        rows: [
+          PhoneWidgetRow(
+            label: 'Retained metric',
+            remainingPercent: 46,
+            accentArgb: 0xff91c4b1,
+          ),
+        ],
+        stale: false,
+      ),
+    );
+
+    expect(data['row_count'], 1);
+    expect(data['row_0_label'], 'Retained metric');
+    expect(data['row_0_percent'], '46% left');
+    for (final field in ['credits', 'family', 'pool', 'resets_at']) {
+      expect(data['row_0_$field'], '', reason: 'Absent $field must be cleared.');
+    }
+    for (var i = 1; i < phoneWidgetSlotCount; i++) {
+      for (final field in rowFields) {
+        expect(data['row_${i}_$field'], '', reason: 'Removed slot $i: $field');
+      }
+    }
+
+    await HomeWidgetPhoneWidgetSyncService.writeHomeWidgetPayload(
+      const PhoneWidgetPayload(rows: [], stale: false),
+    );
+
+    expect(data['row_count'], 0);
+    expect(data['empty'], '1');
+    for (final field in rowFields) {
+      expect(data['row_0_$field'], '', reason: 'Cleared final row: $field');
+    }
+    expect(calls.where((call) => call.method == 'updateWidget'), hasLength(2));
+  });
 
   for (final data in <Map<String, Object?>>[
     {},

@@ -155,6 +155,18 @@ final class HomeWidgetPhoneWidgetSyncService implements PhoneWidgetSyncService {
           row.creditsSuffix ?? '',
         );
         await HomeWidget.saveWidgetData<String>('row_${i}_label', row.label);
+        await HomeWidget.saveWidgetData<String>(
+          'row_${i}_family',
+          row.familyLabel ?? '',
+        );
+        await HomeWidget.saveWidgetData<String>(
+          'row_${i}_pool',
+          row.poolLabel ?? '',
+        );
+        await HomeWidget.saveWidgetData<String>(
+          'row_${i}_resets_at',
+          row.resetsAt?.toUtc().toIso8601String() ?? '',
+        );
         // Hex string — ARGB ints with the high bit set arrive as Long on Android
         // and ClassCastException SharedPreferences.getInt.
         await HomeWidget.saveWidgetData<String>(
@@ -165,6 +177,9 @@ final class HomeWidgetPhoneWidgetSyncService implements PhoneWidgetSyncService {
         await HomeWidget.saveWidgetData<String>('row_${i}_percent', '');
         await HomeWidget.saveWidgetData<String>('row_${i}_credits', '');
         await HomeWidget.saveWidgetData<String>('row_${i}_label', '');
+        await HomeWidget.saveWidgetData<String>('row_${i}_family', '');
+        await HomeWidget.saveWidgetData<String>('row_${i}_pool', '');
+        await HomeWidget.saveWidgetData<String>('row_${i}_resets_at', '');
         await HomeWidget.saveWidgetData<String>('row_${i}_color', '');
       }
     }

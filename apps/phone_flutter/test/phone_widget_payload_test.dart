@@ -44,6 +44,97 @@ void main() {
     expect(payload.rows, isEmpty);
   });
 
+  test('preserves exact window resets and complete pool labels', () {
+    final shortReset = DateTime.utc(2028, 2, 10, 9, 15);
+    final longReset = DateTime.utc(2028, 2, 17, 11, 45);
+    final otherProviderReset = DateTime.utc(2028, 2, 11, 14, 30);
+    const pool = 'Weekly pool · Complete name';
+    final account = snapshot.primaryAccount!.toJson();
+    final source = DashboardSnapshot.fromJson({
+      ...snapshot.toJson(),
+      'accounts': [
+        {
+          ...account,
+          'accountId': 'claude-local',
+          'provider': 'claude',
+          'allowances': [
+            _allowance('window.short', pool, 80, resetsAt: shortReset),
+            _allowance('window.long', pool, 60, resetsAt: longReset),
+          ],
+        },
+        {
+          ...account,
+          'accountId': 'codex-local',
+          'provider': 'codex',
+          'allowances': [
+            _allowance('window.short', pool, 40, resetsAt: otherProviderReset),
+            _allowance('window.no-reset', pool, 20),
+          ],
+        },
+      ],
+    });
+
+    final payload = buildPhoneWidgetPayload(
+      source,
+      const PhoneWidgetPreferences(
+        selectedIds: [
+          'allowance.claude.window.short',
+          'allowance.claude.window.long',
+          'allowance.codex.window.short',
+          'allowance.codex.window.no-reset',
+        ],
+      ),
+    );
+
+    expect(
+      payload.rows.map(
+        (row) => (
+          row.familyLabel,
+          row.poolLabel,
+          row.remainingPercent,
+          row.resetsAt,
+        ),
+      ),
+      [
+        ('Claude', pool, 20, shortReset),
+        ('Claude', pool, 40, longReset),
+        ('Codex', pool, 60, otherProviderReset),
+        ('Codex', pool, 80, null),
+      ],
+    );
+  });
+
+  test('budget identity retains its connection without an allowance reset', () {
+    final account = _asConnection(snapshot).primaryAccount!.toJson();
+    account['allowances'] = [
+      _allowance(
+        'window.short',
+        'Today',
+        50,
+        resetsAt: DateTime.utc(2028, 2, 10, 9, 15),
+      ),
+    ];
+    final source = DashboardSnapshot.fromJson({
+      ...snapshot.toJson(),
+      'accounts': [account],
+    });
+
+    final payload = buildPhoneWidgetPayload(
+      source,
+      const PhoneWidgetPreferences(
+        selectedIds: ['budget.anthropic.platform.today'],
+      ),
+    );
+
+    expect(payload.rows, hasLength(1));
+    final row = payload.rows.single;
+    expect(row.label, 'Anthropic platform · Today');
+    expect(row.familyLabel, 'Anthropic platform');
+    expect(row.poolLabel, 'Today');
+    expect(row.resetsAt, isNull);
+    expect(row.creditsSuffix, isNull);
+  });
+
   test('family accents follow the family named in the metric id', () {
     final claude = providerFamilyColor('claude').toARGB32();
     expect(phoneWidgetAccentArgb('allowance.claude.plan'), claude);
@@ -158,12 +249,15 @@ void main() {
       payload.rows.map((row) => row.label),
       containsAll(['Cursor Models', 'Cursor · Other Models']),
     );
-    expect(
-      payload.rows
-          .firstWhere((row) => row.label == 'Cursor Models')
-          .remainingPercent,
-      0,
+    final models = payload.rows.firstWhere((row) => row.label == 'Cursor Models');
+    expect(models.remainingPercent, 0);
+    expect(models.familyLabel, 'Cursor');
+    expect(models.poolLabel, 'Models');
+    final otherModels = payload.rows.firstWhere(
+      (row) => row.label == 'Cursor · Other Models',
     );
+    expect(otherModels.familyLabel, 'Cursor');
+    expect(otherModels.poolLabel, 'Other Models');
   });
 
   test('appends per-provider purchased credits like Wear Glance', () {
@@ -267,6 +361,21 @@ void main() {
     );
   });
 }
+
+Map<String, Object?> _allowance(
+  String id,
+  String label,
+  double usedPercent, {
+  DateTime? resetsAt,
+}) => {
+  'id': id,
+  'source': 'plan',
+  'label': label,
+  'usedPercent': usedPercent,
+  'windowMinutes': 300,
+  'resetsAt': resetsAt?.toUtc().toIso8601String(),
+  'status': 'ok',
+};
 
 /// Mock fixture as a real connection: mock accounts hold no metric slots.
 DashboardSnapshot _asConnection(DashboardSnapshot snapshot) {
