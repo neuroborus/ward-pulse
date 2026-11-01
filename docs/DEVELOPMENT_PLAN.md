@@ -2708,7 +2708,7 @@ matched unchanged generators in the separate throwaway HOST correspondence check
 Earlier failed generation/candidate records and measurements below apply to their dated
 builds. This face refinement adds no widget feature and does not close Phase 17's paired gate.
 
-**Face-local temperature choice 2026-11-01 — implementation, native acceptance pending.**
+**Face-local temperature choice 2026-11-01 — scoped emulator acceptance complete; physical/OEM deferred.**
 `face` and `cellReadingText` in `tools/render-watchface.mjs` add one WFF2 Temperature editor list,
 default Auto, with Celsius and Fahrenheit options using canonical strings shared by Legacy
 and Push. Auto and matching units preserve the original integer; a known opposite WEATHER
@@ -2718,11 +2718,16 @@ the bare recess, and assigned-provider text/opaque wells/assignments/taps remain
 There is no phone preference, new weather service, schema/transport change or additional slot.
 `check_temperature` in `tools/check-watchface-structure.py` covers emitted configuration and
 numerical/fallback/provider contracts through the existing generator invocation. Illustrative
-Auto/Celsius art stays illustrative. Required Native checks and Lazy Worker confirmation remain
-with the owning execution; HOST full WFF/Wear validation and installed-active editor/default,
-save/reopen persistence, meaningful known-unit conversion/explicit suffix and state recovery
-remain Pending after whole DONE and ownership retirement. Unavailable native source evidence
-must be recorded separately from passes; physical/OEM confirmation stays deferred. See
+Auto/Celsius art stays illustrative. Source commit `bbc9a46` completed its owning Lazy execution;
+HOST full WFF/Wear gates passed. On the canonical 384×384 round API36 emulator, installed
+Legacy `6fc79b39…` retained instance `f78b616d…`: Celsius and Fahrenheit survived editor
+reopening, with separate live `57°F` → `14°C` → `57°F` observations. Auto was restored and
+again showed live `57°F`; the final read-only eight-slot bracket passed against the expected
+restored configuration. Fixed editor-preview `25°C`/`77°F` is not live-weather evidence or an
+exact simultaneous cohort. The selection applies only to built-in WEATHER; external opaque-
+provider `7°` was not natively retested in this session. Native negative/extreme values and
+unsupported/unavailable-source branches remain unobserved and source-only
+coverage is not promoted to native proof. Physical/OEM confirmation stays deferred. See
 [Upper cells](product/WATCH_RING_DESIGN.md#upper-cells-revision-2026-10-09) for the locked behavior.
 
 **Selected-zero revision 2026-10-13.** The retained-zero ring and legend treatment changes

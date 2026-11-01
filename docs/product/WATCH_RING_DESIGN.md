@@ -1884,13 +1884,21 @@ called this band the "upper aperture"; it is the same band.
     `check_temperature` in `tools/check-watchface-structure.py`, invoked by `assertConditionTrees`
     in `tools/render-watchface.mjs`, exercises the emitted list, canonical labels, conditions,
     parameters, numerical/rounding/size boundaries, unknown/unavailable fallback, provider text,
-    opaque wells and eight-slot ownership. This is source regression coverage, not native editor,
-    rendering or persistence proof. Current-candidate editor/default/save-and-reopen behavior,
-    meaningful known-source conversion with an explicit suffix, active-artifact identity and
-    settings/assignment restoration remain **Pending** for scoped HOST acceptance. Observe Auto,
-    provider and availability behavior where the existing route supports it; record unavailable
-    source evidence honestly. Physical/OEM confirmation remains deferred, and earlier Fahrenheit
-    observations below do not accept this selector.
+    opaque wells and eight-slot ownership. This is source regression coverage, not native proof
+    of every fallback or numerical boundary.
+
+    **Scoped native acceptance, 2026-11-01.** On the canonical 384×384 round API36 emulator,
+    installed Legacy APK `6fc79b39…` retained instance `f78b616d…`. The system editor saved
+    Celsius and Fahrenheit across reopening; separate live frames showed `57°F`, converted
+    `14°C`, then `57°F`. Auto was restored and the live face again showed `57°F`. The editor's
+    fixed `25°C`/`77°F` preview is separate from live weather; these observations are not a
+    simultaneous exact weather cohort. The selection applies only to built-in WEATHER;
+    external opaque-provider `7°` was not natively retested in this session. The final
+    read-only eight-slot bracket passed with the expected restored configuration and same
+    instance. Full HOST WFF/Wear gates passed. Native negative/extreme values and unsupported/
+    unavailable-source branches remain unobserved; their coverage above is source-only.
+    Physical/OEM confirmation remains deferred, and earlier Fahrenheit observations below
+    retain their dated scope.
 
     So the default costs the wearer nothing. All three cells stay theirs: the moment one is
     filled, its opaque well covers the chrome under it and that reading is gone; empty it again
