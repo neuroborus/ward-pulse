@@ -2730,6 +2730,19 @@ unsupported/unavailable-source branches remain unobserved and source-only
 coverage is not promoted to native proof. Physical/OEM confirmation stays deferred. See
 [Upper cells](product/WATCH_RING_DESIGN.md#upper-cells-revision-2026-10-09) for the locked behavior.
 
+**Upper-complication compatibility audit 2026-11-01 — bounded emulator proof; no runtime change.**
+On the canonical Round API36 emulator, retained Legacy `6fc79b39…`/instance `f78b616d…`
+showed Battery short text `100` in all three cells, with weather/UV occluded, true AMBIENT
+and an INTERACTIVE return. Emulator Heart Rate showed mock `79`; WardPulse outer half 1
+showed ranged data with supplied text `64`, separate from editor-preview `62`. A centre-region
+tap opened Settings Battery; specific completed slot dispatch was not identified. Exact
+Day/Empty/Empty plus Auto were restored, with a passing six-inventory eight-slot read-only
+bracket against `a0f58cef…` and newer Live metrics preserved. Current `cellSlot` reads TEXT
+only: numeric fallback remains design intent, not a primary-contract guarantee or a native
+missing-TEXT observation. Monochrome/ambient-image, long/custom/extreme labels, positive
+NoData-placeholder and physical/OEM compatibility remain unproved. No runtime correction
+is justified from the unavailable case; the owning design retains the historical evidence.
+
 **Selected-zero revision 2026-10-13.** The retained-zero ring and legend treatment changes
 no upper-cell geometry. That build used the complete cells
 at integer origins `(152,114)`, `(204,100)`, `(256,114)`, the three-unit downward move, full

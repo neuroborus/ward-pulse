@@ -1529,7 +1529,8 @@ called this band the "upper aperture"; it is the same band.
    rather than on the slot, since tinting the slot would take the well with it. It is
    deliberately not tinted a family colour: on this face a family colour means *this ring's
    provider*, and a cell is not a ring. `RANGED_VALUE` is drawn as **text, never as an arc** —
-   `TEXT` when the provider sends it, the value itself otherwise. A small arc in a cell would
+   `TEXT` when the provider sends it; the intended fallback is the value itself otherwise.
+   A small arc in a cell would
    put a second arc language on a face whose arcs already mean one thing, layer rule 1's *one
    ring = one metric of one connection*, and it would say it a few units from the real ones —
    rule 1 records the clearances of every cell's far edge from the innermost band.
@@ -1539,9 +1540,33 @@ called this band the "upper aperture"; it is the same band.
    `SMALL_IMAGE` and `LONG_TEXT` are left out of `supportedTypes` on purpose, which is what
    keeps the system editor from offering a provider that supplies only one of them.
    `SMALL_IMAGE` is the provider's own picture in the provider's own colours and WFF offers no
-   tint for it — a foreign colour image in a 42-unit circle, on a face whose whole palette is
+   tint for it — a foreign colour image in a 52-unit circle, on a face whose whole palette is
    family colours over near-black, reads as a sticker on the glass. `LONG_TEXT` is sized for a
    slot several times this one and has no reading at four glyphs (rule 6).
+
+   **Scoped compatibility audit, 2026-11-01.** Current `cellSlot` in
+   `tools/render-watchface.mjs` reads only `[COMPLICATION.TEXT]` for `SHORT_TEXT` and
+   `RANGED_VALUE`; it does not draw their `TITLE` or companion icon. The monochrome-only
+   branch remains separate. The intended numeric fallback above has no explicit Source
+   branch, and the checked [WFF Complication reference](https://developer.android.com/reference/wear-os/wff/complication/complication)
+   lists text and ranged fields separately without guaranteeing an automatic fallback or a
+   blank result. Actual ranged data without `TEXT` remains unverified, not a proved blank bug.
+
+   On the canonical 384×384 round API36 emulator, Legacy `6fc79b39…` retained instance
+   `f78b616d…`. Battery was configured and observed as `SHORT_TEXT` in all three positions,
+   showing `100`; the middle/right opaque wells hid built-in weather/UV. All three readings
+   remained visible in true `AMBIENT` and after return to `INTERACTIVE`. A centre-region tap
+   opened Settings Battery, without proving a specific completed slot dispatch. Emulator
+   Placeholder Heart Rate showed mock `79` as short text, not real health data. WardPulse
+   outer half 1 in the middle cell was configured/observed as `RANGED_VALUE` and showed its
+   supplied text `64`; editor-preview `62` was separate evidence, not that live value.
+   Day/Empty/Empty and Auto were restored; the final read-only probe passed six complete
+   eight-slot inventories against configuration `a0f58cef…` and the same instance. The full
+   restored face retained newer Live metrics. No OS preferences or physical devices changed.
+   Missing-TEXT ranged data, monochrome/ambient-image rendering, long/custom/extreme labels
+   and a positive NoData-placeholder case remain unobserved. This is bounded compatibility
+   evidence, not every provider/field combination or physical/OEM acceptance; no runtime
+   change is justified by the unavailable missing-TEXT case.
 
    **Correction 2026-10-11 — what a device confirmed was the `SHORT_TEXT` path, not this one.**
    An entry written here earlier that day claimed a `RANGED_VALUE` had been witnessed drawing as
