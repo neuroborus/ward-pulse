@@ -42,7 +42,7 @@ This delivery check applies to preview handoff; mock approval remains distinct f
 
 Judge the whole affected surface after the final change: every metric/half, legends, units, clipping,
 default cells, status controls and navigation context relevant to the case. Do not infer that uninspected
-neighboring elements are correct because one detail passed. Verify real circle/screen boundaries before measuring or cropping.
+neighboring elements are correct because one detail passed. Verify real circle/screen boundaries before measuring or cropping. For responsive widgets/mocks, distinguish outer/background frame fill from actual content sizing and use of space: a filled background and unclipped glyphs do not prove well-sized content. Compare visible inter-column and edge whitespace and readable size with the owner's request and actual/proposed host-frame geometry before declaring ZERO or showing the mock.
 
 Classify the complete original's intended visible mode and settled state before using glyph/ROI measurements.
 Renderer metadata alone does not validate a mixed wake/handoff frame or one covered by an overlay.
