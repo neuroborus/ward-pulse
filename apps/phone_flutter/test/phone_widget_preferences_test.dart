@@ -4,8 +4,86 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
+import 'package:ward_pulse_phone/widget/phone_widget_payload.dart';
 
 void main() {
+  test(
+    'widget keeps six independent rows even when three watch pairs would not fit',
+    () {
+      final base = DashboardSnapshot.fromJsonString(
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync(),
+      );
+      final dashboard = DashboardSnapshot.fromJson(
+        base.toJson()
+          ..['accounts'] = [
+            for (final (provider, connection, ids) in [
+              (
+                'claude',
+                'anthropic.plan',
+                ['claude-five-hour', 'claude-seven-day-fable'],
+              ),
+              ('codex', 'openai.plan', ['codex-primary', 'spark-primary']),
+              (
+                'cursor',
+                'cursor.plan',
+                ['cursor-plan-models', 'cursor-plan-other'],
+              ),
+            ])
+              {
+                ...base.primaryAccount!.toJson(),
+                'provider': provider,
+                'connection': connection,
+                'allowances': [
+                  for (final id in ids)
+                    {
+                      'id': id,
+                      'label': id,
+                      'source': 'plan',
+                      'usedPercent': 100.0,
+                      'windowMinutes': 10080,
+                      'resetsAt': '2026-11-08T08:00:00Z',
+                      'status': 'rateLimited',
+                    },
+                ],
+              },
+          ],
+      );
+      const ids = [
+        'allowance.claude.claude-five-hour',
+        claudeFableRingId,
+        'allowance.codex.codex-primary',
+        'allowance.codex.spark-primary',
+        cursorOwnPoolId,
+        cursorOtherPoolId,
+      ];
+      expect(
+        watchRingCapacityReason(migrateWatchRingSelectedIds(ids)),
+        isNotNull,
+      );
+      final preferences = phoneWidgetPreferencesFromStoredIds(ids);
+      expect(preferences.selectedIds, ids);
+      expect(
+        resolvePhoneWidgetMetrics(dashboard, preferences).map((m) => m.id),
+        ids,
+      );
+      final payload = buildPhoneWidgetPayload(dashboard, preferences);
+      expect(payload.rows, hasLength(6));
+      expect(payload.rows.every((row) => row.remainingPercent == 0), isTrue);
+      expect(
+        payload.rows.every(
+          (row) => row.resetsAt == DateTime.utc(2026, 11, 8, 8),
+        ),
+        isTrue,
+      );
+      expect(
+        payload.rows.map((row) => row.poolLabel),
+        unorderedEquals(ids.map((id) => id.split('.').last)),
+      );
+    },
+  );
+
   test('Codex widget keeps every window and its saved selection', () {
     final base = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),

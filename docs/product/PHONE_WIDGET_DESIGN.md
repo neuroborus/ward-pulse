@@ -36,6 +36,11 @@ chrome do not inherit this exception. Expanded independent rows, six selections,
 purchased-credit eligibility, real optional resets and known-zero/unknown behavior
 are unchanged. This Source palette decision does not close pending native/public acceptance.
 
+**Selection independence revision 2026-11-01.** Fable weekly is its own expanded widget
+choice. Keep six independent rows even when the same metrics would exceed watch band or
+split capacity. Watch correction must not block local widget publication, change its saved
+choices, pair its rows or change purchased-credit eligibility and actual reset ownership.
+
 1. **One slot = one percent metric of one connection** — one connection's local budget for a
    period, a provider plan window, or a purchased meter (Extra usage, on-demand, credits %) when
    the provider reports a %. There is no summed Today / Week / Month slot: see
@@ -43,8 +48,9 @@ are unchanged. This Source palette decision does not close pending native/public
 2. **Claude and Codex plan windows stay expanded** on the phone widget: Claude `5h`,
    `Weekly`, Opus/Sonnet weekly when present; Codex main and Spark primary/secondary
    windows when reported, including `Spark 5h` / `Spark Weekly`. Existing per-window
-   selections survive unchanged. Watchface/Glance collapse Claude to one ring and Codex
-   independently to one main-limit ring and one Spark ring before pairing.
+   selections survive unchanged. Fable weekly remains a separate choice. Watchface/Glance
+   collapse ordinary Claude windows to one ring, with Fable separately outside it when both
+   are selected, and Codex independently to one main-limit ring and one Spark ring before pairing.
 3. **Cursor Models and Other Models** are separate selectable rows whenever the usage-summary
    reports both pool percents.
 4. **Remaining language** — display `(100 - usedPercent)` for percent metrics; family colors match

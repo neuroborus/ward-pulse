@@ -74,13 +74,16 @@ void main() {
     ]);
   });
 
-  test('clamps stored ids to three slots', () {
+  test('keeps invalid stored ids for correction instead of trimming', () {
     const preferences = WatchRingPreferences(
       selectedIds: ['a', 'b', 'c', 'd', 'e'],
     );
 
-    expect(preferences.clampedIds, ['a', 'b', 'c']);
-    expect(jsonEncode(preferences.clampedIds), '["a","b","c"]');
+    expect(preferences.migratedIds, preferences.selectedIds);
+    expect(
+      watchRingCapacityReason(preferences.migratedIds),
+      contains('3 bands'),
+    );
   });
 
   test('the surface keeps four rings when they are three bands', () {
@@ -108,10 +111,8 @@ void main() {
   });
 
   test(
-    'a pool still joins its partner from behind a ring that does not fit',
+    'migration preserves an over-capacity selection including both halves',
     () {
-      // The second pool is free once the first is in, so a full budget must not
-      // hide it: stopping at the first misfit would send the watch half a pair.
       const crowded = WatchRingPreferences(
         selectedIds: [
           'allowance.claude.plan',
@@ -126,9 +127,11 @@ void main() {
         'allowance.claude.plan',
         'budget.anthropic.platform.week',
         cursorOwnPoolId,
+        'budget.anthropic.platform.today',
         cursorOtherPoolId,
       ]);
-      expect(watchRingSlotCost(crowded.clampedIds), 3);
+      expect(watchRingSlotCost(crowded.migratedIds), 4);
+      expect(watchRingCapacityReason(crowded.migratedIds), contains('3 bands'));
     },
   );
 
@@ -153,6 +156,143 @@ void main() {
     label: id,
     usedPercent: used,
     status: ProviderStatus.ok,
+  );
+
+  test('Fable keeps its own catalogue row, title and weekly subtitle', () {
+    final catalog = watchRingCatalog(_threePairSnapshot());
+    final claude = catalog.singleWhere((ring) => ring.id == claudePlanRingId);
+    final fable = catalog.singleWhere((ring) => ring.id == claudeFableRingId);
+    expect(claude.catalogTitle, 'Claude plan');
+    expect(claude.label, '5h');
+    expect(claude.usedPercent, 40);
+    expect(fable.catalogTitle, 'Claude · Fable');
+    expect(fable.catalogSubtitle, 'Fable weekly · 10% left · OK');
+    expect(fable.usedPercent, 90);
+    expect(
+      migrateWatchRingSelectedIds([
+        claudeFableRingId,
+        claudePlanRingId,
+        claudeFableRingId,
+      ]),
+      [claudeFableRingId, claudePlanRingId],
+    );
+  });
+
+  for (final innerIsTighter in [true, false]) {
+    test(
+      'Claude stays inside Fable when tighter half changes: $innerIsTighter',
+      () {
+        final claude = ring(claudePlanRingId, innerIsTighter ? 100 : 10);
+        final fable = ring(claudeFableRingId, innerIsTighter ? 10 : 100);
+        final middle = ring(codexPlanRingId, 50);
+        final surface = orderWatchRingsForSurface([middle, fable, claude]);
+        expect(pairWatchRings(surface), [(claude, fable), (middle, null)]);
+        for (final half in [claude, fable]) {
+          expect(pairWatchRings([half]), [(half, null)]);
+        }
+      },
+    );
+  }
+
+  test(
+    'defaults admit catalogue order and reject the third pair completion',
+    () {
+      final dashboard = _threePairSnapshot();
+      final selected = watchRingSelectionIds(
+        dashboard,
+        const WatchRingPreferences(),
+      );
+      expect(selected, [
+        codexPlanRingId,
+        codexSparkRingId,
+        cursorOwnPoolId,
+        cursorOtherPoolId,
+        claudePlanRingId,
+      ]);
+      expect(watchRingCapacityReason(selected), isNull);
+      expect(watchRingSlotCost([...selected, claudeFableRingId]), 3);
+      expect(
+        watchRingCapacityReason([...selected, claudeFableRingId]),
+        contains('two paired bands'),
+      );
+      // Surface ordering must not conceal an invalid explicit selection.
+      final explicit = WatchRingPreferences(
+        selectedIds: [...selected, claudeFableRingId],
+      );
+      final ordered = orderWatchRingsForSurface(
+        resolveWatchRings(dashboard, explicit),
+      );
+      expect(ordered, hasLength(6));
+      expect(watchRingSelectionIds(dashboard, explicit), explicit.selectedIds);
+      expect(
+        watchRingPayloadSubtitle(dashboard, explicit),
+        contains('correct ring choices'),
+      );
+    },
+  );
+
+  test(
+    'capacity counts saved unknown halves without treating them as zero',
+    () {
+      final dashboard = _threePairSnapshot(fableUsed: null);
+      const preferences = WatchRingPreferences(
+        selectedIds: [claudePlanRingId, claudeFableRingId],
+      );
+      final fable = watchRingCatalog(
+        dashboard,
+      ).singleWhere((ring) => ring.id == claudeFableRingId);
+      expect(fable.isAvailable, isFalse);
+      expect(fable.usedPercent, isNull);
+      expect(
+        watchRingSelectionIds(dashboard, preferences),
+        preferences.selectedIds,
+      );
+      expect(
+        resolveWatchRings(dashboard, preferences).single.id,
+        claudePlanRingId,
+      );
+      final zero = watchRingCatalog(
+        _threePairSnapshot(fableUsed: 100),
+      ).singleWhere((ring) => ring.id == claudeFableRingId);
+      expect(zero.isAvailable, isTrue);
+      expect(zero.remainingPercent, 0);
+      expect(
+        watchRingCapacityReason([
+          codexPlanRingId,
+          codexSparkRingId,
+          cursorOwnPoolId,
+          cursorOtherPoolId,
+          claudePlanRingId,
+          claudeFableRingId,
+        ]),
+        contains('two paired bands'),
+      );
+    },
+  );
+
+  test(
+    'secure preferences preserve invalid choices through partial correction',
+    () async {
+      const key = 'wardpulse.watch.ringIds';
+      const ids = [
+        codexPlanRingId,
+        codexSparkRingId,
+        cursorOwnPoolId,
+        cursorOtherPoolId,
+        claudePlanRingId,
+        claudeFableRingId,
+        'missing',
+      ];
+      FlutterSecureStorage.setMockInitialValues({key: jsonEncode(ids)});
+      const storage = FlutterSecureStorage();
+      final store = SecureWatchRingPreferenceStore(storage: storage);
+      expect((await store.read()).selectedIds, ids);
+      expect(jsonDecode((await storage.read(key: key))!), ids);
+      final corrected = ids.where((id) => id != 'missing').toList();
+      await store.write(WatchRingPreferences(selectedIds: corrected));
+      expect((await store.read()).selectedIds, corrected);
+      expect(watchRingCapacityReason(corrected), contains('two paired bands'));
+    },
   );
 
   for (final innerIsTighter in [true, false]) {
@@ -1081,6 +1221,58 @@ Map<String, dynamic> _spentBudget(String period, {double? usedPercent}) {
     'projectedTotal': null,
     'status': 'ok',
   };
+}
+
+/// Synthetic catalogue order: two complete pairs before the Claude/Fable pair.
+DashboardSnapshot _threePairSnapshot({double? fableUsed = 90}) {
+  final source = _claudeCodexSnapshot(
+    fiveHourUsed: 40,
+    sevenDayUsed: 20,
+    codexUsed: 10,
+  );
+  final claude = source.accounts.first.toJson();
+  claude['allowances'] = [
+    ...source.accounts.first.allowances.map((a) => a.toJson()),
+    {
+      ..._planAllowance(
+        id: 'claude-seven-day-fable',
+        label: 'Fable weekly',
+        usedPercent: fableUsed ?? 0,
+        windowMinutes: 10080,
+      ),
+      'usedPercent': fableUsed,
+      'status':
+          fableUsed == null
+              ? 'unknown'
+              : fableUsed >= 100
+              ? 'rateLimited'
+              : 'ok',
+    },
+  ];
+  final codex =
+      source.accounts.last.toJson()
+        ..['allowances'] = [
+          _planAllowance(
+            id: 'codex-primary',
+            label: '5h',
+            usedPercent: 10,
+            windowMinutes: 300,
+          ),
+          _planAllowance(
+            id: 'spark-primary',
+            label: 'Spark 5h',
+            usedPercent: 20,
+            windowMinutes: 300,
+          ),
+        ];
+  return DashboardSnapshot.fromJson(
+    source.toJson()
+      ..['accounts'] = [
+        codex,
+        _cursorPairAndCodexSnapshot().accounts.first.toJson(),
+        claude,
+      ],
+  );
 }
 
 DashboardSnapshot _claudeCodexSnapshot({

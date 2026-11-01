@@ -38,8 +38,15 @@ class MethodChannelWatchSyncService implements WatchSyncService {
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
     bool mockDataMode = false,
-  }) {
-    return WardPulseWatchSync.syncSummary(
+  }) async {
+    // Keep the last valid publication while the owner corrects saved choices.
+    if (watchRingCapacityReason(
+          watchRingSelectionIds(snapshot, ringPreferences),
+        ) !=
+        null) {
+      return;
+    }
+    await WardPulseWatchSync.syncSummary(
       WatchDashboardSummaryPayload.fromSnapshot(
         snapshot,
         ringPreferences,
@@ -82,6 +89,12 @@ class WatchDashboardSummaryPayload {
     DateTime? clock,
     bool mockDataMode = false,
   }) {
+    final capacityReason = watchRingCapacityReason(
+      watchRingSelectionIds(snapshot, ringPreferences),
+    );
+    if (capacityReason != null) {
+      throw StateError(capacityReason);
+    }
     final rings = orderWatchRingsForSurface(
       resolveWatchRings(snapshot, ringPreferences),
       snapshot: snapshot,

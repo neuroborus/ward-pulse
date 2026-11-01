@@ -35,6 +35,7 @@ import 'package:ward_pulse_phone/settings/recovery_notification_preferences.dart
 import 'package:ward_pulse_phone/sync/recovery_notifications.dart';
 import 'package:ward_pulse_phone/sync/recovery_watchlist.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
+import 'package:ward_pulse_phone/watchface/watchface_screen.dart';
 
 void main() {
   for (final brightness in Brightness.values) {
@@ -1139,36 +1140,140 @@ void main() {
     expect(find.text('Usage dashboard'), findsOneWidget);
   });
 
-  testWidgets('slot count follows the rows, not a stored selection', (
-    tester,
-  ) async {
-    final store =
-        _MemoryWatchRingStore()
-          ..value = const WatchRingPreferences(
-            selectedIds: [
-              'allowance.codex.plan',
-              'budget.anthropic.platform.today',
-              'budget.anthropic.platform.week',
-            ],
-          );
+  testWidgets(
+    'missing saved choices remain visible and removable after a failed load',
+    (tester) async {
+      final store =
+          _MemoryWatchRingStore()
+            ..value = const WatchRingPreferences(
+              selectedIds: [
+                'allowance.codex.plan',
+                'budget.anthropic.platform.today',
+                'budget.anthropic.platform.week',
+              ],
+            );
 
-    await tester.pumpWidget(
-      WardPulseApp(
-        repository: const _FailingDashboardRepository(
-          DashboardSyncIssue.providerUnavailable,
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: const _FailingDashboardRepository(
+            DashboardSyncIssue.providerUnavailable,
+          ),
+          watchRingPreferenceStore: store,
         ),
-        watchRingPreferenceStore: store,
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Watchface'));
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
 
-    // A failed load leaves no rows to tick, so counting the stored ids would
-    // claim three slots the screen does not show.
-    expect(find.text('No metrics yet'), findsOneWidget);
-    expect(find.textContaining('0 of 3 slots used'), findsOneWidget);
-  });
+      expect(find.text('No metrics yet'), findsOneWidget);
+      expect(find.textContaining('3 of 3 slots used'), findsOneWidget);
+      final saved = find.widgetWithText(CheckboxListTile, 'Codex plan');
+      expect(tester.widget<CheckboxListTile>(saved).value, isTrue);
+      expect(tester.widget<CheckboxListTile>(saved).onChanged, isNotNull);
+      await tester.ensureVisible(saved);
+      await tester.tap(saved);
+      await tester.pumpAndSettle();
+      expect(store.value.selectedIds, [
+        'budget.anthropic.platform.today',
+        'budget.anthropic.platform.week',
+      ]);
+      expect(find.textContaining('2 of 3 slots used'), findsOneWidget);
+    },
+  );
+
+  for (final (ids, reason) in [
+    (
+      [
+        codexPlanRingId,
+        codexSparkRingId,
+        cursorOwnPoolId,
+        cursorOtherPoolId,
+        claudePlanRingId,
+      ],
+      'two paired bands',
+    ),
+    (
+      [codexPlanRingId, cursorOwnPoolId, 'budget.anthropic.plan.today'],
+      '3 bands',
+    ),
+  ]) {
+    testWidgets('Watchface rejects an addition over $reason without saving', (
+      tester,
+    ) async {
+      final writes = <WatchRingPreferences>[];
+      await tester.pumpWidget(
+        _watchPicker(
+          snapshot: _threePairDashboard(),
+          initial: WatchRingPreferences(selectedIds: ids),
+          onChanged: writes.add,
+        ),
+      );
+      final fable = find.widgetWithText(CheckboxListTile, 'Fable');
+      expect(tester.widget<CheckboxListTile>(fable).value, isFalse);
+      expect(tester.widget<CheckboxListTile>(fable).onChanged, isNull);
+      expect(
+        find.descendant(of: fable, matching: find.textContaining(reason)),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(fable);
+      await tester.tap(fable);
+      await tester.pumpAndSettle();
+      expect(writes, isEmpty);
+    });
+  }
+
+  testWidgets(
+    'invalid saved choices allow unavailable and missing removals until corrected',
+    (tester) async {
+      const ids = [
+        codexPlanRingId,
+        codexSparkRingId,
+        cursorOwnPoolId,
+        cursorOtherPoolId,
+        claudePlanRingId,
+        claudeFableRingId,
+        'missing.metric',
+      ];
+      final writes = <WatchRingPreferences>[];
+      await tester.pumpWidget(
+        _watchPicker(
+          snapshot: _threePairDashboard(fableUsed: null),
+          initial: const WatchRingPreferences(selectedIds: ids),
+          onChanged: writes.add,
+        ),
+      );
+      expect(find.text('Correct ring choices'), findsOneWidget);
+      expect(
+        find.textContaining('phone and widget updates continue'),
+        findsOneWidget,
+      );
+      final fable = find.widgetWithText(CheckboxListTile, 'Fable');
+      expect(tester.widget<CheckboxListTile>(fable).onChanged, isNotNull);
+      await tester.ensureVisible(fable);
+      await tester.tap(fable);
+      await tester.pumpAndSettle();
+      expect(
+        writes.single.selectedIds,
+        ids.where((id) => id != claudeFableRingId),
+      );
+      expect(find.text('Correct ring choices'), findsOneWidget);
+      final missing = find.widgetWithText(
+        CheckboxListTile,
+        'Saved metric: missing.metric',
+      );
+      expect(tester.widget<CheckboxListTile>(missing).value, isTrue);
+      expect(tester.widget<CheckboxListTile>(missing).onChanged, isNotNull);
+      await tester.ensureVisible(missing);
+      await tester.tap(missing);
+      await tester.pumpAndSettle();
+      expect(
+        writes.last.selectedIds,
+        ids.where((id) => id != claudeFableRingId && id != 'missing.metric'),
+      );
+      expect(find.text('Correct ring choices'), findsNothing);
+      expect(tester.widget<CheckboxListTile>(fable).onChanged, isNull);
+    },
+  );
 
   testWidgets('Watchface tab owns ring slots and payload preview', (
     tester,
@@ -3135,6 +3240,83 @@ class _MemoryPhoneWidgetStore implements PhoneWidgetPreferenceStore {
   Future<void> write(PhoneWidgetPreferences next) async {
     value = next;
   }
+}
+
+Widget _watchPicker({
+  required DashboardSnapshot snapshot,
+  required WatchRingPreferences initial,
+  required ValueChanged<WatchRingPreferences> onChanged,
+}) {
+  var preferences = initial;
+  return MaterialApp(
+    home: Scaffold(
+      body: StatefulBuilder(
+        builder:
+            (context, setState) => WatchfaceScreen(
+              snapshot: snapshot,
+              ringPreferences: preferences,
+              onRefresh: () async {},
+              onRingPreferencesChanged: (next) async {
+                onChanged(next);
+                setState(() => preferences = next);
+              },
+            ),
+      ),
+    ),
+  );
+}
+
+/// Synthetic catalogue with all three supported pairs and an optional unknown half.
+DashboardSnapshot _threePairDashboard({double? fableUsed = 90}) {
+  final source = DashboardSnapshot.fromJsonString(
+    File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+  );
+  return DashboardSnapshot.fromJson(
+    source.toJson()
+      ..['accounts'] = [
+        for (final (provider, connection, limits) in [
+          (
+            'claude',
+            'anthropic.plan',
+            [
+              ('claude-five-hour', '5h', 40.0),
+              ('claude-seven-day-fable', 'Fable weekly', fableUsed),
+            ],
+          ),
+          (
+            'codex',
+            'openai.plan',
+            [
+              ('codex-primary', '5h', 30.0),
+              ('spark-primary', 'Spark 5h', 20.0),
+            ],
+          ),
+          (
+            'cursor',
+            'cursor.plan',
+            [
+              ('cursor-plan-models', 'Cursor Models', 70.0),
+              ('cursor-plan-other', 'Other Models', 20.0),
+            ],
+          ),
+        ])
+          {
+            ...source.primaryAccount!.toJson(),
+            'provider': provider,
+            'connection': connection,
+            'allowances': [
+              for (final (id, label, used) in limits)
+                {
+                  'id': id,
+                  'label': label,
+                  'source': 'plan',
+                  'usedPercent': used,
+                  'status': used == null ? 'unknown' : 'ok',
+                },
+            ],
+          },
+      ],
+  );
 }
 
 class _MemoryWatchRingStore implements WatchRingPreferenceStore {

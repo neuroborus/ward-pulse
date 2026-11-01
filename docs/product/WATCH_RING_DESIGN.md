@@ -110,11 +110,27 @@ An unavailable half retains the existing known-survivor fallback.
 
 The existing three bands, two split ordinals, eight slots, service identities, accepted
 clock/logo/cells, geometry, typography, caps, textures, fades and alpha rules are unchanged.
-This revision provides rendering support; phone catalogue/pair admission follows in the
-next planned commit. Native/current-Legacy and public acceptance remain **Pending** until
+The phone catalogue now exposes **Claude plan** and **Claude · Fable** separately, retaining
+the winning ordinary window and Fable weekly subtitles. Native/current-Legacy and public acceptance remain **Pending** until
 the whole execution and HOST handoff. Historical records below retain their dated scope.
 `round-plan-fable.svg` and `round-plan-fable-zero.svg` are generated synthetic review art,
 not captured provider consumption or native acceptance.
+
+**Selection revision 2026-11-01.** Enforce both three bands and two completed pairs before
+publication using the existing schema-9 split shape and slot ownership. Defaults greedily
+admit available candidates in catalogue order; completing a third pair is excluded with its
+split-capacity reason even when three bands would fit. Ordinary semantic ID migration and
+deduplication do not admit or trim explicit selections. Null still requests defaults; an
+explicit empty choice still publishes no rings; valid saved choices retain their order and IDs.
+
+An invalid saved combination stays visible in **Correct ring choices**, with distinct band
+and split reasons. Reject invalid additions without saving them. Selected unavailable or
+missing metrics remain removable, including while another removal is still required.
+Validate the full saved choice before filtering unavailable data or encoding a payload.
+Keep the last published watch summary until correction, while provider polling, local
+Dashboard and six-row independent widget updates continue. Capacity is a selection constraint,
+never an allowance's unavailability status. Native correction/delivery and public captures
+remain Pending for the post-execution HOST handoff.
 
 ## Implementation repair 2026-10-31 — retained extra paint
 
@@ -1197,10 +1213,11 @@ on its own value.
    whole point: a plan with two pools does not cost two.
    Codex windows collapse independently to `allowance.codex.plan` and
    `allowance.codex.spark`, choosing the tightest known window per limit, including zero;
-   ties prefer primary. Empty limits offer no ring, unavailable limits remain disabled,
-   and fully exhausted selected limits remain visible. The picker keeps `Codex plan`
+   ties prefer primary. Empty limits offer no ring; unavailable limits cannot be added,
+   while saved unavailable choices remain removable. Fully exhausted selected limits
+   remain visible. The picker keeps `Codex plan`
    and `Codex · Spark` stable; the winning window remains in the subtitle and payload.
-   Old per-window Watchface selections migrate before deduplication and the band budget;
+   Old per-window Watchface selections migrate and deduplicate without capacity trimming;
    widget selections remain per-window. Spark window labels are `Spark 5h` / `Spark Weekly`.
 2. **The order inside a pair is fixed by pool, never by usage.** Cursor own models take the
    inner half and left marker; external models take the outer half and right marker. Codex main

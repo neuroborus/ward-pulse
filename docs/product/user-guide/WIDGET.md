@@ -22,7 +22,9 @@ choices save as you tap.
 
 You can select up to **six** metrics. Widget selection is independent of Watchface; changing
 one does not change the other. Claude and Codex windows remain separate widget choices,
-and Cursor Models/Other Models can be separate rows. Selected exhausted pools stay as
+including Fable weekly when reported, and Cursor Models/Other Models can be separate rows.
+The watch's three-band/two-pair limits do not apply to the widget's six independent rows.
+Widget updates continue while saved watch choices need correction. Selected exhausted pools stay as
 **0%**. With all six slots used, deselect a metric before adding another.
 
 Lower remaining percentages appear first. The phone's metric selection is shared by

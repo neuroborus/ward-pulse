@@ -18,8 +18,10 @@ and real resets. This adds no new refresh, navigation or rendering geometry rule
 
 `glance-legend-fable.svg` and `glance-legend-fable-zero.svg` are synthetic illustrative
 review art, not positive-consumption captures or native measurements. Native/current-Legacy
-and public acceptance remain **Pending** for the post-execution HOST handoff. Phone catalogue
-and selection/capacity changes belong to the following planned commit. Earlier acceptance
+and public acceptance remain **Pending** for the post-execution HOST handoff. The phone
+catalogue pairs the two selected halves with three-band/two-split admission. Invalid saved
+choices pause publication and retain the last summary until corrected; unknown halves keep
+the known-survivor fallback. Earlier acceptance
 records below retain their actual dated scope.
 
 The operative legend typography and overflow rules are in

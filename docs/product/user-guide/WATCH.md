@@ -18,7 +18,8 @@ sign in to providers on the watch. If the phone has data but the watch does not,
 
 **Glance** shows remaining capacity with provider labels, compact tracks, optional purchased
 credits and refresh status. A title such as **Claude plan · Weekly** names the plan and its
-selected window. Paired **Cursor plan** or **Codex plan** rows show two pool percentages.
+selected window. Paired **Cursor plan**, **Codex plan** or **Claude / Fable** rows show two
+percentages, with the inner half first.
 Glance hides the clock to make room for larger labels. The clock remains on **Plan windows**,
 **Alerts**, the **Watch face** setup screen and the prompt shown before the first summary.
 
@@ -90,16 +91,28 @@ See [Sync and notifications](/guide/sync#refresh-now) for request delivery and r
 
 1. On the phone, open **Watchface**.
 2. Under **Ring slots → Wear & watch face**, select the known metrics you want.
-3. Read the count of used slots. The limit is three bands; some supported Codex/Cursor pairs
-   share a band, so the count can differ from the number of checked rows.
-4. Deselect an existing band choice first only if your desired choice is disabled because all
-   three bands are full. The other half of an already selected pair may remain available
-   without using another band. Separately, an unavailable metric explains its missing percentage.
+3. Read the count of used slots. The limit is three bands and at most two paired bands.
+   Selecting both halves of a supported Codex/Spark, Cursor or Claude/Fable pair shares one
+   band, so the count can differ from the number of checked rows. Either half alone uses
+   an ordinary band.
+4. If a choice is disabled, read its reason. Free another band or break another pair as
+   needed before adding it. An unavailable metric separately explains its missing percentage.
 5. Check **Next watch payload**, then allow the updated summary to reach Wear.
 
 ![Watchface selection showing three bands used by checked metrics in the light theme.](/screenshots/phone-watch-settings-light.png)
 
 ![Watchface selection showing three bands used by checked metrics in the dark theme.](/screenshots/phone-watch-settings-dark.png)
+
+These October 2026 examples predate the Fable choice and correction messages.
+
+Until you make a selection, defaults admit available metrics in catalogue order within both
+limits. Clearing every checkbox is an explicit choice to show no rings.
+
+If saved choices exceed either limit, **Correct ring choices** keeps them visible for you to
+remove. Selected unavailable or no-longer-reported choices can still be deselected, even if
+more than one removal is needed. Additions that exceed a limit are not saved. Watch updates
+pause and keep the last published summary until your choices fit; phone Dashboard and widget
+updates continue.
 
 Choose which metrics fill the bands; paired pools can share one band.
 With both the watch app and face updated, one or two available bands widen automatically
@@ -127,15 +140,21 @@ Among selected known metrics, the lowest remaining percentage appears first on G
 closest to the centre on the [face](#select-and-customize-the-face). Outside-to-inside bands
 move toward less capacity left.
 Order changes with usage; the phone picker chooses metrics, not display order.
-A shared Codex/Cursor band uses the lower percentage of its two pools for its position.
-Codex's main pool or Cursor Models keeps the left/inner half; Spark or Other Models keeps
-the right/outer half.
+A shared band uses the lower remaining percentage of its two halves for its position.
+Codex's main pool, Cursor Models or ordinary Claude keeps the left/inner half; Spark,
+Other Models or Fable keeps the right/outer half. Usage changes never swap these identities.
 
 Claude plan windows use the tightest known window, including an exhausted zero. The phone
 Dashboard still lists the individual windows. The Glance title keeps the chosen window's
 name: **5h**, **Weekly**, **Opus weekly** or **Sonnet weekly**. A selected exhausted metric
 keeps a grey empty track and pale-red **0%** token; it is not replaced by a less-used window.
 Tiny positive values rounded to zero keep ordinary styling.
+
+**Claude plan** uses those ordinary windows; **Claude · Fable** is a separate included weekly
+sub-cap when reported. Selecting both produces **Claude / Fable**. Fable uses orange
+`#FF8A00`; ordinary Claude keeps `#E8915A`. A missing percentage stays unknown: only known
+halves fill rings, and a surviving half uses an ordinary band. Reported resets stay with their
+own windows on **Plan windows**.
 
 **Next watch payload** describes what the phone will send; it is not delivery confirmation.
 Ring choices are independent of the phone's [home-widget selection](/guide/widget).

@@ -1,13 +1,145 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/sync/manual_refresh_window.dart';
+import 'package:ward_pulse_phone/sync/provider_sync_once.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  for (final (claudeUsed, fableUsed) in <(double?, double?)>[
+    (40, 90),
+    (100, 0),
+    (100, 100),
+    (null, 90),
+    (40, null),
+  ]) {
+    test(
+      'Claude/Fable payload preserves fixed halves at $claudeUsed/$fableUsed',
+      () {
+        final dashboard = _pairedDashboard(
+          claudeUsed: claudeUsed,
+          fableUsed: fableUsed,
+        );
+        final payload =
+            jsonDecode(
+                  WatchDashboardSummaryPayload.fromSnapshot(
+                    dashboard,
+                    const WatchRingPreferences(
+                      selectedIds: [claudeFableRingId, claudePlanRingId],
+                    ),
+                  ).encode(),
+                )
+                as Map<String, dynamic>;
+        expect(payload['schemaVersion'], 9);
+        final band = (payload['rings'] as List).single;
+        if (claudeUsed != null && fableUsed != null) {
+          expect(band['id'], claudePlanRingId);
+          expect(band['label'], '5h');
+          expect(band['usedPercent'], claudeUsed);
+          expect(band['split']['id'], claudeFableRingId);
+          expect(band['split']['label'], 'Fable weekly');
+          expect(band['split']['usedPercent'], fableUsed);
+        } else {
+          expect(
+            band['id'],
+            claudeUsed == null ? claudeFableRingId : claudePlanRingId,
+          );
+          expect(band['usedPercent'], claudeUsed ?? fableUsed);
+          expect(band['split'], isNull);
+        }
+        final allowances = payload['allowances'] as List;
+        expect(
+          allowances.firstWhere(
+            (a) => a['label'] == 'Claude · Fable weekly',
+          )['resetsAt'],
+          '2026-11-08T08:00:00.000Z',
+        );
+        expect(
+          allowances.firstWhere((a) => a['label'] == 'Claude · 5h')['resetsAt'],
+          '2026-11-01T12:00:00.000Z',
+        );
+      },
+    );
+  }
+
+  test(
+    'invalid publication retains the last summary while local sync continues',
+    () async {
+      final published = <String>[];
+      const channel = MethodChannel('app.wardpulse/watch_sync');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'syncWatchSummary');
+        published.add(call.arguments as String);
+        return null;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final dashboard = _pairedDashboard(fableUsed: null);
+      const valid = WatchRingPreferences(
+        selectedIds: [claudePlanRingId, claudeFableRingId],
+      );
+      const invalid = WatchRingPreferences(
+        selectedIds: [
+          claudePlanRingId,
+          claudeFableRingId,
+          codexPlanRingId,
+          codexSparkRingId,
+          cursorOwnPoolId,
+          cursorOtherPoolId,
+        ],
+      );
+      const service = MethodChannelWatchSyncService();
+      await service.sync(dashboard, valid);
+      final lastSummary = published.single;
+      // The unknown Fable half must not hide the invalid third saved pair.
+      expect(
+        () => WatchDashboardSummaryPayload.fromSnapshot(dashboard, invalid),
+        throwsStateError,
+      );
+      expect(
+        () => WatchDashboardSummaryPayload.fromSnapshot(
+          dashboard,
+          const WatchRingPreferences(
+            selectedIds: ['missing-1', 'missing-2', 'missing-3', 'missing-4'],
+          ),
+        ),
+        throwsStateError,
+      );
+      final localUpdates = <String>[];
+      await providerSyncOnce(
+        load:
+            () async => ProviderSyncWork(
+              syncWatch: () => service.sync(dashboard, invalid),
+              syncWidget: () async {
+                localUpdates.add('widget');
+              },
+              syncRecoveries: () async {
+                localUpdates.add('recovery');
+              },
+            ),
+        logFailure:
+            (step, error, stack) => fail('Unexpected $step failure: $error'),
+      );
+      expect(published, [lastSummary]);
+      expect(localUpdates, ['widget', 'recovery']);
+      await service.sync(dashboard, valid);
+      expect(published, hasLength(2));
+      await service.sync(
+        dashboard,
+        const WatchRingPreferences(selectedIds: []),
+      );
+      expect(published, hasLength(3));
+      expect(jsonDecode(published.last)['rings'], isEmpty);
+    },
+  );
+
   test('builds the sanitized watch summary fixture', () {
     final dashboard = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
@@ -481,6 +613,61 @@ void main() {
       lastSync.add(ManualRefreshWindow.floor).toUtc().toIso8601String(),
     );
   });
+}
+
+/// Synthetic values exercise three pair identities without provider calls.
+DashboardSnapshot _pairedDashboard({
+  double? claudeUsed = 40,
+  double? fableUsed = 90,
+}) {
+  final source = DashboardSnapshot.fromJsonString(
+    File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+  );
+  final base = source.primaryAccount!.toJson();
+  return DashboardSnapshot.fromJson(
+    source.toJson()
+      ..['accounts'] = [
+        {
+          ...base,
+          'provider': 'claude',
+          'connection': 'anthropic.plan',
+          'allowances': [
+            {
+              ..._cursorPool('claude-five-hour', '5h', claudeUsed ?? 0),
+              'usedPercent': claudeUsed,
+              'resetsAt': '2026-11-01T12:00:00Z',
+            },
+            {
+              ..._cursorPool(
+                'claude-seven-day-fable',
+                'Fable weekly',
+                fableUsed ?? 0,
+              ),
+              'usedPercent': fableUsed,
+              'resetsAt': '2026-11-08T08:00:00Z',
+            },
+          ],
+        },
+        {
+          ...base,
+          'provider': 'codex',
+          'connection': 'openai.plan',
+          'allowances': [
+            _cursorPool('codex-primary', '5h', 30),
+            _cursorPool('spark-primary', 'Spark 5h', 20),
+          ],
+        },
+        {
+          ...base,
+          'provider': 'cursor',
+          'connection': 'cursor.plan',
+          'allowances': [
+            _cursorPool('cursor-plan-models', 'Cursor Models', 70),
+            _cursorPool('cursor-plan-other', 'Other Models', 20),
+          ],
+        },
+      ],
+  );
 }
 
 /// A plan pool as the Cursor adapter reports it: a percent and nothing to bill.

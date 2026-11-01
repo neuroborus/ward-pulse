@@ -15,6 +15,17 @@ background sync, transport, storage, diagnostics and build work.
   Ordinary Claude stays `#E8915A`; labels, legacy windows, budgets and status chrome do not
   select the accent. Preserve unknown versus zero, six independent widget rows, credits
   and real optional resets. Native/public acceptance remains Pending for HOST.
+- **2026-11-01 watch selection:** offer `Claude plan` and `Claude · Fable` independently;
+  pair ordinary Claude inside/left and Fable outside/right only when both known halves are
+  selected. Keep meaningful window subtitles and rank the band by its tighter half.
+  Reuse local capacity validation for catalogue-order default admission, additions and
+  publication: three bands, at most two completed pairs. Semantic migration/deduplication
+  must not capacity-trim explicit choices. Preserve null defaults, explicit empty and valid
+  saved selections. Invalid saved combinations stay visible with distinct band/split reasons;
+  selected unavailable/missing choices remain removable through partial correction. Reject
+  invalid additions without saving. Validate the full saved IDs before filtering or encoding;
+  retain the last published watch summary until corrected. Provider polling, Dashboard and
+  widget updates remain independent; six expanded widget rows have no watch capacity rule.
 - Show today, week, month, provider plaques on Dashboard, charts, budgets, credits, sync
   status, Providers connection hub, and Settings.
 - Phase 14 primary tabs: Dashboard → Watchface → Widget → Providers → Settings. Watchface owns
@@ -40,7 +51,8 @@ background sync, transport, storage, diagnostics and build work.
   credentials, fetching and phone-watch transport stay with their existing owners.
   Regenerate review/picker art through `tools/render-phone-widget-designs.mjs`; illustrative
   values and former-renderer captures are not replacement native acceptance.
-  Watchface still collapses Claude, choosing the tightest known window including zero;
+  Watchface collapses ordinary Claude windows, choosing the tightest known window including
+  zero, while Fable stays separately selectable and pairs only when both halves are selected;
   exhausted selected watch metrics remain visible after the 2026-10-13 revision. Do not keep
   those controls in Settings.
 - **Providers** owns the full connection catalog (Connected / Not connected), credentials /

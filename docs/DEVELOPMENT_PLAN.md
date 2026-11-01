@@ -2053,6 +2053,26 @@ When multi-profile lands, same-provider rings need hatch/pattern as well as fami
 
 ### Phase 14 — Watchface / Widget tabs and phone home-screen widget
 
+**Claude/Fable Source revision 2026-11-01 — implementation present; HOST/public acceptance Pending.**
+The optional joined weekly quota normalizes to an independent nullable Fable allowance.
+Exact metric accents and closed `fable` tokens preserve ordinary Claude identity; the phone
+now offers Claude plan and Fable separately, packing selected known halves inside/left and
+outside/right and ranking by the tighter half. Shared admission enforces three bands and two
+splits for catalogue-order defaults, additions and publication. Explicit choices are not
+capacity-trimmed; invalid stored combinations remain removable with correction guidance and
+retain the last watch publication. Dashboard/provider polling and the six-row expanded widget
+continue independently. Provider evidence is zero-consumption only; positive arithmetic
+fixtures and review art are explicitly synthetic.
+
+Native gate results belong to the actual Runner step records. Full phone/Wear/watchface
+checks, Rust-for-Android and x64 build/install identity, normal delivery and correction/zero/
+unknown/reset behavior, widget independence, and affected healthy public captures/browser
+verification remain mandatory post-execution HOST work after whole-run DONE, owning CLI exit,
+owned-process retirement and fresh separate idle. Review art is not acceptance; historical
+captures retain their dated scope. The independent full zero-findings pass follows the last
+Runner correction. This revision does not close pending widget/native/public work or alter
+the separate tiny-cap, notifications and release sequence.
+
 **Current widget revision 2026-11-01 — visual baseline approved; replacement native acceptance pending.**
 The phone-private payload carries structured family/pool labels and only the selected
 allowance's real optional reset. The native widget fills its actual allocation with

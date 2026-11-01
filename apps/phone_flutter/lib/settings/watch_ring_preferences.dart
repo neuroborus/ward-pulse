@@ -8,9 +8,11 @@ import '../sync/credit_request_runway.dart';
 
 /// Maximum simultaneous rings on watch and watch-face surfaces.
 const watchRingSlotCount = 3;
+const watchRingSplitCount = 2;
 
 /// Synthetic watch-ring slot: Claude plan windows collapse to the tightest one.
 const claudePlanRingId = 'allowance.claude.plan';
+const claudeFableRingId = 'allowance.claude.claude-seven-day-fable';
 const codexPlanRingId = 'allowance.codex.plan';
 const codexSparkRingId = 'allowance.codex.spark';
 
@@ -36,7 +38,7 @@ const cursorPlanRingId = 'allowance.cursor.plan';
 const cursorOwnPoolId = 'allowance.cursor.cursor-plan-models';
 const cursorOtherPoolId = 'allowance.cursor.cursor-plan-other';
 
-/// Disjoint pairs in fixed inner/outer order; band names are family + ` plan`.
+/// Disjoint pairs in fixed inner/outer order, with meaningful band titles.
 const _splitBands = [
   (
     innerId: cursorOwnPoolId,
@@ -47,6 +49,11 @@ const _splitBands = [
     innerId: codexPlanRingId,
     outerId: codexSparkRingId,
     bandLabel: 'Codex plan',
+  ),
+  (
+    innerId: claudePlanRingId,
+    outerId: claudeFableRingId,
+    bandLabel: 'Claude / Fable',
   ),
 ];
 
@@ -98,7 +105,7 @@ final class WatchRingMetric {
   final Money? spent;
   final Money? limit;
 
-  /// When set, the Settings row is disabled and the reason is shown as help.
+  /// Why this metric cannot be added or sent as a watch ring.
   final String? unavailableReason;
 
   bool get isAvailable =>
@@ -109,6 +116,7 @@ final class WatchRingMetric {
 
   String? get _planTitle => switch (id) {
     claudePlanRingId => 'Claude plan',
+    claudeFableRingId => 'Claude · Fable',
     codexPlanRingId => 'Codex plan',
     codexSparkRingId => 'Codex · Spark',
     _ => null,
@@ -161,7 +169,7 @@ final class WatchRingMetric {
   }
 }
 
-/// Ordered ring metric ids for Watchface (at most [watchRingSlotCount]).
+/// Ordered Watchface choices; invalid saved combinations remain removable.
 ///
 /// `selectedIds == null` means unset → use the default available metrics.
 /// An empty list means the user chose zero rings.
@@ -172,7 +180,7 @@ final class WatchRingPreferences {
 
   bool get usesDefaults => selectedIds == null;
 
-  /// Migrate and deduplicate before applying the band budget.
+  /// Legacy getter name; migration never trims explicit choices for capacity.
   List<String> get clampedIds => migratedIds;
 
   List<String> get migratedIds =>
@@ -225,7 +233,6 @@ final claudePlanWindowRingIds = [
 List<String> migrateWatchRingSelectedIds(
   List<String> ids, {
   bool dropPurchased = true,
-  int maxSlots = watchRingSlotCount,
 }) {
   final out = <String>[];
   void add(String id) {
@@ -255,7 +262,7 @@ List<String> migrateWatchRingSelectedIds(
       add(limit?.id ?? id);
     }
   }
-  return _withinSlotBudget(out, maxSlots).toList(growable: false);
+  return out.toList(growable: false);
 }
 
 /// Collapses Claude plan windows into one ring (tightest remaining).
@@ -370,6 +377,12 @@ List<WatchRingMetric> watchRingCatalog(
       if (collapsed != null) {
         metrics.add(collapsed);
       }
+      for (final allowance in account.allowances) {
+        if (allowance.source == AllowanceSource.plan &&
+            allowance.id == 'claude-seven-day-fable') {
+          metrics.add(_allowanceMetric(account.provider, allowance));
+        }
+      }
       if (includePurchased) {
         for (final allowance in account.allowances) {
           if (allowance.source == AllowanceSource.purchased) {
@@ -414,7 +427,7 @@ List<WatchRingMetric> watchRingCatalog(
 /// configured pair share one band, so they cost one slot; either alone is an
 /// ordinary ring (`WATCH_RING_DESIGN.md`, Split band).
 int watchRingSlotCost(Iterable<String> ids) {
-  final selected = ids.toList(growable: false);
+  final selected = ids.toSet();
   final shared = _splitBands.where(
     (band) =>
         selected.contains(band.innerId) && selected.contains(band.outerId),
@@ -422,7 +435,30 @@ int watchRingSlotCost(Iterable<String> ids) {
   return selected.length - shared.length;
 }
 
-/// Keeps ids in order while they fit the slot budget, counting by band.
+/// Selection constraints are independent of whether a metric currently has data.
+String? watchRingCapacityReason(
+  Iterable<String> ids, {
+  int maxSlots = watchRingSlotCount,
+}) {
+  final selected = ids.toSet();
+  if (watchRingSlotCost(selected) > maxSlots) {
+    return 'Only $maxSlots bands can be shown. Deselect a metric from another band.';
+  }
+  final splits =
+      _splitBands
+          .where(
+            (band) =>
+                selected.contains(band.innerId) &&
+                selected.contains(band.outerId),
+          )
+          .length;
+  if (splits > watchRingSplitCount) {
+    return 'Only two paired bands can be shown. Deselect one metric from another pair.';
+  }
+  return null;
+}
+
+/// Greedy defaults only: keep catalogue order while both capacity limits fit.
 ///
 /// Skips what does not fit rather than stopping at it: the second pool of a pair
 /// costs nothing once the first is in, and it may sit behind a ring that no
@@ -430,7 +466,8 @@ int watchRingSlotCost(Iterable<String> ids) {
 List<String> _withinSlotBudget(Iterable<String> ids, int maxSlots) {
   final out = <String>[];
   for (final id in ids) {
-    if (watchRingSlotCost([...out, id]) <= maxSlots) {
+    if (!out.contains(id) &&
+        watchRingCapacityReason([...out, id], maxSlots: maxSlots) == null) {
       out.add(id);
     }
   }
@@ -512,7 +549,6 @@ List<(WatchRingMetric, WatchRingMetric?)> pairWatchRings(
 List<WatchRingMetric> orderWatchRingsForSurface(
   List<WatchRingMetric> rings, {
   DashboardSnapshot? snapshot,
-  int maxSlots = watchRingSlotCount,
 }) {
   final available = [
     for (final ring in rings)
@@ -551,16 +587,8 @@ List<WatchRingMetric> orderWatchRingsForSurface(
     }
     return a.id.compareTo(b.id);
   });
-  // By band, not by ring: a pair is two rings and one slot, so counting rings
-  // here dropped one of its pools and the band arrived undivided.
-  final kept =
-      _withinSlotBudget([
-        for (final ring in available) ring.id,
-      ], maxSlots).toSet();
-  return [
-    for (final ring in available)
-      if (kept.contains(ring.id)) ring,
-  ];
+  // Ordering cannot repair an invalid saved choice by silently dropping a half.
+  return available;
 }
 
 /// Short subtitle for Watchface preview and Settings diagnostics.
@@ -571,6 +599,10 @@ String watchRingPayloadSubtitle(
   DashboardSnapshot snapshot,
   WatchRingPreferences ringPreferences,
 ) {
+  final selectedIds = watchRingSelectionIds(snapshot, ringPreferences);
+  if (watchRingCapacityReason(selectedIds) != null) {
+    return 'Watch updates paused · correct ring choices to resume';
+  }
   final bands = pairWatchRings(
     orderWatchRingsForSurface(
       resolveWatchRings(snapshot, ringPreferences),
@@ -578,7 +610,9 @@ String watchRingPayloadSubtitle(
     ),
   );
   if (bands.isEmpty) {
-    return 'No rings selected';
+    return selectedIds.isEmpty
+        ? 'No rings selected'
+        : 'Selected ring data unavailable';
   }
   if (bands.length == 1) {
     final (ring, split) = bands.single;
@@ -705,7 +739,7 @@ final class SecureWatchRingPreferenceStore implements WatchRingPreferenceStore {
       ];
       final preferences = watchRingPreferencesFromStoredIds(ids);
       final migrated = preferences.selectedIds;
-      // Persist the canonical selection once, including migrations and trimming.
+      // Persist semantic migrations only; capacity correction belongs to the picker.
       if (migrated == null) {
         await _storage.delete(key: _key);
       } else if (!_sameIds(ids, migrated)) {

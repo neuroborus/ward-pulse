@@ -50,7 +50,10 @@ Read for WFF, its generator/resources, complication metadata or face-like previe
   known zero suffixes must preserve marker selection. Cursor's marker is static `#67E8D4`,
   Spark's `#186020`, Fable's `#FF8A00`, all 3x14. Fable is exact metric
   `allowance.claude.claude-seven-day-fable`, outside/right of ordinary Claude `#E8915A`
-  under the selected 2026-11-01 revision. Fable native acceptance remains Pending.
+  under the selected 2026-11-01 revision. Phone admission enforces three bands and two
+  completed pairs before publication, including saved halves whose data is absent. Invalid
+  stored choices remain removable and retain the last summary until correction; do not
+  increase slot capacity or trim a half to fit. Fable native acceptance remains Pending.
   Marker equivalence for the earlier pools was measured 2026-10-12; a live Codex/Spark
   payload remains a separate unverified condition. New measurements need a date and actual device; the planned target is the
   round API-36 `wardpulse_wear_round_api36_1` emulator, not shipped watch hardware.
