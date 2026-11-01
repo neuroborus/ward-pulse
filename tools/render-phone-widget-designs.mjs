@@ -349,7 +349,7 @@ const OWN_FONT_ROWS = [
   { id: 'allowance.claude.claude-seven-day', family: 'Claude', pool: 'Weekly plan',
     percent: '100%', color: FAMILY.claude, valueSource: 'Historical owner photo',
     resetsAt: '2026-11-07T12:00:00Z' },
-  { id: 'allowance.cursor.cursor-plan-models', family: null, pool: 'Cursor Models',
+  { id: 'allowance.cursor.cursor-plan-models', family: 'Cursor', pool: 'Models',
     percent: '100%', color: FAMILY.cursorOwn, valueSource: 'Root illustration',
     resetsAt: '2026-11-13T12:00:00Z' },
 ]
@@ -362,7 +362,7 @@ const OWN_FONT_HASHES = {
 const PHOTO = 'LOCAL_ARTIFACTS/backlog-2026-10-24-screenshots/phone-widget-truncated-columns.png'
 const PHOTO_HASH = 'cb24a7b1eb3be4d38e8f368f4f9aa3cdd7a620fdc55bd3f58fe35ec4fc4ba9bf'
 const HOST_FRAME = 'LOCAL_ARTIFACTS/phone-widget-host-frame-2026-11-01/CURRENT_LAUNCHER_FRAME.json'
-const WIDGET_BRIEF = 'LOCAL_ARTIFACTS/phone-widget-spacing-revision-prep-2026-11-01/DESIGN_BRIEF.md'
+const WIDGET_BRIEF = 'LOCAL_ARTIFACTS/phone-widget-label-reset-refinement-2026-11-01/DESIGN_BRIEF.md'
 const CLAUDE_FIXTURE = 'fixtures/providers/claude/oauth_usage.json'
 const OWN_FONT_AS_OF = '2026-11-01T12:00:00Z'
 
@@ -609,13 +609,15 @@ async function renderOwnFontPreview(options) {
           if (entry.resetsAt) {
             const instant = new Date(entry.resetsAt)
             const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][instant.getUTCMonth()]
+            const day = String(instant.getUTCDate()).padStart(2, '0')
             const time = `${String(instant.getUTCHours()).padStart(2, '0')}:${String(instant.getUTCMinutes()).padStart(2, '0')}`
-            reset = await text(`Reset ${instant.getUTCDate()} ${month} ${time}`, 11, 'regular', dark.muted)
+            reset = await text(`Reset ${day} ${month} ${time}`, 11, 'regular', dark.muted)
           }
           const detailHeight = (credits?.height ?? 0) + (reset?.height ?? 0) + (credits && reset ? 3 : 0)
           let detailTop = top + (rowHeight - detailHeight) / 2
           for (const [kind, glyph] of [['purchasedBalance', credits], ['reset', reset]]) {
             if (!glyph) continue
+            if (kind === 'reset') detailTop = top + 29
             detailBoxes.push(place(glyph, detailColumn.right - glyph.width, detailTop,
               { ...bounds, ...detailColumn }, index, kind))
             detailTop += glyph.height + 3
