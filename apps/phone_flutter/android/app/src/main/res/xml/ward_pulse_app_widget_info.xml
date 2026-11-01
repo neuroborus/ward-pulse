@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Do not set a tight maxResizeHeight — when an existing span is taller than the max,
-  Pixel hides vertical handles. Leave max unset so users can drag the bottom handle
-  up to the olive card and reclaim empty launcher cells.
-  targetCellHeight≈3 fits ~4–6 metric rows on typical phone grids.
+  Pixel hides vertical handles. Leave max unset so users can resize in either direction.
+  The card fills the allocation; complete measured content stays centered.
+  Cell counts are launcher hints; actual host bounds and glyphs decide row capacity.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="110dp"
