@@ -71,7 +71,7 @@ a separate valid case. Do not infer absolute part alpha from Doze screenshot RGB
 owning emulator/device workflow for normal-mode observations without data reset and for
 restoring temporary DND state; keep operational commands outside this reference.
 
-After restoring preferences/summary bytes, request the owning normal refresh/reload and
+Before OS-state readback/restoration assertions, save the requested values, stored values/key presence and applied configuration with target, phase and read time. A write receipt is not settled-state proof; a failed guard holds dependent product cases Pending. Later readback alone cannot reconstruct unrecorded failure-point values or establish their cause. After restoring preferences/summary bytes, request the owning normal refresh/reload and
 verify the rendered result plus derived caches that can retain data independently. Do
 not end restoration at a successful file copy. Preserve existing data and incident proof;
 device-preserving operations belong to android-devices/android-emulators, not this skill.
