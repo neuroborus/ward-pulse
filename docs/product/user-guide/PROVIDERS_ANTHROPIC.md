@@ -15,6 +15,12 @@ Use the Claude account whose plan windows you want to read.
 This field expects the callback authorization code, not an API key. If the attempt expires
 or is cancelled, start a new attempt rather than reusing the old code.
 
+When Claude reports an included **Fable weekly** window, WardPulse shows it separately
+from your other plan windows. It is a sub-cap of the same weekly allowance, not additional
+weekly usage. Its percentage describes the Fable sub-cap itself. Missing usage stays
+unknown, and a reset is shown only when Claude supplies a valid reset for that window.
+An absent Fable window does not create an allowance or change your other windows.
+
 ## Organization reporting
 
 Use a Claude Console key with permission to read organization usage and costs. An

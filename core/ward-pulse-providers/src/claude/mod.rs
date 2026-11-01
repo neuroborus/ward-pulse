@@ -9,6 +9,7 @@ use std::error::Error as StdError;
 use std::fmt;
 
 use serde::Deserialize;
+use serde_json::Value;
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
     connection, AllowanceSource, AllowanceState, BudgetPeriod, ProviderKind, ProviderSnapshot,
@@ -112,6 +113,9 @@ pub fn claude_provider_snapshot_from_report_json(
             window,
         )?);
     }
+    if let Some(window) = fable_weekly_window(&report.limits, &report.weekly_scoped_shares) {
+        allowances.push(window);
+    }
 
     if let Some(extra) = report.extra_usage.filter(|value| value.is_enabled) {
         let used = extra.used_credits.map(credits_from_cents);
@@ -186,6 +190,60 @@ fn plan_window(
             .map(parse_timestamp)
             .transpose()?,
         status: percent_status(Some(window.utilization)),
+    })
+}
+
+/// Recognizes only the evidenced response-local weekly/Fable join.
+/// Optional data is inspected locally so malformed entries cannot reject ordinary windows.
+fn fable_weekly_window(limits: &Value, shares: &Value) -> Option<AllowanceState> {
+    let limits = limits.as_array()?;
+    shares.as_array()?.iter().find_map(|share| {
+        let index = usize::try_from(share.get("limit_index")?.as_u64()?).ok()?;
+        let limit = limits.get(index)?;
+        let model = limit.get("scope")?.get("model")?;
+        if limit.get("kind").and_then(Value::as_str) != Some("weekly_scoped")
+            || limit.get("group").and_then(Value::as_str) != Some("weekly")
+            || !model.get("id")?.is_null()
+            || model.get("display_name").and_then(Value::as_str) != Some("Fable")
+        {
+            return None;
+        }
+
+        // This narrow inference uses the explicit weekly-relative share, never limit.percent.
+        let used_percent = match (
+            share.get("used_percent_of_weekly").and_then(Value::as_f64),
+            share
+                .get("allowance_percent_of_weekly")
+                .and_then(Value::as_f64),
+        ) {
+            (Some(used), Some(allowance))
+                if used.is_finite() && used >= 0.0 && allowance.is_finite() && allowance > 0.0 =>
+            {
+                Some(if used >= allowance {
+                    100.0
+                } else {
+                    used / allowance * 100.0
+                })
+            }
+            _ => None,
+        };
+
+        Some(AllowanceState {
+            id: "claude-seven-day-fable".to_string(),
+            source: AllowanceSource::Plan,
+            label: "Fable weekly".to_string(),
+            used_percent,
+            used: None,
+            limit: None,
+            remaining: None,
+            unlimited: false,
+            window_minutes: Some(7 * 24 * 60),
+            resets_at: limit
+                .get("resets_at")
+                .and_then(Value::as_str)
+                .and_then(|value| parse_timestamp(value).ok()),
+            status: percent_status(used_percent),
+        })
     })
 }
 
@@ -319,6 +377,11 @@ struct RawReport {
     seven_day_sonnet: Option<RawWindow>,
     #[serde(default)]
     extra_usage: Option<RawExtraUsage>,
+    // Raw optional values preserve response-local indices and tolerate unknown field shapes.
+    #[serde(default)]
+    limits: Value,
+    #[serde(default)]
+    weekly_scoped_shares: Value,
 }
 
 #[derive(Debug, Deserialize)]
@@ -343,6 +406,25 @@ struct RawExtraUsage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+    use ward_pulse_core::model::ProviderStatus;
+
+    fn synthetic_fable_report() -> Value {
+        serde_json::from_str(include_str!(
+            "../../../../fixtures/providers/claude/oauth_usage_max_fable_synthetic.json"
+        ))
+        .expect("synthetic Max projection")
+    }
+
+    fn normalized_fable(report: &Value) -> AllowanceState {
+        claude_provider_snapshot_from_report_json(&report.to_string())
+            .expect("normalize synthetic report")
+            .provider_snapshot
+            .allowances
+            .into_iter()
+            .find(|allowance| allowance.id == "claude-seven-day-fable")
+            .expect("independent Fable allowance")
+    }
 
     #[test]
     fn normalizes_plan_windows_and_extra_usage() {
@@ -369,6 +451,285 @@ mod tests {
             extra.remaining.as_ref().map(|value| value.value.as_str()),
             Some("380.00")
         );
+    }
+
+    #[test]
+    fn synthetic_pro_projection_preserves_absent_null_and_empty_shares() {
+        let mut report: Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/providers/claude/oauth_usage_pro_synthetic.json"
+        ))
+        .expect("synthetic Pro projection");
+        let baseline = claude_provider_snapshot_from_report_json(&report.to_string())
+            .expect("normalize synthetic Pro projection");
+        assert_eq!(
+            baseline
+                .provider_snapshot
+                .allowances
+                .iter()
+                .map(|allowance| allowance.id.as_str())
+                .collect::<Vec<_>>(),
+            ["claude-five-hour", "claude-seven-day"]
+        );
+        for shares in [None, Some(Value::Null), Some(json!([]))] {
+            if let Some(shares) = shares {
+                report["weekly_scoped_shares"] = shares;
+            } else {
+                report
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("weekly_scoped_shares");
+            }
+            assert_eq!(
+                claude_provider_snapshot_from_report_json(&report.to_string()).unwrap(),
+                baseline
+            );
+        }
+    }
+
+    #[test]
+    fn synthetic_max_projection_recognizes_explicit_zero_despite_inactive_false() {
+        let allowance = normalized_fable(&synthetic_fable_report());
+        assert_eq!(allowance.source, AllowanceSource::Plan);
+        assert_eq!(allowance.label, "Fable weekly");
+        assert_eq!(allowance.used_percent, Some(0.0));
+        assert_eq!(allowance.status, ProviderStatus::Ok);
+        assert_eq!(allowance.window_minutes, Some(7 * 24 * 60));
+        assert_eq!(
+            allowance.resets_at.as_ref().map(DateTimeUtc::as_str),
+            Some("2026-11-08T08:00:00Z")
+        );
+        assert_eq!(
+            (allowance.used, allowance.limit, allowance.remaining),
+            (None, None, None)
+        );
+        assert!(!allowance.unlimited);
+    }
+
+    #[test]
+    fn malformed_optional_lists_preserve_ordinary_legacy_and_purchased_allowances() {
+        let legacy: Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/providers/claude/oauth_usage.json"
+        ))
+        .unwrap();
+        let baseline = claude_provider_snapshot_from_report_json(&legacy.to_string()).unwrap();
+        let optional = synthetic_fable_report();
+        for field in ["limits", "weekly_scoped_shares"] {
+            for malformed in [
+                Value::Null,
+                json!(true),
+                json!(7),
+                json!("unexpected"),
+                json!({}),
+                json!([]),
+                json!([null, false, "unexpected", {}, {"limit_index": "2"}]),
+            ] {
+                let mut report = legacy.clone();
+                report["limits"] = optional["limits"].clone();
+                report["weekly_scoped_shares"] = optional["weekly_scoped_shares"].clone();
+                report[field] = malformed;
+                assert_eq!(
+                    claude_provider_snapshot_from_report_json(&report.to_string()).unwrap(),
+                    baseline,
+                    "malformed optional {field}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn follows_moved_indices_skips_bad_neighbors_and_emits_at_most_one_fable() {
+        let mut report = synthetic_fable_report();
+        report["limits"].as_array_mut().unwrap().swap(0, 2);
+        report["limits"][1] = Value::Null;
+        report["weekly_scoped_shares"][0]["limit_index"] = json!(0);
+        let share = report["weekly_scoped_shares"][0].clone();
+        report["weekly_scoped_shares"] = json!([
+            null,
+            {},
+            {"limit_index": 100},
+            share.clone(),
+            share
+        ]);
+        let snapshot = claude_provider_snapshot_from_report_json(&report.to_string()).unwrap();
+        let fable: Vec<_> = snapshot
+            .provider_snapshot
+            .allowances
+            .iter()
+            .filter(|allowance| allowance.id == "claude-seven-day-fable")
+            .collect();
+        assert_eq!(fable.len(), 1);
+        assert_eq!(fable[0].used_percent, Some(0.0));
+    }
+
+    #[test]
+    fn rejects_missing_wrong_type_nonintegral_negative_and_out_of_range_indices() {
+        for index in [
+            None,
+            Some(Value::Null),
+            Some(json!("2")),
+            Some(json!(true)),
+            Some(json!(-1)),
+            Some(json!(2.5)),
+            Some(json!(0)),
+            Some(json!(1)),
+            Some(json!(3)),
+            Some(json!(u64::MAX)),
+        ] {
+            let mut report = synthetic_fable_report();
+            let share = report["weekly_scoped_shares"][0].as_object_mut().unwrap();
+            if let Some(index) = index {
+                share.insert("limit_index".to_string(), index);
+            } else {
+                share.remove("limit_index");
+            }
+            let snapshot = claude_provider_snapshot_from_report_json(&report.to_string()).unwrap();
+            assert_eq!(snapshot.provider_snapshot.allowances.len(), 2);
+        }
+    }
+
+    #[test]
+    fn recognizes_only_the_exact_weekly_fable_scope_with_an_explicit_null_model_id() {
+        for (path, value) in [
+            ("/limits/2/kind", json!("weekly_all")),
+            ("/limits/2/group", json!("session")),
+            ("/limits/2/scope", Value::Null),
+            ("/limits/2/scope", json!({})),
+            ("/limits/2/scope/model", json!([])),
+            ("/limits/2/scope/model", json!({"display_name": "Fable"})),
+            ("/limits/2/scope/model", json!({"id": null})),
+            ("/limits/2/scope/model/id", json!("fable")),
+            ("/limits/2/scope/model/display_name", json!("fable")),
+            ("/limits/2/scope/model/display_name", json!("Fable weekly")),
+            ("/limits/2/scope/model/display_name", json!("Opus")),
+        ] {
+            let mut report = synthetic_fable_report();
+            *report.pointer_mut(path).unwrap() = value;
+            let snapshot = claude_provider_snapshot_from_report_json(&report.to_string()).unwrap();
+            assert_eq!(snapshot.provider_snapshot.allowances.len(), 2, "{path}");
+        }
+    }
+
+    #[test]
+    fn synthetic_nonzero_share_ratios_are_bounded_without_using_limit_percent() {
+        // Positive arithmetic cases are synthetic, not observed provider consumption.
+        for (used, allowance, expected, status) in [
+            (0.0, 50.0, 0.0, ProviderStatus::Ok),
+            (12.5, 50.0, 25.0, ProviderStatus::Ok),
+            (5.0, 20.0, 25.0, ProviderStatus::Ok),
+            (40.0, 50.0, 80.0, ProviderStatus::Warning),
+            (50.0, 50.0, 100.0, ProviderStatus::RateLimited),
+            (75.0, 50.0, 100.0, ProviderStatus::RateLimited),
+            (f64::MAX, 1.0, 100.0, ProviderStatus::RateLimited),
+            (1e308, 1.5e308, 200.0 / 3.0, ProviderStatus::Ok),
+            (1e-300, 2e-300, 50.0, ProviderStatus::Ok),
+        ] {
+            let mut report = synthetic_fable_report();
+            report["weekly_scoped_shares"][0]["used_percent_of_weekly"] = json!(used);
+            report["weekly_scoped_shares"][0]["allowance_percent_of_weekly"] = json!(allowance);
+            report["limits"][2]["percent"] = json!(99);
+            let normalized = normalized_fable(&report);
+            let actual = normalized.used_percent.expect("known share ratio");
+            assert!(actual.is_finite() && (0.0..=100.0).contains(&actual));
+            assert!((actual - expected).abs() < 1e-10, "{used}/{allowance}");
+            assert_eq!(normalized.status, status);
+        }
+    }
+
+    #[test]
+    fn invalid_or_missing_share_numbers_stay_unknown_without_a_percent_fallback() {
+        for field in ["used_percent_of_weekly", "allowance_percent_of_weekly"] {
+            let mut invalid = vec![
+                None,
+                Some(Value::Null),
+                Some(json!(-1)),
+                Some(json!("50")),
+                Some(json!(true)),
+                Some(json!([])),
+                Some(json!({})),
+                Some(serde_json::from_str::<Value>("1e400").unwrap()),
+            ];
+            if field == "allowance_percent_of_weekly" {
+                invalid.push(Some(json!(0)));
+            }
+            for value in invalid {
+                let mut report = synthetic_fable_report();
+                let share = report["weekly_scoped_shares"][0].as_object_mut().unwrap();
+                if let Some(value) = value {
+                    share.insert(field.to_string(), value);
+                } else {
+                    share.remove(field);
+                }
+                let allowance = normalized_fable(&report);
+                assert_eq!(allowance.used_percent, None, "{field}");
+                assert_eq!(allowance.status, ProviderStatus::Unknown, "{field}");
+                assert_eq!(
+                    allowance.resets_at.as_ref().map(DateTimeUtc::as_str),
+                    Some("2026-11-08T08:00:00Z")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn uses_only_fables_own_reset_and_tolerates_invalid_optional_resets() {
+        let mut report = synthetic_fable_report();
+        report["limits"][2]["resets_at"] = json!("2026-11-09T11:15:00.125+02:00");
+        assert_eq!(
+            normalized_fable(&report)
+                .resets_at
+                .as_ref()
+                .map(DateTimeUtc::as_str),
+            Some("2026-11-09T09:15:00Z")
+        );
+        for reset in [
+            None,
+            Some(Value::Null),
+            Some(json!(7)),
+            Some(json!("invalid-reset")),
+            Some(json!("2026-02-30T08:00:00Z")),
+            Some(json!("9999-12-31T23:59:59-00:01")),
+        ] {
+            if let Some(reset) = reset {
+                report["limits"][2]["resets_at"] = reset;
+            } else {
+                report["limits"][2]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("resets_at");
+            }
+            let snapshot = claude_provider_snapshot_from_report_json(&report.to_string()).unwrap();
+            let allowances = snapshot.provider_snapshot.allowances;
+            assert_eq!(allowances[2].resets_at, None);
+            assert_eq!(allowances[2].used_percent, Some(0.0));
+            assert_eq!(
+                allowances[1].resets_at.as_ref().map(DateTimeUtc::as_str),
+                Some("2026-11-08T08:00:00Z")
+            );
+        }
+    }
+
+    #[test]
+    fn keeps_fable_independent_of_legacy_windows_and_extra_usage() {
+        let mut report: Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/providers/claude/oauth_usage.json"
+        ))
+        .unwrap();
+        // Synthetic legacy Sonnet coverage complements the existing non-null Opus window.
+        report["seven_day_sonnet"] = json!({"utilization": 23.0, "resets_at": null});
+        let baseline = claude_provider_snapshot_from_report_json(&report.to_string()).unwrap();
+        let optional = synthetic_fable_report();
+        report["limits"] = optional["limits"].clone();
+        report["weekly_scoped_shares"] = optional["weekly_scoped_shares"].clone();
+        let mut snapshot = claude_provider_snapshot_from_report_json(&report.to_string()).unwrap();
+        assert_eq!(
+            snapshot.provider_snapshot.allowances.len(),
+            baseline.provider_snapshot.allowances.len() + 1
+        );
+        snapshot
+            .provider_snapshot
+            .allowances
+            .retain(|allowance| allowance.id != "claude-seven-day-fable");
+        assert_eq!(snapshot, baseline);
     }
 
     #[test]

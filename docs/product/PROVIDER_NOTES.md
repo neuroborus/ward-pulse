@@ -396,13 +396,39 @@ refresh tokens in secure storage. Refresh is serialized like Codex. Reporting ca
 `GET /api/oauth/usage` with `anthropic-beta: oauth-2025-04-20` and a Claude Code user agent, then
 normalizes `five_hour`, `seven_day`, optional per-model weekly windows, and `extra_usage` into
 `AllowanceState`. Phone dashboard cards still list every window. Watch/Glance rings collapse
-Claude **plan** windows into one slot (`allowance.claude.plan`): the tightest known remaining
-window wins, including an exhausted window; unknown windows cannot displace a known zero.
+ordinary Claude **plan** windows into one slot (`allowance.claude.plan`): the tightest known
+remaining window wins, including an exhausted window; unknown windows cannot displace a known zero.
 Glance label is the short token (`5h`, `Weekly`, `Opus weekly`, `Sonnet weekly`). Purchased
 `extra_usage` is not in that collapse pool and is **not** a watch ring candidate — it stays on
 phone dashboard cards. It may surface as a warning/error alert
 **only when the user configures a threshold** for that meter on Providers — never from a
 hard-coded utilization cutoff alone.
+
+The optional included Fable weekly sub-cap is normalized independently as
+`claude-seven-day-fable` (`Fable weekly`), never as an Opus alias. The adapter joins
+`weekly_scoped_shares[].limit_index` to that response's `limits` array, requiring a
+nonnegative integer index, kind `weekly_scoped`, group `weekly`, an explicitly null
+`scope.model.id` and exact `scope.model.display_name` of `Fable`. It emits at most one
+Fable allowance. Missing/null lists, malformed entries and unknown scopes do not invalidate
+independently valid ordinary or legacy windows.
+
+Own-quota used percentage is inferred only from `used_percent_of_weekly` divided by
+`allowance_percent_of_weekly`, then multiplied by 100. Usage must be finite and nonnegative;
+the allowance must be finite and positive. Usage at or above the allowance becomes 100%;
+otherwise division precedes multiplication to avoid overflow. Invalid or missing inputs
+leave usage and status unknown. Neither a fixed allocation nor `limits.percent`, activity,
+severity or a sibling window supplies a fallback.
+
+This is a narrow inference from explicit weekly-relative fields and Anthropic's
+[included shared-weekly sub-cap policy](https://support.claude.com/en/articles/15424964-claude-fable-models-on-your-plan),
+not a published private-API guarantee. The 2026-11-01 safe observations show null scoped
+shares on Pro and a recognized join after an owner-reported Max upgrade: 0 used / 50
+allowance, with `is_active=false`. Ordinary weekly usage is also inactive at zero, so activity
+does not establish availability or consumption. All observed consumption is zero; neither
+the denominator of `limits.percent` nor precise activity semantics is established.
+The Pro/Max fixtures are explicitly synthetic projections of the three allowlisted safe
+observations/field-shape/measurement files. Nonzero arithmetic tests are synthetic, not
+captured positive-consumption evidence.
 
 Providers exposes each reported Plan window for its own alert rule, independently of
 watch collapse or selection. A window inherits the connection's Plan threshold unless it
@@ -416,8 +442,11 @@ Claude plan resets are validated by `claude_provider_snapshot_from_report_json` 
 within `0000`–`9999` before and after UTC conversion. The adapter validates the entire fraction,
 applies the offset, then drops sub-second precision to emit `YYYY-MM-DDTHH:MM:SSZ`.
 Missing or null resets stay absent; malformed or overflowing resets return the sanitized
-`InvalidTimestamp` adapter error. This boundary leaves the shared infallible `DateTimeUtc`
-and its text-based equality and ordering policy unchanged; see [Boundary](#boundary).
+`InvalidTimestamp` adapter error for ordinary and legacy windows. Optional Fable uses only
+its joined limit's own reset through the same parser; missing, malformed or overflowing
+Fable resets stay absent without discarding ordinary windows or borrowing their reset.
+This boundary leaves the shared infallible `DateTimeUtc` and its text-based equality and
+ordering policy unchanged; see [Boundary](#boundary).
 
 This is a compatibility integration, not a published third-party API. Endpoint or OAuth client
 changes may require an app update. Never log tokens, authorization codes, or raw response bodies.
