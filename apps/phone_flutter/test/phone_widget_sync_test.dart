@@ -128,7 +128,11 @@ void main() {
     expect(data['row_0_label'], 'Retained metric');
     expect(data['row_0_percent'], '46% left');
     for (final field in ['credits', 'family', 'pool', 'resets_at']) {
-      expect(data['row_0_$field'], '', reason: 'Absent $field must be cleared.');
+      expect(
+        data['row_0_$field'],
+        '',
+        reason: 'Absent $field must be cleared.',
+      );
     }
     for (var i = 1; i < phoneWidgetSlotCount; i++) {
       for (final field in rowFields) {

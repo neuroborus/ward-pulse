@@ -70,9 +70,7 @@ PhoneWidgetPayload buildPhoneWidgetPayload(
   );
   return PhoneWidgetPayload(
     stale: snapshot.overallStatus == ProviderStatus.stale,
-    rows: [
-      for (final metric in metrics) _phoneWidgetRow(snapshot, metric),
-    ],
+    rows: [for (final metric in metrics) _phoneWidgetRow(snapshot, metric)],
   );
 }
 

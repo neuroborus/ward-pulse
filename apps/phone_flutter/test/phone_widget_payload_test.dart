@@ -249,7 +249,9 @@ void main() {
       payload.rows.map((row) => row.label),
       containsAll(['Cursor Models', 'Cursor · Other Models']),
     );
-    final models = payload.rows.firstWhere((row) => row.label == 'Cursor Models');
+    final models = payload.rows.firstWhere(
+      (row) => row.label == 'Cursor Models',
+    );
     expect(models.remainingPercent, 0);
     expect(models.familyLabel, 'Cursor');
     expect(models.poolLabel, 'Models');
