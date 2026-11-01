@@ -13,7 +13,7 @@ object RingFamily {
     const val CLAUDE = 0xFFE8915A.toInt()
 
     /** Only the recognized included weekly Fable sub-cap has this accent. */
-    const val CLAUDE_FABLE = 0xFFFF8A00.toInt()
+    const val CLAUDE_FABLE = 0xFFFF603D.toInt()
 
     /** Cursor, and its external models pool by extension. */
     const val CURSOR = 0xFF67E8D4.toInt()

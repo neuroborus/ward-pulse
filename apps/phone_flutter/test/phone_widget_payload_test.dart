@@ -68,7 +68,7 @@ void main() {
           final fable = payload.rows.first;
           expect(fable.poolLabel, 'Fable weekly');
           expect(fable.remainingPercent, 0);
-          expect(fable.accentArgb, 0xFFFF8A00);
+          expect(fable.accentArgb, 0xFFFF603D);
           expect(fable.resetsAt, reset);
         }
       }
@@ -191,7 +191,7 @@ void main() {
     expect(phoneWidgetAccentArgb('allowance.claude.plan'), claude);
     expect(
       phoneWidgetAccentArgb('allowance.claude.claude-seven-day-fable'),
-      0xFFFF8A00,
+      0xFFFF603D,
     );
     for (final id in [
       'allowance.claude.claude-seven-day',

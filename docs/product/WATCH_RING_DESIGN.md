@@ -154,10 +154,22 @@ acceptance is inferred. Three bands, two split ordinals, eight slots, pair/Fable
 all admission/data rules, full closure, tracks and the raised clock/cells/logo/legend
 retain their owning contracts.
 
+## Revision 2026-11-01 — approved Fable palette
+
+The owner approved replacing exact Fable `#FF8A00` with `#FF603D`, a warm red with an
+orange tint, across the face/marker, Glance, Dashboard and widget. Ordinary Claude
+remains `#E8915A`. The current Fable rules below use the replacement accent; matching,
+pair identity, zero/unknown/error styling, alpha, caps, pivots, geometry, raised clock,
+typography, data and selection rules remain unchanged.
+
+New-palette native/current-Legacy and public proof remain **Pending** for the separate
+post-execution HOST handoff. Historical observations and bounded prior acceptance
+retain their dated scope; generated review art does not establish painted native color.
+
 ## Revision 2026-11-01 — included Fable weekly metric
 
 The selected Claude/Fable design adds one exact metric accent: `claude-seven-day-fable`
-and ring `allowance.claude.claude-seven-day-fable` use **`#FF8A00`**. Ordinary Claude,
+and ring `allowance.claude.claude-seven-day-fable` use **`#FF603D`**. Ordinary Claude,
 legacy Opus/Sonnet and Anthropic budgets keep **`#E8915A`**. Provider/status chrome
 retains its existing theme roles.
 This is a selected palette rule; no native color or fit measurement is claimed here.
@@ -1151,7 +1163,7 @@ may modulate toward theme tertiary/error when needed.
 | OpenAI / Codex | `#65D78A` | Green |
 | Codex · Spark | `#186020` | Dark green — the Spark limit on the Codex plan |
 | Anthropic / Claude | `#E8915A` | Orange (Anthropic presentation) |
-| Claude · Fable | `#FF8A00` | Exact included weekly sub-cap only; revision 2026-11-01 |
+| Claude · Fable | `#FF603D` | Warm red with an orange tint; exact included weekly sub-cap only; approved revision 2026-11-01 |
 | Cursor · other models | `#67E8D4` | Cyan — external models on the Cursor plan |
 | Cursor · own models | `#7E93B8` | Grey-blue — the plan's own pool |
 | Unresolved family | `#8A968F` | Neutral grey — fallback only, never a product color |
@@ -1283,7 +1295,7 @@ on its own value.
 2. **The order inside a pair is fixed by pool, never by usage.** Cursor own models take the
    inner half and left marker; external models take the outer half and right marker. Codex main
    takes inside/left, Spark outside/right; its darker `#186020` reads on the longer outer arc.
-   Ordinary Claude takes inside/left in `#E8915A`, Fable outside/right in `#FF8A00`.
+   Ordinary Claude takes inside/left in `#E8915A`, Fable outside/right in `#FF603D`.
    Position inside the pair is a name, not a rank: urgency is already carried twice, by each half's own melt and by
    where the pair sits among the rings. A third encoding would only make the colours swap sides
    at the moment the reader is looking at a problem.
@@ -1295,7 +1307,7 @@ on its own value.
    stays the rule for every other strip: two of the same colour would say a thing twice, which is
    the defect this language exists to avoid. Each strip's `TITLE` carries a closed outer-pool
    token: `cursor-other` selects static `#67E8D4`, `spark` selects static `#186020`, and
-   `fable` selects static `#FF8A00`.
+   `fable` selects static `#FF603D`.
    An empty or unknown family token paints no far marker. Known zero does not remove a marker.
    The inner accent keeps `[COMPLICATION.RANGED_VALUE_COLORS]`; the
    outer accent does not borrow its colour. A new outer pool requires a matching token in Wear

@@ -17,7 +17,7 @@ const familyCursorOwnColor = Color(0xFF7E93B8);
 const familyCodexSparkColor = Color(0xFF186020);
 
 /// The independent included Fable weekly sub-cap, not the ordinary Claude family.
-const familyClaudeFableColor = Color(0xFFFF8A00);
+const familyClaudeFableColor = Color(0xFFFF603D);
 
 /// Demo data keeps the blue it has always had; it is not an unresolved family.
 const _familyMock = Color(0xFF8AB4F8);

@@ -406,7 +406,7 @@ const TEMPERATURE_CONFIGURATION = 'temperatureUnit'
 const SPLIT_POOLS = [
   { token: 'cursor-other', color: '#67E8D4' },
   { token: 'spark', color: '#186020' },
-  { token: 'fable', color: '#FF8A00' },
+  { token: 'fable', color: '#FF603D' },
 ]
 
 /**

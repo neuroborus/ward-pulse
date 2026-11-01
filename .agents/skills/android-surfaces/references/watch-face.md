@@ -48,7 +48,8 @@ Read for WFF, its generator/resources, complication metadata or face-like previe
   accents use `[COMPLICATION.RANGED_VALUE_COLORS]` for the inner pool. Combined TITLE bases
   `split`, `split:cursor-other`, `split:spark`, `split:fable` keep the outer marker's family identity;
   known zero suffixes must preserve marker selection. Cursor's marker is static `#67E8D4`,
-  Spark's `#186020`, Fable's `#FF8A00`, all 3x14. Fable is exact metric
+  Spark's `#186020`, Fable's approved warm red with an orange tint `#FF603D`, all 3x14.
+  Fable is exact metric
   `allowance.claude.claude-seven-day-fable`, outside/right of ordinary Claude `#E8915A`
   under the selected 2026-11-01 revision. Phone admission enforces three bands and two
   completed pairs before publication, including saved halves whose data is absent. Invalid

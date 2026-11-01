@@ -30,11 +30,15 @@ The declared baseline covers approved English labels, numeric tokens and reset f
 ## Metric rules and optional reset
 
 **Metric-color revision 2026-11-01.** Exact metric
-`allowance.claude.claude-seven-day-fable` takes `#FF8A00`; ordinary Claude remains
+`allowance.claude.claude-seven-day-fable` takes `#FF603D`; ordinary Claude remains
 `#E8915A`. Similar labels/IDs, legacy windows, Anthropic budgets and provider/status
 chrome do not inherit this exception. Expanded independent rows, six selections,
 purchased-credit eligibility, real optional resets and known-zero/unknown behavior
 are unchanged. This Source palette decision does not close pending native/public acceptance.
+
+**Approved palette follow-up 2026-11-01.** Replace Fable `#FF8A00` with `#FF603D`,
+a warm red with an orange tint. New-palette native/public proof remains **Pending**;
+earlier observations and ordinary Claude review rows retain their dated scope.
 
 **Selection independence revision 2026-11-01.** Fable weekly is its own expanded widget
 choice. Keep six independent rows even when the same metrics would exceed watch band or

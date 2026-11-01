@@ -48,7 +48,7 @@ class RingFamilyTest {
 
     @Test
     fun onlyTheExactFableMetricLeavesTheClaudeFamilyColor() {
-        assertEquals(0xFFFF8A00.toInt(), RingFamily.colorArgb("allowance.claude.claude-seven-day-fable"))
+        assertEquals(0xFFFF603D.toInt(), RingFamily.colorArgb("allowance.claude.claude-seven-day-fable"))
         for (id in listOf(
             "allowance.claude.plan",
             "allowance.claude.claude-seven-day",

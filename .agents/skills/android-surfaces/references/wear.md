@@ -12,7 +12,8 @@ services and build work.
   subtitle = `82% · 41% left · 320 credits` (credits once, omitted when unavailable).
   **2026-11-01 Fable rendering:** exact inner `allowance.claude.plan` plus outer
   `allowance.claude.claude-seven-day-fable` titles the row `Claude / Fable`.
-  Keep ordinary Claude `#E8915A`, exact Fable `#FF8A00`, fixed inner-first percentages,
+  Keep ordinary Claude `#E8915A`, exact Fable `#FF603D` (approved warm red with an orange
+  tint), fixed inner-first percentages,
   credit eligibility and known-survivor fallbacks. This Source/review-art revision is
   not native/public acceptance. Phone catalogue/admission keeps three bands and two splits,
   with explicit invalid saved choices requiring removal instead of silent trimming. Keep the

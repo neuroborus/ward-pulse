@@ -11,7 +11,8 @@ background sync, transport, storage, diagnostics and build work.
   identity; rank from `ProviderStatus::severity`, never a new list.
 - Consume dashboard snapshots from Rust.
 - **2026-11-01 Fable metric accent:** only Claude Plan `claude-seven-day-fable` and widget
-  ring ID `allowance.claude.claude-seven-day-fable` use `#FF8A00`, before family fallbacks.
+  ring ID `allowance.claude.claude-seven-day-fable` use approved `#FF603D` (warm red with
+  an orange tint), before family fallbacks.
   Ordinary Claude stays `#E8915A`; labels, legacy windows, budgets and status chrome do not
   select the accent. Preserve unknown versus zero, six independent widget rows, credits
   and real optional resets. Native/public acceptance remains Pending for HOST.

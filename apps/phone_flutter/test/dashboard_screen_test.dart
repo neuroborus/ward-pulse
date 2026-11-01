@@ -432,9 +432,9 @@ void main() {
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
     );
     for (final (provider, allowanceSource, id, used, color) in const [
-      ('claude', 'plan', 'claude-seven-day-fable', 25.0, Color(0xFFFF8A00)),
-      ('claude', 'plan', 'claude-seven-day-fable', 100.0, Color(0xFFFF8A00)),
-      ('claude', 'plan', 'claude-seven-day-fable', null, Color(0xFFFF8A00)),
+      ('claude', 'plan', 'claude-seven-day-fable', 25.0, Color(0xFFFF603D)),
+      ('claude', 'plan', 'claude-seven-day-fable', 100.0, Color(0xFFFF603D)),
+      ('claude', 'plan', 'claude-seven-day-fable', null, Color(0xFFFF603D)),
       ('claude', 'plan', 'claude-seven-day', 25.0, Color(0xFFE8915A)),
       (
         'claude',

@@ -18,7 +18,12 @@ pair, healthy Glance, Plan windows and watch face form one shared-state group ca
 The Dashboard warning pair, clock-free Stale Glance and historical manual-selection setup
 image illustrate their explicitly explained states. Date added is unchanged by a refresh.
 
-This group shows the current Dashboard, ring selection, Glance, Plan windows and selected
+**Palette freshness, 2026-11-01.** Existing public captures predate the approved Fable
+accent `#FF603D` and do not verify it. The shared public capture refresh remains **Pending**
+until the remaining UI work is complete. Capture dates, recorded artifact scopes and
+the 37-image inventory remain unchanged; no public PNGs were recaptured for this palette change.
+
+This group shows the captured Dashboard, ring selection, Glance, Plan windows and selected
 face. All three expected default upper face cells contain actual data. Capture verification
 is separate from unpictured setup-utility, physical-device,
 remaining-backlog and release acceptance.

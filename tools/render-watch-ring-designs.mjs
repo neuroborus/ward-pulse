@@ -137,7 +137,7 @@ const STRIP_AMBIENT_ALPHA = 90
 /** The one family accent worn by two entries — a plan ring and a budget ring share it. */
 const ANTHROPIC = '#E8915A'
 const CODEX_SPARK = '#186020'
-const CLAUDE_FABLE = '#FF8A00'
+const CLAUDE_FABLE = '#FF603D'
 
 /** SIL OFL-1.1. Bold for watch-scale labels; the file itself is `FONT_FILE`. */
 const FONT = 'Noto Sans'

@@ -9,12 +9,16 @@ watch-face baseline in [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md): this scre
 
 The selected pair title is **Claude / Fable**, recognized only for inner
 `allowance.claude.plan` and outer `allowance.claude.claude-seven-day-fable`.
-Ordinary Claude keeps `#E8915A`; only the exact Fable metric takes `#FF8A00`.
+Ordinary Claude keeps `#E8915A`; only the exact Fable metric takes `#FF603D`.
 Keep inner-first percentages regardless of which half is tighter, existing purchased-credit
 eligibility and compact formatting, and pale-red numeric zero tokens only for known exhaustion.
 An unknown half uses the existing known-survivor fallback with its meaningful window label;
 two unknown halves produce no legend row. Plan windows retains the supplied window labels
 and real resets. This adds no new refresh, navigation or rendering geometry rule.
+
+**Approved palette follow-up 2026-11-01.** Replace Fable `#FF8A00` with `#FF603D`,
+a warm red with an orange tint. New-palette native/public proof remains **Pending**;
+earlier observations retain their dated scope.
 
 `glance-legend-fable.svg` and `glance-legend-fable-zero.svg` are synthetic illustrative
 review art, not positive-consumption captures or native measurements. Native/current-Legacy

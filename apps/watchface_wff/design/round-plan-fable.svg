@@ -44,7 +44,7 @@
         fill="#ffffff" transform="rotate(356.70024306469156 225 225)" />
       </mask>
     </defs>
-    <circle cx="225" cy="225" r="191" fill="none" stroke="#FF8A00"
+    <circle cx="225" cy="225" r="191" fill="none" stroke="#FF603D"
       stroke-width="22" mask="url(#arc-225-225-191-22)" />
 
     <circle cx="173.0" cy="135.0" r="26.0" fill="#0B0E0C" />
@@ -154,5 +154,5 @@
       y="317.5"
       width="4.5"
       height="17.0"
-      rx="2.3" fill="#FF8A00" />
+      rx="2.3" fill="#FF603D" />
 </svg>

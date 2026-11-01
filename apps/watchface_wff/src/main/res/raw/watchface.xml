@@ -3670,7 +3670,7 @@
                                             height="14"
                                             startAngle="0"
                                             endAngle="359.9">
-                                            <Stroke thickness="3" color="#FF8A00" cap="BUTT" />
+                                            <Stroke thickness="3" color="#FF603D" cap="BUTT" />
                                         </Arc>
                                     </PartDraw>
                                 </Compare>
@@ -4760,7 +4760,7 @@
                                             height="14"
                                             startAngle="0"
                                             endAngle="359.9">
-                                            <Stroke thickness="3" color="#FF8A00" cap="BUTT" />
+                                            <Stroke thickness="3" color="#FF603D" cap="BUTT" />
                                         </Arc>
                                     </PartDraw>
                                 </Compare>
@@ -5596,7 +5596,7 @@
                                             height="14"
                                             startAngle="0"
                                             endAngle="359.9">
-                                            <Stroke thickness="3" color="#FF8A00" cap="BUTT" />
+                                            <Stroke thickness="3" color="#FF603D" cap="BUTT" />
                                         </Arc>
                                     </PartDraw>
                                 </Compare>

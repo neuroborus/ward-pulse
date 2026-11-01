@@ -121,11 +121,15 @@ whole.
 ## Family and source ownership
 
 **Metric-color revision 2026-11-01.** Only a Claude Plan allowance with exact ID
-`claude-seven-day-fable` uses `#FF8A00`; display labels never choose this accent.
+`claude-seven-day-fable` uses `#FF603D`; display labels never choose this accent.
 Ordinary Claude and legacy windows keep `#E8915A`. Anthropic family headers,
 provider/status chrome, purchased usage, budgets and unrelated IDs retain their
 existing colors. Known zero retains its real remaining bar; unknown usage has no
 fabricated bar. This is a selected Source color rule, not native/public acceptance.
+
+**Approved palette follow-up 2026-11-01.** Replace Fable `#FF8A00` with `#FF603D`,
+a warm red with an orange tint. New-palette native/public proof remains **Pending**;
+earlier observations retain their dated scope.
 
 **Clarification 2026-10-17.** Dashboard sections use `providerFamilyOf` and
 `providerFamilyLabel` from `provider_connection.dart`: OpenAI contains Codex plan

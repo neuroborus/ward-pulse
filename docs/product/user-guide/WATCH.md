@@ -151,10 +151,10 @@ keeps a grey empty track and pale-red **0%** token; it is not replaced by a less
 Tiny positive values rounded to zero keep ordinary styling.
 
 **Claude plan** uses those ordinary windows; **Claude · Fable** is a separate included weekly
-sub-cap when reported. Selecting both produces **Claude / Fable**. Fable uses orange
-`#FF8A00`; ordinary Claude keeps `#E8915A`. A missing percentage stays unknown: only known
-halves fill rings, and a surviving half uses an ordinary band. Reported resets stay with their
-own windows on **Plan windows**.
+sub-cap when reported. Selecting both produces **Claude / Fable**. Fable uses warm red
+with an orange tint (`#FF603D`); ordinary Claude keeps `#E8915A`. A missing percentage stays
+unknown: only known halves fill rings, and a surviving half uses an ordinary band. Reported
+resets stay with their own windows on **Plan windows**.
 
 **Next watch payload** describes what the phone will send; it is not delivery confirmation.
 Ring choices are independent of the phone's [home-widget selection](/guide/widget).

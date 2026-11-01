@@ -43,7 +43,7 @@ const FAMILY = {
   codex: { name: 'Codex', color: '#65D78A' },
   codexSpark: { name: 'Codex', color: '#186020' },
   claude: { name: 'Claude', color: '#E8915A' },
-  claudeFable: { name: 'Claude', color: '#FF8A00' },
+  claudeFable: { name: 'Claude', color: '#FF603D' },
   cursor: { name: 'Cursor', color: '#67E8D4' },
   cursorOwn: { name: 'Cursor', color: '#7E93B8' },
   cursorPlatform: { name: 'Cursor platform', color: '#67E8D4' },
