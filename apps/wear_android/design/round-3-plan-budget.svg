@@ -16,25 +16,52 @@
 
     <circle cx="225" cy="225" r="143.91" fill="none" stroke="#2E3632"
       stroke-width="20.205000000000002" />
+    <defs>
+      <mask id="arc-225-225-143.91-20.205000000000002" maskUnits="userSpaceOnUse" x="0" y="0" width="450" height="450">
+        <circle cx="225" cy="225" r="143.91" fill="none" stroke="#ffffff"
+          stroke-width="20.205000000000002" stroke-linecap="butt"
+          stroke-dasharray="52.1320558044971 904.2131975562143"
+          stroke-dashoffset="-841.9786417517171" transform="rotate(-90 225 225)" />
+        <ellipse cx="225" cy="81.09" rx="10.102500000000001" ry="10.102500000000001"
+        fill="#ffffff" transform="rotate(335.22217088826983 225 225)" />
+      <ellipse cx="225" cy="81.09" rx="10.102500000000001" ry="10.102500000000001"
+        fill="#ffffff" transform="rotate(355.97782911173016 225 225)" />
+      </mask>
+    </defs>
     <circle cx="225" cy="225" r="143.91" fill="none" stroke="#65D78A"
-      stroke-width="20.205000000000002" stroke-linecap="round"
-      stroke-dasharray="52.13 904.21"
-      stroke-dashoffset="-841.98"
-      transform="rotate(-90 225 225)" />
+      stroke-width="20.205000000000002" mask="url(#arc-225-225-143.91-20.205000000000002)" />
     <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#2E3632"
       stroke-width="20.205000000000002" />
+    <defs>
+      <mask id="arc-225-225-167.89499999999998-20.205000000000002" maskUnits="userSpaceOnUse" x="0" y="0" width="450" height="450">
+        <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#ffffff"
+          stroke-width="20.205000000000002" stroke-linecap="butt"
+          stroke-dasharray="538.9001604889257 1054.9153971489166"
+          stroke-dashoffset="-505.9127366599908" transform="rotate(-90 225 225)" />
+        <ellipse cx="225" cy="57.10500000000002" rx="10.102500000000001" ry="10.102500000000001"
+        fill="#ffffff" transform="rotate(172.64757504708845 225 225)" />
+      <ellipse cx="225" cy="57.10500000000002" rx="10.102500000000001" ry="10.102500000000001"
+        fill="#ffffff" transform="rotate(356.5524249529116 225 225)" />
+      </mask>
+    </defs>
     <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#7E93B8"
-      stroke-width="20.205000000000002" stroke-linecap="round"
-      stroke-dasharray="538.90 1054.92"
-      stroke-dashoffset="-505.91"
-      transform="rotate(-90 225 225)" />
+      stroke-width="20.205000000000002" mask="url(#arc-225-225-167.89499999999998-20.205000000000002)" />
     <circle cx="225" cy="225" r="191.88" fill="none" stroke="#2E3632"
       stroke-width="20.205000000000002" />
+    <defs>
+      <mask id="arc-225-225-191.88-20.205000000000002" maskUnits="userSpaceOnUse" x="0" y="0" width="450" height="450">
+        <circle cx="225" cy="225" r="191.88" fill="none" stroke="#ffffff"
+          stroke-width="20.205000000000002" stroke-linecap="butt"
+          stroke-dasharray="841.8115816702577 1205.617596741619"
+          stroke-dashoffset="-353.7035150713614" transform="rotate(-90 225 225)" />
+        <ellipse cx="225" cy="33.120000000000005" rx="10.102500000000001" ry="10.102500000000001"
+        fill="#ffffff" transform="rotate(105.61662816620237 225 225)" />
+      <ellipse cx="225" cy="33.120000000000005" rx="10.102500000000001" ry="10.102500000000001"
+        fill="#ffffff" transform="rotate(356.9833718337976 225 225)" />
+      </mask>
+    </defs>
     <circle cx="225" cy="225" r="191.88" fill="none" stroke="#E8915A"
-      stroke-width="20.205000000000002" stroke-linecap="round"
-      stroke-dasharray="841.81 1205.62"
-      stroke-dashoffset="-353.70"
-      transform="rotate(-90 225 225)" />
+      stroke-width="20.205000000000002" mask="url(#arc-225-225-191.88-20.205000000000002)" />
     <g font-family="Noto Sans, sans-serif" font-size="22.1"
       font-weight="700" fill="#0A0D0B" fill-opacity="0.45"
       text-anchor="middle"><text x="225" y="41.0" transform="rotate(54.44 225 225)">7D</text><text x="225" y="41.0" transform="rotate(63.33 225 225)">7D</text><text x="225" y="41.0" transform="rotate(72.22 225 225)">7D</text><text x="225" y="41.0" transform="rotate(81.11 225 225)">7D</text><text x="225" y="41.0" transform="rotate(90.00 225 225)">7D</text><text x="225" y="41.0" transform="rotate(98.89 225 225)">7D</text><text x="225" y="41.0" transform="rotate(107.78 225 225)">7D</text><text x="225" y="41.0" transform="rotate(116.67 225 225)">7D</text><text x="225" y="41.0" transform="rotate(125.56 225 225)">7D</text><text x="225" y="41.0" transform="rotate(144.44 225 225)">7D</text><text x="225" y="41.0" transform="rotate(153.33 225 225)">7D</text><text x="225" y="41.0" transform="rotate(162.22 225 225)">7D</text><text x="225" y="41.0" transform="rotate(171.11 225 225)">7D</text><text x="225" y="41.0" transform="rotate(180.00 225 225)">7D</text><text x="225" y="41.0" transform="rotate(188.89 225 225)">7D</text><text x="225" y="41.0" transform="rotate(197.78 225 225)">7D</text><text x="225" y="41.0" transform="rotate(206.67 225 225)">7D</text><text x="225" y="41.0" transform="rotate(215.56 225 225)">7D</text><text x="225" y="41.0" transform="rotate(234.44 225 225)">7D</text><text x="225" y="41.0" transform="rotate(243.33 225 225)">7D</text><text x="225" y="41.0" transform="rotate(252.22 225 225)">7D</text><text x="225" y="41.0" transform="rotate(261.11 225 225)">7D</text><text x="225" y="41.0" transform="rotate(270.00 225 225)">7D</text><text x="225" y="41.0" transform="rotate(278.89 225 225)">7D</text><text x="225" y="41.0" transform="rotate(287.78 225 225)">7D</text><text x="225" y="41.0" transform="rotate(296.67 225 225)">7D</text><text x="225" y="41.0" transform="rotate(305.56 225 225)">7D</text><text x="225" y="41.0" transform="rotate(324.44 225 225)">7D</text><text x="225" y="41.0" transform="rotate(333.33 225 225)">7D</text><text x="225" y="41.0" transform="rotate(342.22 225 225)">7D</text><text x="225" y="41.0" transform="rotate(351.11 225 225)">7D</text><text x="225" y="41.0" transform="rotate(360.00 225 225)">7D</text><text x="225" y="41.0" transform="rotate(368.89 225 225)">7D</text><text x="225" y="41.0" transform="rotate(377.78 225 225)">7D</text><text x="225" y="41.0" transform="rotate(386.67 225 225)">7D</text><text x="225" y="41.0" transform="rotate(395.56 225 225)">7D</text></g>

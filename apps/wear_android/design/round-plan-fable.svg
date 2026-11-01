@@ -16,18 +16,36 @@
 
     <circle cx="225" cy="225" r="169" fill="none" stroke="#2E3632"
       stroke-width="22" />
+    <defs>
+      <mask id="arc-225-225-169-22" maskUnits="userSpaceOnUse" x="0" y="0" width="450" height="450">
+        <circle cx="225" cy="225" r="169" fill="none" stroke="#ffffff"
+          stroke-width="22" stroke-linecap="butt"
+          stroke-dasharray="848.7238198689472 1061.85831691335"
+          stroke-dashoffset="-202.13449704440296" transform="rotate(-90 225 225)" />
+        <ellipse cx="225" cy="56" rx="11" ry="11"
+        fill="#ffffff" transform="rotate(68.52931109256747 225 225)" />
+      <ellipse cx="225" cy="56" rx="11" ry="11"
+        fill="#ffffff" transform="rotate(356.27068890743254 225 225)" />
+      </mask>
+    </defs>
     <circle cx="225" cy="225" r="169" fill="none" stroke="#E8915A"
-      stroke-width="22" stroke-linecap="round"
-      stroke-dasharray="848.72 1061.86"
-      stroke-dashoffset="-202.13"
-      transform="rotate(-90 225 225)" />
+      stroke-width="22" mask="url(#arc-225-225-169-22)" />
     <circle cx="225" cy="225" r="191" fill="none" stroke="#2E3632"
       stroke-width="22" />
+    <defs>
+      <mask id="arc-225-225-191-22" maskUnits="userSpaceOnUse" x="0" y="0" width="450" height="450">
+        <circle cx="225" cy="225" r="191" fill="none" stroke="#ffffff"
+          stroke-width="22" stroke-linecap="butt"
+          stroke-dasharray="470.03624140523345 1200.088393671301"
+          stroke-dashoffset="-719.0521522660675" transform="rotate(-90 225 225)" />
+        <ellipse cx="225" cy="34" rx="11" ry="11"
+        fill="#ffffff" transform="rotate(215.69975693530841 225 225)" />
+      <ellipse cx="225" cy="34" rx="11" ry="11"
+        fill="#ffffff" transform="rotate(356.70024306469156 225 225)" />
+      </mask>
+    </defs>
     <circle cx="225" cy="225" r="191" fill="none" stroke="#FF8A00"
-      stroke-width="22" stroke-linecap="round"
-      stroke-dasharray="470.04 1200.09"
-      stroke-dashoffset="-719.05"
-      transform="rotate(-90 225 225)" />
+      stroke-width="22" mask="url(#arc-225-225-191-22)" />
 
     <circle cx="173.0" cy="135.0" r="26.0" fill="#0B0E0C" />
 

@@ -16,11 +16,20 @@
 
     <circle cx="225" cy="225" r="180" fill="none" stroke="#2E3632"
       stroke-width="44" />
+    <defs>
+      <mask id="arc-225-225-180-44" maskUnits="userSpaceOnUse" x="0" y="0" width="450" height="450">
+        <circle cx="225" cy="225" r="180" fill="none" stroke="#ffffff"
+          stroke-width="44" stroke-linecap="butt"
+          stroke-dasharray="0.5654866776461632 1130.9733552923256"
+          stroke-dashoffset="-1130.1251252758564" transform="rotate(-90 225 225)" />
+        <ellipse cx="225" cy="45" rx="0.28133426717848176" ry="22"
+        fill="#ffffff" transform="rotate(359.73 225 225)" />
+      <ellipse cx="225" cy="45" rx="0.28133426717848176" ry="22"
+        fill="#ffffff" transform="rotate(359.9100000000001 225 225)" />
+      </mask>
+    </defs>
     <circle cx="225" cy="225" r="180" fill="none" stroke="#E8915A"
-      stroke-width="44" stroke-linecap="butt"
-      stroke-dasharray="1.13 1130.97"
-      stroke-dashoffset="-1129.84"
-      transform="rotate(-90 225 225)" />
+      stroke-width="44" mask="url(#arc-225-225-180-44)" />
 
     <circle cx="173.0" cy="135.0" r="26.0" fill="#0B0E0C" />
 

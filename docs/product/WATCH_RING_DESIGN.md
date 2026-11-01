@@ -72,7 +72,9 @@ new-artifact native acceptance Pending); temperature-choice revision **2026-11-0
 (one face-local Auto/Celsius/Fahrenheit editor
 choice for built-in weather only, default Auto; current-candidate native acceptance Pending);
 active-clock translation **2026-11-01** (Owner-approved 10-unit rise of the whole active clock;
-ambient unchanged; new-runtime native/public acceptance Pending)
+ambient unchanged; new-runtime native/public acceptance Pending);
+short-positive endpoint revision **2026-11-01** (compressed elliptical caps in a local
+WFF2 mask; source/review construction only, native acceptance Pending)
 — locked visual target for
 Wear OS and Watch Face Format until the next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
@@ -84,6 +86,8 @@ The operative layout is the
 [outward-preserving cell contract](#revision-2026-10-25--preserved-outward-fade-and-50-unit-cells).
 Band widths follow the [N1-width revision](#revision-2026-10-30--n1-width-44), retaining the
 [adaptive admission contract](#revision-2026-10-28--adaptive-bands-from-resolved-count).
+Partial endpoints follow the [short-positive revision](#revision-2026-11-01--short-positive-rounded-endpoints);
+its construction supersedes the historical straight-end/ROUND drawing switch, retaining its admission gates.
 The earlier bottom-only/uniform-centre candidate below is superseded, not accepted intent.
 
 Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 13). Asset ownership: `docs/DESIGN_ASSETS.md`.
@@ -92,6 +96,63 @@ Canonical review generator: `tools/render-watch-ring-designs.mjs`
 Canonical face generator: `tools/render-watchface.mjs` — it writes the shipped `watchface.xml`
 and the ring-type drawables beside it.  
 Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and sibling variants).
+
+## Revision 2026-11-01 — short-positive rounded endpoints
+
+The selected construction changes only positive partial endpoints in `bandPaint` in
+`tools/render-watchface.mjs`. Both existing tiny and round gates retain their names,
+predicates and published cutoff literals but draw the same silhouette. For requested
+sweep `S` in degrees, radius `R`, half-thickness `h`, and the historical rounded
+`c = capDegrees(diameter, thickness)`, use `a = min(c, S/4)`. The full-width BUTT core
+runs from `359.9 - S + a` to `359.9 - a`, retaining at least half the positive sweep.
+Two filled ellipses centered on those endpoints have radial radius `h` and tangential
+radius `b = h*tan(a)/tan(c)`, with trigonometric arguments converted to radians.
+There is no minimum sweep, percentage or cap radius. At `S >= 4c`, `b = h`: the core
+and circular caps reproduce the existing ideal ordinary/near-full ROUND silhouette.
+Exact full retains its single un-inset ROUND path; true zero retains only its track.
+
+One named local WFF2 composition uses the fixed, un-inset live-ColorRamp annulus as
+SOURCE and one opaque MASK group containing the core and both rotated ellipse drawings.
+Only the composed foreground applies active alpha255 / ambient140. The mask never
+reaches tracks, legends, adjacent bands or the separate unsplit-N1 backdrop restoration.
+Every added group has a stable name. No blendMode or newer format is introduced.
+
+The actual ideal angular half-extent is `phi = atan(b/sqrt(R²-h²))`, not `a` in general.
+With all angles in radians, let `K = h/(sqrt(R²-h²)*tan(c))`; then `phi = atan(K*tan(a))` and
+`|phi-a| <= |K-1|*tan(a)` because atan is 1-Lipschitz. Thus the angular footprint
+`S - 2a + 2phi` differs from the requested sweep by at most `2|K-1|*tan(a)`.
+Across the admitted Legacy/N1/N2/N3 geometries this bound is below **0.04136°** and
+below **0.151% of the requested positive sweep**; these are error bounds, not paint
+floors. The error shrinks with the sweep. At saturation it retains the existing
+rounded-cap calibration error rather than asserting an exact angular footprint.
+Since `0 < b <= h < R`, every ellipse fits inside its radius-h endpoint disc and
+therefore inside the unchanged radial annulus `R-h .. R+h`.
+
+`assertNearExhaustedArcs` and `tools/check-watchface-structure.py` inspect finite zero,
+tiny, published-cutoff and saturation neighbours, ordinary, near-full and exact-full
+cases, including both outer ordinals. Their interpretation follows the mask union;
+the full SOURCE annulus is not counted as unmasked foreground. Existing admission,
+ownership, retained-extra and count-change regressions remain. The review generator's
+`ringArc` mirrors the core/ellipse mask while retaining its measured radii, ambient
+palette and historical 360-degree review circumference. Generated art is not native proof.
+
+The historical N1 below/above RED still has an absent expected Spark head with
+191/191 projected interior pixels reading track; the reverse control has a visible
+rounded head. Float-narrowed endpoints collapsed in both controls, so this revision
+does not establish a consumer, callback, evaluator or precision cause. Those original
+cases remain consumed evidence. Fresh synthetic operational XML is prepared outside
+committed fixtures for independent review before the controlled-summary debug-AVD procedure.
+Repository fixture validation does not imply that ignored XML was scanned or rendered.
+
+Native acceptance remains **Pending** after this source/review change: whole-run
+completion and retirement precede HOST official WFF2 and pinned Push semantic/resource
+validation, artifact/active-instance joins, finite positive/cutoff/true-zero native-scale
+observations, ambient/overlap review and guarded ordinary restoration. Preserve newer
+live delivery, Round Legacy and protected Square state. Unavailable consumer fields and
+callback/evaluator precision remain Unknown; no Push/Square/physical/public or performance
+acceptance is inferred. Three bands, two split ordinals, eight slots, pair/Fable identity,
+all admission/data rules, full closure, tracks and the raised clock/cells/logo/legend
+retain their owning contracts.
 
 ## Revision 2026-11-01 — included Fable weekly metric
 

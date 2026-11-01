@@ -16,25 +16,52 @@
 
     <circle cx="225" cy="225" r="143.91" fill="none" stroke="#2E3632"
       stroke-width="20.205000000000002" />
+    <defs>
+      <mask id="arc-225-225-143.91-20.205000000000002" maskUnits="userSpaceOnUse" x="0" y="0" width="450" height="450">
+        <circle cx="225" cy="225" r="143.91" fill="none" stroke="#ffffff"
+          stroke-width="20.205000000000002" stroke-linecap="butt"
+          stroke-dasharray="9.042131975562151 904.2131975562143"
+          stroke-dashoffset="-890.649999592871" transform="rotate(-90 225 225)" />
+        <ellipse cx="225" cy="81.09" rx="4.515122369015427" ry="10.102500000000001"
+        fill="#ffffff" transform="rotate(354.6 225 225)" />
+      <ellipse cx="225" cy="81.09" rx="4.515122369015427" ry="10.102500000000001"
+        fill="#ffffff" transform="rotate(358.2 225 225)" />
+      </mask>
+    </defs>
     <circle cx="225" cy="225" r="143.91" fill="none" stroke="#65D78A"
-      stroke-width="20.205000000000002" stroke-linecap="butt"
-      stroke-dasharray="18.08 904.21"
-      stroke-dashoffset="-886.13"
-      transform="rotate(-90 225 225)" />
+      stroke-width="20.205000000000002" mask="url(#arc-225-225-143.91-20.205000000000002)" />
     <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#2E3632"
       stroke-width="20.205000000000002" />
+    <defs>
+      <mask id="arc-225-225-167.89499999999998-20.205000000000002" maskUnits="userSpaceOnUse" x="0" y="0" width="450" height="450">
+        <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#ffffff"
+          stroke-width="20.205000000000002" stroke-linecap="butt"
+          stroke-dasharray="707.6866240327523 1054.9153971489166"
+          stroke-dashoffset="-337.1262731161642" transform="rotate(-90 225 225)" />
+        <ellipse cx="225" cy="57.10500000000002" rx="10.102500000000001" ry="10.102500000000001"
+        fill="#ffffff" transform="rotate(115.04757504708846 225 225)" />
+      <ellipse cx="225" cy="57.10500000000002" rx="10.102500000000001" ry="10.102500000000001"
+        fill="#ffffff" transform="rotate(356.5524249529116 225 225)" />
+      </mask>
+    </defs>
     <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#E8915A"
-      stroke-width="20.205000000000002" stroke-linecap="round"
-      stroke-dasharray="707.69 1054.92"
-      stroke-dashoffset="-337.13"
-      transform="rotate(-90 225 225)" />
+      stroke-width="20.205000000000002" mask="url(#arc-225-225-167.89499999999998-20.205000000000002)" />
     <circle cx="225" cy="225" r="191.88" fill="none" stroke="#2E3632"
       stroke-width="20.205000000000002" />
+    <defs>
+      <mask id="arc-225-225-191.88-20.205000000000002" maskUnits="userSpaceOnUse" x="0" y="0" width="450" height="450">
+        <circle cx="225" cy="225" r="191.88" fill="none" stroke="#ffffff"
+          stroke-width="20.205000000000002" stroke-linecap="butt"
+          stroke-dasharray="1113.075540937122 1205.617596741619"
+          stroke-dashoffset="-82.43955580449722" transform="rotate(-90 225 225)" />
+        <ellipse cx="225" cy="33.120000000000005" rx="10.102500000000001" ry="10.102500000000001"
+        fill="#ffffff" transform="rotate(24.616628166202414 225 225)" />
+      <ellipse cx="225" cy="33.120000000000005" rx="10.102500000000001" ry="10.102500000000001"
+        fill="#ffffff" transform="rotate(356.9833718337977 225 225)" />
+      </mask>
+    </defs>
     <circle cx="225" cy="225" r="191.88" fill="none" stroke="#7E93B8"
-      stroke-width="20.205000000000002" stroke-linecap="round"
-      stroke-dasharray="1113.08 1205.62"
-      stroke-dashoffset="-82.44"
-      transform="rotate(-90 225 225)" />
+      stroke-width="20.205000000000002" mask="url(#arc-225-225-191.88-20.205000000000002)" />
 
     <circle cx="173.0" cy="135.0" r="26.0" fill="#0B0E0C" />
 

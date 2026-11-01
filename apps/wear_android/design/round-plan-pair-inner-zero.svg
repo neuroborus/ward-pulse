@@ -18,18 +18,36 @@
       stroke-width="16" />
     <circle cx="225" cy="225" r="158" fill="none" stroke="#2E3632"
       stroke-width="16" />
+    <defs>
+      <mask id="arc-225-225-158-16" maskUnits="userSpaceOnUse" x="0" y="0" width="450" height="450">
+        <circle cx="225" cy="225" r="158" fill="none" stroke="#ffffff"
+          stroke-width="16" stroke-linecap="butt"
+          stroke-dasharray="659.0654294033748 992.7432785343747"
+          stroke-dashoffset="-325.67784913099996" transform="rotate(-90 225 225)" />
+        <ellipse cx="225" cy="67" rx="8" ry="8"
+        fill="#ffffff" transform="rotate(118.1010521272447 225 225)" />
+      <ellipse cx="225" cy="67" rx="8" ry="8"
+        fill="#ffffff" transform="rotate(357.09894787275533 225 225)" />
+      </mask>
+    </defs>
     <circle cx="225" cy="225" r="158" fill="none" stroke="#67E8D4"
-      stroke-width="16" stroke-linecap="round"
-      stroke-dasharray="659.07 992.74"
-      stroke-dashoffset="-325.68"
-      transform="rotate(-90 225 225)" />
+      stroke-width="16" mask="url(#arc-225-225-158-16)" />
     <circle cx="225" cy="225" r="186" fill="none" stroke="#2E3632"
       stroke-width="32" />
+    <defs>
+      <mask id="arc-225-225-186-32" maskUnits="userSpaceOnUse" x="0" y="0" width="450" height="450">
+        <circle cx="225" cy="225" r="186" fill="none" stroke="#ffffff"
+          stroke-width="32" stroke-linecap="butt"
+          stroke-dasharray="1089.9255684499867 1168.672467135403"
+          stroke-dashoffset="-62.746898685416156" transform="rotate(-90 225 225)" />
+        <ellipse cx="225" cy="39" rx="16" ry="16"
+        fill="#ffffff" transform="rotate(19.328669205426447 225 225)" />
+      <ellipse cx="225" cy="39" rx="16" ry="16"
+        fill="#ffffff" transform="rotate(355.0713307945735 225 225)" />
+      </mask>
+    </defs>
     <circle cx="225" cy="225" r="186" fill="none" stroke="#65D78A"
-      stroke-width="32" stroke-linecap="round"
-      stroke-dasharray="1089.93 1168.67"
-      stroke-dashoffset="-62.75"
-      transform="rotate(-90 225 225)" />
+      stroke-width="32" mask="url(#arc-225-225-186-32)" />
 
     <circle cx="173.0" cy="135.0" r="26.0" fill="#0B0E0C" />
 

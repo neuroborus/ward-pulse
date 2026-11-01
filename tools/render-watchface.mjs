@@ -947,23 +947,17 @@ function meltGeometry(diameter, thickness) {
   }
 }
 
-function meltBranchAngles(geometry, remaining, nearEmpty) {
-  return {
-    nearEmpty,
-    strokeCap: nearEmpty ? 'BUTT' : 'ROUND',
-    start: (1 - remaining) * SWEEP.end + (nearEmpty ? 0 : geometry.cap),
-    end: nearEmpty ? SWEEP.end : geometry.insetEnd,
-  }
-}
-
 function meltAngles(diameter, thickness, remaining) {
-  const geometry = meltGeometry(diameter, thickness)
-  const nearEmpty = remaining <= geometry.twoCapCutoff
-  return meltBranchAngles(geometry, remaining, nearEmpty)
+  const cap = capDegrees(diameter, thickness)
+  const sweep = remaining * SWEEP.end
+  const inset = Math.min(cap, sweep / 4)
+  const tangent = thickness / 2 * Math.tan(inset * Math.PI / 180) / Math.tan(cap * Math.PI / 180)
+  return { sweep, inset, tangent, start: SWEEP.end - sweep + inset, end: SWEEP.end - inset }
 }
 
-function visibleSweep(angles, roundCap) {
-  return angles.end - angles.start + (angles.strokeCap === 'ROUND' ? 2 * roundCap : 0)
+function visibleSweep(angles, diameter, thickness) {
+  const halfExtent = Math.atan(angles.tangent / Math.sqrt((diameter / 2) ** 2 - (thickness / 2) ** 2)) * 180 / Math.PI
+  return angles.end - angles.start + 2 * halfExtent
 }
 
 /**
@@ -1020,14 +1014,14 @@ function assertLegacyCutoffs() {
   const emittedCutoff = (diameter, thickness) => Number(tinyDecision(diameter, thickness)?.expression
     .match(/<= ([\d.]+)/)?.[1])
   // This Float lies between the analytical and published 336/20 cutoffs.
-  // Both the old percentage range and binary-scaled N3 must still select BUTT.
+  // Both the old percentage range and binary-scaled N3 must still select tiny.
   const percent = Math.fround(1.8949854373931885)
   const selectsTiny = tinyDecision(336, 20).alpha
   for (const max of [100, 800]) {
     const value = Math.fround(percent * (max / 100))
     const ratio = Math.fround(value / max)
     if (!(ratio <= emittedCutoff(336, 20)) || selectsTiny(0, max, value, '') !== 255) {
-      throw new Error(`MAX${max}: the preserved boundary remainder must select BUTT`)
+      throw new Error(`MAX${max}: the preserved boundary remainder must select tiny`)
     }
   }
   for (const [diameter, thickness, cutoff] of [
@@ -1052,79 +1046,48 @@ function assertNearExhaustedArcs() {
   )
   for (const [centre, thickness] of geometries) {
     const geometry = meltGeometry(centre, thickness)
-    const belowRemaining = geometry.twoCapCutoff - epsilon
-    const below = meltAngles(centre, thickness, belowRemaining)
-    const expectedBelowSweep = belowRemaining * SWEEP.end
-    if (
-      !below.nearEmpty ||
-      below.strokeCap !== 'BUTT' ||
-      below.end <= below.start ||
-      Math.abs(visibleSweep(below, geometry.cap) - expectedBelowSweep) > tolerance
-    ) {
-      throw new Error(
-        `ring ${centre}/${thickness}: a remainder below the two-cap cutoff must stay visible and proportional`,
-      )
-    }
-
-    const aboveRemaining = geometry.twoCapCutoff + epsilon
-    const above = meltAngles(centre, thickness, aboveRemaining)
-    const expectedStart = (1 - aboveRemaining) * SWEEP.end + geometry.cap
-    if (
-      above.nearEmpty ||
-      above.strokeCap !== 'ROUND' ||
-      above.start !== expectedStart ||
-      above.end !== geometry.insetEnd ||
-      Math.abs(visibleSweep(above, geometry.cap) - aboveRemaining * SWEEP.end) > tolerance
-    ) {
-      throw new Error(`ring ${centre}/${thickness}: geometry above the two-cap cutoff must stay inset`)
-    }
-
-    const buttAtCutoff = meltBranchAngles(geometry, geometry.twoCapCutoff, true)
-    const roundAtCutoff = meltBranchAngles(geometry, geometry.twoCapCutoff, false)
-    const cutoffSweep = geometry.twoCapCutoff * SWEEP.end
-    if (
-      Math.abs(visibleSweep(buttAtCutoff, geometry.cap) - cutoffSweep) > tolerance ||
-      Math.abs(visibleSweep(roundAtCutoff, geometry.cap) - cutoffSweep) > tolerance
-    ) {
-      throw new Error(`ring ${centre}/${thickness}: melt branches must meet at the two-cap cutoff`)
-    }
-
-    for (const remaining of [0.999, 0.996, 0.99, 0.37, 0.04, 0.01, 0.0000001]) {
+    const saturation = 4 * geometry.cap / SWEEP.end
+    const cases = [0, 0.0000001, geometry.twoCapCutoff - epsilon,
+      geometry.twoCapCutoff + epsilon, saturation - epsilon, saturation, saturation + epsilon,
+      0.04, 0.37, 0.99, 0.996, 0.999, 1 - 2 ** -24, 1]
+    const radius = centre / 2
+    const half = thickness / 2
+    // atan is 1-Lipschitz: |atan(k*tan(a)) - a| <= |k-1|*tan(a).
+    // This retains the rounded historical c calibration rather than claiming
+    // an exact footprint from proportional ellipse radius alone.
+    const c = geometry.cap * Math.PI / 180
+    const k = half / (Math.sqrt(radius ** 2 - half ** 2) * Math.tan(c))
+    for (const remaining of cases.filter((value) => value > 0 && value < 1)) {
       const angles = meltAngles(centre, thickness, remaining)
-      if (
-        angles.end <= angles.start ||
-        Math.abs(visibleSweep(angles, geometry.cap) - remaining * SWEEP.end) > tolerance
-      ) {
-        throw new Error(`ring ${centre}/${thickness}: positive partials must remain proportional`)
+      const errorBound = 2 * Math.abs(k - 1) * Math.tan(angles.inset * Math.PI / 180) * 180 / Math.PI
+      if (angles.end <= angles.start || angles.end - angles.start < angles.sweep / 2 - tolerance ||
+          angles.tangent <= 0 || angles.tangent > half + tolerance ||
+          Math.abs(visibleSweep(angles, centre, thickness) - angles.sweep) > errorBound + tolerance ||
+          Math.abs(angles.tangent / Math.tan(angles.inset * Math.PI / 180) - half / Math.tan(c)) > tolerance ||
+          (remaining >= saturation && Math.abs(angles.start - ((1 - remaining) * SWEEP.end + geometry.cap)) > tolerance) ||
+          (remaining >= saturation && (angles.end !== geometry.insetEnd || Math.abs(angles.tangent - half) > tolerance))) {
+        throw new Error(`ring ${centre}/${thickness}: partial core/caps lost proportional scaling, containment or ordinary silhouette`)
       }
     }
-
+    const zero = meltAngles(centre, thickness, 0)
+    if (zero.tangent !== 0 || zero.start !== zero.end) throw new Error('zero must have no cap footprint')
     const markup = bandArcs(centre, thickness, '')
     const decisions = emittedPaintDecisions(markup)
     assertFullRing(centre, thickness, decisions.find(({ name }) => name.endsWith('_full'))?.body ?? '')
-    for (const remaining of [0, belowRemaining, aboveRemaining, 0.999, 0.996, 0.99, 0.37, 0.04, 0.01, 0.0000001, 1]) {
+    for (const remaining of cases) {
       const active = decisions.filter(({ alpha }) => {
         const value = alpha(0, 100, remaining * 100, '')
         if (value !== 0 && value !== 255) throw new Error('main paint gate must emit only 0 or 255')
         return value === 255
       })
-      const kind = remaining === 1 ? 'full' : remaining <= geometry.twoCapCutoff ? 'tiny' : 'round'
+      const kind = remaining === 1 ? 'full' : remaining <= Number(geometry.cutoffLiteral) ? 'tiny' : 'round'
       if (decisions.length !== 3 || active.length !== (remaining === 0 ? 0 : 1) ||
           (active.length === 1 && !active[0].name.endsWith(`_${kind}`))) {
-        throw new Error(`ring ${centre}/${thickness}: emitted paint gates must select only the proportional branch`)
+        throw new Error(`ring ${centre}/${thickness}: emitted paint gates must select only their admitted branch`)
       }
     }
-    const rawStart = `(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end}`
-    const caps = [...markup.matchAll(/cap="(ROUND|BUTT)"/g)].map((match) => match[1])
-    if (
-      !decisions.find(({ name }) => name.endsWith('_tiny'))?.expression.includes(`<= ${geometry.cutoffLiteral}`) ||
-      !markup.includes(`value="${rawStart}"`) ||
-      !markup.includes(`* ${SWEEP.end} + ${geometry.cap}`) ||
-      caps.join(',') !== 'ROUND,ROUND,BUTT,ROUND'
-    ) {
-      throw new Error(
-        `ring ${centre}/${thickness}: generated markup does not preserve both melt branches`,
-      )
+    if (!decisions.find(({ name }) => name.endsWith('_tiny'))?.expression.includes(`<= ${geometry.cutoffLiteral}`)) {
+      throw new Error(`ring ${centre}/${thickness}: published cutoff changed`)
     }
   }
 
@@ -1224,17 +1187,9 @@ ${pad}</Group>`
 }
 
 /** The same three drawings serve alpha-gated main/inner and extra decisions. */
-function bandPaint(diameter, thickness, kind, pad) {
-  const geometry = meltGeometry(diameter, thickness)
-  const end = kind === 'round' ? geometry.insetEnd.toFixed(2) : SWEEP.end
-  const rawStart = `(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end}`
-  const start = kind === 'tiny' ? rawStart
-    : `clamp(${rawStart} + ${geometry.cap}, ${SWEEP.start}, ${end})`
-  const transform = kind === 'full' ? '' : `${pad}        <Transform
-${pad}            target="startAngle"
-${pad}            value="${start}" />
-`
-  return `${pad}<PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
+function bandPaint(diameter, thickness, kind, pad, name) {
+  if (kind === 'full') {
+    return `${pad}<PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
 ${pad}    <Variant mode="AMBIENT" target="alpha" value="140" />
 ${pad}    <Arc
 ${pad}        centerX="${FACE.center}"
@@ -1242,24 +1197,53 @@ ${pad}        centerY="${FACE.center}"
 ${pad}        width="${diameter}"
 ${pad}        height="${diameter}"
 ${pad}        startAngle="${SWEEP.start}"
-${pad}        endAngle="${end}">
-${transform}${pad}        <WeightedStroke
+${pad}        endAngle="${SWEEP.end}">
+${pad}        <WeightedStroke
 ${pad}            thickness="${thickness}"
 ${pad}            colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-${pad}            cap="${kind === 'tiny' ? 'BUTT' : 'ROUND'}" />
+${pad}            cap="ROUND" />
 ${pad}    </Arc>
 ${pad}</PartDraw>`
+  }
+  const cap = capDegrees(diameter, thickness)
+  const sweep = `([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * ${SWEEP.end}`
+  const inset = `clamp((${sweep}) / 4, 0, ${cap})`
+  const tangent = `${thickness / 2} * tan((${inset}) * ${Math.PI / 180}) / ${Math.tan(cap * Math.PI / 180)}`
+  const start = `(${SWEEP.end} - (${sweep})) + (${inset})`
+  const end = `${SWEEP.end} - (${inset})`
+  const caps = [['start', start], ['end', end]].map(([side, angle]) => `${pad}        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}_${side}Cap" angle="0" pivotX="0.5" pivotY="0.5">
+${pad}            <Transform target="angle" value="${angle}" />
+${pad}            <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}">
+${pad}                <Ellipse x="${FACE.center - thickness / 2}" y="${FACE.center - diameter / 2 - thickness / 2}" width="${thickness}" height="${thickness}">
+${pad}                    <Transform target="x" value="${FACE.center} - (${tangent})" />
+${pad}                    <Transform target="width" value="2 * (${tangent})" />
+${pad}                    <Fill color="#ffffffff" />
+${pad}                </Ellipse>
+${pad}            </PartDraw>
+${pad}        </Group>`).join('\n')
+  // One opaque mask layer unions the core and caps. Ambient alpha belongs to
+  // the isolated composition, never to overlapping constituents of that mask.
+  return `${pad}<Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}_foreground" alpha="255">
+${pad}    <Variant mode="AMBIENT" target="alpha" value="140" />
+${pad}    <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" renderMode="SOURCE">
+${pad}        <Arc centerX="${FACE.center}" centerY="${FACE.center}" width="${diameter}" height="${diameter}" startAngle="${SWEEP.start}" endAngle="${SWEEP.end}">
+${pad}            <WeightedStroke thickness="${thickness}" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+${pad}        </Arc>
+${pad}    </PartDraw>
+${pad}    <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}_mask" renderMode="MASK">
+${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}">
+${pad}            <Arc centerX="${FACE.center}" centerY="${FACE.center}" width="${diameter}" height="${diameter}" startAngle="${SWEEP.start}" endAngle="${SWEEP.end}">
+${pad}                <Transform target="startAngle" value="${start}" />
+${pad}                <Transform target="endAngle" value="${end}" />
+${pad}                <Stroke color="#ffffffff" thickness="${thickness}" cap="BUTT" />
+${pad}            </Arc>
+${pad}        </PartDraw>
+${caps}
+${pad}    </Group>
+${pad}</Group>`
 }
 
-/**
- * Track plus melt for one arc. The melt keeps its own `PartDraw` so ambient can
- * dim it without touching the track underneath.
- *
- * Above the cutoff, the melt is inset by one cap at each end, so the round caps
- * fill exactly the space the inset freed. At or below it, straight ends keep the
- * visible sweep equal to the proportional centreline. Exact full uses neither
- * inset: one almost-closed path keeps the ROUND endpoints together at 12.
- */
+/** Track plus mutually exclusive full/tiny/round gates; both partial gates share one silhouette. */
 function bandArcs(diameter, thickness, pad, name = 'band') {
   const geometry = meltGeometry(diameter, thickness)
   const value = '[COMPLICATION.RANGED_VALUE_VALUE]'
@@ -1271,7 +1255,7 @@ function bandArcs(diameter, thickness, pad, name = 'band') {
     ['round', `${partial} && (${value} / ${maximum}) > ${geometry.cutoffLiteral}`],
   ].map(([kind, predicate]) => `${pad}<Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}_${kind}" alpha="0">
 ${alphaTransform(predicate, `${pad}    `)}
-${bandPaint(diameter, thickness, kind, `${pad}    `)}
+${bandPaint(diameter, thickness, kind, `${pad}    `, `${name}_${kind}`)}
 ${pad}</Group>`).join('\n')
   return `${bandTrack(diameter, thickness, pad)}
 ${pad}<!-- Stable foreground trees have mutually exclusive alpha gates.
@@ -1421,7 +1405,7 @@ function outerHalfSlot({ slotId, service, label }, ordinal, diagnostics = false)
     return `                        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="outerHalf${slotId}_${layout.name}_${index + 1}_${kind}" alpha="0">
 ${alphaTransform(predicate, ' '.repeat(28))}
 ${bandTrack(outer, half, ' '.repeat(28))}${kind === 'zero' ? '' : `
-${bandPaint(outer, half, kind, ' '.repeat(28))}`}${diagnostics ? `
+${bandPaint(outer, half, kind, ' '.repeat(28), `outerHalf${slotId}_${layout.name}_${index + 1}_${kind}`)}`}${diagnostics ? `
 ${n1Witness(`admit_${layout.name}_${index}_${kind}`, layout.name === 'N1' ? 'A1' : 'AO', 1, 1)}${layout.name === 'N1' ? `
 ${n1Witness(kind === 'zero' ? 'paintNone' : `paint_${kind}`, paintToken, 2, 1)}` : ''}` : ''}
                         </Group>`
@@ -1473,8 +1457,22 @@ function emittedExpressions(markup) {
 
 /** Paint gates have fixed drawing Groups; the XML checker enforces that structure. */
 function emittedPaintDecisions(markup) {
-  return [...markup.matchAll(/<Group [^>]*name="([^"]+)" alpha="0">\s*<Transform target="alpha" value="([^"]+)" \/>([\s\S]*?)<\/Group>/g)]
-    .map(([, name, encoded, body]) => {
+  return [...markup.matchAll(/<Group [^>]*name="([^"]+)" alpha="0">\s*<Transform target="alpha" value="([^"]+)" \/>/g)]
+    .map((match) => {
+      const [, name, encoded] = match
+      const content = markup.slice(match.index + match[0].length)
+      // Partial paint now contains nested composition/cap Groups. Retain the
+      // complete owning body; the Python XML check validates its actual tree.
+      let depth = 1
+      let body
+      for (const tag of content.matchAll(/<\/?Group\b[^>]*>/g)) {
+        depth += tag[0].startsWith('</') ? -1 : 1
+        if (depth === 0) {
+          body = content.slice(0, tag.index)
+          break
+        }
+      }
+      if (body === undefined) throw new Error(`unclosed paint decision ${name}`)
       const expression = encoded.replaceAll('&quot;', '"').replaceAll('&lt;', '<')
         .replaceAll('&gt;', '>').replaceAll('&amp;', '&')
       return { name, body, expression, alpha: emittedValue(expression) }
@@ -1533,8 +1531,10 @@ function assertLowerContracts() {
             throw new Error(`extra ${ordinal}/${max}/${index}: impossible ordinal or position admitted`)
           }
           const body = active[0]?.body
-          if (body !== undefined && ((body.match(/<Stroke /g)?.length ?? 0) !== 1 ||
+          const partial = value > 0 && value < max
+          if (body !== undefined && ((body.match(/<Stroke /g)?.length ?? 0) !== (partial ? 2 : 1) ||
               (body.match(/<WeightedStroke/g)?.length ?? 0) !== (value > 0 ? 1 : 0) ||
+              (body.match(/<Ellipse /g)?.length ?? 0) !== (partial ? 2 : 0) ||
               body.includes('<Condition>'))) {
             throw new Error(`extra ${ordinal}: selected decision must own its track and only its paint`)
           }

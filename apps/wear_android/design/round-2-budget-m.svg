@@ -16,21 +16,39 @@
 
     <circle cx="225" cy="225" r="150" fill="none" stroke="#2E3632"
       stroke-width="32" />
+    <defs>
+      <mask id="arc-225-225-150-32" maskUnits="userSpaceOnUse" x="0" y="0" width="450" height="450">
+        <circle cx="225" cy="225" r="150" fill="none" stroke="#ffffff"
+          stroke-width="32" stroke-linecap="butt"
+          stroke-dasharray="439.23889803846896 942.4777960769379"
+          stroke-dashoffset="-487.23889803846896" transform="rotate(-90 225 225)" />
+        <ellipse cx="225" cy="75" rx="16" ry="16"
+        fill="#ffffff" transform="rotate(186.11154981472876 225 225)" />
+      <ellipse cx="225" cy="75" rx="16" ry="16"
+        fill="#ffffff" transform="rotate(353.8884501852712 225 225)" />
+      </mask>
+    </defs>
     <circle cx="225" cy="225" r="150" fill="none" stroke="#E8915A"
-      stroke-width="32" stroke-linecap="round"
-      stroke-dasharray="439.24 942.48"
-      stroke-dashoffset="-487.24"
-      transform="rotate(-90 225 225)" />
+      stroke-width="32" mask="url(#arc-225-225-150-32)" />
     <g font-family="Noto Sans, sans-serif" font-size="22.1"
       font-weight="700" fill="#0A0D0B" fill-opacity="0.45"
       text-anchor="middle"><text x="225" y="82.9" transform="rotate(53.64 225 225)">D</text><text x="225" y="82.9" transform="rotate(60.91 225 225)">D</text><text x="225" y="82.9" transform="rotate(68.18 225 225)">D</text><text x="225" y="82.9" transform="rotate(75.45 225 225)">D</text><text x="225" y="82.9" transform="rotate(82.73 225 225)">D</text><text x="225" y="82.9" transform="rotate(90.00 225 225)">D</text><text x="225" y="82.9" transform="rotate(97.27 225 225)">D</text><text x="225" y="82.9" transform="rotate(104.55 225 225)">D</text><text x="225" y="82.9" transform="rotate(111.82 225 225)">D</text><text x="225" y="82.9" transform="rotate(119.09 225 225)">D</text><text x="225" y="82.9" transform="rotate(126.36 225 225)">D</text><text x="225" y="82.9" transform="rotate(143.64 225 225)">D</text><text x="225" y="82.9" transform="rotate(150.91 225 225)">D</text><text x="225" y="82.9" transform="rotate(158.18 225 225)">D</text><text x="225" y="82.9" transform="rotate(165.45 225 225)">D</text><text x="225" y="82.9" transform="rotate(172.73 225 225)">D</text><text x="225" y="82.9" transform="rotate(180.00 225 225)">D</text><text x="225" y="82.9" transform="rotate(187.27 225 225)">D</text><text x="225" y="82.9" transform="rotate(194.55 225 225)">D</text><text x="225" y="82.9" transform="rotate(201.82 225 225)">D</text><text x="225" y="82.9" transform="rotate(209.09 225 225)">D</text><text x="225" y="82.9" transform="rotate(216.36 225 225)">D</text><text x="225" y="82.9" transform="rotate(233.64 225 225)">D</text><text x="225" y="82.9" transform="rotate(240.91 225 225)">D</text><text x="225" y="82.9" transform="rotate(248.18 225 225)">D</text><text x="225" y="82.9" transform="rotate(255.45 225 225)">D</text><text x="225" y="82.9" transform="rotate(262.73 225 225)">D</text><text x="225" y="82.9" transform="rotate(270.00 225 225)">D</text><text x="225" y="82.9" transform="rotate(277.27 225 225)">D</text><text x="225" y="82.9" transform="rotate(284.55 225 225)">D</text><text x="225" y="82.9" transform="rotate(291.82 225 225)">D</text><text x="225" y="82.9" transform="rotate(299.09 225 225)">D</text><text x="225" y="82.9" transform="rotate(306.36 225 225)">D</text><text x="225" y="82.9" transform="rotate(323.64 225 225)">D</text><text x="225" y="82.9" transform="rotate(330.91 225 225)">D</text><text x="225" y="82.9" transform="rotate(338.18 225 225)">D</text><text x="225" y="82.9" transform="rotate(345.45 225 225)">D</text><text x="225" y="82.9" transform="rotate(352.73 225 225)">D</text><text x="225" y="82.9" transform="rotate(360.00 225 225)">D</text><text x="225" y="82.9" transform="rotate(367.27 225 225)">D</text><text x="225" y="82.9" transform="rotate(374.55 225 225)">D</text><text x="225" y="82.9" transform="rotate(381.82 225 225)">D</text><text x="225" y="82.9" transform="rotate(389.09 225 225)">D</text><text x="225" y="82.9" transform="rotate(396.36 225 225)">D</text></g>
     <circle cx="225" cy="225" r="186" fill="none" stroke="#2E3632"
       stroke-width="32" />
+    <defs>
+      <mask id="arc-225-225-186-32" maskUnits="userSpaceOnUse" x="0" y="0" width="450" height="450">
+        <circle cx="225" cy="225" r="186" fill="none" stroke="#ffffff"
+          stroke-width="32" stroke-linecap="butt"
+          stroke-dasharray="844.5043503515521 1168.672467135403"
+          stroke-dashoffset="-308.16811678385073" transform="rotate(-90 225 225)" />
+        <ellipse cx="225" cy="39" rx="16" ry="16"
+        fill="#ffffff" transform="rotate(94.92866920542643 225 225)" />
+      <ellipse cx="225" cy="39" rx="16" ry="16"
+        fill="#ffffff" transform="rotate(355.0713307945735 225 225)" />
+      </mask>
+    </defs>
     <circle cx="225" cy="225" r="186" fill="none" stroke="#E8915A"
-      stroke-width="32" stroke-linecap="round"
-      stroke-dasharray="844.50 1168.67"
-      stroke-dashoffset="-308.17"
-      transform="rotate(-90 225 225)" />
+      stroke-width="32" mask="url(#arc-225-225-186-32)" />
     <g font-family="Noto Sans, sans-serif" font-size="22.1"
       font-weight="700" fill="#0A0D0B" fill-opacity="0.45"
       text-anchor="middle"><text x="225" y="46.9" transform="rotate(53.33 225 225)">M</text><text x="225" y="46.9" transform="rotate(60.00 225 225)">M</text><text x="225" y="46.9" transform="rotate(66.67 225 225)">M</text><text x="225" y="46.9" transform="rotate(73.33 225 225)">M</text><text x="225" y="46.9" transform="rotate(80.00 225 225)">M</text><text x="225" y="46.9" transform="rotate(86.67 225 225)">M</text><text x="225" y="46.9" transform="rotate(93.33 225 225)">M</text><text x="225" y="46.9" transform="rotate(100.00 225 225)">M</text><text x="225" y="46.9" transform="rotate(106.67 225 225)">M</text><text x="225" y="46.9" transform="rotate(113.33 225 225)">M</text><text x="225" y="46.9" transform="rotate(120.00 225 225)">M</text><text x="225" y="46.9" transform="rotate(126.67 225 225)">M</text><text x="225" y="46.9" transform="rotate(143.33 225 225)">M</text><text x="225" y="46.9" transform="rotate(150.00 225 225)">M</text><text x="225" y="46.9" transform="rotate(156.67 225 225)">M</text><text x="225" y="46.9" transform="rotate(163.33 225 225)">M</text><text x="225" y="46.9" transform="rotate(170.00 225 225)">M</text><text x="225" y="46.9" transform="rotate(176.67 225 225)">M</text><text x="225" y="46.9" transform="rotate(183.33 225 225)">M</text><text x="225" y="46.9" transform="rotate(190.00 225 225)">M</text><text x="225" y="46.9" transform="rotate(196.67 225 225)">M</text><text x="225" y="46.9" transform="rotate(203.33 225 225)">M</text><text x="225" y="46.9" transform="rotate(210.00 225 225)">M</text><text x="225" y="46.9" transform="rotate(216.67 225 225)">M</text><text x="225" y="46.9" transform="rotate(233.33 225 225)">M</text><text x="225" y="46.9" transform="rotate(240.00 225 225)">M</text><text x="225" y="46.9" transform="rotate(246.67 225 225)">M</text><text x="225" y="46.9" transform="rotate(253.33 225 225)">M</text><text x="225" y="46.9" transform="rotate(260.00 225 225)">M</text><text x="225" y="46.9" transform="rotate(266.67 225 225)">M</text><text x="225" y="46.9" transform="rotate(273.33 225 225)">M</text><text x="225" y="46.9" transform="rotate(280.00 225 225)">M</text><text x="225" y="46.9" transform="rotate(286.67 225 225)">M</text><text x="225" y="46.9" transform="rotate(293.33 225 225)">M</text><text x="225" y="46.9" transform="rotate(300.00 225 225)">M</text><text x="225" y="46.9" transform="rotate(306.67 225 225)">M</text><text x="225" y="46.9" transform="rotate(323.33 225 225)">M</text><text x="225" y="46.9" transform="rotate(330.00 225 225)">M</text><text x="225" y="46.9" transform="rotate(336.67 225 225)">M</text><text x="225" y="46.9" transform="rotate(343.33 225 225)">M</text><text x="225" y="46.9" transform="rotate(350.00 225 225)">M</text><text x="225" y="46.9" transform="rotate(356.67 225 225)">M</text><text x="225" y="46.9" transform="rotate(363.33 225 225)">M</text><text x="225" y="46.9" transform="rotate(370.00 225 225)">M</text><text x="225" y="46.9" transform="rotate(376.67 225 225)">M</text><text x="225" y="46.9" transform="rotate(383.33 225 225)">M</text><text x="225" y="46.9" transform="rotate(390.00 225 225)">M</text><text x="225" y="46.9" transform="rotate(396.67 225 225)">M</text></g>

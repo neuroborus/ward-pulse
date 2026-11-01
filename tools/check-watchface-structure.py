@@ -139,6 +139,8 @@ def evaluate_paint(node, value, maximum, minimum=0, title=""):
             return math.floor(evaluate(node.args[0]) + 0.5)
         if node.func.id == "textLength":
             return len(evaluate(node.args[0]))
+        if node.func.id == "tan":
+            return math.tan(evaluate(node.args[0]))
     if isinstance(node, ast.Name) and node.id in ("value", "maximum", "minimum", "title"):
         return {"value": value, "maximum": maximum, "minimum": minimum, "title": title}[node.id]
     if isinstance(node, ast.Name) and node.id in ("true", "false"):
@@ -355,43 +357,122 @@ def check_band_envelopes(root):
     return errors
 
 
-def check_paint_endpoints(arc, kind, diameter, thickness, value, maximum):
-    """Evaluate emitted transforms, not reconstructed generator markup."""
-    if arc is None:
+def check_paint_shape(paint, kind, diameter, thickness, name):
+    """One live color source, an opaque local mask union and one ambient alpha."""
+    canvas = {"x": "0", "y": "0", "width": "450", "height": "450"}
+    geometry = {"centerX": "225", "centerY": "225", "width": f"{diameter:g}",
+                "height": f"{diameter:g}", "startAngle": "0", "endAngle": "359.9"}
+    weighted = {"thickness": f"{thickness:g}", "colors": "[COMPLICATION.RANGED_VALUE_COLORS]", "cap": "ROUND"}
+    if paint is None or paint.find(".//Condition") is not None:
         return False
-    transforms = arc.findall("Transform")
-    cap = round(thickness / diameter * 180 / math.pi, 2)
-    start = float(arc.get("startAngle"))
-    end = float(arc.get("endAngle"))
-    if transforms:
-        start = evaluate_paint(paint_expression(transforms[0].get("value", "")), value, maximum)
-    wanted_start = 0 if kind == "full" else (1 - value / maximum) * 359.9
-    wanted_end = 359.9
-    if kind == "round":
-        wanted_start += cap
-        wanted_end -= cap
-    # Legacy/N3 publish six-decimal cutoffs. Immediately above a rounded-down
-    # boundary their historical clamp can collapse the centreline, with at most
-    # half a last published digit of excess visible cap. New widths get no allowance.
-    legacy_rounding = (kind == "round" and thickness in (10, 20)
-                       and 0 <= 2 * cap - 359.9 * value / maximum <= 359.9 * 0.0000005)
-    if legacy_rounding:
-        wanted_start = wanted_end
-    visible = end - start + (2 * cap if kind == "round" else 0)
-    if not (len(transforms) == (0 if kind == "full" else 1)
-            and math.isclose(start, wanted_start, rel_tol=0, abs_tol=1e-9)
-            and math.isclose(end, wanted_end, rel_tol=0, abs_tol=1e-9)
-            and (end > start or (legacy_rounding and end == start))
-            and math.isclose(visible, 2 * cap if legacy_rounding else 359.9 * value / maximum,
-                             rel_tol=0, abs_tol=1e-9)):
+    attributes = {**canvas, "alpha": "255"}
+    if kind != "full":
+        attributes["name"] = f"{name}_foreground"
+    if (paint.attrib != attributes or paint.tag != ("PartDraw" if kind == "full" else "Group")
+            or [child.tag for child in paint] != (["Variant", "Arc"] if kind == "full" else ["Variant", "PartDraw", "Group"])
+            or paint[0].attrib != {"mode": "AMBIENT", "target": "alpha", "value": "140"}):
+        return False
+    source = paint if kind == "full" else paint[1]
+    arc = source.find("Arc")
+    stroke = source.find("Arc/WeightedStroke")
+    if (arc is None or arc.attrib != geometry or [child.tag for child in arc] != ["WeightedStroke"]
+            or stroke is None or stroke.attrib != weighted):
         return False
     if kind == "full":
+        return True
+    if source.attrib != {**canvas, "renderMode": "SOURCE"} or [child.tag for child in source] != ["Arc"]:
+        return False
+    mask = paint[2]
+    if (mask.attrib != {**canvas, "name": f"{name}_mask", "renderMode": "MASK"}
+            or [child.tag for child in mask] != ["PartDraw", "Group", "Group"]):
+        return False
+    core = mask[0]
+    arc = core.find("Arc")
+    stroke = core.find("Arc/Stroke")
+    if (core.attrib != canvas or [child.tag for child in core] != ["Arc"]
+            or arc is None or arc.attrib != geometry
+            or [child.tag for child in arc] != ["Transform", "Transform", "Stroke"]
+            or [item.get("target") for item in arc.findall("Transform")] != ["startAngle", "endAngle"]
+            or any(set(item.attrib) != {"target", "value"} for item in arc.findall("Transform"))
+            or stroke is None or stroke.attrib != {"color": "#ffffffff", "thickness": f"{thickness:g}", "cap": "BUTT"}):
+        return False
+    for group, side in zip(mask.findall("Group"), ("start", "end")):
+        ellipse = group.find("PartDraw/Ellipse")
+        if (group.attrib != {**canvas, "name": f"{name}_{side}Cap", "angle": "0", "pivotX": "0.5", "pivotY": "0.5"}
+                or [child.tag for child in group] != ["Transform", "PartDraw"]
+                or set(group[0].attrib) != {"target", "value"} or group[0].get("target") != "angle"
+                or group[1].attrib != canvas or [child.tag for child in group[1]] != ["Ellipse"]
+                or ellipse is None or ellipse.attrib != {
+                    "x": f"{225 - thickness / 2:g}", "y": f"{225 - diameter / 2 - thickness / 2:g}",
+                    "width": f"{thickness:g}", "height": f"{thickness:g}"}
+                or [child.tag for child in ellipse] != ["Transform", "Transform", "Fill"]
+                or [item.get("target") for item in ellipse.findall("Transform")] != ["x", "width"]
+                or any(set(item.attrib) != {"target", "value"} for item in ellipse.findall("Transform"))
+                or ellipse[-1].attrib != {"color": "#ffffffff"}):
+            return False
+    return True
+
+
+def paint_attribute(node, attribute, value, maximum):
+    transform = node.find(f"Transform[@target='{attribute}']")
+    return (float(node.get(attribute)) if transform is None else
+            evaluate_paint(paint_expression(transform.get("value", "")), value, maximum))
+
+
+def check_paint_endpoints(paint, kind, diameter, thickness, value, maximum):
+    """Evaluate the emitted core, cap placement and ellipse dimensions independently."""
+    if paint is None:
+        return False
+    if kind == "full":
+        arc = paint.find("Arc")
+        if arc is None:
+            return False
+        start = paint_attribute(arc, "startAngle", value, maximum)
+        end = paint_attribute(arc, "endAngle", value, maximum)
         radius = diameter / 2
         half_gap = math.radians((360 - (end - start)) / 2)
         along = radius * math.cos(half_gap)
         reach = math.sqrt((thickness / 2)**2 - (radius * math.sin(half_gap))**2)
-        return (0 <= along - reach - (diameter - thickness) / 2 <= 0.01
+        return (start == 0 and end == 359.9 and not arc.findall("Transform")
+                and 0 <= along - reach - (diameter - thickness) / 2 <= 0.01
                 and 0 <= (diameter + thickness) / 2 - along - reach <= 0.01)
+    mask = paint.find("Group[@renderMode='MASK']")
+    if mask is None:
+        return False
+    core = mask.find("PartDraw/Arc")
+    if core is None:
+        return False
+    radius, half = diameter / 2, thickness / 2
+    cap = round(thickness / diameter * 180 / math.pi, 2)
+    sweep = 359.9 * value / maximum
+    inset = min(cap, sweep / 4)
+    tangent = half * math.tan(math.radians(inset)) / math.tan(math.radians(cap))
+    start = paint_attribute(core, "startAngle", value, maximum)
+    end = paint_attribute(core, "endAngle", value, maximum)
+    def close(actual, expected):
+        return math.isclose(actual, expected, rel_tol=0, abs_tol=1e-9)
+
+    if not (close(start, 359.9 - sweep + inset) and close(end, 359.9 - inset)
+            and end > start and end - start >= sweep / 2 - 1e-9):
+        return False
+    for group, endpoint in zip(mask.findall("Group"), (start, end)):
+        ellipse = group.find("PartDraw/Ellipse")
+        if ellipse is None:
+            return False
+        x = paint_attribute(ellipse, "x", value, maximum)
+        b = paint_attribute(ellipse, "width", value, maximum) / 2
+        if not (close(paint_attribute(group, "angle", value, maximum), endpoint)
+                and close(x + b, 225) and close(b, tangent) and 0 < b <= half + 1e-9):
+            return False
+        # With b<=h<R the entire ellipse lies between R-h and R+h. Its
+        # angular half-extent is not a linear scaling of the rounded c.
+        extent = math.atan(b / math.sqrt(radius**2 - half**2))
+        k = half / (math.sqrt(radius**2 - half**2) * math.tan(math.radians(cap)))
+        error_bound = abs(k - 1) * math.tan(math.radians(inset))
+        if abs(extent - math.radians(inset)) > error_bound + 1e-12:
+            return False
+        if sweep >= 4 * cap and not (close(b, half) and close(inset, cap)):
+            return False
     return True
 
 
@@ -432,42 +513,19 @@ def check_band_paints(root):
             errors.append(f"{name}: zero must retain its track")
             continue
         alphas = [alpha_expression(decision) for decision in decisions]
-        kinds = []
-        for decision, expected_kind in zip(decisions, ("full", "tiny", "round")):
-            if (decision.attrib != {**canvas, "name": f"{name}_{expected_kind}", "alpha": "0"}
-                    or [child.tag for child in element_children(decision)] != ["Transform", "PartDraw"]):
-                errors.append(f"{name}: each paint gate must be its stable named Group with one drawing")
-                break
-            draws = list(decision.iter("PartDraw"))
-            arcs = list(decision.iter("Arc"))
-            strokes = list(decision.iter("WeightedStroke"))
-            if len(draws) != 1 or len(arcs) != 1 or len(strokes) != 1 or decision.find(".//Condition") is not None:
-                errors.append(f"{name}: each paint gate must own one fixed drawing subtree")
-                break
-            draw, arc, stroke = draws[0], arcs[0], strokes[0]
-            transforms = arc.findall("Transform")
-            kind = "tiny" if stroke.get("cap") == "BUTT" else "round" if transforms else "full"
-            kinds.append(kind)
-            if (draw.find("Arc") is not arc or arc.find("WeightedStroke") is not stroke
-                    or draw.attrib != {**canvas, "alpha": "255"}
-                    or [child.tag for child in draw] != ["Variant", "Arc"]
-                    or draw.find("Variant[@mode='AMBIENT'][@target='alpha'][@value='140']") is None
-                    or stroke.get("colors") != "[COMPLICATION.RANGED_VALUE_COLORS]"
-                    or stroke.get("thickness") != track_stroke.get("thickness")
-                    or stroke.get("cap") != ("BUTT" if kind == "tiny" else "ROUND")
-                    or any(arc.get(key) != track_arc.get(key)
-                           for key in ("centerX", "centerY", "width", "height", "startAngle"))
-                    or len(transforms) != (0 if kind == "full" else 1)
-                    or any(item.get("target") != "startAngle" for item in transforms)):
-                errors.append(f"{name}: paint lost its band geometry, family source or ambient alpha")
-        if kinds != ["full", "tiny", "round"]:
-            errors.append(f"{name}: gates must own full, tiny, round drawings in that order")
-            continue
+        kinds = ["full", "tiny", "round"]
+        for decision, kind in zip(decisions, kinds):
+            name_kind = f"{name}_{kind}"
+            if (decision.attrib != {**canvas, "name": name_kind, "alpha": "0"}
+                    or [child.tag for child in element_children(decision)] != ["Transform", "PartDraw" if kind == "full" else "Group"]
+                    or not check_paint_shape(decision[1], kind, diameter, thickness, name_kind)):
+                errors.append(f"{name_kind}: paint lost its isolated source/mask, endpoints, family or single ambient alpha")
         foreground = [node for child in children for node in child.iter()]
         if (sum(node.tag == "WeightedStroke" for node in foreground) != 3
-                or sum(node.tag == "PartDraw" for node in foreground) != 4
-                or sum(node.tag == "Stroke" for node in foreground) != 1):
-            errors.append(f"{name}: colored paint escaped its three gates")
+                or sum(node.tag == "PartDraw" for node in foreground) != 10
+                or sum(node.tag == "Stroke" for node in foreground) != 3
+                or sum(node.tag == "Ellipse" for node in foreground) != 4):
+            errors.append(f"{name}: paint escaped its three owning gates")
 
         # Use the published geometry boundary independently of the emitted predicates.
         cap = round(thickness / diameter * 180 / math.pi, 2)
@@ -481,14 +539,15 @@ def check_band_paints(root):
                  (0.99 * maximum, "round"), (0.996 * maximum, "round"),
                  (0.999 * maximum, "round"), (adjacent_float(maximum, -1), "round"),
                  (maximum, "full")]
+        cases += [(adjacent_float(4 * cap / 359.9 * maximum, direction), "round") for direction in (-1, 1)]
         for value, wanted in cases:
             values = [evaluate_paint(alpha, value, maximum) for alpha in alphas]
             active = [kind for kind, alpha in zip(kinds, values) if alpha != 0]
             if any(alpha not in (0, 255) for alpha in values) or active != ([] if wanted == "none" else [wanted]):
                 errors.append(f"{name}: {value}/{maximum} selected {active}, expected {wanted} alone")
             elif active:
-                arc = decisions[kinds.index(wanted)].find("PartDraw/Arc")
-                if not check_paint_endpoints(arc, wanted, diameter, thickness, value, maximum):
+                paint = decisions[kinds.index(wanted)][1]
+                if not check_paint_endpoints(paint, wanted, diameter, thickness, value, maximum):
                     errors.append(f"{name}: {value}/{maximum} lost proportional endpoints or full closure")
     return errors
 
@@ -683,7 +742,8 @@ def check_extra_decisions(root):
                 continue
             children = element_children(group)
             draws = children[1:]
-            if [child.tag for child in children] != ["Transform"] + ["PartDraw"] * (1 if kind == "zero" else 2):
+            tags = ["Transform", "PartDraw"] + ([] if kind == "zero" else ["PartDraw" if kind == "full" else "Group"])
+            if [child.tag for child in children] != tags:
                 errors.append(f"{name}: decision must own track then only its corresponding paint")
                 paints.append(None)
                 continue
@@ -710,30 +770,9 @@ def check_extra_decisions(root):
                 paints.append(None)
                 continue
             paint = draws[1]
-            arc = paint.find("Arc")
-            weighted = paint.find("Arc/WeightedStroke")
-            cap = round(thickness / diameter * 180 / math.pi, 2)
-            end = 359.9 - cap if kind == "round" else 359.9
-            transforms = [] if arc is None else arc.findall("Transform")
-            if (paint.attrib != {**canvas, "alpha": "255"}
-                    or [child.tag for child in paint] != ["Variant", "Arc"]
-                    or paint[0].attrib != {"mode": "AMBIENT", "target": "alpha", "value": "140"}
-                    or arc is None or arc.attrib != {**arc_geometry, "endAngle": f"{end:.2f}" if kind == "round" else "359.9"}
-                    or [child.tag for child in arc] != ([] if kind == "full" else ["Transform"]) + ["WeightedStroke"]
-                    or weighted is None or weighted.attrib != {
-                        "thickness": f"{thickness:g}", "colors": "[COMPLICATION.RANGED_VALUE_COLORS]",
-                        "cap": "BUTT" if kind == "tiny" else "ROUND"}
-                    or any(set(item.attrib) != {"target", "value"} or item.get("target") != "startAngle"
-                           for item in transforms)):
-                errors.append(f"{name}: selected drawing lost its geometry, caps, family or ambient alpha")
-            paints.append(paint_expression(transforms[0].get("value", "")) if transforms else None)
-            if kind == "full":
-                radius = diameter / 2
-                along = radius * math.cos(half_gap)
-                reach = math.sqrt((thickness / 2)**2 - (radius * math.sin(half_gap))**2)
-                if not (0 <= along - reach - (diameter - thickness) / 2 <= 0.01
-                        and 0 <= (diameter + thickness) / 2 - along - reach <= 0.01):
-                    errors.append(f"{name}: full path no longer closes the complete annulus")
+            if not check_paint_shape(paint, kind, diameter, thickness, name):
+                errors.append(f"{name}: selected drawing lost its isolated composition, geometry, family or ambient alpha")
+            paints.append(paint)
 
         gate_errors = set()
 
@@ -757,7 +796,9 @@ def check_extra_decisions(root):
                 if thickness == 20:
                     cutoff = round(cutoff, 6)
                 values = [0, 2**-20 * maximum, adjacent_float(cutoff * maximum, -1),
-                          adjacent_float(cutoff * maximum, 1), 0.37 * maximum, 0.99 * maximum,
+                          adjacent_float(cutoff * maximum, 1),
+                          adjacent_float(4 * cap / 359.9 * maximum, -1),
+                          adjacent_float(4 * cap / 359.9 * maximum, 1), 0.37 * maximum, 0.99 * maximum,
                           0.996 * maximum, 0.999 * maximum, adjacent_float(maximum, -1), maximum]
                 for value in values:
                     kind = ("zero" if value == 0 else "full" if value == maximum
@@ -768,15 +809,9 @@ def check_extra_decisions(root):
                     if actual != wanted:
                         errors.append(f"slot {slot_id}/{layout}/{index}: {value} selected {actual}, expected {wanted}")
                     elif positions and kind != "zero":
-                        arc = groups[positions[0]].findall("PartDraw")[1].find("Arc")
-                        if not check_paint_endpoints(arc, kind, diameter, thickness / 2, value, maximum):
+                        paint = paints[positions[0]]
+                        if not check_paint_endpoints(paint, kind, diameter, thickness / 2, value, maximum):
                             errors.append(f"slot {slot_id}/{layout}/{index}: selected {kind} endpoints or closure drifted")
-                    if positions and kind in ("tiny", "round"):
-                        transform = paints[positions[0]]
-                        start = evaluate_paint(transform, value, maximum) if transform is not None else math.nan
-                        wanted_start = (1 - value / maximum) * 359.9 + (cap if kind == "round" else 0)
-                        if not math.isclose(start, wanted_start, rel_tol=0, abs_tol=1e-9):
-                            errors.append(f"slot {slot_id}/{layout}/{index}: selected {kind} sweep is not proportional")
                 malformed = [(value, maximum, 0, str(index))
                              for value in (-1, adjacent_float(maximum, 1), math.nan, math.inf, -math.inf)]
                 # Exercise admission in every paint state, including the zero-only track.
@@ -848,6 +883,21 @@ def emitted_band_layers(root, responses):
             if mask is not None:
                 visit(mask, fields, "backdrop", alpha)
             return
+        if node.tag == "Group" and node.get("name", "").endswith("_foreground"):
+            # The source annulus supplies color only inside the mask union.
+            # Keep one foreground layer, not an unmasked full-colored ring or
+            # independently blended white/core/cap layers.
+            mask = node.find("Group[@renderMode='MASK']")
+            source = node.find("PartDraw[@renderMode='SOURCE']/Arc/WeightedStroke")
+            if mask is not None and source is not None:
+                core = mask.find("PartDraw/Arc")
+                ellipse = mask.find("Group/PartDraw/Ellipse")
+                layers.append((float(core.get("width")) / 2, float(source.get("thickness")),
+                               paint_attribute(core, "startAngle", fields["value"], fields["maximum"]),
+                               paint_attribute(core, "endAngle", fields["value"], fields["maximum"]),
+                               ("ELLIPSE", paint_attribute(ellipse, "width", fields["value"], fields["maximum"]) / 2),
+                               family, alpha, source.get("colors")))
+            return
         if node.tag == "Arc":
             stroke = node.find("Stroke")
             colored = stroke is None
@@ -884,6 +934,12 @@ def visible_band_owner(layers, radius, angle):
         if cap == "ROUND":
             inside |= any(radius**2 + center**2 - 2 * radius * center * math.cos(
                 math.radians(angle - endpoint)) <= (thickness / 2)**2 for endpoint in (start, end))
+        elif isinstance(cap, tuple) and cap[0] == "ELLIPSE":
+            tangent = cap[1]
+            if tangent > 0:
+                inside |= any(((radius * math.cos(math.radians(angle - endpoint)) - center) / (thickness / 2))**2
+                              + (radius * math.sin(math.radians(angle - endpoint)) / tangent)**2 <= 1
+                              for endpoint in (start, end))
         if inside:
             if family == "track" and (alpha != 255 or color != "#ff2e3632"):
                 raise ValueError("retained-extra protection requires the emitted opaque track")
@@ -1070,11 +1126,15 @@ def check_retained_extra_paint(root):
             errors.append(f"{label}: independent main/outer paint must not be suppressed or duplicated")
         else:
             center, thickness, start, end, cap, _, alpha, color = main_paints[0]
-            visible = end - start + 2 * round(22 / 338 * 180 / math.pi, 2)
-            if ((center, thickness, cap, alpha, color)
-                    != (169, 22, "ROUND", 255, "[COMPLICATION.RANGED_VALUE_COLORS]")
-                    or not math.isclose(visible, main_value / 200 * 359.9, rel_tol=0, abs_tol=1e-9)):
-                errors.append(f"{label}: actual Float projection lost the proportional main declaration")
+            extent = (math.degrees(math.atan(cap[1] / math.sqrt(center**2 - (thickness / 2)**2)))
+                      if isinstance(cap, tuple) else math.nan)
+            visible = end - start + 2 * extent
+            calibration_error = 2 * (math.degrees(math.asin(11 / 169)) - round(22 / 338 * 180 / math.pi, 2))
+            if ((center, thickness, alpha, color)
+                    != (169, 22, 255, "[COMPLICATION.RANGED_VALUE_COLORS]")
+                    or not isinstance(cap, tuple) or not math.isclose(cap[1], 11, rel_tol=0, abs_tol=1e-9)
+                    or not math.isclose(visible, main_value / 200 * 359.9 + calibration_error, rel_tol=0, abs_tol=1e-9)):
+                errors.append(f"{label}: Float projection lost the calibrated ordinary ROUND silhouette")
         for angle in (10, 90, 180, 270, 350):
             expect(root, state, 169, angle, "Codex", f"{label} large inner")
         expect(root, state, 169, 0, "track", f"{label} main spent gap")
@@ -1098,6 +1158,20 @@ def check_retained_extra_paint(root):
             round_gate.set("value", "(0 == 1) ? 255 : 0")
         if not check_band_paints(broken):
             errors.append("suppressed or overlapping main paint no longer fails emitted-gate coverage")
+    # Reject escaped masks, double attenuation and a constant tiny-cap floor.
+    for target, attribute, value in (
+        (".//Group[@name='ring1N1Half_round_mask']", "renderMode", "ALL"),
+        (".//Group[@name='ring1N1Half_round_mask']", "alpha", "140"),
+        (".//Group[@name='ring1N1Half_tiny_startCap']/PartDraw/Ellipse/Transform[@target='width']", "value", "22"),
+    ):
+        broken = deepcopy(root)
+        node = broken.find(target)
+        if node is None:
+            errors.append("partial-mask counterexample requires its emitted owning node")
+            continue
+        node.set(attribute, value)
+        if not check_band_paints(broken):
+            errors.append("escaped/attenuated mask or cap floor no longer fails paint coverage")
     return errors
 
 
@@ -1199,7 +1273,7 @@ def check_diagnostics(root, baseline):
         witness = group.find(f"Group[@name='{name}']")
         if static_readout(witness) != ("A1" if layout == "N1" else "AO"):
             errors.append(f"{group.get('name')}: admission witness must belong to the actual decision")
-        wanted = ["Transform"] + ["PartDraw"] * (1 if kind == "zero" else 2) + ["Group"]
+        wanted = ["Transform", "PartDraw"] + ([] if kind == "zero" else ["PartDraw" if kind == "full" else "Group"]) + ["Group"]
         if layout == "N1":
             paint_name = "n1Diag_add_paintNone" if kind == "zero" else f"n1Diag_add_paint_{kind}"
             expected_additions.add(paint_name)

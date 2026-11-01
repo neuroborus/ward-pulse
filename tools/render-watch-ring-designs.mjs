@@ -360,26 +360,17 @@ function twoCapCutoff(r, thickness) {
   return (2 * capLength) / (2 * Math.PI * r)
 }
 
-function ringArcBranchGeometry(r, thickness, remaining, nearEmpty) {
+function ringArcGeometry(r, thickness, remaining) {
   const circ = 2 * Math.PI * r
   const left = Math.min(Math.max(remaining, 0), 0.999)
+  const cap = thickness / 2 / r
+  const inset = Math.min(cap, left * 2 * Math.PI / 4)
   return {
-    circ,
-    left,
-    nearEmpty,
-    strokeCap: nearEmpty ? 'butt' : 'round',
-    paint: circ * left - (nearEmpty ? 0 : thickness),
-    used: circ * (1 - left) + (nearEmpty ? 0 : thickness / 2),
+    circ, left, inset,
+    tangent: thickness / 2 * Math.tan(inset) / Math.tan(cap),
+    paint: circ * left - 2 * r * inset,
+    used: circ * (1 - left) + r * inset,
   }
-}
-
-function ringArcGeometry(r, thickness, remaining) {
-  const left = Math.min(Math.max(remaining, 0), 0.999)
-  return ringArcBranchGeometry(r, thickness, left, left <= twoCapCutoff(r, thickness))
-}
-
-function visibleRingArcLength(geometry, thickness) {
-  return geometry.paint + (geometry.strokeCap === 'round' ? thickness : 0)
 }
 
 function assertNearExhaustedArcs() {
@@ -401,57 +392,38 @@ function assertNearExhaustedArcs() {
     }).flat()
   })
   for (const [r, thickness] of geometries) {
-    const diameter = r * 2
     const cutoff = twoCapCutoff(r, thickness)
-    const belowRemaining = cutoff - epsilon
-    const below = ringArcGeometry(r, thickness, belowRemaining)
-    if (
-      !below.nearEmpty ||
-      below.strokeCap !== 'butt' ||
-      below.paint <= 0 ||
-      Math.abs(visibleRingArcLength(below, thickness) - below.circ * belowRemaining) > tolerance
-    ) {
-      throw new Error(
-        `ring ${diameter}: a remainder below the two-cap cutoff must stay visible and proportional`,
-      )
+    const saturation = 2 * cutoff
+    const h = thickness / 2
+    const c = h / r
+    const k = h / (Math.sqrt(r * r - h * h) * Math.tan(c))
+    for (const remaining of [0.0000001, cutoff - epsilon, cutoff + epsilon,
+      saturation - epsilon, saturation, saturation + epsilon, 0.37, 0.99, 0.996, 0.999]) {
+      const geometry = ringArcGeometry(r, thickness, remaining)
+      const extent = Math.atan(geometry.tangent / Math.sqrt(r * r - h * h))
+      const footprint = geometry.paint / r + 2 * extent
+      const bound = 2 * Math.abs(k - 1) * Math.tan(geometry.inset)
+      if (geometry.paint <= 0 || geometry.paint < geometry.circ * geometry.left / 2 - tolerance ||
+          geometry.tangent <= 0 || geometry.tangent > h + tolerance ||
+          Math.abs(footprint - geometry.left * 2 * Math.PI) > bound + tolerance ||
+          Math.abs(geometry.tangent / Math.tan(geometry.inset) - h / Math.tan(c)) > tolerance ||
+          (remaining >= saturation && Math.abs(geometry.tangent - h) > tolerance)) {
+        throw new Error(`ring ${r * 2}: compressed caps lost their scaling, containment or ordinary silhouette`)
+      }
+      const markup = ringArc({ cx: 225, cy: 225, r, thickness, remaining, color: '#ffffff', ambient: false })
+      if (!markup.includes('<mask ') || !markup.includes('stroke-linecap="butt"') ||
+          [...markup.matchAll(/<ellipse /g)].length !== 2) {
+        throw new Error(`ring ${r * 2}: partial art must use one core/cap mask`)
+      }
     }
-
-    const aboveRemaining = cutoff + epsilon
-    const above = ringArcGeometry(r, thickness, aboveRemaining)
-    const expectedPaint = above.circ * aboveRemaining - thickness
-    const expectedUsed = above.circ * (1 - aboveRemaining) + thickness / 2
-    if (
-      above.nearEmpty ||
-      above.strokeCap !== 'round' ||
-      above.paint !== expectedPaint ||
-      above.used !== expectedUsed ||
-      Math.abs(visibleRingArcLength(above, thickness) - above.circ * aboveRemaining) > tolerance
-    ) {
-      throw new Error(`ring ${diameter}: geometry above the two-cap cutoff must stay inset`)
-    }
-
-    const buttAtCutoff = ringArcBranchGeometry(r, thickness, cutoff, true)
-    const roundAtCutoff = ringArcBranchGeometry(r, thickness, cutoff, false)
-    const cutoffLength = buttAtCutoff.circ * cutoff
-    if (
-      Math.abs(visibleRingArcLength(buttAtCutoff, thickness) - cutoffLength) > tolerance ||
-      Math.abs(visibleRingArcLength(roundAtCutoff, thickness) - cutoffLength) > tolerance
-    ) {
-      throw new Error(`ring ${diameter}: arc branches must meet at the two-cap cutoff`)
-    }
-
-    const markupArgs = { cx: 225, cy: 225, r, thickness, color: '#ffffff', ambient: false }
-    if (
-      !ringArc({ ...markupArgs, remaining: belowRemaining }).includes(
-        'stroke-linecap="butt"',
-      ) ||
-      !ringArc({ ...markupArgs, remaining: aboveRemaining }).includes(
-        'stroke-linecap="round"',
-      )
-    ) {
-      throw new Error(`ring ${diameter}: generated markup must select the branch cap`)
+    for (const remaining of [0, 1]) {
+      const markup = ringArc({ cx: 225, cy: 225, r, thickness, remaining, color: '#ffffff', ambient: false })
+      if (markup.includes('<mask ') || markup.includes('<ellipse ')) {
+        throw new Error('zero and full art must retain their existing circles')
+      }
     }
   }
+
 }
 
 function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
@@ -472,18 +444,27 @@ function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
       stroke-width="${thickness}" />`
   }
   const geometry = ringArcGeometry(r, thickness, remaining)
-  // Round caps reach half a thickness past each end, so the drawn span is
-  // shortened by one cap on each side and started half a cap later. Below that
-  // two-cap cutoff the proportional centreline stays uninset and uses straight
-  // ends so its visible length remains equal to the value.
+  const mask = `arc-${cx}-${cy}-${r}-${thickness}`
+  const endpoints = [geometry.used / r, (geometry.used + geometry.paint) / r]
+  const caps = endpoints.map((angle) => `<ellipse cx="${cx}" cy="${cy - r}" rx="${geometry.tangent}" ry="${thickness / 2}"
+        fill="#ffffff" transform="rotate(${angle * 180 / Math.PI} ${cx} ${cy})" />`).join('\n      ')
+  // The review model retains its measured radii and 360-degree circumference;
+  // like WFF it colors one opaque core/cap union, never overlapping alpha layers.
   return `
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
       stroke-width="${thickness}" />
+    <defs>
+      <mask id="${mask}" maskUnits="userSpaceOnUse" x="0" y="0" width="${cx * 2}" height="${cy * 2}">
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#ffffff"
+          stroke-width="${thickness}" stroke-linecap="butt"
+          stroke-dasharray="${geometry.paint} ${geometry.circ}"
+          stroke-dashoffset="${-geometry.used}" transform="rotate(-90 ${cx} ${cy})" />
+        ${caps}
+      </mask>
+    </defs>
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${valueColor}"
-      stroke-width="${thickness}" stroke-linecap="${geometry.strokeCap}"
-      stroke-dasharray="${geometry.paint.toFixed(2)} ${geometry.circ.toFixed(2)}"
-      stroke-dashoffset="${(-geometry.used).toFixed(2)}"
-      transform="rotate(-90 ${cx} ${cy})" />`
+      stroke-width="${thickness}" mask="url(#${mask})" />`
+
 }
 
 /** Inner half first, then outer: the same order the payload packs a pair in. */
