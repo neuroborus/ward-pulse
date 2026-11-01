@@ -4,12 +4,24 @@
  * (`docs/product/WATCH_RING_DESIGN.md`).
  *
  * Usage: node tools/render-watch-ring-designs.mjs [--check]
+ *
+ * One local UNAPPROVED PREVIEW ONLY active face, without canonical export writes:
+ *   node tools/render-watch-ring-designs.mjs --clock-preview-up <450-unit-offset> \
+ *     --clock-preview-output LOCAL_ARTIFACTS/<new-directory>
+ * The offset must be positive in 0.1-unit increments; no offset is approved here.
+ * The destination's parent must exist, and its resolved path must stay inside
+ * LOCAL_ARTIFACTS. The destination must be new. Preview flags cannot use --check.
+ * Produces one 450x450 logo-composited PNG, its intermediate SVG, and metadata
+ * with the exact invocation, content, source/input hashes and output identities.
+ * Host review art does not establish native WFF fit or approve runtime adoption.
  */
 
+import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { mkdir } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
@@ -19,6 +31,44 @@ const runFile = promisify(execFile)
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const checking = process.argv.includes('--check')
+const clockPreview = parseClockPreview(process.argv.slice(2))
+
+function parseClockPreview(args) {
+  if (args.length === 0 || (args.length === 1 && args[0] === '--check')) return null
+  const values = new Map()
+  for (let index = 0; index < args.length; index += 2) {
+    const flag = args[index]
+    const value = args[index + 1]
+    if (!['--clock-preview-up', '--clock-preview-output'].includes(flag) ||
+        values.has(flag) || !value || value.startsWith('--')) {
+      throw new Error('use both clock preview flags exactly once, without --check or other flags')
+    }
+    values.set(flag, value)
+  }
+  const up = Number(values.get('--clock-preview-up'))
+  if (values.size !== 2 || !Number.isFinite(up) || up <= 0 || up !== Number(up.toFixed(1))) {
+    throw new Error('clock preview requires an output directory and a positive offset in 0.1-unit increments')
+  }
+  return { up, output: values.get('--clock-preview-output') }
+}
+
+async function clockPreviewDirectory(output, resolveParent = realpath) {
+  const localRoot = join(root, 'LOCAL_ARTIFACTS')
+  const requested = resolve(root, output)
+  const insideLocal = (path) => {
+    const fromLocal = relative(localRoot, path)
+    return fromLocal !== '' && fromLocal !== '..' &&
+      !fromLocal.startsWith(`..${sep}`) && !isAbsolute(fromLocal)
+  }
+  if (!insideLocal(requested)) {
+    throw new Error('clock preview output must be a new directory inside LOCAL_ARTIFACTS')
+  }
+  const directory = join(await resolveParent(dirname(requested)), basename(requested))
+  if (!insideLocal(directory)) {
+    throw new Error('clock preview output resolves outside LOCAL_ARTIFACTS')
+  }
+  return directory
+}
 
 const SURFACE = '#101412'
 const TRACK = '#2E3632'
@@ -662,6 +712,7 @@ async function faceSvg({
   showPlan = true,
   showCredits = false,
   clearedCells = [],
+  clockUp = 0,
 }) {
   const cx = size / 2
   const cy = size / 2
@@ -747,7 +798,7 @@ async function faceSvg({
 
   const clock = ambient ? CLOCK.ambient : CLOCK.active
   const timeSize = clock.fontSize * size / FACE
-  const timeY = clock.baseline * size / FACE
+  const timeY = (clock.baseline - clockUp) * size / FACE
   let content = upperCells({ size, ambient, clearedCells })
   content += `
     <text x="${cx}" y="${timeY.toFixed(1)}" text-anchor="middle"
@@ -784,10 +835,6 @@ async function faceSvg({
 
 const wearDir = join(root, 'apps/wear_android/design')
 const wffDir = join(root, 'apps/watchface_wff/design')
-if (!checking) {
-  await mkdir(wearDir, { recursive: true })
-  await mkdir(wffDir, { recursive: true })
-}
 
 const three = [CATALOG.codex, CATALOG.claude, CATALOG.cursor]
 const two = [CATALOG.codex, CATALOG.claude]
@@ -1075,6 +1122,164 @@ const pickerPreview = {
   },
 }
 
+function assertClockOnlyPreview(reference, preview, up) {
+  const clock = (svg) => {
+    const matches = [...svg.matchAll(/<text\b[^>]*>10:08<\/text>/g)]
+    assert.equal(matches.length, 1, 'preview must retain the single whole 10:08 clock')
+    const markup = matches[0][0]
+    const y = markup.match(/\by="([^"]+)"/)
+    assert.ok(y, 'clock must have a y coordinate')
+    return { markup, y: y[1] }
+  }
+  const before = clock(reference)
+  const after = clock(preview)
+  const restored = preview.replace(after.markup, after.markup.replace(/\by="[^"]+"/, `y="${before.y}"`))
+  assert.equal(restored, reference, 'preview may change only the clock y coordinate')
+  assert.equal(Number((Number(before.y) - Number(after.y)).toFixed(1)), up,
+    'preview must move upward by the requested 450-unit offset')
+  assert.ok(Number(after.y) > 0 && Number(after.y) < Number(before.y),
+    'preview clock baseline must remain positive and move upward')
+  return { referenceY: Number(before.y), previewY: Number(after.y) }
+}
+
+async function sha256(path) {
+  return createHash('sha256').update(await readFile(path)).digest('hex')
+}
+
+async function renderClockPreview({ up, output }) {
+  const directory = await clockPreviewDirectory(output)
+  const primary = variants.find(({ file }) => file === 'round-3-plan-credits.svg')
+  const reference = await faceSvg({ ...primary, size: FACE })
+  const svg = await faceSvg({ ...primary, size: FACE, clockUp: up })
+  const clock = assertClockOnlyPreview(reference, svg, up)
+  const referencePath = join(wearDir, primary.file)
+  assert.equal(reference, await readFile(referencePath, 'utf8'),
+    'preview reference must match the accepted Primary board')
+  const inputPaths = [
+    'tools/render-watch-ring-designs.mjs',
+    'tools/design-output.mjs',
+    'tools/render-watchface.mjs',
+    'apps/watchface_wff/src/main/res/raw/watchface.xml',
+    'apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png',
+    relative(root, referencePath),
+    relative(root, join(wffDir, primary.file)),
+    FONT_FILE,
+  ]
+  const inputHashes = Object.fromEntries(await Promise.all(inputPaths.map(async (path) =>
+    [path, await sha256(resolve(root, path))])))
+  const { stdout: rendererVersion } = await runFile('convert', ['-version'], { encoding: 'utf8' })
+  // Exclusive creation keeps existing candidates, links and canonical files out of the write set.
+  await mkdir(directory, { mode: 0o700 })
+  const stem = join(directory, 'UNAPPROVED-PREVIEW-ONLY')
+  const svgPath = `${stem}.input.svg`
+  const pngPath = `${stem}.png`
+  await writeFile(svgPath, svg, { flag: 'wx' })
+  await renderPreviews([{
+    svg: svgPath,
+    png: pngPath,
+    density: pickerPreview.density,
+    overlay: pickerPreview.overlay,
+  }])
+  const png = await readFile(pngPath)
+  assert.ok(png.length >= 24 &&
+    png.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) &&
+    png.toString('ascii', 12, 16) === 'IHDR', 'preview output must be a PNG')
+  const width = png.readUInt32BE(16)
+  const height = png.readUInt32BE(20)
+  assert.equal(width, FACE, 'preview must retain the 450-unit canvas width')
+  assert.equal(height, FACE, 'preview must retain the 450-unit canvas height')
+  const metadata = {
+    status: 'UNAPPROVED PREVIEW ONLY',
+    evidence: 'Host review art only; no native WFF fit or runtime approval.',
+    invocation: { cwd: process.cwd(), argv: [process.execPath, ...process.argv.slice(1)] },
+    tools: { node: process.version, imageMagick: rendererVersion.trim() },
+    inputHashes,
+    reference: relative(root, referencePath),
+    clock: { upwardOffset450: up, ...clock },
+    displayedContent: {
+      time: '10:08',
+      cells: CELL.readings.map(({ text }) => text),
+      legend: sortByRemaining(primary.layers).map((layer) => ({
+        provider: layer.id,
+        text: barLabel(layer, primary),
+      })),
+      layers: primary.layers,
+    },
+    logo: pickerPreview.overlay,
+    outputs: {
+      intermediateSvg: { file: basename(svgPath), sha256: await sha256(svgPath) },
+      fullFacePng: { file: basename(pngPath), width, height, sha256: await sha256(pngPath) },
+    },
+  }
+  await writeFile(`${stem}.json`, `${JSON.stringify(metadata, null, 2)}\n`, { flag: 'wx' })
+  console.log(`UNAPPROVED PREVIEW ONLY: ${pngPath}`)
+}
+
+async function writeDesigns(preview, {
+  writePreview = renderClockPreview,
+  emitSvg = emit,
+  renderImages = renderPreviews,
+} = {}) {
+  if (preview) {
+    await writePreview(preview)
+    return
+  }
+  if (!checking) {
+    await mkdir(wearDir, { recursive: true })
+    await mkdir(wffDir, { recursive: true })
+  }
+  for (const variant of variants) {
+    const svg = await faceSvg({
+      name: variant.name,
+      size: FACE,
+      layers: variant.layers,
+      ambient: variant.ambient === true,
+      showPlan: variant.showPlan,
+      showCredits: variant.showCredits,
+      clearedCells: variant.clearedCells ?? [],
+    })
+    await emitSvg(join(wearDir, variant.file), svg, 'render-designs')
+    if (wffFiles.has(variant.file)) {
+      await emitSvg(join(wffDir, variant.file), svg, 'render-designs')
+    }
+  }
+  await renderImages([...previews, pickerPreview])
+}
+
+async function assertClockPreviewIsolation() {
+  // Synthetic guard inputs do not select or publish a design offset or candidate.
+  const flags = ['--clock-preview-up', '1', '--clock-preview-output', 'LOCAL_ARTIFACTS/preview-guard']
+  const preview = parseClockPreview(flags)
+  assert.equal(parseClockPreview([]), null)
+  assert.equal(parseClockPreview(['--check']), null)
+  assert.throws(() => parseClockPreview([...flags, '--check']), /without --check/)
+  assert.throws(() => parseClockPreview(flags.slice(0, 2)), /requires an output directory/)
+  for (const offset of ['0', '-1', 'NaN', '0.01']) {
+    assert.throws(() => parseClockPreview([flags[0], offset, ...flags.slice(2)]), /positive offset/)
+  }
+  const parentUnchanged = async (path) => path
+  assert.equal(await clockPreviewDirectory(preview.output, parentUnchanged), resolve(root, preview.output))
+  for (const output of ['LOCAL_ARTIFACTS', 'apps/watchface_wff/design', 'LOCAL_ARTIFACTS/../brand']) {
+    await assert.rejects(clockPreviewDirectory(output, parentUnchanged), /inside LOCAL_ARTIFACTS/)
+  }
+  await assert.rejects(clockPreviewDirectory(preview.output, async () => wearDir), /resolves outside/)
+  const primary = variants.find(({ file }) => file === 'round-3-plan-credits.svg')
+  const reference = await faceSvg({ ...primary, size: FACE })
+  const candidate = await faceSvg({ ...primary, size: FACE, clockUp: preview.up })
+  assertClockOnlyPreview(reference, candidate, preview.up)
+  let previewWrites = 0
+  const rejectCanonicalWrite = () => assert.fail('preview must not write or render canonical exports')
+  await writeDesigns(preview, {
+    writePreview: async (options) => {
+      assert.deepEqual(options, preview)
+      previewWrites += 1
+    },
+    emitSvg: rejectCanonicalWrite,
+    renderImages: rejectCanonicalWrite,
+  })
+  assert.equal(previewWrites, 1, 'preview must dispatch exactly one candidate')
+}
+
 assertNearExhaustedArcs()
 
 // Common and compact-bound labels must remain complete at the selected size.
@@ -1098,20 +1303,5 @@ await assertLabelsFit(cellFitReadings.map(({ text }) => text), {
   width: CELL.textWidth,
 })
 
-for (const variant of variants) {
-  const svg = await faceSvg({
-    name: variant.name,
-    size: 450,
-    layers: variant.layers,
-    ambient: variant.ambient === true,
-    showPlan: variant.showPlan,
-    showCredits: variant.showCredits,
-    clearedCells: variant.clearedCells ?? [],
-  })
-  await emit(join(wearDir, variant.file), svg, 'render-designs')
-  if (wffFiles.has(variant.file)) {
-    await emit(join(wffDir, variant.file), svg, 'render-designs')
-  }
-}
-
-await renderPreviews([...previews, pickerPreview])
+await assertClockPreviewIsolation()
+await writeDesigns(clockPreview)
