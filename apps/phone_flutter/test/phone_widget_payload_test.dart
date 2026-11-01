@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/provider_status_color.dart';
+import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_payload.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
 
@@ -23,6 +24,56 @@ void main() {
       expect(row.line, contains('% left ·'));
     }
   });
+
+  test(
+    'Fable widget zero retains its accent and reset while unknown is omitted',
+    () {
+      const fableId = 'allowance.claude.claude-seven-day-fable';
+      final reset = DateTime.utc(2026, 11, 8, 8);
+      for (final used in [100.0, null]) {
+        final account =
+            snapshot.primaryAccount!.toJson()
+              ..['accountId'] = 'claude-local'
+              ..['provider'] = 'claude'
+              ..['connection'] = ProviderConnections.claudePlan.storageKey
+              ..['allowances'] = [
+                {
+                  ..._allowance(
+                    'claude-seven-day-fable',
+                    'Fable weekly',
+                    100,
+                    resetsAt: reset,
+                  ),
+                  'usedPercent': used,
+                  'windowMinutes': 7 * 24 * 60,
+                  'status': used == null ? 'unknown' : 'rateLimited',
+                },
+                _allowance('claude-seven-day', 'Weekly plan', 60),
+              ];
+        final payload = buildPhoneWidgetPayload(
+          DashboardSnapshot.fromJson({
+            ...snapshot.toJson(),
+            'accounts': [account],
+          }),
+          const PhoneWidgetPreferences(
+            selectedIds: [fableId, 'allowance.claude.claude-seven-day'],
+          ),
+        );
+        expect(payload.rows.last.poolLabel, 'Weekly plan');
+        expect(payload.rows.last.accentArgb, 0xFFE8915A);
+        if (used == null) {
+          expect(payload.rows, hasLength(1));
+        } else {
+          expect(payload.rows, hasLength(2));
+          final fable = payload.rows.first;
+          expect(fable.poolLabel, 'Fable weekly');
+          expect(fable.remainingPercent, 0);
+          expect(fable.accentArgb, 0xFFFF8A00);
+          expect(fable.resetsAt, reset);
+        }
+      }
+    },
+  );
 
   test('marks stale when overall status is stale', () {
     final stale = snapshot.withStaleStatus(
@@ -138,6 +189,17 @@ void main() {
   test('family accents follow the family named in the metric id', () {
     final claude = providerFamilyColor('claude').toARGB32();
     expect(phoneWidgetAccentArgb('allowance.claude.plan'), claude);
+    expect(
+      phoneWidgetAccentArgb('allowance.claude.claude-seven-day-fable'),
+      0xFFFF8A00,
+    );
+    for (final id in [
+      'allowance.claude.claude-seven-day',
+      'allowance.claude.claude-seven-day-fable-other',
+      'budget.anthropic.platform.claude-seven-day-fable',
+    ]) {
+      expect(phoneWidgetAccentArgb(id), claude, reason: id);
+    }
     // A budget ring carries its connection, so it takes that family too.
     expect(phoneWidgetAccentArgb('budget.anthropic.platform.month'), claude);
     expect(

@@ -137,6 +137,7 @@ const STRIP_AMBIENT_ALPHA = 90
 /** The one family accent worn by two entries — a plan ring and a budget ring share it. */
 const ANTHROPIC = '#E8915A'
 const CODEX_SPARK = '#186020'
+const CLAUDE_FABLE = '#FF8A00'
 
 /** SIL OFL-1.1. Bold for watch-scale labels; the file itself is `FONT_FILE`. */
 const FONT = 'Noto Sans'
@@ -234,6 +235,11 @@ const CATALOG = {
     id: 'claude',
     used: 0.61,
     color: ANTHROPIC,
+  },
+  // Synthetic illustration only; no positive Fable consumption was captured.
+  claudeFable: {
+    id: 'claude', used: 0.18, color: ANTHROPIC,
+    split: { id: 'fable', used: 0.59, color: CLAUDE_FABLE },
   },
   cursor: {
     id: 'cursor',
@@ -888,6 +894,17 @@ const adaptiveVariants = [
 const variants = [
   ...adaptiveVariants,
   {
+    file: 'round-plan-fable.svg',
+    name: 'Synthetic Claude / Fable pair · fixed halves · illustrative usage',
+    layers: [CATALOG.claudeFable], showPlan: true, showCredits: false,
+  },
+  {
+    file: 'round-plan-fable-zero.svg',
+    name: 'Synthetic Claude / Fable pair · both exhausted · illustrative usage',
+    layers: [{ ...CATALOG.claudeFable, used: 1, split: { ...CATALOG.claudeFable.split, used: 1 } }],
+    showPlan: true, showCredits: false,
+  },
+  {
     file: 'round-3-plan-credits.svg',
     name: 'Round · 3 providers · plan + credits',
     layers: three,
@@ -1025,6 +1042,8 @@ const variants = [
 
 const wffFiles = new Set([
   ...adaptiveVariants.map(({ file }) => file),
+  'round-plan-fable.svg',
+  'round-plan-fable-zero.svg',
   'round-1-plan-exhausted.svg',
   'round-3-plan-exhausted-claude.svg',
   'round-plan-pair-inner-zero.svg',

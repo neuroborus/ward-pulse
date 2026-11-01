@@ -463,6 +463,62 @@ class GlanceModelsTest {
                 ),
         )
 
+    @Test
+    fun fablePairKeepsItsTitleIdentityOrderCreditsAndExhaustionTokens() {
+        val credits = cursorCredits().copy(label = "Claude · Extra usage", remaining = Quantity("80", "credits"))
+        for ((inner, outer, expected) in listOf(
+            Triple(18.0, 59.0, "82% · 41% left · 80 credits"),
+            Triple(59.0, 18.0, "41% · 82% left · 80 credits"),
+            Triple(100.0, 59.0, "0% · 41% left · 80 credits"),
+            Triple(18.0, 100.0, "82% · 0% left · 80 credits"),
+            Triple(100.0, 100.0, "0% · 0% left · 80 credits"),
+        )) {
+            val row = glanceLegendRows(baseSummary(
+                rings = listOf(fablePair(inner, outer)),
+                allowances = listOf(credits),
+            )).single()
+            assertEquals("Claude / Fable", row.title)
+            assertEquals(expected, row.subtitle)
+            assertEquals(RingFamily.CLAUDE, row.colorArgb)
+            assertEquals(RingFamily.CLAUDE_FABLE, requireNotNull(row.secondaryArc).colorArgb)
+            val secondStart = expected.indexOf(" · ") + 3
+            assertEquals(buildList {
+                if (inner >= 100.0) add(0 until 2)
+                if (outer >= 100.0) add(secondStart until secondStart + 2)
+            }, row.exhaustedPercentRanges)
+        }
+        val unlimited = credits.copy(unlimited = true)
+        assertEquals("82% · 41% left", glanceLegendRows(baseSummary(
+            rings = listOf(fablePair()), allowances = listOf(unlimited),
+        )).single().subtitle)
+    }
+
+    @Test
+    fun fableUnknownHalvesFallBackWithoutInventingZeroOrPairIdentity() {
+        val outer = glanceLegendRows(baseSummary(rings = listOf(fablePair(Double.NaN, 100.0)))).single()
+        assertEquals("Claude · Fable weekly", outer.title)
+        assertEquals("0% left", outer.subtitle)
+        assertEquals(RingFamily.CLAUDE_FABLE, outer.colorArgb)
+        assertNull(outer.secondaryArc)
+        val inner = glanceLegendRows(baseSummary(rings = listOf(fablePair(18.0, Double.NaN)))).single()
+        assertEquals("Claude plan · Weekly", inner.title)
+        assertEquals("82% left", inner.subtitle)
+        assertNull(inner.secondaryArc)
+        assertTrue(glanceLegendRows(baseSummary(rings = listOf(fablePair(Double.NaN, Double.NaN)))).isEmpty())
+        val pair = fablePair()
+        for (other in listOf(
+            pair.copy(id = "allowance.claude.plan-other"),
+            pair.copy(split = pair.split!!.copy(id = "allowance.claude.claude-seven-day-fable-other")),
+        )) {
+            assertEquals("Claude plan", glanceLegendRows(baseSummary(rings = listOf(other))).single().title)
+        }
+    }
+
+    private fun fablePair(innerUsed: Double = 18.0, outerUsed: Double = 59.0) = RingSummary(
+        "allowance.claude.plan", "Weekly", innerUsed, PulseStatus.OK,
+        split = RingHalf("allowance.claude.claude-seven-day-fable", "Fable weekly", outerUsed, PulseStatus.OK),
+    )
+
     private fun cursorPair(innerUsed: Double = 18.0, outerUsed: Double = 59.0) = RingSummary(
         "allowance.cursor.cursor-plan-models",
         "Cursor Models",

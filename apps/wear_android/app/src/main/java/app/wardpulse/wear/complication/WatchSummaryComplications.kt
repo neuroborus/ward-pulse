@@ -550,6 +550,7 @@ object WatchComplicationText {
         when (ringId) {
             "allowance.cursor.cursor-plan-other" -> "cursor-other"
             "allowance.codex.spark" -> "spark"
+            "allowance.claude.claude-seven-day-fable" -> "fable"
             else -> null
         }
 

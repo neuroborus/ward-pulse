@@ -425,6 +425,92 @@ void main() {
     }
   });
 
+  testWidgets('Fable accent follows exact provider, Plan source and identity', (
+    tester,
+  ) async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    for (final (provider, allowanceSource, id, used, color) in const [
+      ('claude', 'plan', 'claude-seven-day-fable', 25.0, Color(0xFFFF8A00)),
+      ('claude', 'plan', 'claude-seven-day-fable', 100.0, Color(0xFFFF8A00)),
+      ('claude', 'plan', 'claude-seven-day-fable', null, Color(0xFFFF8A00)),
+      ('claude', 'plan', 'claude-seven-day', 25.0, Color(0xFFE8915A)),
+      (
+        'claude',
+        'plan',
+        'claude-seven-day-fable-other',
+        25.0,
+        Color(0xFFE8915A),
+      ),
+      (
+        'claude',
+        'purchased',
+        'claude-seven-day-fable',
+        25.0,
+        Color(0xFFE8915A),
+      ),
+      ('codex', 'plan', 'claude-seven-day-fable', 25.0, Color(0xFF65D78A)),
+    ]) {
+      final account =
+          source.primaryAccount!.toJson()
+            ..['accountId'] = '$provider-local'
+            ..['provider'] = provider
+            ..['allowances'] = [
+              {
+                'id': id,
+                'source': allowanceSource,
+                'label': 'Fable weekly',
+                'usedPercent': used,
+                'used': null,
+                'limit': null,
+                'remaining': null,
+                'windowMinutes': 10080,
+                'resetsAt': null,
+                'status':
+                    used == null
+                        ? 'unknown'
+                        : used >= 100
+                        ? 'rateLimited'
+                        : 'ok',
+              },
+            ]
+            ..['buckets'] = <Object>[]
+            ..['modelBreakdown'] = <Object>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: wardPulseLightTheme,
+          home: Scaffold(
+            body: DashboardScreen(
+              onRefresh: _noRefresh,
+              snapshot: DashboardSnapshot.fromJson({
+                ...source.toJson(),
+                'accounts': [account],
+              }),
+            ),
+          ),
+        ),
+      );
+      final card = find.widgetWithText(AllowanceSummaryCard, 'Fable weekly');
+      final progress = find.descendant(
+        of: card,
+        matching: find.byType(LinearProgressIndicator),
+      );
+      if (used == null) {
+        expect(progress, findsNothing);
+        expect(find.text('Unknown left'), findsOneWidget);
+        expect(_pillsInCardOf(find.text('Fable weekly')), findsOneWidget);
+      } else {
+        final bar = tester.widget<LinearProgressIndicator>(progress);
+        expect(bar.color, color, reason: '$provider/$allowanceSource/$id');
+        expect(
+          bar.value,
+          allowanceSource == 'plan' ? (100 - used) / 100 : used / 100,
+        );
+      }
+    }
+  });
+
   testWidgets('always shows platform spend when budgets are available', (
     tester,
   ) async {

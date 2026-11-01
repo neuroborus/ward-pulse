@@ -45,4 +45,19 @@ class RingFamilyTest {
             RingFamily.colorArgb("allowance.cursor.cursor-plan-other"),
         )
     }
+
+    @Test
+    fun onlyTheExactFableMetricLeavesTheClaudeFamilyColor() {
+        assertEquals(0xFFFF8A00.toInt(), RingFamily.colorArgb("allowance.claude.claude-seven-day-fable"))
+        for (id in listOf(
+            "allowance.claude.plan",
+            "allowance.claude.claude-seven-day",
+            "allowance.claude.claude-seven-day-opus",
+            "allowance.claude.claude-seven-day-fable-other",
+            "budget.anthropic.platform.claude-seven-day-fable",
+        )) {
+            assertEquals(id, RingFamily.CLAUDE, RingFamily.colorArgb(id))
+        }
+        assertEquals(RingFamily.FALLBACK, RingFamily.colorArgb("claude-seven-day-fable"))
+    }
 }

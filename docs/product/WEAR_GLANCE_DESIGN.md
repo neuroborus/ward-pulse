@@ -5,6 +5,23 @@
 watch-face baseline in [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md): this screen is a
 **text legend** for face ring colors, not a face clone.
 
+## Revision 2026-11-01 — Claude / Fable rendering
+
+The selected pair title is **Claude / Fable**, recognized only for inner
+`allowance.claude.plan` and outer `allowance.claude.claude-seven-day-fable`.
+Ordinary Claude keeps `#E8915A`; only the exact Fable metric takes `#FF8A00`.
+Keep inner-first percentages regardless of which half is tighter, existing purchased-credit
+eligibility and compact formatting, and pale-red numeric zero tokens only for known exhaustion.
+An unknown half uses the existing known-survivor fallback with its meaningful window label;
+two unknown halves produce no legend row. Plan windows retains the supplied window labels
+and real resets. This adds no new refresh, navigation or rendering geometry rule.
+
+`glance-legend-fable.svg` and `glance-legend-fable-zero.svg` are synthetic illustrative
+review art, not positive-consumption captures or native measurements. Native/current-Legacy
+and public acceptance remain **Pending** for the post-execution HOST handoff. Phone catalogue
+and selection/capacity changes belong to the following planned commit. Earlier acceptance
+records below retain their actual dated scope.
+
 The operative legend typography and overflow rules are in
 [Revision 2026-10-24 — clock-free Glance and larger legend](#revision-2026-10-24--clock-free-glance-and-larger-legend).
 Earlier measurements and acceptance records below describe only their dated builds.
@@ -791,6 +808,7 @@ integrated acceptance remains **Pending**.
 | `glance-legend-max-credits.svg` | Synthetic default-scale example with both paired families, long Claude title and complete `100% · 100% left · 999.9T credits`; this large compact credit balance is not an upper bound |
 | `glance-legend-text-scale-150.svg` / `glance-legend-text-scale-200.svg` | Synthetic legend-only text scaling with wrapping, actual modeled local-position indicator at start/end, fixed review controls; generation and native acceptance Pending |
 | `glance-legend-3.svg` | **Primary** — three providers, `OK` refresh enabled, Alerts disabled |
+| `glance-legend-fable.svg` / `glance-legend-fable-zero.svg` | Synthetic Claude/Fable illustrations: fixed inner-first percentages, credits once and retained exhausted halves; native acceptance Pending |
 | `glance-legend-1.svg` | Single provider with credits |
 | `glance-legend-pair.svg` | One Cursor pair — one row, two coloured arcs, inner-first percentages and credits once |
 | `glance-legend-full.svg` | Three-row ceiling: longest `Claude plan · Sonnet weekly` plus complete credited Cursor and Codex pairs. Preserve the paired credit extreme (`100% · 75% left · 62.5K credits`) and ordinary `320 credits` pair; revised art and device fit Pending |

@@ -156,6 +156,9 @@ AllowanceState? _phoneWidgetAllowance(
 /// A budget row carries the connection it belongs to, so it takes that family
 /// (`budget.anthropic.platform.month`) rather than a colour of its own.
 int phoneWidgetAccentArgb(String metricId) {
+  if (metricId == 'allowance.claude.claude-seven-day-fable') {
+    return familyClaudeFableColor.toARGB32();
+  }
   if (metricId.contains('claude') || metricId.contains('anthropic')) {
     return providerFamilyColor('claude').toARGB32();
   }

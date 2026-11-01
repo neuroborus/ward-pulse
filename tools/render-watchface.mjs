@@ -406,6 +406,7 @@ const TEMPERATURE_CONFIGURATION = 'temperatureUnit'
 const SPLIT_POOLS = [
   { token: 'cursor-other', color: '#67E8D4' },
   { token: 'spark', color: '#186020' },
+  { token: 'fable', color: '#FF8A00' },
 ]
 
 /**
@@ -1500,6 +1501,16 @@ function assertLowerContracts() {
         valid(0, 200, 100, CREDITS_TOKEN)) {
       throw new Error(`main ${index}: malformed data or count-bearing credits admitted`)
     }
+    for (const title of SPLIT_TITLES) {
+      if (!valid(0, 800, 100, title)) {
+        throw new Error(`main ${index}: recognized paired TITLE ${title} rejected`)
+      }
+    }
+    for (const title of ['split:fable:unknown', 'split:fable-extra', 'split:fable:zero']) {
+      if (valid(0, 800, 100, title)) {
+        throw new Error(`main ${index}: unknown paired TITLE ${title} admitted`)
+      }
+    }
     // Every drawing, including the row, is below the single valid-position gate.
     const body = markup.split('<Complication type="RANGED_VALUE">')[1].split('</Complication>')[0]
     if (body.indexOf('<Compare expression="isValid">') > body.indexOf('<PartDraw') ||
@@ -1552,6 +1563,24 @@ function assertLowerContracts() {
           n3[0].alpha(0, 400, 148, String(index)) !== 0) {
         throw new Error(`extra ${ordinal}/${index}: N2-to-N3 must hide the old half and reveal the new half`)
       }
+    }
+  }
+  const markers = emittedExpressions(splitMarker(''))
+  for (const [index, { token, color }] of SPLIT_POOLS.entries()) {
+    const base = `${SPLIT_TOKEN}${TOKEN_SEPARATOR}${token}`
+    for (const title of [base, ...ZERO_STATES.map((state) => `${base}:${state}`)]) {
+      const active = [...markers].filter(([, expression]) => expression(0, 800, 100, title))
+      if (active.length !== 1 || active[0][0] !== `isPool${index}`) {
+        throw new Error(`marker ${token}: paired/zero TITLE lost its pool identity`)
+      }
+    }
+    if (!splitMarker('').includes(`<Stroke thickness="3" color="${color}" cap="BUTT" />`)) {
+      throw new Error(`marker ${token}: pool color missing`)
+    }
+  }
+  for (const title of ['', 'split:unknown', 'split:fable-extra', 'split:fable:unknown']) {
+    if ([...markers.values()].some((expression) => expression(0, 800, 100, title))) {
+      throw new Error(`unknown TITLE ${title} selected a far marker`)
     }
   }
 }

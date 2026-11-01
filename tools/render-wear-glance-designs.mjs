@@ -43,6 +43,7 @@ const FAMILY = {
   codex: { name: 'Codex', color: '#65D78A' },
   codexSpark: { name: 'Codex', color: '#186020' },
   claude: { name: 'Claude', color: '#E8915A' },
+  claudeFable: { name: 'Claude', color: '#FF8A00' },
   cursor: { name: 'Cursor', color: '#67E8D4' },
   cursorOwn: { name: 'Cursor', color: '#7E93B8' },
   cursorPlatform: { name: 'Cursor platform', color: '#67E8D4' },
@@ -50,6 +51,8 @@ const FAMILY = {
 
 /** Match Wear's recognized plan windows and preserve composed or already-named labels. */
 function rowTitle(row) {
+  if (row.id === 'allowance.claude.plan' &&
+      row.split?.id === 'allowance.claude.claude-seven-day-fable') return 'Claude / Fable'
   if (row.split) return `${row.family.name} plan`
   const family = row.family.name
   // Wear compares the first word, not a prefix, so `Cursorish` would still be named.
@@ -532,6 +535,11 @@ const three = [
   { family: FAMILY.cursorOwn, metric: 'Cursor Models', used: 0.47 },
 ]
 const exhaustedClaude = { family: FAMILY.claude, metric: '5h', used: 1 }
+// Explicitly synthetic arithmetic and layout values, not captured positive consumption.
+const fablePair = {
+  id: 'allowance.claude.plan', family: FAMILY.claude, metric: 'Weekly', used: 0.18, credits: '80',
+  split: { id: 'allowance.claude.claude-seven-day-fable', family: FAMILY.claudeFable, metric: 'Fable weekly', used: 0.59 },
+}
 const liveCodex = { family: FAMILY.codex, metric: 'Weekly plan', used: 0.04, credits: '62.5K' }
 const liveCursor = {
   family: FAMILY.cursorOwn, metric: 'Cursor Models', used: 0,
@@ -548,6 +556,15 @@ const maximumCreditRows = [
 ]
 
 const variants = [
+  {
+    file: 'glance-legend-fable.svg', name: 'Synthetic Claude / Fable pair · illustrative usage',
+    rows: [fablePair], ok: true, refreshEnabled: true, alerts: 0,
+  },
+  {
+    file: 'glance-legend-fable-zero.svg', name: 'Synthetic Claude / Fable pair · both exhausted · illustrative usage',
+    rows: [{ ...fablePair, used: 1, split: { ...fablePair.split, used: 1 } }],
+    ok: true, refreshEnabled: true, alerts: 0,
+  },
   {
     file: 'glance-legend-max-credits.svg',
     name: 'Synthetic layout: three bands with maximum compact credits',

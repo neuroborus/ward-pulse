@@ -29,6 +29,13 @@ The declared baseline covers approved English labels, numeric tokens and reset f
 
 ## Metric rules and optional reset
 
+**Metric-color revision 2026-11-01.** Exact metric
+`allowance.claude.claude-seven-day-fable` takes `#FF8A00`; ordinary Claude remains
+`#E8915A`. Similar labels/IDs, legacy windows, Anthropic budgets and provider/status
+chrome do not inherit this exception. Expanded independent rows, six selections,
+purchased-credit eligibility, real optional resets and known-zero/unknown behavior
+are unchanged. This Source palette decision does not close pending native/public acceptance.
+
 1. **One slot = one percent metric of one connection** — one connection's local budget for a
    period, a provider plan window, or a purchased meter (Extra usage, on-demand, credits %) when
    the provider reports a %. There is no summed Today / Week / Month slot: see

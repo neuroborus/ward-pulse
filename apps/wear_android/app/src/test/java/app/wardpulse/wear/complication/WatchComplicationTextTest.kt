@@ -886,6 +886,40 @@ class WatchComplicationTextTest {
     }
 
     @Test
+    fun fableTokensKeepKnownZeroIdentityAndPercentageOnlyStrips() {
+        assertEquals("fable", WatchComplicationText.splitPoolToken("allowance.claude.claude-seven-day-fable"))
+        for (id in listOf("allowance.claude.plan", "allowance.claude.claude-seven-day-fable-other", "claude-seven-day-fable")) {
+            assertNull(WatchComplicationText.splitPoolToken(id))
+        }
+        val pair = RingSummary(
+            "allowance.claude.plan", "Weekly", 18.0, PulseStatus.OK,
+            split = RingHalf("allowance.claude.claude-seven-day-fable", "Fable weekly", 59.0, PulseStatus.OK),
+        )
+        for ((inner, outer, title) in listOf(
+            Triple(18.0, 59.0, "split:fable"),
+            Triple(100.0, 59.0, "split:fable:zero-inner"),
+            Triple(18.0, 100.0, "split:fable:zero-outer"),
+            Triple(100.0, 100.0, "split:fable:zero-both"),
+        )) {
+            val ring = pair.copy(usedPercent = inner, split = pair.split!!.copy(usedPercent = outer))
+            assertEquals(title, WatchComplicationText.ringTitleToken(ring))
+            assertEquals("fable", WatchComplicationText.stripTitleToken(ring))
+            val summary = PreviewWatchDashboardSummary.value.copy(
+                rings = listOf(ring),
+                allowances = listOf(AllowanceSummary(
+                    source = "purchased", label = "Claude · Extra usage", usedPercent = null,
+                    remaining = Quantity("80", "credits"), unlimited = false, resetsAt = null,
+                    status = PulseStatus.OK,
+                )),
+            )
+            assertEquals("${(100 - inner).toInt()}% · ${(100 - outer).toInt()}%", WatchComplicationText.stripLabel(summary, 0))
+        }
+        val unknown = pair.copy(split = pair.split!!.copy(usedPercent = Double.NaN))
+        assertNull(WatchComplicationText.stripTitleToken(unknown))
+        assertEquals("", WatchComplicationText.ringTitleToken(unknown))
+    }
+
+    @Test
     fun aSplitStripSpendsItsWellOnTheSecondPercentNotCredits() {
         val summary =
             PreviewWatchDashboardSummary.value.copy(

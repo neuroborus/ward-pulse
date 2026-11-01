@@ -940,12 +940,13 @@ class _ProviderDashboardSourceView extends StatelessWidget {
       for (final allowance in account.allowances)
         AllowanceSummaryCard(
           allowance: allowance,
-          accent:
-              account.provider == 'cursor' &&
-                      allowance.source == AllowanceSource.plan &&
-                      allowance.id == 'cursor-plan-models'
-                  ? familyCursorOwnColor
-                  : accent,
+          accent: switch ((account.provider, allowance.source, allowance.id)) {
+            ('claude', AllowanceSource.plan, 'claude-seven-day-fable') =>
+              familyClaudeFableColor,
+            ('cursor', AllowanceSource.plan, 'cursor-plan-models') =>
+              familyCursorOwnColor,
+            _ => accent,
+          },
         ),
     ];
     return Column(

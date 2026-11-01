@@ -82,7 +82,11 @@ fun glanceLegendRows(summary: WatchDashboardSummary): List<GlanceLegendRowModel>
                 val secondPercent = "${remainingPercent(split.usedPercent).roundToInt()}%"
                 val secondStart = firstPercent.length + " · ".length
                 inner.copy(
-                    title = "${glanceFamilyName(ring.id) ?: ring.label} plan",
+                    title = when {
+                        ring.id == "allowance.claude.plan" &&
+                            split.id == "allowance.claude.claude-seven-day-fable" -> "Claude / Fable"
+                        else -> "${glanceFamilyName(ring.id) ?: ring.label} plan"
+                    },
                     subtitle = glanceSubtitle(
                         summary,
                         ring.id,

@@ -93,6 +93,29 @@ Canonical face generator: `tools/render-watchface.mjs` — it writes the shipped
 and the ring-type drawables beside it.  
 Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and sibling variants).
 
+## Revision 2026-11-01 — included Fable weekly metric
+
+The selected Claude/Fable design adds one exact metric accent: `claude-seven-day-fable`
+and ring `allowance.claude.claude-seven-day-fable` use **`#FF8A00`**. Ordinary Claude,
+legacy Opus/Sonnet and Anthropic budgets keep **`#E8915A`**. Provider/status chrome
+retains its existing theme roles.
+This is a selected palette rule; no native color or fit measurement is claimed here.
+
+For the recognized pair, ordinary `allowance.claude.plan` is inside/left and Fable is
+outside/right. Rank the whole band by its tighter half without exchanging identities.
+The outer token is exactly `fable`: `split:fable` and its `:zero-inner`, `:zero-outer`
+and `:zero-both` forms join the closed vocabulary. Both markers remain, including at
+known zero; the strip remains two percentages without credits. Unknown is not zero.
+An unavailable half retains the existing known-survivor fallback.
+
+The existing three bands, two split ordinals, eight slots, service identities, accepted
+clock/logo/cells, geometry, typography, caps, textures, fades and alpha rules are unchanged.
+This revision provides rendering support; phone catalogue/pair admission follows in the
+next planned commit. Native/current-Legacy and public acceptance remain **Pending** until
+the whole execution and HOST handoff. Historical records below retain their dated scope.
+`round-plan-fable.svg` and `round-plan-fable-zero.svg` are generated synthetic review art,
+not captured provider consumption or native acceptance.
+
 ## Implementation repair 2026-10-31 — retained extra paint
 
 Square's delayed Codex37 + Cursor70/Other50 → main-only Codex80 observation showed old
@@ -1051,6 +1074,7 @@ may modulate toward theme tertiary/error when needed.
 | OpenAI / Codex | `#65D78A` | Green |
 | Codex · Spark | `#186020` | Dark green — the Spark limit on the Codex plan |
 | Anthropic / Claude | `#E8915A` | Orange (Anthropic presentation) |
+| Claude · Fable | `#FF8A00` | Exact included weekly sub-cap only; revision 2026-11-01 |
 | Cursor · other models | `#67E8D4` | Cyan — external models on the Cursor plan |
 | Cursor · own models | `#7E93B8` | Grey-blue — the plan's own pool |
 | Unresolved family | `#8A968F` | Neutral grey — fallback only, never a product color |
@@ -1166,7 +1190,8 @@ on its own value.
 
 1. **Only when both are picked, and only one slot.** The division is allowed for
    two pools or limits of the same plan of the same connection: Cursor own/external pools
-   and Codex main/Spark limits. Everything else stays one ring, one metric.
+   and Codex main/Spark limits, plus ordinary Claude/Fable under the 2026-11-01 revision.
+   Everything else stays one ring, one metric.
    The Watchface tab offers each pool as its own row: **ticking both** is what shares a band —
    either alone is an ordinary, undivided ring. A pair costs one of the three slots, which is the
    whole point: a plan with two pools does not cost two.
@@ -1180,6 +1205,7 @@ on its own value.
 2. **The order inside a pair is fixed by pool, never by usage.** Cursor own models take the
    inner half and left marker; external models take the outer half and right marker. Codex main
    takes inside/left, Spark outside/right; its darker `#186020` reads on the longer outer arc.
+   Ordinary Claude takes inside/left in `#E8915A`, Fable outside/right in `#FF8A00`.
    Position inside the pair is a name, not a rank: urgency is already carried twice, by each half's own melt and by
    where the pair sits among the rings. A third encoding would only make the colours swap sides
    at the moment the reader is looking at a problem.
@@ -1190,7 +1216,8 @@ on its own value.
    colours, and two percentages in one TEXT, as every strip label is composed whole. One marker
    stays the rule for every other strip: two of the same colour would say a thing twice, which is
    the defect this language exists to avoid. Each strip's `TITLE` carries a closed outer-pool
-   token: `cursor-other` selects static `#67E8D4`, and `spark` selects static `#186020`.
+   token: `cursor-other` selects static `#67E8D4`, `spark` selects static `#186020`, and
+   `fable` selects static `#FF8A00`.
    An empty or unknown family token paints no far marker. Known zero does not remove a marker.
    The inner accent keeps `[COMPLICATION.RANGED_VALUE_COLORS]`; the
    outer accent does not borrow its colour. A new outer pool requires a matching token in Wear
@@ -1408,7 +1435,7 @@ called this band the "upper aperture"; it is the same band.
    | `RANGED_VALUE_VALUE` | band and outer-half slots only | free |
    | `TEXT` | strip slots only | free — a band slot never reads it, so it carries the strip label |
    | `RANGED_VALUE_COLORS` | both | same family colour either way |
-   | `TITLE` | both — bands branch on `D` / `7D` / `M` / `split`, strips on `cursor-other` / `spark` | **collides** |
+   | `TITLE` | both — bands branch on `D` / `7D` / `M` / `split`, strips on `cursor-other` / `spark` / `fable` | **collides** |
 
    The collision is resolved by a combined closed vocabulary, with each branch comparing against
    the full set of combinations joined by `||` — WFF has no prefix test, so a token is matched
@@ -1423,14 +1450,18 @@ called this band the "upper aperture"; it is the same band.
    | `split` | the inner half only | no far marker — outer family token absent |
    | `split:cursor-other` | the inner half only | the Cursor pool's marker |
    | `split:spark` | the inner half only | the Spark pool's marker |
+   | `split:fable` | the inner half only | the Fable metric's marker; Source revision 2026-11-01 |
    | `credits` | **no band at all** | the lone credits row (rule 3) |
 
-   Each paired base (`split`, `split:cursor-other`, `split:spark`) accepts no suffix or exactly
-   one of **`:zero-inner`**, **`:zero-outer`**, **`:zero-both`**: twelve closed spellings in all.
+   Each paired base (`split`, `split:cursor-other`, `split:spark`, `split:fable`) accepts no suffix
+   or exactly one of **`:zero-inner`**, **`:zero-outer`**, **`:zero-both`**: sixteen closed spellings.
    Every spelling preserves the band's half geometry and its base family-marker selection.
    The zero suffix selects only the exhausted percentage token(s) for pale red. Full `TEXT`
    still carries the complete label, with separators and credits retaining normal colour;
    budget periods and the credits-only token are unchanged.
+
+   The Fable extension remains Pending for native acceptance; the historical runtime record
+   below covers the earlier pool tokens.
 
    **The combined branch has now executed.** Until the generator changed, live data sent a plain
    `split` and this was recorded here as unverified through several revisions. It is not any
@@ -2728,6 +2759,7 @@ These images are review/picker art, not native or public-capture acceptance.
 | `round-3-plan-credits.svg` | **Primary baseline** — three providers, plan + credits |
 | `round-3-plan-split.svg` | **Split band baseline** — a Cursor plan's two pools on one band, two markers and two percents on its strip |
 | `round-3-plan-two-pairs.svg` | Three bands with Cursor and Codex/Spark pairs, fixed inner/outer order and two far markers |
+| `round-plan-fable.svg` / `round-plan-fable-zero.svg` | Synthetic Claude/Fable illustrations: fixed halves and both exhausted; native acceptance Pending |
 | `round-3-plan-untouched.svg` | A pool nobody has spent: its half closes, while the pool beside it keeps its gap |
 | `round-3-plan-near-exhausted.svg` | Near-exhaustion regression — `2%`, `69%`, and `94%` remain, and the 2% ring still has a visible mark |
 | `round-1-plan-exhausted.svg` | Selected Claude 5h at zero: grey track and pale-red `0%` |

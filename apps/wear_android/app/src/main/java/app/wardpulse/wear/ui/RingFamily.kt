@@ -12,6 +12,9 @@ object RingFamily {
 
     const val CLAUDE = 0xFFE8915A.toInt()
 
+    /** Only the recognized included weekly Fable sub-cap has this accent. */
+    const val CLAUDE_FABLE = 0xFFFF8A00.toInt()
+
     /** Cursor, and its external models pool by extension. */
     const val CURSOR = 0xFF67E8D4.toInt()
 
@@ -24,6 +27,7 @@ object RingFamily {
     /** ARGB for WFF [COMPLICATION.RANGED_VALUE_COLORS] / Compose strokes. */
     fun colorArgb(ringId: String): Int =
         when {
+            ringId == "allowance.claude.claude-seven-day-fable" -> CLAUDE_FABLE
             // Before the family branch, or it would never be reached: the limit
             // name sits inside an `allowance.codex.` id.
             ringId.contains("codex.spark") -> CODEX_SPARK
