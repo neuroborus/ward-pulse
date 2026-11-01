@@ -264,6 +264,68 @@ void main() {
     expect(find.text('Watch summary queued'), findsOneWidget);
   });
 
+  testWidgets('Settings sync reports invalid saved capacity without queuing', (
+    tester,
+  ) async {
+    const ids = [
+      codexPlanRingId,
+      codexSparkRingId,
+      cursorOwnPoolId,
+      cursorOtherPoolId,
+      claudePlanRingId,
+      claudeFableRingId,
+    ];
+    final store =
+        _MemoryWatchRingStore()
+          ..value = const WatchRingPreferences(selectedIds: ids);
+    final published = <String>[];
+    const channel = MethodChannel('app.wardpulse/watch_sync');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      expect(call.method, 'syncWatchSummary');
+      published.add(call.arguments as String);
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(
+          _threePairDashboard(fableUsed: null),
+        ),
+        watchRingPreferenceStore: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(published, isEmpty);
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Send to watch'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -160));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Sync'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.widgetWithText(ListTile, 'Send to watch'),
+        matching: find.text(
+          'Watch updates paused · correct ring choices to resume',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Watch summary queued'), findsNothing);
+    expect(published, isEmpty);
+    expect(store.value.selectedIds, ids);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Settings shows systemic sections without Watch display', (
     tester,
   ) async {
@@ -1250,6 +1312,7 @@ void main() {
       final fable = find.widgetWithText(CheckboxListTile, 'Fable');
       expect(tester.widget<CheckboxListTile>(fable).onChanged, isNotNull);
       await tester.ensureVisible(fable);
+      await tester.pumpAndSettle();
       await tester.tap(fable);
       await tester.pumpAndSettle();
       expect(
@@ -1264,6 +1327,7 @@ void main() {
       expect(tester.widget<CheckboxListTile>(missing).value, isTrue);
       expect(tester.widget<CheckboxListTile>(missing).onChanged, isNotNull);
       await tester.ensureVisible(missing);
+      await tester.pumpAndSettle();
       await tester.tap(missing);
       await tester.pumpAndSettle();
       expect(

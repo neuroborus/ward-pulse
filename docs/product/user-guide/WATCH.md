@@ -145,7 +145,7 @@ Codex's main pool, Cursor Models or ordinary Claude keeps the left/inner half; S
 Other Models or Fable keeps the right/outer half. Usage changes never swap these identities.
 
 Claude plan windows use the tightest known window, including an exhausted zero. The phone
-Dashboard still lists the individual windows. The Glance title keeps the chosen window's
+Dashboard still lists the individual windows. For an unpaired ordinary Claude row, the Glance title keeps the chosen window's
 name: **5h**, **Weekly**, **Opus weekly** or **Sonnet weekly**. A selected exhausted metric
 keeps a grey empty track and pale-red **0%** token; it is not replaced by a less-used window.
 Tiny positive values rounded to zero keep ordinary styling.

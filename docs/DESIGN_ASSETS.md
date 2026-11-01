@@ -96,7 +96,7 @@ owns the current centre composition, retaining the other
 [2026-10-27 composition contracts](product/WATCH_RING_DESIGN.md#revision-2026-10-27--upward-digits-and-fixed-reference-bottoms). The
 [N1-width revision](product/WATCH_RING_DESIGN.md#revision-2026-10-30--n1-width-44), retaining the
 [adaptive admission contract](product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count),
-owns 40 face boards/previews, 37 WFF mirrors and the shipped portrait. At adaptive-band adoption,
+owns 42 face boards/previews, 39 WFF mirrors and the shipped portrait. At adaptive-band adoption,
 N3 boards, previews, portrait and the original nine textures retained their accepted bytes. Nine new
 N1/N2 textures are baked at actual radii with fixed nominal 15.756 glyph caps; no existing
 PNG is stretched. New one/two-band pair and D/7D/M active/ambient boards are generated

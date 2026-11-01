@@ -2761,7 +2761,7 @@ primary review preview after generation:
 xdg-open apps/wear_android/design/preview-3-plan-credits.png
 ```
 
-The current maps contain 40 boards/40 PNGs and 37 WFF mirrors. The 14 adaptive additions
+The current maps contain 42 boards/42 PNGs and 39 WFF mirrors. The 14 adaptive additions
 come from `adaptiveVariants` in `tools/render-watch-ring-designs.mjs` and are included in
 both `variants` and `wffFiles`. All model the enlarged whole
 clock with the approved active baseline **240.78125** and unchanged ambient **254.296875**,

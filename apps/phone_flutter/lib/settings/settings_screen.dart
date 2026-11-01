@@ -66,7 +66,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int? _dragRefreshMinutes;
 
   Future<void> _syncWatch() async {
-    if (widget.snapshot == null) {
+    final snapshot = widget.snapshot;
+    if (snapshot == null) {
+      return;
+    }
+    if (watchRingCapacityReason(
+          watchRingSelectionIds(snapshot, widget.ringPreferences),
+        ) !=
+        null) {
+      setState(() {
+        _syncResult = watchRingPayloadSubtitle(
+          snapshot,
+          widget.ringPreferences,
+        );
+      });
       return;
     }
 
