@@ -399,12 +399,32 @@ ViewModel and test composition jobs and consent workers retired before the priva
 are deleted and isolation is released. A timeout fails the case while retaining isolation
 and private storage; another default Activity cannot fall back to live dependencies. An
 unscoped default launch fails before production store construction. No lifecycle callback
-is suppressed and no existing case becomes opt-in. The current default inventory is **47 tests**
-across the original six classes: original40 plus seven necessary fixture/API tests, retaining
-the distinct multi-owner durable-consent assertions.
+is suppressed and no existing case becomes opt-in. The current source inventory is **48 default
+tests** across the original six classes: original40, seven necessary fixture/API tests and one
+same-metric foreground-publication regression, retaining the distinct multi-owner durable-consent
+assertions. With 48 manual cases, the source total is **96**; packaged discovery and execution
+are separate HOST evidence.
+
+`WardPulseNavigationStateTest.productionForegroundPublicationRepaintsSameClaudeWindowWithoutRestartingOwner`
+publishes a private replacement while the real production Activity stays on Glance. The selected
+`allowance.claude.plan` metric, `5h` label/window and split configuration stay unchanged as known
+remaining capacity changes from `75% left` to genuinely exhausted `0% left`. The case requires
+`Claude plan · 5h`, the new value and absence of the old value, with the same RESUMED owner/task,
+one creation and exactly one recording-sink refresh throughout. It performs no navigation,
+recreation, OK tap, real phone refresh or normal-store write. This protects accepted-summary
+storage/observation/Compose publication, not OK-to-phone/provider/Data Layer completion or a
+proved cause of the reported incident.
+
+The case adapts this class's bounded UiAutomation/cache/PNG pattern for two fresh originals:
+`wear-claude-5h-foreground-<case UUID>-before.png` and
+`wear-claude-5h-foreground-<case UUID>-after.png`. `WardPulseNavigation` logs their actual names,
+original native dimensions and byte sizes under `privateForegroundPublication`. Both PNGs must
+decode without scaling at the captured dimensions. HOST must inspect those actual originals;
+the existing Beta/NoSummary exports are different cases. These names describe future outputs,
+not captured or accepted evidence, and existing originals are never overwritten.
 
 **Recorded PASS and current acceptance are separate.** The later full recipe genuinely passed
-47 tests, excluding manual cases, and advanced Push 4→5 before tests. Current installed Wear4/
+47 tests, excluding manual cases, and advanced Push 4→5 before tests. That run's Wear4/
 asset5 APK `097c337f…` and retained Push5 APK `4ed262fa…` are distinct from the old host/asset3
 and real SDK 3→4 journal. Preserve all historical originals/receipts. The failed preservation
 and missing ordinary UI 4→5 witness remain separate gaps; no downgrade, reset, code6, replay
@@ -423,6 +443,17 @@ Ordinary Source 5 builds require candidate flags absent. The historical stock ro
 load this application or launch `MainActivity`. Retain the
 [historical qualification](../../docs/product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30) and see the
 [toolchain ordering](../../docs/ANDROID_TOOLCHAIN.md#wear-instrumentation-provisioning-order).
+
+For the 2026-11-01 foreground-publication scope, follow the
+[retained-target procedure](../../docs/ANDROID_TOOLCHAIN.md#same-metric-foreground-publication-2026-11-01).
+After whole DONE, owning CLI exit, all owned-process retirement and fresh separate quiescent
+ownership, HOST runs unchanged `just check-wear`, revalidates compatibility and provisions only
+the fresh test APK against the intended retained `babe573393a18…` target. The fresh main APK is
+for checks/comparison only. Preserve the retained target/embedded asset and Legacy/owned-Push
+identities and choices; unexpected parity differences HOLD for Root. Verify packaged discovery,
+all 48 default successes and exclusion of all 48 manual cases through the existing isolated
+entry. This scope admits no main/WFF/Push install, target replacement or full paired-sync gate;
+HOST acceptance does not gate the Native commit.
 
 ## Guarded native Push integration
 
@@ -449,7 +480,7 @@ one independent metadata observation). The typed-config classes add six (one obs
 five synthetic guards). The inventory classes add nine (two observations and seven synthetic guards).
 `IsolatedWearRunner.onCreate` always
 excludes that annotation, including explicitly selected manual classes. Source discovery is
-47 default + 48 manual = 95 tests; packaged discovery/execution of these bytes remains a HOST
+48 default + 48 manual = 96 tests; packaged discovery/execution of these bytes remains a HOST
 duty. The stock `androidx.test.runner.AndroidJUnitRunner` entry in the test
 manifest follows the configured isolated runner, because AGP applies its runner name to the
 first instrumentation element. Verify both entries in the packaged test manifest during HOST.
@@ -587,7 +618,7 @@ does not close the utility-button gap, earlier manager-update gaps or historical
 For normal delivery, `NativeDatasourceTransitionTest` exposes three stock-runner manual cases: `probeDelivery`,
 `observeDelivery` and `observeRestoration`. `NativeDatasourceGuardTest` has four private
 admission/selection/mapping/cleanup cases, with no live preferences or manager mutation. These
-seven cases remain excluded from the current 47 defaults. HOST compilation, guard execution,
+seven cases remain excluded from the current 48 defaults. HOST compilation, guard execution,
 provisioning and runtime observations follow whole execution DONE, all owned-process retirement,
 owning CLI exit if used and separate fresh idle. Preserve historical old-host obscured probe
 originals/receipts unchanged and retain actual Push5. Reconcile current provisioning as above;
@@ -794,8 +825,8 @@ rejection, unchanged-byte publication, global fencing and newer-write-safe targe
 using private preferences and injected requests. The existing cleanup guard also exercises the
 shared stage path with absent/present events, missing/invalid originals, an unseen before-stage
 despite later evidence, persistence failure and genuine request failures with independent recovery.
-These synthetic originals establish no native paint or settled restoration. No test method or
-default exclusion changes: source discovery remains expected at 47 default + 48 manual;
+These synthetic originals establish no native paint or settled restoration. These datasource
+changes add no methods or default exclusions: current source discovery is 48 default + 48 manual;
 packaged discovery is a separate
 HOST verification. Compilation, guards, default tests, delivery, paint, quiet custody and settled
 restoration of these new paths remain unrun/Pending until their ordered HOST phase. Invocation
@@ -920,7 +951,7 @@ another case. Unresolved mapping, delivery, paint or recovery stays Pending.
 
 `NativeSdkDirectDataGuardTest` adds three excluded private guards for API36/manual authorization
 and capability provenance, finite public construction, and durable dispatch/uncertainty plus
-independent recovery. Source inventory is **47 defaults + 48 manual = 95**; this is not packaged
+independent recovery. Source inventory is **48 defaults + 48 manual = 96**; this is not packaged
 discovery or execution evidence. Preserve the genuine historical 47-test PASS, actual Push5
 and the separate failed-preservation/UI4→5-witness gap. Current native viewport, active artifact,
 geometry and broader item12 acceptance remain Pending; no downgrade/reset/replay/code6 or
@@ -1051,7 +1082,7 @@ closes the local result, so late/duplicate callbacks cannot rewrite the terminal
 `NativeTypedConfigGuardTest` has five deterministic synthetic cases for admission, unavailable/
 null/empty/denied outcomes, distinct ID domains and read-receipt rejection, timeout/late completion
 and changed/missing brackets. They are callback/record tests, not an OS configuration producer.
-All six typed cases carry `ManualNativeIntegration`; default discovery stays 47. Compilation,
+All six typed cases carry `ManualNativeIntegration`; current default discovery is 48. Compilation,
 actual guard execution, runtime access and later HOST/device acceptance remain pending under
 the same whole-DONE/retirement/fresh-idle boundary above. This does not close #12 or waive its
 malformed/delayed/missing-main native, restoration, artifact/compatibility or public acceptance gaps.
@@ -1096,9 +1127,10 @@ The seven `NativeInventoryGuardTest` cases cover independent admission/read-rece
 raw domains and active status, absent ownership, unsupported/denied/timeout outcomes, invalid/
 changed inventories and null/empty/failed peers, plus exact current datasource Push scope and
 Legacy-only independence. The fake Push client rejects every bundle,
-mutation and permission effect. All nine cases carry `ManualNativeIntegration`; the 47 defaults
-retain original40 plus the seven fixture/API cases. Compilation, actual guard execution and
-reviewed watch observations are later HOST duties after whole DONE, all owned-process retirement,
+mutation and permission effect. All nine cases carry `ManualNativeIntegration`; the 48 defaults
+retain original40, the seven fixture/API cases and the foreground-publication case. Compilation,
+actual guard execution and reviewed watch observations are later HOST duties after whole DONE,
+all owned-process retirement,
 any owning-CLI exit and fresh
 separate public idle. Fresh runtime identity/custody, reviewed test-only provisioning and cleanup/
 recovery precede watch actions; a target dependency must be exposed without target replacement
@@ -1112,7 +1144,7 @@ these observations establish neither universal PASS, physical-device acceptance 
 `probeClient`, `observeOverride` and `observeRestoration`. `NativeClientGuardTest` retains its two
 synthetic binding/object cases and adds the five read/custody cases above, without real service
 binds or data updates, plus three synthetic runtime-reader cases. All carry
-`ManualNativeIntegration` and remain excluded from the current default 47. The three native
+`ManualNativeIntegration` and remain excluded from the current default 48. The three native
 methods use the current-target admission described above and
 remain HOST-only after whole execution DONE, owned-process retirement and separate fresh public
 idle, with separately reviewed compilation/provisioning. The guarded route never launches

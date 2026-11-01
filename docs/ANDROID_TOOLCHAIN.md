@@ -1010,23 +1010,97 @@ require a Codex CLI, local server, or `adb reverse`.
 The default Wear runner is `IsolatedWearRunner`. It selects its test-owned application only
 through `newApplication` and requires a compatible target with the full `MainActivityDependencies` ABI.
 The [isolated default instrumentation](../apps/wear_android/README.md#isolated-default-instrumentation)
-keeps all original 40 tests plus seven necessary fixture/API tests (**47 defaults**) and real
-owner/lifecycle/durable-consent guarantees, with private fixture stores and a recording refresh
+keeps all original 40 tests, seven necessary fixture/API tests and the same-metric foreground
+publication regression (**48 defaults**), preserving real owner/lifecycle/durable-consent
+guarantees, with private fixture stores and a recording refresh
 sink. Test-APK installation alone does not provide
 the target seam. The earlier seam-unavailable observation belongs to its original baseline bytes;
 preserved Wear APK `8f3ec6b2…` defines `MainActivityDependencies` and both `WatchSummaryStore`
 constructors. Class presence proves neither the full required ABI/isolation nor candidate parity.
-Default 47 must validate new test bytes on the correctly provisioned owning candidate under
+Default 48 must validate new test bytes on the correctly provisioned owning candidate under
 its permitted target/artifact order. The later full recipe genuinely passed 47, with manual
 cases excluded, while advancing Push 4→5 before tests. Preserve that PASS separately from
 native/UI acceptance and from the failed preservation and absent ordinary UI 4→5 witness.
-Current installed Wear4/asset5 APK `097c337f…` and retained Push5 APK `4ed262fa…` do not replace
+That recorded Wear4/asset5 APK `097c337f…` and retained Push5 APK `4ed262fa…` do not replace
 the old host/asset3 or historical SDK 3→4 originals/receipts. No downgrade, reset, code6, replay
 or retroactive UI witness is authorized. Current native viewport, active artifact identity,
 geometry and broader item12 acceptance remain Pending.
 Its attribution regressions use private stand-ins for equal and newer normal-store values;
 byte equality is not evidence that a test published to normal storage. Actual backing-store
 identity, constructor routing and recording-sink dispatch remain the isolation evidence.
+
+#### Same-metric foreground publication (2026-11-01)
+
+`WardPulseNavigationStateTest.productionForegroundPublicationRepaintsSameClaudeWindowWithoutRestartingOwner`
+uses the production Activity with private summary/consent storage and the recording refresh
+sink. It keeps `allowance.claude.plan`, label/window `5h` and selection/split configuration
+fixed while publishing known `75% left` → exhausted `0% left`. Both phases require
+`Claude plan · 5h`, the expected percentage and absence of the other percentage on settled
+Glance. The same RESUMED owner/task, one creation and a refresh count of exactly one bracket
+each capture, excluding another onStart, navigation or recreation as the update mechanism.
+Existing attribution and lifecycle/job/storage teardown remain in force; no real phone refresh
+or normal-store write is part of this case.
+
+Current source inventory is **48 defaults + 48 manual = 96**. This is source arithmetic,
+not packaged discovery or a new PASS. Preserve the historical 47-test PASS and dated native
+records. Test-only private publication establishes the accepted-summary store/observer/Compose
+contract, not actual OK-to-phone/provider/Data Layer completion, ordinary arrival or the
+original incident's cause. Ordinary scoped Glance acceptance and any arrival evidence must
+be reviewed separately and qualified by what was actually observed.
+
+HOST acceptance starts only after whole Runner DONE, actual owning CLI exit, all owned-process
+retirement and fresh separate quiescent ownership; it is not a Native commit prerequisite.
+Run unchanged `just check-wear`. Its fresh main APK is a check/compatibility comparison artifact
+only. The intended retained installed target SHA-256 is
+`babe573393a18de48ab0577d7035a09f409e298e3e40de630662d3997c88feb7`.
+Before provisioning, revalidate fresh test/production ABI and DEX closure, resource IDs/content,
+manifest/target and signing compatibility against the actual retained target. The earlier
+existing-built `716a5385…` comparison is feasibility evidence, not a fresh build or future PASS;
+its bounded embedded-asset/default-token differences do not authorize normalizing new parity
+differences. Unexpected fresh differences HOLD for Root reconciliation without waiver or
+retargeting. A demonstrated Source fault likewise requires preserved evidence and scope
+reconciliation before any production edit.
+
+Independently record exact current retained target/embedded-asset hashes and protected
+Legacy/owned-Push package, signer, instance and selection/choice identities before provisioning.
+After fresh test-APK provenance and compatibility admission, use only the existing test-only
+install operation from `apps/wear_android`, addressing the currently discovered Wear serial:
+
+```sh
+adb -s "$WEAR_SERIAL" install -r -t app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+```
+
+Recheck unchanged retained target/asset bytes and protected identities/choices after this
+operation. Never install the fresh main/WFF/Push APKs, replace the target or use
+`connectedDebugAndroidTest`, `just test-wear-device` or a paired-sync recipe as a shortcut:
+those routes can provision targets outside this scope. Keep candidate flags absent. No
+physical-device action, new AVD, reset/unpair, Push6 or historical replay is admitted.
+
+Inspect the actual fresh packaged test inventory independently: 96 total methods, including
+48 manual cases. Discover and execute the full default selection through the existing isolated
+entry, preserving its annotation exclusion. The stock second runner does not supply default
+isolation. From HOST, after the admission above:
+
+```sh
+adb -s "$WEAR_SERIAL" shell am instrument -w -r -e log true app.wardpulse.test/app.wardpulse.wear.IsolatedWearRunner
+adb -s "$WEAR_SERIAL" shell am instrument -w -r app.wardpulse.test/app.wardpulse.wear.IsolatedWearRunner
+```
+
+Verify actual discovery of all 48 defaults, successful results for all 48 and exclusion of all
+48 manual cases; a subset or shell exit 0 alone is insufficient. Failure remains evidence,
+not permission for retry-until-green, target replacement or a broader gate.
+
+The new case writes two fresh target-cache originals named
+`wear-claude-5h-foreground-<case UUID>-before.png` and
+`wear-claude-5h-foreground-<case UUID>-after.png`. Capture output under
+`WardPulseNavigation` / `privateForegroundPublication` reports actual filenames, original native
+dimensions and byte sizes; decoding must preserve PNG format and dimensions without scaling.
+These are planned output patterns, not existing witnesses. Root must review both actual native
+originals with their same-metric/private-publication attribution and ordinary scoped Glance
+acceptance. The existing Beta/NoSummary PNGs do not prove this case. Preserve historical
+originals, current phone credentials/data and newer writes; export no live provider payloads.
+
+#### Historical item12 provisioning context
 
 For item12, retain actual Push5 and preserve the old Round host/asset3/Push4 evidence, old
 Legacy originals and actual 3→4 journal unchanged. Do not replay that witness or install a
@@ -1043,8 +1117,8 @@ ambiguous `beforeResource`; its exact failing suboperation/cause was not establi
 not an API denial, requester-mapping acceptance or native paint, and read receipts authorize no mutation.
 The [UI evidence](../.agents/skills/ui-verification/references/state-and-artifacts.md) and
 [finalization reference](../.agents/skills/finalization/references/commit-message.md) corrections were
-applied and reviewed in `5b6486e` and `5b5df97`. New current mapping, default-47 and native acceptance
-remain Pending, separately from the recorded 47-test PASS. Separately reviewed test-only
+applied and reviewed in `5b6486e` and `5b5df97`. New current mapping, default-suite execution and
+native acceptance remain Pending, separately from the recorded 47-test PASS. Separately reviewed test-only
 provisioning does not authorize early seam-bearing target replacement; expose any genuine
 target dependency first. Phone-emulator sync and UI Update/selection still require their
 operation-specific authority and custody; physical-phone action remains forbidden. The earlier
@@ -1094,7 +1168,8 @@ the recorded completed cache checks above are not pending. After operation-speci
 dependency and retention review admits the required provisioning,
 `just test-wear-device` explicitly provisions the rebuilt seam-bearing target and test APKs
 through `connectedDebugAndroidTest`; verify the retention policy below first, confirm the
-current 47 tests/manual exclusion, then recheck retained actual Push5, bindings and active state.
+current 48 tests/manual exclusion, then recheck retained actual Push5, bindings and active state.
+This target-installing recipe is outside the foreground-publication scope above.
 
 #### Guarded Push witness
 
@@ -1170,8 +1245,9 @@ they use memory, private temporary files/descriptors and fixed shell-output fixt
 querying installed packages or accessing the manager/live stores.
 The three update-class cases are manual; together with the three Push guard, thirteen
 datasource, fourteen client, six typed-config and nine inventory cases, `IsolatedWearRunner`
-excludes all **48 manual cases** and keeps **47 default tests** (original40 plus seven
-necessary fixture/API tests). This is verified source-discovery arithmetic, 95 total;
+excludes all **48 manual cases** and keeps **48 default tests** (original40, seven
+necessary fixture/API tests and the foreground-publication case). This is source arithmetic,
+96 total;
 packaged discovery and execution of new bytes remain separate HOST duties.
 
 After the system-authority correction, require a fresh complete warm `just check-wear`
@@ -1627,7 +1703,7 @@ on the stock runner. It uses private synthetic files only, preserving historical
 evidence while checking independent creation, invalid/duplicate IDs, partial/changed captures,
 scope mismatches and exact hash/sidecar rejection; it reviews no real native original.
 The three normal-delivery methods and four datasource guard cases are annotation-excluded from
-the default 47. With the six SDK direct-data cases below, the manual total is 48. Neither source
+the default 48. With the six SDK direct-data cases below, the manual total is 48. Neither source
 completion nor a successful instrumentation exit closes unavailable provenance, unseen transitions
 or effective-restoration acceptance. The existing cleanup guard exercises the shared stage path
 with synthetic private originals: event presence/absence, missing/invalid evidence, unseen-before
@@ -1722,7 +1798,7 @@ Retain all private reference bytes, receipts and originals until reconciliation.
 `finitePublicBuildersRetainRangesTitlesAndSequentialPartialTargets` and
 `durableArmingUncertainCallbacksAndIndependentRecoveryCannotBeSkipped`. They use synthetic
 private evidence, public construction and injected dispatch/recovery, without a live update.
-Source inventory is **47 default + 48 manual = 95**; packaged discovery/execution remains HOST.
+Source inventory is **48 default + 48 manual = 96**; packaged discovery/execution remains HOST.
 After whole execution DONE, owned-process retirement, owning CLI exit when used and fresh
 separate idle, Root reconciles the complete provisioning footprint and candidate order before
 full `just check-wear`, docs confirmation, test-APK provenance/install admission, affected/new
@@ -1928,8 +2004,8 @@ Select exactly one `NativeComplicationOverrideTest` method on the stock runner w
 `wardpulseNativeIntegration=client-probe`. The three guarded native methods, ten synthetic
 `NativeClientGuardTest` cases and independent metadata observation remain excluded by the
 isolated runner; with the thirteen datasource, six Push, six typed-config and nine inventory
-cases the manual total is 48 and the default total stays 47. The guarded native methods require
-the same current
+cases the manual total is 48 and the current default total is 48. The guarded native methods
+require the same current
 caller/resource/runtime/renderer and applicable owned-Push identity arguments as the
 [datasource probe](#guarded-datasource-observations), plus
 `clientArtifactReview=resolved-1.2.1` and `expectedClientArtifactSha256` from the actual resolved

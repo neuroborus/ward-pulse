@@ -263,6 +263,81 @@ class WardPulseNavigationStateTest {
     }
 
     @Test
+    fun productionForegroundPublicationRepaintsSameClaudeWindowWithoutRestartingOwner() {
+        val initial = alpha.copy(
+            rings = listOf(RingSummary("allowance.claude.plan", "5h", 25.0, PulseStatus.OK)),
+            allowances = emptyList(),
+            alerts = emptyList(),
+        )
+        val exhausted = initial.copy(rings = listOf(initial.rings.single().copy(usedPercent = 100.0)))
+        launchProduction(initial)
+        val owner = productionOwner()
+        val captureId = UUID.randomUUID()
+
+        fun assertForeground(expected: String, obsolete: String) {
+            awaitHomePage(0)
+            assertVisible("Claude plan · 5h")
+            assertVisible(expected)
+            assertAbsent(obsolete, anchor = expected)
+            awaitAccessibility("Foreground Claude legend must have settled layout") {
+                nativeSurface("glance-legend")?.pendingLayout == false
+            }
+            assertProductionOwner(owner)
+            onActivity {
+                assertEquals(Lifecycle.State.RESUMED, it.lifecycle.currentState)
+                assertEquals(
+                    "Foreground publication must retain exactly one onStart refresh",
+                    1,
+                    isolation.scope.refreshCount(it),
+                )
+            }
+        }
+
+        fun capture(phase: String, expected: String, obsolete: String) {
+            assertForeground(expected, obsolete)
+            val screenshot = checkNotNull(automation.takeScreenshot()) { "Foreground $phase screenshot failed" }
+            try {
+                val width = screenshot.width
+                val height = screenshot.height
+                assertTrue("Foreground PNG dimensions exceed bounds", width in 1..1024 && height in 1..1024)
+                val evidence = File(
+                    instrumentation.targetContext.cacheDir,
+                    "wear-claude-5h-foreground-$captureId-$phase.png",
+                )
+                assertTrue("Foreground evidence must not overwrite an existing original", evidence.createNewFile())
+                evidence.outputStream().use { output ->
+                    assertTrue("Foreground PNG compression failed", screenshot.compress(Bitmap.CompressFormat.PNG, 100, output))
+                }
+                assertTrue("Foreground PNG size exceeds bounds", evidence.isFile && evidence.length() in 1L..(4L * 1024 * 1024))
+                val options = BitmapFactory.Options().apply { inScaled = false }
+                val decoded = checkNotNull(BitmapFactory.decodeFile(evidence.absolutePath, options)) {
+                    "Foreground PNG could not be decoded"
+                }
+                try {
+                    assertEquals("Foreground artifact is not PNG", "image/png", options.outMimeType)
+                    assertEquals("Foreground PNG width changed", width, decoded.width)
+                    assertEquals("Foreground PNG height changed", height, decoded.height)
+                } finally {
+                    decoded.recycle()
+                }
+                Log.i(
+                    "WardPulseNavigation",
+                    "privateForegroundPublication=$phase, metric=allowance.claude.plan, label=5h, " +
+                        "expectedRemaining=$expected, owner=${System.identityHashCode(owner)}, task=$productionTaskId, " +
+                        "png=${evidence.name}, nativeDimensions=${width}x$height, pngBytes=${evidence.length()}",
+                )
+                assertForeground(expected, obsolete)
+            } finally {
+                screenshot.recycle()
+            }
+        }
+
+        capture("before", "75% left", "0% left")
+        isolation.scope.saveSummary(exhausted)
+        capture("after", "0% left", "75% left")
+    }
+
+    @Test
     fun productionOldTapReturnsToNoSummaryPromptAndRootSwipeRetainsTheOwner() {
         launchProduction(null, entry = faceIntent())
         val owner = productionOwner()
