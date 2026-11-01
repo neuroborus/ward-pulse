@@ -169,12 +169,12 @@ const STRIP = {
 }
 
 /**
- * Fixed per-mode baselines model the measured 08:08 lower edges while larger
- * whole digits grow upward. Host SVG metrics are illustrative, not native fit
- * or balanced-gap acceptance; other time strings retain their natural optics.
+ * Active adopts the approved 10-unit upward translation; ambient retains its
+ * measured 08:08 reference baseline. Host SVG metrics are illustrative, not native
+ * fit or balanced-gap acceptance; other time strings retain their natural optics.
  */
 const CLOCK = {
-  active: { fontSize: 86, baseline: 250.78125, weight: 700 },
+  active: { fontSize: 86, baseline: 240.78125, weight: 700 },
   ambient: { fontSize: 96, baseline: 254.296875, weight: 100 },
 }
 
@@ -212,7 +212,7 @@ const TEXTURE = {
   },
 }
 
-// New-radius fits mirror the face's ADAPTIVE_REPEATS; N3 art stays unchanged.
+// New-radius fits mirror the face's ADAPTIVE_REPEATS; N3 type repeats stay unchanged.
 const ADAPTIVE_REPEATS = {
   1: { D: [11], '7D': [7], M: [9] },
   2: { D: [15, 11], '7D': [9, 6], M: [12, 9] },

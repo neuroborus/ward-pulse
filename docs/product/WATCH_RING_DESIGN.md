@@ -70,14 +70,17 @@ new-radius raster fits below; native acceptance Pending); retained-extra composi
 **2026-10-31** (extras precede main tracks; unsplit N1 restores the local backdrop;
 new-artifact native acceptance Pending); temperature-choice revision **2026-11-01**
 (one face-local Auto/Celsius/Fahrenheit editor
-choice for built-in weather only, default Auto; current-candidate native acceptance Pending)
+choice for built-in weather only, default Auto; current-candidate native acceptance Pending);
+active-clock translation **2026-11-01** (Owner-approved 10-unit rise of the whole active clock;
+ambient unchanged; new-runtime native/public acceptance Pending)
 — locked visual target for
 Wear OS and Watch Face Format until the next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
 wireframes, large remaining-% heroes, or bordered strip cards.
 
-The operative layout is
-[upward digits and fixed reference bottoms](#revision-2026-10-27--upward-digits-and-fixed-reference-bottoms), retaining the
+The operative layout is the
+[approved active-clock translation](#revision-2026-11-01--approved-active-clock-translation), retaining the
+[2026-10-27 ambient and other composition contracts](#revision-2026-10-27--upward-digits-and-fixed-reference-bottoms) and the
 [outward-preserving cell contract](#revision-2026-10-25--preserved-outward-fade-and-50-unit-cells).
 Band widths follow the [N1-width revision](#revision-2026-10-30--n1-width-44), retaining the
 [adaptive admission contract](#revision-2026-10-28--adaptive-bands-from-resolved-count).
@@ -203,7 +206,7 @@ budget semantics, family/pool identity, eight slots, services, bindings, taps, c
 composition and interactive/ambient/MUTE distinctions. Extras still precede mains;
 `n1BackdropRestore` remains confined to admitted unsplit N1, preserving valid split extras
 and valid-extra/main-NoData behavior. No shared count, sibling accessor, ACK or diagnostics
-is added. Review art and fixture bytes/timestamps do not change.
+is added. That repair left review art and fixture bytes/timestamps unchanged.
 
 **Native repair acceptance remains Pending.** The current incident fixture is consumed;
 this candidate supplies no replay eligibility or device admission. A bounded extension of
@@ -336,9 +339,11 @@ at a smaller scale. At 450 the selected radial ink envelopes were D **170.883..1
 these conservative raster bounds include antialiasing. The chosen counts establish measured
 spacing and fit under this model, not readability PASS or native cap-height acceptance.
 
-Canonical XML and the three N1 textures are regenerated before the affected N1 boards,
-previews and WFF mirrors. N2/N3/legacy textures, unaffected art and Primary portrait bytes
-remain fixed. Drift checks cover XML/SVG, not raster fit. Inspect D/7D/M active/ambient
+At the 2026-10-30 refit, canonical XML and the three N1 textures were regenerated before the
+affected N1 boards, previews and WFF mirrors. N2/N3/legacy textures, unaffected art and Primary
+portrait bytes remained fixed for that refit; current active art follows the
+[approved translation](#revision-2026-11-01--approved-active-clock-translation).
+Drift checks cover XML/SVG, not raster fit. Inspect D/7D/M active/ambient
 originals independently at viewport scale; central clearance, clipping, first and separately
 settled native geometry and retained-engine transitions remain **Pending**. Preserve the
 completed Alpha selection repair, all eight slots, 52-unit cells, logo/clock/wells/labels/
@@ -430,8 +435,9 @@ measured model is preserved, including its historical thinner ambient strokes.
 
 Keep all eight scene slots: lower 101/102/105/106/109, all six updater services including
 Status, and upper 201/202/203 with existing types, DAY_OF_WEEK/EMPTY/EMPTY defaults and wearer
-choices. Canonical IDs do not establish runtime IDs. The current 52-unit cells, logo,
-clock/type/reference bottoms, 132×26 wells, labels and fades remain unchanged.
+choices. Canonical IDs do not establish runtime IDs. That adaptive revision retained the
+52-unit cells, logo, clock/type/reference bottoms, 132×26 wells, labels and fades; the later
+[active translation](#revision-2026-11-01--approved-active-clock-translation) supersedes only active clock placement.
 
 Old app/new face stays fixed legacy width for any count. New app/old face preserves
 VALUE/MAX ratios, semantic strings and the existing pair contract, but third-party raw
@@ -776,7 +782,41 @@ equivalence check was completed on **2026-10-12** — see *Marker equivalence co
 Split band. These checks do not establish a live Codex/Spark payload; that live-data condition
 remains unverified.
 
+## Revision 2026-11-01 — approved active-clock translation
+
+The Owner-approved **450×450, 10:08 active portrait** translates the whole active clock
+**10.0 design units upward**. Runtime keeps real device-synchronized time; 10:08 is review
+data. Preserve **86 Bold**, `height=90`, complete `hh:mm`, horizontal alignment, natural
+glyph/colon spacing and hour-format behavior. No other element moves or changes appearance.
+
+| Clock | Current runtime `TimeText` | Review SVG baseline |
+| --- | --- | --- |
+| Active | **x=0, y=166, width=450, height=90**, **86 Bold**, `CENTER` | **240.78125**, rendered **240.8** |
+| Ambient, unchanged | **x=0, y=175, width=450, height=90**, **96 Thin**, `CENTER` | **254.296875**, rendered **254.3** |
+
+The active SVG baseline moves from **250.78125** (rounded **250.8**) to **240.78125**
+(rounded **240.8**). These are host text coordinates, not measured native glyph centres or
+ink bounds. This translation supersedes the old active 08:08 fixed-bottom/equal-gap target;
+the dated measurements below remain history for their original bytes. Other strings and row
+counts retain natural variation, with no per-time or per-count offsets. Ambient placement,
+mode switching and alpha remain unchanged; the active approval supplies no ambient rise.
+
+Retain all logo, cell, legend, band, data and delivery contracts recorded below, including
+original logo pixels/alpha, outward rims, lateral-only lower treatment, caps and paint gates.
+Generate canonical WFF before ordinary face art; active boards, mirrors, PNGs and the shipped
+logo-composited portrait share this translation. Ambient content remains unchanged.
+
+**New-runtime native/public acceptance: Pending.** The approved host portrait and generator
+drift do not establish native agreement. Matched native 10:08 active, existing wide/narrow
+clock cases and actual-AMBIENT regression on supported Round/Square targets remain unobserved
+for this revision. Existing public captures retain their dated provenance; any image presented
+as this runtime requires a fresh native capture and owning index review.
+
 ## Revision 2026-10-27 — upward digits and fixed reference bottoms
+
+**Historical active placement, superseded 2026-11-01.** This revision records its original
+target and native evidence. Its ambient and non-clock contracts remain unchanged; the active
+clock now follows the [approved translation](#revision-2026-11-01--approved-active-clock-translation).
 
 The Owner-approved composition keeps the **450×450** canvas and centre **(225,225)**.
 The reading order is **cells → logo → clock → legend**. Enlarge whole digits upward,
@@ -785,7 +825,7 @@ visible gaps in the **reference with three full rows only**. Keep device-defined
 hour format, colon and natural glyph advances; no per-time offsets, split or stretched
 digits, font replacement, central lower fade, gloss, palette or brightness changes.
 
-| Element | Current target, in 450×450 design units |
+| Element | 2026-10-27 target, in 450×450 design units |
 | --- | --- |
 | Active clock | **86 Bold**; integer `TimeText` **x=0, y=176, width=450, height=90**, `CENTER` |
 | Ambient clock | **96 Thin**; integer `TimeText` **x=0, y=175, width=450, height=90**, `CENTER` |
@@ -798,7 +838,7 @@ digits, font replacement, central lower fade, gloss, palette or brightness chang
 | Complete mixed-run label | **120×26**, inset **6**, centred at x=225; **20** through 10 characters, **18** at 11, **16** at 12+ |
 | Row/markers | Whole-row alpha **255 active / 90 ambient**; unchanged marker geometry, family and token meaning; far marker follows the wider well |
 
-The two `CLOCK` entries are the current settings calibrated on the canonical Round 384 target,
+The two `CLOCK` entries were the settings calibrated on the canonical Round 384 target,
 retaining the 08:08 reference bottoms measured below. This is bounded native evidence,
 not fixed optical bounds for every time string or device. Preferred cell font **18** is new relative to
 font **17**; keep the **12** branch ahead of **14** and the existing weather/custom-length
@@ -815,7 +855,7 @@ boundary and first-row top 259, their respective above/below gaps in 450 units w
 for those bytes, not acceptance of the corrected bytes. The first-wake `2b2c27b2…` frame
 visibly mixed Thin/Bold despite INTERACTIVE metadata and is **rejected** as Bold evidence.
 
-**Corrected Round calibration, 2026-10-27.** Current XML SHA-256
+**Corrected Round calibration, 2026-10-27.** That revision's XML SHA-256
 `1685b2b3bb9e309fee38aee278a40ed8471c9e34bb7d3b7200eb3005f9f9c6dc` was bound to the
 installed active legacy `app.wardpulse.watchface`, `wfId-15`. Settled 08:08 **86 Bold/y176**
 had exclusive native bounds **[102,161,282,214]**, height **53**; renderer-proven AMBIENT
@@ -847,8 +887,9 @@ and the first three-row legend at **259**, the targets are:
 | Ambient | **4.703125** | **184.453125 /69.84375** |
 
 The initial linear 86/97 estimates put the tops at **188.87277 /184.12905**. Estimated residuals
-below **0.35 units** are neither actual font metrics, a pass nor a tolerance. The review generator's
-per-mode `CLOCK` baselines model the reference lower edges with the enlarged type, replacing
+below **0.35 units** are neither actual font metrics, a pass nor a tolerance. The review generator
+for that revision used per-mode `CLOCK` baselines to model the reference lower edges with
+enlarged type, replacing
 `TIME_LIFT=0`; SVG host glyph bounds are illustrative and do not establish native agreement.
 Other strings retain natural ink, bottom and optical variation. Never retune by row count.
 
@@ -1059,8 +1100,9 @@ theme `outlineVariant` at runtime).
 
 Rules:
 
-- **Time is the hero** — current Round-calibrated 86 Bold/96 Thin clocks grow upward from
-  the mode-specific 08:08 reference bottoms; the owning revision records bounded native scope.
+- **Time is the hero** — the approved active 86 Bold clock rises 10 units from the dated
+  2026-10-27 placement; 96 Thin ambient retains its calibrated placement. New-runtime native
+  acceptance remains Pending under the owning translation revision.
 - **Upper cells** — three customizable complication cells in the band the baseline reserved for
   a weather glance until **2026-10-09**. They retain a curved row, with the middle one higher
   than the outer two; the operative **2026-10-27** origins and 52-unit wells are listed above.
@@ -1233,7 +1275,7 @@ called this band the "upper aperture"; it is the same band.
 
 1. **Three cells of 52 units in a curved row, refined on 2026-10-27.** Each complete
    well/border/text/icon/slot moves together. The integer coordinates below must match
-   in the WFF and review generators. The whole clock follows the upward-digit revision:
+   in the WFF and review generators. The whole clock follows the approved active translation:
 
    | Cell | Centre | Box origin, integer | Radius from face centre |
    |---|---|---|---:|
@@ -1243,13 +1285,13 @@ called this band the "upper aperture"; it is the same band.
 
    The derived clearances, against the clear aperture of **133.8** (the innermost band's
    outer edge at 154, less the 20.2 the band renders inward) and current `TimeText` boxes at
-   `y=176` active / `y=175` ambient:
+   `y=166` active / `y=175` ambient:
 
    | | Value |
    |---|---:|
    | Left/right cell to inner band | **3.8577** |
    | Middle cell to inner band | **3.8000** |
-   | Lowest cell to the clock box | **15.00 active /14.00 ambient** (nominal box separation; native glyph scope is recorded above) |
+   | Lowest cell to the clock box | **5.00 active /14.00 ambient** (nominal box separation, not native glyph clearance) |
    | Between neighbouring cells | 1.851648 |
    | Middle cell above the outer two | 14.00 |
 
@@ -1482,7 +1524,7 @@ called this band the "upper aperture"; it is the same band.
    cell, before 2026-10-09: `Tue` 23 units, `18°` 18, `UV 7` 27. At the subsequent 42 units the
    same three labels were rendered on the AVD in the 37-unit line box of rule 7 and read
    cleanly, but their ink was not remeasured. That observed fit belongs to the old font/box.
-   The upward-digit revision records current Round default-reading fit and the narrower
+   The upward-digit revision records dated Round default-reading fit and the narrower
    Square cell-well scope; arbitrary custom/extreme readings and physical fit remain unproved.
 
 7. **A complication has no appearance of its own; the face draws all of it.** WFF gives a
@@ -2172,9 +2214,9 @@ centred review art used `TIME_LIFT=0`.
 The initial nominal y182 was a 30-unit shift from y152, projecting a centre near 225.3 from
 that older reading. The matched 2026-10-27 six-frame measurement above instead found
 226.171875, leading to the historical y181 calibration and Source6397 record above.
-Current review art uses per-mode fixed baselines with enlarged type; the owning upward revision
-records current Round calibration/corpus and remaining native scope. Projections do not prove
-board/device agreement or every time string's optical centre.
+Current review art uses per-mode baselines with enlarged type and the approved active translation;
+the upward-digit revision records historical Round calibration/corpus, not acceptance of the new
+active placement. Projections do not prove board/device agreement or every time string's optical centre.
 
 **Clock colon spacing stays device-defined (revision 2026-10-01).** On the `emulator-5554`
 screenshot used for the 2026-09-26 decision, `03:24` at 384×384 produced these bright-pixel
@@ -2674,7 +2716,8 @@ xdg-open apps/wear_android/design/preview-3-plan-credits.png
 The current maps contain 40 boards/40 PNGs and 37 WFF mirrors. The 14 adaptive additions
 come from `adaptiveVariants` in `tools/render-watch-ring-designs.mjs` and are included in
 both `variants` and `wffFiles`. All model the enlarged whole
-clock with per-mode fixed baselines, 52-unit cells and 132×26 wells with 20/18/16 labels.
+clock with the approved active baseline **240.78125** and unchanged ambient **254.296875**,
+52-unit cells and 132×26 wells with 20/18/16 labels.
 Ordinary boards stay mark-free; the shipped portrait alone overlays the active 64-square
 logo at (193,141), alpha95, read from generated XML.
 Generate WFF first, then review art; inspect actual PNGs separately from SVG drift checks.

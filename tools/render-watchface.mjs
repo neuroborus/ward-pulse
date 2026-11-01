@@ -301,12 +301,12 @@ const STRIP = {
 const WORDMARK = { centerX: FACE.center, centerY: 173, size: 64, ambientSize: 54 }
 
 /**
- * Enlarge whole digits upward from the measured 08:08 lower edges, rather than
- * retaining the old centred clock. These integer boxes are calibration starters:
- * native font metrics must establish complete glyph fit, bottom and visible gaps.
+ * The approved active composition translates the enlarged whole clock upward
+ * by 10 design units; ambient retains its calibrated 08:08 placement. Native
+ * font metrics must establish complete glyph fit, bottom and visible gaps.
  */
 const CLOCK = {
-  active: { y: 176, height: 90, fontSize: 86 },
+  active: { y: 166, height: 90, fontSize: 86 },
   ambient: { y: 175, height: 90, fontSize: 96 },
 }
 

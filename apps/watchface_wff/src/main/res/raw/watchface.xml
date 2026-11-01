@@ -4585,7 +4585,7 @@
         <DigitalClock x="0" y="0" width="450" height="450">
             <TimeText
                 x="0"
-                y="176"
+                y="166"
                 width="450"
                 height="90"
                 alpha="255"

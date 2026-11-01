@@ -2666,16 +2666,29 @@ the mono wordmark remains reserved for watermark use and is not duplicated besid
 
 ### Phase 20 — three upper cells on the watch face
 
-**Composition revision 2026-10-27 — calibrated upward digits; bounded native evidence.**
-The operative [upward-digit face target](product/WATCH_RING_DESIGN.md#revision-2026-10-27--upward-digits-and-fixed-reference-bottoms)
+**Active-clock revision 2026-11-01 — approved translation; native/public acceptance Pending.**
+The operative [active-clock target](product/WATCH_RING_DESIGN.md#revision-2026-11-01--approved-active-clock-translation)
+raises the whole active clock **10 design units**: **86 Bold/y166**, height90, and ordinary
+review baseline **240.78125** (rounded **240.8**), retaining complete device-synchronized time.
+Ambient remains **96 Thin/y175**, height90, baseline **254.296875**, with unchanged switching
+and alpha. Logo pixels/geometry/alpha, cells, legend, bands, textures, data and delivery remain
+unchanged. Canonical WFF generation precedes face art, including affected active boards,
+mirrors, PNGs and the shipped portrait. The old active fixed-bottom/equal-gap target is history;
+no per-time or per-count offsets follow. New-runtime native/public acceptance stays **Pending**
+until post-execution HOST identity/rendering review and exact restoration. Existing public
+captures retain their dated provenance; new-runtime images require fresh native captures and
+owning index review. This revision closes neither adaptive-band nor widget acceptance.
+
+**Historical composition revision 2026-10-27 — calibrated upward digits; bounded native evidence.**
+That [upward-digit face target](product/WATCH_RING_DESIGN.md#revision-2026-10-27--upward-digits-and-fixed-reference-bottoms)
 uses 52-unit cells at (147,109)/(199,95)/(251,109), preferred **18** with existing **14/12** readings,
 46×24 text at (3,14), 24-unit icons at inset **14** and original outward lighting with added
 bottom treatment only laterally. Whole-clock **86 Bold/y176** and **96 Thin/y175**, both height 90,
-are the current Round-calibrated settings. Digits enlarge upward, preserving the measured
+were the Round-calibrated settings. Digits enlarged upward, preserving the measured
 08:08 bottoms **250.78125 active/254.296875 ambient** and balancing visible logo→time and
 time→legend gaps only in the reference with three full rows: targets **8.21875/4.703125** respectively.
 Other strings retain natural optical variation; do not retune by row count. Review art
-uses per-mode fixed baselines; the owning revision records actual Round metrics and bounded fit.
+used per-mode fixed baselines; the owning revision records actual Round metrics and bounded fit for those bytes.
 The original logo sits above the clock/below the central cell: active **64×64** at (193,141),
 alpha95; ambient **54×54** at (198,146), alpha70; centre (225,173). Preserve original PNG pixels.
 Equal 132×26 wells at x159/y259,286,313 use 120-unit 20/18/16 whole-label branches, bottom339
@@ -2686,12 +2699,12 @@ The inherited y181/70 Bold/81 Thin candidate (Source6397) supplied the 08:08 ref
 bottoms above. Its old centre225 goal and review `TIME_LIFT=0` are superseded; arithmetic
 and older native results do not establish enlarged-clock acceptance or a new tolerance.
 Slots, sources, units, protocols, ring geometry/textures and navigation stay unchanged;
-adaptive-width item 12 remains separate. Current XML1685 passed post-retirement checkout/HOST
+adaptive-width item 12 remains separate. That revision's XML1685 passed post-retirement checkout/HOST
 checks, strict Push validation and canonical-resource equality in both APKs. Native evidence
 is for active legacy `app.wardpulse.watchface`, `wfId-15`. The previous upward
 Source54f6 measured clean active 86/y175 08:08 bottom 213 versus reference 214, and true
 AMBIENT 97/y175 bottom 217 with height 61 on Round 384. The owning revision preserves the dated
-bounds/gaps and subsequent corrected Round calibration: 08:08 now retains both reference
+bounds/gaps and subsequent corrected Round calibration: that 08:08 case retained both reference
 bottoms, with settled 53-pixel Bold and 60-pixel Thin ink. The older mixed Thin/Bold first-wake
 frame remains rejected despite INTERACTIVE metadata.
 One inspected actual 08:08 active original was already delivered through an Owner-visible
@@ -2766,7 +2779,7 @@ is justified from the unavailable case; the owning design retains the historical
 no upper-cell geometry. That build used the complete cells
 at integer origins `(152,114)`, `(204,100)`, `(256,114)`, the three-unit downward move, full
 temperature labels and shortest radial border fades. The historical acceptance block below
-records those dated revisions; current acceptance follows the upward-digit contract above.
+records those dated revisions; current acceptance follows the active-translation contract above.
 
 **Historical first implementation status, 2026-10-09.** The design was locked in
 `docs/product/WATCH_RING_DESIGN.md` (upper-cell revision, with the melt-length and cell-layout
@@ -2777,7 +2790,7 @@ painted; `watchface.xml` was regenerated from it. The nine ring textures came ou
 and the review-art generators and the Wear complication sources were still untouched at that
 point. The following records preserve the original scope and dated observations. Current
 implementation and acceptance follow the
-[upward-digit contract](product/WATCH_RING_DESIGN.md#revision-2026-10-27--upward-digits-and-fixed-reference-bottoms);
+[active-translation contract](product/WATCH_RING_DESIGN.md#revision-2026-11-01--approved-active-clock-translation);
 the historical geometry below does not prescribe future passes or accept the current candidate.
 
 Unrelated to the cells, and found while reading the system face picker on 2026-10-09: the
@@ -3025,8 +3038,9 @@ would show wrong data until both were updated; keeping the service names stable 
 prevent it, as the 2026-09-16 revision already learned. The face and the app had to ship together
 for that migration. The current composition refinement changes no slots, services or transport.
 
-**Current acceptance — bounded native and captured-public evidence.** Use the upward-digit
-contract's measured scope and remaining proof requirements. The eight-slot budget, weather chrome and occlusion,
+**Current acceptance — active translation Pending; earlier evidence remains dated.** Use the
+active-translation contract's remaining proof requirements; prior native/public observations
+do not accept the new active placement. The eight-slot budget, weather chrome and occlusion,
 customizable bindings, provider taps, complete-label rendering, bottom anchoring, tightest-first
 ordering, ring/texture preservation and ambient retention below remain required with current
 geometry. Earlier device observations establish only their dated artifacts.

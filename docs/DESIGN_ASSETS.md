@@ -91,20 +91,21 @@ the `wffFiles` subset into `apps/watchface_wff/design/`, and rasterizes the face
 asset `apps/watchface_wff/src/main/res/drawable/preview.png` from the Primary one. Primary
 preview: `apps/wear_android/design/preview-3-plan-credits.png`.
 
-The [upward-digit 2026-10-27 composition](product/WATCH_RING_DESIGN.md#revision-2026-10-27--upward-digits-and-fixed-reference-bottoms)
-owns the preserved centre composition. The
+The [approved active-clock translation, 2026-11-01](product/WATCH_RING_DESIGN.md#revision-2026-11-01--approved-active-clock-translation)
+owns the current centre composition, retaining the other
+[2026-10-27 composition contracts](product/WATCH_RING_DESIGN.md#revision-2026-10-27--upward-digits-and-fixed-reference-bottoms). The
 [N1-width revision](product/WATCH_RING_DESIGN.md#revision-2026-10-30--n1-width-44), retaining the
 [adaptive admission contract](product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count),
-now owns 40 face boards/previews, 37 WFF mirrors and the shipped portrait. N3 boards,
-previews, portrait and the original nine textures retain their accepted bytes. Nine new
+owns 40 face boards/previews, 37 WFF mirrors and the shipped portrait. At adaptive-band adoption,
+N3 boards, previews, portrait and the original nine textures retained their accepted bytes. Nine new
 N1/N2 textures are baked at actual radii with fixed nominal 15.756 glyph caps; no existing
 PNG is stretched. New one/two-band pair and D/7D/M active/ambient boards are generated
 by `adaptiveVariants` in `tools/render-watch-ring-designs.mjs`. Face generation precedes
 review art so the portrait reads current canonical geometry.
 The 2026-10-30 N1 refit uses full 44 / half 22 at radius 180 (pair 191/169), with measured
-D/7D/M counts 11/7/9 per sweep. Only the three N1 textures and affected N1 exports change;
-N2/N3/legacy textures, unaffected art and Primary portrait retain their bytes. The owning
-revision records angular envelopes, bounded count enumeration and 450/360/384 raster
+D/7D/M counts 11/7/9 per sweep. Only the three N1 textures and affected N1 exports changed then;
+N2/N3/legacy textures, unaffected art and Primary portrait retained their bytes at that revision.
+The owning revision records angular envelopes, bounded count enumeration and 450/360/384 raster
 spacing/clearance. These measurements do not establish independent visual or native acceptance.
 Actual adaptive aperture, clipping, textures, transitions and native acceptance remain
 **known Pending**. Delegated documentation/design work in the same integration owns final
@@ -113,21 +114,28 @@ acceptance; existing public images retain their dated N3 provenance.
 The 52-unit cells
 at (147,109)/(199,95)/(251,109) use preferred **18** with unchanged **14/12** fallbacks, centred
 46×24 text at (3,14) and 24-unit icons at inset **14**. Preserve outward fading and add lower
-fading only laterally. Whole-clock **86 Bold/y176** and **96 Thin/y175**, both height 90, are
-the current Round-calibrated settings: digits grow upward from the measured 08:08 bottoms **250.78125/254.296875**,
-balancing visible gaps only in the three-row reference. Review art uses per-mode fixed
-baselines; it is not native metric evidence. The original logo sits above the clock,
+fading only laterally.
+
+**Active-clock revision 2026-11-01.** Adopt the Owner-approved **10-unit upward translation**:
+whole-clock **86 Bold/y166**, height90, with review baseline **240.78125** (rendered **240.8**).
+The earlier active **y176/250.78125** and three-row equal-gap measurements remain dated history.
+Preserve **96 Thin/y175**, height90, ambient baseline **254.296875**, switching and alpha.
+Generate WFF first, then all affected active boards/mirrors/PNGs and the shipped portrait;
+ambient content and every texture remain unchanged. Host SVG baselines are not native ink bounds.
+New-runtime native/public acceptance stays **Pending**; existing public captures retain their dates.
+The original logo sits above the clock,
 below the central cell, at image-box centre (225,173). Equal 132×26 wells at x159 use
 120-unit labels and 20/18/16 branches with unchanged shorter-stack bottom anchoring.
 The calculated bottom-corner aperture margin is 2.0730.
-The owning revision records bounded Round calibration/corpus and twelve-case Round/Square
-fit. The [current shared-state cohort](assets/README.md#shared-state-capture-refresh-2026-10-27)
-and its scoped publication review are accepted. Generation/drift or host-font fit is not native proof.
+The 2026-10-27 revision records bounded Round calibration/corpus and twelve-case Round/Square
+fit for those bytes. The [dated shared-state cohort](assets/README.md#shared-state-capture-refresh-2026-10-27)
+and its scoped publication review remain accepted for their captured layout.
+Generation/drift or host-font fit is not native proof.
 The 2026-10-27 Source54f6 calibration measured clean active 86/y175 bottom 213 instead of 214
 and true AMBIENT 97/y175 bottom 217 with height 61 on Round 384. The owning revision retains
 those dated bounds/gaps and subsequent corrected Round calibration; the mixed Thin/Bold first
 wake is rejected evidence despite INTERACTIVE metadata. The already delivered actual 08:08
-preview creates no additional approval loop. Current evidence is scoped in the owning revision;
+preview creates no additional approval loop. That evidence is scoped in the dated owning revision;
 unfilled temporary-time weather wells do not establish the healthy filled-default public cohort.
 The historical centred calibration records six Round 384 glyph centres at **193** native pixels
 (226.171875 design units) with y182, followed by the y181/70 Bold/81 Thin Source6397
