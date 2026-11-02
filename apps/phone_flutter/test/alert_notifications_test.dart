@@ -366,6 +366,61 @@ void main() {
     await Future.wait([first, second]);
     expect(notifier.posts, [_key]);
   });
+
+  test('a completed predecessor preserves the newer active tail', () async {
+    final crossingEntered = Completer<void>();
+    final releaseCrossing = Completer<void>();
+    final clearEntered = Completer<void>();
+    final releaseClear = Completer<void>();
+    final store =
+        _Conditions()
+          ..beforeWrite = (_, consumed) async {
+            if (consumed && !crossingEntered.isCompleted) {
+              crossingEntered.complete();
+              await releaseCrossing.future;
+            } else if (!consumed) {
+              clearEntered.complete();
+              await releaseClear.future;
+            }
+          };
+    final notifier = _Notifier();
+    AlertNotificationDelivery delivery() => AlertNotificationDelivery(
+      preferences: _Preferences(),
+      conditions: store,
+      notifier: notifier,
+    );
+    final first = delivery().sync(_snapshot([_crossed]));
+    Future<void>? second;
+    Future<void>? third;
+    var thirdStarted = false;
+    try {
+      await crossingEntered.future;
+      second = delivery().sync(_snapshot([_clear]));
+      releaseCrossing.complete();
+      await first;
+      await clearEntered.future;
+      third = delivery().sync(
+        _snapshot([_crossed]),
+        isAccepted: () {
+          thirdStarted = true;
+          return true;
+        },
+      );
+      expect(thirdStarted, isFalse);
+    } finally {
+      if (!releaseCrossing.isCompleted) releaseCrossing.complete();
+      if (!releaseClear.isCompleted) releaseClear.complete();
+      await Future.wait([
+        first,
+        if (second != null) second,
+        if (third != null) third,
+      ]);
+    }
+    expect(thirdStarted, isTrue);
+    expect(notifier.posts, [_key, _key]);
+    expect(store.values[_key], isTrue);
+  });
+
   test(
     'accepted identity is checked after the final preference await',
     () async {

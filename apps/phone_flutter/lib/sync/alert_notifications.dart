@@ -183,7 +183,7 @@ final class AlertNotificationDelivery {
   final AlertNotificationPreferenceStore preferences;
   final AlertConditionStore conditions;
   final AlertNotifier notifier;
-  static Future<void> _pending = Future<void>.value();
+  static Future<void>? _pending;
 
   /// [isDeliveryEnabled] gates posting only; accepted observations still update
   /// consumed markers while delivery is off.
@@ -198,8 +198,8 @@ final class AlertNotificationDelivery {
     final previous = _pending;
     final done = Completer<void>();
     _pending = done.future;
-    await previous;
     try {
+      if (previous != null) await previous;
       for (final condition in snapshot.alertConditions) {
         if (condition.state == AlertConditionState.unknown) continue;
         try {
@@ -228,6 +228,7 @@ final class AlertNotificationDelivery {
         }
       }
     } finally {
+      if (identical(_pending, done.future)) _pending = null;
       done.complete();
     }
   }

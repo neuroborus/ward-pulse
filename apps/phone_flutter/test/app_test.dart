@@ -380,7 +380,7 @@ void main() {
       findsNothing,
     );
     await tester.scrollUntilVisible(
-      find.text('Diagnostics'),
+      find.widgetWithText(ListTile, 'Watch summary'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
@@ -3293,6 +3293,7 @@ void main() {
       final markers = _MemoryAlertConditions();
       final notifier = _FakeAlertNotifier();
       final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
       try {
         await tester.pumpWidget(
           WardPulseApp(
@@ -3301,6 +3302,7 @@ void main() {
             alertNotificationStore: preference,
             alertConditionStore: markers,
             alertNotifier: notifier,
+            watchSyncService: _FakeWatchSyncService(),
             syncScheduler: scheduler,
           ),
         );
@@ -3353,9 +3355,8 @@ void main() {
           preference.releaseRead.complete();
         try {
           await tester.pumpWidget(const SizedBox());
-          await tester.pumpAndSettle();
         } finally {
-          await scheduler.dispose();
+          await tester.pumpAndSettle();
         }
       }
     },
@@ -3371,6 +3372,7 @@ void main() {
       final notifier = _BlockedRecoveryNotifier();
       final wake = _RecordingRecoveryWake();
       final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
       var spent = true;
       try {
         await tester.pumpWidget(
@@ -3380,6 +3382,7 @@ void main() {
             recoveryWatchlistStore: watchlist,
             recoveryNotifier: notifier,
             recoveryWake: wake,
+            watchSyncService: _FakeWatchSyncService(),
             readExhaustedWindows: (_) => spent ? const [window] : const [],
             readPlanRecoveries:
                 (_, remembered) => [
@@ -3426,9 +3429,8 @@ void main() {
           repository.validation.complete(true);
         try {
           await tester.pumpWidget(const SizedBox());
-          await tester.pumpAndSettle();
         } finally {
-          await scheduler.dispose();
+          await tester.pumpAndSettle();
         }
       }
     },
