@@ -19,8 +19,8 @@ use ward_pulse_providers::cursor::{
     CursorPlanReportError, CursorPlatformReportError,
 };
 use ward_pulse_providers::mock::{
-    debug_multi_provider_dashboard_json, mock_provider_snapshot_from_usage_fixture,
-    DebugDemoDashboardError, MockUsageFixtureError,
+    debug_multi_provider_dashboard_json, debug_multi_provider_dashboard_json_at,
+    mock_provider_snapshot_from_usage_fixture, DebugDemoDashboardError, MockUsageFixtureError,
 };
 use ward_pulse_providers::openai::{openai_provider_snapshot_from_report_json, OpenAiReportError};
 
@@ -282,6 +282,28 @@ pub extern "C" fn ward_pulse_debug_dashboard_snapshot_result_json(seed: u64) -> 
     result_json_into_raw(move || debug_dashboard_snapshot_json(seed))
 }
 
+/// Builds a seeded debug dashboard at an explicit `YYYY-MM-DDTHH:MM:SSZ` UTC anchor.
+/// Invalid dates return an error envelope, never an undated fallback. Free every
+/// non-null result with [`ward_pulse_string_free`]; the caller retains the input.
+/// The original seed-only entry point and its output are unchanged.
+///
+/// # Safety
+///
+/// Non-null `capture_anchor` must point to a valid null-terminated byte string.
+/// Null and non-UTF-8 inputs return null.
+#[no_mangle]
+pub unsafe extern "C" fn ward_pulse_debug_dashboard_snapshot_at_result_json(
+    seed: u64,
+    capture_anchor: *const c_char,
+) -> *mut c_char {
+    transform_report_json(capture_anchor, |anchor| {
+        snapshot_result_json(
+            debug_multi_provider_dashboard_json_at(seed, Some(anchor))
+                .map_err(DashboardSnapshotJsonError::DebugDemo),
+        )
+    })
+}
+
 /// Wraps a snapshot build in the shared result envelope and hands the string
 /// to the caller, who releases it with [`ward_pulse_string_free`].
 fn result_json_into_raw(
@@ -413,7 +435,7 @@ pub unsafe extern "C" fn ward_pulse_plan_recoveries_result_json(
 
 unsafe fn transform_report_json(
     report_json: *const c_char,
-    transform: fn(&str) -> Option<String>,
+    transform: impl FnOnce(&str) -> Option<String> + std::panic::UnwindSafe,
 ) -> *mut c_char {
     if report_json.is_null() {
         return ptr::null_mut();
@@ -604,6 +626,42 @@ mod tests {
         assert!(providers.contains(&"claude"));
         assert!(providers.contains(&"cursor"));
         assert!(!providers.contains(&"mock"));
+    }
+
+    #[test]
+    fn dated_debug_api_owns_results_but_borrows_its_anchor() {
+        for (anchor, status) in [
+            ("2026-11-02T12:00:00Z", "success"),
+            ("2026-02-30T12:00:00Z", "error"),
+            ("", "error"),
+        ] {
+            let request = CString::new(anchor).unwrap();
+            let result =
+                unsafe { ward_pulse_debug_dashboard_snapshot_at_result_json(7, request.as_ptr()) };
+            assert!(!result.is_null());
+            let envelope: serde_json::Value =
+                serde_json::from_str(unsafe { CStr::from_ptr(result) }.to_str().unwrap()).unwrap();
+            unsafe { ward_pulse_string_free(result) };
+            assert_eq!(envelope["status"], status);
+            assert_eq!(request.to_str().unwrap(), anchor);
+            if status == "success" {
+                let snapshot: serde_json::Value =
+                    serde_json::from_str(envelope["dashboardJson"].as_str().unwrap()).unwrap();
+                assert_eq!(snapshot["generatedAt"], anchor);
+            } else {
+                assert!(envelope["message"]
+                    .as_str()
+                    .unwrap()
+                    .contains("capture anchor"));
+                assert!(envelope.get("dashboardJson").is_none());
+            }
+        }
+        let invalid_utf8 = CString::new(vec![0xff]).unwrap();
+        for input in [ptr::null(), invalid_utf8.as_ptr()] {
+            assert!(
+                unsafe { ward_pulse_debug_dashboard_snapshot_at_result_json(7, input) }.is_null()
+            );
+        }
     }
 
     #[test]

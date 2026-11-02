@@ -298,6 +298,74 @@ void main() {
     }
   });
 
+  test(
+    'dated demo forwards a fixed anchor through cached seed advancement',
+    () async {
+      final fixture =
+          File(
+            '../../fixtures/snapshots/dashboard_today.json',
+          ).readAsStringSync();
+      final requests = <(int, String)>[];
+      DemoDashboardRepository create() => DemoDashboardRepository(
+        debugSeed: '280',
+        debugAnchor: '2026-11-02T12:00:00Z',
+        loadDebugDashboardJson:
+            (_) => throw StateError('unexpected seed-only load'),
+        loadDatedDebugDashboardJson: (seed, anchor) {
+          requests.add((seed, anchor));
+          return fixture;
+        },
+      );
+      final repository = create();
+      repository.invalidate();
+      final first = await repository.load();
+      expect(await repository.load(), same(first));
+      repository.invalidate();
+      repository.invalidate();
+      expect(await repository.load(), isNot(same(first)));
+      expect((await create().load()).toJson(), first.toJson());
+      expect(requests, [
+        (280, '2026-11-02T12:00:00Z'),
+        (281, '2026-11-02T12:00:00Z'),
+        (280, '2026-11-02T12:00:00Z'),
+      ]);
+    },
+  );
+
+  test(
+    'invalid explicit demo anchors fail without caching or fallback',
+    () async {
+      for (final anchor in ['', 'invalid']) {
+        final seeds = <int>[];
+        var fallbacks = 0;
+        final repository = DemoDashboardRepository(
+          debugSeed: '280',
+          debugAnchor: anchor,
+          loadDebugDashboardJson: (_) {
+            fallbacks += 1;
+            throw StateError('unexpected fallback');
+          },
+          loadDatedDebugDashboardJson: (seed, forwarded) {
+            expect(forwarded, anchor);
+            seeds.add(seed);
+            throw const FormatException('invalid explicit anchor');
+          },
+        );
+        await expectLater(
+          repository.load(),
+          throwsA(isA<DashboardLoadException>()),
+        );
+        repository.invalidate();
+        await expectLater(
+          repository.load(),
+          throwsA(isA<DashboardLoadException>()),
+        );
+        expect(seeds, [280, 280]);
+        expect(fallbacks, 0);
+      }
+    },
+  );
+
   test('absent or invalid demo seeds retain the fallback source', () async {
     final fixture =
         File(
@@ -345,6 +413,8 @@ void main() {
     final repository = DemoDashboardRepository(
       debugMode: false,
       debugSeed: '42',
+      debugAnchor: 'invalid',
+      loadDatedDebugDashboardJson: (_, _) => throw StateError('release anchor'),
       seedForLoad: () => fallbackSeed += 7,
       loadDebugDashboardJson: (seed) {
         seeds.add(seed);

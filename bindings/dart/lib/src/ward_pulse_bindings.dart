@@ -7,6 +7,8 @@ typedef _NativeSnapshotResultJson = Pointer<Utf8> Function();
 typedef _DartSnapshotResultJson = Pointer<Utf8> Function();
 typedef _NativeSeededResultJson = Pointer<Utf8> Function(Uint64);
 typedef _DartSeededResultJson = Pointer<Utf8> Function(int);
+typedef _NativeDatedResultJson = Pointer<Utf8> Function(Uint64, Pointer<Utf8>);
+typedef _DartDatedResultJson = Pointer<Utf8> Function(int, Pointer<Utf8>);
 typedef _NativeJsonTransform = Pointer<Utf8> Function(Pointer<Utf8>);
 typedef _DartJsonTransform = Pointer<Utf8> Function(Pointer<Utf8>);
 typedef _NativeStringFree = Void Function(Pointer<Utf8>);
@@ -34,6 +36,10 @@ final class _WardPulseBindings {
       _debugDashboardSnapshotResultJson = library
           .lookupFunction<_NativeSeededResultJson, _DartSeededResultJson>(
             'ward_pulse_debug_dashboard_snapshot_result_json',
+          ),
+      _datedDebugDashboardSnapshotResultJson = library
+          .lookupFunction<_NativeDatedResultJson, _DartDatedResultJson>(
+            'ward_pulse_debug_dashboard_snapshot_at_result_json',
           ),
       _openAiDashboardSnapshotResultJson = library
           .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
@@ -85,6 +91,7 @@ final class _WardPulseBindings {
 
   final _DartSnapshotResultJson _dashboardSnapshotResultJson;
   final _DartSeededResultJson _debugDashboardSnapshotResultJson;
+  final _DartDatedResultJson _datedDebugDashboardSnapshotResultJson;
   final _DartJsonTransform _openAiDashboardSnapshotResultJson;
   final _DartJsonTransform _codexDashboardSnapshotResultJson;
   final _DartJsonTransform _anthropicDashboardSnapshotResultJson;
@@ -101,8 +108,23 @@ final class _WardPulseBindings {
     return _decodeResultJson(_dashboardSnapshotResultJson());
   }
 
-  String loadDebugDashboardSnapshotJson(int seed) {
-    return _decodeResultJson(_debugDashboardSnapshotResultJson(seed));
+  String loadDebugDashboardSnapshotJson(int seed, {String? captureAnchor}) {
+    if (captureAnchor == null) {
+      return _decodeResultJson(_debugDashboardSnapshotResultJson(seed));
+    }
+    if (captureAnchor.contains('\u0000')) {
+      throw const WardPulseBindingsException(
+        'Capture anchor contains a null character.',
+      );
+    }
+    final request = captureAnchor.toNativeUtf8();
+    try {
+      return _decodeResultJson(
+        _datedDebugDashboardSnapshotResultJson(seed, request),
+      );
+    } finally {
+      malloc.free(request);
+    }
   }
 
   String normalizeOpenAiReportJson(String reportJson) {
@@ -226,8 +248,12 @@ String loadDashboardSnapshotJson() {
   return _bindings.loadDashboardSnapshotJson();
 }
 
-String loadDebugDashboardSnapshotJson(int seed) {
-  return _bindings.loadDebugDashboardSnapshotJson(seed);
+/// Optional explicit whole-second UTC anchor, validated by Rust without fallback.
+String loadDebugDashboardSnapshotJson(int seed, {String? captureAnchor}) {
+  return _bindings.loadDebugDashboardSnapshotJson(
+    seed,
+    captureAnchor: captureAnchor,
+  );
 }
 
 String normalizeOpenAiReportJson(String reportJson) {

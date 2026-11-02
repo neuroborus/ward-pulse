@@ -54,6 +54,12 @@ Future<void> main() async {
                   debugSeed: const String.fromEnvironment(
                     'WARD_PULSE_MOCK_SEED',
                   ),
+                  debugAnchor:
+                      const bool.hasEnvironment('WARD_PULSE_MOCK_ANCHOR')
+                          ? const String.fromEnvironment(
+                            'WARD_PULSE_MOCK_ANCHOR',
+                          )
+                          : null,
                 ),
               )
               : live.repository,

@@ -7,6 +7,17 @@ The package loads `libward_pulse_ffi.so`, converts the returned UTF-8 JSON to a 
 string, and releases the Rust allocation. Domain models and calculations stay in Rust;
 Flutter owns JSON decoding and UI-safe error handling.
 
+`loadDebugDashboardSnapshotJson(seed, captureAnchor: '2026-11-02T12:00:00Z')`
+optionally dates debug Mock data. Without the named argument, the existing seed-only
+C symbol and output are retained. The dated call uses
+`ward_pulse_debug_dashboard_snapshot_at_result_json`, borrowing a UTF-8 anchor and freeing
+both the Dart request allocation and the Rust result through their existing owners.
+Rust requires whole-second `YYYY-MM-DDTHH:MM:SSZ` UTC with representable rebased dates;
+invalid explicit anchors raise `WardPulseBindingsException` without fallback. Embedded
+NUL input is rejected before the C-string boundary. Phone startup exposes this only in debug.
+Rebuild both Android ABIs and qualify the actual APK/FFI symbols on HOST before acceptance;
+Flutter tests alone do not establish native symbol availability.
+
 ## Threshold condition observations
 
 The existing `ward_pulse_apply_alert_settings_result_json` export returns an optional

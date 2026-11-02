@@ -52,6 +52,39 @@ it again. Recreating the repository, including an app-process restart, starts fr
 configured seed again. The maximum seed wraps to zero. A reproducible seed is not a
 healthy-data preset: inspect the actual rendered statuses before choosing public captures.
 
+For explicitly dated debug data, add `--dart-define=WARD_PULSE_MOCK_ANCHOR=2026-11-02T12:00:00Z`.
+The anchor accepts exactly `YYYY-MM-DDTHH:MM:SSZ` (Gregorian UTC, whole seconds).
+An explicitly empty, malformed or out-of-range value fails the Mock load; it never
+falls back to historical or current time. Anchors whose rebased history or next billing
+boundary cannot be represented within years 0001–9999 also fail. Omit the define to
+retain the exact seed-only scenario. Both defines are consumed only by debug startup.
+
+Anchored composition uses the existing synthetic Max Fable fixture and both Cursor pools.
+Rust rebases calendar/reporting/history/billing dates before normalization and preserves
+rolling reset offsets, missing resets and unknown consumption. It reads no clock.
+The actually generated seed **280**, anchor **2026-11-02T12:00:00Z**, provides:
+
+| Widget metric | Used % |
+| --- | ---: |
+| Codex Weekly | 9.6 |
+| Claude 5-hour | 48.4 |
+| Claude Weekly | 30.6 |
+| Claude Fable weekly | 36.9 |
+| Cursor Models | 45.95531337916742 |
+| Cursor Other Models | 2.3 |
+
+These six plan metrics are healthy; Codex has **1200** finite purchased credits.
+Cursor reporting's unknown day/week budgets remain unknown. For the watch, select Codex
+plan, Claude plan + Fable, and both Cursor pools: three bands with two completed pairs.
+Use one cached accepted snapshot and normal guarded sync for related views; refresh or
+Mock-toggle invalidation advances the seed, while process restart restores the configured seed.
+This dated example is Mock data, not evidence of current device or public readiness.
+
+Before enabling Mock for capture, qualify custody/restoration of live credentials,
+preferences, notification bookkeeping and wake, or HOLD. Mock clears the recovery watchlist
+and cancels its wake; toggling back cannot restore that history. Native/public capture,
+real default weather availability and Pending headless-publication proof remain separate gates.
+
 ## Persistent Connection Recovery
 
 `PhoneLiveBindings` wires all six live connections to `ConnectionSnapshotCache` and the

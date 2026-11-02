@@ -67,6 +67,11 @@ final class RustDashboardRepository extends DashboardRepository {
 }
 
 typedef DebugDashboardJsonLoader = String Function(int seed);
+typedef DatedDebugDashboardJsonLoader =
+    String Function(int seed, String anchor);
+
+String _loadDatedDebugDashboardJson(int seed, String anchor) =>
+    loadDebugDashboardSnapshotJson(seed, captureAnchor: anchor);
 
 /// Debug Mock data: full multi-provider fixture dashboard.
 ///
@@ -76,10 +81,12 @@ typedef DebugDashboardJsonLoader = String Function(int seed);
 final class DemoDashboardRepository extends DashboardRepository {
   DemoDashboardRepository({
     this.loadDebugDashboardJson = loadDebugDashboardSnapshotJson,
+    this.loadDatedDebugDashboardJson = _loadDatedDebugDashboardJson,
     this.seedForLoad,
     String? debugSeed,
+    String? debugAnchor,
     bool debugMode = kDebugMode,
-  }) {
+  }) : _captureAnchor = debugMode ? debugAnchor : null {
     if (debugMode &&
         debugSeed != null &&
         !debugSeed.contains(RegExp(r'[^0-9]'))) {
@@ -88,7 +95,9 @@ final class DemoDashboardRepository extends DashboardRepository {
   }
 
   final DebugDashboardJsonLoader loadDebugDashboardJson;
+  final DatedDebugDashboardJsonLoader loadDatedDebugDashboardJson;
   final int Function()? seedForLoad;
+  final String? _captureAnchor;
   int? _nextSeed;
   DashboardSnapshot? _cached;
 
@@ -103,8 +112,11 @@ final class DemoDashboardRepository extends DashboardRepository {
           _nextSeed ??
           seedForLoad?.call() ??
           DateTime.now().microsecondsSinceEpoch;
+      final anchor = _captureAnchor;
       final snapshot = DashboardSnapshot.fromJsonString(
-        loadDebugDashboardJson(seed),
+        anchor == null
+            ? loadDebugDashboardJson(seed)
+            : loadDatedDebugDashboardJson(seed, anchor),
       );
       _cached = snapshot;
       return snapshot;

@@ -5,11 +5,55 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
+import 'package:ward_pulse_phone/sync/credit_request_runway.dart';
+import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
 
 void main() {
   final snapshot = DashboardSnapshot.fromJsonString(
     File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
   );
+
+  test('dated metric selection fits six widget rows and two watch pairs', () {
+    // Generated seed-280 IDs; Rust owns the detailed percentage/date assertions.
+    final source = _threePairSnapshot(fableUsed: 36.9).toJson();
+    final codex = (source['accounts'] as List).first as Map<String, dynamic>;
+    (codex['allowances'] as List).add(
+      _purchasedAllowance(remaining: 1200)..['id'] = 'codex-purchased-credits',
+    );
+    final dashboard = DashboardSnapshot.fromJson(source);
+    const widgetIds = [
+      'allowance.codex.codex-primary',
+      'allowance.claude.claude-five-hour',
+      'allowance.claude.claude-seven-day',
+      claudeFableRingId,
+      cursorOwnPoolId,
+      cursorOtherPoolId,
+    ];
+    expect(
+      resolvePhoneWidgetMetrics(
+        dashboard,
+        const PhoneWidgetPreferences(selectedIds: widgetIds),
+      ).map((ring) => ring.id),
+      widgetIds,
+    );
+    expect(purchasedCreditsRemainingForProvider(dashboard, 'codex'), 1200);
+    const selected = [
+      codexPlanRingId,
+      claudePlanRingId,
+      claudeFableRingId,
+      cursorOwnPoolId,
+      cursorOtherPoolId,
+    ];
+    expect(watchRingCapacityReason(selected), isNull);
+    final bands = pairWatchRings(
+      resolveWatchRings(
+        dashboard,
+        const WatchRingPreferences(selectedIds: selected),
+      ),
+    );
+    expect(bands, hasLength(3));
+    expect(bands.where((band) => band.$2 != null), hasLength(2));
+  });
 
   test('mock accounts offer no rings at all', () {
     expect(watchRingCatalog(snapshot), isEmpty);

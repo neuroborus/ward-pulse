@@ -7,7 +7,7 @@
 use std::error::Error as StdError;
 use std::fmt;
 
-use serde_json::json;
+use serde_json::{json, Value};
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::build_dashboard_snapshot;
 use ward_pulse_core::model::{
@@ -29,6 +29,8 @@ use crate::openai::openai_provider_snapshot_from_report_json;
 const CODEX_FIXTURE: &str = include_str!("../../../../fixtures/providers/codex/report.json");
 const CLAUDE_OAUTH_FIXTURE: &str =
     include_str!("../../../../fixtures/providers/claude/oauth_usage.json");
+const CLAUDE_FABLE_FIXTURE: &str =
+    include_str!("../../../../fixtures/providers/claude/oauth_usage_max_fable_synthetic.json");
 const CLAUDE_USAGE_FIXTURE: &str =
     include_str!("../../../../fixtures/providers/claude/usage_report.json");
 const CLAUDE_COST_FIXTURE: &str =
@@ -45,12 +47,16 @@ const OPENAI_COST_FIXTURE: &str = include_str!("../../../../fixtures/providers/o
 #[derive(Debug)]
 pub enum DebugDemoDashboardError {
     Build(String),
+    InvalidAnchor,
     Serialize(serde_json::Error),
 }
 
 impl fmt::Display for DebugDemoDashboardError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidAnchor => formatter.write_str(
+                "capture anchor must be YYYY-MM-DDTHH:MM:SSZ with representable rebased dates",
+            ),
             Self::Build(message) => {
                 write!(formatter, "failed to build debug demo dashboard: {message}")
             }
@@ -68,7 +74,7 @@ impl StdError for DebugDemoDashboardError {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
             Self::Serialize(error) => Some(error),
-            Self::Build(_) => None,
+            Self::Build(_) | Self::InvalidAnchor => None,
         }
     }
 }
@@ -78,27 +84,43 @@ impl StdError for DebugDemoDashboardError {
 /// Same seed → same snapshot. A new seed (for example each phone refresh) yields
 /// different utilization / status combinations while keeping account shapes stable.
 pub fn debug_multi_provider_dashboard_json(seed: u64) -> Result<String, DebugDemoDashboardError> {
-    let snapshot = debug_multi_provider_dashboard(seed)?;
+    debug_multi_provider_dashboard_json_at(seed, None)
+}
+
+/// Optional whole-second UTC anchor; omission preserves the historical seeded output.
+pub fn debug_multi_provider_dashboard_json_at(
+    seed: u64,
+    capture_anchor: Option<&str>,
+) -> Result<String, DebugDemoDashboardError> {
+    let snapshot = debug_multi_provider_dashboard_at(seed, capture_anchor)?;
     serde_json::to_string(&snapshot).map_err(DebugDemoDashboardError::Serialize)
 }
 
 pub fn debug_multi_provider_dashboard(
     seed: u64,
 ) -> Result<DashboardSnapshot, DebugDemoDashboardError> {
+    debug_multi_provider_dashboard_at(seed, None)
+}
+
+/// Builds dated Mock data through the normal adapters, without consulting a clock.
+pub fn debug_multi_provider_dashboard_at(
+    seed: u64,
+    capture_anchor: Option<&str>,
+) -> Result<DashboardSnapshot, DebugDemoDashboardError> {
+    let anchor = capture_anchor.map(DemoTime::parse).transpose()?;
     let mut rng = SeedRng(seed);
-    let cursor_plan = cursor_plan_account(&mut rng)?;
-    let accounts = vec![
-        scramble_account(&mut rng, openai_account()?, ScrambleMode::Budgets),
-        scramble_account(&mut rng, codex_account()?, ScrambleMode::Allowances),
-        scramble_account(&mut rng, claude_plan_account()?, ScrambleMode::Allowances),
-        scramble_account(
-            &mut rng,
-            anthropic_platform_account()?,
-            ScrambleMode::Budgets,
-        ),
-        scramble_account(&mut rng, cursor_plan, ScrambleMode::Allowances),
-        scramble_account(&mut rng, cursor_platform_account()?, ScrambleMode::Budgets),
-    ];
+    let cursor_plan = cursor_plan_account(&mut rng, anchor)?;
+    let accounts: Vec<_> = [
+        (openai_account(anchor)?, ScrambleMode::Budgets),
+        (codex_account(anchor)?, ScrambleMode::Allowances),
+        (claude_plan_account(anchor)?, ScrambleMode::Allowances),
+        (anthropic_platform_account(anchor)?, ScrambleMode::Budgets),
+        (cursor_plan, ScrambleMode::Allowances),
+        (cursor_platform_account(anchor)?, ScrambleMode::Budgets),
+    ]
+    .into_iter()
+    .map(|(account, mode)| scramble_account(&mut rng, account, mode, anchor.is_some()))
+    .collect();
 
     // Newest fixture stamp keeps relative ordering; seed is what varies content.
     let generated_at = accounts
@@ -121,11 +143,19 @@ fn scramble_account(
     rng: &mut SeedRng,
     mut account: ProviderSnapshot,
     mode: ScrambleMode,
+    preserve_unknowns: bool,
 ) -> ProviderSnapshot {
     match mode {
         ScrambleMode::Allowances => {
             for allowance in &mut account.allowances {
-                scramble_allowance(rng, allowance);
+                if !preserve_unknowns
+                    || allowance.used_percent.is_some()
+                    || (allowance.source == AllowanceSource::Purchased
+                        && allowance.limit.is_none()
+                        && allowance.remaining.is_some())
+                {
+                    scramble_allowance(rng, allowance);
+                }
             }
             account.status = worst_status(&account.allowances);
         }
@@ -285,7 +315,7 @@ fn interesting_percent(rng: &mut SeedRng) -> f64 {
     }
 }
 
-fn openai_account() -> Result<ProviderSnapshot, DebugDemoDashboardError> {
+fn openai_account(anchor: Option<DemoTime>) -> Result<ProviderSnapshot, DebugDemoDashboardError> {
     let report = json!({
         "accountId": "openai-demo",
         "generatedAt": "2026-07-19T12:00:00Z",
@@ -296,24 +326,33 @@ fn openai_account() -> Result<ProviderSnapshot, DebugDemoDashboardError> {
         "costPages": [OPENAI_COST_FIXTURE]
     })
     .to_string();
-    openai_provider_snapshot_from_report_json(&report)
+    openai_provider_snapshot_from_report_json(&dated_report(&report, anchor)?)
         .map(|report| report.provider_snapshot)
         .map_err(|error| DebugDemoDashboardError::Build(error.to_string()))
 }
 
-fn codex_account() -> Result<ProviderSnapshot, DebugDemoDashboardError> {
-    codex_provider_snapshot_from_report_json(CODEX_FIXTURE)
+fn codex_account(anchor: Option<DemoTime>) -> Result<ProviderSnapshot, DebugDemoDashboardError> {
+    codex_provider_snapshot_from_report_json(&dated_report(CODEX_FIXTURE, anchor)?)
         .map(|report| report.provider_snapshot)
         .map_err(|error| DebugDemoDashboardError::Build(error.to_string()))
 }
 
-fn claude_plan_account() -> Result<ProviderSnapshot, DebugDemoDashboardError> {
-    claude_provider_snapshot_from_report_json(CLAUDE_OAUTH_FIXTURE)
+fn claude_plan_account(
+    anchor: Option<DemoTime>,
+) -> Result<ProviderSnapshot, DebugDemoDashboardError> {
+    let fixture = if anchor.is_some() {
+        CLAUDE_FABLE_FIXTURE
+    } else {
+        CLAUDE_OAUTH_FIXTURE
+    };
+    claude_provider_snapshot_from_report_json(&dated_report(fixture, anchor)?)
         .map(|report| report.provider_snapshot)
         .map_err(|error| DebugDemoDashboardError::Build(error.to_string()))
 }
 
-fn anthropic_platform_account() -> Result<ProviderSnapshot, DebugDemoDashboardError> {
+fn anthropic_platform_account(
+    anchor: Option<DemoTime>,
+) -> Result<ProviderSnapshot, DebugDemoDashboardError> {
     let report = json!({
         "accountId": "anthropic-demo",
         "generatedAt": "2026-07-19T12:00:00Z",
@@ -324,17 +363,20 @@ fn anthropic_platform_account() -> Result<ProviderSnapshot, DebugDemoDashboardEr
         "costPages": [CLAUDE_COST_FIXTURE]
     })
     .to_string();
-    anthropic_provider_snapshot_from_report_json(&report)
+    anthropic_provider_snapshot_from_report_json(&dated_report(&report, anchor)?)
         .map(|report| report.provider_snapshot)
         .map_err(|error| DebugDemoDashboardError::Build(error.to_string()))
 }
 
-fn cursor_plan_account(rng: &mut SeedRng) -> Result<ProviderSnapshot, DebugDemoDashboardError> {
+fn cursor_plan_account(
+    rng: &mut SeedRng,
+    anchor: Option<DemoTime>,
+) -> Result<ProviderSnapshot, DebugDemoDashboardError> {
     let mut value: serde_json::Value = serde_json::from_str(CURSOR_PLAN_FIXTURE)
         .map_err(|error| DebugDemoDashboardError::Build(error.to_string()))?;
     // Occasionally drop pool meters so the older single "Plan usage" bar appears;
     // percent values are always applied later by scramble_allowance.
-    if rng.next_u32() % 5 == 0 {
+    if rng.next_u32() % 5 == 0 && anchor.is_none() {
         if let Some(plan) = value
             .pointer_mut("/individualUsage/plan")
             .and_then(|node| node.as_object_mut())
@@ -344,12 +386,14 @@ fn cursor_plan_account(rng: &mut SeedRng) -> Result<ProviderSnapshot, DebugDemoD
             plan.insert("totalPercentUsed".into(), json!(50.0));
         }
     }
-    cursor_plan_snapshot_from_report_json(&value.to_string())
+    cursor_plan_snapshot_from_report_json(&dated_report(&value.to_string(), anchor)?)
         .map(|report| report.provider_snapshot)
         .map_err(|error| DebugDemoDashboardError::Build(error.to_string()))
 }
 
-fn cursor_platform_account() -> Result<ProviderSnapshot, DebugDemoDashboardError> {
+fn cursor_platform_account(
+    anchor: Option<DemoTime>,
+) -> Result<ProviderSnapshot, DebugDemoDashboardError> {
     let report = json!({
         "accountId": "cursor-team-demo",
         "generatedAt": "2026-07-19T12:00:00Z",
@@ -357,9 +401,223 @@ fn cursor_platform_account() -> Result<ProviderSnapshot, DebugDemoDashboardError
         "spendPages": [CURSOR_SPEND_FIXTURE]
     })
     .to_string();
-    cursor_platform_snapshot_from_report_json(&report)
+    cursor_platform_snapshot_from_report_json(&dated_report(&report, anchor)?)
         .map(|report| report.provider_snapshot)
         .map_err(|error| DebugDemoDashboardError::Build(error.to_string()))
+}
+
+const DAY_SECONDS: i64 = 86_400;
+
+/// Gregorian UTC arithmetic confined to the debug producer (no clock or dependency).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct DemoTime(i64);
+
+impl DemoTime {
+    fn new(seconds: i64) -> Result<Self, DebugDemoDashboardError> {
+        if !(-62_135_596_800..=253_402_300_799).contains(&seconds) {
+            return Err(DebugDemoDashboardError::InvalidAnchor);
+        }
+        Ok(Self(seconds))
+    }
+
+    fn parse(value: &str) -> Result<Self, DebugDemoDashboardError> {
+        if value.len() != 20 || !value.is_ascii() {
+            return Err(DebugDemoDashboardError::InvalidAnchor);
+        }
+        let number = |range: std::ops::Range<usize>| {
+            value[range]
+                .parse::<i64>()
+                .map_err(|_| DebugDemoDashboardError::InvalidAnchor)
+        };
+        let (year, month, day) = (number(0..4)?, number(5..7)?, number(8..10)?);
+        let (hour, minute, second) = (number(11..13)?, number(14..16)?, number(17..19)?);
+        if !(1..=12).contains(&month)
+            || !(1..=31).contains(&day)
+            || !(0..24).contains(&hour)
+            || !(0..60).contains(&minute)
+            || !(0..60).contains(&second)
+        {
+            return Err(DebugDemoDashboardError::InvalidAnchor);
+        }
+        let parsed = Self::new(
+            Self::days(year, month, day) * DAY_SECONDS + hour * 3_600 + minute * 60 + second,
+        )?;
+        if parsed.stamp() != value {
+            return Err(DebugDemoDashboardError::InvalidAnchor);
+        }
+        Ok(parsed)
+    }
+
+    fn days(year: i64, month: i64, day: i64) -> i64 {
+        let year = year - i64::from(month <= 2);
+        let era = year.div_euclid(400);
+        let year_of_era = year - era * 400;
+        let month = month + if month > 2 { -3 } else { 9 };
+        let day_of_year = (153 * month + 2) / 5 + day - 1;
+        era * 146_097 + year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year
+            - 719_468
+    }
+
+    fn civil(self) -> (i64, i64, i64) {
+        let days = self.0.div_euclid(DAY_SECONDS) + 719_468;
+        let era = days.div_euclid(146_097);
+        let day_of_era = days - era * 146_097;
+        let year_of_era =
+            (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+        let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+        let month_prime = (5 * day_of_year + 2) / 153;
+        let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
+        let month = month_prime + if month_prime < 10 { 3 } else { -9 };
+        (year_of_era + era * 400 + i64::from(month <= 2), month, day)
+    }
+
+    fn stamp(self) -> String {
+        let (year, month, day) = self.civil();
+        let clock = self.0.rem_euclid(DAY_SECONDS);
+        format!(
+            "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}Z",
+            clock / 3_600,
+            clock % 3_600 / 60,
+            clock % 60
+        )
+    }
+
+    fn day_start(self) -> Self {
+        Self(self.0.div_euclid(DAY_SECONDS) * DAY_SECONDS)
+    }
+
+    fn week_start(self) -> Result<Self, DebugDemoDashboardError> {
+        Self::new(
+            self.day_start().0 - (self.0.div_euclid(DAY_SECONDS) + 3).rem_euclid(7) * DAY_SECONDS,
+        )
+    }
+
+    fn month_start(self, next: bool) -> Result<Self, DebugDemoDashboardError> {
+        let (mut year, mut month, _) = self.civil();
+        if next {
+            month += 1;
+            if month == 13 {
+                year += 1;
+                month = 1;
+            }
+        }
+        Self::new(Self::days(year, month, 1) * DAY_SECONDS)
+    }
+}
+
+fn dated_report(raw: &str, anchor: Option<DemoTime>) -> Result<String, DebugDemoDashboardError> {
+    let Some(anchor) = anchor else {
+        return Ok(raw.to_string());
+    };
+    let mut report: Value = serde_json::from_str(raw)
+        .map_err(|error| DebugDemoDashboardError::Build(error.to_string()))?;
+    let original = DemoTime::parse(
+        report["generatedAt"]
+            .as_str()
+            .ok_or(DebugDemoDashboardError::InvalidAnchor)?,
+    )?;
+    rebase_fields(&mut report, anchor, original)?;
+    Ok(report.to_string())
+}
+
+// Only temporal fields in the bundled reports are rewritten. Calendar buckets move
+// by whole days; rolling resets retain elapsed time relative to their own report.
+fn rebase_fields(
+    node: &mut Value,
+    anchor: DemoTime,
+    original: DemoTime,
+) -> Result<(), DebugDemoDashboardError> {
+    match node {
+        Value::Array(values) => {
+            for value in values {
+                rebase_fields(value, anchor, original)?;
+            }
+        }
+        Value::Object(fields) => {
+            for (key, value) in fields {
+                if value.is_null() {
+                    continue;
+                }
+                let day_delta = anchor.day_start().0 - original.day_start().0;
+                let shifted = |seconds: i64, delta: i64| {
+                    DemoTime::new(
+                        seconds
+                            .checked_add(delta)
+                            .ok_or(DebugDemoDashboardError::InvalidAnchor)?,
+                    )
+                };
+                match key.as_str() {
+                    "generatedAt" => *value = json!(anchor.stamp()),
+                    "todayStart" | "weekStart" | "monthStart" => {
+                        let start = match key.as_str() {
+                            "todayStart" => anchor.day_start(),
+                            "weekStart" => anchor.week_start()?,
+                            _ => anchor.month_start(false)?,
+                        };
+                        *value = if value.is_number() {
+                            json!(start.0)
+                        } else {
+                            json!(start.stamp())
+                        };
+                    }
+                    "billingCycleStart" | "billingCycleEnd" => {
+                        *value = json!(anchor.month_start(key == "billingCycleEnd")?.stamp())
+                    }
+                    "resetsAt" | "start_time" | "end_time" | "date" => {
+                        let scale = if key == "date" { 1_000 } else { 1 };
+                        let seconds = value
+                            .as_i64()
+                            .ok_or(DebugDemoDashboardError::InvalidAnchor)?;
+                        let delta = if key == "resetsAt" {
+                            anchor.0 - original.0
+                        } else {
+                            day_delta
+                        };
+                        *value = json!(
+                            shifted(seconds / scale, delta)?.0 * scale + seconds.rem_euclid(scale)
+                        );
+                    }
+                    "resets_at" | "starting_at" | "ending_at" | "startDate" | "day" => {
+                        let raw = value
+                            .as_str()
+                            .ok_or(DebugDemoDashboardError::InvalidAnchor)?;
+                        let date_only = matches!(key.as_str(), "startDate" | "day");
+                        let stamp = if date_only {
+                            format!("{raw}T00:00:00Z")
+                        } else if let Some(utc) = raw.strip_suffix("+00:00") {
+                            format!("{utc}Z")
+                        } else {
+                            raw.to_string()
+                        };
+                        let delta = if key == "resets_at" {
+                            anchor.0 - original.0
+                        } else {
+                            day_delta
+                        };
+                        let stamp = shifted(DemoTime::parse(&stamp)?.0, delta)?.stamp();
+                        *value = json!(if date_only { &stamp[..10] } else { &stamp });
+                    }
+                    "usagePages" | "costPages" | "dailyUsagePages" | "spendPages" => {
+                        for page in value
+                            .as_array_mut()
+                            .ok_or(DebugDemoDashboardError::InvalidAnchor)?
+                        {
+                            let mut parsed: Value = serde_json::from_str(
+                                page.as_str()
+                                    .ok_or(DebugDemoDashboardError::InvalidAnchor)?,
+                            )
+                            .map_err(|error| DebugDemoDashboardError::Build(error.to_string()))?;
+                            rebase_fields(&mut parsed, anchor, original)?;
+                            *page = json!(parsed.to_string());
+                        }
+                    }
+                    _ => rebase_fields(value, anchor, original)?,
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 /// Tiny deterministic PRNG — no extra crate dependency.
@@ -455,6 +713,17 @@ mod tests {
         let left = debug_multi_provider_dashboard_json(7).expect("left");
         let right = debug_multi_provider_dashboard_json(7).expect("right");
         assert_eq!(left, right);
+        // FNV-1a of the complete seed-7 JSON, recorded before adding the anchor.
+        assert_eq!(
+            left.bytes().fold(0xcbf29ce484222325_u64, |hash, byte| (hash
+                ^ u64::from(byte))
+            .wrapping_mul(0x100000001b3)),
+            3_512_970_002_277_323_788
+        );
+        assert_eq!(
+            left,
+            debug_multi_provider_dashboard_json_at(7, None).unwrap()
+        );
     }
 
     #[test]
@@ -462,6 +731,216 @@ mod tests {
         let left = debug_multi_provider_dashboard_json(1).expect("left");
         let right = debug_multi_provider_dashboard_json(2).expect("right");
         assert_ne!(left, right);
+    }
+
+    #[test]
+    fn dated_healthy_scenario() {
+        // Actually generated together; reporting unknowns are not forced to OK.
+        let anchor = "2026-11-02T12:00:00Z";
+        let snapshot = debug_multi_provider_dashboard_at(280, Some(anchor)).unwrap();
+        assert_eq!(
+            snapshot,
+            debug_multi_provider_dashboard_at(280, Some(anchor)).unwrap()
+        );
+        assert_ne!(
+            snapshot,
+            debug_multi_provider_dashboard_at(281, Some(anchor)).unwrap()
+        );
+        assert!(snapshot
+            .accounts
+            .iter()
+            .all(|account| matches!(account.status, ProviderStatus::Ok | ProviderStatus::Unknown)));
+        let allowance = |id: &str| {
+            snapshot
+                .accounts
+                .iter()
+                .flat_map(|account| &account.allowances)
+                .find(|value| value.id == id)
+                .unwrap()
+        };
+        for (id, used) in [
+            ("codex-primary", 9.6),
+            ("claude-five-hour", 48.4),
+            ("claude-seven-day", 30.6),
+            ("claude-seven-day-fable", 36.9),
+            ("cursor-plan-models", 45.95531337916742),
+            ("cursor-plan-other", 2.3),
+        ] {
+            let meter = allowance(id);
+            assert_eq!(meter.source, AllowanceSource::Plan);
+            assert_eq!(meter.status, ProviderStatus::Ok);
+            assert!((meter.used_percent.unwrap() - used).abs() < 1e-9);
+        }
+        let purchased = allowance("codex-purchased-credits");
+        assert!(!purchased.unlimited);
+        assert_eq!(purchased.remaining, Some(credits(1_200)));
+        assert_eq!(
+            (
+                purchased.used_percent,
+                &purchased.limit,
+                &purchased.resets_at
+            ),
+            (None, &None, &None)
+        );
+        assert!(allowance("claude-five-hour").resets_at.is_none());
+        assert_eq!(
+            allowance("claude-seven-day-fable").resets_at,
+            allowance("claude-seven-day").resets_at
+        );
+        let cursor = snapshot
+            .accounts
+            .iter()
+            .find(|account| account.connection.as_deref() == Some("cursor.platform"))
+            .unwrap();
+        assert!(cursor.today.spent.is_none() && cursor.week.spent.is_none());
+        assert_eq!(cursor.status, ProviderStatus::Unknown);
+    }
+
+    #[test]
+    fn dated_reports_keep_calendar_buckets_and_rolling_offsets() {
+        let baseline = debug_multi_provider_dashboard(280).unwrap();
+        for (anchor, day, week, month, next_month) in [
+            (
+                "2028-02-29T23:59:59Z",
+                "2028-02-29",
+                "2028-02-28",
+                "2028-02-01",
+                "2028-03-01",
+            ),
+            (
+                "2027-01-01T00:00:00Z",
+                "2027-01-01",
+                "2026-12-28",
+                "2027-01-01",
+                "2027-02-01",
+            ),
+            (
+                "2026-11-02T12:00:00Z",
+                "2026-11-02",
+                "2026-11-02",
+                "2026-11-01",
+                "2026-12-01",
+            ),
+        ] {
+            let time = DemoTime::parse(anchor).unwrap();
+            assert_eq!(
+                time.week_start().unwrap().stamp(),
+                format!("{week}T00:00:00Z")
+            );
+            assert_eq!(
+                time.month_start(false).unwrap().stamp(),
+                format!("{month}T00:00:00Z")
+            );
+            let snapshot = debug_multi_provider_dashboard_at(280, Some(anchor)).unwrap();
+            assert_eq!(snapshot.generated_at.as_str(), anchor);
+            for (account, previous) in snapshot.accounts.iter().zip(&baseline.accounts) {
+                assert_eq!(
+                    account.last_successful_sync_at.as_ref().unwrap().as_str(),
+                    anchor
+                );
+                assert_eq!(account.buckets.len(), previous.buckets.len());
+                for (bucket, old_bucket) in account.buckets.iter().zip(&previous.buckets) {
+                    let start = DemoTime::parse(bucket.start_at.as_str()).unwrap();
+                    let end = DemoTime::parse(bucket.end_at.as_str()).unwrap();
+                    let old_start = DemoTime::parse(old_bucket.start_at.as_str()).unwrap();
+                    let old_sync = DemoTime::parse(
+                        previous.last_successful_sync_at.as_ref().unwrap().as_str(),
+                    )
+                    .unwrap();
+                    assert_eq!(
+                        start.0 - old_start.0,
+                        time.day_start().0 - old_sync.day_start().0,
+                        "{:?} history",
+                        account.connection
+                    );
+                    assert_eq!(start.0.rem_euclid(DAY_SECONDS), 0);
+                    assert_eq!(end.0 - start.0, DAY_SECONDS);
+                    assert!(start.0 <= time.day_start().0);
+                }
+                for meter in &account.allowances {
+                    if meter.id == "codex-primary" {
+                        assert_eq!(meter.window_minutes, Some(10_080));
+                        let reset =
+                            DemoTime::parse(meter.resets_at.as_ref().unwrap().as_str()).unwrap();
+                        assert_eq!(reset.0 - time.0, 1_785_059_737 - 1_784_462_400);
+                    } else if meter.id == "claude-seven-day" || meter.id == "claude-seven-day-fable"
+                    {
+                        assert_eq!(meter.window_minutes, Some(10_080));
+                        let reset =
+                            DemoTime::parse(meter.resets_at.as_ref().unwrap().as_str()).unwrap();
+                        assert_eq!(reset.0 - time.0, 7 * DAY_SECONDS + 8 * 3_600);
+                    } else if meter.id.starts_with("cursor-") {
+                        assert_eq!(
+                            meter.resets_at.as_ref().unwrap().as_str(),
+                            format!("{next_month}T00:00:00Z")
+                        );
+                    }
+                }
+            }
+            // These un-scrambled adapters must calculate periods from the rebased history.
+            for account in [
+                openai_account(Some(time)).unwrap(),
+                anthropic_platform_account(Some(time)).unwrap(),
+            ] {
+                for (state, start) in [
+                    (&account.today, day),
+                    (&account.week, week),
+                    (&account.month, month),
+                ] {
+                    let start = format!("{start}T00:00:00Z");
+                    let cents: i64 = account
+                        .buckets
+                        .iter()
+                        .filter(|bucket| bucket.start_at.as_str() >= start.as_str())
+                        .filter_map(|bucket| bucket.cost.as_ref())
+                        .map(|cost| cost.minor_units)
+                        .sum();
+                    assert_eq!(state.spent.as_ref().unwrap().minor_units, cents);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn dated_input_refuses_invalid_anchors_and_retains_unknowns() {
+        for anchor in [
+            "",
+            "not a date",
+            "2026-02-29T12:00:00Z",
+            "2026-04-31T00:00:00Z",
+            "2026-11-02T24:00:00Z",
+            "2026-11-02T12:00:60Z",
+            "2026-11-02T12:00:00+00:00",
+            "2026-11-02T12:00:00.1Z",
+            "0000-01-01T00:00:00Z",
+            "0000-06-01T00:00:00Z",
+            "0001-01-01T00:00:00Z",
+            "9999-12-31T12:00:00Z",
+            "2026-11-02T12:00:00Z\0",
+        ] {
+            assert!(
+                matches!(
+                    debug_multi_provider_dashboard_at(280, Some(anchor)),
+                    Err(DebugDemoDashboardError::InvalidAnchor)
+                ),
+                "{anchor:?}"
+            );
+        }
+        let mut account =
+            claude_plan_account(Some(DemoTime::parse("2026-11-02T12:00:00Z").unwrap())).unwrap();
+        account.allowances[0].used_percent = None;
+        account.allowances[0].status = ProviderStatus::Unknown;
+        let mut purchased = account.allowances[0].clone();
+        purchased.id = "purchased".to_string();
+        purchased.source = AllowanceSource::Purchased;
+        purchased.limit = Some(credits(500));
+        purchased.remaining = Some(credits(400));
+        account.allowances.push(purchased);
+        let unknowns = account.allowances.clone();
+        let scrambled =
+            scramble_account(&mut SeedRng(280), account, ScrambleMode::Allowances, true);
+        assert_eq!(scrambled.allowances[0], unknowns[0]);
+        assert_eq!(scrambled.allowances.last(), unknowns.last());
     }
 
     #[test]
