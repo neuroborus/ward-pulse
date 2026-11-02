@@ -71,7 +71,7 @@ a separate valid case. Do not infer absolute part alpha from Doze screenshot RGB
 owning emulator/device workflow for normal-mode observations without data reset and for
 restoring temporary DND state; keep operational commands outside this reference.
 
-Before OS-state readback/restoration assertions, save the requested values, stored values/key presence and applied configuration with target, phase and read time. A write receipt is not settled-state proof; a failed guard holds dependent product cases Pending. Later readback alone cannot reconstruct unrecorded failure-point values or establish their cause. After restoring preferences/summary bytes, request the owning normal refresh/reload and
+Before OS-state readback/restoration assertions or compound identity guards, retain bounded expected/actual values and sample identity/hash with target, phase and read time; include requested/stored values, key presence and applied configuration as relevant. Map the failure trace to the exact executed guard before classifying stage or cause; a compound failure alone does not identify which subcondition failed. An ambiguous trace does not establish an earlier parser failure. A write receipt is not settled-state proof; a failed guard holds dependent product cases Pending. Later readback is a separate sample and cannot reconstruct unrecorded failure-point values or their cause. After restoring preferences/summary bytes, request the owning normal refresh/reload and
 verify the rendered result plus derived caches that can retain data independently. Do
 not end restoration at a successful file copy. Preserve existing data and incident proof;
 device-preserving operations belong to android-devices/android-emulators, not this skill.
