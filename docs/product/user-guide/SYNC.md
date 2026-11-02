@@ -78,7 +78,9 @@ attempt can be lost, and overlapping background/foreground work can repeat an at
 
 Turning either delivery switch off leaves reporting, in-app alerts, watch/widget updates and
 recovery tracking active. Notification text contains only the provider family, window or budget
-name, and generic threshold/recovery copy. Check Android's lock-screen settings for visibility.
+name, and the configured alert boundary in **% left** or recovery copy. An alert set to 20% left
+still says 20% left when a later report shows 10% left. Check Android's lock-screen settings for
+visibility.
 
 ## Plan recovery notifications
 

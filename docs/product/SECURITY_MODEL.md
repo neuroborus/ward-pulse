@@ -185,9 +185,10 @@ for stage attribution and cleanup ownership. Diagnostics establish neither repai
 ## Notification Rules
 
 A notification is read off a locked screen, by whoever is holding the phone. It may carry only
-what the reader needs to act: the provider family and the window's own name. It must not carry
-credentials, account identifiers, spend, or any raw provider field. Private identifiers serve
-only local bookkeeping and addressing; they never appear in notification text.
+what the reader needs to act: the provider family, the window's own name and the user-configured
+alert threshold percentage. It must not carry credentials, account identifiers, actual spend,
+or any raw provider field. Private identifiers serve only local bookkeeping and addressing;
+they never appear in notification text.
 
 The phone has independent **Alert notifications** and **Plan recovery** delivery controls.
 Both default on when unset and preserve a saved Off. Threshold rules remain opt-in on Providers;

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/settings/alert_notification_preferences.dart';
+import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 import 'package:ward_pulse_phone/settings/recovery_notification_preferences.dart';
 import 'package:ward_pulse_phone/settings/notification_permission_preferences.dart';
 import 'package:ward_pulse_phone/sync/alert_notifications.dart';
@@ -35,6 +36,14 @@ DashboardSnapshot _snapshot(
   ...DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 11, 2)).toJson(),
   'alertConditions': conditions.map((condition) => condition.toJson()).toList(),
 });
+
+AlertThresholdPreferences _planRules(int? at) => AlertThresholdPreferences(
+  connections: {
+    _key.connection: ConnectionAlertThresholds(
+      plan: AlertPercentThreshold(at: at),
+    ),
+  },
+);
 
 void main() {
   test(
@@ -271,6 +280,7 @@ void main() {
       await delivery().sync(_snapshot([_crossed]));
       expect(notifier.posts, [_key, _key]);
       expect(notifier.titles, everyElement('Claude · Plan window'));
+      expect(notifier.bodies, everyElement(alertNotificationBody));
       expect(notifier.titles.join(), isNot(contains(_key.accountId)));
       expect(notifier.titles.join(), isNot(contains(_crossed.alert!.message)));
       expect(
@@ -310,7 +320,102 @@ void main() {
     },
   );
 
-  test('window copy prefers the exact connection over a legacy sibling', () {
+  test('body copy maps exact windows, sources and budget periods', () {
+    const settings = AlertThresholdPreferences(
+      connections: {
+        'anthropic.plan': ConnectionAlertThresholds(
+          plan: AlertPercentThreshold(at: 80),
+          planWindows: {
+            'window-a': AlertPercentThreshold(at: 73),
+            'off': AlertPercentThreshold(),
+            'invalid': AlertPercentThreshold(at: 101),
+          },
+          purchased: AlertPercentThreshold(at: 60),
+          today: AlertPercentThreshold(at: 90),
+          week: AlertPercentThreshold(at: 50),
+          month: AlertPercentThreshold(at: 100),
+        ),
+      },
+    );
+    for (final (target, expected) in <(AlertConditionTarget, String)>[
+      (_key.target, 'Reached your alert threshold: 27% left.'),
+      (
+        const AllowanceAlertTarget(source: AllowanceSource.plan, id: 'other'),
+        'Reached your alert threshold: 20% left.',
+      ),
+      (
+        const AllowanceAlertTarget(source: AllowanceSource.plan, id: 'off'),
+        alertNotificationBody,
+      ),
+      (
+        const AllowanceAlertTarget(source: AllowanceSource.plan, id: 'invalid'),
+        alertNotificationBody,
+      ),
+      (
+        const AllowanceAlertTarget(
+          source: AllowanceSource.purchased,
+          id: 'window-a',
+        ),
+        'Reached your alert threshold: 40% left.',
+      ),
+      (
+        const BudgetAlertTarget(period: AlertBudgetPeriod.today),
+        'Reached your alert threshold: 10% left.',
+      ),
+      (
+        const BudgetAlertTarget(period: AlertBudgetPeriod.week),
+        'Reached your alert threshold: 50% left.',
+      ),
+      (
+        const BudgetAlertTarget(period: AlertBudgetPeriod.month),
+        'Reached your alert threshold: 0% left.',
+      ),
+    ]) {
+      final key = AlertConditionKey(
+        provider: _key.provider,
+        accountId: _key.accountId,
+        connection: _key.connection,
+        target: target,
+      );
+      expect(alertNotificationBodyFor(key, settings), expected);
+    }
+  });
+
+  test('body copy keeps custom values, endpoints and fallback', () {
+    for (final (at, expected) in <(int?, String)>[
+      (0, 'Reached your alert threshold: 100% left.'),
+      (73, 'Reached your alert threshold: 27% left.'),
+      (100, 'Reached your alert threshold: 0% left.'),
+      (null, alertNotificationBody),
+      (-1, alertNotificationBody),
+      (101, alertNotificationBody),
+    ]) {
+      expect(alertNotificationBodyFor(_key, _planRules(at)), expected);
+    }
+    expect(alertNotificationBodyFor(_key, null), alertNotificationBody);
+    expect(
+      alertNotificationBodyFor(_key, const AlertThresholdPreferences()),
+      alertNotificationBody,
+    );
+  });
+
+  test('delivery uses the captured settings for copy', () async {
+    var rules = _planRules(80);
+    final preferences = _Preferences();
+    preferences.beforeRead = () async {
+      rules = _planRules(90);
+    };
+    final notifier = _Notifier();
+    await AlertNotificationDelivery(
+      preferences: preferences,
+      conditions: _Conditions(),
+      notifier: notifier,
+    ).sync(_snapshot([_crossed]), alertThresholds: rules);
+    expect(rules.connections[_key.connection]!.plan.at, 90);
+    expect(notifier.bodies, ['Reached your alert threshold: 20% left.']);
+  });
+
+  test('copy prefers the resolved connection over a legacy sibling', () {
     final empty = DashboardSnapshot.empty();
     ProviderSnapshot account(String? connection, String label) =>
         ProviderSnapshot(
@@ -354,6 +459,26 @@ void main() {
     );
     expect(alertNotificationTitle(snapshot, exactKey), 'Claude · Weekly plan');
     expect(alertNotificationTitle(snapshot, _key), 'Claude · Legacy window');
+    final rules = AlertThresholdPreferences(
+      connections: {
+        ..._planRules(80).connections,
+        'other-connection': const ConnectionAlertThresholds(
+          plan: AlertPercentThreshold(at: 30),
+        ),
+      },
+    );
+    expect(
+      alertNotificationBodyFor(exactKey, rules),
+      'Reached your alert threshold: 70% left.',
+    );
+    expect(
+      alertNotificationBodyFor(_key, rules),
+      'Reached your alert threshold: 20% left.',
+    );
+    expect(
+      alertNotificationBodyFor(exactKey, _planRules(80)),
+      alertNotificationBody,
+    );
   });
 
   for (final mode in ['muted', 'denied', 'preference failure']) {
@@ -679,6 +804,7 @@ class _Notifier implements AlertNotifier {
   int asked = 0;
   final posts = <AlertConditionKey>[];
   final titles = <String>[];
+  final bodies = <String>[];
   @override
   Future<bool> canPost() async => allowed;
   @override
@@ -688,9 +814,14 @@ class _Notifier implements AlertNotifier {
   }
 
   @override
-  Future<void> notify(AlertConditionKey key, {required String title}) async {
+  Future<void> notify(
+    AlertConditionKey key, {
+    required String title,
+    required String body,
+  }) async {
     if (failPost) throw StateError('Plugin unavailable.');
     posts.add(key);
     titles.add(title);
+    bodies.add(body);
   }
 }

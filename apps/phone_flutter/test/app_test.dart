@@ -3922,6 +3922,92 @@ void main() {
     },
   );
 
+  testWidgets('a threshold edit retains the consumed notification identity', (
+    tester,
+  ) async {
+    final source = _alertTestSnapshot(usedPercent: 90);
+    final account = source.accounts.first;
+    final window = account.allowances.single;
+    final key = AlertConditionKey(
+      provider: account.provider,
+      accountId: account.accountId,
+      connection: account.connection!,
+      target: AllowanceAlertTarget(source: window.source, id: window.id),
+    );
+    final rules = _MemoryAlertThresholdStore();
+    rules.value = rules.value.withConnection(
+      ProviderConnections.codexPlan,
+      const ConnectionAlertThresholds(plan: AlertPercentThreshold(at: 80)),
+    );
+    final notifier = _FakeAlertNotifier();
+    final markers = _MemoryAlertConditions();
+    final scheduler = _ManualProviderSyncScheduler();
+    addTearDown(scheduler.dispose);
+    try {
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: ValueDashboardRepository(source),
+          alertThresholdStore: rules,
+          alertConditionStore: markers,
+          alertNotifier: notifier,
+          syncScheduler: scheduler,
+          watchSyncService: _FakeWatchSyncService(),
+          phoneWidgetSyncService: _FakePhoneWidgetSyncService(),
+          readExhaustedWindows: (_) => const [],
+          readPlanRecoveries: (_, _) => const [],
+          applyAlertSettings: (snapshot, settings) {
+            final at =
+                settings.forConnection(ProviderConnections.codexPlan).plan.at;
+            final used = snapshot.accounts.first.allowances.single.usedPercent!;
+            final crossed = AlertCondition.crossed(
+              key: key,
+              alert: const AlertSummary(
+                severity: 'warning',
+                message: 'Configured window',
+              ),
+            );
+            return DashboardSnapshot.fromJson({
+              ...snapshot.toJson(),
+              'alertConditions': [
+                if (at != null)
+                  (used >= at ? crossed : AlertCondition.clear(key: key))
+                      .toJson(),
+              ],
+            });
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(notifier.posts, [key]);
+      expect(notifier.bodies, ['Reached your alert threshold: 20% left.']);
+      expect(markers.values[key], isTrue);
+
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      await tester
+          .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+          .onAlertThresholdsChanged(
+            (current) => current.withConnection(
+              ProviderConnections.codexPlan,
+              const ConnectionAlertThresholds(
+                plan: AlertPercentThreshold(at: 85),
+              ),
+            ),
+          );
+      await tester.pumpAndSettle();
+      expect(
+        rules.value.forConnection(ProviderConnections.codexPlan).plan.at,
+        85,
+      );
+      expect(notifier.posts, [key]);
+      expect(notifier.bodies, ['Reached your alert threshold: 20% left.']);
+      expect(markers.values, {key: true});
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+    }
+  });
+
   testWidgets(
     'a read begun during a delivery toggle cannot replace the saved Off',
     (tester) async {
@@ -4305,6 +4391,7 @@ DashboardSnapshot _asConnection(DashboardSnapshot snapshot) {
 DashboardSnapshot _alertTestSnapshot({
   bool includeWindow = true,
   String windowLabel = 'Window A',
+  double usedPercent = 75,
 }) {
   final empty = DashboardSnapshot.empty(
     generatedAt: DateTime.utc(2026, 10, 26),
@@ -4332,7 +4419,7 @@ DashboardSnapshot _alertTestSnapshot({
           'id': 'window-a',
           'source': 'plan',
           'label': windowLabel,
-          'usedPercent': 75,
+          'usedPercent': usedPercent,
           'status': 'ok',
         },
     ],
@@ -4469,6 +4556,7 @@ class _MemoryAlertConditions implements AlertConditionStore {
 class _FakeAlertNotifier implements AlertNotifier {
   int asked = 0;
   final posts = <AlertConditionKey>[];
+  final bodies = <String>[];
   @override
   Future<bool> canPost() async => true;
   @override
@@ -4478,8 +4566,14 @@ class _FakeAlertNotifier implements AlertNotifier {
   }
 
   @override
-  Future<void> notify(AlertConditionKey key, {required String title}) async =>
-      posts.add(key);
+  Future<void> notify(
+    AlertConditionKey key, {
+    required String title,
+    required String body,
+  }) async {
+    posts.add(key);
+    bodies.add(body);
+  }
 }
 
 class _FakeWatchSyncService implements WatchSyncService {

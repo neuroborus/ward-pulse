@@ -7,6 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../dashboard/dashboard_models.dart';
 import '../settings/alert_notification_preferences.dart';
+import '../settings/alert_threshold_preferences.dart';
 import 'notification_coordinator.dart';
 
 abstract interface class AlertConditionStore {
@@ -51,7 +52,11 @@ abstract interface class AlertNotifier {
   /// Initializes the plugin and checks permission without requesting it.
   Future<bool> canPost();
   Future<bool> requestPermission();
-  Future<void> notify(AlertConditionKey key, {required String title});
+  Future<void> notify(
+    AlertConditionKey key, {
+    required String title,
+    required String body,
+  });
 }
 
 final class SilentAlertNotifier implements AlertNotifier {
@@ -62,7 +67,11 @@ final class SilentAlertNotifier implements AlertNotifier {
   @override
   Future<bool> requestPermission() async => true;
   @override
-  Future<void> notify(AlertConditionKey key, {required String title}) async {}
+  Future<void> notify(
+    AlertConditionKey key, {
+    required String title,
+    required String body,
+  }) async {}
 }
 
 final class LocalAlertNotifier implements AlertNotifier {
@@ -90,25 +99,52 @@ final class LocalAlertNotifier implements AlertNotifier {
   // canPost prepares the plugin before the caller's final ownership/preference
   // guard. There is no further asynchronous setup between that guard and show.
   @override
-  Future<void> notify(AlertConditionKey key, {required String title}) =>
-      _coordinator.plugin.show(
-        id: alertNotificationId,
-        title: title,
-        body: alertNotificationBody,
-        notificationDetails: NotificationDetails(
-          android: AndroidNotificationDetails(
-            alertNotificationChannel.id,
-            alertNotificationChannel.name,
-            channelDescription: alertNotificationChannel.description,
-            tag: alertNotificationTag(key),
-            category: AndroidNotificationCategory.status,
-          ),
-        ),
-      );
+  Future<void> notify(
+    AlertConditionKey key, {
+    required String title,
+    required String body,
+  }) => _coordinator.plugin.show(
+    id: alertNotificationId,
+    title: title,
+    body: body,
+    notificationDetails: NotificationDetails(
+      android: AndroidNotificationDetails(
+        alertNotificationChannel.id,
+        alertNotificationChannel.name,
+        channelDescription: alertNotificationChannel.description,
+        tag: alertNotificationTag(key),
+        category: AndroidNotificationCategory.status,
+      ),
+    ),
+  );
 }
 
 const alertNotificationId = 0;
 const alertNotificationBody = 'Reached your alert threshold.';
+
+/// Formats the configured boundary from the settings used for evaluation.
+String alertNotificationBodyFor(
+  AlertConditionKey key,
+  AlertThresholdPreferences? alertThresholds,
+) {
+  // Rust has already resolved legacy connections into this structural key.
+  final rules = alertThresholds?.connections[key.connection];
+  if (rules == null) return alertNotificationBody;
+  final threshold = switch (key.target) {
+    AllowanceAlertTarget(:final source, :final id) => switch (source) {
+      AllowanceSource.plan => rules.planWindows[id] ?? rules.plan,
+      AllowanceSource.purchased => rules.purchased,
+    },
+    BudgetAlertTarget(:final period) => switch (period) {
+      AlertBudgetPeriod.today => rules.today,
+      AlertBudgetPeriod.week => rules.week,
+      AlertBudgetPeriod.month => rules.month,
+    },
+  };
+  final at = threshold.at;
+  if (at == null || at < 0 || at > 100) return alertNotificationBody;
+  return 'Reached your alert threshold: ${alertUsedToRemaining(at)}% left.';
+}
 
 /// Canonical typed-key JSON avoids delimiter ambiguity. This is addressing,
 /// never eligibility; account identifiers do not appear in notification text.
@@ -175,8 +211,10 @@ final class AlertNotificationDelivery {
 
   /// [isDeliveryEnabled] gates posting only; accepted observations still update
   /// consumed markers while delivery is off.
+  /// [alertThresholds] supplies captured settings for copy only.
   Future<void> sync(
     DashboardSnapshot snapshot, {
+    AlertThresholdPreferences? alertThresholds,
     bool mockData = false,
     Future<bool> Function() isCurrent = _alwaysCurrent,
     bool Function() isAccepted = _alwaysAccepted,
@@ -210,6 +248,7 @@ final class AlertNotificationDelivery {
           await notifier.notify(
             condition.key,
             title: alertNotificationTitle(snapshot, condition.key),
+            body: alertNotificationBodyFor(condition.key, alertThresholds),
           );
         } catch (_) {
           // A failed read/claim suppresses this condition; siblings still run.

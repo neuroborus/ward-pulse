@@ -179,7 +179,7 @@ void main() {
         final alert = active.singleWhere(isAlert);
         expect(alert.channelId, 'wardpulse.alerts');
         expect(alert.title, 'Claude · Weekly plan');
-        expect(alert.body, alertNotificationBody);
+        expect(alert.body, 'Reached your alert threshold: 20% left.');
         if (includeRecovery) {
           final recovered = active.singleWhere(isRecovery);
           expect(recovered.channelId, 'wardpulse.plan_recovery');
@@ -602,9 +602,13 @@ final class _Alerts implements AlertNotifier {
   @override
   Future<bool> requestPermission() => real.requestPermission();
   @override
-  Future<void> notify(AlertConditionKey key, {required String title}) async {
+  Future<void> notify(
+    AlertConditionKey key, {
+    required String title,
+    required String body,
+  }) async {
     attempts++;
-    await real.notify(key, title: title);
+    await real.notify(key, title: title, body: body);
     posts++;
   }
 }

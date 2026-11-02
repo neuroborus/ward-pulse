@@ -128,6 +128,7 @@ Future<ProviderSyncWork> _loadProviderSyncWork() async {
           notifier: LocalAlertNotifier(),
         ).sync(
           snapshot,
+          alertThresholds: alertThresholds,
           isCurrent: () async {
             if (kDebugMode &&
                 await SecureDebugDataPreferenceStore().readMockDataEnabled())

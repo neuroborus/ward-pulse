@@ -923,6 +923,7 @@ class _DashboardHostState extends State<DashboardHost>
       snapshot,
       mockData: _mockDataEnabled,
       isAccepted: accepted,
+      alertThresholds: rules,
       isDeliveryEnabled: () => _alertNotificationsEnabled,
       isCurrent: () async {
         if (!accepted()) return false;
