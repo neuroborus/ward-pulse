@@ -95,5 +95,5 @@ An observed success covers that target/state, not every device or retained-insta
 After temporary preferences or a fixture are restored, verify actual derived surfaces again using the
 [state/artifact reference](state-and-artifacts.md). Restored file bytes alone do not establish restored complications, widget caches or the active scene.
 
-Healthy public examples follow user-docs. Preserve the incident privately when preparing a clean demonstration; do not replace
-the incident with healthy data and call the bug fixed. Public coherence is required independently of the incident's diagnostic value.
+Healthy public candidates require [whole-screen health](../../user-docs/references/capture-state.md#privacy-and-relevant-ui-state), not only selected-metric health. Preserve incidents privately;
+clean demonstration data does not prove a repair. Public coherence remains required independently of diagnostic value.

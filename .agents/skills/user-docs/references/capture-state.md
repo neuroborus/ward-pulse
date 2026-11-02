@@ -12,7 +12,13 @@ for actual device operations and persisted-state preservation.
   sanitized content honestly, and do not invent data or unperformed captures.
 - General examples, setup steps and showcases must use screenshots without errors,
   warnings or stale-data indicators such as `Stale`, including persistent credential or
-  provider errors. Show an error, warning or stale-data state only when
+  provider errors. Before accepting a generic healthy candidate, validate the overall
+  application state, every included connection and all visible counters and badges;
+  healthy selected widget/watch metrics alone are insufficient. Unknown values that
+  produce problem counters or badges also disqualify it, even when those indicators are grey.
+  Use complete legitimate fixtures or a deliberately supported scenario; never fabricate
+  zero/OK values or hide legitimate problem indicators to qualify a candidate.
+  Show an error, warning or stale-data state only when
   nearby text explicitly explains that exact state; never use it as a generic illustration.
   Capture the appropriate real device state without irrelevant system notifications/service
   icons or low-battery warnings. Use existing OS/device controls; never erase, fake or
