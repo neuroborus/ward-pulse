@@ -175,7 +175,8 @@ void main() {
       }
 
       try {
-        await alerts.canPost(); // Initialize without requesting permission.
+        // Initialize without requesting permission; OS denial precedes launch.
+        expect(await alerts.canPost(), isFalse);
         await absent(); // Never displace a pre-existing notification.
         await tester.pumpWidget(
           MaterialApp(
@@ -235,12 +236,63 @@ void main() {
         await tester.tap(find.text('Settings'));
         await tester.pumpAndSettle();
         await barrier(
-          'READY: record original permission/channel settings; enable WardPulse notifications. '
+          'READY: prelaunch denial and restoration receipts must already be retained. Keep Android notifications denied. '
           'Case alert: ID $alertNotificationId, tag $tag. Recovery: untagged ID $recoveryId. '
           'Inspect the clear baseline, then Continue.',
         );
-        expect(await alerts.canPost(), isTrue);
+        expect(await alerts.canPost(), isFalse);
         await absent();
+        await publish(90);
+        expect(markers.values[key], isTrue);
+        expect(memory.keys, isEmpty);
+        expect(alerts.attempts, 0);
+        expect(recoveries.attempts, 0);
+        await absent();
+        await barrier(
+          'DENIED ALERT: the 90 crossing is consumed. Inspect absence and retain private OS receipts. Keep Android denied, then Continue.',
+        );
+        expect(await alerts.canPost(), isFalse);
+        await publish(100);
+        expect(memory.keys, isNotEmpty);
+        expect(markers.values[key], isTrue);
+        expect(alerts.attempts, 0);
+        await absent();
+        await publish(20);
+        expect(memory.keys, isEmpty);
+        expect(markers.values.containsKey(key), isFalse);
+        expect(alerts.attempts, 0);
+        expect(
+          recoveries.attempts,
+          1,
+        ); // Denied plugin completion or failure is not delivery proof.
+        await absent();
+        await barrier(
+          'DENIED RECOVERY: exhausted 100 to usable 20 advanced tracking without a visible post. Retain private absence receipts; keep Android denied, then Continue.',
+        );
+        expect(await alerts.canPost(), isFalse);
+        await publish(90);
+        expect(await alerts.canPost(), isFalse);
+        expect(markers.values[key], isTrue);
+        expect(memory.keys, isEmpty);
+        expect(alerts.attempts, 0);
+        expect(recoveries.attempts, 1);
+        await absent();
+        await barrier(
+          'GRANT: 90 is consumed again and recovery tracking is clear. Retain before/after PID, process-start and VM receipts; enable Android notifications ON once. '
+          'Continue only after proving continuity and permission/channel policy. Never revoke during the remaining case.',
+        );
+        expect(await alerts.canPost(), isTrue);
+        await publish(90);
+        expect(markers.values[key], isTrue);
+        expect(memory.keys, isEmpty);
+        expect(alerts.attempts, 0);
+        expect(recoveries.attempts, 1);
+        await absent();
+        await barrier(
+          'NO BACKLOG: unchanged 90 caused neither alert nor recovery replay after the single grant. Retain absence and continuity receipts, then Continue with Android enabled.',
+        );
+        await publish(20);
+        expect(markers.values.containsKey(key), isFalse);
         await publish(90);
         await barrier(
           'CROSSED: inspect alert UID/channel/tag/ID, post/update facts and original shade frame, then Continue.',
@@ -285,49 +337,22 @@ void main() {
         await publish(20);
         recoveryChoice.enabled = true;
         await publish(20);
-        expect(recoveries.attempts, 0);
-        await absent();
-        await barrier(
-          'MUTED RECOVERY: exhausted→usable advanced tracking without a post/backlog. Disable WardPulse app notifications in Android, then return and Continue.',
-        );
-        expect(await alerts.canPost(), isFalse);
-        await publish(100);
-        expect(markers.values[key], isTrue);
-        expect(alerts.attempts, 2);
-        await absent();
-        await barrier(
-          'DENIED ALERT: inspect absence. Enable Android notifications again, then Continue.',
-        );
-        expect(await alerts.canPost(), isTrue);
-        await publish(100);
-        expect(alerts.attempts, 2);
-        await absent();
-        await barrier(
-          'NO ALERT BACKLOG: unchanged crossing stayed consumed. Disable Android notifications again to inspect recovery denial, then Continue.',
-        );
-        expect(await alerts.canPost(), isFalse);
-        await publish(20);
-        expect(memory.keys, isEmpty);
-        expect(
-          recoveries.attempts,
-          1,
-        ); // A denied adapter attempt may succeed or throw; neither is delivery.
-        await absent();
-        await barrier(
-          'DENIED RECOVERY: inspect absence; plugin completion is not delivery proof. Enable Android notifications, then Continue.',
-        );
-        expect(await alerts.canPost(), isTrue);
-        await publish(20);
         expect(recoveries.attempts, 1);
         await absent();
+        await barrier(
+          'MUTED RECOVERY: exhausted→usable advanced tracking without a new post/backlog. Inspect absence, keep Android enabled, then Continue.',
+        );
         await publish(100);
         expect(memory.keys, isNotEmpty);
+        expect(alerts.attempts, 3);
+        expect(recoveries.attempts, 1);
         await barrier(
           'EXHAUSTED: inspect the alert and remembered spent window before recovery, then Continue.',
         );
         await visible(false);
         await publish(20);
         expect(recoveries.attempts, 2);
+        expect(memory.keys, isEmpty);
         await barrier(
           'RECOVERED: inspect BOTH actual alert and recovery identities and original shade frames. Continue cleans only this case’s posts.',
         );

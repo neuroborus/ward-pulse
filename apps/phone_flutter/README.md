@@ -144,8 +144,18 @@ version name/code and signer certificate to that artifact. Use SDK `apkanalyzer`
 and compare both packaged `lib/<abi>/libward_pulse_ffi.so` hashes against the corresponding
 `android/app/src/main/jniLibs/<abi>/libward_pulse_ffi.so` inputs (`arm64-v8a`, `x86_64`). Compare
 the installed package's signer/version and base-APK hash with the verified APK after install;
-an SDK build message alone establishes no installed identity. Record original permissions,
-channel settings and normal-live profiles/rules/bookkeeping without exporting credentials.
+an SDK build message alone establishes no installed identity. Before any device mutation,
+record original permission state **and flags**, app/channel presence, blocking and importance,
+and normal-live profiles/rules/bookkeeping without exporting credentials. Qualify exact
+restoration of every touched setting; an originally absent channel is not automatically safe
+to delete. HOLD the affected route if restoration is unproved.
+
+Immediately before OS denial, freshly qualify the **complete existing WardPulse post set**,
+not only the unused case identities. Denial may kill the UID and cancel its notifications.
+Preserve legitimate posts or HOLD the case if reversible preservation is unproved; never
+automatically cancel or repost them. An actually observed empty app-post set can qualify this
+guard alongside the original permission flags and channels. The baseline is Unknown until
+observed. Finish preflight and arm restoration before launching the timed case.
 
 Install the verified target without removing the app or clearing its data:
 
@@ -154,7 +164,12 @@ adb -s "$PHONE_SERIAL" install -t -r build/app/outputs/flutter-apk/app-debug.apk
 ```
 
 **Stop on installation failure.** Do not uninstall, clear data or substitute a convenience
-`flutter drive` route that installs the target. After verified successful installation, launch:
+`flutter drive` route that installs the target. After verified successful installation and
+before launching the isolated target, establish genuine Android OS denial through the admitted
+permission route, without requesting permission or resetting data. Any revoke-related process
+death must happen before the case's transient memory and VM exist. Recheck preservation and
+restoration guards before this mutation; do not substitute AppOps or a fake permission result.
+Then launch the target already denied:
 
 ```sh
 adb -s "$PHONE_SERIAL" shell am start -W -n app.wardpulse/.MainActivity || exit 1
@@ -179,14 +194,31 @@ flutter drive -d "$PHONE_SERIAL" --target=integration_test/notification_delivery
 ```
 
 The case has an 18-minute limit inside the stock driver's 20-minute timeout. Use each visible
-**Continue** barrier after inspecting the requested OS state. It drives clear→crossed→unchanged
-→clear→crossed, independent mute/no-backlog cases, actual Android denial/restoration, and a
-genuinely exhausted→usable recovery. Intended identities must be unused at entry; an occupied
-identity stops the case without canceling it. Preserve original shade frames and privacy-safe
-UID/channel/tag/ID/post-update facts at CROSSED, UNCHANGED, CLEAR, REARMED, EXHAUSTED and RECOVERED,
-and inspect absence at mute/denial barriers. Do not dismiss the case posts during comparisons.
-If changing Android permission kills the process, record the case incomplete and restore;
-do not claim a resumed test or replace actual denial with a fake permission result.
+**Continue** barrier only after inspecting and retaining the requested OS evidence. READY
+requires the prelaunch denial/restoration receipts, and real `canPost` must be false. While
+denied, the case consumes 90, exercises exhausted 100 → usable 20 recovery/tracking, and publishes
+90 again so its alert marker is consumed while recovery tracking is clear. DENIED ALERT and
+DENIED RECOVERY require absence observations for both case identities.
+
+At the single **GRANT** barrier, retain before/after receipts proving the same actual PID,
+process start ticks and Dart VM-service identity. Enable Android notifications ON once and
+verify permission/channel policy; the case must observe real `canPost` changing false → true.
+Grant continuity remains unverified on API36 until these receipts exist. Continue only after
+continuity is established. Do not revoke again while the case is alive. NO BACKLOG reobserves
+unchanged 90 and requires both identities absent with no new alert or recovery adapter attempt.
+The case then clears to 20 before the positive crossed→unchanged→clear→rearmed, independent
+mute/no-backlog and positive exhausted→usable recovery outcomes.
+
+Intended identities must be unused at entry; an occupied identity stops the case without
+canceling it. Preserve private original shade frames and bounded UID/channel/tag/ID/post-update
+facts at CROSSED, UNCHANGED, CLEAR, REARMED, EXHAUSTED and RECOVERED; inspect absence at denial,
+NO BACKLOG and mute barriers. Do not dismiss case posts during comparisons. Retain each receipt
+and original throughout the run, including partial evidence on abort; do not wait for JSON.
+The stock wrapper's JSON is success-only, and `reportData` remains assigned after RECOVERED.
+Killed or aborted cases remain incomplete; retain failed results as failures. Missing JSON is
+not PASS. If a permission change kills the process or continuity is unproved, stop the case
+and restore after driver termination. Never relaunch with reconstructed memory and call it a
+resumed case.
 
 The adapters distinguish attempts from successful plugin completion, and the case queries its
 own active Android identities. Neither a completed Future nor unchanged tags/counts proves
@@ -194,8 +226,11 @@ delivery, no repost or exactly-once behavior. OS observations remain necessary. 
 the injected pipeline with real adapters; separately verify production `main` Off/restart, the real foreground timer
 and actual headless dispatch. Leave unexercised real-edge/background/physical scope Pending.
 
-On success or failure, await teardown and cancel only posts created by this case; never reset
-notifications globally. If interrupted before teardown, reconcile only its recorded identities.
+On success or failure, await the case and driver's terminal result and retain teardown's
+outcome. Cleanup cancels only posts created by this case; never reset notifications globally.
+If interrupted before teardown, retain partial private originals and reconcile only its
+recorded identities. Restore an originally denied policy only after the case and driver have
+finished, never during the remaining barriers.
 Remove only the case's ADB forward, then restore the retained ordinary APK with data preserved:
 
 ```sh
