@@ -41,6 +41,11 @@ and `justfile`; do not add a framework or dependency for this workflow.
   budget. Measure it and remove avoidable cost; report build, toolchain and emulator setup
   separately. This is not a budget for `just test-all` or a reason to omit required gates.
   Do not enforce it with a flaky wall-clock assertion in a unit test.
+  Before starting a bounded Flutter widget diagnostic, inspect its effective `testWidgets`
+  timeout (explicit override or binding default); the CLI default alone is insufficient.
+  Before launch, qualify a framework deadline or owned controller stop that enforces the
+  stated bound, with a process identity and retirement procedure; verify retirement after interruption.
+  An interrupted run remains interrupted even if its controller or tool exits zero.
 - Keep an expensive test only when its necessary guarantee cannot be proved cheaply. Classify
   it as slow, integration or device where appropriate; document its guarantee, owner and
   explicit invocation in existing owning component or command documentation. Finalization
