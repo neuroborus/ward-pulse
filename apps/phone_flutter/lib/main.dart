@@ -14,6 +14,7 @@ import 'widget/phone_widget_preferences.dart';
 import 'widget/phone_widget_sync.dart';
 import 'sync/alert_notifications.dart';
 import 'sync/headless_provider_sync.dart';
+import 'sync/notification_coordinator.dart';
 import 'sync/provider_sync_scheduler.dart';
 import 'sync/recovery_notifications.dart';
 import 'sync/recovery_wake.dart';
@@ -24,6 +25,7 @@ Future<void> main() async {
   await HeadlessProviderSync.ensureInitialized();
   final live = PhoneLiveBindings.create();
   final debugDataPreferenceStore = SecureDebugDataPreferenceStore();
+  final notifications = PhoneNotificationCoordinator();
 
   runApp(
     WardPulseApp(
@@ -37,13 +39,14 @@ Future<void> main() async {
       alertThresholdStore: SecureAlertThresholdPreferenceStore(),
       alertNotificationStore: SecureAlertNotificationPreferenceStore(),
       alertConditionStore: SecureAlertConditionStore(),
-      alertNotifier: LocalAlertNotifier(),
+      notificationCoordinator: notifications,
+      alertNotifier: LocalAlertNotifier(coordinator: notifications),
       syncScheduler: TimerProviderSyncScheduler(),
       debugDataAvailable: kDebugMode,
       debugDataPreferenceStore: debugDataPreferenceStore,
       recoveryWatchlistStore: SecureRecoveryWatchlistStore(),
       recoveryNotificationStore: SecureRecoveryNotificationPreferenceStore(),
-      recoveryNotifier: LocalRecoveryNotifier(),
+      recoveryNotifier: LocalRecoveryNotifier(coordinator: notifications),
       recoveryWake: const WorkmanagerRecoveryWakeScheduler(),
       repository:
           kDebugMode

@@ -26,6 +26,7 @@ import '../settings/watch_ring_preferences.dart';
 import '../sync/alert_notifications.dart';
 import '../sync/headless_provider_sync.dart';
 import '../sync/manual_refresh_window.dart';
+import '../sync/notification_coordinator.dart';
 import '../sync/provider_sync_scheduler.dart';
 import '../sync/recovery_notifications.dart';
 import '../sync/recovery_wake.dart';
@@ -70,6 +71,7 @@ class WardPulseApp extends StatelessWidget {
         const DefaultAlertNotificationPreferenceStore(),
     this.alertConditionStore = const DisabledAlertConditionStore(),
     this.alertNotifier = const SilentAlertNotifier(),
+    this.notificationCoordinator,
   });
 
   final DashboardRepository repository;
@@ -97,6 +99,7 @@ class WardPulseApp extends StatelessWidget {
   final AlertNotificationPreferenceStore alertNotificationStore;
   final AlertConditionStore alertConditionStore;
   final AlertNotifier alertNotifier;
+  final PhoneNotificationCoordinator? notificationCoordinator;
 
   @override
   Widget build(BuildContext context) {
@@ -131,6 +134,7 @@ class WardPulseApp extends StatelessWidget {
         alertNotificationStore: alertNotificationStore,
         alertConditionStore: alertConditionStore,
         alertNotifier: alertNotifier,
+        notificationCoordinator: notificationCoordinator,
       ),
     );
   }
@@ -164,6 +168,7 @@ class DashboardHost extends StatefulWidget {
     required this.alertNotificationStore,
     required this.alertConditionStore,
     required this.alertNotifier,
+    this.notificationCoordinator,
   });
 
   final DashboardRepository repository;
@@ -192,12 +197,14 @@ class DashboardHost extends StatefulWidget {
   final AlertNotificationPreferenceStore alertNotificationStore;
   final AlertConditionStore alertConditionStore;
   final AlertNotifier alertNotifier;
+  final PhoneNotificationCoordinator? notificationCoordinator;
 
   @override
   State<DashboardHost> createState() => _DashboardHostState();
 }
 
-class _DashboardHostState extends State<DashboardHost> {
+class _DashboardHostState extends State<DashboardHost>
+    with WidgetsBindingObserver {
   static const _dashboardIndex = 0;
   static const _watchfaceIndex = 1;
   static const _widgetIndex = 2;
@@ -232,6 +239,12 @@ class _DashboardHostState extends State<DashboardHost> {
   bool _alertNotificationsEnabled = true;
   var _alertNotificationRevision = 0;
   var _recoveryNotificationRevision = 0;
+  var _notificationEligibilityRevision = 0;
+  var _notificationReads = 0;
+  var _notificationWrites = 0;
+  var _notificationFrameRevision = 0;
+  bool _notificationPreferencesResolved = false;
+  bool _notificationFrameReady = false;
   int _selectedIndex = 0;
   bool _widgetNavigationPending = false;
   ({String provider, int token})? _reveal;
@@ -248,11 +261,96 @@ class _DashboardHostState extends State<DashboardHost> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _initializeNotifications();
+    _queueNotificationFrame();
     _syncTicks = widget.syncScheduler.ticks.listen((_) {
       unawaited(_onScheduledSync());
     });
     widget.watchSyncService.bindWatchRefreshListener(_onWatchRefreshRequested);
     widget.phoneWidgetNavigationService.bind(_openDashboardFromWidget);
+  }
+
+  void _initializeNotifications() {
+    final coordinator = widget.notificationCoordinator;
+    if (coordinator != null) {
+      unawaited(coordinator.ensureReady().catchError((Object _) {}));
+    }
+  }
+
+  bool get _notificationForegroundReady =>
+      mounted &&
+      _notificationFrameReady &&
+      WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+
+  void _queueNotificationFrame() {
+    _notificationFrameReady = false;
+    final revision = ++_notificationFrameRevision;
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          revision != _notificationFrameRevision ||
+          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+        return;
+      }
+      _notificationFrameReady = true;
+      _considerNotificationPermission();
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _queueNotificationFrame();
+  }
+
+  @override
+  void didUpdateWidget(covariant DashboardHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(
+          oldWidget.notificationCoordinator,
+          widget.notificationCoordinator,
+        ) ||
+        !identical(
+          oldWidget.alertNotificationStore,
+          widget.alertNotificationStore,
+        ) ||
+        !identical(
+          oldWidget.recoveryNotificationStore,
+          widget.recoveryNotificationStore,
+        )) {
+      _alertNotificationRevision++;
+      _recoveryNotificationRevision++;
+      _invalidateNotificationEligibility();
+      _initializeNotifications();
+      unawaited(_readNotificationPreferences(_loadRevision));
+    }
+  }
+
+  void _invalidateNotificationEligibility() {
+    _notificationEligibilityRevision++;
+    _notificationPreferencesResolved = false;
+  }
+
+  void _considerNotificationPermission() {
+    final coordinator = widget.notificationCoordinator;
+    if (coordinator == null) return;
+    final revision = _notificationEligibilityRevision;
+    bool eligible() =>
+        _notificationForegroundReady &&
+        identical(coordinator, widget.notificationCoordinator) &&
+        revision == _notificationEligibilityRevision &&
+        _notificationPreferencesResolved &&
+        _notificationReads == 0 &&
+        _notificationWrites == 0 &&
+        (_alertNotificationsEnabled || _recoveryNotificationsEnabled);
+    if (eligible()) {
+      unawaited(
+        coordinator.requestForeground(isEligible: eligible, automatic: true),
+      );
+    }
   }
 
   void _openDashboardFromWidget() {
@@ -307,6 +405,9 @@ class _DashboardHostState extends State<DashboardHost> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _notificationFrameRevision++;
+    _invalidateNotificationEligibility();
     widget.watchSyncService.unbindWatchRefreshListener();
     widget.phoneWidgetNavigationService.unbind();
     unawaited(_syncTicks?.cancel());
@@ -346,39 +447,73 @@ class _DashboardHostState extends State<DashboardHost> {
     }
   }
 
-  Future<void> _readRecoveryNotificationPreference() async {
-    final revision = _recoveryNotificationRevision;
+  Future<void> _readNotificationPreferences(int loadRevision) async {
+    if (!mounted || loadRevision != _loadRevision) return;
+    _invalidateNotificationEligibility();
+    final revision = _notificationEligibilityRevision;
+    _notificationReads++;
+    var resolved = true;
+    bool current() =>
+        mounted &&
+        loadRevision == _loadRevision &&
+        revision == _notificationEligibilityRevision &&
+        _notificationWrites == 0;
     try {
-      final enabled = await widget.recoveryNotificationStore.read();
-      if (revision == _recoveryNotificationRevision)
-        _recoveryNotificationsEnabled = enabled;
-    } catch (_) {
-      // Keep the last known choice. Delivery reads independently and fails muted.
-    }
-  }
-
-  Future<void> _readAlertNotificationPreference() async {
-    final revision = _alertNotificationRevision;
-    try {
-      final enabled = await widget.alertNotificationStore.read();
-      if (revision == _alertNotificationRevision)
-        _alertNotificationsEnabled = enabled;
-    } catch (_) {
-      // Never replace a known Off or persist a fallback on a failed read.
+      try {
+        final enabled = await widget.recoveryNotificationStore.read();
+        if (current()) _recoveryNotificationsEnabled = enabled;
+      } catch (_) {
+        resolved = false;
+      }
+      try {
+        final enabled = await widget.alertNotificationStore.read();
+        if (current()) _alertNotificationsEnabled = enabled;
+      } catch (_) {
+        resolved = false;
+      }
+      // Failed reads keep the last known UI choice, but cannot authorize an ask.
+      if (current() && resolved) _notificationPreferencesResolved = true;
+    } finally {
+      _notificationReads--;
+      _considerNotificationPermission();
     }
   }
 
   Future<bool> _updateAlertNotifications(bool enabled) async {
     final wasEnabled = _alertNotificationsEnabled;
     final revision = ++_alertNotificationRevision;
-    await widget.alertNotificationStore.write(enabled);
+    _invalidateNotificationEligibility();
+    _notificationWrites++;
+    try {
+      await widget.alertNotificationStore.write(enabled);
+    } finally {
+      _notificationWrites--;
+      _invalidateNotificationEligibility();
+    }
     if (revision == _alertNotificationRevision) {
       // Invalidate reads that began while the write was awaiting storage too.
       _alertNotificationRevision++;
       if (mounted) setState(() => _alertNotificationsEnabled = enabled);
     }
-    if (enabled && !wasEnabled && mounted)
-      return widget.alertNotifier.requestPermission();
+    if (mounted && widget.notificationCoordinator != null) {
+      unawaited(_readNotificationPreferences(_loadRevision));
+    }
+    if (enabled &&
+        !wasEnabled &&
+        mounted &&
+        revision + 1 == _alertNotificationRevision) {
+      final coordinator = widget.notificationCoordinator;
+      if (coordinator == null) return widget.alertNotifier.requestPermission();
+      return await coordinator.requestForeground(
+            isEligible:
+                () =>
+                    _notificationForegroundReady &&
+                    identical(coordinator, widget.notificationCoordinator) &&
+                    revision + 1 == _alertNotificationRevision &&
+                    _alertNotificationsEnabled,
+          ) ??
+          true;
+    }
     return true;
   }
 
@@ -391,13 +526,38 @@ class _DashboardHostState extends State<DashboardHost> {
   Future<bool> _updateRecoveryNotifications(bool enabled) async {
     final wasEnabled = _recoveryNotificationsEnabled;
     final revision = ++_recoveryNotificationRevision;
-    await widget.recoveryNotificationStore.write(enabled);
+    _invalidateNotificationEligibility();
+    _notificationWrites++;
+    try {
+      await widget.recoveryNotificationStore.write(enabled);
+    } finally {
+      _notificationWrites--;
+      _invalidateNotificationEligibility();
+    }
     if (revision == _recoveryNotificationRevision) {
       _recoveryNotificationRevision++;
       if (mounted) setState(() => _recoveryNotificationsEnabled = enabled);
     }
-    if (enabled && !wasEnabled && mounted)
-      return widget.recoveryNotifier.requestPermission();
+    if (mounted && widget.notificationCoordinator != null) {
+      unawaited(_readNotificationPreferences(_loadRevision));
+    }
+    if (enabled &&
+        !wasEnabled &&
+        mounted &&
+        revision + 1 == _recoveryNotificationRevision) {
+      final coordinator = widget.notificationCoordinator;
+      if (coordinator == null)
+        return widget.recoveryNotifier.requestPermission();
+      return await coordinator.requestForeground(
+            isEligible:
+                () =>
+                    _notificationForegroundReady &&
+                    identical(coordinator, widget.notificationCoordinator) &&
+                    revision + 1 == _recoveryNotificationRevision &&
+                    _recoveryNotificationsEnabled,
+          ) ??
+          true;
+    }
     return true;
   }
 
@@ -550,14 +710,14 @@ class _DashboardHostState extends State<DashboardHost> {
 
   Future<DashboardSnapshot> _loadForegroundSnapshot() async {
     final revision = ++_loadRevision;
+    _invalidateNotificationEligibility();
     try {
       await _readRefreshInterval();
       await _readRingPreferences();
       await _readWidgetPreferences();
       await _serializeSnapshotSettings(_readAlertThresholds);
       await _readDebugDataPreference(revision);
-      await _readRecoveryNotificationPreference();
-      await _readAlertNotificationPreference();
+      await _readNotificationPreferences(revision);
       // Rescheduling before the load keeps the next tick a full interval away, so
       // no connection is polled faster than its floor, and a failed load still
       // retries on the next tick. Headless WorkManager uses ≥15 minutes.

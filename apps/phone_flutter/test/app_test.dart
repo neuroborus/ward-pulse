@@ -23,8 +23,10 @@ import 'package:ward_pulse_phone/providers/providers_screen.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 import 'package:ward_pulse_phone/settings/alert_notification_preferences.dart';
+import 'package:ward_pulse_phone/settings/notification_permission_preferences.dart';
 import 'package:ward_pulse_phone/settings/settings_screen.dart';
 import 'package:ward_pulse_phone/sync/alert_notifications.dart';
+import 'package:ward_pulse_phone/sync/notification_coordinator.dart';
 import 'package:ward_pulse_phone/sync/headless_provider_sync.dart';
 import 'package:ward_pulse_phone/settings/alert_percent_threshold_editor.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
@@ -45,6 +47,289 @@ import 'package:ward_pulse_phone/watchface/watchface_screen.dart';
 import 'connection_cache_test_support.dart';
 
 void main() {
+  for (final failed in [false, true]) {
+    testWidgets(
+      'default-On bootstrap is independent of ${failed ? 'failed' : 'held'} provider loading',
+      (tester) async {
+        await _notificationLifecycle(tester, AppLifecycleState.resumed);
+        final pending = Completer<DashboardSnapshot>();
+        final snapshot = DashboardSnapshot.empty();
+        final repository =
+            _PublicationRepository(snapshot)
+              ..failLoad = failed
+              ..response = failed ? null : pending.future;
+        final storage = FakeSecureStorage();
+        var requests = 0;
+        final coordinator = PhoneNotificationCoordinator(
+          attempts: SecureNotificationPermissionAttemptStore(storage: storage),
+          initialize: () async {},
+          requestPermission: () async {
+            requests++;
+            return false;
+          },
+        );
+        try {
+          await tester.pumpWidget(
+            _notificationApp(coordinator, repository: repository),
+          );
+          await tester.pump();
+          expect(repository.loads, 1);
+          expect(requests, 1);
+          expect(
+            await SecureNotificationPermissionAttemptStore(
+              storage: storage,
+            ).read(),
+            isTrue,
+          );
+        } finally {
+          await tester.pumpWidget(const SizedBox());
+          if (!pending.isCompleted) pending.complete(snapshot);
+          await tester.pump();
+        }
+      },
+    );
+  }
+
+  for (final choices in [(false, false), (true, false), (false, true)]) {
+    testWidgets('bootstrap respects saved delivery choices $choices', (
+      tester,
+    ) async {
+      await _notificationLifecycle(tester, AppLifecycleState.resumed);
+      final storage = FakeSecureStorage();
+      final alerts = SecureAlertNotificationPreferenceStore(storage: storage);
+      final recoveries = SecureRecoveryNotificationPreferenceStore(
+        storage: storage,
+      );
+      await alerts.write(choices.$1);
+      await recoveries.write(choices.$2);
+      var requests = 0;
+      var initializations = 0;
+      PhoneNotificationCoordinator coordinator() =>
+          PhoneNotificationCoordinator(
+            attempts: SecureNotificationPermissionAttemptStore(
+              storage: storage,
+            ),
+            initialize: () async {
+              initializations++;
+            },
+            requestPermission: () async {
+              requests++;
+              return false;
+            },
+          );
+      for (var mount = 0; mount < 2; mount++) {
+        await tester.pumpWidget(
+          _notificationApp(
+            coordinator(),
+            alerts: alerts,
+            recoveries: recoveries,
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+      }
+      expect(requests, choices.$1 || choices.$2 ? 1 : 0);
+      expect(initializations, 2); // Includes both saved Off, before any post.
+      expect(await alerts.read(), choices.$1);
+      expect(await recoveries.read(), choices.$2);
+    });
+  }
+
+  for (final refresh in [false, true]) {
+    for (final failed in [false, true]) {
+      testWidgets(
+        '${refresh ? 'refresh' : 'initial'} ${failed ? 'failed' : 'held'} choices cannot authorize an ask from cached On${refresh && !failed ? ' after saved Off' : ''}',
+        (tester) async {
+          await _notificationLifecycle(tester, AppLifecycleState.inactive);
+          final alerts = _NotificationChoice();
+          final recoveries = _NotificationChoice();
+          final affected = refresh ? recoveries : alerts;
+          final release = Completer<void>();
+          var requests = 0;
+          final coordinator = PhoneNotificationCoordinator(
+            attempts: SecureNotificationPermissionAttemptStore(
+              storage: FakeSecureStorage(),
+            ),
+            initialize: () async {},
+            requestPermission: () async {
+              requests++;
+              return false;
+            },
+          );
+          void delayRead() {
+            affected.failRead = failed;
+            affected.hold = failed ? null : release.future;
+          }
+
+          Future<void>? refreshing;
+          try {
+            if (!refresh) delayRead();
+            await tester.pumpWidget(
+              _notificationApp(
+                coordinator,
+                alerts: alerts,
+                recoveries: recoveries,
+              ),
+            );
+            if (refresh) {
+              await tester.pumpAndSettle();
+              await tester.tap(find.text('Settings'));
+              await tester.pumpAndSettle();
+              delayRead();
+              refreshing =
+                  tester
+                      .widget<SettingsScreen>(find.byType(SettingsScreen))
+                      .onRefresh();
+            }
+            await tester.pump();
+            if (refresh && !failed) {
+              final settings = tester.widget<SettingsScreen>(
+                find.byType(SettingsScreen),
+              );
+              await settings.onAlertNotificationsChanged(false);
+              await settings.onRecoveryNotificationsChanged(false);
+            }
+            await _notificationLifecycle(tester, AppLifecycleState.resumed);
+            expect(
+              requests,
+              0,
+            ); // Resumed alone is insufficient without its frame.
+            if (!refresh && !failed) {
+              release.complete();
+              await tester.idle();
+              expect(
+                requests,
+                0,
+              ); // Choices are resolved; no resumed frame yet.
+            }
+            await tester.pump();
+            expect(requests, !refresh && !failed ? 1 : 0);
+            if (!release.isCompleted) release.complete();
+            await refreshing;
+            await tester.pumpAndSettle();
+            expect(requests, failed || refresh ? 0 : 1);
+            if (failed) {
+              affected.failRead = false;
+              await tester.tap(find.text('Settings'));
+              await tester.pumpAndSettle();
+              await tester
+                  .widget<SettingsScreen>(find.byType(SettingsScreen))
+                  .onRefresh();
+              await tester.pumpAndSettle();
+              expect(requests, 1);
+            }
+          } finally {
+            await tester.pumpWidget(const SizedBox());
+            if (!release.isCompleted) release.complete();
+            await refreshing;
+            await _notificationLifecycle(tester, AppLifecycleState.resumed);
+            await tester.pump();
+          }
+        },
+      );
+    }
+  }
+
+  for (final dispose in [false, true]) {
+    testWidgets(
+      'foreground readiness is rechecked after initialization (${dispose ? 'disposed' : 'paused'})',
+      (tester) async {
+        await _notificationLifecycle(tester, AppLifecycleState.resumed);
+        final ready = Completer<void>();
+        var requests = 0;
+        final coordinator = PhoneNotificationCoordinator(
+          attempts: SecureNotificationPermissionAttemptStore(
+            storage: FakeSecureStorage(),
+          ),
+          initialize: () => ready.future,
+          requestPermission: () async {
+            requests++;
+            return true;
+          },
+        );
+        try {
+          await tester.pumpWidget(_notificationApp(coordinator));
+          await tester.pumpAndSettle();
+          expect(requests, 0);
+          if (dispose) {
+            await tester.pumpWidget(const SizedBox());
+          } else {
+            await _notificationLifecycle(tester, AppLifecycleState.paused);
+          }
+          ready.complete();
+          await tester.pump();
+          expect(requests, 0);
+          await _notificationLifecycle(tester, AppLifecycleState.resumed);
+          if (dispose) await tester.pumpWidget(_notificationApp(coordinator));
+          await tester.pumpAndSettle();
+          expect(requests, 1);
+        } finally {
+          await tester.pumpWidget(const SizedBox());
+          if (!ready.isCompleted) ready.complete();
+          await _notificationLifecycle(tester, AppLifecycleState.resumed);
+          await tester.pump();
+        }
+      },
+    );
+  }
+
+  testWidgets(
+    'changed-Off choices cancel a durable preparation without losing explicit retry',
+    (tester) async {
+      await _notificationLifecycle(tester, AppLifecycleState.resumed);
+      final claimed = Completer<void>();
+      final release = Completer<void>();
+      final storage =
+          FakeSecureStorage()
+            ..beforeWrite = (_) async {
+              if (!claimed.isCompleted) claimed.complete();
+              await release.future;
+            };
+      var requests = 0;
+      final attempts = SecureNotificationPermissionAttemptStore(
+        storage: storage,
+      );
+      final coordinator = PhoneNotificationCoordinator(
+        attempts: attempts,
+        initialize: () async {},
+        requestPermission: () async {
+          requests++;
+          return false;
+        },
+      );
+      final alerts = _NotificationChoice();
+      final recoveries = _NotificationChoice();
+      try {
+        await tester.pumpWidget(
+          _notificationApp(coordinator, alerts: alerts, recoveries: recoveries),
+        );
+        await tester.pumpAndSettle();
+        expect(claimed.isCompleted, isTrue);
+        await tester.tap(find.text('Settings'));
+        await tester.pumpAndSettle();
+        final settings = tester.widget<SettingsScreen>(
+          find.byType(SettingsScreen),
+        );
+        await settings.onAlertNotificationsChanged(false);
+        await settings.onRecoveryNotificationsChanged(false);
+        release.complete();
+        await tester.pumpAndSettle();
+        expect(requests, 0);
+        expect(await attempts.read(), isFalse);
+        expect(await settings.onAlertNotificationsChanged(true), isFalse);
+        await tester.pumpAndSettle();
+        expect(requests, 1);
+        expect(await attempts.read(), isTrue);
+        expect(recoveries.enabled, isFalse);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        if (!release.isCompleted) release.complete();
+        await tester.pump();
+      }
+    },
+  );
+
   testWidgets('schedules foreground and injected headless work together', (
     tester,
   ) async {
@@ -3083,7 +3368,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
 
-    // On without being asked: interrupting is the point of the feature.
+    // This isolated switch fixture has no startup coordinator.
     expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
 
     // Off and on again, so the ask runs with Android refusing it.
@@ -3104,7 +3389,7 @@ void main() {
   });
 
   testWidgets(
-    'alert delivery choice persists and only Off to On requests permission',
+    'alert delivery choice persists and explicit Off to On reports denial',
     (tester) async {
       final storage = FakeSecureStorage();
       final store = SecureAlertNotificationPreferenceStore(storage: storage);
@@ -3536,6 +3821,53 @@ void main() {
 
     expect(find.text('Mock data'), findsNothing);
   });
+}
+
+Future<void> _notificationLifecycle(
+  WidgetTester tester,
+  AppLifecycleState state,
+) async {
+  await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+    SystemChannels.lifecycle.name,
+    SystemChannels.lifecycle.codec.encodeMessage(
+      'AppLifecycleState.${state.name}',
+    ),
+    (_) {},
+  );
+}
+
+Widget _notificationApp(
+  PhoneNotificationCoordinator coordinator, {
+  DashboardRepository? repository,
+  AlertNotificationPreferenceStore? alerts,
+  RecoveryNotificationPreferenceStore? recoveries,
+}) => WardPulseApp(
+  repository: repository ?? ValueDashboardRepository(DashboardSnapshot.empty()),
+  notificationCoordinator: coordinator,
+  alertNotificationStore:
+      alerts ?? const DefaultAlertNotificationPreferenceStore(),
+  recoveryNotificationStore:
+      recoveries ?? const DefaultRecoveryNotificationPreferenceStore(),
+  scheduleHeadlessSync: (_) async {},
+);
+
+final class _NotificationChoice
+    implements
+        AlertNotificationPreferenceStore,
+        RecoveryNotificationPreferenceStore {
+  bool enabled = true;
+  bool failRead = false;
+  Future<void>? hold;
+  @override
+  Future<bool> read() async {
+    final value = enabled;
+    await hold;
+    if (failRead) throw StateError('Delivery choice unavailable.');
+    return value;
+  }
+
+  @override
+  Future<void> write(bool value) async => enabled = value;
 }
 
 /// Mock fixture as a real connection: mock accounts hold no metric slots.

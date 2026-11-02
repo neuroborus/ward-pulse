@@ -2263,8 +2263,16 @@ an exactly-once guarantee, and stable IDs/tags/counts are not proof of no repost
 Production composition now injects secure delivery stores, including the previously omitted
 recovery preference; scheduled foreground acceptance also invokes recovery work. Delivery
 preferences are resolved inside independent delivery steps, and failed recovery preference
-reads mute posting while retaining tracking/wake work. Startup, polling and default ON never
-request permission; explicit foreground Off→On may ask Android. Lock-screen privacy, existing
+reads mute posting while retaining tracking/wake work. The 2026-11-02 foreground repair adds
+one shared coordinator in production composition: successful effective-choice reads plus a
+completed resumed frame authorize one persisted automatic attempt when either delivery choice
+is On. Both Off suppress it. Pending/failed reads, writes and stale ownership cannot ask;
+provider loading need not complete. Explicit Off→On retry and blocking feedback remain.
+The durable marker records an attempted bootstrap, not historical OS permission state; an
+upgrade gets one OS-bounded opportunity, and a crash after claiming can consume it. Existing
+permission decisions and saved choices are retained. Both system channels are registered before
+posting, without policy resets or dummy notifications. Polling and notifier show never ask.
+Lock-screen privacy, existing
 watch/widget behavior and recovery tracking remain independent. No Wear dispatcher is added.
 New source regressions do not establish actual Android delivery. Full phone checks, real
 production Off/restart, timer/headless dispatch, artifact joins and original shade observations
@@ -2272,6 +2280,16 @@ remain required HOST work after the complete execution retires. The SDK integrat
 stock attach driver are available through the phone README's data-retaining route; when run,
 they provide injected-pipeline/real-adapter evidence, not production composition or dispatch
 proof. Historical device observations above apply only to their dated artifacts.
+
+Foreground permission/channel acceptance is **Pending HOST execution**: normal-APK actual
+dialog, channels before posting, denied/restart anti-nag, explicit retries and bounded
+background non-prompting. The existing SDK target selects either its original denied
+13-barrier delivery case with handled startup state, or the focused real-request case with
+unhandled case-owned state. Their OS prerequisites require separate invocations; manual grant
+proves delivery only. Retain all original consumption, tracking, no-backlog, identity/copy and
+3/2 attempt assertions. Naturally eligible/reversible state, artifact/runtime joins and safe
+normal-state restoration remain mandatory; absent prerequisites leave acceptance Pending.
+Physical/OEM menu proof and public capture/release work are outside this repair.
 
 Original Phase 15 rationale (historical): an exhausted plan window is the state the user was actively waiting to leave.
 Today the product says nothing when it ends — the ring simply reappears after the next poll,

@@ -1,7 +1,119 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/settings/notification_permission_preferences.dart';
+import 'package:ward_pulse_phone/sync/alert_notifications.dart';
+import 'package:ward_pulse_phone/sync/notification_coordinator.dart';
 import 'package:ward_pulse_phone/sync/recovery_notifications.dart';
 
+import 'connection_cache_test_support.dart';
+
 void main() {
+  testWidgets(
+    'readiness registers both channels once without posting or requesting',
+    (tester) async {
+      final previousPlatform = FlutterLocalNotificationsPlatform.instance;
+      AndroidFlutterLocalNotificationsPlugin.registerWith();
+      const channel = MethodChannel(
+        'dexterous.com/flutter/local_notifications',
+      );
+      final messenger = tester.binding.defaultBinaryMessenger;
+      addTearDown(() {
+        messenger.setMockMethodCallHandler(channel, null);
+        FlutterLocalNotificationsPlatform.instance = previousPlatform;
+      });
+      final calls = <MethodCall>[];
+      final initialized = Completer<void>();
+      final release = Completer<void>();
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        if (call.method == 'initialize') {
+          initialized.complete();
+          await release.future;
+          return true;
+        }
+        if (call.method == 'areNotificationsEnabled') return false;
+        return null;
+      });
+      final storage = FakeSecureStorage();
+      final coordinator = PhoneNotificationCoordinator(
+        attempts: SecureNotificationPermissionAttemptStore(storage: storage),
+      );
+      final ready = coordinator.ensureReady();
+      await initialized.future;
+      final canPost = LocalAlertNotifier(coordinator: coordinator).canPost();
+      release.complete();
+      await ready;
+      expect(await canPost, isFalse);
+      await coordinator.ensureReady();
+      expect(calls.map((call) => call.method), [
+        'initialize',
+        'createNotificationChannel',
+        'createNotificationChannel',
+        'areNotificationsEnabled',
+      ]);
+      final channels =
+          calls
+              .where((call) => call.method == 'createNotificationChannel')
+              .map((call) => call.arguments as Map)
+              .toList();
+      expect(
+        channels.map(
+          (value) => [
+            value['id'],
+            value['name'],
+            value['description'],
+            value['importance'],
+          ],
+        ),
+        [
+          [
+            'wardpulse.alerts',
+            'Alert notifications',
+            'Your configured usage and budget thresholds.',
+            3,
+          ],
+          [
+            'wardpulse.plan_recovery',
+            'Plan recovery',
+            'A plan window you had run out of is usable again.',
+            4,
+          ],
+        ],
+      );
+      expect(
+        storage.values,
+        isEmpty,
+      ); // Readiness never consumes a foreground attempt.
+      await LocalRecoveryNotifier(coordinator: coordinator).notify((
+        accountId: 'account',
+        provider: 'claude',
+        allowanceId: 'weekly',
+        label: 'Weekly plan',
+        resetsAt: null,
+      ));
+      expect(calls.last.method, 'show');
+      expect(calls.where((call) => call.method == 'initialize'), hasLength(1));
+      expect(
+        calls.where((call) => call.method == 'createNotificationChannel'),
+        hasLength(2),
+      );
+      expect(
+        calls.any(
+          (call) =>
+              call.method == 'requestNotificationsPermission' ||
+              call.method.startsWith('delete'),
+        ),
+        isFalse,
+      );
+      expect(storage.values, isEmpty);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
   int idOf(String accountId, String allowanceId) => recoveryNotificationId((
     accountId: accountId,
     provider: 'claude',

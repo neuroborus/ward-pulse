@@ -51,12 +51,22 @@ phone or widget, and a watch display may update after that time rather than exac
 
 1. On **Providers**, configure the usage or budget alert thresholds you want.
 2. Open **Settings → Notifications → Alert notifications** to control delivery.
-3. Allow notifications for WardPulse in Android's app settings. Turning the switch off and
-   back on in WardPulse may also open Android's permission request.
+3. Allow Android's notification request when it appears. If Android blocks notifications,
+   enable them for WardPulse in Android's app settings. Turning a WardPulse delivery switch
+   off and back on can retry the request; Android decides whether to show it again.
 
 Alert notifications and **Plan recovery** are independent and start on unless you saved Off.
-Startup and polling do not open a permission request. Android can block delivery even while a
-WardPulse switch is on; a denied request keeps your saved choice and reports the block.
+They share one Android permission. On the first eligible foreground use, WardPulse makes one
+automatic attempt after reading your choices and becoming ready on screen. Either switch
+being on qualifies; saving both off suppresses the attempt. A denial does not cause repeated
+automatic prompts after refresh or restart. Existing installations can receive this one
+bootstrap attempt too, subject to Android's previous permission decisions.
+
+Android can block delivery even while a WardPulse switch is on. Denial keeps your saved
+choices; an explicit off-to-on retry reports blocking. Polling and background delivery never
+request permission. WardPulse registers its **Alert notifications** and **Plan recovery**
+system channels before any notification; their blocking and importance remain under Android's
+controls. The location and appearance of those controls vary by Android version and device.
 
 An enabled threshold can notify when first observed crossed. Unchanged crossings are suppressed
 across app restarts; a report showing the condition clear rearms it. Missing or unknown data does

@@ -7,6 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../dashboard/dashboard_models.dart';
 import '../settings/alert_notification_preferences.dart';
+import 'notification_coordinator.dart';
 
 abstract interface class AlertConditionStore {
   Future<bool> read(AlertConditionKey key);
@@ -65,53 +66,40 @@ final class SilentAlertNotifier implements AlertNotifier {
 }
 
 final class LocalAlertNotifier implements AlertNotifier {
-  LocalAlertNotifier({FlutterLocalNotificationsPlugin? plugin})
-    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+  LocalAlertNotifier({
+    FlutterLocalNotificationsPlugin? plugin,
+    PhoneNotificationCoordinator? coordinator,
+  }) : _coordinator =
+           coordinator ?? PhoneNotificationCoordinator(plugin: plugin);
 
-  final FlutterLocalNotificationsPlugin _plugin;
-  bool _ready = false;
-
-  Future<void> _ensureReady() async {
-    if (_ready) return;
-    await _plugin.initialize(
-      settings: const InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-      ),
-    );
-    _ready = true;
-  }
-
-  AndroidFlutterLocalNotificationsPlugin? get _android =>
-      _plugin
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >();
+  final PhoneNotificationCoordinator _coordinator;
 
   @override
   Future<bool> canPost() async {
-    await _ensureReady();
-    return await _android?.areNotificationsEnabled() ?? false;
+    await _coordinator.ensureReady();
+    return await _coordinator.android?.areNotificationsEnabled() ?? false;
   }
 
   @override
   Future<bool> requestPermission() async {
-    await _ensureReady();
-    return await _android?.requestNotificationsPermission() ?? false;
+    await _coordinator.ensureReady();
+    return await _coordinator.android?.requestNotificationsPermission() ??
+        false;
   }
 
   // canPost prepares the plugin before the caller's final ownership/preference
   // guard. There is no further asynchronous setup between that guard and show.
   @override
   Future<void> notify(AlertConditionKey key, {required String title}) =>
-      _plugin.show(
+      _coordinator.plugin.show(
         id: alertNotificationId,
         title: title,
         body: alertNotificationBody,
         notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(
-            'wardpulse.alerts',
-            'Alert notifications',
-            channelDescription: 'Your configured usage and budget thresholds.',
+            alertNotificationChannel.id,
+            alertNotificationChannel.name,
+            channelDescription: alertNotificationChannel.description,
             tag: alertNotificationTag(key),
             category: AndroidNotificationCategory.status,
           ),

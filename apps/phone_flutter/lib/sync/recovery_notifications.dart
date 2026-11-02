@@ -2,6 +2,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/plan_recoveries.dart';
+import 'notification_coordinator.dart';
 
 /// Tells the reader a plan window is usable again.
 ///
@@ -13,8 +14,8 @@ abstract interface class RecoveryNotifier {
   /// Asks Android for permission to post at all (13+), and answers whether it
   /// may now.
   ///
-  /// Only a foreground Activity may ask, so this is called from the Settings
-  /// switch and never from the poll that posts.
+  /// Foreground transport only. DashboardHost coordinates startup and explicit
+  /// Settings retries; the poll that posts never requests permission.
   Future<bool> requestPermission();
 }
 
@@ -37,30 +38,26 @@ final class SilentRecoveryNotifier implements RecoveryNotifier {
 /// are registered there. An app-level channel lives in the Activity's engine
 /// alone.
 final class LocalRecoveryNotifier implements RecoveryNotifier {
-  LocalRecoveryNotifier({FlutterLocalNotificationsPlugin? plugin})
-    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+  LocalRecoveryNotifier({
+    FlutterLocalNotificationsPlugin? plugin,
+    PhoneNotificationCoordinator? coordinator,
+  }) : _coordinator =
+           coordinator ?? PhoneNotificationCoordinator(plugin: plugin);
 
-  /// Recovery delivery has its own channel, independent of threshold alerts.
-  static const _channelId = 'wardpulse.plan_recovery';
-  static const _channelName = 'Plan recovery';
-  static const _channelDescription =
-      'A plan window you had run out of is usable again.';
-
-  final FlutterLocalNotificationsPlugin _plugin;
-  bool _ready = false;
+  final PhoneNotificationCoordinator _coordinator;
 
   @override
   Future<void> notify(PlanRecovery recovery) async {
-    await _ensureReady();
-    await _plugin.show(
+    await _coordinator.ensureReady();
+    await _coordinator.plugin.show(
       id: recoveryNotificationId(recovery),
       title: recoveryNotificationTitle(recovery),
       body: recoveryNotificationBody,
-      notificationDetails: const NotificationDetails(
+      notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
-          _channelId,
-          _channelName,
-          channelDescription: _channelDescription,
+          recoveryNotificationChannel.id,
+          recoveryNotificationChannel.name,
+          channelDescription: recoveryNotificationChannel.description,
           category: AndroidNotificationCategory.status,
           // Preserve the recovery channel's existing importance: a window the
           // reader had exhausted is usable again.
@@ -73,29 +70,12 @@ final class LocalRecoveryNotifier implements RecoveryNotifier {
 
   @override
   Future<bool> requestPermission() async {
-    await _ensureReady();
+    await _coordinator.ensureReady();
     final granted =
-        await _plugin
-            .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin
-            >()
-            ?.requestNotificationsPermission();
+        await _coordinator.android?.requestNotificationsPermission();
     // Null means no Android implementation answered — nothing was refused, so
     // the switch has no bad news to report.
     return granted ?? true;
-  }
-
-  Future<void> _ensureReady() async {
-    if (_ready) {
-      return;
-    }
-    await _plugin.initialize(
-      settings: const InitializationSettings(
-        // The launcher mark, because the product has no separate status icon.
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-      ),
-    );
-    _ready = true;
   }
 }
 

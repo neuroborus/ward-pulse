@@ -15,7 +15,9 @@ home-widget metrics are on **Widget**.
 | Legal | Independent product information. |
 
 Follow [Sync and notifications](/guide/sync) to set the cadence or notification permission.
-Both notification switches start on and preserve your saved choice. Alert rules remain on
+Both notification switches start on and preserve your saved choice. They share Android's
+notification permission, with one automatic attempt on eligible foreground use and explicit
+off-to-on retry. Saving both off suppresses that automatic attempt. Alert rules remain on
 Providers; turning delivery off does not remove those rules or the in-app alerts.
 Diagnostics helps you compare the phone's displayed data and watch summary. It does not
 guarantee that the watch has already received an update.

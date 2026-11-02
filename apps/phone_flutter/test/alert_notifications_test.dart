@@ -4,7 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/settings/alert_notification_preferences.dart';
 import 'package:ward_pulse_phone/settings/recovery_notification_preferences.dart';
+import 'package:ward_pulse_phone/settings/notification_permission_preferences.dart';
 import 'package:ward_pulse_phone/sync/alert_notifications.dart';
+import 'package:ward_pulse_phone/sync/notification_coordinator.dart';
 
 import 'connection_cache_test_support.dart';
 
@@ -35,6 +37,142 @@ DashboardSnapshot _snapshot(
 });
 
 void main() {
+  for (final granted in [false, true]) {
+    test('shared foreground request persists handling ($granted)', () async {
+      final storage = FakeSecureStorage();
+      final attempts = SecureNotificationPermissionAttemptStore(
+        storage: storage,
+      );
+      final dispatched = Completer<void>();
+      final answer = Completer<bool>();
+      var requests = 0;
+      PhoneNotificationCoordinator coordinator() =>
+          PhoneNotificationCoordinator(
+            attempts: SecureNotificationPermissionAttemptStore(
+              storage: storage,
+            ),
+            initialize: () async {},
+            requestPermission: () {
+              requests++;
+              if (!dispatched.isCompleted) dispatched.complete();
+              return answer.future;
+            },
+          );
+      final current = coordinator();
+      final automatic = current.requestForeground(
+        isEligible: () => true,
+        automatic: true,
+      );
+      await dispatched.future;
+      expect(await attempts.read(), isTrue);
+      final explicit = current.requestForeground(isEligible: () => true);
+      final repeated = current.requestForeground(
+        isEligible: () => true,
+        automatic: true,
+      );
+      answer.complete(granted);
+      expect(await Future.wait([automatic, explicit, repeated]), [
+        granted,
+        granted,
+        granted,
+      ]);
+      expect(
+        await coordinator().requestForeground(
+          isEligible: () => true,
+          automatic: true,
+        ),
+        isNull,
+      );
+      expect(requests, 1);
+      expect(await current.requestForeground(isEligible: () => true), granted);
+      expect(requests, 2); // Explicit retries bypass handled suppression.
+    });
+  }
+
+  for (final stage in ['initialize', 'read', 'claim']) {
+    test(
+      'invalidated $stage preparation releases only its undispatched claim',
+      () async {
+        final entered = Completer<void>();
+        final release = Completer<void>();
+        var eligible = true;
+        var requests = 0;
+        Future<void> hold() async {
+          if (!entered.isCompleted) entered.complete();
+          await release.future;
+        }
+
+        final attempts =
+            _PermissionAttempts()
+              ..beforeRead = stage == 'read' ? hold : null
+              ..beforeClaim = stage == 'claim' ? hold : null;
+        final coordinator = PhoneNotificationCoordinator(
+          attempts: attempts,
+          initialize: stage == 'initialize' ? hold : () async {},
+          requestPermission: () async {
+            requests++;
+            return false;
+          },
+        );
+        final automatic = coordinator.requestForeground(
+          isEligible: () => eligible,
+          automatic: true,
+        );
+        await entered.future;
+        eligible = false;
+        final explicit = coordinator.requestForeground(isEligible: () => true);
+        release.complete();
+        expect(await automatic, isNull);
+        expect(await explicit, isFalse);
+        expect(
+          requests,
+          1,
+        ); // Aborted preparation did not consume explicit retry.
+        expect(attempts.handled, isTrue);
+      },
+    );
+  }
+
+  for (final failure in ['read', 'write', 'request']) {
+    test(
+      'permission $failure failures cannot repeat automatic dispatch',
+      () async {
+        final storage =
+            FakeSecureStorage()
+              ..failRead = failure == 'read'
+              ..failWrite = failure == 'write';
+        var requests = 0;
+        final coordinator = PhoneNotificationCoordinator(
+          attempts: SecureNotificationPermissionAttemptStore(storage: storage),
+          initialize: () async {},
+          requestPermission: () {
+            requests++;
+            throw StateError('Permission unavailable.');
+          },
+        );
+        await coordinator.requestForeground(
+          isEligible: () => true,
+          automatic: true,
+        );
+        await coordinator.requestForeground(
+          isEligible: () => true,
+          automatic: true,
+        );
+        expect(requests, failure == 'request' ? 1 : 0);
+        expect(
+          await coordinator.requestForeground(isEligible: () => true),
+          isFalse,
+        );
+        expect(requests, failure == 'request' ? 2 : 1);
+        await coordinator.requestForeground(
+          isEligible: () => true,
+          automatic: true,
+        );
+        expect(requests, failure == 'request' ? 2 : 1);
+      },
+    );
+  }
+
   test(
     'secure choices and per-condition consumed markers survive new adapters',
     () async {
@@ -439,6 +577,23 @@ void main() {
       expect(notifier.posts, isEmpty);
     },
   );
+}
+
+final class _PermissionAttempts implements NotificationPermissionAttemptStore {
+  bool handled = false;
+  Future<void> Function()? beforeRead;
+  Future<void> Function()? beforeClaim;
+  @override
+  Future<bool> read() async {
+    await beforeRead?.call();
+    return handled;
+  }
+
+  @override
+  Future<void> write(bool value) async {
+    if (value) await beforeClaim?.call();
+    handled = value;
+  }
 }
 
 class _Preferences implements AlertNotificationPreferenceStore {

@@ -11,10 +11,12 @@ import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/dashboard/plan_recoveries.dart';
 import 'package:ward_pulse_phone/settings/alert_notification_preferences.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
+import 'package:ward_pulse_phone/settings/notification_permission_preferences.dart';
 import 'package:ward_pulse_phone/settings/recovery_notification_preferences.dart';
 import 'package:ward_pulse_phone/settings/settings_screen.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/sync/alert_notifications.dart';
+import 'package:ward_pulse_phone/sync/notification_coordinator.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_scheduler.dart';
 import 'package:ward_pulse_phone/sync/recovery_notifications.dart';
 import 'package:ward_pulse_phone/sync/recovery_wake.dart';
@@ -71,12 +73,24 @@ void main() {
   final binding =
       IntegrationTestWidgetsFlutterBinding.ensureInitialized()
         ..framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
+  if (const bool.fromEnvironment('WARDPULSE_NOTIFICATION_FIRST_FOREGROUND')) {
+    _firstForegroundPermission(binding);
+    return;
+  }
   testWidgets(
     'isolated pipeline with real Rust and Android notifications',
     (tester) async {
       final plugin = FlutterLocalNotificationsPlugin();
-      final alerts = _Alerts(LocalAlertNotifier(plugin: plugin));
-      final recoveries = _Recoveries(LocalRecoveryNotifier(plugin: plugin));
+      // This scenario proves denied delivery, not a startup request. Preserve
+      // both default-On choices while explicitly handling the new bootstrap.
+      final notifications = PhoneNotificationCoordinator(
+        plugin: plugin,
+        attempts: _PermissionAttempts()..handled = true,
+      );
+      final alerts = _Alerts(LocalAlertNotifier(coordinator: notifications));
+      final recoveries = _Recoveries(
+        LocalRecoveryNotifier(coordinator: notifications),
+      );
       final alertChoice = _Choice();
       final recoveryChoice = _Choice();
       final markers = _Markers();
@@ -194,6 +208,7 @@ void main() {
                   alertNotificationStore: alertChoice,
                   alertConditionStore: markers,
                   alertNotifier: alerts,
+                  notificationCoordinator: notifications,
                   recoveryNotificationStore: recoveryChoice,
                   recoveryWatchlistStore: memory,
                   recoveryNotifier: recoveries,
@@ -392,6 +407,133 @@ void main() {
     },
     timeout: const Timeout(Duration(minutes: 18)),
   );
+}
+
+void _firstForegroundPermission(IntegrationTestWidgetsFlutterBinding binding) {
+  testWidgets(
+    'first foreground requests the shared Android permission',
+    (tester) async {
+      final plugin = FlutterLocalNotificationsPlugin();
+      final previousPlatform = FlutterLocalNotificationsPlatform.instance;
+      final android = _ObservedAndroidNotifications();
+      FlutterLocalNotificationsPlatform.instance = android;
+      addTearDown(
+        () => FlutterLocalNotificationsPlatform.instance = previousPlatform,
+      );
+      final attempts = _PermissionAttempts();
+      final notifications = PhoneNotificationCoordinator(
+        plugin: plugin,
+        attempts: attempts,
+      );
+      final before = {
+        for (final channel
+            in await android.getNotificationChannels() ??
+                <AndroidNotificationChannel>[])
+          channel.id: channel,
+      };
+      expect(
+        await android.areNotificationsEnabled(),
+        isFalse,
+        reason:
+            'HOST must qualify a naturally requestable, ungranted baseline.',
+      );
+      final alerts = _Alerts(LocalAlertNotifier(coordinator: notifications));
+      final recoveries = _Recoveries(
+        LocalRecoveryNotifier(coordinator: notifications),
+      );
+      Widget app() => WardPulseApp(
+        repository: _Repository(_source(20)),
+        notificationCoordinator: notifications,
+        alertNotifier: alerts,
+        recoveryNotifier: recoveries,
+        alertNotificationStore: _Choice(),
+        recoveryNotificationStore: _Choice(),
+        watchSyncService: _NoWatch(),
+        phoneWidgetSyncService: const DisabledPhoneWidgetSyncService(),
+        phoneWidgetNavigationService: _NoNavigation(),
+        syncScheduler: const DisabledProviderSyncScheduler(),
+        scheduleHeadlessSync: (_) async {},
+      );
+      try {
+        await tester.pumpWidget(app());
+        await tester.pump();
+        await tester.runAsync(() => android.requested.future);
+        // These application-context reads work while the actual Android dialog is
+        // visible. HOST observes and denies that dialog; manual grant is no proof.
+        final channels = await android.getNotificationChannels() ?? [];
+        for (final expected in [
+          alertNotificationChannel,
+          recoveryNotificationChannel,
+        ]) {
+          final actual = channels.singleWhere(
+            (channel) => channel.id == expected.id,
+          );
+          expect(actual.name, expected.name);
+          expect(actual.description, expected.description);
+          expect(
+            actual.importance,
+            before[expected.id]?.importance ?? expected.importance,
+          );
+        }
+        expect(alerts.attempts, 0);
+        expect(recoveries.attempts, 0);
+        expect(await tester.runAsync(() => android.answer!), isFalse);
+        await tester.pumpAndSettle();
+        expect(attempts.handled, isTrue);
+        await tester.tap(find.text('Settings'));
+        await tester.pumpAndSettle();
+        await tester
+            .widget<SettingsScreen>(find.byType(SettingsScreen))
+            .onRefresh();
+        await tester.pumpAndSettle();
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+        expect(android.requests, 1);
+        expect(await alerts.canPost(), isFalse);
+        expect(alerts.attempts, 0);
+        expect(recoveries.attempts, 0);
+        binding.reportData = {
+          'scope':
+              'first foreground / real Android request; HOST dialog observation required',
+          'requests': android.requests,
+          'channelsBeforeCasePost': true,
+          'refreshRemountNoSecondRequest': true,
+        };
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+      }
+    },
+    timeout: const Timeout(Duration(minutes: 3)),
+  );
+}
+
+/// Observe the production dispatch without replacing its permission effect.
+/// All platform work, including the actual Android dialog/result, stays real.
+final class _ObservedAndroidNotifications
+    extends AndroidFlutterLocalNotificationsPlugin {
+  final requested = Completer<void>();
+  Future<bool?>? answer;
+  int requests = 0;
+
+  @override
+  Future<bool?> requestNotificationsPermission() {
+    requests++;
+    final result = super.requestNotificationsPermission();
+    answer = result;
+    if (!requested.isCompleted) requested.complete();
+    return result;
+  }
+}
+
+final class _PermissionAttempts implements NotificationPermissionAttemptStore {
+  bool handled = false;
+  @override
+  Future<bool> read() async => handled;
+  @override
+  Future<void> write(bool value) async => handled = value;
 }
 
 final class _Repository extends DashboardRepository {

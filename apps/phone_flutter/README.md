@@ -159,6 +159,22 @@ memory. Watch/widget/navigation/wake effects and both foreground/headless schedu
 The target never calls production `main`, initializes WorkManager or polls providers. Existing
 OS-scheduled production work is separate and is neither canceled nor proved by this case.
 
+Production `main` retains one notification coordinator across DashboardHost recreation. It
+registers both existing system channels without a post, including when delivery is Off, and
+requests the shared Android permission once after successful effective-choice reads and a
+completed resumed frame when either choice is On. Failed/held reads and stale ownership cannot
+authorize asking. A secure attempt marker prevents repeated automatic requests after denial or
+restart; explicit Off→On retries remain available with blocking feedback. Missing marker state
+allows one OS-bounded pre-release bootstrap, not an inference about earlier permission history.
+The durable claim can consume that opportunity if the process crashes before dispatch. Existing
+OS/channel policy, saved delivery choices and delivery bookkeeping are preserved.
+
+The default integration invocation runs only the original denied delivery case, with an
+explicit handled startup fixture and both choices still default-On. The test-only
+`WARDPULSE_NOTIFICATION_FIRST_FOREGROUND=true` define selects only the focused real-request
+case. Never combine their incompatible OS prerequisites. Both are mandatory HOST acceptance;
+neither case proves normal production scheduling or durable process-restart behavior.
+
 Acceptance is **Pending** until HOST runs this route and records actual Android observations.
 Begin only after the whole owning execution is DONE, its CLI has exited, all owned processes
 have retired and a fresh separate idle check passes. The sole admitted native operator owns
@@ -206,10 +222,11 @@ adb -s "$PHONE_SERIAL" install -t -r build/app/outputs/flutter-apk/app-debug.apk
 
 **Stop on installation failure.** Do not uninstall, clear data or substitute a convenience
 `flutter drive` route that installs the target. After verified successful installation and
-before launching the isolated target, establish genuine Android OS denial through the admitted
-permission route, without requesting permission or resetting data. Any revoke-related process
-death must happen before the case's transient memory and VM exist. Recheck preservation and
-restoration guards before this mutation; do not substitute AppOps or a fake permission result.
+before launching the default isolated target, qualify genuine Android OS denial and its
+reversible restoration through the admitted permission route. Recheck preservation and
+restoration guards before any mutation. Do not use revoke, permission-flag resets, AppOps,
+clear/uninstall, force-stop or a fake permission result to manufacture a convenient baseline.
+If the required baseline is unavailable, leave this acceptance Pending.
 Then launch the target already denied:
 
 ```sh
@@ -285,3 +302,33 @@ normal installed artifact/native libraries and restore normal-live state plus al
 permissions, channels, profiles, rules and bookkeeping. The injected stores require no copying
 into production. Root completes HOST acceptance and an independent zero-findings pass after
 the last correction; builds or test completion alone do not establish delivery acceptance.
+
+### Focused first-foreground request case
+
+Use a qualified existing AVD with a naturally eligible, ungranted Android notification
+permission baseline and reversible channel/policy preservation. Do not create an AVD or reset
+data/permission flags to obtain it. Apply the same whole-DONE/CLI-exit/retirement/fresh-idle,
+artifact/install/UID joins, case-identity and normal-APK restoration guards above. Build and
+attach separately from the default denied case, from `apps/phone_flutter`:
+
+```sh
+flutter build apk --debug --target=integration_test/notification_delivery_test.dart --dart-define=INTEGRATION_TEST_SHOULD_REPORT_RESULTS_TO_NATIVE=false --dart-define=WARDPULSE_NOTIFICATION_FIRST_FOREGROUND=true
+flutter drive -d "$PHONE_SERIAL" --target=integration_test/notification_delivery_test.dart --driver=test_driver/notification_delivery.dart --dart-define=WARDPULSE_NOTIFICATION_FIRST_FOREGROUND=true --use-existing-app="$WARDPULSE_NOTIFICATION_VM_URI" --keep-app-running
+```
+
+Retain the ordinary APK first; install and launch the verified selected APK through the
+existing guarded route between those commands. The focused case has a three-minute deadline
+within the stock driver's timeout. Observe and retain the actual automatic Android permission
+dialog and both discoverable system channels **before any case post**, then deny the dialog.
+The case uses real coordinator/notifiers, unhandled case-owned bookkeeping and no crossed
+input. It checks channel identity/metadata and retained importance, zero adapter posts, one
+request, denial, and refresh/remount without a second request. Method invocation alone is not
+dialog proof: if Android suppresses the dialog, keep that acceptance Pending.
+
+Separately build/run the ordinary `lib/main.dart` debug APK to prove durable denial/restart
+anti-nag, explicit-toggle blocking feedback and bounded background non-prompting. Qualify the
+actual timer/headless dispatch where safely possible; this target's inert schedulers cannot
+prove it. Preserve scheduled work and prove actual process replacement through the documented
+background `am kill` route, never force-stop. Restore the verified normal current APK and
+legitimate newer data, not an old snapshot over newer publications. Physical/OEM menu behavior
+and public screenshots/release remain Pending separate work.

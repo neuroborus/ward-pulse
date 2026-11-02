@@ -192,9 +192,25 @@ only local bookkeeping and addressing; they never appear in notification text.
 The phone has independent **Alert notifications** and **Plan recovery** delivery controls.
 Both default on when unset and preserve a saved Off. Threshold rules remain opt-in on Providers;
 only Rust's configured-threshold observations qualify for alert delivery. Provider errors and
-status severity alone never create notifications. Startup, polling and the default choice do
-not request permission. An explicit foreground Off→On action may ask Android; denial preserves
-the saved choice. A failed preference read cannot authorize posting or persist a fallback.
+status severity alone never create notifications. One shared foreground coordinator requests
+Android permission on the first eligible normal use, after successful effective-choice reads
+and a completed resumed UI frame. Either On choice qualifies; both saved Off suppress asking.
+Failed/pending reads, pending writes and stale UI ownership cannot authorize that attempt.
+Explicit foreground Off→On actions can retry and report blocking without changing the saved
+choice. Polling, headless work and notifier show never request permission.
+
+An attempt marker stays in secure phone storage. Automatic dispatch claims it before asking;
+denial or a dispatched error leaves it handled across refresh, recreation and restart. A crash
+between the durable claim and dispatch can consume this opportunity. Storage failures suppress
+automatic asking. A missing marker permits one bootstrap attempt, including on this pre-release
+upgrade; it is not evidence that Android permission was never requested. Existing grants,
+denials and restrictions remain authoritative. No permission flags or delivery choices are reset.
+
+Foreground startup registers both existing system channels without posting, independently of
+preference/provider completion. Notifier readiness can also register them without asking or
+touching the attempt marker. Registration retains channel identities and original importance
+(Alert notifications: 3; Plan recovery: 4), preserves user blocking/importance, and never deletes
+or recreates channels. A failed preference read cannot authorize posting or persist a fallback.
 
 Alert posts use `wardpulse.alerts`, a fixed numeric ID and a SHA-256 tag over the structural
 condition key. This opaque digest addresses notifications; it does not decide eligibility.
