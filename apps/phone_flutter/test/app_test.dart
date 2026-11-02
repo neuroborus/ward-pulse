@@ -25,6 +25,7 @@ import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 import 'package:ward_pulse_phone/settings/alert_notification_preferences.dart';
 import 'package:ward_pulse_phone/settings/settings_screen.dart';
 import 'package:ward_pulse_phone/sync/alert_notifications.dart';
+import 'package:ward_pulse_phone/sync/headless_provider_sync.dart';
 import 'package:ward_pulse_phone/settings/alert_percent_threshold_editor.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/settings/debug_data_preferences.dart';
@@ -43,6 +44,30 @@ import 'package:ward_pulse_phone/watchface/watchface_screen.dart';
 import 'connection_cache_test_support.dart';
 
 void main() {
+  testWidgets('schedules foreground and injected headless work together', (
+    tester,
+  ) async {
+    final app = WardPulseApp(
+      repository: ValueDashboardRepository(DashboardSnapshot.empty()),
+    );
+    expect(app.scheduleHeadlessSync, HeadlessProviderSync.schedule);
+    final foreground = _ManualProviderSyncScheduler();
+    addTearDown(foreground.dispose);
+    final headless = <Duration>[];
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: app.repository,
+        syncScheduler: foreground,
+        scheduleHeadlessSync: (interval) async => headless.add(interval),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(foreground.scheduledInterval, isNotNull);
+    expect(headless, [foreground.scheduledInterval]);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+  });
+
   for (final brightness in Brightness.values) {
     testWidgets(
       'app bar keeps the WardPulse mark and title in ${brightness.name}',

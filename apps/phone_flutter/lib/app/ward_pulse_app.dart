@@ -55,6 +55,7 @@ class WardPulseApp extends StatelessWidget {
     this.alertThresholdStore = const DefaultAlertThresholdPreferenceStore(),
     this.applyAlertSettings = applyUserAlertSettings,
     this.syncScheduler = const DisabledProviderSyncScheduler(),
+    this.scheduleHeadlessSync = HeadlessProviderSync.schedule,
     this.debugDataAvailable = false,
     this.debugDataPreferenceStore = const DisabledDebugDataPreferenceStore(),
     this.recoveryWatchlistStore = const DisabledRecoveryWatchlistStore(),
@@ -81,6 +82,7 @@ class WardPulseApp extends StatelessWidget {
   final AlertThresholdPreferenceStore alertThresholdStore;
   final ApplyAlertSettings applyAlertSettings;
   final ProviderSyncScheduler syncScheduler;
+  final Future<void> Function(Duration) scheduleHeadlessSync;
   final bool debugDataAvailable;
   final DebugDataPreferenceStore debugDataPreferenceStore;
   final RecoveryWatchlistStore recoveryWatchlistStore;
@@ -112,6 +114,7 @@ class WardPulseApp extends StatelessWidget {
         alertThresholdStore: alertThresholdStore,
         applyAlertSettings: applyAlertSettings,
         syncScheduler: syncScheduler,
+        scheduleHeadlessSync: scheduleHeadlessSync,
         debugDataAvailable: debugDataAvailable,
         debugDataPreferenceStore: debugDataPreferenceStore,
         recoveryWatchlistStore: recoveryWatchlistStore,
@@ -142,6 +145,7 @@ class DashboardHost extends StatefulWidget {
     required this.alertThresholdStore,
     required this.applyAlertSettings,
     required this.syncScheduler,
+    required this.scheduleHeadlessSync,
     required this.debugDataAvailable,
     required this.debugDataPreferenceStore,
     required this.recoveryWatchlistStore,
@@ -166,6 +170,7 @@ class DashboardHost extends StatefulWidget {
   final AlertThresholdPreferenceStore alertThresholdStore;
   final ApplyAlertSettings applyAlertSettings;
   final ProviderSyncScheduler syncScheduler;
+  final Future<void> Function(Duration) scheduleHeadlessSync;
   final bool debugDataAvailable;
   final DebugDataPreferenceStore debugDataPreferenceStore;
   final RecoveryNotificationPreferenceStore recoveryNotificationStore;
@@ -696,7 +701,7 @@ class _DashboardHostState extends State<DashboardHost> {
 
   Future<void> _scheduleAutoSync(Duration interval) async {
     await widget.syncScheduler.schedule(interval);
-    await HeadlessProviderSync.schedule(interval);
+    await widget.scheduleHeadlessSync(interval);
   }
 
   Future<void> _onScheduledSync() async {

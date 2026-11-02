@@ -2268,8 +2268,10 @@ request permission; explicit foreground Off→On may ask Android. Lock-screen pr
 watch/widget behavior and recovery tracking remain independent. No Wear dispatcher is added.
 New source regressions do not establish actual Android delivery. Full phone checks, real
 production Off/restart, timer/headless dispatch, artifact joins and original shade observations
-remain required HOST work after the complete execution retires; the planned SDK driver is a
-later commit. Historical device observations above apply only to their dated artifacts.
+remain required HOST work after the complete execution retires. The SDK integration target and
+stock attach driver are available through the phone README's data-retaining route; when run,
+they provide injected-pipeline/real-adapter evidence, not production composition or dispatch
+proof. Historical device observations above apply only to their dated artifacts.
 
 Original Phase 15 rationale (historical): an exhausted plan window is the state the user was actively waiting to leave.
 Today the product says nothing when it ends — the ring simply reappears after the next poll,
