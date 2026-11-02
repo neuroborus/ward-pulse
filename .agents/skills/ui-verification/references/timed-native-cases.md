@@ -12,16 +12,27 @@ contract and qualified restoration inputs ready before launching the timed case.
 essential Source/tool questions and preservation prerequisites beforehand; an active case
 is not preparation time. Use the owning device procedure, without a new harness or script.
 
-Plan a reasonable reserve for the remaining observations, actual original-image inspection,
-barrier inputs and final assertions/report collection. Budget normal restoration separately
-at its owning phase; never restore early while the case requires continuity.
+Before launch, record a phase-specific action/capture plan and realistic operator time budget,
+using measured comparable timings or explicit conservative estimates. Include model/tool
+round trips and settlement, not only shell duration. Assign intermediate cumulative elapsed-time
+checkpoints that leave time for all remaining phases and a protected final-phase reserve.
+Fix that reserve and its phase-entry cutoff before launch: cover final original/OS checks,
+Continue, end assertions, required report and in-case teardown. Do not reduce it mid-case after
+a budget shortfall. It is allocated time consumed by that phase, not a fresh full-duration
+minimum after each completed action; remaining actions still need their planned time and guards.
+Budget normal restoration separately at its owning phase; never restore early while the case
+requires continuity.
 
 ## Track the actual budget
 
 Bind the effective framework limit to the actual case start and record its deadline;
-a later driver attach or shell invocation does not restart that budget. Reassess remaining
-time before dependent progression, including after intervening tool or conversation work.
-Do not spend the operator's live budget on new Source/tool discovery or unrelated work.
+a later driver attach or shell invocation does not restart that budget. At each planned
+intermediate checkpoint, compare elapsed time with the remaining plan and protected final
+reserve; do not wait until the final barrier to detect overrun. Reassess before progression.
+During the live case, limit model work to the immediate current original/OS checks and required
+input, retaining only the case's necessary observation/identity/time facts. Defer correlation prose, research
+and extra bookkeeping until terminal. Honor stop/scope steering; otherwise answer briefly and
+recompute the budget before progressing. Do not bypass current-image or input-authority guards.
 If a necessary unknown or insufficient reserve prevents completion, stop progression and
 retain the actual incomplete/interrupted outcome rather than rushing past observation guards.
 Do not extend the timeout, restart the clock or substitute fixed sleeps for case settlement.
