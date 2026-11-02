@@ -41,8 +41,8 @@ intended artifact/window or obtain owner acknowledgement before claiming it show
 This delivery check applies to preview handoff; mock approval remains distinct from native acceptance.
 
 Judge the whole affected surface after the final change: every metric/half, legends, units, clipping,
-default cells, status controls and navigation context relevant to the case. Do not infer that uninspected
-neighboring elements are correct because one detail passed. Verify real circle/screen boundaries before measuring or cropping. For responsive widgets/mocks, distinguish outer/background frame fill from actual content sizing and use of space: a filled background and unclipped glyphs do not prove well-sized content. Compare visible inter-column and edge whitespace and readable size with the owner's request and actual/proposed host-frame geometry before declaring ZERO or showing the mock.
+default cells, status controls and navigation context relevant to the case. When enlarging the face or filling its viewport, preserve the requested whole-composition scope: verify the sizes and relative positions of time, legend, upper cells, logo and arcs, including arc thickness. An explicit ring-only request remains ring-only.
+Do not infer that uninspected neighboring elements are correct because one detail passed. Verify real circle/screen boundaries before measuring or cropping. Distinguish measured clipping from an inset hypothesis; aesthetic preference alone does not justify a residual safe inset. For responsive widgets/mocks, distinguish outer/background frame fill from actual content sizing and use of space: a filled background and unclipped glyphs do not prove well-sized content. Compare visible inter-column and edge whitespace and readable size with the owner's request and actual/proposed host-frame geometry before declaring ZERO or showing the mock.
 
 Classify the complete original's intended visible mode and settled state before using glyph/ROI measurements.
 Renderer metadata alone does not validate a mixed wake/handoff frame or one covered by an overlay.
