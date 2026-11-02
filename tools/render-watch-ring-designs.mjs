@@ -9,11 +9,11 @@
  *   node tools/render-watch-ring-designs.mjs --clock-preview-up <450-unit-offset> \
  *     --clock-preview-output LOCAL_ARTIFACTS/<new-directory>
  * The offset must be positive in 0.1-unit increments; no offset is approved here.
- * One fixed local viewport proposal, retaining the current clock and centre content:
+ * One local whole-composition illustration using retained historical incident data:
  *   node tools/render-watch-ring-designs.mjs \
  *     --viewport-preview-output LOCAL_ARTIFACTS/<new-directory>
- * This active three-band proposal has outer radius 216, width 20 and gap 4 on the
- * unchanged 450 canvas. Its retained incident values are illustrative, not live data.
+ * It uses the same 225/202 composition scale as ordinary boards on the unchanged
+ * 450 canvas. Its retained incident values are illustrative, not live data.
  * Viewport and clock preview flags cannot be combined, or used with other flags.
  * The destination's parent must exist, and its resolved path must stay inside
  * LOCAL_ARTIFACTS. The destination must be new. Preview flags cannot use --check.
@@ -161,12 +161,13 @@ const FONT = 'Noto Sans'
 /** The canvas the face was measured on; every absolute number below is in its units. */
 const FACE = 450
 
-/** Only the isolated active proposal uses exact 20/4 geometry at the larger edge. */
-const VIEWPORT_GEOMETRY = { outerEdge: 216, width: 20, gap: 4 }
-const VIEWPORT_RADII = Array.from({ length: MAX_RINGS }, (_, index) =>
-  VIEWPORT_GEOMETRY.outerEdge - VIEWPORT_GEOMETRY.width / 2 -
-    index * (VIEWPORT_GEOMETRY.width + VIEWPORT_GEOMETRY.gap),
-)
+const COMPOSITION_SCALE = 225 / 202
+const compositionTransform = (size) =>
+  `translate(${size / 2} ${size / 2}) scale(${COMPOSITION_SCALE}) translate(${-size / 2} ${-size / 2})`
+
+// Preserve the measured N3 model, including its historical ambient approximation.
+// It is deliberately distinct from the runtime's nominal 20-unit bands / 4-unit gaps.
+const REVIEW_N3 = { outerCenterline: 450 * 0.4264, width: 450 * 0.0449, gap: 450 * 0.0084 }
 
 /**
  * Fixed in the 450-unit language: 132x26 boxes stepping 27 from y=259,
@@ -414,10 +415,6 @@ function assertNearExhaustedArcs() {
       })
     }).flat()
   })
-  geometries.push(...VIEWPORT_RADII.flatMap((r, index) => [
-    [r, VIEWPORT_GEOMETRY.width],
-    ...(index < 2 ? ringArcPair(r, VIEWPORT_GEOMETRY.width) : []),
-  ]))
   for (const [r, thickness] of geometries) {
     const cutoff = twoCapCutoff(r, thickness)
     const saturation = 2 * cutoff
@@ -453,7 +450,7 @@ function assertNearExhaustedArcs() {
 
 }
 
-function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
+function ringArc({ cx, cy, r, thickness, remaining, color, ambient, paired = false }) {
   const valueColor = ambient ? '#8A968F' : color
   if (remaining <= 0) {
     return `
@@ -490,7 +487,7 @@ function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
       </mask>
     </defs>
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${valueColor}"
-      stroke-width="${thickness}" mask="url(#${mask})" />`
+      stroke-width="${thickness + (paired ? 2 : 0)}" mask="url(#${mask})" />`
 
 }
 
@@ -760,16 +757,12 @@ async function faceSvg({
     band = thickness
   }
   if (viewport) {
-    assert.equal(size, FACE, 'viewport proposal must retain the 450-unit canvas')
-    assert.equal(ambient, false, 'viewport proposal is active only')
-    assert.equal(showPlan, true, 'viewport proposal must show its plan bands')
-    assert.equal(planLayers.length, MAX_RINGS, 'viewport proposal requires three bands')
-    assert.equal(clockUp, 0, 'viewport proposal must retain the approved clock')
-    assert.deepEqual(clearedCells, [], 'viewport proposal must retain the filled default cells')
-    outer = VIEWPORT_RADII[0]
-    thickness = VIEWPORT_GEOMETRY.width
-    gap = VIEWPORT_GEOMETRY.gap
-    band = thickness
+    assert.equal(size, FACE, 'composition illustration must retain the 450-unit canvas')
+    assert.equal(ambient, false, 'composition illustration is active only')
+    assert.equal(showPlan, true, 'composition illustration must show its plan bands')
+    assert.equal(planLayers.length, MAX_RINGS, 'composition illustration requires three bands')
+    assert.equal(clockUp, 0, 'composition illustration must retain the reference clock')
+    assert.deepEqual(clearedCells, [], 'composition illustration must retain the filled default cells')
   }
   const stripLayers = showPlan ? planLayers : layers.slice(0, 1)
 
@@ -792,6 +785,7 @@ async function faceSvg({
             remaining: 1 - (half === 0 ? planLayers[i].used : split.used),
             color: half === 0 ? planLayers[i].color : split.color,
             ambient,
+            paired: true,
           })
         })
       } else {
@@ -825,10 +819,12 @@ async function faceSvg({
 
   const clock = ambient ? CLOCK.ambient : CLOCK.active
   const timeSize = clock.fontSize * size / FACE
-  const timeY = (clock.baseline - clockUp) * size / FACE
+  // The public offset remains in final 450-unit coordinates, after the carrier.
+  const referenceY = Number((clock.baseline * size / FACE).toFixed(1))
+  const timeY = referenceY - clockUp * size / FACE / COMPOSITION_SCALE
   let content = upperCells({ size, ambient, clearedCells })
   content += `
-    <text x="${cx}" y="${timeY.toFixed(1)}" text-anchor="middle"
+    <text x="${cx}" y="${clockUp === 0 ? timeY.toFixed(1) : timeY}" text-anchor="middle"
       font-family="${FONT}, sans-serif" font-size="${timeSize.toFixed(1)}"
       font-weight="${clock.weight}" fill="${LABEL}">10:08</text>`
   content += await providerBars({
@@ -839,7 +835,7 @@ async function faceSvg({
     ambient,
   })
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="${esc(name)}">
   <defs>
     <radialGradient id="lift" cx="50%" cy="48%" r="62%">
@@ -853,11 +849,17 @@ async function faceSvg({
       <stop offset="100%" stop-color="${CELL_RIM}"/>
     </radialGradient>
   </defs>
+  <g id="composition" transform="${compositionTransform(size)}">
   <rect width="${size}" height="${size}" fill="url(#lift)"/>
   ${ringMarkup}
   ${content}
+  </g>
 </svg>
 `.replace(/^[ \t]+$/gm, '')
+  assert.equal((svg.match(/\bscale\(/g) ?? []).length, 1, 'each board must scale its complete composition exactly once')
+  assert.equal((svg.match(/<g id="composition"/g) ?? []).length, 1, 'each board needs one composition owner')
+  assert.ok(svg.includes(`transform="${compositionTransform(size)}"`), 'board must use the common centered scale')
+  return svg
 }
 
 const wearDir = join(root, 'apps/wear_android/design')
@@ -1115,12 +1117,33 @@ function watermarkBox() {
     ))
     .find((attrs) => attrs.alpha !== '0')
   if (!part) throw new Error('watchface.xml draws no visible watermark PartImage')
-  return {
+  const owner = Object.fromEntries([...group[0].slice(0, group[0].indexOf('>')).matchAll(/(\w+)="([^"]*)"/g)]
+    .map(([, key, value]) => [key, value]))
+  assert.deepEqual(['x', 'y', 'width', 'height', 'scaleX', 'scaleY', 'pivotX', 'pivotY'].map((key) => Number(owner[key])),
+    [0, 0, FACE, FACE, COMPOSITION_SCALE, COMPOSITION_SCALE, 0.5, 0.5],
+    'watermark must use the common full-face carrier')
+  const reference = {
     x: Number(part.x),
     y: Number(part.y),
     width: Number(part.width),
     height: Number(part.height),
+  }
+  const nominal = {
+    x: FACE / 2 + (reference.x - FACE / 2) * COMPOSITION_SCALE,
+    y: FACE / 2 + (reference.y - FACE / 2) * COMPOSITION_SCALE,
+    width: reference.width * COMPOSITION_SCALE,
+    height: reference.height * COMPOSITION_SCALE,
+  }
+  // Round the two edges once; rounding width independently can shift the far edge.
+  const x = Math.round(nominal.x)
+  const y = Math.round(nominal.y)
+  return {
+    x, y,
+    width: Math.round(nominal.x + nominal.width) - x,
+    height: Math.round(nominal.y + nominal.height) - y,
     alpha: Number(part.alpha) / 255,
+    reference, nominal,
+    rounding: 'Round each effective raster edge once; width/height are edge differences.',
   }
 }
 
@@ -1162,9 +1185,9 @@ const pickerPreview = {
   },
 }
 
-// Retained incident values are design data; ordinary catalog entries and boards stay unchanged.
+// Historical incident values illustrate the completed geometry, independently of current Live.
 const viewportProposal = {
-  name: 'Round · viewport proposal',
+  name: 'Round · whole-composition illustration · historical data',
   viewport: true,
   showPlan: true,
   showCredits: true,
@@ -1188,7 +1211,7 @@ function assertClockOnlyPreview(reference, preview, up) {
   const after = clock(preview)
   const restored = preview.replace(after.markup, after.markup.replace(/\by="[^"]+"/, `y="${before.y}"`))
   assert.equal(restored, reference, 'preview may change only the clock y coordinate')
-  assert.equal(Number((Number(before.y) - Number(after.y)).toFixed(1)), up,
+  assert.ok(Math.abs((Number(before.y) - Number(after.y)) * COMPOSITION_SCALE - up) < 1e-9,
     'preview must move upward by the requested 450-unit offset')
   assert.ok(Number(after.y) > 0 && Number(after.y) < Number(before.y),
     'preview clock baseline must remain positive and move upward')
@@ -1248,7 +1271,11 @@ async function renderClockPreview({ up, output }) {
     tools: { node: process.version, imageMagick: rendererVersion.trim() },
     inputHashes,
     reference: relative(root, referencePath),
-    clock: { upwardOffset450: up, ...clock },
+    clock: {
+      upwardOffset450: up, referenceGeometry: clock, compositionScale: COMPOSITION_SCALE,
+      effectiveReferenceY: FACE / 2 + (clock.referenceY - FACE / 2) * COMPOSITION_SCALE,
+      effectivePreviewY: FACE / 2 + (clock.previewY - FACE / 2) * COMPOSITION_SCALE,
+    },
     displayedContent: {
       time: '10:08',
       cells: CELL.readings.map(({ text }) => text),
@@ -1290,7 +1317,7 @@ async function renderViewportPreview({ output }) {
     [path, await sha256(resolve(root, path))])))
   assert.equal(inputHashes[relative(root, pickerPreview.overlay.image)],
     '599a722e2c08bb5d952e87ceb0ea02c228c77554e0dc3572e7eeb992b96d1cef',
-    'viewport proposal must retain the original logo pixels')
+    'composition illustration must retain the original logo pixels')
   const { stdout: rendererVersion } = await runFile('convert', ['-version'], { encoding: 'utf8' })
   await mkdir(directory, { mode: 0o700 })
   const stem = join(directory, 'viewport-preview')
@@ -1313,7 +1340,7 @@ async function renderViewportPreview({ output }) {
   assert.equal(width, FACE, 'viewport preview must retain the full canvas width')
   assert.equal(height, FACE, 'viewport preview must retain the full canvas height')
   const metadata = {
-    status: 'UNAPPROVED PREVIEW ONLY',
+    status: 'COMPLETED COMPOSITION ILLUSTRATION — HISTORICAL DATA',
     evidence: 'Illustrative retained incident data; no fresh-live, healthy-public or native seam-repair acceptance.',
     invocation: { cwd: process.cwd(), argv: [process.execPath, ...process.argv.slice(1)] },
     tools: { node: process.version, imageMagick: rendererVersion.trim() },
@@ -1322,28 +1349,44 @@ async function renderViewportPreview({ output }) {
     geometry: {
       canvas: { width: FACE, height: FACE },
       center: { x: FACE / 2, y: FACE / 2 },
-      proposed: {
-        ...VIEWPORT_GEOMETRY,
-        diameter: VIEWPORT_GEOMETRY.outerEdge * 2,
-        border: FACE / 2 - VIEWPORT_GEOMETRY.outerEdge,
-        innerEdge: VIEWPORT_RADII.at(-1) - VIEWPORT_GEOMETRY.width / 2,
-        centerlinesOuterToInner: VIEWPORT_RADII,
-        pairedCenterlinesInnerOuter: VIEWPORT_RADII.slice(0, 2).map((r) =>
-          ringArcPair(r, VIEWPORT_GEOMETRY.width).map(([radius]) => radius)),
-        halfWidth: VIEWPORT_GEOMETRY.width / 2,
+      reference: { runtimeOuterEdge: 202, runtimeWidth: 20, runtimeGap: 4, measuredReview: REVIEW_N3 },
+      scale: { numerator: 225, denominator: 202, value: COMPOSITION_SCALE, pivot: { x: 225, y: 225 }, applications: 1 },
+      effective: {
+        runtimeOuterEdge: 225, runtimeBorder: 0,
+        reviewWidth: REVIEW_N3.width * COMPOSITION_SCALE,
+        reviewGap: REVIEW_N3.gap * COMPOSITION_SCALE,
+        reviewOuterEdge: (REVIEW_N3.outerCenterline + REVIEW_N3.width / 2) * COMPOSITION_SCALE,
+        reviewCenterlinesOuterToInner: Array.from({ length: MAX_RINGS }, (_, index) =>
+          (REVIEW_N3.outerCenterline - index * (REVIEW_N3.width + REVIEW_N3.gap)) * COMPOSITION_SCALE),
       },
-      accepted: { outerEdge: 202, diameter: 404, border: 23 },
+      rasterRounding: {
+        portrait: pickerPreview.overlay.rounding,
+        periodTextures: 'ceil(referenceDiameter * 225 / 202), integer numerator first; unchanged reference WFF image boxes.',
+      },
     },
     displayedContent: {
+      provenance: 'Historical incident illustration; values/order are not current Live or native acceptance.',
       time: '10:08',
-      clock: { ...CLOCK.active, renderedBaseline: Number(CLOCK.active.baseline.toFixed(1)) },
-      cellSize: CELL.size,
-      cells: CELL.readings,
-      legendWell: STRIP,
+      clock: {
+        reference: { ...CLOCK.active, renderedBaseline: Number(CLOCK.active.baseline.toFixed(1)) },
+        effectiveFontSize: CLOCK.active.fontSize * COMPOSITION_SCALE,
+        effectiveBaseline: FACE / 2 + (Number(CLOCK.active.baseline.toFixed(1)) - FACE / 2) * COMPOSITION_SCALE,
+      },
+      referenceCells: { size: CELL.size, readings: CELL.readings },
+      effectiveCells: CELL.readings.map(({ x, y, ...reading }) => ({
+        ...reading,
+        x: FACE / 2 + (x - FACE / 2) * COMPOSITION_SCALE,
+        y: FACE / 2 + (y - FACE / 2) * COMPOSITION_SCALE,
+        size: CELL.size * COMPOSITION_SCALE,
+      })),
+      referenceLegendWell: STRIP,
+      effectiveLegendWell: { width: STRIP.width * COMPOSITION_SCALE, height: STRIP.height * COMPOSITION_SCALE,
+        pitch: STRIP.pitch * COMPOSITION_SCALE, radius: STRIP.radius * COMPOSITION_SCALE },
       legend: sortByRemaining(viewportProposal.layers).map((layer) => ({
         provider: layer.id,
         text: barLabel(layer, viewportProposal),
-        fontSize: stripFontSize(barLabel(layer, viewportProposal)),
+        referenceFontSize: stripFontSize(barLabel(layer, viewportProposal)),
+        effectiveFontSize: stripFontSize(barLabel(layer, viewportProposal)) * COMPOSITION_SCALE,
       })),
       layersOuterToInner: viewportProposal.layers,
     },
@@ -1355,7 +1398,7 @@ async function renderViewportPreview({ output }) {
     },
   }
   await writeFile(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, { flag: 'wx' })
-  console.log(`UNAPPROVED PREVIEW ONLY: ${pngPath}`)
+  console.log(`Historical whole-composition illustration: ${pngPath}`)
   // A metadata file cannot contain its own digest; retain that identity in the delivery receipt.
   console.log(`metadata: ${metadataPath} (sha256 ${await sha256(metadataPath)})`)
 }
@@ -1443,17 +1486,19 @@ async function assertViewportPreviewIsolation() {
     await assert.rejects(clockPreviewDirectory(output, parentUnchanged), /inside LOCAL_ARTIFACTS/)
   }
   await assert.rejects(clockPreviewDirectory(preview.output, async () => wffDir), /resolves outside/)
-  assert.deepEqual(VIEWPORT_RADII, [206, 182, 158])
-  assert.deepEqual(VIEWPORT_RADII.slice(0, 2).map((r) => ringArcPair(r, VIEWPORT_GEOMETRY.width)),
-    [[[201, 10], [211, 10]], [[177, 10], [187, 10]]])
+  for (const [key, value] of Object.entries({ outerCenterline: 191.88, width: 20.205, gap: 3.78 })) {
+    assert.ok(Math.abs(REVIEW_N3[key] - value) < 1e-12, 'retain the measured N3 reference geometry within binary rounding')
+  }
+  assert.ok(Math.abs(202 * COMPOSITION_SCALE - 225) < 1e-12, 'the common scale must reach the effective viewport edge')
   assert.deepEqual(CLOCK.active, { fontSize: 86, baseline: 240.78125, weight: 700 })
   assert.equal(CELL.size, 52)
   assert.deepEqual(CELL.readings.map(({ text }) => text), ['Tue', '18°C', 'UV 7'])
   assert.deepEqual([STRIP.width, STRIP.height, STRIP.fontSize], [132, 26, 20])
-  assert.deepEqual(pickerPreview.overlay, {
-    image: join(root, 'apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png'),
-    x: 193, y: 141, width: 64, height: 64, alpha: 95 / 255,
-  })
+  const { image, x, y, width, height, alpha, reference: logoReference, nominal } = pickerPreview.overlay
+  assert.equal(image, join(root, 'apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png'))
+  assert.deepEqual({ x, y, width, height, alpha }, { x: 189, y: 131, width: 72, height: 72, alpha: 95 / 255 })
+  assert.deepEqual(logoReference, { x: 193, y: 141, width: 64, height: 64 })
+  assert.equal(nominal.width, 64 * COMPOSITION_SCALE)
   const ordered = sortByRemaining(viewportProposal.layers)
   assert.deepEqual(ordered.map((layer) => [layer.id, layer.used, layer.split?.id, layer.split?.used]), [
     ['codex', 1, undefined, undefined], ['cursor', 0, 'cursor-other', 0.36], ['claude', 0.12, 'fable', 0],
@@ -1465,31 +1510,32 @@ async function assertViewportPreviewIsolation() {
     ['0% · 49.7K', '100% · 64%', '88% · 100%'])
   const reference = await faceSvg({ ...viewportProposal, viewport: false, size: FACE })
   const candidate = await faceSvg({ ...viewportProposal, size: FACE })
+  assert.equal(candidate, reference, 'fixed illustration must consume the ordinary composition without a geometry override')
   const cells = upperCells({ size: FACE, ambient: false })
   const content = (svg) => {
     const start = svg.indexOf(cells)
-    assert.ok(start >= 0, 'viewport proposal must retain all default cell markup')
+    assert.ok(start >= 0, 'composition illustration must retain all default cell markup')
     assert.equal(svg.indexOf(cells, start + cells.length), -1, 'default cells must appear once')
     return svg.slice(start)
   }
   assert.equal(content(candidate), content(reference),
-    'viewport proposal may change only band geometry, keeping all centre content unchanged')
-  assert.ok(candidate.includes('y="240.8" text-anchor="middle"'), 'viewport clock baseline must stay approved')
+    'fixed illustration must preserve all center content')
+  assert.ok(candidate.includes('y="240.8" text-anchor="middle"'), 'clock must retain its reference baseline beneath the scale')
   assert.ok(candidate.includes('<tspan fill="#FFB4AB">0%</tspan> · 49.7K'),
     'only the exhausted percentage token must turn red')
   for (const [index, layer] of ordered.entries()) {
-    const r = VIEWPORT_RADII[MAX_RINGS - 1 - index]
-    const halves = layer.split ? ringArcPair(r, VIEWPORT_GEOMETRY.width) : [[r, VIEWPORT_GEOMETRY.width]]
+    const r = REVIEW_N3.outerCenterline - (MAX_RINGS - 1 - index) * (REVIEW_N3.width + REVIEW_N3.gap)
+    const halves = layer.split ? ringArcPair(r, REVIEW_N3.width) : [[r, REVIEW_N3.width]]
     halves.forEach(([radius, thickness], half) => {
       const pool = half === 0 ? layer : layer.split
       assert.ok(candidate.includes(ringArc({
         cx: FACE / 2, cy: FACE / 2, r: radius, thickness,
-        remaining: 1 - pool.used, color: pool.color, ambient: false,
-      })), 'each proposal pool must paint its own value and color at the proposed radius')
+        remaining: 1 - pool.used, color: pool.color, ambient: false, paired: Boolean(layer.split),
+      })), 'each historical pool must paint its own value and color at the reference radius')
     })
   }
   await assert.rejects(faceSvg({ ...viewportProposal, size: FACE, ambient: true }), /active only/)
-  await assert.rejects(faceSvg({ ...viewportProposal, size: FACE, clockUp: 1 }), /approved clock/)
+  await assert.rejects(faceSvg({ ...viewportProposal, size: FACE, clockUp: 1 }), /reference clock/)
   let previewWrites = 0
   const rejectCanonicalWrite = () => assert.fail('viewport preview must not write or render canonical exports')
   await writeDesigns(preview, {

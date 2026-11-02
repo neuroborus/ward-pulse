@@ -12,6 +12,7 @@
       <stop offset="100%" stop-color="#242A27"/>
     </radialGradient>
   </defs>
+  <g id="composition" transform="translate(225 225) scale(1.113861386138614) translate(-225 -225)">
   <rect width="450" height="450" fill="url(#lift)"/>
 
     <circle cx="225" cy="225" r="148.04999999999998" fill="none" stroke="#2E3632"
@@ -205,4 +206,5 @@
       font-family="Noto Sans, sans-serif" font-size="20.0"
       font-weight="700" fill="#F4FBF8">$12.40/50</text>
     </g>
+  </g>
 </svg>

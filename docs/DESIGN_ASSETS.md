@@ -91,8 +91,18 @@ the `wffFiles` subset into `apps/watchface_wff/design/`, and rasterizes the face
 asset `apps/watchface_wff/src/main/res/drawable/preview.png` from the Primary one. Primary
 preview: `apps/wear_android/design/preview-3-plan-credits.png`.
 
+The [whole-composition scale, 2026-11-02](product/WATCH_RING_DESIGN.md#revision-2026-11-02--whole-composition-scale-and-paired-source-allowance)
+owns current effective geometry: every reference element grows once by 225/202 about (225,225)
+on the unchanged 450 canvas. Canonical resources precede review exports. All 18 textures are
+sampled at ceil(reference diameter × scale), retaining reference WFF image boxes and font identity.
+Boards/mirrors use one SVG composition transform, preserving measured N3 20.205/3.78 geometry and
+historical ambient approximations separately from runtime nominal 20/4. The fixed local illustration
+uses this same transform with disclosed historical data, not current Live or a separate 216-radius
+proposal. Its metadata records reference/effective geometry, single scale and raster rounding.
+New-byte native fit and paired-contour acceptance remain Pending.
+
 The [approved active-clock translation, 2026-11-01](product/WATCH_RING_DESIGN.md#revision-2026-11-01--approved-active-clock-translation)
-owns the current centre composition, retaining the other
+owns the reference centre composition beneath that scale, retaining the other
 [2026-10-27 composition contracts](product/WATCH_RING_DESIGN.md#revision-2026-10-27--upward-digits-and-fixed-reference-bottoms). The
 [N1-width revision](product/WATCH_RING_DESIGN.md#revision-2026-10-30--n1-width-44), retaining the
 [adaptive admission contract](product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count),
@@ -189,6 +199,10 @@ wordmark for quiet watermark treatments.
 
 Quiet branding on WFF — not a second hero. Locked with the concentric face baseline:
 
+- **Whole-composition scale, 2026-11-02** — the original image boxes below are reference
+  geometry under the common 225/202 carrier. The portrait derives their effective bounds from
+  canonical XML, rounds each raster edge once and records nominal plus rounded bounds; the active
+  overlay is (189,131,72,72). The original source pixels/alpha/fade and runtime alpha95/70 stay fixed.
 - **No framing ring** — straight `WARDPULSE` wordmark above the pulse + eye.
 - **Placement** — below the central upper cell and above the enlarged whole clock; order is
   cells → logo → clock → sunk strips.

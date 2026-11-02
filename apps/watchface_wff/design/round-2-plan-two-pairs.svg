@@ -12,6 +12,7 @@
       <stop offset="100%" stop-color="#242A27"/>
     </radialGradient>
   </defs>
+  <g id="composition" transform="translate(225 225) scale(1.113861386138614) translate(-225 -225)">
   <rect width="450" height="450" fill="url(#lift)"/>
 
     <circle cx="225" cy="225" r="142" fill="none" stroke="#2E3632"
@@ -29,7 +30,7 @@
       </mask>
     </defs>
     <circle cx="225" cy="225" r="142" fill="none" stroke="#65D78A"
-      stroke-width="16" mask="url(#arc-225-225-142-16)" />
+      stroke-width="18" mask="url(#arc-225-225-142-16)" />
     <circle cx="225" cy="225" r="158" fill="none" stroke="#2E3632"
       stroke-width="16" />
     <defs>
@@ -45,7 +46,7 @@
       </mask>
     </defs>
     <circle cx="225" cy="225" r="158" fill="none" stroke="#186020"
-      stroke-width="16" mask="url(#arc-225-225-158-16)" />
+      stroke-width="18" mask="url(#arc-225-225-158-16)" />
     <circle cx="225" cy="225" r="178" fill="none" stroke="#2E3632"
       stroke-width="16" />
     <defs>
@@ -61,7 +62,7 @@
       </mask>
     </defs>
     <circle cx="225" cy="225" r="178" fill="none" stroke="#7E93B8"
-      stroke-width="16" mask="url(#arc-225-225-178-16)" />
+      stroke-width="18" mask="url(#arc-225-225-178-16)" />
     <circle cx="225" cy="225" r="194" fill="none" stroke="#2E3632"
       stroke-width="16" />
     <defs>
@@ -77,7 +78,7 @@
       </mask>
     </defs>
     <circle cx="225" cy="225" r="194" fill="none" stroke="#67E8D4"
-      stroke-width="16" mask="url(#arc-225-225-194-16)" />
+      stroke-width="18" mask="url(#arc-225-225-194-16)" />
 
     <circle cx="173.0" cy="135.0" r="26.0" fill="#0B0E0C" />
 
@@ -204,4 +205,5 @@
       width="4.5"
       height="17.0"
       rx="2.3" fill="#67E8D4" />
+  </g>
 </svg>

@@ -20,14 +20,129 @@ BAND_LAYOUTS = {
 }
 
 N1_RESTORE = "ring1N1BackdropRestore"
+COMPOSITION_SCALE = 225 / 202
+SCALE_ATTRIBUTES = {"scaleX": str(COMPOSITION_SCALE), "scaleY": str(COMPOSITION_SCALE),
+                    "pivotX": "0.5", "pivotY": "0.5"}
 
 
 def element_children(element):
     return [child for child in element if isinstance(child.tag, str)]
 
 
-def check_structure(root):
+def check_composition_scale(root):
+    """Check actual WFF2 owners before the reference-coordinate semantic guards."""
     errors = []
+    canvas = {"x": "0", "y": "0", "width": "450", "height": "450"}
+    scene = root.find("Scene")
+    if root.attrib != {"width": "450", "height": "450"} or scene is None:
+        return ["whole-composition scaling must retain the 450 canvas and Scene"]
+    if scene.attrib != {"backgroundColor": "#ff0a0d0b"}:
+        errors.append("Scene must not carry an unsupported scale or geometry attribute")
+    slots = scene.findall("ComplicationSlot")
+    chrome = scene.find("Group[@name='compositionChrome']")
+    clock = scene.find("DigitalClock")
+    mark = scene.find("Group[@name='wardpulse']")
+    carriers = slots + [chrome, clock, mark]
+    if len(slots) != 8 or len(list(root.iter("ComplicationSlot"))) != 8 or any(node is None for node in carriers):
+        return ["eight direct Scene slots, chrome, clock and watermark must own the scale"]
+    for owner in carriers:
+        if any(owner.get(key) != value for key, value in {**canvas, **SCALE_ATTRIBUTES}.items()):
+            errors.append(f"{owner.tag}/{owner.get('name', owner.get('slotId'))}: use one full-face scale and normalized center pivot")
+    for node in root.iter():
+        if node not in carriers and any(key in node.attrib for key in ("scaleX", "scaleY")):
+            errors.append(f"{node.tag}: nested/extra scale would enlarge the composition twice")
+        if node.tag in ("Transform", "Variant") and node.get("target") in ("scaleX", "scaleY"):
+            errors.append("composition scale must remain on its documented fixed owner")
+        if node.tag == "Group" and not node.get("name"):
+            errors.append("all WFF Groups need stable names")
+        if node.tag in ("ComplicationSlot", "Group", "DigitalClock", "TimeText", "PartImage"):
+            if any(key in node.attrib and not node.get(key).lstrip("-").isdigit()
+                   for key in ("x", "y", "width", "height")):
+                errors.append(f"{node.tag}: base rectangles must stay integer reference geometry")
+    for owner in carriers:
+        if any(node.tag in ("Transform", "Variant") and node.get("target") in
+               ("x", "y", "width", "height", "pivotX", "pivotY") for node in owner):
+            errors.append("full-face carrier geometry and pivot must not be overridden")
+    for slot in slots:
+        if slot.get("slotId") in ("101", "102", "105"):
+            bound = slot.find("BoundingBox")
+            if bound is None or bound.attrib != canvas:
+                errors.append("main ring clips must retain the full reference canvas under their slot scale")
+    chrome_children = element_children(chrome)
+    if ([child.get("name") for child in chrome_children] != ["lift", "cell1Chrome", "cell2Chrome", "cell3Chrome"]
+            or list(scene).index(chrome) >= min(list(scene).index(slot) for slot in slots)):
+        errors.append("one scaled chrome Group must retain backdrop and all cell chrome before slots")
+    for slot_id, x, y in (("201", 147, 109), ("202", 199, 95), ("203", 251, 109)):
+        slot = scene.find(f"ComplicationSlot[@slotId='{slot_id}']")
+        if slot is None:
+            errors.append(f"missing customizable cell {slot_id}")
+            continue
+        rectangle = {"x": str(x), "y": str(y), "width": "52", "height": "52"}
+        bound = slot.find("BoundingBox")
+        if bound is None or bound.attrib != rectangle:
+            errors.append(f"cell {slot_id}: bounds must transform with content at its original integer position")
+        for complication in slot.findall("Complication"):
+            if complication.get("type") != "EMPTY":
+                group = complication.find("Group")
+                if group is None or any(group.get(key) != value for key, value in rectangle.items()):
+                    errors.append(f"cell {slot_id}: every populated type must share the transformed bounding box")
+        # The complete transformed cell rectangle must fit the physical circle.
+        for px in (x, x + 52):
+            for py in (y, y + 52):
+                if math.hypot((px - 225) * COMPOSITION_SCALE, (py - 225) * COMPOSITION_SCALE) >= 225:
+                    errors.append(f"cell {slot_id}: effective bounds exceed the circular viewport")
+    times = clock.findall("TimeText")
+    if len(times) != 2 or [(node.get("y"), node.get("height"), node.find("Font").get("size"))
+                           for node in times] != [("166", "90", "86"), ("175", "90", "96")]:
+        errors.append("whole clocks must retain their reference sizes and placements beneath one scale")
+    if any(node.get("format") != "hh:mm" or node.get("hourFormat") != "SYNC_TO_DEVICE"
+           or node.find("Font").get("family") != "SYNC_TO_DEVICE" for node in times):
+        errors.append("whole-clock formatting and device font identity must stay synchronized")
+    images = mark.findall("PartImage")
+    expected = [("193", "141", "64", "95"), ("198", "146", "54", "0")]
+    if (len(images) != 2 or [(node.get("x"), node.get("y"), node.get("width"), node.get("alpha"))
+                             for node in images] != expected
+            or any(node.get("height") != node.get("width") or node.find("Image").get("resource") != "wardpulse_mono"
+                   for node in images)):
+        errors.append("watermark must retain its original square image boxes and alpha beneath one scale")
+    if not math.isclose(202 * COMPOSITION_SCALE, 225, abs_tol=1e-12):
+        errors.append("the effective outer edge must meet radius 225 without a reserve")
+    return errors + check_texture_boxes(root)
+
+
+def check_texture_boxes(root):
+    """Raster sampling increases separately; XML boxes retain reference geometry."""
+    expected = {}
+    for count, diameters in ((1, (404,)), (2, (404, 332)), (3, (404, 356, 308))):
+        prefix = "ring" if count == 3 else f"ring_n{count}_"
+        for index, diameter in enumerate(diameters, 1):
+            for period in ("day", "week", "month"):
+                expected[f"{prefix}{index}_type_{period}"] = diameter
+    errors = []
+    seen = set()
+    for part in root.findall(".//PartImage"):
+        image = part.find("Image")
+        resource = "" if image is None else image.get("resource", "")
+        if not resource.startswith("ring"):
+            continue
+        diameter = expected.get(resource)
+        if diameter is None:
+            errors.append(f"unknown period texture resource {resource}")
+            continue
+        seen.add(resource)
+        inset = str((450 - diameter) // 2)
+        if (part.attrib != {"x": inset, "y": inset, "width": str(diameter),
+                           "height": str(diameter), "alpha": "115"}
+                or [node.attrib for node in part.findall("Variant")] !=
+                [{"mode": "AMBIENT", "target": "alpha", "value": "63"}]):
+            errors.append(f"{resource}: preserve reference image box/alpha beneath its single scaled slot")
+    if seen != set(expected):
+        errors.append("all 18 period textures must retain their reference WFF image boxes")
+    return errors
+
+
+def check_structure(root):
+    errors = check_composition_scale(root)
     owners = {node: slot.get("slotId") for slot in root.iter("ComplicationSlot") for node in slot.iter()}
     for branch in root.iter():
         if branch.tag not in ("Compare", "Default"):
@@ -206,11 +321,12 @@ def check_temperature(root):
     slots = scene.findall("ComplicationSlot")
     if sorted(slot.get("slotId") for slot in slots) != ["101", "102", "105", "106", "109", "201", "202", "203"]:
         errors.append("temperature configuration must preserve all eight complication slots")
-    chrome = scene.find("Group[@name='cell2Chrome']")
+    chrome_owner = scene.find("Group[@name='compositionChrome']")
+    chrome = scene.find("Group[@name='compositionChrome']/Group[@name='cell2Chrome']")
     if chrome is None:
         return errors + ["missing built-in temperature chrome"]
     for label in ("cell2", "cell3"):
-        group = scene.find(f"Group[@name='{label}Chrome']")
+        group = scene.find(f"Group[@name='compositionChrome']/Group[@name='{label}Chrome']")
         if group is None:
             errors.append(f"missing {label} weather chrome")
             continue
@@ -219,7 +335,7 @@ def check_temperature(root):
                 or group.find("Condition/Compare[@expression='hasWeather']") is None
                 or group.find(f"Condition/Default/Group[@name='{label}Bare']") is None):
             errors.append(f"{label}: preserve the weather availability gate and bare recess")
-        if any(list(scene).index(group) >= list(scene).index(slot) for slot in slots):
+        if chrome_owner is None or any(list(scene).index(chrome_owner) >= list(scene).index(slot) for slot in slots):
             errors.append(f"{label}: built-in weather must remain beneath every complication slot")
 
     def expect_reading(temperature, unit, selection, value, suffix, size):
@@ -351,18 +467,27 @@ def check_band_envelopes(root):
                     or (previous_inner is None and full_edges[1] != 202)
                     or (previous_inner is not None and previous_inner - full_edges[1] != 4)):
                 errors.append(f"{layout}/{index}: emitted radial edges, aperture or gapless halves drifted")
+            # The carriers above were checked on the actual emitted owners.
+            # Compare effective geometry, while retaining reference tests below.
+            if (not math.isclose(inner_edges[1] * COMPOSITION_SCALE, outer_edges[0] * COMPOSITION_SCALE, abs_tol=1e-12)
+                    or (previous_inner is None and not math.isclose(full_edges[1] * COMPOSITION_SCALE, 225, abs_tol=1e-12))
+                    or (previous_inner is not None and not math.isclose(
+                        (previous_inner - full_edges[1]) * COMPOSITION_SCALE, 4 * COMPOSITION_SCALE, abs_tol=1e-12))):
+                errors.append(f"{layout}/{index}: effective outer edge, paired join or proportional gap drifted")
             previous_inner = full_edges[0]
         if previous_inner != belt_end:
             errors.append(f"{layout}: belt must end at {belt_end}")
     return errors
 
 
-def check_paint_shape(paint, kind, diameter, thickness, name):
+def check_paint_shape(paint, kind, diameter, thickness, name, paired=False):
     """One live color source, an opaque local mask union and one ambient alpha."""
     canvas = {"x": "0", "y": "0", "width": "450", "height": "450"}
     geometry = {"centerX": "225", "centerY": "225", "width": f"{diameter:g}",
                 "height": f"{diameter:g}", "startAngle": "0", "endAngle": "359.9"}
     weighted = {"thickness": f"{thickness:g}", "colors": "[COMPLICATION.RANGED_VALUE_COLORS]", "cap": "ROUND"}
+    if paired and kind != "full":
+        weighted["thickness"] = f"{thickness + 2:g}"
     if paint is None or paint.find(".//Condition") is not None:
         return False
     attributes = {**canvas, "alpha": "255"}
@@ -518,7 +643,7 @@ def check_band_paints(root):
             name_kind = f"{name}_{kind}"
             if (decision.attrib != {**canvas, "name": name_kind, "alpha": "0"}
                     or [child.tag for child in element_children(decision)] != ["Transform", "PartDraw" if kind == "full" else "Group"]
-                    or not check_paint_shape(decision[1], kind, diameter, thickness, name_kind)):
+                    or not check_paint_shape(decision[1], kind, diameter, thickness, name_kind, name.endswith("Half"))):
                 errors.append(f"{name_kind}: paint lost its isolated source/mask, endpoints, family or single ambient alpha")
         foreground = [node for child in children for node in child.iter()]
         if (sum(node.tag == "WeightedStroke" for node in foreground) != 3
@@ -562,7 +687,7 @@ def check_backdrop_restore(root):
     """Check local declaration coverage, not fractional native raster coverage."""
     errors = []
     canvas = {"x": "0", "y": "0", "width": "450", "height": "450"}
-    lift = root.find("Scene/PartDraw[@name='lift']")
+    lift = root.find("Scene/Group[@name='compositionChrome']/PartDraw[@name='lift']")
     ellipse = None if lift is None else lift.find("Ellipse")
     fill = None if ellipse is None else ellipse.find("Fill")
     gradient = None if fill is None else fill.find("RadialGradient")
@@ -770,7 +895,7 @@ def check_extra_decisions(root):
                 paints.append(None)
                 continue
             paint = draws[1]
-            if not check_paint_shape(paint, kind, diameter, thickness, name):
+            if not check_paint_shape(paint, kind, diameter, thickness, name, paired=True):
                 errors.append(f"{name}: selected drawing lost its isolated composition, geometry, family or ambient alpha")
             paints.append(paint)
 
@@ -892,7 +1017,9 @@ def emitted_band_layers(root, responses):
             if mask is not None and source is not None:
                 core = mask.find("PartDraw/Arc")
                 ellipse = mask.find("Group/PartDraw/Ellipse")
-                layers.append((float(core.get("width")) / 2, float(source.get("thickness")),
+                # Coverage allowance belongs only to SOURCE. The nominal MASK
+                # remains the visible envelope in this reference-coordinate model.
+                layers.append((float(core.get("width")) / 2, float(core.find("Stroke").get("thickness")),
                                paint_attribute(core, "startAngle", fields["value"], fields["maximum"]),
                                paint_attribute(core, "endAngle", fields["value"], fields["maximum"]),
                                ("ELLIPSE", paint_attribute(ellipse, "width", fields["value"], fields["maximum"]) / 2),

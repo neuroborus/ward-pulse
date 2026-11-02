@@ -80,7 +80,10 @@ Wear OS and Watch Face Format until the next explicit design revision.
 Implementation and review art must follow this document; do not reintroduce side-by-side ring
 wireframes, large remaining-% heroes, or bordered strip cards.
 
-The operative layout is the
+The operative effective layout follows the
+[whole-composition revision](#revision-2026-11-02--whole-composition-scale-and-paired-source-allowance).
+Earlier geometry below remains reference geometry beneath its common carrier, or dated
+historical evidence for the bytes measured then. The reference layout is the
 [approved active-clock translation](#revision-2026-11-01--approved-active-clock-translation), retaining the
 [2026-10-27 ambient and other composition contracts](#revision-2026-10-27--upward-digits-and-fixed-reference-bottoms) and the
 [outward-preserving cell contract](#revision-2026-10-25--preserved-outward-fade-and-50-unit-cells).
@@ -96,6 +99,80 @@ Canonical review generator: `tools/render-watch-ring-designs.mjs`
 Canonical face generator: `tools/render-watchface.mjs` — it writes the shipped `watchface.xml`
 and the ring-type drawables beside it.  
 Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and sibling variants).
+
+## Revision 2026-11-02 — whole-composition scale and paired SOURCE allowance
+
+The Owner selected the entire accepted radius-202 composition enlarged to radius **225**
+about **(225,225)** on the unchanged **450×450** canvas. Apply **225/202** once to all
+positions, time/glyphs, cells/rims, logo, legend/wells/padding/accents, arcs/strokes/gaps/caps,
+backdrop, masks/clips and period imagery. There is no residual inset or separate clock rise.
+Reference literals, families/weights, original logo pixels/alpha/fade, palette, labels, units,
+device-synchronized whole time/hour format and data meaning remain unchanged.
+
+`COMPOSITION_SCALE` and `SCALE_ATTRIBUTES` in `tools/render-watchface.mjs` put documented
+`scaleX`/`scaleY` and normalized `0.5` pivots on each full-face ring/extra slot, `DigitalClock`,
+the watermark Group and the named `compositionChrome` Group. Scene has no scale attribute;
+all eight slots remain direct Scene children. Each customizable slot now has integer
+rectangle (0,0,450,450); its content Group and BoundingBox retain the original integer
+52-square cell position. Thus chrome, populated content, clipping, editor and tap bounds
+share the same transformation rather than scaling paint around a small slot's local center.
+Nested coordinates, fonts, image boxes, strokes and masks are not multiplied again.
+
+| Quantity | Reference | Effective geometry |
+| --- | --- | --- |
+| Outer radius / canvas border | 202 / 23 | 225 / 0 |
+| Full band widths N1 / N2 / N3 | 44 / 32 / 20 | reference × 225/202 |
+| Half widths and inter-band gaps | 22, 16, 10 / 4 | reference × 225/202 |
+| Position coordinate q | original integer or legal float | 225 + (q − 225) × 225/202 |
+| Cell / legend well / active logo size | 52 / 132×26 / 64 | reference × 225/202 |
+
+WFF floating-point attributes and renderer rasterization do not promise exact decimal
+pixel placement. A full-face slot's transformed rectangle exceeds the physical canvas;
+the final viewport still clips at 450. The extra-slot reference clip remains radii 139..207
+and scales with its slot; its margin is not a visible outside reserve. Native editor/tap
+dispatch, clip behavior and complete clock/cell/legend/logo fit remain acceptance work.
+
+`PAIRED_SOURCE_ALLOWANCE` selects a bounded seam hypothesis: only paired inner and extra
+**partial** colored SOURCE strokes gain **one reference unit on each radial side**. Their
+centerline, nominal white MASK core, elliptical caps, percentage calculations and cutoffs
+stay unchanged. Ordinary partials, full paths, tracks and zero gates retain their paint.
+The approximately one-native-pixel Round allowance tests repeated SOURCE/MASK edge attenuation;
+it adds no unconditional bridge or visible-envelope extension and establishes no AA cause.
+The shared contour must still prove continuous in actual paired full/full and partial/full
+controls, including ambient; an unresolved seam is a finding, not accepted improvement.
+
+All **18** period textures are regenerated from their reference SVG geometry using the
+existing named-file rasterizer and original Noto Sans Bold, repeat counts, breaks and opacity.
+Density targets **ceil(referenceDiameter × 225/202)** samples: reference 404/356/332/308
+becomes 450/397/370/344 pixels. PNG dimensions are asserted on generation and drift inspection.
+Multiply the integer numerator before division so binary scale rounding cannot turn the
+exact 404→450 case into a spurious 451-pixel raster.
+WFF image boxes keep reference dimensions under the scaled slot, so sampling is not a second
+geometric enlargement. Original watermark input pixels remain untouched.
+
+Ordinary review boards, mirrors and the fixed historical illustration use one whole SVG
+composition transform. The measured active N3 model retains width **20.205**, gap **3.78**
+and centerline **191.88**, distinct from runtime nominal **20/4/192**. Its effective outer
+edge is approximately **224.9805**, not an assertion of identical runtime geometry. Historical
+thinner/gray ambient art remains illustrative. The portrait reads the watermark's effective
+box from canonical XML, rounds each raster edge once, and derives width/height from those edges;
+the active overlay is (189,131,72,72), with reference and nominal float bounds retained in metadata.
+
+`--viewport-preview-output` now consumes that same completed composition without a 216-radius
+override or another scale. It retains historical Claude/Fable 88/100, Cursor 100/64 and Codex
+0% · 49.7K as explicitly historical illustrative data, not current Live. Its exclusive local
+PNG/SVG/metadata output retains input/output hashes and canonical-write isolation. The separate
+clock-only preview remains unapproved experimentation; its requested upward offset means final
+450-unit displacement after the common scale, and only its clock coordinate may differ.
+
+**Native and public acceptance: Pending.** Emitted guards check legal carriers, integer base
+rectangles, common pivots, exactly-once geometry, bounds, texture sampling and SOURCE allowance
+behind unchanged masks, while retaining admission, zero/full/cap, ordering and backdrop guards.
+Official WFF2 and pinned Push semantic validation, whole joined Round INTERACTIVE and renderer-proven
+AMBIENT originals, bounded fit/count/pair controls and guarded restoration follow whole Runner
+DONE, CLI exit, scoped retirement and fresh separate idle. Preserve then-current Live/order,
+newer legitimate publications, physical STOP and protected Square. Historical native receipts
+and clean review art do not accept these bytes; there is no additional Owner layout approval gate.
 
 ## Revision 2026-11-01 — short-positive rounded endpoints
 

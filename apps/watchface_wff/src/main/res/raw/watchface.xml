@@ -36,334 +36,53 @@
     </UserConfigurations>
 
     <Scene backgroundColor="#ff0a0d0b">
-        <PartDraw x="0" y="0" width="450" height="450" name="lift">
-            <Ellipse x="0" y="0" width="450" height="450">
-                <Fill color="#ff101412">
-                    <RadialGradient
-                        centerX="225"
-                        centerY="216"
-                        radius="279"
-                        colors="#ff18201C #ff101412 #ff0A0D0B"
-                        positions="0.0 0.55 1.0" />
-                </Fill>
-            </Ellipse>
-        </PartDraw>
-        <!-- What lies under the cells, declared ahead of every slot so a filled
-             cell's own opaque well covers it: 147,109  199,95  251,109 at 52 units, centres on a
-             curved row with the middle cell raised fourteen units.
-             The middle and right cells
-             carry the default weather, which costs no complication slot. -->
-        <Group x="147" y="109" width="52" height="52" name="cell1Chrome">
-            <PartDraw x="0" y="0" width="52" height="52">
-                <Ellipse x="0" y="0" width="52" height="52">
-                    <Fill color="#ff0b0e0c">
+        <Group x="0" y="0" width="450" height="450" name="compositionChrome" scaleX="1.113861386138614" scaleY="1.113861386138614" pivotX="0.5" pivotY="0.5">
+            <PartDraw x="0" y="0" width="450" height="450" name="lift">
+                <Ellipse x="0" y="0" width="450" height="450">
+                    <Fill color="#ff101412">
                         <RadialGradient
-                            centerX="26"
-                            centerY="26"
-                            radius="26"
-                            colors="#ff0b0e0c #ff0b0e0c #ff242a27"
+                            centerX="225"
+                            centerY="216"
+                            radius="279"
+                            colors="#ff18201C #ff101412 #ff0A0D0B"
                             positions="0.0 0.55 1.0" />
                     </Fill>
                 </Ellipse>
             </PartDraw>
-        </Group>
-
-        <Group x="199" y="95" width="52" height="52" name="cell2Chrome">
-            <Condition>
-                <Expressions>
-                    <Expression name="hasWeather"><![CDATA[[WEATHER.IS_AVAILABLE]]]></Expression>
-                </Expressions>
-                <Compare expression="hasWeather">
-                    <Group x="0" y="0" width="52" height="52" name="cell2Reading">
-                        <PartDraw x="0" y="0" width="52" height="52">
-                            <Ellipse x="0" y="0" width="52" height="52">
-                                <Fill color="#eb0b0e0c" />
-                            </Ellipse>
-                        </PartDraw>
-                        <PartDraw x="0" y="0" width="52" height="52" alpha="255">
-                            <Variant mode="AMBIENT" target="alpha" value="140" />
-                            <Arc
+            <!-- What lies under the cells, declared ahead of every slot so a filled
+                 cell's own opaque well covers it: 147,109  199,95  251,109 at 52 units, centres on a
+                 curved row with the middle cell raised fourteen units.
+                 The middle and right cells
+                 carry the default weather, which costs no complication slot. -->
+            <Group x="147" y="109" width="52" height="52" name="cell1Chrome">
+                <PartDraw x="0" y="0" width="52" height="52">
+                    <Ellipse x="0" y="0" width="52" height="52">
+                        <Fill color="#ff0b0e0c">
+                            <RadialGradient
                                 centerX="26"
                                 centerY="26"
-                                width="50.5"
-                                height="50.5"
-                                startAngle="0"
-                                endAngle="359.9">
-                                <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
-                                    <LinearGradient
-                                        startX="26"
-                                        startY="51.25"
-                                        endX="26"
-                                        endY="0.75"
-                                        colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
-                                        positions="0 0.5 0.625 0.75 0.875 1" />
-                                </Stroke>
-                            </Arc>
-                        </PartDraw>
-                        <Condition>
-                            <Expressions>
-                                <Expression name="convertToCelsius"><![CDATA[[CONFIGURATION.temperatureUnit] == "celsius" && [WEATHER.TEMPERATURE_UNIT] == 2]]></Expression>
-                                <Expression name="convertToFahrenheit"><![CDATA[[CONFIGURATION.temperatureUnit] == "fahrenheit" && [WEATHER.TEMPERATURE_UNIT] == 1]]></Expression>
-                                <Expression name="isCelsius"><![CDATA[[WEATHER.TEMPERATURE_UNIT] == 1]]></Expression>
-                                <Expression name="isFahrenheit"><![CDATA[[WEATHER.TEMPERATURE_UNIT] == 2]]></Expression>
-                            </Expressions>
-                            <Compare expression="convertToCelsius">
-                                <Condition>
-                                    <Expressions>
-                                        <Expression name="smallText"><![CDATA[round(([WEATHER.TEMPERATURE] - 32) * 5 / 9) <= -100]]></Expression>
-                                        <Expression name="mediumText"><![CDATA[!(round(([WEATHER.TEMPERATURE] - 32) * 5 / 9) <= -100) && (round(([WEATHER.TEMPERATURE] - 32) * 5 / 9) < 0 || round(([WEATHER.TEMPERATURE] - 32) * 5 / 9) >= 100)]]></Expression>
-                                    </Expressions>
-                                    <Compare expression="smallText">
-                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
-                                            <Variant mode="AMBIENT" target="alpha" value="140" />
-                                            <Text align="CENTER" ellipsis="TRUE">
-                                                <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                                    <Template>%s°C
-                                                        <Parameter expression="round(([WEATHER.TEMPERATURE] - 32) * 5 / 9)" />
-                                                    </Template>
-                                                </Font>
-                                            </Text>
-                                        </PartText>
-                                    </Compare>
-                                    <Compare expression="mediumText">
-                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
-                                            <Variant mode="AMBIENT" target="alpha" value="140" />
-                                            <Text align="CENTER" ellipsis="TRUE">
-                                                <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                                    <Template>%s°C
-                                                        <Parameter expression="round(([WEATHER.TEMPERATURE] - 32) * 5 / 9)" />
-                                                    </Template>
-                                                </Font>
-                                            </Text>
-                                        </PartText>
-                                    </Compare>
-                                    <Default>
-                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
-                                            <Variant mode="AMBIENT" target="alpha" value="140" />
-                                            <Text align="CENTER" ellipsis="TRUE">
-                                                <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
-                                                    <Template>%s°C
-                                                        <Parameter expression="round(([WEATHER.TEMPERATURE] - 32) * 5 / 9)" />
-                                                    </Template>
-                                                </Font>
-                                            </Text>
-                                        </PartText>
-                                    </Default>
-                                </Condition>
-                            </Compare>
-                            <Compare expression="convertToFahrenheit">
-                                <Condition>
-                                    <Expressions>
-                                        <Expression name="smallText"><![CDATA[round([WEATHER.TEMPERATURE] * 9 / 5 + 32) <= -100]]></Expression>
-                                        <Expression name="mediumText"><![CDATA[!(round([WEATHER.TEMPERATURE] * 9 / 5 + 32) <= -100) && (round([WEATHER.TEMPERATURE] * 9 / 5 + 32) < 0 || round([WEATHER.TEMPERATURE] * 9 / 5 + 32) >= 100)]]></Expression>
-                                    </Expressions>
-                                    <Compare expression="smallText">
-                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
-                                            <Variant mode="AMBIENT" target="alpha" value="140" />
-                                            <Text align="CENTER" ellipsis="TRUE">
-                                                <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                                    <Template>%s°F
-                                                        <Parameter expression="round([WEATHER.TEMPERATURE] * 9 / 5 + 32)" />
-                                                    </Template>
-                                                </Font>
-                                            </Text>
-                                        </PartText>
-                                    </Compare>
-                                    <Compare expression="mediumText">
-                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
-                                            <Variant mode="AMBIENT" target="alpha" value="140" />
-                                            <Text align="CENTER" ellipsis="TRUE">
-                                                <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                                    <Template>%s°F
-                                                        <Parameter expression="round([WEATHER.TEMPERATURE] * 9 / 5 + 32)" />
-                                                    </Template>
-                                                </Font>
-                                            </Text>
-                                        </PartText>
-                                    </Compare>
-                                    <Default>
-                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
-                                            <Variant mode="AMBIENT" target="alpha" value="140" />
-                                            <Text align="CENTER" ellipsis="TRUE">
-                                                <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
-                                                    <Template>%s°F
-                                                        <Parameter expression="round([WEATHER.TEMPERATURE] * 9 / 5 + 32)" />
-                                                    </Template>
-                                                </Font>
-                                            </Text>
-                                        </PartText>
-                                    </Default>
-                                </Condition>
-                            </Compare>
-                            <Compare expression="isCelsius">
-                                <Condition>
-                                    <Expressions>
-                                        <Expression name="smallText"><![CDATA[[WEATHER.TEMPERATURE] <= -100]]></Expression>
-                                        <Expression name="mediumText"><![CDATA[!([WEATHER.TEMPERATURE] <= -100) && ([WEATHER.TEMPERATURE] < 0 || [WEATHER.TEMPERATURE] >= 100)]]></Expression>
-                                    </Expressions>
-                                    <Compare expression="smallText">
-                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
-                                            <Variant mode="AMBIENT" target="alpha" value="140" />
-                                            <Text align="CENTER" ellipsis="TRUE">
-                                                <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                                    <Template>%s°C
-                                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
-                                                    </Template>
-                                                </Font>
-                                            </Text>
-                                        </PartText>
-                                    </Compare>
-                                    <Compare expression="mediumText">
-                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
-                                            <Variant mode="AMBIENT" target="alpha" value="140" />
-                                            <Text align="CENTER" ellipsis="TRUE">
-                                                <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                                    <Template>%s°C
-                                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
-                                                    </Template>
-                                                </Font>
-                                            </Text>
-                                        </PartText>
-                                    </Compare>
-                                    <Default>
-                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
-                                            <Variant mode="AMBIENT" target="alpha" value="140" />
-                                            <Text align="CENTER" ellipsis="TRUE">
-                                                <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
-                                                    <Template>%s°C
-                                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
-                                                    </Template>
-                                                </Font>
-                                            </Text>
-                                        </PartText>
-                                    </Default>
-                                </Condition>
-                            </Compare>
-                            <Compare expression="isFahrenheit">
-                                <Condition>
-                                    <Expressions>
-                                        <Expression name="smallText"><![CDATA[[WEATHER.TEMPERATURE] <= -100]]></Expression>
-                                        <Expression name="mediumText"><![CDATA[!([WEATHER.TEMPERATURE] <= -100) && ([WEATHER.TEMPERATURE] < 0 || [WEATHER.TEMPERATURE] >= 100)]]></Expression>
-                                    </Expressions>
-                                    <Compare expression="smallText">
-                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
-                                            <Variant mode="AMBIENT" target="alpha" value="140" />
-                                            <Text align="CENTER" ellipsis="TRUE">
-                                                <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                                    <Template>%s°F
-                                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
-                                                    </Template>
-                                                </Font>
-                                            </Text>
-                                        </PartText>
-                                    </Compare>
-                                    <Compare expression="mediumText">
-                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
-                                            <Variant mode="AMBIENT" target="alpha" value="140" />
-                                            <Text align="CENTER" ellipsis="TRUE">
-                                                <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                                    <Template>%s°F
-                                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
-                                                    </Template>
-                                                </Font>
-                                            </Text>
-                                        </PartText>
-                                    </Compare>
-                                    <Default>
-                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
-                                            <Variant mode="AMBIENT" target="alpha" value="140" />
-                                            <Text align="CENTER" ellipsis="TRUE">
-                                                <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
-                                                    <Template>%s°F
-                                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
-                                                    </Template>
-                                                </Font>
-                                            </Text>
-                                        </PartText>
-                                    </Default>
-                                </Condition>
-                            </Compare>
-                            <Default>
-                                <Condition>
-                                    <Expressions>
-                                        <Expression name="smallText"><![CDATA[[WEATHER.TEMPERATURE] <= -100]]></Expression>
-                                        <Expression name="mediumText"><![CDATA[!([WEATHER.TEMPERATURE] <= -100) && ([WEATHER.TEMPERATURE] < 0 || [WEATHER.TEMPERATURE] >= 100)]]></Expression>
-                                    </Expressions>
-                                    <Compare expression="smallText">
-                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
-                                            <Variant mode="AMBIENT" target="alpha" value="140" />
-                                            <Text align="CENTER" ellipsis="TRUE">
-                                                <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                                    <Template>%s°
-                                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
-                                                    </Template>
-                                                </Font>
-                                            </Text>
-                                        </PartText>
-                                    </Compare>
-                                    <Compare expression="mediumText">
-                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
-                                            <Variant mode="AMBIENT" target="alpha" value="140" />
-                                            <Text align="CENTER" ellipsis="TRUE">
-                                                <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                                    <Template>%s°
-                                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
-                                                    </Template>
-                                                </Font>
-                                            </Text>
-                                        </PartText>
-                                    </Compare>
-                                    <Default>
-                                        <PartText x="3" y="14" width="46" height="24" alpha="255">
-                                            <Variant mode="AMBIENT" target="alpha" value="140" />
-                                            <Text align="CENTER" ellipsis="TRUE">
-                                                <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
-                                                    <Template>%s°
-                                                        <Parameter expression="[WEATHER.TEMPERATURE]" />
-                                                    </Template>
-                                                </Font>
-                                            </Text>
-                                        </PartText>
-                                    </Default>
-                                </Condition>
-                            </Default>
-                        </Condition>
-                    </Group>
-                </Compare>
-                <Default>
-                    <Group x="0" y="0" width="52" height="52" name="cell2Bare">
-                        <PartDraw x="0" y="0" width="52" height="52">
-                            <Ellipse x="0" y="0" width="52" height="52">
-                                <Fill color="#ff0b0e0c">
-                                    <RadialGradient
-                                        centerX="26"
-                                        centerY="26"
-                                        radius="26"
-                                        colors="#ff0b0e0c #ff0b0e0c #ff242a27"
-                                        positions="0.0 0.55 1.0" />
-                                </Fill>
-                            </Ellipse>
-                        </PartDraw>
-                    </Group>
-                </Default>
-            </Condition>
-        </Group>
+                                radius="26"
+                                colors="#ff0b0e0c #ff0b0e0c #ff242a27"
+                                positions="0.0 0.55 1.0" />
+                        </Fill>
+                    </Ellipse>
+                </PartDraw>
+            </Group>
 
-        <Group x="251" y="109" width="52" height="52" name="cell3Chrome">
-            <Condition>
-                <Expressions>
-                    <Expression name="hasWeather"><![CDATA[[WEATHER.IS_AVAILABLE]]]></Expression>
-                </Expressions>
-                <Compare expression="hasWeather">
-                    <Group x="0" y="0" width="52" height="52" name="cell3Reading">
-                        <PartDraw x="0" y="0" width="52" height="52">
-                            <Ellipse x="0" y="0" width="52" height="52">
-                                <Fill color="#eb0b0e0c" />
-                            </Ellipse>
-                        </PartDraw>
-                        <Group x="0" y="0" width="52" height="52" name="cell3ReadingBorder" alpha="255">
-                            <Variant mode="AMBIENT" target="alpha" value="140" />
+            <Group x="199" y="95" width="52" height="52" name="cell2Chrome">
+                <Condition>
+                    <Expressions>
+                        <Expression name="hasWeather"><![CDATA[[WEATHER.IS_AVAILABLE]]]></Expression>
+                    </Expressions>
+                    <Compare expression="hasWeather">
+                        <Group x="0" y="0" width="52" height="52" name="cell2Reading">
+                            <PartDraw x="0" y="0" width="52" height="52">
+                                <Ellipse x="0" y="0" width="52" height="52">
+                                    <Fill color="#eb0b0e0c" />
+                                </Ellipse>
+                            </PartDraw>
                             <PartDraw x="0" y="0" width="52" height="52" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <Arc
                                     centerX="26"
                                     centerY="26"
@@ -373,90 +92,373 @@
                                     endAngle="359.9">
                                     <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
                                         <LinearGradient
-                                            startX="13.367991"
-                                            startY="47.863093"
-                                            endX="38.632009"
-                                            endY="4.136907"
+                                            startX="26"
+                                            startY="51.25"
+                                            endX="26"
+                                            endY="0.75"
                                             colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
                                             positions="0 0.5 0.625 0.75 0.875 1" />
                                     </Stroke>
                                 </Arc>
                             </PartDraw>
-                            <PartDraw x="0" y="0" width="52" height="52" renderMode="MASK">
-                                <Rectangle x="0" y="0" width="52" height="52">
-                                    <Fill color="#ffffffff">
-                                        <LinearGradient
-                                            startX="26"
-                                            startY="0.75"
-                                            endX="26"
-                                            endY="51.25"
-                                            colors="#ffffffff #ffffffff #daffffff #87ffffff #35ffffff #0fffffff"
-                                            positions="0 0.5 0.625 0.75 0.875 1" />
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="convertToCelsius"><![CDATA[[CONFIGURATION.temperatureUnit] == "celsius" && [WEATHER.TEMPERATURE_UNIT] == 2]]></Expression>
+                                    <Expression name="convertToFahrenheit"><![CDATA[[CONFIGURATION.temperatureUnit] == "fahrenheit" && [WEATHER.TEMPERATURE_UNIT] == 1]]></Expression>
+                                    <Expression name="isCelsius"><![CDATA[[WEATHER.TEMPERATURE_UNIT] == 1]]></Expression>
+                                    <Expression name="isFahrenheit"><![CDATA[[WEATHER.TEMPERATURE_UNIT] == 2]]></Expression>
+                                </Expressions>
+                                <Compare expression="convertToCelsius">
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="smallText"><![CDATA[round(([WEATHER.TEMPERATURE] - 32) * 5 / 9) <= -100]]></Expression>
+                                            <Expression name="mediumText"><![CDATA[!(round(([WEATHER.TEMPERATURE] - 32) * 5 / 9) <= -100) && (round(([WEATHER.TEMPERATURE] - 32) * 5 / 9) < 0 || round(([WEATHER.TEMPERATURE] - 32) * 5 / 9) >= 100)]]></Expression>
+                                        </Expressions>
+                                        <Compare expression="smallText">
+                                            <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Text align="CENTER" ellipsis="TRUE">
+                                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                                        <Template>%s°C
+                                                            <Parameter expression="round(([WEATHER.TEMPERATURE] - 32) * 5 / 9)" />
+                                                        </Template>
+                                                    </Font>
+                                                </Text>
+                                            </PartText>
+                                        </Compare>
+                                        <Compare expression="mediumText">
+                                            <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Text align="CENTER" ellipsis="TRUE">
+                                                    <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                        <Template>%s°C
+                                                            <Parameter expression="round(([WEATHER.TEMPERATURE] - 32) * 5 / 9)" />
+                                                        </Template>
+                                                    </Font>
+                                                </Text>
+                                            </PartText>
+                                        </Compare>
+                                        <Default>
+                                            <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Text align="CENTER" ellipsis="TRUE">
+                                                    <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                        <Template>%s°C
+                                                            <Parameter expression="round(([WEATHER.TEMPERATURE] - 32) * 5 / 9)" />
+                                                        </Template>
+                                                    </Font>
+                                                </Text>
+                                            </PartText>
+                                        </Default>
+                                    </Condition>
+                                </Compare>
+                                <Compare expression="convertToFahrenheit">
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="smallText"><![CDATA[round([WEATHER.TEMPERATURE] * 9 / 5 + 32) <= -100]]></Expression>
+                                            <Expression name="mediumText"><![CDATA[!(round([WEATHER.TEMPERATURE] * 9 / 5 + 32) <= -100) && (round([WEATHER.TEMPERATURE] * 9 / 5 + 32) < 0 || round([WEATHER.TEMPERATURE] * 9 / 5 + 32) >= 100)]]></Expression>
+                                        </Expressions>
+                                        <Compare expression="smallText">
+                                            <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Text align="CENTER" ellipsis="TRUE">
+                                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                                        <Template>%s°F
+                                                            <Parameter expression="round([WEATHER.TEMPERATURE] * 9 / 5 + 32)" />
+                                                        </Template>
+                                                    </Font>
+                                                </Text>
+                                            </PartText>
+                                        </Compare>
+                                        <Compare expression="mediumText">
+                                            <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Text align="CENTER" ellipsis="TRUE">
+                                                    <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                        <Template>%s°F
+                                                            <Parameter expression="round([WEATHER.TEMPERATURE] * 9 / 5 + 32)" />
+                                                        </Template>
+                                                    </Font>
+                                                </Text>
+                                            </PartText>
+                                        </Compare>
+                                        <Default>
+                                            <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Text align="CENTER" ellipsis="TRUE">
+                                                    <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                        <Template>%s°F
+                                                            <Parameter expression="round([WEATHER.TEMPERATURE] * 9 / 5 + 32)" />
+                                                        </Template>
+                                                    </Font>
+                                                </Text>
+                                            </PartText>
+                                        </Default>
+                                    </Condition>
+                                </Compare>
+                                <Compare expression="isCelsius">
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="smallText"><![CDATA[[WEATHER.TEMPERATURE] <= -100]]></Expression>
+                                            <Expression name="mediumText"><![CDATA[!([WEATHER.TEMPERATURE] <= -100) && ([WEATHER.TEMPERATURE] < 0 || [WEATHER.TEMPERATURE] >= 100)]]></Expression>
+                                        </Expressions>
+                                        <Compare expression="smallText">
+                                            <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Text align="CENTER" ellipsis="TRUE">
+                                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                                        <Template>%s°C
+                                                            <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                                        </Template>
+                                                    </Font>
+                                                </Text>
+                                            </PartText>
+                                        </Compare>
+                                        <Compare expression="mediumText">
+                                            <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Text align="CENTER" ellipsis="TRUE">
+                                                    <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                        <Template>%s°C
+                                                            <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                                        </Template>
+                                                    </Font>
+                                                </Text>
+                                            </PartText>
+                                        </Compare>
+                                        <Default>
+                                            <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Text align="CENTER" ellipsis="TRUE">
+                                                    <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                        <Template>%s°C
+                                                            <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                                        </Template>
+                                                    </Font>
+                                                </Text>
+                                            </PartText>
+                                        </Default>
+                                    </Condition>
+                                </Compare>
+                                <Compare expression="isFahrenheit">
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="smallText"><![CDATA[[WEATHER.TEMPERATURE] <= -100]]></Expression>
+                                            <Expression name="mediumText"><![CDATA[!([WEATHER.TEMPERATURE] <= -100) && ([WEATHER.TEMPERATURE] < 0 || [WEATHER.TEMPERATURE] >= 100)]]></Expression>
+                                        </Expressions>
+                                        <Compare expression="smallText">
+                                            <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Text align="CENTER" ellipsis="TRUE">
+                                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                                        <Template>%s°F
+                                                            <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                                        </Template>
+                                                    </Font>
+                                                </Text>
+                                            </PartText>
+                                        </Compare>
+                                        <Compare expression="mediumText">
+                                            <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Text align="CENTER" ellipsis="TRUE">
+                                                    <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                        <Template>%s°F
+                                                            <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                                        </Template>
+                                                    </Font>
+                                                </Text>
+                                            </PartText>
+                                        </Compare>
+                                        <Default>
+                                            <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Text align="CENTER" ellipsis="TRUE">
+                                                    <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                        <Template>%s°F
+                                                            <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                                        </Template>
+                                                    </Font>
+                                                </Text>
+                                            </PartText>
+                                        </Default>
+                                    </Condition>
+                                </Compare>
+                                <Default>
+                                    <Condition>
+                                        <Expressions>
+                                            <Expression name="smallText"><![CDATA[[WEATHER.TEMPERATURE] <= -100]]></Expression>
+                                            <Expression name="mediumText"><![CDATA[!([WEATHER.TEMPERATURE] <= -100) && ([WEATHER.TEMPERATURE] < 0 || [WEATHER.TEMPERATURE] >= 100)]]></Expression>
+                                        </Expressions>
+                                        <Compare expression="smallText">
+                                            <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Text align="CENTER" ellipsis="TRUE">
+                                                    <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                                        <Template>%s°
+                                                            <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                                        </Template>
+                                                    </Font>
+                                                </Text>
+                                            </PartText>
+                                        </Compare>
+                                        <Compare expression="mediumText">
+                                            <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Text align="CENTER" ellipsis="TRUE">
+                                                    <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                        <Template>%s°
+                                                            <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                                        </Template>
+                                                    </Font>
+                                                </Text>
+                                            </PartText>
+                                        </Compare>
+                                        <Default>
+                                            <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                                <Text align="CENTER" ellipsis="TRUE">
+                                                    <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                        <Template>%s°
+                                                            <Parameter expression="[WEATHER.TEMPERATURE]" />
+                                                        </Template>
+                                                    </Font>
+                                                </Text>
+                                            </PartText>
+                                        </Default>
+                                    </Condition>
+                                </Default>
+                            </Condition>
+                        </Group>
+                    </Compare>
+                    <Default>
+                        <Group x="0" y="0" width="52" height="52" name="cell2Bare">
+                            <PartDraw x="0" y="0" width="52" height="52">
+                                <Ellipse x="0" y="0" width="52" height="52">
+                                    <Fill color="#ff0b0e0c">
+                                        <RadialGradient
+                                            centerX="26"
+                                            centerY="26"
+                                            radius="26"
+                                            colors="#ff0b0e0c #ff0b0e0c #ff242a27"
+                                            positions="0.0 0.55 1.0" />
                                     </Fill>
-                                </Rectangle>
+                                </Ellipse>
                             </PartDraw>
                         </Group>
-                        <Condition>
-                            <Expressions>
-                                <Expression name="smallText"><![CDATA[false]]></Expression>
-                                <Expression name="mediumText"><![CDATA[!(false) && ([WEATHER.UV_INDEX] >= 10)]]></Expression>
-                            </Expressions>
-                            <Compare expression="smallText">
-                                <PartText x="3" y="14" width="46" height="24" alpha="255">
-                                    <Variant mode="AMBIENT" target="alpha" value="140" />
-                                    <Text align="CENTER" ellipsis="TRUE">
-                                        <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
-                                            <Template>UV %s
-                                                <Parameter expression="[WEATHER.UV_INDEX]" />
-                                            </Template>
-                                        </Font>
-                                    </Text>
-                                </PartText>
-                            </Compare>
-                            <Compare expression="mediumText">
-                                <PartText x="3" y="14" width="46" height="24" alpha="255">
-                                    <Variant mode="AMBIENT" target="alpha" value="140" />
-                                    <Text align="CENTER" ellipsis="TRUE">
-                                        <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
-                                            <Template>UV %s
-                                                <Parameter expression="[WEATHER.UV_INDEX]" />
-                                            </Template>
-                                        </Font>
-                                    </Text>
-                                </PartText>
-                            </Compare>
-                            <Default>
-                                <PartText x="3" y="14" width="46" height="24" alpha="255">
-                                    <Variant mode="AMBIENT" target="alpha" value="140" />
-                                    <Text align="CENTER" ellipsis="TRUE">
-                                        <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
-                                            <Template>UV %s
-                                                <Parameter expression="[WEATHER.UV_INDEX]" />
-                                            </Template>
-                                        </Font>
-                                    </Text>
-                                </PartText>
-                            </Default>
-                        </Condition>
-                    </Group>
-                </Compare>
-                <Default>
-                    <Group x="0" y="0" width="52" height="52" name="cell3Bare">
-                        <PartDraw x="0" y="0" width="52" height="52">
-                            <Ellipse x="0" y="0" width="52" height="52">
-                                <Fill color="#ff0b0e0c">
-                                    <RadialGradient
+                    </Default>
+                </Condition>
+            </Group>
+
+            <Group x="251" y="109" width="52" height="52" name="cell3Chrome">
+                <Condition>
+                    <Expressions>
+                        <Expression name="hasWeather"><![CDATA[[WEATHER.IS_AVAILABLE]]]></Expression>
+                    </Expressions>
+                    <Compare expression="hasWeather">
+                        <Group x="0" y="0" width="52" height="52" name="cell3Reading">
+                            <PartDraw x="0" y="0" width="52" height="52">
+                                <Ellipse x="0" y="0" width="52" height="52">
+                                    <Fill color="#eb0b0e0c" />
+                                </Ellipse>
+                            </PartDraw>
+                            <Group x="0" y="0" width="52" height="52" name="cell3ReadingBorder" alpha="255">
+                                <Variant mode="AMBIENT" target="alpha" value="140" />
+                                <PartDraw x="0" y="0" width="52" height="52" alpha="255">
+                                    <Arc
                                         centerX="26"
                                         centerY="26"
-                                        radius="26"
-                                        colors="#ff0b0e0c #ff0b0e0c #ff242a27"
-                                        positions="0.0 0.55 1.0" />
-                                </Fill>
-                            </Ellipse>
-                        </PartDraw>
-                    </Group>
-                </Default>
-            </Condition>
+                                        width="50.5"
+                                        height="50.5"
+                                        startAngle="0"
+                                        endAngle="359.9">
+                                        <Stroke thickness="1.5" color="#fff4fbf8" cap="BUTT">
+                                            <LinearGradient
+                                                startX="13.367991"
+                                                startY="47.863093"
+                                                endX="38.632009"
+                                                endY="4.136907"
+                                                colors="#aaf4fbf8 #aaf4fbf8 #91f4fbf8 #5af4fbf8 #23f4fbf8 #0af4fbf8"
+                                                positions="0 0.5 0.625 0.75 0.875 1" />
+                                        </Stroke>
+                                    </Arc>
+                                </PartDraw>
+                                <PartDraw x="0" y="0" width="52" height="52" renderMode="MASK">
+                                    <Rectangle x="0" y="0" width="52" height="52">
+                                        <Fill color="#ffffffff">
+                                            <LinearGradient
+                                                startX="26"
+                                                startY="0.75"
+                                                endX="26"
+                                                endY="51.25"
+                                                colors="#ffffffff #ffffffff #daffffff #87ffffff #35ffffff #0fffffff"
+                                                positions="0 0.5 0.625 0.75 0.875 1" />
+                                        </Fill>
+                                    </Rectangle>
+                                </PartDraw>
+                            </Group>
+                            <Condition>
+                                <Expressions>
+                                    <Expression name="smallText"><![CDATA[false]]></Expression>
+                                    <Expression name="mediumText"><![CDATA[!(false) && ([WEATHER.UV_INDEX] >= 10)]]></Expression>
+                                </Expressions>
+                                <Compare expression="smallText">
+                                    <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="12" weight="BOLD" color="#fff4fbf8">
+                                                <Template>UV %s
+                                                    <Parameter expression="[WEATHER.UV_INDEX]" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Compare expression="mediumText">
+                                    <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="14" weight="BOLD" color="#fff4fbf8">
+                                                <Template>UV %s
+                                                    <Parameter expression="[WEATHER.UV_INDEX]" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Compare>
+                                <Default>
+                                    <PartText x="3" y="14" width="46" height="24" alpha="255">
+                                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                                        <Text align="CENTER" ellipsis="TRUE">
+                                            <Font family="SYNC_TO_DEVICE" size="18" weight="BOLD" color="#fff4fbf8">
+                                                <Template>UV %s
+                                                    <Parameter expression="[WEATHER.UV_INDEX]" />
+                                                </Template>
+                                            </Font>
+                                        </Text>
+                                    </PartText>
+                                </Default>
+                            </Condition>
+                        </Group>
+                    </Compare>
+                    <Default>
+                        <Group x="0" y="0" width="52" height="52" name="cell3Bare">
+                            <PartDraw x="0" y="0" width="52" height="52">
+                                <Ellipse x="0" y="0" width="52" height="52">
+                                    <Fill color="#ff0b0e0c">
+                                        <RadialGradient
+                                            centerX="26"
+                                            centerY="26"
+                                            radius="26"
+                                            colors="#ff0b0e0c #ff0b0e0c #ff242a27"
+                                            positions="0.0 0.55 1.0" />
+                                    </Fill>
+                                </Ellipse>
+                            </PartDraw>
+                        </Group>
+                    </Default>
+                </Condition>
+            </Group>
         </Group>
 
         <ComplicationSlot
@@ -464,6 +466,7 @@
             y="0"
             width="450"
             height="450"
+            scaleX="1.113861386138614" scaleY="1.113861386138614" pivotX="0.5" pivotY="0.5"
             slotId="106"
             displayName="@string/outer_half_complication"
             supportedTypes="RANGED_VALUE EMPTY"
@@ -529,7 +532,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="394" height="394" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_1_tiny_mask" renderMode="MASK">
@@ -580,7 +583,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="394" height="394" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_1_round_mask" renderMode="MASK">
@@ -674,7 +677,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="346" height="346" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_2_tiny_mask" renderMode="MASK">
@@ -725,7 +728,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="346" height="346" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_2_round_mask" renderMode="MASK">
@@ -819,7 +822,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="298" height="298" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_3_tiny_mask" renderMode="MASK">
@@ -870,7 +873,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="298" height="298" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf106_Legacy_3_round_mask" renderMode="MASK">
@@ -964,7 +967,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="382" height="382" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="22" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="24" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf106_N1_1_tiny_mask" renderMode="MASK">
@@ -1015,7 +1018,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="382" height="382" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="22" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="24" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf106_N1_1_round_mask" renderMode="MASK">
@@ -1109,7 +1112,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="388" height="388" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="16" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="18" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_1_tiny_mask" renderMode="MASK">
@@ -1160,7 +1163,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="388" height="388" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="16" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="18" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_1_round_mask" renderMode="MASK">
@@ -1254,7 +1257,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="316" height="316" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="16" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="18" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_2_tiny_mask" renderMode="MASK">
@@ -1305,7 +1308,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="316" height="316" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="16" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="18" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf106_N2_2_round_mask" renderMode="MASK">
@@ -1399,7 +1402,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="394" height="394" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_1_tiny_mask" renderMode="MASK">
@@ -1450,7 +1453,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="394" height="394" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_1_round_mask" renderMode="MASK">
@@ -1544,7 +1547,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="346" height="346" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_2_tiny_mask" renderMode="MASK">
@@ -1595,7 +1598,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="346" height="346" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_2_round_mask" renderMode="MASK">
@@ -1689,7 +1692,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="298" height="298" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_3_tiny_mask" renderMode="MASK">
@@ -1740,7 +1743,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="298" height="298" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf106_N3_3_round_mask" renderMode="MASK">
@@ -1797,6 +1800,7 @@
             y="0"
             width="450"
             height="450"
+            scaleX="1.113861386138614" scaleY="1.113861386138614" pivotX="0.5" pivotY="0.5"
             slotId="109"
             displayName="@string/split_marker_complication"
             supportedTypes="RANGED_VALUE EMPTY"
@@ -1862,7 +1866,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="394" height="394" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_1_tiny_mask" renderMode="MASK">
@@ -1913,7 +1917,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="394" height="394" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_1_round_mask" renderMode="MASK">
@@ -2007,7 +2011,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="346" height="346" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_2_tiny_mask" renderMode="MASK">
@@ -2058,7 +2062,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="346" height="346" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf109_Legacy_2_round_mask" renderMode="MASK">
@@ -2152,7 +2156,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="388" height="388" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="16" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="18" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf109_N2_1_tiny_mask" renderMode="MASK">
@@ -2203,7 +2207,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="388" height="388" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="16" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="18" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf109_N2_1_round_mask" renderMode="MASK">
@@ -2297,7 +2301,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="394" height="394" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_1_tiny_mask" renderMode="MASK">
@@ -2348,7 +2352,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="394" height="394" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_1_round_mask" renderMode="MASK">
@@ -2442,7 +2446,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="346" height="346" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_2_tiny_mask" renderMode="MASK">
@@ -2493,7 +2497,7 @@
                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                     <Arc centerX="225" centerY="225" width="346" height="346" startAngle="0" endAngle="359.9">
-                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                     </Arc>
                                 </PartDraw>
                                 <Group x="0" y="0" width="450" height="450" name="outerHalf109_N3_2_round_mask" renderMode="MASK">
@@ -2550,6 +2554,7 @@
             y="0"
             width="450"
             height="450"
+            scaleX="1.113861386138614" scaleY="1.113861386138614" pivotX="0.5" pivotY="0.5"
             slotId="101"
             displayName="@string/ring1_complication"
             supportedTypes="RANGED_VALUE EMPTY"
@@ -2607,7 +2612,7 @@
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                                     <Arc centerX="225" centerY="225" width="374" height="374" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring1LegacyHalf_tiny_mask" renderMode="MASK">
@@ -2647,7 +2652,7 @@
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                                     <Arc centerX="225" centerY="225" width="374" height="374" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring1LegacyHalf_round_mask" renderMode="MASK">
@@ -2861,7 +2866,7 @@
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                                     <Arc centerX="225" centerY="225" width="338" height="338" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="22" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                        <WeightedStroke thickness="24" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring1N1Half_tiny_mask" renderMode="MASK">
@@ -2901,7 +2906,7 @@
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                                     <Arc centerX="225" centerY="225" width="338" height="338" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="22" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                        <WeightedStroke thickness="24" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring1N1Half_round_mask" renderMode="MASK">
@@ -3140,7 +3145,7 @@
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                                     <Arc centerX="225" centerY="225" width="356" height="356" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="16" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                        <WeightedStroke thickness="18" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring1N2Half_tiny_mask" renderMode="MASK">
@@ -3180,7 +3185,7 @@
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                                     <Arc centerX="225" centerY="225" width="356" height="356" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="16" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                        <WeightedStroke thickness="18" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring1N2Half_round_mask" renderMode="MASK">
@@ -3394,7 +3399,7 @@
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                                     <Arc centerX="225" centerY="225" width="374" height="374" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring1N3Half_tiny_mask" renderMode="MASK">
@@ -3434,7 +3439,7 @@
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                                     <Arc centerX="225" centerY="225" width="374" height="374" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring1N3Half_round_mask" renderMode="MASK">
@@ -3919,6 +3924,7 @@
             y="0"
             width="450"
             height="450"
+            scaleX="1.113861386138614" scaleY="1.113861386138614" pivotX="0.5" pivotY="0.5"
             slotId="102"
             displayName="@string/ring2_complication"
             supportedTypes="RANGED_VALUE EMPTY"
@@ -3976,7 +3982,7 @@
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                                     <Arc centerX="225" centerY="225" width="326" height="326" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring2LegacyHalf_tiny_mask" renderMode="MASK">
@@ -4016,7 +4022,7 @@
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                                     <Arc centerX="225" centerY="225" width="326" height="326" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring2LegacyHalf_round_mask" renderMode="MASK">
@@ -4230,7 +4236,7 @@
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                                     <Arc centerX="225" centerY="225" width="284" height="284" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="16" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                        <WeightedStroke thickness="18" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring2N2Half_tiny_mask" renderMode="MASK">
@@ -4270,7 +4276,7 @@
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                                     <Arc centerX="225" centerY="225" width="284" height="284" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="16" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                        <WeightedStroke thickness="18" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring2N2Half_round_mask" renderMode="MASK">
@@ -4484,7 +4490,7 @@
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                                     <Arc centerX="225" centerY="225" width="326" height="326" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring2N3Half_tiny_mask" renderMode="MASK">
@@ -4524,7 +4530,7 @@
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                                     <Arc centerX="225" centerY="225" width="326" height="326" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring2N3Half_round_mask" renderMode="MASK">
@@ -5009,6 +5015,7 @@
             y="0"
             width="450"
             height="450"
+            scaleX="1.113861386138614" scaleY="1.113861386138614" pivotX="0.5" pivotY="0.5"
             slotId="105"
             displayName="@string/ring3_complication"
             supportedTypes="RANGED_VALUE EMPTY"
@@ -5066,7 +5073,7 @@
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                                     <Arc centerX="225" centerY="225" width="278" height="278" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring3LegacyHalf_tiny_mask" renderMode="MASK">
@@ -5106,7 +5113,7 @@
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                                     <Arc centerX="225" centerY="225" width="278" height="278" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring3LegacyHalf_round_mask" renderMode="MASK">
@@ -5320,7 +5327,7 @@
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                                     <Arc centerX="225" centerY="225" width="278" height="278" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring3N3Half_tiny_mask" renderMode="MASK">
@@ -5360,7 +5367,7 @@
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
                                                     <Arc centerX="225" centerY="225" width="278" height="278" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="10" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring3N3Half_round_mask" renderMode="MASK">
@@ -5840,7 +5847,7 @@
             <Complication type="EMPTY" />
         </ComplicationSlot>
 
-        <DigitalClock x="0" y="0" width="450" height="450">
+        <DigitalClock x="0" y="0" width="450" height="450" scaleX="1.113861386138614" scaleY="1.113861386138614" pivotX="0.5" pivotY="0.5">
             <TimeText
                 x="0"
                 y="166"
@@ -5877,7 +5884,7 @@
             </TimeText>
         </DigitalClock>
 
-        <Group x="0" y="0" width="450" height="450" name="wardpulse">
+        <Group x="0" y="0" width="450" height="450" name="wardpulse" scaleX="1.113861386138614" scaleY="1.113861386138614" pivotX="0.5" pivotY="0.5">
             <Launch target="app.wardpulse/app.wardpulse.wear.MainActivity" />
             <!-- Preserve the original padded PNG; visible clock clearance needs native measurement. -->
             <PartImage x="193" y="141" width="64" height="64" alpha="95">
@@ -5894,10 +5901,11 @@
              in them; this face owns only the declaration and how it is drawn.
              (docs/product/WATCH_RING_DESIGN.md, Upper cells, revision 2026-10-09) -->
         <ComplicationSlot
-            x="147"
-            y="109"
-            width="52"
-            height="52"
+            x="0"
+            y="0"
+            width="450"
+            height="450"
+            scaleX="1.113861386138614" scaleY="1.113861386138614" pivotX="0.5" pivotY="0.5"
             slotId="201"
             displayName="@string/cell1_complication"
             supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
@@ -5905,9 +5913,9 @@
             <DefaultProviderPolicy
                 defaultSystemProvider="DAY_OF_WEEK"
                 defaultSystemProviderType="SHORT_TEXT" />
-            <BoundingBox x="0" y="0" width="52" height="52" />
+            <BoundingBox x="147" y="109" width="52" height="52" />
             <Complication type="SHORT_TEXT">
-            <Group x="0" y="0" width="52" height="52" name="cell1">
+            <Group x="147" y="109" width="52" height="52" name="cell1">
                     <PartDraw x="0" y="0" width="52" height="52">
                         <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
@@ -5993,7 +6001,7 @@
             </Group>
             </Complication>
             <Complication type="RANGED_VALUE">
-            <Group x="0" y="0" width="52" height="52" name="cell1">
+            <Group x="147" y="109" width="52" height="52" name="cell1">
                     <PartDraw x="0" y="0" width="52" height="52">
                         <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
@@ -6079,7 +6087,7 @@
             </Group>
             </Complication>
             <Complication type="MONOCHROMATIC_IMAGE">
-            <Group x="0" y="0" width="52" height="52" name="cell1Icon">
+            <Group x="147" y="109" width="52" height="52" name="cell1Icon">
                     <PartDraw x="0" y="0" width="52" height="52">
                         <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
@@ -6132,10 +6140,11 @@
         </ComplicationSlot>
 
         <ComplicationSlot
-            x="199"
-            y="95"
-            width="52"
-            height="52"
+            x="0"
+            y="0"
+            width="450"
+            height="450"
+            scaleX="1.113861386138614" scaleY="1.113861386138614" pivotX="0.5" pivotY="0.5"
             slotId="202"
             displayName="@string/cell2_complication"
             supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
@@ -6143,9 +6152,9 @@
             <DefaultProviderPolicy
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="52" height="52" />
+            <BoundingBox x="199" y="95" width="52" height="52" />
             <Complication type="SHORT_TEXT">
-            <Group x="0" y="0" width="52" height="52" name="cell2">
+            <Group x="199" y="95" width="52" height="52" name="cell2">
                     <PartDraw x="0" y="0" width="52" height="52">
                         <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
@@ -6216,7 +6225,7 @@
             </Group>
             </Complication>
             <Complication type="RANGED_VALUE">
-            <Group x="0" y="0" width="52" height="52" name="cell2">
+            <Group x="199" y="95" width="52" height="52" name="cell2">
                     <PartDraw x="0" y="0" width="52" height="52">
                         <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
@@ -6287,7 +6296,7 @@
             </Group>
             </Complication>
             <Complication type="MONOCHROMATIC_IMAGE">
-            <Group x="0" y="0" width="52" height="52" name="cell2Icon">
+            <Group x="199" y="95" width="52" height="52" name="cell2Icon">
                     <PartDraw x="0" y="0" width="52" height="52">
                         <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
@@ -6325,10 +6334,11 @@
         </ComplicationSlot>
 
         <ComplicationSlot
-            x="251"
-            y="109"
-            width="52"
-            height="52"
+            x="0"
+            y="0"
+            width="450"
+            height="450"
+            scaleX="1.113861386138614" scaleY="1.113861386138614" pivotX="0.5" pivotY="0.5"
             slotId="203"
             displayName="@string/cell3_complication"
             supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
@@ -6336,9 +6346,9 @@
             <DefaultProviderPolicy
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="0" y="0" width="52" height="52" />
+            <BoundingBox x="251" y="109" width="52" height="52" />
             <Complication type="SHORT_TEXT">
-            <Group x="0" y="0" width="52" height="52" name="cell3">
+            <Group x="251" y="109" width="52" height="52" name="cell3">
                     <PartDraw x="0" y="0" width="52" height="52">
                         <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
@@ -6424,7 +6434,7 @@
             </Group>
             </Complication>
             <Complication type="RANGED_VALUE">
-            <Group x="0" y="0" width="52" height="52" name="cell3">
+            <Group x="251" y="109" width="52" height="52" name="cell3">
                     <PartDraw x="0" y="0" width="52" height="52">
                         <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
@@ -6510,7 +6520,7 @@
             </Group>
             </Complication>
             <Complication type="MONOCHROMATIC_IMAGE">
-            <Group x="0" y="0" width="52" height="52" name="cell3Icon">
+            <Group x="251" y="109" width="52" height="52" name="cell3Icon">
                     <PartDraw x="0" y="0" width="52" height="52">
                         <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />

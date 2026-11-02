@@ -10,6 +10,26 @@ instead of inventing filler. Tapping the face or a WardPulse complication opens 
 app; ambient keeps muted arcs, large time, a quieter mark, and the strips dimmed rather than
 switched off, so the credits and budget money they alone carry survive it.
 
+## Whole-composition scale
+
+The [2026-11-02 revision](../../docs/product/WATCH_RING_DESIGN.md#revision-2026-11-02--whole-composition-scale-and-paired-source-allowance)
+applies 225/202 once about (225,225) to the entire accepted radius-202 composition on the
+unchanged 450 canvas. Dimensions below are reference geometry beneath documented full-face
+slot/clock/Group carriers. The eight slots remain direct Scene children; cell content and
+BoundingBox move together within rebased integer full-face slots. Text, logo, legend, bands,
+clips and textures grow proportionally without multiplying their local geometry again.
+All 18 period textures target ceil(reference diameter × scale) pixels, retaining reference
+WFF image boxes. Only paired-partial SOURCE strokes gain one reference unit per radial side
+behind unchanged masks/caps; ordinary/full/zero behavior is preserved. This tests an AA
+hypothesis, not a proved renderer cause. Whole Round interactive/ambient fit, clips, editor/tap
+bounds and paired-contour continuity remain Pending alongside official WFF2/Push validation.
+
+Generate canonical resources before review art with the existing owning tools. Boards and
+fixed local illustrations share one composition transform; measured N3 and historical ambient
+art remain illustrative. `--viewport-preview-output` retains historical incident data with
+reference/effective/rounding metadata, no independent 216-radius override and no further
+layout approval gate. Neither the illustration nor old native receipts accept the new bytes.
+
 ## Packaging paths
 
 This directory owns the canonical WFF 2 resources in `src/main/res/` and the independent

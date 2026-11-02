@@ -1873,6 +1873,21 @@ no tokens, cookies, or raw payloads appear in logs
 
 ### Phase 13 — configurable watch rings
 
+**Whole-composition scale and seam candidate, 2026-11-02 — Source/review only; acceptance Pending.**
+The [owning revision](product/WATCH_RING_DESIGN.md#revision-2026-11-02--whole-composition-scale-and-paired-source-allowance)
+enlarges the accepted radius-202 composition by 225/202 about (225,225) on the unchanged
+450 canvas, including time, cells, logo, legend, strokes, clips and textures. Legal full-face
+owners carry the scale once; customizable cell bounds/content are rebased together. Paired
+partial SOURCE strokes gain one reference unit per radial side behind unchanged nominal masks,
+testing an AA hypothesis without bridge geometry, recoloring or changed zero/full semantics.
+All 18 textures gain effective-scale samples and review exports share one composition transform;
+the historical fixed illustration no longer has independent 216-radius geometry. Integer/float
+and raster rounding are documented, with original logo pixels and all admission/identity guards
+retained. Official WFF2/Push validation, whole joined Round interactive/ambient fit and contour
+controls, guarded newer-Live-preserving restoration and Root's complete independent review remain
+Pending after the owning Runner lifecycle. Physical STOP and protected Square remain; no release,
+version, all-device, public-capture or native seam-repair acceptance is claimed.
+
 **Selected-zero follow-up, design, injected-watch and live phone-to-watch acceptance
 verified 2026-10-13.** The owner's screenshots at 11:36 and 11:38 showed Claude 5h at `0% left`
 on the phone while WFF and Glance selected Weekly `23% left`. The watch now keeps the

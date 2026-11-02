@@ -14,16 +14,15 @@
  * them needs ImageMagick, as `just export-icons` already does.
  *
  * Usage: node tools/render-watchface.mjs [--check]
- *   --check  compare the XML against the file on disk and exit non-zero on drift
+ *   --check  compare XML and verify effective-scale texture dimensions without writes
  *   --n1-pair-diagnostics-output PATH  write only a debug build-directory XML overlay
  *
- * `--check` covers the XML only: the images are what a rasterizer made of it, and
- * comparing bytes would fail on a different ImageMagick rather than on a real
- * drift. A missing one still stops the build — the face names each by resource.
+ * `--check` does not compare raster pixels: their bytes depend on ImageMagick.
+ * Sampling dimensions are deterministic and checked; missing images also fail.
  */
 
 import { execFile } from 'node:child_process'
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { pipeline } from 'node:stream/promises'
@@ -36,8 +35,8 @@ const runFile = promisify(execFile)
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const target = join(root, 'apps/watchface_wff/src/main/res/raw/watchface.xml')
-// `-nodpi`, because the images are already sized to the canvas: the density
-// buckets would rescale them on load and soften what was baked to be exact.
+// `-nodpi` keeps Android density buckets from rescaling the deliberate samples.
+// Reference image boxes are enlarged only by their owning composition carrier.
 const drawables = join(root, 'apps/watchface_wff/src/main/res/drawable-nodpi')
 // The same face the review generators measure with, and named as a file for the
 // same reason: the rasterizer resolves a family through fontconfig, which
@@ -53,6 +52,12 @@ const FONT_FILE = '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf'
  * against 0.151 at 900, on a 384-pixel device. Raising it is a cost, not a knob.
  */
 const FACE = { size: 450, center: 225 }
+
+// Reference geometry stays in its accepted 202-radius language. Only these
+// full-face owners enlarge it; nested fonts, images, clips and strokes do not.
+const COMPOSITION_SCALE = 225 / 202
+const SCALE_ATTRIBUTES = `scaleX="${COMPOSITION_SCALE}" scaleY="${COMPOSITION_SCALE}" pivotX="0.5" pivotY="0.5"`
+const PAIRED_SOURCE_ALLOWANCE = 1
 
 /**
  * Both ends of the melt: usage opens clockwise from 12, remaining ends at 12.
@@ -734,7 +739,7 @@ function cellSlot({ slotId, x, y, label, provider: systemProvider, type }) {
   const pad = ' '.repeat(20)
   const well = (name) => `${cellWellFlat(COLOR.cellWell, pad)}
 ${cellRing({ x, y, name }, pad)}`
-  const body = (parameter, name) => `            <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}">
+  const body = (parameter, name) => `            <Group x="${x}" y="${y}" width="${CELL.size}" height="${CELL.size}" name="${label}">
 ${well(name)}
 ${cellSizedText('%s', parameter, pad, `textLength(${parameter}) >= 5`, `textLength(${parameter}) >= 7`)}
             </Group>`
@@ -744,7 +749,7 @@ ${cellSizedText('%s', parameter, pad, `textLength(${parameter}) >= 5`, `textLeng
   // colour — on this face a family colour means *this ring's provider*, and a
   // cell is not a ring — so an icon reads as face text rather than as a
   // foreign mark.
-  const icon = `            <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}Icon">
+  const icon = `            <Group x="${x}" y="${y}" width="${CELL.size}" height="${CELL.size}" name="${label}Icon">
 ${well(`${label}IconBorder`)}
                 <Group x="${inset}" y="${inset}" width="${CELL.iconSize}" height="${CELL.iconSize}" name="${label}Tint" tintColor="${COLOR.text}">
                     <PartImage x="0" y="0" width="${CELL.iconSize}" height="${CELL.iconSize}" alpha="255">
@@ -754,10 +759,11 @@ ${well(`${label}IconBorder`)}
                 </Group>
             </Group>`
   return `        <ComplicationSlot
-            x="${x}"
-            y="${y}"
-            width="${CELL.size}"
-            height="${CELL.size}"
+            x="0"
+            y="0"
+            width="${FACE.size}"
+            height="${FACE.size}"
+            ${SCALE_ATTRIBUTES}
             slotId="${slotId}"
             displayName="@string/${label}_complication"
             supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
@@ -765,7 +771,7 @@ ${well(`${label}IconBorder`)}
             <DefaultProviderPolicy
                 defaultSystemProvider="${systemProvider}"
                 defaultSystemProviderType="${type}" />
-            <BoundingBox x="0" y="0" width="${CELL.size}" height="${CELL.size}" />
+            <BoundingBox x="${x}" y="${y}" width="${CELL.size}" height="${CELL.size}" />
             <Complication type="SHORT_TEXT">
 ${body('[COMPLICATION.TEXT]', `${label}TextBorder`)}
             </Complication>
@@ -820,10 +826,9 @@ function textureImage(diameter, title, repeats, thickness = BAND_THICKNESS) {
 
 /**
  * ImageMagick, as `just export-icons` already uses it; no new tool for this. The
- * density is what sizes the output: 96 is one pixel per SVG user unit, and the SVG
- * is written in design units, so the image lands at exactly the pixels its box
- * covers on the canvas and the renderer draws it one to one. Baking finer buys
- * nothing — the scene is rasterized at canvas size before it reaches the screen.
+ * density supplies ceil(reference diameter * composition scale) samples. The
+ * reference SVG and WFF image box stay unchanged beneath the single slot scale.
+ * Integer raster rounding changes sampling, never the nominal glyph geometry.
  *
  * Through a file, never a pipe: ImageMagick hands a named SVG to a real renderer
  * and falls back to its own on stdin, and that fallback drops the centre a
@@ -832,14 +837,44 @@ function textureImage(diameter, title, repeats, thickness = BAND_THICKNESS) {
  * `-strip` for the sake of the diff: it drops the render timestamp, without which
  * every run rewrites committed binaries whose pixels did not change.
  */
-async function rasterize(file, png, signal) {
-  const render = runFile('convert', ['-background', 'none', '-density', '96', '-strip', file, `png32:${png}`], { signal })
+async function rasterize(file, png, diameter, signal) {
+  const pixels = texturePixels(diameter)
+  const density = 96 * pixels / diameter
+  const render = runFile('convert', ['-background', 'none', '-density', String(density), '-strip', file, `png32:${png}`], { signal })
   const closed = new Promise((resolve) => render.child.once('close', resolve))
   try {
     await render
   } finally {
     // Abort rejects before close; the caller must not remove the SVG yet.
     await closed
+  }
+  await assertTextureDimensions(png, pixels)
+}
+
+function texturePixels(diameter) {
+  // Multiply the integer numerator first: 404 * (225/202) rounds slightly
+  // above 450 in binary arithmetic and must not acquire a spurious 451st pixel.
+  return Math.ceil(diameter * 225 / 202)
+}
+
+async function assertTextureDimensions(path, pixels) {
+  const png = await readFile(path)
+  if (png.length < 24 || png.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a' ||
+      png.toString('ascii', 12, 16) !== 'IHDR' ||
+      png.readUInt32BE(16) !== pixels || png.readUInt32BE(20) !== pixels) {
+    throw new Error(`${path}: expected a ${pixels}-square period texture at the effective scale`)
+  }
+}
+
+async function assertTextures() {
+  for (const layout of LAYOUTS.filter(({ name }) => name !== 'Legacy')) {
+    for (let index = 0; index < layout.count; index += 1) {
+      const { diameter } = bandGeometry(layout, index)
+      for (const { period } of TOKENS) {
+        await assertTextureDimensions(join(drawables, `${textureResource(index, period, layout.count)}.png`),
+          texturePixels(diameter))
+      }
+    }
   }
 }
 
@@ -865,7 +900,7 @@ async function writeTextures() {
           const svg = join(scratch, `${name}.svg`)
           const repeat = ADAPTIVE_REPEATS[layout.count]?.[title][index] ?? repeats[index]
           await writeFile(svg, textureImage(diameter, title, repeat, thickness))
-          await rasterize(svg, join(drawables, `${name}.png`), controller.signal)
+          await rasterize(svg, join(drawables, `${name}.png`), diameter, controller.signal)
         }
       }
     }
@@ -1187,7 +1222,7 @@ ${pad}</Group>`
 }
 
 /** The same three drawings serve alpha-gated main/inner and extra decisions. */
-function bandPaint(diameter, thickness, kind, pad, name) {
+function bandPaint(diameter, thickness, kind, pad, name, sourceAllowance = 0) {
   if (kind === 'full') {
     return `${pad}<PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
 ${pad}    <Variant mode="AMBIENT" target="alpha" value="140" />
@@ -1221,13 +1256,13 @@ ${pad}                    <Fill color="#ffffffff" />
 ${pad}                </Ellipse>
 ${pad}            </PartDraw>
 ${pad}        </Group>`).join('\n')
-  // One opaque mask layer unions the core and caps. Ambient alpha belongs to
-  // the isolated composition, never to overlapping constituents of that mask.
+  // Only paired partial SOURCE gains radial coverage behind the nominal mask.
+  // One opaque mask unions core/caps; ambient alpha belongs to the composition.
   return `${pad}<Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}_foreground" alpha="255">
 ${pad}    <Variant mode="AMBIENT" target="alpha" value="140" />
 ${pad}    <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" renderMode="SOURCE">
 ${pad}        <Arc centerX="${FACE.center}" centerY="${FACE.center}" width="${diameter}" height="${diameter}" startAngle="${SWEEP.start}" endAngle="${SWEEP.end}">
-${pad}            <WeightedStroke thickness="${thickness}" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+${pad}            <WeightedStroke thickness="${thickness + 2 * sourceAllowance}" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
 ${pad}        </Arc>
 ${pad}    </PartDraw>
 ${pad}    <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}_mask" renderMode="MASK">
@@ -1244,7 +1279,7 @@ ${pad}</Group>`
 }
 
 /** Track plus mutually exclusive full/tiny/round gates; both partial gates share one silhouette. */
-function bandArcs(diameter, thickness, pad, name = 'band') {
+function bandArcs(diameter, thickness, pad, name = 'band', paired = false) {
   const geometry = meltGeometry(diameter, thickness)
   const value = '[COMPLICATION.RANGED_VALUE_VALUE]'
   const maximum = '[COMPLICATION.RANGED_VALUE_MAX]'
@@ -1255,7 +1290,7 @@ function bandArcs(diameter, thickness, pad, name = 'band') {
     ['round', `${partial} && (${value} / ${maximum}) > ${geometry.cutoffLiteral}`],
   ].map(([kind, predicate]) => `${pad}<Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}_${kind}" alpha="0">
 ${alphaTransform(predicate, `${pad}    `)}
-${bandPaint(diameter, thickness, kind, `${pad}    `, `${name}_${kind}`)}
+${bandPaint(diameter, thickness, kind, `${pad}    `, `${name}_${kind}`, paired ? PAIRED_SOURCE_ALLOWANCE : 0)}
 ${pad}</Group>`).join('\n')
   return `${bandTrack(diameter, thickness, pad)}
 ${pad}<!-- Stable foreground trees have mutually exclusive alpha gates.
@@ -1322,7 +1357,7 @@ function mainBand(layout, index) {
   const restore = layout.name === 'N1' ? `${n1BackdropRestore(' '.repeat(40))}\n` : ''
   return `                                    <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}Half" alpha="0">
 ${alphaTransform(`${rangeGuard(layout.max)} && (${titleEquals(...SPLIT_TITLES)})`, ' '.repeat(40))}
-${bandArcs(inner, half, ' '.repeat(40), `${name}Half`)}
+${bandArcs(inner, half, ' '.repeat(40), `${name}Half`, true)}
                                     </Group>
                                     <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}" alpha="0">
 ${alphaTransform(`${rangeGuard(layout.max)} && (${titleEquals(...ORDINARY_TITLES)})`, ' '.repeat(40))}
@@ -1341,6 +1376,7 @@ function ringSlot({ slotId, service }, index) {
             y="0"
             width="${FACE.size}"
             height="${FACE.size}"
+            ${SCALE_ATTRIBUTES}
             slotId="${slotId}"
             displayName="@string/ring${index + 1}_complication"
             supportedTypes="RANGED_VALUE EMPTY"
@@ -1405,7 +1441,7 @@ function outerHalfSlot({ slotId, service, label }, ordinal, diagnostics = false)
     return `                        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="outerHalf${slotId}_${layout.name}_${index + 1}_${kind}" alpha="0">
 ${alphaTransform(predicate, ' '.repeat(28))}
 ${bandTrack(outer, half, ' '.repeat(28))}${kind === 'zero' ? '' : `
-${bandPaint(outer, half, kind, ' '.repeat(28), `outerHalf${slotId}_${layout.name}_${index + 1}_${kind}`)}`}${diagnostics ? `
+${bandPaint(outer, half, kind, ' '.repeat(28), `outerHalf${slotId}_${layout.name}_${index + 1}_${kind}`, PAIRED_SOURCE_ALLOWANCE)}`}${diagnostics ? `
 ${n1Witness(`admit_${layout.name}_${index}_${kind}`, layout.name === 'N1' ? 'A1' : 'AO', 1, 1)}${layout.name === 'N1' ? `
 ${n1Witness(kind === 'zero' ? 'paintNone' : `paint_${kind}`, paintToken, 2, 1)}` : ''}` : ''}
                         </Group>`
@@ -1415,6 +1451,7 @@ ${n1Witness(kind === 'zero' ? 'paintNone' : `paint_${kind}`, paintToken, 2, 1)}`
             y="0"
             width="${FACE.size}"
             height="${FACE.size}"
+            ${SCALE_ATTRIBUTES}
             slotId="${slotId}"
             displayName="@string/${label}"
             supportedTypes="RANGED_VALUE EMPTY"
@@ -1587,7 +1624,7 @@ function assertLowerContracts() {
 
 /** Two clocks, not one: the ambient copy is thinner and swaps in by alpha. */
 function clock() {
-  return `        <DigitalClock x="0" y="0" width="${FACE.size}" height="${FACE.size}">
+  return `        <DigitalClock x="0" y="0" width="${FACE.size}" height="${FACE.size}" ${SCALE_ATTRIBUTES}>
             <TimeText
                 x="0"
                 y="${CLOCK.active.y}"
@@ -1629,7 +1666,7 @@ function clock() {
 function wordmark() {
   const box = (size) =>
     `x="${WORDMARK.centerX - size / 2}" y="${WORDMARK.centerY - size / 2}" width="${size}" height="${size}"`
-  return `        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="wardpulse">
+  return `        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="wardpulse" ${SCALE_ATTRIBUTES}>
             <Launch target="app.wardpulse/app.wardpulse.wear.MainActivity" />
             <!-- Preserve the original padded PNG; visible clock clearance needs native measurement. -->
             <PartImage ${box(WORDMARK.size)} alpha="95">
@@ -1788,12 +1825,12 @@ function face(diagnostics = false) {
   // A blank line means "a different slot starts here". The lift is the ground
   // the first ring sits on and the comment introduces the strip stack, so
   // neither is cut off from what follows it.
+  const chrome = [lift(), cellChromeComment(), CELLS.map(cellChrome).join('\n\n')]
+    .join('\n').split('\n').map((line) => line ? `    ${line}` : line).join('\n')
   const body = [
-    [
-      lift(),
-      cellChromeComment(),
-      CELLS.map(cellChrome).join('\n\n'),
-    ].join('\n'),
+    `        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="compositionChrome" ${SCALE_ATTRIBUTES}>
+${chrome}
+        </Group>`,
     [
       // Current main foreground follows extras; unsplit N1 first restores its backdrop.
       // Compatible halves remain adjacent; absent mains still paint nothing.
@@ -1850,6 +1887,9 @@ const diagnosticXml = face(true)
 assertLegacyCutoffs()
 assertNearExhaustedArcs()
 assertLowerContracts()
+for (const [diameter, pixels] of [[404, 450], [356, 397], [332, 370], [308, 344]]) {
+  if (texturePixels(diameter) !== pixels) throw new Error(`reference ${diameter}: texture sampling/ceil boundary drifted`)
+}
 await assertConditionTrees(xml)
 await assertConditionTrees(diagnosticXml, xml)
 const outputFlag = process.argv.indexOf('--n1-pair-diagnostics-output')
@@ -1866,6 +1906,7 @@ if (outputFlag !== -1) {
   await mkdir(dirname(output), { recursive: true })
   await writeFile(output, diagnosticXml)
 } else {
+  if (process.argv.includes('--check')) await assertTextures()
   await emit(target, xml, 'render-watchface')
 
   // Textures are rasterized, not compared: ImageMagick stamps metadata that
