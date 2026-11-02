@@ -9,6 +9,12 @@
  *   node tools/render-watch-ring-designs.mjs --clock-preview-up <450-unit-offset> \
  *     --clock-preview-output LOCAL_ARTIFACTS/<new-directory>
  * The offset must be positive in 0.1-unit increments; no offset is approved here.
+ * One fixed local viewport proposal, retaining the current clock and centre content:
+ *   node tools/render-watch-ring-designs.mjs \
+ *     --viewport-preview-output LOCAL_ARTIFACTS/<new-directory>
+ * This active three-band proposal has outer radius 216, width 20 and gap 4 on the
+ * unchanged 450 canvas. Its retained incident values are illustrative, not live data.
+ * Viewport and clock preview flags cannot be combined, or used with other flags.
  * The destination's parent must exist, and its resolved path must stay inside
  * LOCAL_ARTIFACTS. The destination must be new. Preview flags cannot use --check.
  * Produces one 450x450 logo-composited PNG, its intermediate SVG, and metadata
@@ -31,7 +37,17 @@ const runFile = promisify(execFile)
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const checking = process.argv.includes('--check')
-const clockPreview = parseClockPreview(process.argv.slice(2))
+const viewportPreview = parseViewportPreview(process.argv.slice(2))
+const clockPreview = viewportPreview ? null : parseClockPreview(process.argv.slice(2))
+
+function parseViewportPreview(args) {
+  if (!args.includes('--viewport-preview-output')) return null
+  if (args.length !== 2 || args[0] !== '--viewport-preview-output' ||
+      !args[1] || args[1].startsWith('--')) {
+    throw new Error('use viewport preview output exactly once, without clock flags, --check or other flags')
+  }
+  return { output: args[1] }
+}
 
 function parseClockPreview(args) {
   if (args.length === 0 || (args.length === 1 && args[0] === '--check')) return null
@@ -144,6 +160,13 @@ const FONT = 'Noto Sans'
 
 /** The canvas the face was measured on; every absolute number below is in its units. */
 const FACE = 450
+
+/** Only the isolated active proposal uses exact 20/4 geometry at the larger edge. */
+const VIEWPORT_GEOMETRY = { outerEdge: 216, width: 20, gap: 4 }
+const VIEWPORT_RADII = Array.from({ length: MAX_RINGS }, (_, index) =>
+  VIEWPORT_GEOMETRY.outerEdge - VIEWPORT_GEOMETRY.width / 2 -
+    index * (VIEWPORT_GEOMETRY.width + VIEWPORT_GEOMETRY.gap),
+)
 
 /**
  * Fixed in the 450-unit language: 132x26 boxes stepping 27 from y=259,
@@ -391,6 +414,10 @@ function assertNearExhaustedArcs() {
       })
     }).flat()
   })
+  geometries.push(...VIEWPORT_RADII.flatMap((r, index) => [
+    [r, VIEWPORT_GEOMETRY.width],
+    ...(index < 2 ? ringArcPair(r, VIEWPORT_GEOMETRY.width) : []),
+  ]))
   for (const [r, thickness] of geometries) {
     const cutoff = twoCapCutoff(r, thickness)
     const saturation = 2 * cutoff
@@ -700,6 +727,7 @@ async function faceSvg({
   showCredits = false,
   clearedCells = [],
   clockUp = 0,
+  viewport = false,
 }) {
   const cx = size / 2
   const cy = size / 2
@@ -729,6 +757,18 @@ async function faceSvg({
     thickness = [44, 32, 20][planLayers.length - 1] * scale
     outer = 202 * scale - thickness / 2
     gap = 4 * scale
+    band = thickness
+  }
+  if (viewport) {
+    assert.equal(size, FACE, 'viewport proposal must retain the 450-unit canvas')
+    assert.equal(ambient, false, 'viewport proposal is active only')
+    assert.equal(showPlan, true, 'viewport proposal must show its plan bands')
+    assert.equal(planLayers.length, MAX_RINGS, 'viewport proposal requires three bands')
+    assert.equal(clockUp, 0, 'viewport proposal must retain the approved clock')
+    assert.deepEqual(clearedCells, [], 'viewport proposal must retain the filled default cells')
+    outer = VIEWPORT_RADII[0]
+    thickness = VIEWPORT_GEOMETRY.width
+    gap = VIEWPORT_GEOMETRY.gap
     band = thickness
   }
   const stripLayers = showPlan ? planLayers : layers.slice(0, 1)
@@ -1122,6 +1162,19 @@ const pickerPreview = {
   },
 }
 
+// Retained incident values are design data; ordinary catalog entries and boards stay unchanged.
+const viewportProposal = {
+  name: 'Round · viewport proposal',
+  viewport: true,
+  showPlan: true,
+  showCredits: true,
+  layers: [
+    { ...CATALOG.claudeFable, used: 0.12, split: { ...CATALOG.claudeFable.split, used: 0 } },
+    { ...CATALOG.cursorPairUntouched, split: { ...CATALOG.cursorPairUntouched.split, used: 0.36 } },
+    { ...CATALOG.codex, used: 1, credits: '49.7K' },
+  ],
+}
+
 function assertClockOnlyPreview(reference, preview, up) {
   const clock = (svg) => {
     const matches = [...svg.matchAll(/<text\b[^>]*>10:08<\/text>/g)]
@@ -1215,6 +1268,98 @@ async function renderClockPreview({ up, output }) {
   console.log(`UNAPPROVED PREVIEW ONLY: ${pngPath}`)
 }
 
+async function renderViewportPreview({ output }) {
+  const directory = await clockPreviewDirectory(output)
+  const primary = variants.find(({ file }) => file === 'round-3-plan-credits.svg')
+  const referencePath = join(wearDir, primary.file)
+  assert.equal(await faceSvg({ ...primary, size: FACE }), await readFile(referencePath, 'utf8'),
+    'viewport reference must match the accepted Primary board')
+  const svg = await faceSvg({ ...viewportProposal, size: FACE })
+  const inputPaths = [
+    'tools/render-watch-ring-designs.mjs',
+    'tools/design-output.mjs',
+    'tools/render-watchface.mjs',
+    'docs/product/WATCH_RING_DESIGN.md',
+    'apps/watchface_wff/src/main/res/raw/watchface.xml',
+    'apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png',
+    relative(root, referencePath),
+    relative(root, join(wffDir, primary.file)),
+    FONT_FILE,
+  ]
+  const inputHashes = Object.fromEntries(await Promise.all(inputPaths.map(async (path) =>
+    [path, await sha256(resolve(root, path))])))
+  assert.equal(inputHashes[relative(root, pickerPreview.overlay.image)],
+    '599a722e2c08bb5d952e87ceb0ea02c228c77554e0dc3572e7eeb992b96d1cef',
+    'viewport proposal must retain the original logo pixels')
+  const { stdout: rendererVersion } = await runFile('convert', ['-version'], { encoding: 'utf8' })
+  await mkdir(directory, { mode: 0o700 })
+  const stem = join(directory, 'viewport-preview')
+  const svgPath = `${stem}.input.svg`
+  const pngPath = `${stem}.png`
+  const metadataPath = `${stem}.json`
+  await writeFile(svgPath, svg, { flag: 'wx' })
+  await renderPreviews([{
+    svg: svgPath,
+    png: pngPath,
+    density: pickerPreview.density,
+    overlay: pickerPreview.overlay,
+  }])
+  const png = await readFile(pngPath)
+  assert.ok(png.length >= 24 &&
+    png.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) &&
+    png.toString('ascii', 12, 16) === 'IHDR', 'viewport output must be a PNG')
+  const width = png.readUInt32BE(16)
+  const height = png.readUInt32BE(20)
+  assert.equal(width, FACE, 'viewport preview must retain the full canvas width')
+  assert.equal(height, FACE, 'viewport preview must retain the full canvas height')
+  const metadata = {
+    status: 'UNAPPROVED PREVIEW ONLY',
+    evidence: 'Illustrative retained incident data; no fresh-live, healthy-public or native seam-repair acceptance.',
+    invocation: { cwd: process.cwd(), argv: [process.execPath, ...process.argv.slice(1)] },
+    tools: { node: process.version, imageMagick: rendererVersion.trim() },
+    inputHashes,
+    reference: relative(root, referencePath),
+    geometry: {
+      canvas: { width: FACE, height: FACE },
+      center: { x: FACE / 2, y: FACE / 2 },
+      proposed: {
+        ...VIEWPORT_GEOMETRY,
+        diameter: VIEWPORT_GEOMETRY.outerEdge * 2,
+        border: FACE / 2 - VIEWPORT_GEOMETRY.outerEdge,
+        innerEdge: VIEWPORT_RADII.at(-1) - VIEWPORT_GEOMETRY.width / 2,
+        centerlinesOuterToInner: VIEWPORT_RADII,
+        pairedCenterlinesInnerOuter: VIEWPORT_RADII.slice(0, 2).map((r) =>
+          ringArcPair(r, VIEWPORT_GEOMETRY.width).map(([radius]) => radius)),
+        halfWidth: VIEWPORT_GEOMETRY.width / 2,
+      },
+      accepted: { outerEdge: 202, diameter: 404, border: 23 },
+    },
+    displayedContent: {
+      time: '10:08',
+      clock: { ...CLOCK.active, renderedBaseline: Number(CLOCK.active.baseline.toFixed(1)) },
+      cellSize: CELL.size,
+      cells: CELL.readings,
+      legendWell: STRIP,
+      legend: sortByRemaining(viewportProposal.layers).map((layer) => ({
+        provider: layer.id,
+        text: barLabel(layer, viewportProposal),
+        fontSize: stripFontSize(barLabel(layer, viewportProposal)),
+      })),
+      layersOuterToInner: viewportProposal.layers,
+    },
+    logo: pickerPreview.overlay,
+    outputs: {
+      intermediateSvg: { file: basename(svgPath), sha256: await sha256(svgPath) },
+      fullFacePng: { file: basename(pngPath), width, height, sha256: await sha256(pngPath) },
+      metadata: { file: basename(metadataPath) },
+    },
+  }
+  await writeFile(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, { flag: 'wx' })
+  console.log(`UNAPPROVED PREVIEW ONLY: ${pngPath}`)
+  // A metadata file cannot contain its own digest; retain that identity in the delivery receipt.
+  console.log(`metadata: ${metadataPath} (sha256 ${await sha256(metadataPath)})`)
+}
+
 async function writeDesigns(preview, {
   writePreview = renderClockPreview,
   emitSvg = emit,
@@ -1280,6 +1425,84 @@ async function assertClockPreviewIsolation() {
   assert.equal(previewWrites, 1, 'preview must dispatch exactly one candidate')
 }
 
+async function assertViewportPreviewIsolation() {
+  const flags = ['--viewport-preview-output', 'LOCAL_ARTIFACTS/viewport-guard']
+  const preview = parseViewportPreview(flags)
+  const clockFlags = ['--clock-preview-up', '1', '--clock-preview-output', 'LOCAL_ARTIFACTS/clock-guard']
+  for (const args of [[], ['--check'], clockFlags]) assert.equal(parseViewportPreview(args), null)
+  for (const args of [flags.slice(0, 1), [...flags, ...flags], [...flags, '--check'],
+    ['--check', ...flags], [...flags, '--unknown'], [...flags, ...clockFlags],
+    [...clockFlags, ...flags], [flags[0], '--check']]) {
+    assert.throws(() => parseViewportPreview(args), /viewport preview output exactly once/)
+  }
+  assert.throws(() => parseClockPreview(flags), /without --check or other flags/)
+  assert.throws(() => parseClockPreview(['--unknown']), /without --check or other flags/)
+  const parentUnchanged = async (path) => path
+  assert.equal(await clockPreviewDirectory(preview.output, parentUnchanged), resolve(root, preview.output))
+  for (const output of ['LOCAL_ARTIFACTS', 'LOCAL_ARTIFACTS/../brand', 'apps/watchface_wff/design']) {
+    await assert.rejects(clockPreviewDirectory(output, parentUnchanged), /inside LOCAL_ARTIFACTS/)
+  }
+  await assert.rejects(clockPreviewDirectory(preview.output, async () => wffDir), /resolves outside/)
+  assert.deepEqual(VIEWPORT_RADII, [206, 182, 158])
+  assert.deepEqual(VIEWPORT_RADII.slice(0, 2).map((r) => ringArcPair(r, VIEWPORT_GEOMETRY.width)),
+    [[[201, 10], [211, 10]], [[177, 10], [187, 10]]])
+  assert.deepEqual(CLOCK.active, { fontSize: 86, baseline: 240.78125, weight: 700 })
+  assert.equal(CELL.size, 52)
+  assert.deepEqual(CELL.readings.map(({ text }) => text), ['Tue', '18°C', 'UV 7'])
+  assert.deepEqual([STRIP.width, STRIP.height, STRIP.fontSize], [132, 26, 20])
+  assert.deepEqual(pickerPreview.overlay, {
+    image: join(root, 'apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png'),
+    x: 193, y: 141, width: 64, height: 64, alpha: 95 / 255,
+  })
+  const ordered = sortByRemaining(viewportProposal.layers)
+  assert.deepEqual(ordered.map((layer) => [layer.id, layer.used, layer.split?.id, layer.split?.used]), [
+    ['codex', 1, undefined, undefined], ['cursor', 0, 'cursor-other', 0.36], ['claude', 0.12, 'fable', 0],
+  ])
+  assert.deepEqual(ordered.map((layer) => [layer.color, layer.split?.color]), [
+    ['#65D78A', undefined], ['#7E93B8', '#67E8D4'], ['#E8915A', '#FF603D'],
+  ])
+  assert.deepEqual(ordered.map((layer) => barLabel(layer, viewportProposal)),
+    ['0% · 49.7K', '100% · 64%', '88% · 100%'])
+  const reference = await faceSvg({ ...viewportProposal, viewport: false, size: FACE })
+  const candidate = await faceSvg({ ...viewportProposal, size: FACE })
+  const cells = upperCells({ size: FACE, ambient: false })
+  const content = (svg) => {
+    const start = svg.indexOf(cells)
+    assert.ok(start >= 0, 'viewport proposal must retain all default cell markup')
+    assert.equal(svg.indexOf(cells, start + cells.length), -1, 'default cells must appear once')
+    return svg.slice(start)
+  }
+  assert.equal(content(candidate), content(reference),
+    'viewport proposal may change only band geometry, keeping all centre content unchanged')
+  assert.ok(candidate.includes('y="240.8" text-anchor="middle"'), 'viewport clock baseline must stay approved')
+  assert.ok(candidate.includes('<tspan fill="#FFB4AB">0%</tspan> · 49.7K'),
+    'only the exhausted percentage token must turn red')
+  for (const [index, layer] of ordered.entries()) {
+    const r = VIEWPORT_RADII[MAX_RINGS - 1 - index]
+    const halves = layer.split ? ringArcPair(r, VIEWPORT_GEOMETRY.width) : [[r, VIEWPORT_GEOMETRY.width]]
+    halves.forEach(([radius, thickness], half) => {
+      const pool = half === 0 ? layer : layer.split
+      assert.ok(candidate.includes(ringArc({
+        cx: FACE / 2, cy: FACE / 2, r: radius, thickness,
+        remaining: 1 - pool.used, color: pool.color, ambient: false,
+      })), 'each proposal pool must paint its own value and color at the proposed radius')
+    })
+  }
+  await assert.rejects(faceSvg({ ...viewportProposal, size: FACE, ambient: true }), /active only/)
+  await assert.rejects(faceSvg({ ...viewportProposal, size: FACE, clockUp: 1 }), /approved clock/)
+  let previewWrites = 0
+  const rejectCanonicalWrite = () => assert.fail('viewport preview must not write or render canonical exports')
+  await writeDesigns(preview, {
+    writePreview: async (options) => {
+      assert.deepEqual(options, preview)
+      previewWrites += 1
+    },
+    emitSvg: rejectCanonicalWrite,
+    renderImages: rejectCanonicalWrite,
+  })
+  assert.equal(previewWrites, 1, 'viewport preview must dispatch exactly one candidate')
+}
+
 assertNearExhaustedArcs()
 
 // Common and compact-bound labels must remain complete at the selected size.
@@ -1304,4 +1527,7 @@ await assertLabelsFit(cellFitReadings.map(({ text }) => text), {
 })
 
 await assertClockPreviewIsolation()
-await writeDesigns(clockPreview)
+await assertViewportPreviewIsolation()
+await writeDesigns(viewportPreview ?? clockPreview, {
+  writePreview: viewportPreview ? renderViewportPreview : renderClockPreview,
+})
