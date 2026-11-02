@@ -272,9 +272,13 @@ canceling it. Preserve private original shade frames and bounded UID/channel/tag
 facts at CROSSED, UNCHANGED, CLEAR, REARMED, EXHAUSTED and RECOVERED; inspect absence at denial,
 NO BACKLOG and mute barriers. Do not dismiss case posts during comparisons. Retain each receipt
 and original throughout the run, including partial evidence on abort; do not wait for JSON.
-The stock wrapper's JSON is success-only, and `reportData` remains assigned after RECOVERED.
-Killed or aborted cases remain incomplete; retain failed results as failures. Missing JSON is
-not PASS. If a permission change kills the process or continuity is unproved, stop the case
+The stock driver's awaited callback writes available response JSON before validating the selected
+case's completed report; failure diagnostics are retained too. Retained JSON can be null or
+incomplete. Callback rejection prevents successful wrapper completion, and framework failure or
+timeout remains failure even if the driver prints success. Default `reportData` remains assigned
+after the final RECOVERED Continue and notification assertions. A completed report still requires
+the actual OS evidence above. Killed or aborted cases remain incomplete; retain failed results
+as failures. If a permission change kills the process or continuity is unproved, stop the case
 and restore after driver termination. Never relaunch with reconstructed memory and call it a
 resumed case.
 
