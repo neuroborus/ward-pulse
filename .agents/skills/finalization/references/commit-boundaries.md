@@ -46,7 +46,7 @@ owner's authorized scope. Each stream still requires its own actual Runner execu
 and an explicit focused commit/integration boundary. Do not pour results into one uncommitted
 integration pool. Preserve dependencies, ownership and existing changes when bringing a
 completed stream back to the main working copy. Isolation does not authorize bypassing
-another run's protected ownership.
+another run's protected ownership. Linked worktrees share branch/tag/stash refs; serialize any external commit, stash, tag or other ref write against every guarded Runner lifecycle, including read-only turns, not only Source ownership. The owning pipeline's admitted Native commits keep their existing contract; independently authorized HOST/device/read-only work that writes no refs may continue.
 
 ## Preserve the Native/HOST and commit contract
 

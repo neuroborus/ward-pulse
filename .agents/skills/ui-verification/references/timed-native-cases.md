@@ -10,7 +10,7 @@ mandatory whole-run retirement before HOST work through [finalization](../../fin
 Have the existing phase commands, privacy-safe projections, expected identities/report
 contract and qualified restoration inputs ready before launching the timed case. Resolve
 essential Source/tool questions and preservation prerequisites beforehand; an active case
-is not preparation time. Use the owning device procedure, without a new harness or script.
+is not preparation time. Use the owning device procedure, without a new harness or script. Plan witness windows around the expected event using realistic operator/model/tool round trips, then join their actual start/end to the real post/event time; a window missing that event is not a witness. Every process/communicate/network deadline that bounds that capture must exceed its budget plus an explicit completion margin.
 
 Before launch, record a phase-specific action/capture plan and realistic operator time budget,
 using measured comparable timings or explicit conservative estimates. Include model/tool
