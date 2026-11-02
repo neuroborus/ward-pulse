@@ -110,17 +110,20 @@ pub fn debug_multi_provider_dashboard_at(
     let anchor = capture_anchor.map(DemoTime::parse).transpose()?;
     let mut rng = SeedRng(seed);
     let cursor_plan = cursor_plan_account(&mut rng, anchor)?;
-    let accounts: Vec<_> = [
+    let mut accounts = vec![
         (openai_account(anchor)?, ScrambleMode::Budgets),
         (codex_account(anchor)?, ScrambleMode::Allowances),
         (claude_plan_account(anchor)?, ScrambleMode::Allowances),
         (anthropic_platform_account(anchor)?, ScrambleMode::Budgets),
         (cursor_plan, ScrambleMode::Allowances),
-        (cursor_platform_account(anchor)?, ScrambleMode::Budgets),
-    ]
-    .into_iter()
-    .map(|(account, mode)| scramble_account(&mut rng, account, mode, anchor.is_some()))
-    .collect();
+    ];
+    if anchor.is_none() {
+        accounts.push((cursor_platform_account(anchor)?, ScrambleMode::Budgets));
+    }
+    let accounts: Vec<_> = accounts
+        .into_iter()
+        .map(|(account, mode)| scramble_account(&mut rng, account, mode, anchor.is_some()))
+        .collect();
 
     // Newest fixture stamp keeps relative ordering; seed is what varies content.
     let generated_at = accounts
@@ -724,6 +727,18 @@ mod tests {
             left,
             debug_multi_provider_dashboard_json_at(7, None).unwrap()
         );
+        let snapshot: DashboardSnapshot = serde_json::from_str(&left).unwrap();
+        assert_eq!(snapshot.accounts.len(), 6);
+        let cursor = snapshot
+            .accounts
+            .iter()
+            .find(|account| account.connection.as_deref() == Some("cursor.platform"))
+            .unwrap();
+        for budget in [&cursor.today, &cursor.week] {
+            assert!(budget.spent.is_none());
+            assert_eq!(budget.status, ProviderStatus::Unknown);
+        }
+        assert_ne!(cursor.status, ProviderStatus::Ok);
     }
 
     #[test]
@@ -735,7 +750,7 @@ mod tests {
 
     #[test]
     fn dated_healthy_scenario() {
-        // Actually generated together; reporting unknowns are not forced to OK.
+        // Complete anchored scenario; other seeds may still produce problems.
         let anchor = "2026-11-02T12:00:00Z";
         let snapshot = debug_multi_provider_dashboard_at(280, Some(anchor)).unwrap();
         assert_eq!(
@@ -746,10 +761,27 @@ mod tests {
             snapshot,
             debug_multi_provider_dashboard_at(281, Some(anchor)).unwrap()
         );
-        assert!(snapshot
-            .accounts
-            .iter()
-            .all(|account| matches!(account.status, ProviderStatus::Ok | ProviderStatus::Unknown)));
+        assert_eq!(
+            snapshot
+                .accounts
+                .iter()
+                .map(|account| (account.account_id.as_str(), account.connection.as_deref()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("openai-demo", Some("openai.platform")),
+                ("codex-local", Some("openai.plan")),
+                ("claude-local", Some("anthropic.plan")),
+                ("anthropic-demo", Some("anthropic.platform")),
+                ("cursor-local", Some("cursor.plan")),
+            ]
+        );
+        assert_eq!(snapshot.overall_status, ProviderStatus::Ok);
+        for account in &snapshot.accounts {
+            assert_eq!(account.status, ProviderStatus::Ok, "{}", account.account_id);
+            for allowance in &account.allowances {
+                assert_eq!(allowance.status, ProviderStatus::Ok, "{}", allowance.id);
+            }
+        }
         let allowance = |id: &str| {
             snapshot
                 .accounts
@@ -787,13 +819,6 @@ mod tests {
             allowance("claude-seven-day-fable").resets_at,
             allowance("claude-seven-day").resets_at
         );
-        let cursor = snapshot
-            .accounts
-            .iter()
-            .find(|account| account.connection.as_deref() == Some("cursor.platform"))
-            .unwrap();
-        assert!(cursor.today.spent.is_none() && cursor.week.spent.is_none());
-        assert_eq!(cursor.status, ProviderStatus::Unknown);
     }
 
     #[test]

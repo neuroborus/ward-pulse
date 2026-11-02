@@ -59,7 +59,11 @@ falls back to historical or current time. Anchors whose rebased history or next 
 boundary cannot be represented within years 0001–9999 also fail. Omit the define to
 retain the exact seed-only scenario. Both defines are consumed only by debug startup.
 
-Anchored composition uses the existing synthetic Max Fable fixture and both Cursor pools.
+Anchored composition has five accounts: OpenAI reporting, Codex plan, Claude plan,
+Anthropic reporting and Cursor plan. It uses the existing synthetic Max Fable fixture
+and both Cursor pools, omitting the optional Cursor Team reporting connection.
+The unanchored seed-only composition retains all six accounts, including Cursor Team
+with its unknown day/week budgets.
 Rust rebases calendar/reporting/history/billing dates before normalization and preserves
 rolling reset offsets, missing resets and unknown consumption. It reads no clock.
 The actually generated seed **280**, anchor **2026-11-02T12:00:00Z**, provides:
@@ -74,8 +78,12 @@ The actually generated seed **280**, anchor **2026-11-02T12:00:00Z**, provides:
 | Cursor Other Models | 2.3 |
 
 These six plan metrics are healthy; Codex has **1200** finite purchased credits.
-Cursor reporting's unknown day/week budgets remain unknown. For the watch, select Codex
-plan, Claude plan + Fable, and both Cursor pools: three bands with two completed pairs.
+For a healthy capture, the overall snapshot, every included account and every rendered
+allowance must be OK. Verify the complete native screen has zero app-bar/family problem
+counters, including grey Unknown badges; healthy selected metrics alone are insufficient.
+Other seeds can still produce unhealthy states, and missing optional values remain missing.
+For the watch, select Codex plan, Claude plan + Fable, and both Cursor pools: three bands
+with two completed pairs.
 Use one cached accepted snapshot and normal guarded sync for related views; refresh or
 Mock-toggle invalidation advances the seed, while process restart restores the configured seed.
 This dated example is Mock data, not evidence of current device or public readiness.
