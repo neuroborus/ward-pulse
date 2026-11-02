@@ -9,7 +9,7 @@ home-widget metrics are on **Widget**.
 | Section | What it shows or changes |
 | --- | --- |
 | Refresh | Refresh interval while open and approximate background cadence. |
-| Notifications | Independent Alert notifications and Plan recovery switches. |
+| Notifications | Independent Alert notifications and Plan recovery switches, plus an Android settings action when notifications are blocked. |
 | Diagnostics | Sync timestamp/status and the next Watch summary, when a summary is available. |
 | Help | User guide in your external browser. |
 | Legal | Independent product information. |
@@ -19,6 +19,15 @@ Both notification switches start on and preserve your saved choice. They share A
 notification permission, with one automatic attempt on eligible foreground use and explicit
 off-to-on retry. Saving both off suppresses that automatic attempt. Alert rules remain on
 Providers; turning delivery off does not remove those rules or the in-app alerts.
+
+If **Notifications are blocked** appears, choose **Enable notifications** to open WardPulse's
+Android settings. If Android opens the app information page, choose its notification controls.
+Return to WardPulse to recheck the warning.
+Opening those controls does not enable notifications or change either saved switch; returning
+without allowing notifications leaves the warning. The warning can appear even with both
+switches off. Android channel settings and Do Not Disturb can still limit delivery when the
+warning is absent.
+
 Diagnostics helps you compare the phone's displayed data and watch summary. It does not
 guarantee that the watch has already received an update.
 

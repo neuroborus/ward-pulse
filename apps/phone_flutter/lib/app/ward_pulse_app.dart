@@ -245,6 +245,8 @@ class _DashboardHostState extends State<DashboardHost>
   var _notificationFrameRevision = 0;
   bool _notificationPreferencesResolved = false;
   bool _notificationFrameReady = false;
+  bool? _androidNotificationsEnabled;
+  var _notificationStatusRevision = 0;
   int _selectedIndex = 0;
   bool _widgetNavigationPending = false;
   ({String provider, int token})? _reveal;
@@ -304,11 +306,25 @@ class _DashboardHostState extends State<DashboardHost>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _queueNotificationFrame();
+    if (state == AppLifecycleState.resumed &&
+        _selectedIndex == _settingsIndex) {
+      unawaited(_refreshNotificationStatus());
+    }
   }
 
   @override
   void didUpdateWidget(covariant DashboardHost oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(
+      oldWidget.notificationCoordinator,
+      widget.notificationCoordinator,
+    )) {
+      _notificationStatusRevision++;
+      _androidNotificationsEnabled = null;
+      if (_selectedIndex == _settingsIndex) {
+        unawaited(_refreshNotificationStatus());
+      }
+    }
     if (!identical(
           oldWidget.notificationCoordinator,
           widget.notificationCoordinator,
@@ -348,9 +364,49 @@ class _DashboardHostState extends State<DashboardHost>
         (_alertNotificationsEnabled || _recoveryNotificationsEnabled);
     if (eligible()) {
       unawaited(
-        coordinator.requestForeground(isEligible: eligible, automatic: true),
+        _requestNotificationPermission(
+          coordinator,
+          isEligible: eligible,
+          automatic: true,
+        ),
       );
     }
+  }
+
+  Future<bool?> _requestNotificationPermission(
+    PhoneNotificationCoordinator coordinator, {
+    required bool Function() isEligible,
+    bool automatic = false,
+  }) async {
+    final result = await coordinator.requestForeground(
+      isEligible: isEligible,
+      automatic: automatic,
+    );
+    if (result != null &&
+        mounted &&
+        identical(coordinator, widget.notificationCoordinator)) {
+      unawaited(_refreshNotificationStatus());
+    }
+    return result;
+  }
+
+  Future<void> _refreshNotificationStatus() async {
+    if (!mounted) return;
+    final coordinator = widget.notificationCoordinator;
+    final revision = ++_notificationStatusRevision;
+    setState(() => _androidNotificationsEnabled = null);
+    bool? enabled;
+    try {
+      enabled = await coordinator?.readAndroidNotificationStatus();
+    } catch (_) {
+      // Unsupported and failed reads leave the status unknown.
+    }
+    if (!mounted ||
+        revision != _notificationStatusRevision ||
+        !identical(coordinator, widget.notificationCoordinator)) {
+      return;
+    }
+    setState(() => _androidNotificationsEnabled = enabled);
   }
 
   void _openDashboardFromWidget() {
@@ -406,6 +462,7 @@ class _DashboardHostState extends State<DashboardHost>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _notificationStatusRevision++;
     _notificationFrameRevision++;
     _invalidateNotificationEligibility();
     widget.watchSyncService.unbindWatchRefreshListener();
@@ -504,7 +561,8 @@ class _DashboardHostState extends State<DashboardHost>
         revision + 1 == _alertNotificationRevision) {
       final coordinator = widget.notificationCoordinator;
       if (coordinator == null) return widget.alertNotifier.requestPermission();
-      return await coordinator.requestForeground(
+      return await _requestNotificationPermission(
+            coordinator,
             isEligible:
                 () =>
                     _notificationForegroundReady &&
@@ -548,7 +606,8 @@ class _DashboardHostState extends State<DashboardHost>
       final coordinator = widget.notificationCoordinator;
       if (coordinator == null)
         return widget.recoveryNotifier.requestPermission();
-      return await coordinator.requestForeground(
+      return await _requestNotificationPermission(
+            coordinator,
             isEligible:
                 () =>
                     _notificationForegroundReady &&
@@ -1280,6 +1339,11 @@ class _DashboardHostState extends State<DashboardHost>
                 onRecoveryNotificationsChanged: _updateRecoveryNotifications,
                 alertNotificationsEnabled: _alertNotificationsEnabled,
                 onAlertNotificationsChanged: _updateAlertNotifications,
+                androidNotificationsEnabled: _androidNotificationsEnabled,
+                onOpenNotificationSettings:
+                    () async =>
+                        await widget.notificationCoordinator
+                            ?.openAndroidNotificationSettings(),
                 debugDataAvailable: widget.debugDataAvailable,
                 mockDataEnabled: _mockDataEnabled,
                 onMockDataEnabledChanged: _updateMockDataEnabled,
@@ -1390,9 +1454,14 @@ class _DashboardHostState extends State<DashboardHost>
               final navigationBar = NavigationBar(
                 selectedIndex: _selectedIndex,
                 onDestinationSelected: (index) {
+                  final enteringSettings =
+                      index == _settingsIndex && index != _selectedIndex;
                   setState(() {
                     _selectedIndex = index;
                   });
+                  if (enteringSettings) {
+                    unawaited(_refreshNotificationStatus());
+                  }
                 },
                 destinations: destinations,
               );

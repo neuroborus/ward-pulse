@@ -37,6 +37,39 @@ DashboardSnapshot _snapshot(
 });
 
 void main() {
+  test(
+    'readiness retains initialization failure and stack, then retries once',
+    () async {
+      final failure = StateError('Initialization unavailable.');
+      final stack = StackTrace.current;
+      final failed = Completer<void>();
+      final successful = Completer<void>();
+      var initializations = 0;
+      final coordinator = PhoneNotificationCoordinator(
+        initialize:
+            () => ++initializations == 1 ? failed.future : successful.future,
+      );
+      final first = coordinator.ensureReady();
+      expect(coordinator.ensureReady(), same(first));
+      final observed = first.then<void>(
+        (_) => fail('Initialization must retain its failure.'),
+        onError: (Object error, StackTrace trace) {
+          expect(error, same(failure));
+          expect(trace.toString(), stack.toString());
+        },
+      );
+      failed.completeError(failure, stack);
+      await observed;
+      final retry = coordinator.ensureReady();
+      expect(retry, isNot(same(first)));
+      expect(coordinator.ensureReady(), same(retry));
+      successful.complete();
+      await retry;
+      expect(coordinator.ensureReady(), same(retry));
+      expect(initializations, 2);
+    },
+  );
+
   for (final granted in [false, true]) {
     test('shared foreground request persists handling ($granted)', () async {
       final storage = FakeSecureStorage();

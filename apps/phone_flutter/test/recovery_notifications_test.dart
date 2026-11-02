@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +11,71 @@ import 'package:ward_pulse_phone/sync/recovery_notifications.dart';
 import 'connection_cache_test_support.dart';
 
 void main() {
+  testWidgets(
+    'passive Android status and settings bypass readiness and attempts',
+    (tester) async {
+      final previousPlatform = FlutterLocalNotificationsPlatform.instance;
+      AndroidFlutterLocalNotificationsPlugin.registerWith();
+      const channel = MethodChannel(
+        'dexterous.com/flutter/local_notifications',
+      );
+      final messenger = tester.binding.defaultBinaryMessenger;
+      addTearDown(() {
+        messenger.setMockMethodCallHandler(channel, null);
+        FlutterLocalNotificationsPlatform.instance = previousPlatform;
+      });
+      final calls = <String>[];
+      bool? response;
+      var fail = false;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call.method);
+        if (fail) throw PlatformException(code: 'unavailable');
+        return response;
+      });
+      final storage = FakeSecureStorage()..failRead = true;
+      var writes = 0;
+      storage.beforeWrite = (_) async {
+        writes++;
+      };
+      var initializations = 0;
+      final coordinator = PhoneNotificationCoordinator(
+        attempts: SecureNotificationPermissionAttemptStore(storage: storage),
+        initialize: () async {
+          initializations++;
+        },
+      );
+      for (final value in [false, true, null]) {
+        response = value;
+        expect(await coordinator.readAndroidNotificationStatus(), value);
+        expect(await coordinator.openAndroidNotificationSettings(), value);
+      }
+      fail = true;
+      await expectLater(
+        coordinator.readAndroidNotificationStatus(),
+        throwsA(isA<PlatformException>()),
+      );
+      await expectLater(
+        coordinator.openAndroidNotificationSettings(),
+        throwsA(isA<PlatformException>()),
+      );
+      fail = false;
+      response = true;
+      expect(await coordinator.openAndroidNotificationSettings(), isTrue);
+      expect(calls, [
+        for (var i = 0; i < 4; i++) ...[
+          'areNotificationsEnabled',
+          'openAppNotificationSettings',
+        ],
+        'openAppNotificationSettings',
+      ]);
+      expect(initializations, 0);
+      expect(writes, 0);
+      expect(storage.values, isEmpty);
+      expect(storage.deleted, isEmpty);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
   testWidgets(
     'readiness registers both channels once without posting or requesting',
     (tester) async {

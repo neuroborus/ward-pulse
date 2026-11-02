@@ -31,6 +31,8 @@ class SettingsScreen extends StatefulWidget {
     required this.onRecoveryNotificationsChanged,
     required this.alertNotificationsEnabled,
     required this.onAlertNotificationsChanged,
+    required this.androidNotificationsEnabled,
+    required this.onOpenNotificationSettings,
     required this.debugDataAvailable,
     required this.mockDataEnabled,
     required this.onMockDataEnabledChanged,
@@ -43,6 +45,8 @@ class SettingsScreen extends StatefulWidget {
   final bool recoveryNotificationsEnabled;
   final bool alertNotificationsEnabled;
   final Future<bool> Function(bool enabled) onAlertNotificationsChanged;
+  final bool? androidNotificationsEnabled;
+  final Future<bool?> Function() onOpenNotificationSettings;
 
   /// Turning it on is also where Android is asked for the permission: only the
   /// foreground can ask, and the poll that posts runs without an Activity.
@@ -66,6 +70,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _settingNotification = false;
+  bool _openingNotificationSettings = false;
   bool _isSyncing = false;
   String? _syncResult;
   int? _dragRefreshMinutes;
@@ -121,6 +126,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _isSyncing = false;
         });
       }
+    }
+  }
+
+  Future<void> _openNotificationSettings() async {
+    if (_openingNotificationSettings) return;
+    setState(() => _openingNotificationSettings = true);
+    var opened = false;
+    try {
+      opened = await widget.onOpenNotificationSettings() == true;
+    } catch (_) {
+      // Navigation failures share retryable feedback below.
+    } finally {
+      if (mounted) setState(() => _openingNotificationSettings = false);
+    }
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open Android notification settings'),
+        ),
+      );
     }
   }
 
@@ -200,6 +225,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final snapshot = widget.snapshot;
+    final colors = Theme.of(context).colorScheme;
     final shownRefreshMinutes = PollCadence.clampMinutes(
       _dragRefreshMinutes ?? widget.refreshInterval.minutes,
     );
@@ -267,6 +293,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: 16),
         const _SettingsSectionHeader(title: 'Notifications'),
+        if (widget.androidNotificationsEnabled == false)
+          Card(
+            color: colors.errorContainer,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: colors.onErrorContainer,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Notifications are blocked',
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(color: colors.onErrorContainer),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Allow notifications for WardPulse in Android settings.',
+                              style: TextStyle(color: colors.onErrorContainer),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  TextButton(
+                    onPressed:
+                        _openingNotificationSettings
+                            ? null
+                            : _openNotificationSettings,
+                    style: TextButton.styleFrom(
+                      foregroundColor: colors.onErrorContainer,
+                    ),
+                    child: const Text('Enable notifications'),
+                  ),
+                ],
+              ),
+            ),
+          ),
         Card(
           child: SwitchListTile(
             secondary: const Icon(Icons.notifications_outlined),

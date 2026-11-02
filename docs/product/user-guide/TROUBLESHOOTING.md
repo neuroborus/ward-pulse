@@ -122,10 +122,17 @@ a restart or a rule edit that remains crossed. Unknown/missing reports do not re
 A report showing the condition clear is needed before a later crossing can notify again.
 Crossings seen while muted or denied are not delivered as a backlog when you enable delivery.
 
+If Settings shows **Notifications are blocked**, choose **Enable notifications**, allow them in
+Android settings, and return to WardPulse. Opening Android settings alone changes neither
+permission nor your two saved switches. Returning without allowing notifications keeps the
+warning. If the page cannot open, retry or open WardPulse's notification controls from Android
+settings. A missing warning does not rule out a blocked channel or Do Not Disturb.
+
 ## Plan recovery notifications do not appear
 
 Check **Settings → Notifications → Plan recovery** and Android's notification permission for
-WardPulse. This independent feature is for an exhausted plan becoming usable again; use
+WardPulse. The warning and **Enable notifications** action above apply to this switch too.
+This independent feature is for an exhausted plan becoming usable again; use
 **Alert notifications** for configured thresholds. It needs a later report to detect recovery, so
 its delivery is not an exact reset alarm.
 

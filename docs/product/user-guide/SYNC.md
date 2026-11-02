@@ -51,8 +51,9 @@ phone or widget, and a watch display may update after that time rather than exac
 
 1. On **Providers**, configure the usage or budget alert thresholds you want.
 2. Open **Settings → Notifications → Alert notifications** to control delivery.
-3. Allow Android's notification request when it appears. If Android blocks notifications,
-   enable them for WardPulse in Android's app settings. Turning a WardPulse delivery switch
+3. Allow Android's notification request when it appears. If **Notifications are blocked** appears
+   in Settings, choose **Enable notifications** to open WardPulse's Android settings,
+   allow notifications there, then return to WardPulse. Turning a WardPulse delivery switch
    off and back on can retry the request; Android decides whether to show it again.
 
 Alert notifications and **Plan recovery** are independent and start on unless you saved Off.
@@ -89,9 +90,11 @@ This feature tells you when a plan window that was exhausted becomes usable agai
 independent of Alert notifications and needs no threshold rule. Detection depends on reporting
 and scheduling, so it is not an exact reset alarm or an exactly-once delivery guarantee.
 
-If Android blocks notifications, WardPulse reports that. Enable notifications for WardPulse in
-Android's app settings, then return to the toggle. Reporting and the in-app Dashboard remain
-available without notification permission.
+The **Notifications are blocked** warning applies to both switches, including saved Off choices.
+**Enable notifications** opens Android settings; it does not grant permission or change either
+switch. WardPulse rechecks when you return. Android's channel settings and Do Not Disturb can
+still limit delivery without this warning. Reporting and the in-app Dashboard remain available
+without notification permission.
 Android may bridge phone notifications to a paired watch; WardPulse does not guarantee mirroring.
 
 For delayed watch delivery, unchanged figures or failed reports, see

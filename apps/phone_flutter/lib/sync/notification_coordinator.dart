@@ -25,16 +25,23 @@ final class PhoneNotificationCoordinator {
     NotificationPermissionAttemptStore? attempts,
     Future<void> Function()? initialize,
     Future<bool> Function()? requestPermission,
+    Future<bool?> Function()? readStatus,
+    Future<bool?> Function()? openSettings,
   }) : plugin = plugin ?? FlutterLocalNotificationsPlugin(),
        _attempts = attempts ?? SecureNotificationPermissionAttemptStore(),
        _initializeEffect = initialize,
-       _requestEffect = requestPermission;
+       _requestEffect = requestPermission,
+       _readStatusEffect = readStatus,
+       _openSettingsEffect = openSettings;
 
   final FlutterLocalNotificationsPlugin plugin;
   final NotificationPermissionAttemptStore _attempts;
   final Future<void> Function()? _initializeEffect;
   final Future<bool> Function()? _requestEffect;
+  final Future<bool?> Function()? _readStatusEffect;
+  final Future<bool?> Function()? _openSettingsEffect;
   Future<void>? _initializing;
+  Future<bool?>? _openingSettings;
   _PermissionOperation? _pending;
   bool _handled = false;
 
@@ -45,10 +52,31 @@ final class PhoneNotificationCoordinator {
           >();
 
   Future<void> ensureReady() =>
-      _initializing ??= _initialize().onError((error, stack) {
+      _initializing ??= _initialize().onError((Object error, stack) {
         _initializing = null;
         Error.throwWithStackTrace(error, stack);
       });
+
+  /// Reads app-global enablement; null means unknown. Enabled does not establish
+  /// channel policy or guarantee delivery.
+  /// Inspection never initializes channels or claims a permission attempt.
+  Future<bool?> readAndroidNotificationStatus() async {
+    final effect = _readStatusEffect;
+    if (effect != null) return effect();
+    return await android?.areNotificationsEnabled();
+  }
+
+  /// The result describes navigation only, never a permission grant.
+  Future<bool?> openAndroidNotificationSettings() =>
+      _openingSettings ??= _openSettings().whenComplete(() {
+        _openingSettings = null;
+      });
+
+  Future<bool?> _openSettings() async {
+    final effect = _openSettingsEffect;
+    if (effect != null) return effect();
+    return await android?.openAppNotificationSettings();
+  }
 
   Future<void> _initialize() async {
     final effect = _initializeEffect;

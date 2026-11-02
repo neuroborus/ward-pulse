@@ -60,12 +60,19 @@ void main() {
               ..response = failed ? null : pending.future;
         final storage = FakeSecureStorage();
         var requests = 0;
+        var statusReads = 0;
+        var allowed = true;
+        final decision = Completer<bool>();
         final coordinator = PhoneNotificationCoordinator(
           attempts: SecureNotificationPermissionAttemptStore(storage: storage),
           initialize: () async {},
           requestPermission: () async {
             requests++;
-            return false;
+            return decision.future;
+          },
+          readStatus: () async {
+            statusReads++;
+            return allowed;
           },
         );
         try {
@@ -81,9 +88,417 @@ void main() {
             ).read(),
             isTrue,
           );
+          await tester.tap(find.text('Settings'));
+          await tester.pumpAndSettle();
+          expect(statusReads, 1);
+          expect(find.text('Notifications are blocked'), findsNothing);
+          allowed = false;
+          decision.complete(false);
+          await tester.pumpAndSettle();
+          expect(statusReads, 2);
+          expect(find.text('Notifications are blocked'), findsOneWidget);
+          expect(requests, 1);
         } finally {
           await tester.pumpWidget(const SizedBox());
+          if (!decision.isCompleted) decision.complete(false);
           if (!pending.isCompleted) pending.complete(snapshot);
+          await tester.pump();
+        }
+      },
+    );
+  }
+
+  for (final choices in [(false, false), (true, false), (false, true)]) {
+    testWidgets(
+      'blocked warning preserves saved choices $choices without asking',
+      (tester) async {
+        if (choices == (false, false)) {
+          tester.view.physicalSize = const Size(320, 800);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+        }
+        await _notificationLifecycle(tester, AppLifecycleState.resumed);
+        final storage = FakeSecureStorage();
+        final attempts = SecureNotificationPermissionAttemptStore(
+          storage: storage,
+        );
+        await attempts.write(true);
+        var writes = 0;
+        storage.beforeWrite = (_) async {
+          writes++;
+        };
+        final alerts = _NotificationChoice()..enabled = choices.$1;
+        final recoveries = _NotificationChoice()..enabled = choices.$2;
+        var requests = 0;
+        final coordinator = PhoneNotificationCoordinator(
+          attempts: attempts,
+          initialize: () async {},
+          requestPermission: () async {
+            requests++;
+            return false;
+          },
+          readStatus: () async => false,
+        );
+        await tester.pumpWidget(
+          _notificationApp(coordinator, alerts: alerts, recoveries: recoveries),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Settings'));
+        await tester.pumpAndSettle();
+        expect(find.text('Notifications are blocked'), findsOneWidget);
+        await tester.ensureVisible(find.text('Enable notifications'));
+        expect(tester.takeException(), isNull);
+        final settings = tester.widget<SettingsScreen>(
+          find.byType(SettingsScreen),
+        );
+        expect(settings.alertNotificationsEnabled, choices.$1);
+        expect(settings.recoveryNotificationsEnabled, choices.$2);
+        expect(alerts.writes + recoveries.writes, 0);
+        expect(requests, 0);
+        expect(writes, 0);
+        expect(await attempts.read(), isTrue);
+        expect(storage.deleted, isEmpty);
+      },
+    );
+  }
+
+  testWidgets(
+    'Settings entry and resumed return read actual status, failures stay unknown',
+    (tester) async {
+      await _notificationLifecycle(tester, AppLifecycleState.resumed);
+      final reads = <Completer<bool?>>[];
+      final storage = FakeSecureStorage();
+      var requests = 0;
+      final coordinator = PhoneNotificationCoordinator(
+        attempts: SecureNotificationPermissionAttemptStore(storage: storage),
+        initialize: () async {},
+        requestPermission: () async {
+          requests++;
+          return false;
+        },
+        readStatus: () {
+          final read = Completer<bool?>();
+          reads.add(read);
+          return read.future;
+        },
+      );
+      try {
+        await tester.pumpWidget(
+          _notificationApp(
+            coordinator,
+            alerts: _NotificationChoice()..enabled = false,
+            recoveries: _NotificationChoice()..enabled = false,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(reads, isEmpty);
+        await tester.tap(find.text('Settings'));
+        await tester.pump();
+        expect(reads, hasLength(1));
+        expect(find.text('Notifications are blocked'), findsNothing);
+        reads[0].complete(false);
+        await tester.pumpAndSettle();
+        expect(find.text('Notifications are blocked'), findsOneWidget);
+        await _notificationLifecycle(tester, AppLifecycleState.inactive);
+        await tester.pump();
+        expect(reads, hasLength(1));
+        await _notificationLifecycle(tester, AppLifecycleState.resumed);
+        await tester.pump();
+        expect(reads, hasLength(2));
+        expect(find.text('Notifications are blocked'), findsNothing);
+        reads[1].complete(true);
+        await tester.pumpAndSettle();
+        expect(find.text('Notifications are blocked'), findsNothing);
+        await tester.tap(find.text('Dashboard'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Settings'));
+        await tester.pump();
+        expect(reads, hasLength(3));
+        reads[2].complete(null);
+        await tester.pumpAndSettle();
+        expect(find.text('Notifications are blocked'), findsNothing);
+        await _notificationLifecycle(tester, AppLifecycleState.inactive);
+        await _notificationLifecycle(tester, AppLifecycleState.resumed);
+        await tester.pump();
+        expect(reads, hasLength(4));
+        reads[3].completeError(StateError('Status unavailable.'));
+        await tester.pumpAndSettle();
+        expect(find.text('Notifications are blocked'), findsNothing);
+        expect(requests, 0);
+        expect(storage.values, isEmpty);
+        expect(storage.deleted, isEmpty);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        for (final read in reads) {
+          if (!read.isCompleted) read.complete(null);
+        }
+        await tester.pump();
+      }
+    },
+  );
+
+  testWidgets(
+    'status rejects older reads, replaced coordinators and disposed results',
+    (tester) async {
+      await _notificationLifecycle(tester, AppLifecycleState.resumed);
+      final oldReads = <Completer<bool?>>[];
+      final newReads = <Completer<bool?>>[];
+      final alerts = _NotificationChoice()..enabled = false;
+      final recoveries = _NotificationChoice()..enabled = false;
+      PhoneNotificationCoordinator coordinator(List<Completer<bool?>> reads) =>
+          PhoneNotificationCoordinator(
+            initialize: () async {},
+            readStatus: () {
+              final read = Completer<bool?>();
+              reads.add(read);
+              return read.future;
+            },
+          );
+      final oldCoordinator = coordinator(oldReads);
+      final newCoordinator = coordinator(newReads);
+      Future<void> resume() async {
+        await _notificationLifecycle(tester, AppLifecycleState.inactive);
+        await _notificationLifecycle(tester, AppLifecycleState.resumed);
+        await tester.pump();
+      }
+
+      try {
+        await tester.pumpWidget(
+          _notificationApp(
+            oldCoordinator,
+            alerts: alerts,
+            recoveries: recoveries,
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Settings'));
+        await tester.pump();
+        await resume();
+        expect(oldReads, hasLength(2));
+        oldReads[1].complete(true);
+        await tester.pumpAndSettle();
+        oldReads[0].complete(false);
+        await tester.pumpAndSettle();
+        expect(find.text('Notifications are blocked'), findsNothing);
+        await resume();
+        expect(oldReads, hasLength(3));
+        await tester.pumpWidget(
+          _notificationApp(
+            newCoordinator,
+            alerts: alerts,
+            recoveries: recoveries,
+          ),
+        );
+        expect(newReads, hasLength(1));
+        newReads[0].complete(true);
+        await tester.pumpAndSettle();
+        oldReads[2].complete(false);
+        await tester.pumpAndSettle();
+        expect(find.text('Notifications are blocked'), findsNothing);
+        await resume();
+        expect(newReads, hasLength(2));
+        await tester.pumpWidget(const SizedBox());
+        newReads[1].complete(false);
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        for (final read in [...oldReads, ...newReads]) {
+          if (!read.isCompleted) read.complete(null);
+        }
+        await tester.pump();
+      }
+    },
+  );
+
+  for (final alert in [true, false]) {
+    testWidgets(
+      '${alert ? 'alert' : 'recovery'} permission decision refreshes status with provider load held',
+      (tester) async {
+        await _notificationLifecycle(tester, AppLifecycleState.resumed);
+        final snapshot = DashboardSnapshot.empty();
+        final load = Completer<DashboardSnapshot>();
+        final decision = Completer<bool>();
+        final storage = FakeSecureStorage();
+        final alerts = _NotificationChoice()..enabled = false;
+        final recoveries = _NotificationChoice()..enabled = false;
+        var requests = 0;
+        var allowed = true;
+        final coordinator = PhoneNotificationCoordinator(
+          attempts: SecureNotificationPermissionAttemptStore(storage: storage),
+          initialize: () async {},
+          requestPermission: () {
+            requests++;
+            return decision.future;
+          },
+          readStatus: () async => allowed,
+        );
+        try {
+          await tester.pumpWidget(
+            _notificationApp(
+              coordinator,
+              repository: _PublicationRepository(snapshot)
+                ..response = load.future,
+              alerts: alerts,
+              recoveries: recoveries,
+            ),
+          );
+          await tester.pump();
+          await tester.tap(find.text('Settings'));
+          await tester.pumpAndSettle();
+          final settings = tester.widget<SettingsScreen>(
+            find.byType(SettingsScreen),
+          );
+          expect(find.text('Notifications are blocked'), findsNothing);
+          final changing =
+              alert
+                  ? settings.onAlertNotificationsChanged(true)
+                  : settings.onRecoveryNotificationsChanged(true);
+          await tester.pump();
+          expect(requests, 1);
+          allowed = false;
+          decision.complete(alert);
+          expect(await changing, alert);
+          await tester.pumpAndSettle();
+          expect(find.text('Notifications are blocked'), findsOneWidget);
+          expect(alerts.enabled, alert);
+          expect(recoveries.enabled, !alert);
+          expect(requests, 1);
+          expect(
+            await SecureNotificationPermissionAttemptStore(
+              storage: storage,
+            ).read(),
+            isTrue,
+          );
+        } finally {
+          await tester.pumpWidget(const SizedBox());
+          if (!decision.isCompleted) decision.complete(false);
+          if (!load.isCompleted) load.complete(snapshot);
+          await tester.pump();
+        }
+      },
+    );
+  }
+
+  for (final outcome in [true, false, null, 'exception']) {
+    testWidgets(
+      'notification settings navigation $outcome guards duplicates and preserves policy',
+      (tester) async {
+        await _notificationLifecycle(tester, AppLifecycleState.resumed);
+        final storage = FakeSecureStorage();
+        var writes = 0;
+        storage.beforeWrite = (_) async {
+          writes++;
+        };
+        final alerts = _NotificationChoice()..enabled = false;
+        final recoveries = _NotificationChoice()..enabled = false;
+        var opens = 0;
+        var reads = 0;
+        var requests = 0;
+        var allowed = false;
+        var opening = Completer<bool?>();
+        final coordinator = PhoneNotificationCoordinator(
+          attempts: SecureNotificationPermissionAttemptStore(storage: storage),
+          initialize: () async {},
+          requestPermission: () async {
+            requests++;
+            return false;
+          },
+          readStatus: () async {
+            reads++;
+            return allowed;
+          },
+          openSettings: () {
+            opens++;
+            return opening.future;
+          },
+        );
+        Future<void> tapAction() async {
+          await tester.ensureVisible(find.text('Enable notifications'));
+          await tester.tap(find.text('Enable notifications'));
+        }
+
+        try {
+          await tester.pumpWidget(
+            _notificationApp(
+              coordinator,
+              alerts: alerts,
+              recoveries: recoveries,
+            ),
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Settings'));
+          await tester.pumpAndSettle();
+          await tapAction();
+          await tapAction();
+          await tester.pump();
+          expect(opens, 1);
+          expect(
+            tester
+                .widget<TextButton>(
+                  find.widgetWithText(TextButton, 'Enable notifications'),
+                )
+                .onPressed,
+            isNull,
+          );
+          await tester.tap(find.text('Dashboard'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Settings'));
+          await tester.pumpAndSettle();
+          await tapAction();
+          expect(
+            opens,
+            1,
+          ); // The coordinator also guards a remounted Settings tab.
+          if (outcome == 'exception') {
+            opening.completeError(StateError('Settings unavailable.'));
+          } else {
+            opening.complete(outcome as bool?);
+          }
+          await tester.pumpAndSettle();
+          expect(reads, 2); // Launch completion is not a status read or grant.
+          expect(find.text('Notifications are blocked'), findsOneWidget);
+          expect(
+            find.text('Could not open Android notification settings'),
+            outcome == true ? findsNothing : findsOneWidget,
+          );
+          expect(
+            tester
+                .widget<TextButton>(
+                  find.widgetWithText(TextButton, 'Enable notifications'),
+                )
+                .onPressed,
+            isNotNull,
+          );
+          if (outcome == true) {
+            await _notificationLifecycle(tester, AppLifecycleState.inactive);
+            await _notificationLifecycle(tester, AppLifecycleState.resumed);
+            await tester.pumpAndSettle();
+            expect(find.text('Notifications are blocked'), findsOneWidget);
+            allowed = true;
+            await _notificationLifecycle(tester, AppLifecycleState.inactive);
+            await _notificationLifecycle(tester, AppLifecycleState.resumed);
+            await tester.pumpAndSettle();
+            expect(find.text('Notifications are blocked'), findsNothing);
+          } else {
+            opening = Completer<bool?>();
+            await tapAction();
+            expect(opens, 2);
+            opening.complete(true);
+            await tester.pumpAndSettle();
+            expect(find.text('Notifications are blocked'), findsOneWidget);
+          }
+          expect(alerts.enabled, isFalse);
+          expect(recoveries.enabled, isFalse);
+          expect(alerts.writes + recoveries.writes, 0);
+          expect(requests, 0);
+          expect(writes, 0);
+          expect(storage.values, isEmpty);
+          expect(storage.deleted, isEmpty);
+        } finally {
+          await tester.pumpWidget(const SizedBox());
+          if (!opening.isCompleted) opening.complete(false);
           await tester.pump();
         }
       },
@@ -3856,6 +4271,7 @@ final class _NotificationChoice
         AlertNotificationPreferenceStore,
         RecoveryNotificationPreferenceStore {
   bool enabled = true;
+  int writes = 0;
   bool failRead = false;
   Future<void>? hold;
   @override
@@ -3867,7 +4283,10 @@ final class _NotificationChoice
   }
 
   @override
-  Future<void> write(bool value) async => enabled = value;
+  Future<void> write(bool value) async {
+    writes++;
+    enabled = value;
+  }
 }
 
 /// Mock fixture as a real connection: mock accounts hold no metric slots.
