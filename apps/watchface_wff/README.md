@@ -19,9 +19,11 @@ slot/clock/Group carriers. The eight slots remain direct Scene children; cell co
 BoundingBox move together within rebased integer full-face slots. Text, logo, legend, bands,
 clips and textures grow proportionally without multiplying their local geometry again.
 All 18 period textures target ceil(reference diameter × scale) pixels, retaining reference
-WFF image boxes. Only paired-partial SOURCE strokes gain one reference unit per radial side
-behind unchanged masks/caps; ordinary/full/zero behavior is preserved. This tests an AA
-hypothesis, not a proved renderer cause. Whole Round interactive/ambient fit, clips, editor/tap
+WFF image boxes. The [bounded contour correction](../../docs/product/WATCH_RING_DESIGN.md#revision-2026-11-02--bounded-paired-main-coverage)
+adds one reference unit outward to positive paired MAIN coverage using diameter d+1 and
+thickness t+1; its partial SOURCE uses d+1/t+3 behind the recalculated MASK/caps. Nominal tracks,
+cutoffs, extra-half construction, ordinary paint and true-zero behavior remain unchanged.
+This tests coverage, not a proved renderer cause. Whole Round interactive/ambient fit, clips, editor/tap
 bounds and paired-contour continuity remain Pending alongside official WFF2/Push validation.
 
 Generate canonical resources before review art with the existing owning tools. Boards and

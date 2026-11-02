@@ -17,9 +17,9 @@
 
     <circle cx="225" cy="225" r="148.04999999999998" fill="none" stroke="#2E3632"
       stroke-width="13.60125" />
-    <circle cx="225" cy="225" r="166.5646875" fill="none" stroke="#2E3632"
-      stroke-width="6.800625" />
     <circle cx="225" cy="225" r="173.36531250000002" fill="none" stroke="#2E3632"
+      stroke-width="6.800625" />
+    <circle cx="225" cy="225" r="166.5646875" fill="none" stroke="#2E3632"
       stroke-width="6.800625" />
     <circle cx="225" cy="225" r="191.88" fill="none" stroke="#2E3632"
       stroke-width="13.60125" />

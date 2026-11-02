@@ -58,6 +58,7 @@ const FACE = { size: 450, center: 225 }
 const COMPOSITION_SCALE = 225 / 202
 const SCALE_ATTRIBUTES = `scaleX="${COMPOSITION_SCALE}" scaleY="${COMPOSITION_SCALE}" pivotX="0.5" pivotY="0.5"`
 const PAIRED_SOURCE_ALLOWANCE = 1
+const PAIRED_MAIN_COVERAGE = 1
 
 /**
  * Both ends of the melt: usage opens clockwise from 12, remaining ends at 12.
@@ -1076,52 +1077,56 @@ function assertNearExhaustedArcs() {
   const geometries = LAYOUTS.filter(({ name }) => name !== 'Legacy').flatMap((layout) =>
     Array.from({ length: layout.count }, (_, index) => {
       const { full, inner, outer, thickness, half } = bandGeometry(layout, index)
-      return [[full, thickness], [inner, half], [outer, half]]
+      return [[full, thickness, false], [inner, half, true], [outer, half, false]]
     }).flat(),
   )
-  for (const [centre, thickness] of geometries) {
-    const geometry = meltGeometry(centre, thickness)
+  for (const [centre, thickness, paired] of geometries) {
+    const gate = meltGeometry(centre, thickness)
+    const paintDiameter = centre + (paired ? PAIRED_MAIN_COVERAGE : 0)
+    const paintThickness = thickness + (paired ? PAIRED_MAIN_COVERAGE : 0)
+    const geometry = meltGeometry(paintDiameter, paintThickness)
     const saturation = 4 * geometry.cap / SWEEP.end
-    const cases = [0, 0.0000001, geometry.twoCapCutoff - epsilon,
-      geometry.twoCapCutoff + epsilon, saturation - epsilon, saturation, saturation + epsilon,
+    const cases = [0, 0.0000001, Number(gate.cutoffLiteral) - epsilon,
+      Number(gate.cutoffLiteral) + epsilon, saturation - epsilon, saturation, saturation + epsilon,
       0.04, 0.37, 0.99, 0.996, 0.999, 1 - 2 ** -24, 1]
-    const radius = centre / 2
-    const half = thickness / 2
+    const radius = paintDiameter / 2
+    const half = paintThickness / 2
     // atan is 1-Lipschitz: |atan(k*tan(a)) - a| <= |k-1|*tan(a).
     // This retains the rounded historical c calibration rather than claiming
     // an exact footprint from proportional ellipse radius alone.
     const c = geometry.cap * Math.PI / 180
     const k = half / (Math.sqrt(radius ** 2 - half ** 2) * Math.tan(c))
     for (const remaining of cases.filter((value) => value > 0 && value < 1)) {
-      const angles = meltAngles(centre, thickness, remaining)
+      const angles = meltAngles(paintDiameter, paintThickness, remaining)
       const errorBound = 2 * Math.abs(k - 1) * Math.tan(angles.inset * Math.PI / 180) * 180 / Math.PI
       if (angles.end <= angles.start || angles.end - angles.start < angles.sweep / 2 - tolerance ||
           angles.tangent <= 0 || angles.tangent > half + tolerance ||
-          Math.abs(visibleSweep(angles, centre, thickness) - angles.sweep) > errorBound + tolerance ||
+          Math.abs(visibleSweep(angles, paintDiameter, paintThickness) - angles.sweep) > errorBound + tolerance ||
+          errorBound > 0.04136 || errorBound > angles.sweep * 0.00151 ||
           Math.abs(angles.tangent / Math.tan(angles.inset * Math.PI / 180) - half / Math.tan(c)) > tolerance ||
           (remaining >= saturation && Math.abs(angles.start - ((1 - remaining) * SWEEP.end + geometry.cap)) > tolerance) ||
           (remaining >= saturation && (angles.end !== geometry.insetEnd || Math.abs(angles.tangent - half) > tolerance))) {
         throw new Error(`ring ${centre}/${thickness}: partial core/caps lost proportional scaling, containment or ordinary silhouette`)
       }
     }
-    const zero = meltAngles(centre, thickness, 0)
+    const zero = meltAngles(paintDiameter, paintThickness, 0)
     if (zero.tangent !== 0 || zero.start !== zero.end) throw new Error('zero must have no cap footprint')
-    const markup = bandArcs(centre, thickness, '')
+    const markup = bandArcs(centre, thickness, '', 'band', paired)
     const decisions = emittedPaintDecisions(markup)
-    assertFullRing(centre, thickness, decisions.find(({ name }) => name.endsWith('_full'))?.body ?? '')
+    assertFullRing(paintDiameter, paintThickness, decisions.find(({ name }) => name.endsWith('_full'))?.body ?? '')
     for (const remaining of cases) {
       const active = decisions.filter(({ alpha }) => {
         const value = alpha(0, 100, remaining * 100, '')
         if (value !== 0 && value !== 255) throw new Error('main paint gate must emit only 0 or 255')
         return value === 255
       })
-      const kind = remaining === 1 ? 'full' : remaining <= Number(geometry.cutoffLiteral) ? 'tiny' : 'round'
+      const kind = remaining === 1 ? 'full' : remaining <= Number(gate.cutoffLiteral) ? 'tiny' : 'round'
       if (decisions.length !== 3 || active.length !== (remaining === 0 ? 0 : 1) ||
           (active.length === 1 && !active[0].name.endsWith(`_${kind}`))) {
         throw new Error(`ring ${centre}/${thickness}: emitted paint gates must select only their admitted branch`)
       }
     }
-    if (!decisions.find(({ name }) => name.endsWith('_tiny'))?.expression.includes(`<= ${geometry.cutoffLiteral}`)) {
+    if (!decisions.find(({ name }) => name.endsWith('_tiny'))?.expression.includes(`<= ${gate.cutoffLiteral}`)) {
       throw new Error(`ring ${centre}/${thickness}: published cutoff changed`)
     }
   }
@@ -1170,6 +1175,8 @@ function assertNearExhaustedArcs() {
       const edge = diameter / 2
       if ((full - thickness) / 2 < beltEnd - 0.2 || edge > 202 ||
           (outer - half) / 2 !== (inner + half) / 2 ||
+          (inner + PAIRED_MAIN_COVERAGE - (half + PAIRED_MAIN_COVERAGE)) / 2 !== edge - thickness ||
+          (inner + PAIRED_MAIN_COVERAGE + half + PAIRED_MAIN_COVERAGE) / 2 !== (outer - half) / 2 + 1 ||
           (inner - half) / 2 !== edge - thickness ||
           (outer + half) / 2 !== edge) {
         throw new Error(`${layout.name}/${index}: band envelope or gapless split drifted`)
@@ -1246,17 +1253,18 @@ ${pad}</PartDraw>`
   const tangent = `${thickness / 2} * tan((${inset}) * ${Math.PI / 180}) / ${Math.tan(cap * Math.PI / 180)}`
   const start = `(${SWEEP.end} - (${sweep})) + (${inset})`
   const end = `${SWEEP.end} - (${inset})`
+  // Ellipse base rectangles are integers; the live x Transform retains sub-unit placement.
   const caps = [['start', start], ['end', end]].map(([side, angle]) => `${pad}        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}_${side}Cap" angle="0" pivotX="0.5" pivotY="0.5">
 ${pad}            <Transform target="angle" value="${angle}" />
 ${pad}            <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}">
-${pad}                <Ellipse x="${FACE.center - thickness / 2}" y="${FACE.center - diameter / 2 - thickness / 2}" width="${thickness}" height="${thickness}">
+${pad}                <Ellipse x="${Math.floor(FACE.center - thickness / 2)}" y="${FACE.center - diameter / 2 - thickness / 2}" width="${thickness}" height="${thickness}">
 ${pad}                    <Transform target="x" value="${FACE.center} - (${tangent})" />
 ${pad}                    <Transform target="width" value="2 * (${tangent})" />
 ${pad}                    <Fill color="#ffffffff" />
 ${pad}                </Ellipse>
 ${pad}            </PartDraw>
 ${pad}        </Group>`).join('\n')
-  // Only paired partial SOURCE gains radial coverage behind the nominal mask.
+  // Paired partial SOURCE retains one unit beyond each owning mask edge.
   // One opaque mask unions core/caps; ambient alpha belongs to the composition.
   return `${pad}<Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}_foreground" alpha="255">
 ${pad}    <Variant mode="AMBIENT" target="alpha" value="140" />
@@ -1280,7 +1288,9 @@ ${pad}</Group>`
 
 /** Track plus mutually exclusive full/tiny/round gates; both partial gates share one silhouette. */
 function bandArcs(diameter, thickness, pad, name = 'band', paired = false) {
+  // Gate and track geometry stay nominal; only positive paired MAIN paint grows.
   const geometry = meltGeometry(diameter, thickness)
+  const coverage = paired ? PAIRED_MAIN_COVERAGE : 0
   const value = '[COMPLICATION.RANGED_VALUE_VALUE]'
   const maximum = '[COMPLICATION.RANGED_VALUE_MAX]'
   const partial = `${value} > 0 && ${value} < ${maximum}`
@@ -1290,7 +1300,7 @@ function bandArcs(diameter, thickness, pad, name = 'band', paired = false) {
     ['round', `${partial} && (${value} / ${maximum}) > ${geometry.cutoffLiteral}`],
   ].map(([kind, predicate]) => `${pad}<Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}_${kind}" alpha="0">
 ${alphaTransform(predicate, `${pad}    `)}
-${bandPaint(diameter, thickness, kind, `${pad}    `, `${name}_${kind}`, paired ? PAIRED_SOURCE_ALLOWANCE : 0)}
+${bandPaint(diameter + coverage, thickness + coverage, kind, `${pad}    `, `${name}_${kind}`, paired ? PAIRED_SOURCE_ALLOWANCE : 0)}
 ${pad}</Group>`).join('\n')
   return `${bandTrack(diameter, thickness, pad)}
 ${pad}<!-- Stable foreground trees have mutually exclusive alpha gates.

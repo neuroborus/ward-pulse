@@ -82,6 +82,8 @@ wireframes, large remaining-% heroes, or bordered strip cards.
 
 The operative effective layout follows the
 [whole-composition revision](#revision-2026-11-02--whole-composition-scale-and-paired-source-allowance).
+Positive paired MAIN coverage follows the
+[bounded contour correction](#revision-2026-11-02--bounded-paired-main-coverage).
 Earlier geometry below remains reference geometry beneath its common carrier, or dated
 historical evidence for the bytes measured then. The reference layout is the
 [approved active-clock translation](#revision-2026-11-01--approved-active-clock-translation), retaining the
@@ -99,6 +101,67 @@ Canonical review generator: `tools/render-watch-ring-designs.mjs`
 Canonical face generator: `tools/render-watchface.mjs` — it writes the shipped `watchface.xml`
 and the ring-type drawables beside it.  
 Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and sibling variants).
+
+## Revision 2026-11-02 — bounded paired MAIN coverage
+
+The Round384/API36 INTERACTIVE original for Source `a3f5a3a` retained dark uneven
+Claude/Fable and Cursor own/other shared contours after the whole-composition enlargement
+and partial SOURCE allowance. That finding remains OPEN; it does not identify a renderer
+or antialiasing cause. The Owner-admitted correction is a bounded positive MAIN overdraw,
+not another scale or a native acceptance claim.
+
+For nominal paired-main diameter `d` and thickness `t`, `PAIRED_MAIN_COVERAGE` in
+`tools/render-watchface.mjs` gives every positive full/tiny/round foreground diameter
+`d + 1` and thickness `t + 1`. Its inner edge stays `(d - t)/2`; its outer edge becomes
+`(d + t)/2 + 1`. Tracks and branch predicates retain nominal dimensions and published
+cutoffs. Partial SOURCE uses `d + 1` / `t + 3`, retaining the existing one-unit allowance
+beyond each new MASK edge. Extra-half SOURCE, MASK, full paint and track construction
+remain unchanged. Zero still paints only its nominal track.
+
+| Layout, outside first | Nominal MAIN radial intervals | Positive MAIN coverage |
+| --- | --- | --- |
+| N1 | 158–180 | 158–181 |
+| N2 | 170–186; 134–150 | 170–187; 134–151 |
+| Legacy / N3 | 182–192; 158–168; 134–144 | 182–193; 158–169; 134–145 |
+
+Only the positive MAIN pool owns this overlap, including beside a zero or temporarily
+absent extra; it creates no peer foreground or label. It stays within the band's nominal
+union. Outer202/effective225, border0, aperture, inter-band gaps, clips and the existing
+single225/202 composition scale remain unchanged. One reference unit becomes approximately
+1.11386 canvas units or0.9505 physical pixels on Round384.
+
+For partial sweep `S = 359.9 * value/max`, recompute `c = capDegrees(d + 1, t + 1)`,
+`a = min(c, S/4)` and tangential radius `(t + 1)/2 * tan(a)/tan(c)` with angles converted
+to radians. The core and both endpoint ellipses share those dimensions; there is no floor.
+An integer Ellipse base `x` precedes its existing live `x` Transform, preserving legal WFF2
+base attributes without rounding the effective endpoint. Full stays one un-inset ROUND
+path from0 to359.9. The existing proportional-error bounds also apply to these changed
+profiles; the independent emitted guards evaluate their actual core/cap dimensions and
+retain nominal gate-boundary tests.
+
+Extras still precede MAIN in the runtime scene. The review mirror now draws extra before
+MAIN and mirrors only this bounded positive coverage, retaining measured N3 geometry,
+the historical360-degree illustration and thinner/gray ambient art. Nominal envelopes
+and permitted foreground coverage are distinct; neither a source annulus nor an illustration
+proves native continuity. Each foreground retains active255/ambient140 exactly once.
+Two translucent foregrounds overlap in the new strip: actual renderer-proven AMBIENT
+partial/full and genuine full/full frames must reject a bright, dark or mixed-color fringe.
+
+`fixtures/snapshots/watch_dashboard_summary_n3_pairs_full_full.json` is historical schema9
+Mock support: exhausted ordinary Codex first, then full Claude/Fable and Cursor own/other.
+All four paired used percentages are0. Payload split ordinal0 maps to slot106/outside1;
+ordinal1 maps to slot109/outside0, both with value800/MAX800. This is distinct from ordinary
+full/full and paired100/99.9 controls. Task-owned static XML preserves the selected bounded
+R/F/Z/N2/N1/M inputs and transition endpoints, their historical timestamps and exact decoded
+JSON identities, plus this new case; it is not current Live or native proof.
+
+**Native effectiveness and complete fit: Pending.** Preserve the failed original and its
+strict `red < min(innerRed, outerRed) - 12` diagnostic (more than12 below both reds), without
+an inclusive recount or numeric PASS threshold. Retain the unowned Live54→52 history and
+newer data; no identical-input A/B claim is established. Whole Runner completion, CLI exit,
+retirement and separate idle precede HOST gates, fresh Round artifact/Reader qualification,
+bounded whole-frame INTERACTIVE/AMBIENT controls and guarded restoration. Physical STOP,
+protected Square and all existing semantic/admission/fit/isolation safeguards remain.
 
 ## Revision 2026-11-02 — whole-composition scale and paired SOURCE allowance
 
@@ -132,12 +195,14 @@ the final viewport still clips at 450. The extra-slot reference clip remains rad
 and scales with its slot; its margin is not a visible outside reserve. Native editor/tap
 dispatch, clip behavior and complete clock/cell/legend/logo fit remain acceptance work.
 
-`PAIRED_SOURCE_ALLOWANCE` selects a bounded seam hypothesis: only paired inner and extra
+The earlier `PAIRED_SOURCE_ALLOWANCE` candidate selected a bounded seam hypothesis: paired inner and extra
 **partial** colored SOURCE strokes gain **one reference unit on each radial side**. Their
 centerline, nominal white MASK core, elliptical caps, percentage calculations and cutoffs
 stay unchanged. Ordinary partials, full paths, tracks and zero gates retain their paint.
 The approximately one-native-pixel Round allowance tests repeated SOURCE/MASK edge attenuation;
 it adds no unconditional bridge or visible-envelope extension and establishes no AA cause.
+That SOURCE-only candidate did not eliminate the observed shared contour. The bounded MAIN
+correction above supersedes its unchanged-MASK foreground construction for positive MAIN only.
 The shared contour must still prove continuous in actual paired full/full and partial/full
 controls, including ambient; an unresolved seam is a finding, not accepted improvement.
 
@@ -167,7 +232,7 @@ clock-only preview remains unapproved experimentation; its requested upward offs
 
 **Native and public acceptance: Pending.** Emitted guards check legal carriers, integer base
 rectangles, common pivots, exactly-once geometry, bounds, texture sampling and SOURCE allowance
-behind unchanged masks, while retaining admission, zero/full/cap, ordering and backdrop guards.
+behind their owning masks, while retaining admission, zero/full/cap, ordering and backdrop guards.
 Official WFF2 and pinned Push semantic validation, whole joined Round INTERACTIVE and renderer-proven
 AMBIENT originals, bounded fit/count/pair controls and guarded restoration follow whole Runner
 DONE, CLI exit, scoped retirement and fresh separate idle. Preserve then-current Live/order,

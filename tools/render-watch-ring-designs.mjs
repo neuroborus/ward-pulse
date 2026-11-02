@@ -411,11 +411,18 @@ function assertNearExhaustedArcs() {
         const r = count === 3
           ? 450 * 0.4264 - index * (pitchWidth + 450 * 0.0084)
           : 202 - index * (width + 4) - width / 2
-        return [[r, band], ...ringArcPair(r, band)]
+        return [[r, band, 'ordinary'], ...ringArcPair(r, band)
+          .map(([radius, half], index) => [radius, half, index === 0 ? 'main' : 'extra'])]
       })
     }).flat()
   })
-  for (const [r, thickness] of geometries) {
+  for (const [nominalRadius, nominalThickness, role] of geometries) {
+    const r = nominalRadius + (role === 'main' ? 0.5 : 0)
+    const thickness = nominalThickness + (role === 'main' ? 1 : 0)
+    const draw = (remaining) => ringArc({
+      cx: 225, cy: 225, r: nominalRadius, thickness: nominalThickness,
+      remaining, color: '#ffffff', ambient: false, paired: role !== 'ordinary', pairedMain: role === 'main',
+    })
     const cutoff = twoCapCutoff(r, thickness)
     const saturation = 2 * cutoff
     const h = thickness / 2
@@ -434,15 +441,20 @@ function assertNearExhaustedArcs() {
           (remaining >= saturation && Math.abs(geometry.tangent - h) > tolerance)) {
         throw new Error(`ring ${r * 2}: compressed caps lost their scaling, containment or ordinary silhouette`)
       }
-      const markup = ringArc({ cx: 225, cy: 225, r, thickness, remaining, color: '#ffffff', ambient: false })
+      const markup = draw(remaining)
       if (!markup.includes('<mask ') || !markup.includes('stroke-linecap="butt"') ||
-          [...markup.matchAll(/<ellipse /g)].length !== 2) {
+          [...markup.matchAll(/<ellipse /g)].length !== 2 ||
+          !markup.includes(`r="${r}" fill="none" stroke="#ffffff"\n          stroke-width="${thickness}"`) ||
+          !markup.includes(`stroke-width="${thickness + (role !== 'ordinary' ? 2 : 0)}" mask=`)) {
         throw new Error(`ring ${r * 2}: partial art must use one core/cap mask`)
       }
     }
     for (const remaining of [0, 1]) {
-      const markup = ringArc({ cx: 225, cy: 225, r, thickness, remaining, color: '#ffffff', ambient: false })
-      if (markup.includes('<mask ') || markup.includes('<ellipse ')) {
+      const markup = draw(remaining)
+      if (markup.includes('<mask ') || markup.includes('<ellipse ') ||
+          [...markup.matchAll(/<circle /g)].length !== (remaining === 0 ? 1 : 2) ||
+          !markup.includes(`r="${nominalRadius}" fill="none" stroke="${TRACK}"\n      stroke-width="${nominalThickness}"`) ||
+          (remaining === 1 && !markup.includes(`r="${r}" fill="none" stroke="#ffffff"\n      stroke-width="${thickness}"`))) {
         throw new Error('zero and full art must retain their existing circles')
       }
     }
@@ -450,8 +462,11 @@ function assertNearExhaustedArcs() {
 
 }
 
-function ringArc({ cx, cy, r, thickness, remaining, color, ambient, paired = false }) {
+function ringArc({ cx, cy, r, thickness, remaining, color, ambient, paired = false, pairedMain = false }) {
   const valueColor = ambient ? '#8A968F' : color
+  // Tracks stay nominal; only the positive MAIN pool covers the shared edge.
+  const paintRadius = r + (pairedMain ? 0.5 : 0)
+  const paintThickness = thickness + (pairedMain ? 1 : 0)
   if (remaining <= 0) {
     return `
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
@@ -464,13 +479,13 @@ function ringArc({ cx, cy, r, thickness, remaining, color, ambient, paired = fal
     return `
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
       stroke-width="${thickness}" />
-    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${valueColor}"
-      stroke-width="${thickness}" />`
+    <circle cx="${cx}" cy="${cy}" r="${paintRadius}" fill="none" stroke="${valueColor}"
+      stroke-width="${paintThickness}" />`
   }
-  const geometry = ringArcGeometry(r, thickness, remaining)
+  const geometry = ringArcGeometry(paintRadius, paintThickness, remaining)
   const mask = `arc-${cx}-${cy}-${r}-${thickness}`
-  const endpoints = [geometry.used / r, (geometry.used + geometry.paint) / r]
-  const caps = endpoints.map((angle) => `<ellipse cx="${cx}" cy="${cy - r}" rx="${geometry.tangent}" ry="${thickness / 2}"
+  const endpoints = [geometry.used / paintRadius, (geometry.used + geometry.paint) / paintRadius]
+  const caps = endpoints.map((angle) => `<ellipse cx="${cx}" cy="${cy - paintRadius}" rx="${geometry.tangent}" ry="${paintThickness / 2}"
         fill="#ffffff" transform="rotate(${angle * 180 / Math.PI} ${cx} ${cy})" />`).join('\n      ')
   // The review model retains its measured radii and 360-degree circumference;
   // like WFF it colors one opaque core/cap union, never overlapping alpha layers.
@@ -479,15 +494,15 @@ function ringArc({ cx, cy, r, thickness, remaining, color, ambient, paired = fal
       stroke-width="${thickness}" />
     <defs>
       <mask id="${mask}" maskUnits="userSpaceOnUse" x="0" y="0" width="${cx * 2}" height="${cy * 2}">
-        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#ffffff"
-          stroke-width="${thickness}" stroke-linecap="butt"
+        <circle cx="${cx}" cy="${cy}" r="${paintRadius}" fill="none" stroke="#ffffff"
+          stroke-width="${paintThickness}" stroke-linecap="butt"
           stroke-dasharray="${geometry.paint} ${geometry.circ}"
           stroke-dashoffset="${-geometry.used}" transform="rotate(-90 ${cx} ${cy})" />
         ${caps}
       </mask>
     </defs>
-    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${valueColor}"
-      stroke-width="${thickness + (paired ? 2 : 0)}" mask="url(#${mask})" />`
+    <circle cx="${cx}" cy="${cy}" r="${paintRadius}" fill="none" stroke="${valueColor}"
+      stroke-width="${paintThickness + (paired ? 2 : 0)}" mask="url(#${mask})" />`
 
 }
 
@@ -776,7 +791,10 @@ async function faceSvg({
       if (split) {
         // Halves of one band: centre lines a quarter-band either side of it,
         // each half as thick, exactly as the face draws them.
-        ringArcPair(r, band).forEach(([radius, halfBand], half) => {
+        const halves = ringArcPair(r, band)
+        // Match runtime scene order: extra before MAIN, including its own track.
+        for (const half of [1, 0]) {
+          const [radius, halfBand] = halves[half]
           ringMarkup += ringArc({
             cx,
             cy,
@@ -786,8 +804,9 @@ async function faceSvg({
             color: half === 0 ? planLayers[i].color : split.color,
             ambient,
             paired: true,
+            pairedMain: half === 0,
           })
-        })
+        }
       } else {
         ringMarkup += ringArc({
           cx,
@@ -1526,13 +1545,20 @@ async function assertViewportPreviewIsolation() {
   for (const [index, layer] of ordered.entries()) {
     const r = REVIEW_N3.outerCenterline - (MAX_RINGS - 1 - index) * (REVIEW_N3.width + REVIEW_N3.gap)
     const halves = layer.split ? ringArcPair(r, REVIEW_N3.width) : [[r, REVIEW_N3.width]]
-    halves.forEach(([radius, thickness], half) => {
+    const paints = halves.map(([radius, thickness], half) => {
       const pool = half === 0 ? layer : layer.split
-      assert.ok(candidate.includes(ringArc({
+      return ringArc({
         cx: FACE / 2, cy: FACE / 2, r: radius, thickness,
         remaining: 1 - pool.used, color: pool.color, ambient: false, paired: Boolean(layer.split),
-      })), 'each historical pool must paint its own value and color at the reference radius')
+        pairedMain: Boolean(layer.split) && half === 0,
+      })
     })
+    for (const paint of paints) {
+      assert.ok(candidate.includes(paint), 'each historical pool must paint its own value and color at the reference radius')
+    }
+    if (layer.split) {
+      assert.ok(candidate.indexOf(paints[1]) < candidate.indexOf(paints[0]), 'extra paint must precede MAIN coverage')
+    }
   }
   await assert.rejects(faceSvg({ ...viewportProposal, size: FACE, ambient: true }), /active only/)
   await assert.rejects(faceSvg({ ...viewportProposal, size: FACE, clockUp: 1 }), /reference clock/)

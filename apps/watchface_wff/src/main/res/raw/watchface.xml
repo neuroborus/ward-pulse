@@ -2595,12 +2595,12 @@
                                                 <Arc
                                                     centerX="225"
                                                     centerY="225"
-                                                    width="374"
-                                                    height="374"
+                                                    width="375"
+                                                    height="375"
                                                     startAngle="0"
                                                     endAngle="359.9">
                                                     <WeightedStroke
-                                                        thickness="10"
+                                                        thickness="11"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                                         cap="ROUND" />
                                                 </Arc>
@@ -2611,34 +2611,34 @@
                                             <Group x="0" y="0" width="450" height="450" name="ring1LegacyHalf_tiny_foreground" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
-                                                    <Arc centerX="225" centerY="225" width="374" height="374" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                    <Arc centerX="225" centerY="225" width="375" height="375" startAngle="0" endAngle="359.9">
+                                                        <WeightedStroke thickness="13" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring1LegacyHalf_tiny_mask" renderMode="MASK">
                                                     <PartDraw x="0" y="0" width="450" height="450">
-                                                        <Arc centerX="225" centerY="225" width="374" height="374" startAngle="0" endAngle="359.9">
-                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53))" />
-                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53))" />
-                                                            <Stroke color="#ffffffff" thickness="10" cap="BUTT" />
+                                                        <Arc centerX="225" centerY="225" width="375" height="375" startAngle="0" endAngle="359.9">
+                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68))" />
+                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68))" />
+                                                            <Stroke color="#ffffffff" thickness="11" cap="BUTT" />
                                                         </Arc>
                                                     </PartDraw>
                                                     <Group x="0" y="0" width="450" height="450" name="ring1LegacyHalf_tiny_startCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53))" />
+                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="33" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53)) * 0.017453292519943295) / 0.026709886609692163)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53)) * 0.017453292519943295) / 0.026709886609692163)" />
+                                                            <Ellipse x="219" y="32" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68)) * 0.017453292519943295) / 0.029329937408112555)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68)) * 0.017453292519943295) / 0.029329937408112555)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
                                                     </Group>
                                                     <Group x="0" y="0" width="450" height="450" name="ring1LegacyHalf_tiny_endCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53))" />
+                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="33" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53)) * 0.017453292519943295) / 0.026709886609692163)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53)) * 0.017453292519943295) / 0.026709886609692163)" />
+                                                            <Ellipse x="219" y="32" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68)) * 0.017453292519943295) / 0.029329937408112555)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68)) * 0.017453292519943295) / 0.029329937408112555)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
@@ -2651,34 +2651,34 @@
                                             <Group x="0" y="0" width="450" height="450" name="ring1LegacyHalf_round_foreground" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
-                                                    <Arc centerX="225" centerY="225" width="374" height="374" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                    <Arc centerX="225" centerY="225" width="375" height="375" startAngle="0" endAngle="359.9">
+                                                        <WeightedStroke thickness="13" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring1LegacyHalf_round_mask" renderMode="MASK">
                                                     <PartDraw x="0" y="0" width="450" height="450">
-                                                        <Arc centerX="225" centerY="225" width="374" height="374" startAngle="0" endAngle="359.9">
-                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53))" />
-                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53))" />
-                                                            <Stroke color="#ffffffff" thickness="10" cap="BUTT" />
+                                                        <Arc centerX="225" centerY="225" width="375" height="375" startAngle="0" endAngle="359.9">
+                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68))" />
+                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68))" />
+                                                            <Stroke color="#ffffffff" thickness="11" cap="BUTT" />
                                                         </Arc>
                                                     </PartDraw>
                                                     <Group x="0" y="0" width="450" height="450" name="ring1LegacyHalf_round_startCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53))" />
+                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="33" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53)) * 0.017453292519943295) / 0.026709886609692163)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53)) * 0.017453292519943295) / 0.026709886609692163)" />
+                                                            <Ellipse x="219" y="32" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68)) * 0.017453292519943295) / 0.029329937408112555)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68)) * 0.017453292519943295) / 0.029329937408112555)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
                                                     </Group>
                                                     <Group x="0" y="0" width="450" height="450" name="ring1LegacyHalf_round_endCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53))" />
+                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="33" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53)) * 0.017453292519943295) / 0.026709886609692163)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53)) * 0.017453292519943295) / 0.026709886609692163)" />
+                                                            <Ellipse x="219" y="32" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68)) * 0.017453292519943295) / 0.029329937408112555)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68)) * 0.017453292519943295) / 0.029329937408112555)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
@@ -2849,12 +2849,12 @@
                                                 <Arc
                                                     centerX="225"
                                                     centerY="225"
-                                                    width="338"
-                                                    height="338"
+                                                    width="339"
+                                                    height="339"
                                                     startAngle="0"
                                                     endAngle="359.9">
                                                     <WeightedStroke
-                                                        thickness="22"
+                                                        thickness="23"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                                         cap="ROUND" />
                                                 </Arc>
@@ -2865,34 +2865,34 @@
                                             <Group x="0" y="0" width="450" height="450" name="ring1N1Half_tiny_foreground" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
-                                                    <Arc centerX="225" centerY="225" width="338" height="338" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="24" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                    <Arc centerX="225" centerY="225" width="339" height="339" startAngle="0" endAngle="359.9">
+                                                        <WeightedStroke thickness="25" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring1N1Half_tiny_mask" renderMode="MASK">
                                                     <PartDraw x="0" y="0" width="450" height="450">
-                                                        <Arc centerX="225" centerY="225" width="338" height="338" startAngle="0" endAngle="359.9">
-                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.73))" />
-                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.73))" />
-                                                            <Stroke color="#ffffffff" thickness="22" cap="BUTT" />
+                                                        <Arc centerX="225" centerY="225" width="339" height="339" startAngle="0" endAngle="359.9">
+                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.89))" />
+                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.89))" />
+                                                            <Stroke color="#ffffffff" thickness="23" cap="BUTT" />
                                                         </Arc>
                                                     </PartDraw>
                                                     <Group x="0" y="0" width="450" height="450" name="ring1N1Half_tiny_startCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.73))" />
+                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.89))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="214" y="45" width="22" height="22">
-                                                                <Transform target="x" value="225 - (11 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.73)) * 0.017453292519943295) / 0.06519290540312343)" />
-                                                                <Transform target="width" value="2 * (11 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.73)) * 0.017453292519943295) / 0.06519290540312343)" />
+                                                            <Ellipse x="213" y="44" width="23" height="23">
+                                                                <Transform target="x" value="225 - (11.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.89)) * 0.017453292519943295) / 0.06799781869993193)" />
+                                                                <Transform target="width" value="2 * (11.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.89)) * 0.017453292519943295) / 0.06799781869993193)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
                                                     </Group>
                                                     <Group x="0" y="0" width="450" height="450" name="ring1N1Half_tiny_endCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.73))" />
+                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.89))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="214" y="45" width="22" height="22">
-                                                                <Transform target="x" value="225 - (11 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.73)) * 0.017453292519943295) / 0.06519290540312343)" />
-                                                                <Transform target="width" value="2 * (11 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.73)) * 0.017453292519943295) / 0.06519290540312343)" />
+                                                            <Ellipse x="213" y="44" width="23" height="23">
+                                                                <Transform target="x" value="225 - (11.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.89)) * 0.017453292519943295) / 0.06799781869993193)" />
+                                                                <Transform target="width" value="2 * (11.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.89)) * 0.017453292519943295) / 0.06799781869993193)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
@@ -2905,34 +2905,34 @@
                                             <Group x="0" y="0" width="450" height="450" name="ring1N1Half_round_foreground" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
-                                                    <Arc centerX="225" centerY="225" width="338" height="338" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="24" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                    <Arc centerX="225" centerY="225" width="339" height="339" startAngle="0" endAngle="359.9">
+                                                        <WeightedStroke thickness="25" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring1N1Half_round_mask" renderMode="MASK">
                                                     <PartDraw x="0" y="0" width="450" height="450">
-                                                        <Arc centerX="225" centerY="225" width="338" height="338" startAngle="0" endAngle="359.9">
-                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.73))" />
-                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.73))" />
-                                                            <Stroke color="#ffffffff" thickness="22" cap="BUTT" />
+                                                        <Arc centerX="225" centerY="225" width="339" height="339" startAngle="0" endAngle="359.9">
+                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.89))" />
+                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.89))" />
+                                                            <Stroke color="#ffffffff" thickness="23" cap="BUTT" />
                                                         </Arc>
                                                     </PartDraw>
                                                     <Group x="0" y="0" width="450" height="450" name="ring1N1Half_round_startCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.73))" />
+                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.89))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="214" y="45" width="22" height="22">
-                                                                <Transform target="x" value="225 - (11 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.73)) * 0.017453292519943295) / 0.06519290540312343)" />
-                                                                <Transform target="width" value="2 * (11 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.73)) * 0.017453292519943295) / 0.06519290540312343)" />
+                                                            <Ellipse x="213" y="44" width="23" height="23">
+                                                                <Transform target="x" value="225 - (11.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.89)) * 0.017453292519943295) / 0.06799781869993193)" />
+                                                                <Transform target="width" value="2 * (11.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.89)) * 0.017453292519943295) / 0.06799781869993193)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
                                                     </Group>
                                                     <Group x="0" y="0" width="450" height="450" name="ring1N1Half_round_endCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.73))" />
+                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.89))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="214" y="45" width="22" height="22">
-                                                                <Transform target="x" value="225 - (11 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.73)) * 0.017453292519943295) / 0.06519290540312343)" />
-                                                                <Transform target="width" value="2 * (11 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.73)) * 0.017453292519943295) / 0.06519290540312343)" />
+                                                            <Ellipse x="213" y="44" width="23" height="23">
+                                                                <Transform target="x" value="225 - (11.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.89)) * 0.017453292519943295) / 0.06799781869993193)" />
+                                                                <Transform target="width" value="2 * (11.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.89)) * 0.017453292519943295) / 0.06799781869993193)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
@@ -3128,12 +3128,12 @@
                                                 <Arc
                                                     centerX="225"
                                                     centerY="225"
-                                                    width="356"
-                                                    height="356"
+                                                    width="357"
+                                                    height="357"
                                                     startAngle="0"
                                                     endAngle="359.9">
                                                     <WeightedStroke
-                                                        thickness="16"
+                                                        thickness="17"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                                         cap="ROUND" />
                                                 </Arc>
@@ -3144,34 +3144,34 @@
                                             <Group x="0" y="0" width="450" height="450" name="ring1N2Half_tiny_foreground" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
-                                                    <Arc centerX="225" centerY="225" width="356" height="356" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="18" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                    <Arc centerX="225" centerY="225" width="357" height="357" startAngle="0" endAngle="359.9">
+                                                        <WeightedStroke thickness="19" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring1N2Half_tiny_mask" renderMode="MASK">
                                                     <PartDraw x="0" y="0" width="450" height="450">
-                                                        <Arc centerX="225" centerY="225" width="356" height="356" startAngle="0" endAngle="359.9">
-                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.58))" />
-                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.58))" />
-                                                            <Stroke color="#ffffffff" thickness="16" cap="BUTT" />
+                                                        <Arc centerX="225" centerY="225" width="357" height="357" startAngle="0" endAngle="359.9">
+                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.73))" />
+                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.73))" />
+                                                            <Stroke color="#ffffffff" thickness="17" cap="BUTT" />
                                                         </Arc>
                                                     </PartDraw>
                                                     <Group x="0" y="0" width="450" height="450" name="ring1N2Half_tiny_startCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.58))" />
+                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.73))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="217" y="39" width="16" height="16">
-                                                                <Transform target="x" value="225 - (8 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.58)) * 0.017453292519943295) / 0.045059954172142445)" />
-                                                                <Transform target="width" value="2 * (8 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.58)) * 0.017453292519943295) / 0.045059954172142445)" />
+                                                            <Ellipse x="216" y="38" width="17" height="17">
+                                                                <Transform target="x" value="225 - (8.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.73)) * 0.017453292519943295) / 0.0476835791178683)" />
+                                                                <Transform target="width" value="2 * (8.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.73)) * 0.017453292519943295) / 0.0476835791178683)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
                                                     </Group>
                                                     <Group x="0" y="0" width="450" height="450" name="ring1N2Half_tiny_endCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.58))" />
+                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.73))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="217" y="39" width="16" height="16">
-                                                                <Transform target="x" value="225 - (8 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.58)) * 0.017453292519943295) / 0.045059954172142445)" />
-                                                                <Transform target="width" value="2 * (8 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.58)) * 0.017453292519943295) / 0.045059954172142445)" />
+                                                            <Ellipse x="216" y="38" width="17" height="17">
+                                                                <Transform target="x" value="225 - (8.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.73)) * 0.017453292519943295) / 0.0476835791178683)" />
+                                                                <Transform target="width" value="2 * (8.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.73)) * 0.017453292519943295) / 0.0476835791178683)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
@@ -3184,34 +3184,34 @@
                                             <Group x="0" y="0" width="450" height="450" name="ring1N2Half_round_foreground" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
-                                                    <Arc centerX="225" centerY="225" width="356" height="356" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="18" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                    <Arc centerX="225" centerY="225" width="357" height="357" startAngle="0" endAngle="359.9">
+                                                        <WeightedStroke thickness="19" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring1N2Half_round_mask" renderMode="MASK">
                                                     <PartDraw x="0" y="0" width="450" height="450">
-                                                        <Arc centerX="225" centerY="225" width="356" height="356" startAngle="0" endAngle="359.9">
-                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.58))" />
-                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.58))" />
-                                                            <Stroke color="#ffffffff" thickness="16" cap="BUTT" />
+                                                        <Arc centerX="225" centerY="225" width="357" height="357" startAngle="0" endAngle="359.9">
+                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.73))" />
+                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.73))" />
+                                                            <Stroke color="#ffffffff" thickness="17" cap="BUTT" />
                                                         </Arc>
                                                     </PartDraw>
                                                     <Group x="0" y="0" width="450" height="450" name="ring1N2Half_round_startCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.58))" />
+                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.73))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="217" y="39" width="16" height="16">
-                                                                <Transform target="x" value="225 - (8 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.58)) * 0.017453292519943295) / 0.045059954172142445)" />
-                                                                <Transform target="width" value="2 * (8 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.58)) * 0.017453292519943295) / 0.045059954172142445)" />
+                                                            <Ellipse x="216" y="38" width="17" height="17">
+                                                                <Transform target="x" value="225 - (8.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.73)) * 0.017453292519943295) / 0.0476835791178683)" />
+                                                                <Transform target="width" value="2 * (8.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.73)) * 0.017453292519943295) / 0.0476835791178683)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
                                                     </Group>
                                                     <Group x="0" y="0" width="450" height="450" name="ring1N2Half_round_endCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.58))" />
+                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.73))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="217" y="39" width="16" height="16">
-                                                                <Transform target="x" value="225 - (8 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.58)) * 0.017453292519943295) / 0.045059954172142445)" />
-                                                                <Transform target="width" value="2 * (8 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.58)) * 0.017453292519943295) / 0.045059954172142445)" />
+                                                            <Ellipse x="216" y="38" width="17" height="17">
+                                                                <Transform target="x" value="225 - (8.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.73)) * 0.017453292519943295) / 0.0476835791178683)" />
+                                                                <Transform target="width" value="2 * (8.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.73)) * 0.017453292519943295) / 0.0476835791178683)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
@@ -3382,12 +3382,12 @@
                                                 <Arc
                                                     centerX="225"
                                                     centerY="225"
-                                                    width="374"
-                                                    height="374"
+                                                    width="375"
+                                                    height="375"
                                                     startAngle="0"
                                                     endAngle="359.9">
                                                     <WeightedStroke
-                                                        thickness="10"
+                                                        thickness="11"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                                         cap="ROUND" />
                                                 </Arc>
@@ -3398,34 +3398,34 @@
                                             <Group x="0" y="0" width="450" height="450" name="ring1N3Half_tiny_foreground" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
-                                                    <Arc centerX="225" centerY="225" width="374" height="374" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                    <Arc centerX="225" centerY="225" width="375" height="375" startAngle="0" endAngle="359.9">
+                                                        <WeightedStroke thickness="13" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring1N3Half_tiny_mask" renderMode="MASK">
                                                     <PartDraw x="0" y="0" width="450" height="450">
-                                                        <Arc centerX="225" centerY="225" width="374" height="374" startAngle="0" endAngle="359.9">
-                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53))" />
-                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53))" />
-                                                            <Stroke color="#ffffffff" thickness="10" cap="BUTT" />
+                                                        <Arc centerX="225" centerY="225" width="375" height="375" startAngle="0" endAngle="359.9">
+                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68))" />
+                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68))" />
+                                                            <Stroke color="#ffffffff" thickness="11" cap="BUTT" />
                                                         </Arc>
                                                     </PartDraw>
                                                     <Group x="0" y="0" width="450" height="450" name="ring1N3Half_tiny_startCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53))" />
+                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="33" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53)) * 0.017453292519943295) / 0.026709886609692163)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53)) * 0.017453292519943295) / 0.026709886609692163)" />
+                                                            <Ellipse x="219" y="32" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68)) * 0.017453292519943295) / 0.029329937408112555)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68)) * 0.017453292519943295) / 0.029329937408112555)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
                                                     </Group>
                                                     <Group x="0" y="0" width="450" height="450" name="ring1N3Half_tiny_endCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53))" />
+                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="33" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53)) * 0.017453292519943295) / 0.026709886609692163)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53)) * 0.017453292519943295) / 0.026709886609692163)" />
+                                                            <Ellipse x="219" y="32" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68)) * 0.017453292519943295) / 0.029329937408112555)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68)) * 0.017453292519943295) / 0.029329937408112555)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
@@ -3438,34 +3438,34 @@
                                             <Group x="0" y="0" width="450" height="450" name="ring1N3Half_round_foreground" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
-                                                    <Arc centerX="225" centerY="225" width="374" height="374" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                    <Arc centerX="225" centerY="225" width="375" height="375" startAngle="0" endAngle="359.9">
+                                                        <WeightedStroke thickness="13" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring1N3Half_round_mask" renderMode="MASK">
                                                     <PartDraw x="0" y="0" width="450" height="450">
-                                                        <Arc centerX="225" centerY="225" width="374" height="374" startAngle="0" endAngle="359.9">
-                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53))" />
-                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53))" />
-                                                            <Stroke color="#ffffffff" thickness="10" cap="BUTT" />
+                                                        <Arc centerX="225" centerY="225" width="375" height="375" startAngle="0" endAngle="359.9">
+                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68))" />
+                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68))" />
+                                                            <Stroke color="#ffffffff" thickness="11" cap="BUTT" />
                                                         </Arc>
                                                     </PartDraw>
                                                     <Group x="0" y="0" width="450" height="450" name="ring1N3Half_round_startCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53))" />
+                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="33" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53)) * 0.017453292519943295) / 0.026709886609692163)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53)) * 0.017453292519943295) / 0.026709886609692163)" />
+                                                            <Ellipse x="219" y="32" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68)) * 0.017453292519943295) / 0.029329937408112555)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68)) * 0.017453292519943295) / 0.029329937408112555)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
                                                     </Group>
                                                     <Group x="0" y="0" width="450" height="450" name="ring1N3Half_round_endCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53))" />
+                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="33" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53)) * 0.017453292519943295) / 0.026709886609692163)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.53)) * 0.017453292519943295) / 0.026709886609692163)" />
+                                                            <Ellipse x="219" y="32" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68)) * 0.017453292519943295) / 0.029329937408112555)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.68)) * 0.017453292519943295) / 0.029329937408112555)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
@@ -3965,12 +3965,12 @@
                                                 <Arc
                                                     centerX="225"
                                                     centerY="225"
-                                                    width="326"
-                                                    height="326"
+                                                    width="327"
+                                                    height="327"
                                                     startAngle="0"
                                                     endAngle="359.9">
                                                     <WeightedStroke
-                                                        thickness="10"
+                                                        thickness="11"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                                         cap="ROUND" />
                                                 </Arc>
@@ -3981,34 +3981,34 @@
                                             <Group x="0" y="0" width="450" height="450" name="ring2LegacyHalf_tiny_foreground" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
-                                                    <Arc centerX="225" centerY="225" width="326" height="326" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                    <Arc centerX="225" centerY="225" width="327" height="327" startAngle="0" endAngle="359.9">
+                                                        <WeightedStroke thickness="13" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring2LegacyHalf_tiny_mask" renderMode="MASK">
                                                     <PartDraw x="0" y="0" width="450" height="450">
-                                                        <Arc centerX="225" centerY="225" width="326" height="326" startAngle="0" endAngle="359.9">
-                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76))" />
-                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76))" />
-                                                            <Stroke color="#ffffffff" thickness="10" cap="BUTT" />
+                                                        <Arc centerX="225" centerY="225" width="327" height="327" startAngle="0" endAngle="359.9">
+                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93))" />
+                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93))" />
+                                                            <Stroke color="#ffffffff" thickness="11" cap="BUTT" />
                                                         </Arc>
                                                     </PartDraw>
                                                     <Group x="0" y="0" width="450" height="450" name="ring2LegacyHalf_tiny_startCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76))" />
+                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="57" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76)) * 0.017453292519943295) / 0.030727460078610755)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76)) * 0.017453292519943295) / 0.030727460078610755)" />
+                                                            <Ellipse x="219" y="56" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93)) * 0.017453292519943295) / 0.03369760074014224)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93)) * 0.017453292519943295) / 0.03369760074014224)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
                                                     </Group>
                                                     <Group x="0" y="0" width="450" height="450" name="ring2LegacyHalf_tiny_endCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76))" />
+                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="57" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76)) * 0.017453292519943295) / 0.030727460078610755)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76)) * 0.017453292519943295) / 0.030727460078610755)" />
+                                                            <Ellipse x="219" y="56" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93)) * 0.017453292519943295) / 0.03369760074014224)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93)) * 0.017453292519943295) / 0.03369760074014224)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
@@ -4021,34 +4021,34 @@
                                             <Group x="0" y="0" width="450" height="450" name="ring2LegacyHalf_round_foreground" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
-                                                    <Arc centerX="225" centerY="225" width="326" height="326" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                    <Arc centerX="225" centerY="225" width="327" height="327" startAngle="0" endAngle="359.9">
+                                                        <WeightedStroke thickness="13" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring2LegacyHalf_round_mask" renderMode="MASK">
                                                     <PartDraw x="0" y="0" width="450" height="450">
-                                                        <Arc centerX="225" centerY="225" width="326" height="326" startAngle="0" endAngle="359.9">
-                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76))" />
-                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76))" />
-                                                            <Stroke color="#ffffffff" thickness="10" cap="BUTT" />
+                                                        <Arc centerX="225" centerY="225" width="327" height="327" startAngle="0" endAngle="359.9">
+                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93))" />
+                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93))" />
+                                                            <Stroke color="#ffffffff" thickness="11" cap="BUTT" />
                                                         </Arc>
                                                     </PartDraw>
                                                     <Group x="0" y="0" width="450" height="450" name="ring2LegacyHalf_round_startCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76))" />
+                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="57" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76)) * 0.017453292519943295) / 0.030727460078610755)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76)) * 0.017453292519943295) / 0.030727460078610755)" />
+                                                            <Ellipse x="219" y="56" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93)) * 0.017453292519943295) / 0.03369760074014224)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93)) * 0.017453292519943295) / 0.03369760074014224)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
                                                     </Group>
                                                     <Group x="0" y="0" width="450" height="450" name="ring2LegacyHalf_round_endCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76))" />
+                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="57" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76)) * 0.017453292519943295) / 0.030727460078610755)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76)) * 0.017453292519943295) / 0.030727460078610755)" />
+                                                            <Ellipse x="219" y="56" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93)) * 0.017453292519943295) / 0.03369760074014224)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93)) * 0.017453292519943295) / 0.03369760074014224)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
@@ -4219,12 +4219,12 @@
                                                 <Arc
                                                     centerX="225"
                                                     centerY="225"
-                                                    width="284"
-                                                    height="284"
+                                                    width="285"
+                                                    height="285"
                                                     startAngle="0"
                                                     endAngle="359.9">
                                                     <WeightedStroke
-                                                        thickness="16"
+                                                        thickness="17"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                                         cap="ROUND" />
                                                 </Arc>
@@ -4235,34 +4235,34 @@
                                             <Group x="0" y="0" width="450" height="450" name="ring2N2Half_tiny_foreground" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
-                                                    <Arc centerX="225" centerY="225" width="284" height="284" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="18" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                    <Arc centerX="225" centerY="225" width="285" height="285" startAngle="0" endAngle="359.9">
+                                                        <WeightedStroke thickness="19" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring2N2Half_tiny_mask" renderMode="MASK">
                                                     <PartDraw x="0" y="0" width="450" height="450">
-                                                        <Arc centerX="225" centerY="225" width="284" height="284" startAngle="0" endAngle="359.9">
-                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.23))" />
-                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.23))" />
-                                                            <Stroke color="#ffffffff" thickness="16" cap="BUTT" />
+                                                        <Arc centerX="225" centerY="225" width="285" height="285" startAngle="0" endAngle="359.9">
+                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.42))" />
+                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.42))" />
+                                                            <Stroke color="#ffffffff" thickness="17" cap="BUTT" />
                                                         </Arc>
                                                     </PartDraw>
                                                     <Group x="0" y="0" width="450" height="450" name="ring2N2Half_tiny_startCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.23))" />
+                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.42))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="217" y="75" width="16" height="16">
-                                                                <Transform target="x" value="225 - (8 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.23)) * 0.017453292519943295) / 0.056433930663734595)" />
-                                                                <Transform target="width" value="2 * (8 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.23)) * 0.017453292519943295) / 0.056433930663734595)" />
+                                                            <Ellipse x="216" y="74" width="17" height="17">
+                                                                <Transform target="x" value="225 - (8.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.42)) * 0.017453292519943295) / 0.059761252279372575)" />
+                                                                <Transform target="width" value="2 * (8.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.42)) * 0.017453292519943295) / 0.059761252279372575)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
                                                     </Group>
                                                     <Group x="0" y="0" width="450" height="450" name="ring2N2Half_tiny_endCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.23))" />
+                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.42))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="217" y="75" width="16" height="16">
-                                                                <Transform target="x" value="225 - (8 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.23)) * 0.017453292519943295) / 0.056433930663734595)" />
-                                                                <Transform target="width" value="2 * (8 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.23)) * 0.017453292519943295) / 0.056433930663734595)" />
+                                                            <Ellipse x="216" y="74" width="17" height="17">
+                                                                <Transform target="x" value="225 - (8.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.42)) * 0.017453292519943295) / 0.059761252279372575)" />
+                                                                <Transform target="width" value="2 * (8.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.42)) * 0.017453292519943295) / 0.059761252279372575)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
@@ -4275,34 +4275,34 @@
                                             <Group x="0" y="0" width="450" height="450" name="ring2N2Half_round_foreground" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
-                                                    <Arc centerX="225" centerY="225" width="284" height="284" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="18" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                    <Arc centerX="225" centerY="225" width="285" height="285" startAngle="0" endAngle="359.9">
+                                                        <WeightedStroke thickness="19" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring2N2Half_round_mask" renderMode="MASK">
                                                     <PartDraw x="0" y="0" width="450" height="450">
-                                                        <Arc centerX="225" centerY="225" width="284" height="284" startAngle="0" endAngle="359.9">
-                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.23))" />
-                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.23))" />
-                                                            <Stroke color="#ffffffff" thickness="16" cap="BUTT" />
+                                                        <Arc centerX="225" centerY="225" width="285" height="285" startAngle="0" endAngle="359.9">
+                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.42))" />
+                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.42))" />
+                                                            <Stroke color="#ffffffff" thickness="17" cap="BUTT" />
                                                         </Arc>
                                                     </PartDraw>
                                                     <Group x="0" y="0" width="450" height="450" name="ring2N2Half_round_startCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.23))" />
+                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.42))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="217" y="75" width="16" height="16">
-                                                                <Transform target="x" value="225 - (8 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.23)) * 0.017453292519943295) / 0.056433930663734595)" />
-                                                                <Transform target="width" value="2 * (8 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.23)) * 0.017453292519943295) / 0.056433930663734595)" />
+                                                            <Ellipse x="216" y="74" width="17" height="17">
+                                                                <Transform target="x" value="225 - (8.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.42)) * 0.017453292519943295) / 0.059761252279372575)" />
+                                                                <Transform target="width" value="2 * (8.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.42)) * 0.017453292519943295) / 0.059761252279372575)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
                                                     </Group>
                                                     <Group x="0" y="0" width="450" height="450" name="ring2N2Half_round_endCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.23))" />
+                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.42))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="217" y="75" width="16" height="16">
-                                                                <Transform target="x" value="225 - (8 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.23)) * 0.017453292519943295) / 0.056433930663734595)" />
-                                                                <Transform target="width" value="2 * (8 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.23)) * 0.017453292519943295) / 0.056433930663734595)" />
+                                                            <Ellipse x="216" y="74" width="17" height="17">
+                                                                <Transform target="x" value="225 - (8.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.42)) * 0.017453292519943295) / 0.059761252279372575)" />
+                                                                <Transform target="width" value="2 * (8.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 3.42)) * 0.017453292519943295) / 0.059761252279372575)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
@@ -4473,12 +4473,12 @@
                                                 <Arc
                                                     centerX="225"
                                                     centerY="225"
-                                                    width="326"
-                                                    height="326"
+                                                    width="327"
+                                                    height="327"
                                                     startAngle="0"
                                                     endAngle="359.9">
                                                     <WeightedStroke
-                                                        thickness="10"
+                                                        thickness="11"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                                         cap="ROUND" />
                                                 </Arc>
@@ -4489,34 +4489,34 @@
                                             <Group x="0" y="0" width="450" height="450" name="ring2N3Half_tiny_foreground" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
-                                                    <Arc centerX="225" centerY="225" width="326" height="326" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                    <Arc centerX="225" centerY="225" width="327" height="327" startAngle="0" endAngle="359.9">
+                                                        <WeightedStroke thickness="13" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring2N3Half_tiny_mask" renderMode="MASK">
                                                     <PartDraw x="0" y="0" width="450" height="450">
-                                                        <Arc centerX="225" centerY="225" width="326" height="326" startAngle="0" endAngle="359.9">
-                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76))" />
-                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76))" />
-                                                            <Stroke color="#ffffffff" thickness="10" cap="BUTT" />
+                                                        <Arc centerX="225" centerY="225" width="327" height="327" startAngle="0" endAngle="359.9">
+                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93))" />
+                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93))" />
+                                                            <Stroke color="#ffffffff" thickness="11" cap="BUTT" />
                                                         </Arc>
                                                     </PartDraw>
                                                     <Group x="0" y="0" width="450" height="450" name="ring2N3Half_tiny_startCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76))" />
+                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="57" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76)) * 0.017453292519943295) / 0.030727460078610755)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76)) * 0.017453292519943295) / 0.030727460078610755)" />
+                                                            <Ellipse x="219" y="56" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93)) * 0.017453292519943295) / 0.03369760074014224)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93)) * 0.017453292519943295) / 0.03369760074014224)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
                                                     </Group>
                                                     <Group x="0" y="0" width="450" height="450" name="ring2N3Half_tiny_endCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76))" />
+                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="57" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76)) * 0.017453292519943295) / 0.030727460078610755)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76)) * 0.017453292519943295) / 0.030727460078610755)" />
+                                                            <Ellipse x="219" y="56" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93)) * 0.017453292519943295) / 0.03369760074014224)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93)) * 0.017453292519943295) / 0.03369760074014224)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
@@ -4529,34 +4529,34 @@
                                             <Group x="0" y="0" width="450" height="450" name="ring2N3Half_round_foreground" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
-                                                    <Arc centerX="225" centerY="225" width="326" height="326" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                    <Arc centerX="225" centerY="225" width="327" height="327" startAngle="0" endAngle="359.9">
+                                                        <WeightedStroke thickness="13" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring2N3Half_round_mask" renderMode="MASK">
                                                     <PartDraw x="0" y="0" width="450" height="450">
-                                                        <Arc centerX="225" centerY="225" width="326" height="326" startAngle="0" endAngle="359.9">
-                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76))" />
-                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76))" />
-                                                            <Stroke color="#ffffffff" thickness="10" cap="BUTT" />
+                                                        <Arc centerX="225" centerY="225" width="327" height="327" startAngle="0" endAngle="359.9">
+                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93))" />
+                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93))" />
+                                                            <Stroke color="#ffffffff" thickness="11" cap="BUTT" />
                                                         </Arc>
                                                     </PartDraw>
                                                     <Group x="0" y="0" width="450" height="450" name="ring2N3Half_round_startCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76))" />
+                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="57" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76)) * 0.017453292519943295) / 0.030727460078610755)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76)) * 0.017453292519943295) / 0.030727460078610755)" />
+                                                            <Ellipse x="219" y="56" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93)) * 0.017453292519943295) / 0.03369760074014224)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93)) * 0.017453292519943295) / 0.03369760074014224)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
                                                     </Group>
                                                     <Group x="0" y="0" width="450" height="450" name="ring2N3Half_round_endCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76))" />
+                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="57" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76)) * 0.017453292519943295) / 0.030727460078610755)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.76)) * 0.017453292519943295) / 0.030727460078610755)" />
+                                                            <Ellipse x="219" y="56" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93)) * 0.017453292519943295) / 0.03369760074014224)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 1.93)) * 0.017453292519943295) / 0.03369760074014224)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
@@ -5056,12 +5056,12 @@
                                                 <Arc
                                                     centerX="225"
                                                     centerY="225"
-                                                    width="278"
-                                                    height="278"
+                                                    width="279"
+                                                    height="279"
                                                     startAngle="0"
                                                     endAngle="359.9">
                                                     <WeightedStroke
-                                                        thickness="10"
+                                                        thickness="11"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                                         cap="ROUND" />
                                                 </Arc>
@@ -5072,34 +5072,34 @@
                                             <Group x="0" y="0" width="450" height="450" name="ring3LegacyHalf_tiny_foreground" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
-                                                    <Arc centerX="225" centerY="225" width="278" height="278" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                    <Arc centerX="225" centerY="225" width="279" height="279" startAngle="0" endAngle="359.9">
+                                                        <WeightedStroke thickness="13" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring3LegacyHalf_tiny_mask" renderMode="MASK">
                                                     <PartDraw x="0" y="0" width="450" height="450">
-                                                        <Arc centerX="225" centerY="225" width="278" height="278" startAngle="0" endAngle="359.9">
-                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06))" />
-                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06))" />
-                                                            <Stroke color="#ffffffff" thickness="10" cap="BUTT" />
+                                                        <Arc centerX="225" centerY="225" width="279" height="279" startAngle="0" endAngle="359.9">
+                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26))" />
+                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26))" />
+                                                            <Stroke color="#ffffffff" thickness="11" cap="BUTT" />
                                                         </Arc>
                                                     </PartDraw>
                                                     <Group x="0" y="0" width="450" height="450" name="ring3LegacyHalf_tiny_startCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06))" />
+                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="81" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06)) * 0.017453292519943295) / 0.035969282784917435)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06)) * 0.017453292519943295) / 0.035969282784917435)" />
+                                                            <Ellipse x="219" y="80" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26)) * 0.017453292519943295) / 0.03946491056200473)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26)) * 0.017453292519943295) / 0.03946491056200473)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
                                                     </Group>
                                                     <Group x="0" y="0" width="450" height="450" name="ring3LegacyHalf_tiny_endCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06))" />
+                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="81" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06)) * 0.017453292519943295) / 0.035969282784917435)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06)) * 0.017453292519943295) / 0.035969282784917435)" />
+                                                            <Ellipse x="219" y="80" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26)) * 0.017453292519943295) / 0.03946491056200473)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26)) * 0.017453292519943295) / 0.03946491056200473)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
@@ -5112,34 +5112,34 @@
                                             <Group x="0" y="0" width="450" height="450" name="ring3LegacyHalf_round_foreground" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
-                                                    <Arc centerX="225" centerY="225" width="278" height="278" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                    <Arc centerX="225" centerY="225" width="279" height="279" startAngle="0" endAngle="359.9">
+                                                        <WeightedStroke thickness="13" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring3LegacyHalf_round_mask" renderMode="MASK">
                                                     <PartDraw x="0" y="0" width="450" height="450">
-                                                        <Arc centerX="225" centerY="225" width="278" height="278" startAngle="0" endAngle="359.9">
-                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06))" />
-                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06))" />
-                                                            <Stroke color="#ffffffff" thickness="10" cap="BUTT" />
+                                                        <Arc centerX="225" centerY="225" width="279" height="279" startAngle="0" endAngle="359.9">
+                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26))" />
+                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26))" />
+                                                            <Stroke color="#ffffffff" thickness="11" cap="BUTT" />
                                                         </Arc>
                                                     </PartDraw>
                                                     <Group x="0" y="0" width="450" height="450" name="ring3LegacyHalf_round_startCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06))" />
+                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="81" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06)) * 0.017453292519943295) / 0.035969282784917435)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06)) * 0.017453292519943295) / 0.035969282784917435)" />
+                                                            <Ellipse x="219" y="80" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26)) * 0.017453292519943295) / 0.03946491056200473)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26)) * 0.017453292519943295) / 0.03946491056200473)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
                                                     </Group>
                                                     <Group x="0" y="0" width="450" height="450" name="ring3LegacyHalf_round_endCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06))" />
+                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="81" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06)) * 0.017453292519943295) / 0.035969282784917435)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06)) * 0.017453292519943295) / 0.035969282784917435)" />
+                                                            <Ellipse x="219" y="80" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26)) * 0.017453292519943295) / 0.03946491056200473)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26)) * 0.017453292519943295) / 0.03946491056200473)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
@@ -5310,12 +5310,12 @@
                                                 <Arc
                                                     centerX="225"
                                                     centerY="225"
-                                                    width="278"
-                                                    height="278"
+                                                    width="279"
+                                                    height="279"
                                                     startAngle="0"
                                                     endAngle="359.9">
                                                     <WeightedStroke
-                                                        thickness="10"
+                                                        thickness="11"
                                                         colors="[COMPLICATION.RANGED_VALUE_COLORS]"
                                                         cap="ROUND" />
                                                 </Arc>
@@ -5326,34 +5326,34 @@
                                             <Group x="0" y="0" width="450" height="450" name="ring3N3Half_tiny_foreground" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
-                                                    <Arc centerX="225" centerY="225" width="278" height="278" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                    <Arc centerX="225" centerY="225" width="279" height="279" startAngle="0" endAngle="359.9">
+                                                        <WeightedStroke thickness="13" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring3N3Half_tiny_mask" renderMode="MASK">
                                                     <PartDraw x="0" y="0" width="450" height="450">
-                                                        <Arc centerX="225" centerY="225" width="278" height="278" startAngle="0" endAngle="359.9">
-                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06))" />
-                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06))" />
-                                                            <Stroke color="#ffffffff" thickness="10" cap="BUTT" />
+                                                        <Arc centerX="225" centerY="225" width="279" height="279" startAngle="0" endAngle="359.9">
+                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26))" />
+                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26))" />
+                                                            <Stroke color="#ffffffff" thickness="11" cap="BUTT" />
                                                         </Arc>
                                                     </PartDraw>
                                                     <Group x="0" y="0" width="450" height="450" name="ring3N3Half_tiny_startCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06))" />
+                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="81" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06)) * 0.017453292519943295) / 0.035969282784917435)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06)) * 0.017453292519943295) / 0.035969282784917435)" />
+                                                            <Ellipse x="219" y="80" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26)) * 0.017453292519943295) / 0.03946491056200473)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26)) * 0.017453292519943295) / 0.03946491056200473)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
                                                     </Group>
                                                     <Group x="0" y="0" width="450" height="450" name="ring3N3Half_tiny_endCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06))" />
+                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="81" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06)) * 0.017453292519943295) / 0.035969282784917435)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06)) * 0.017453292519943295) / 0.035969282784917435)" />
+                                                            <Ellipse x="219" y="80" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26)) * 0.017453292519943295) / 0.03946491056200473)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26)) * 0.017453292519943295) / 0.03946491056200473)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
@@ -5366,34 +5366,34 @@
                                             <Group x="0" y="0" width="450" height="450" name="ring3N3Half_round_foreground" alpha="255">
                                                 <Variant mode="AMBIENT" target="alpha" value="140" />
                                                 <PartDraw x="0" y="0" width="450" height="450" renderMode="SOURCE">
-                                                    <Arc centerX="225" centerY="225" width="278" height="278" startAngle="0" endAngle="359.9">
-                                                        <WeightedStroke thickness="12" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+                                                    <Arc centerX="225" centerY="225" width="279" height="279" startAngle="0" endAngle="359.9">
+                                                        <WeightedStroke thickness="13" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
                                                     </Arc>
                                                 </PartDraw>
                                                 <Group x="0" y="0" width="450" height="450" name="ring3N3Half_round_mask" renderMode="MASK">
                                                     <PartDraw x="0" y="0" width="450" height="450">
-                                                        <Arc centerX="225" centerY="225" width="278" height="278" startAngle="0" endAngle="359.9">
-                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06))" />
-                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06))" />
-                                                            <Stroke color="#ffffffff" thickness="10" cap="BUTT" />
+                                                        <Arc centerX="225" centerY="225" width="279" height="279" startAngle="0" endAngle="359.9">
+                                                            <Transform target="startAngle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26))" />
+                                                            <Transform target="endAngle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26))" />
+                                                            <Stroke color="#ffffffff" thickness="11" cap="BUTT" />
                                                         </Arc>
                                                     </PartDraw>
                                                     <Group x="0" y="0" width="450" height="450" name="ring3N3Half_round_startCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06))" />
+                                                        <Transform target="angle" value="(359.9 - (([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9)) + (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="81" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06)) * 0.017453292519943295) / 0.035969282784917435)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06)) * 0.017453292519943295) / 0.035969282784917435)" />
+                                                            <Ellipse x="219" y="80" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26)) * 0.017453292519943295) / 0.03946491056200473)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26)) * 0.017453292519943295) / 0.03946491056200473)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>
                                                     </Group>
                                                     <Group x="0" y="0" width="450" height="450" name="ring3N3Half_round_endCap" angle="0" pivotX="0.5" pivotY="0.5">
-                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06))" />
+                                                        <Transform target="angle" value="359.9 - (clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26))" />
                                                         <PartDraw x="0" y="0" width="450" height="450">
-                                                            <Ellipse x="220" y="81" width="10" height="10">
-                                                                <Transform target="x" value="225 - (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06)) * 0.017453292519943295) / 0.035969282784917435)" />
-                                                                <Transform target="width" value="2 * (5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.06)) * 0.017453292519943295) / 0.035969282784917435)" />
+                                                            <Ellipse x="219" y="80" width="11" height="11">
+                                                                <Transform target="x" value="225 - (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26)) * 0.017453292519943295) / 0.03946491056200473)" />
+                                                                <Transform target="width" value="2 * (5.5 * tan((clamp((([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * 359.9) / 4, 0, 2.26)) * 0.017453292519943295) / 0.03946491056200473)" />
                                                                 <Fill color="#ffffffff" />
                                                             </Ellipse>
                                                         </PartDraw>

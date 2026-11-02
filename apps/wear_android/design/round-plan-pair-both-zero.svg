@@ -15,9 +15,9 @@
   <g id="composition" transform="translate(225 225) scale(1.113861386138614) translate(-225 -225)">
   <rect width="450" height="450" fill="url(#lift)"/>
 
-    <circle cx="225" cy="225" r="142" fill="none" stroke="#2E3632"
-      stroke-width="16" />
     <circle cx="225" cy="225" r="158" fill="none" stroke="#2E3632"
+      stroke-width="16" />
+    <circle cx="225" cy="225" r="142" fill="none" stroke="#2E3632"
       stroke-width="16" />
     <circle cx="225" cy="225" r="186" fill="none" stroke="#2E3632"
       stroke-width="32" />

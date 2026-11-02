@@ -17,13 +17,13 @@
 
     <circle cx="225" cy="225" r="143.91" fill="none" stroke="#2E3632"
       stroke-width="20.205000000000002" />
-    <circle cx="225" cy="225" r="162.84374999999997" fill="none" stroke="#2E3632"
-      stroke-width="10.102500000000001" />
     <circle cx="225" cy="225" r="172.94625" fill="none" stroke="#2E3632"
       stroke-width="10.102500000000001" />
-    <circle cx="225" cy="225" r="186.82874999999999" fill="none" stroke="#2E3632"
+    <circle cx="225" cy="225" r="162.84374999999997" fill="none" stroke="#2E3632"
       stroke-width="10.102500000000001" />
     <circle cx="225" cy="225" r="196.93125" fill="none" stroke="#2E3632"
+      stroke-width="10.102500000000001" />
+    <circle cx="225" cy="225" r="186.82874999999999" fill="none" stroke="#2E3632"
       stroke-width="10.102500000000001" />
 
     <circle cx="173.0" cy="135.0" r="26.0" fill="#0B0E0C" />

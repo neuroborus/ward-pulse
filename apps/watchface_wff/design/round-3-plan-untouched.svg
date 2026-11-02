@@ -47,10 +47,6 @@
     </defs>
     <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#E8915A"
       stroke-width="20.205000000000002" mask="url(#arc-225-225-167.89499999999998-20.205000000000002)" />
-    <circle cx="225" cy="225" r="186.82874999999999" fill="none" stroke="#2E3632"
-      stroke-width="10.102500000000001" />
-    <circle cx="225" cy="225" r="186.82874999999999" fill="none" stroke="#7E93B8"
-      stroke-width="10.102500000000001" />
     <circle cx="225" cy="225" r="196.93125" fill="none" stroke="#2E3632"
       stroke-width="10.102500000000001" />
     <defs>
@@ -67,6 +63,10 @@
     </defs>
     <circle cx="225" cy="225" r="196.93125" fill="none" stroke="#67E8D4"
       stroke-width="12.102500000000001" mask="url(#arc-225-225-196.93125-10.102500000000001)" />
+    <circle cx="225" cy="225" r="186.82874999999999" fill="none" stroke="#2E3632"
+      stroke-width="10.102500000000001" />
+    <circle cx="225" cy="225" r="187.32874999999999" fill="none" stroke="#7E93B8"
+      stroke-width="11.102500000000001" />
 
     <circle cx="173.0" cy="135.0" r="26.0" fill="#0B0E0C" />
 

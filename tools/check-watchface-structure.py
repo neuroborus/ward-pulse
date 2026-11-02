@@ -528,7 +528,7 @@ def check_paint_shape(paint, kind, diameter, thickness, name, paired=False):
                 or set(group[0].attrib) != {"target", "value"} or group[0].get("target") != "angle"
                 or group[1].attrib != canvas or [child.tag for child in group[1]] != ["Ellipse"]
                 or ellipse is None or ellipse.attrib != {
-                    "x": f"{225 - thickness / 2:g}", "y": f"{225 - diameter / 2 - thickness / 2:g}",
+                    "x": str(math.floor(225 - thickness / 2)), "y": f"{225 - diameter / 2 - thickness / 2:g}",
                     "width": f"{thickness:g}", "height": f"{thickness:g}"}
                 or [child.tag for child in ellipse] != ["Transform", "Transform", "Fill"]
                 or [item.get("target") for item in ellipse.findall("Transform")] != ["x", "width"]
@@ -594,7 +594,9 @@ def check_paint_endpoints(paint, kind, diameter, thickness, value, maximum):
         extent = math.atan(b / math.sqrt(radius**2 - half**2))
         k = half / (math.sqrt(radius**2 - half**2) * math.tan(math.radians(cap)))
         error_bound = abs(k - 1) * math.tan(math.radians(inset))
-        if abs(extent - math.radians(inset)) > error_bound + 1e-12:
+        if (abs(extent - math.radians(inset)) > error_bound + 1e-12
+                or math.degrees(2 * error_bound) > 0.04136
+                or math.degrees(2 * error_bound) > sweep * 0.00151):
             return False
         if sweep >= 4 * cap and not (close(b, half) and close(inset, cap)):
             return False
@@ -612,6 +614,8 @@ def check_band_paints(root):
                     maximum, inner if suffix else full, thickness / 2 if suffix else thickness)
 
     for name, (maximum, diameter, thickness) in expected.items():
+        coverage = 1 if name.endswith("Half") else 0
+        paint_diameter, paint_thickness = diameter + coverage, thickness + coverage
         groups = root.findall(f".//Group[@name='{name}']")
         if len(groups) != 1:
             errors.append(f"{name}: expected one owning band Group")
@@ -643,7 +647,7 @@ def check_band_paints(root):
             name_kind = f"{name}_{kind}"
             if (decision.attrib != {**canvas, "name": name_kind, "alpha": "0"}
                     or [child.tag for child in element_children(decision)] != ["Transform", "PartDraw" if kind == "full" else "Group"]
-                    or not check_paint_shape(decision[1], kind, diameter, thickness, name_kind, name.endswith("Half"))):
+                    or not check_paint_shape(decision[1], kind, paint_diameter, paint_thickness, name_kind, bool(coverage))):
                 errors.append(f"{name_kind}: paint lost its isolated source/mask, endpoints, family or single ambient alpha")
         foreground = [node for child in children for node in child.iter()]
         if (sum(node.tag == "WeightedStroke" for node in foreground) != 3
@@ -664,7 +668,8 @@ def check_band_paints(root):
                  (0.99 * maximum, "round"), (0.996 * maximum, "round"),
                  (0.999 * maximum, "round"), (adjacent_float(maximum, -1), "round"),
                  (maximum, "full")]
-        cases += [(adjacent_float(4 * cap / 359.9 * maximum, direction), "round") for direction in (-1, 1)]
+        paint_cap = round(paint_thickness / paint_diameter * 180 / math.pi, 2)
+        cases += [(adjacent_float(4 * paint_cap / 359.9 * maximum, direction), "round") for direction in (-1, 1)]
         for value, wanted in cases:
             values = [evaluate_paint(alpha, value, maximum) for alpha in alphas]
             active = [kind for kind, alpha in zip(kinds, values) if alpha != 0]
@@ -672,7 +677,7 @@ def check_band_paints(root):
                 errors.append(f"{name}: {value}/{maximum} selected {active}, expected {wanted} alone")
             elif active:
                 paint = decisions[kinds.index(wanted)][1]
-                if not check_paint_endpoints(paint, wanted, diameter, thickness, value, maximum):
+                if not check_paint_endpoints(paint, wanted, paint_diameter, paint_thickness, value, maximum):
                     errors.append(f"{name}: {value}/{maximum} lost proportional endpoints or full closure")
     return errors
 
@@ -763,7 +768,7 @@ def check_main_decisions(root):
     errors = []
     canvas = {"x": "0", "y": "0", "width": "450", "height": "450"}
     ordinary = ("", "zero", "D", "7D", "M")
-    paired = tuple(base + suffix for base in ("split", "split:cursor-other", "split:spark")
+    paired = tuple(base + suffix for base in ("split", "split:cursor-other", "split:spark", "split:fable")
                    for suffix in ("", ":zero-inner", ":zero-outer", ":zero-both"))
     for index, slot_id in enumerate((101, 102, 105)):
         owner = root.find(f".//Group[@name='ring{index + 1}_main']")
@@ -966,7 +971,7 @@ def check_extra_decisions(root):
     return errors
 
 
-def emitted_band_layers(root, responses):
+def emitted_band_layers(root, responses, ambient=False):
     """Select actual emitted drawing trees in scene order, with independent slot fields.
 
     Usage arcs and the separately validated local backdrop mask participate. Strips,
@@ -999,6 +1004,10 @@ def emitted_band_layers(root, responses):
             if transform is not None:
                 # A Transform replaces this node's initial alpha, rather than multiplying it.
                 local_alpha = evaluate_paint(paint_expression(transform.get("value")), **fields)
+            if ambient:
+                variant = node.find("Variant[@mode='AMBIENT'][@target='alpha']")
+                if variant is not None:
+                    local_alpha = int(variant.get("value"))
             alpha = alpha * local_alpha / 255
             if alpha == 0:
                 return
@@ -1017,8 +1026,8 @@ def emitted_band_layers(root, responses):
             if mask is not None and source is not None:
                 core = mask.find("PartDraw/Arc")
                 ellipse = mask.find("Group/PartDraw/Ellipse")
-                # Coverage allowance belongs only to SOURCE. The nominal MASK
-                # remains the visible envelope in this reference-coordinate model.
+                # SOURCE allowance is not visible. The owning MASK defines the
+                # ordinary/extra envelope or the bounded positive MAIN coverage.
                 layers.append((float(core.get("width")) / 2, float(core.find("Stroke").get("thickness")),
                                paint_attribute(core, "startAngle", fields["value"], fields["maximum"]),
                                paint_attribute(core, "endAngle", fields["value"], fields["maximum"]),
@@ -1098,8 +1107,8 @@ def check_count_change_pair(root):
                 if evaluate_paint(alpha_expression(group), **fields) != 0]
 
     for layout, maximum, inner_edges, outer_edges in (
-        ("N3", 800, (182, 192), (192, 202)),
-        ("N2", 400, (170, 186), (186, 202)),
+        ("N3", 800, (182, 193), (192, 202)),
+        ("N2", 400, (170, 187), (186, 202)),
     ):
         state = {101: response(maximum, maximum, "split:cursor-other", "Cursor"),
                  106: response(remaining * (maximum / 100), maximum, "0", "Other")}
@@ -1237,6 +1246,37 @@ def check_retained_extra_paint(root):
                 expect(root, {slot_id: outer_response}, outer / 2, 300, "Other", f"{label} main NoData")
                 expect(root, {slot_id: outer_response}, inner / 2, 300, None, f"{label} no invented main")
 
+                # Positive MAIN owns the bounded overlap, even beside a zero or
+                # absent extra. These are declaration/alpha checks, not AA proof.
+                half = BAND_LAYOUTS[layout][1] / 2
+                join = (inner + half) / 2
+                for ambient in (False, True):
+                    for fraction in (0, 0.37, 1):
+                        main_response = response(maximum * fraction, maximum, "split:cursor-other", "Cursor")
+                        paired = {main_id: main_response,
+                                  slot_id: response(maximum, maximum, str(index), "Other")}
+                        layers = emitted_band_layers(root, paired, ambient)
+                        main_paints = [layer for layer in layers if layer[5] == "Cursor"]
+                        extra_paints = [layer for layer in layers if layer[5] == "Other"]
+                        expected_alpha = 140 if ambient else 255
+                        if (len(main_paints) != (0 if fraction == 0 else 1) or len(extra_paints) != 1
+                                or extra_paints[0][:2] != (outer / 2, half)
+                                or any(layer[6] != expected_alpha for layer in main_paints + extra_paints)
+                                or (main_paints and main_paints[0][:2] != ((inner + 1) / 2, half + 1))):
+                            errors.append(f"{label}: positive coverage/extra role or single ambient alpha drifted")
+                        if (visible_band_owner(layers, join + 0.5, 300) != ("Cursor" if fraction else "Other")
+                                or visible_band_owner(layers, join + 1.5, 300) != "Other"):
+                            errors.append(f"{label}: MAIN must cover exactly one reference unit of the shared edge")
+                        if fraction:
+                            for peer in (None, response(0, maximum, str(index), "Other")):
+                                state = {main_id: main_response}
+                                if peer is not None:
+                                    state[slot_id] = peer
+                                own_layers = emitted_band_layers(root, state, ambient)
+                                if (visible_band_owner(own_layers, join + 0.5, 300) != "Cursor"
+                                        or any(layer[5] == "Other" for layer in own_layers)):
+                                    errors.append(f"{label}: own positive coverage invented or depended on peer foreground")
+
     # Producer projection of the unchanged near-full/tiny fixture, not observed
     # native fields: remainingPercent converts to Float before binary N1 scaling.
     main_value = struct.unpack("!f", struct.pack("!f", 100 - 0.1))[0] * 2
@@ -1256,10 +1296,10 @@ def check_retained_extra_paint(root):
             extent = (math.degrees(math.atan(cap[1] / math.sqrt(center**2 - (thickness / 2)**2)))
                       if isinstance(cap, tuple) else math.nan)
             visible = end - start + 2 * extent
-            calibration_error = 2 * (math.degrees(math.asin(11 / 169)) - round(22 / 338 * 180 / math.pi, 2))
+            calibration_error = 2 * (math.degrees(math.asin(11.5 / 169.5)) - round(23 / 339 * 180 / math.pi, 2))
             if ((center, thickness, alpha, color)
-                    != (169, 22, 255, "[COMPLICATION.RANGED_VALUE_COLORS]")
-                    or not isinstance(cap, tuple) or not math.isclose(cap[1], 11, rel_tol=0, abs_tol=1e-9)
+                    != (169.5, 23, 255, "[COMPLICATION.RANGED_VALUE_COLORS]")
+                    or not isinstance(cap, tuple) or not math.isclose(cap[1], 11.5, rel_tol=0, abs_tol=1e-9)
                     or not math.isclose(visible, main_value / 200 * 359.9 + calibration_error, rel_tol=0, abs_tol=1e-9)):
                 errors.append(f"{label}: Float projection lost the calibrated ordinary ROUND silhouette")
         for angle in (10, 90, 180, 270, 350):
@@ -1285,8 +1325,13 @@ def check_retained_extra_paint(root):
             round_gate.set("value", "(0 == 1) ? 255 : 0")
         if not check_band_paints(broken):
             errors.append("suppressed or overlapping main paint no longer fails emitted-gate coverage")
-    # Reject escaped masks, double attenuation and a constant tiny-cap floor.
+    # Reject nominal MAIN paint, misplaced SOURCE/MASK coverage, double
+    # attenuation and a constant tiny-cap floor without weakening other roles.
     for target, attribute, value in (
+        (".//Group[@name='ring1N1Half_full']/PartDraw/Arc", "width", "338"),
+        (".//Group[@name='ring1N1Half_round_foreground']/PartDraw/Arc", "width", "338"),
+        (".//Group[@name='ring1N1Half_round_mask']/PartDraw/Arc/Stroke", "thickness", "22"),
+        (".//Group[@name='ring1N1Half_full']/PartDraw/Variant", "value", "255"),
         (".//Group[@name='ring1N1Half_round_mask']", "renderMode", "ALL"),
         (".//Group[@name='ring1N1Half_round_mask']", "alpha", "140"),
         (".//Group[@name='ring1N1Half_tiny_startCap']/PartDraw/Ellipse/Transform[@target='width']", "value", "22"),
