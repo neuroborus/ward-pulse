@@ -20,7 +20,7 @@ Resolve visible band order through `RingSurfaceOrder` and actual effective main/
 family, color or geometry claims; payload/picker order alone is not outer-to-inner order. Map absent paint too.
 After count, selection or reorder changes, verify BOTH halves of EVERY selected pair against the current native frame: family, band/position, radius AND width must match the current owning geometry.
 A retained half can keep an earlier count's footprint while its mate moves. A surviving sliver of the expected color, plausible ring count or updated percentage does not establish correct pair geometry.
-When thin adjacent bands are ambiguous, measure radii/widths and overlap at the actual native viewport scale, map both halves to their families, and report unresolved geometry as a finding before PASS; exact-color counts alone do not prove geometry.
+Inspect every paired band's full shared radial contour in the native original, magnifying edge pixels to check intended continuity even when colors/radii match; ideal zero gap is not paint proof. For ambiguous adjacent bands, measure radii/widths and overlap at the actual viewport scale, map both halves to their families, and report unresolved geometry or unintended dark seams as a finding before PASS; exact-color counts alone do not prove geometry.
 A Cursor secondary half sharing Codex's band while its mate occupies another is wrong even if counts/shapes look plausible. Use the existing locked design/ordering rules; do not invent a new visual convention.
 
 When a pair is removed, reordered or absent, verify that the previously occupied split surface no longer
