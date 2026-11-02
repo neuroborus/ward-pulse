@@ -186,12 +186,36 @@ for stage attribution and cleanup ownership. Diagnostics establish neither repai
 
 A notification is read off a locked screen, by whoever is holding the phone. It may carry only
 what the reader needs to act: the provider family and the window's own name. It must not carry
-credentials, account identifiers, spend, or any raw provider field — the account id keys the
-notification so a repeat replaces its own earlier copy, and never appears in its text.
+credentials, account identifiers, spend, or any raw provider field. Private identifiers serve
+only local bookkeeping and addressing; they never appear in notification text.
 
-Recovery notifications are the only interruption WardPulse makes. Nothing else in the product
-earns one, and an alert threshold never becomes one: alerts are conditions, listed and counted,
-while a recovery is an edge that is told once.
+The phone has independent **Alert notifications** and **Plan recovery** delivery controls.
+Both default on when unset and preserve a saved Off. Threshold rules remain opt-in on Providers;
+only Rust's configured-threshold observations qualify for alert delivery. Provider errors and
+status severity alone never create notifications. Startup, polling and the default choice do
+not request permission. An explicit foreground Off→On action may ask Android; denial preserves
+the saved choice. A failed preference read cannot authorize posting or persist a fallback.
+
+Alert posts use `wardpulse.alerts`, a fixed numeric ID and a SHA-256 tag over the structural
+condition key. This opaque digest addresses notifications; it does not decide eligibility.
+Recovery posts retain their separate channel and untagged IDs. No account identifier, spend,
+raw error or provider payload is included in notification text or payload extras. Lock-screen
+visibility still depends on Android and the user's notification settings.
+
+Consumed alert markers and delivery choices stay in phone-secure storage. A crossing is consumed
+before a post attempt; only a positively observed clear rearms it. Unknown, missing and disabled
+observations retain history. Rule edits preserve identity: a clear result rearms, a still-crossed
+result does not replay. Muted or denied crossings are consumed without backlog. A failed marker
+read/write suppresses that condition's post and can be retried on a later accepted observation;
+after a successful claim, plugin failure or a crash can lose delivery until clear. One isolate
+serializes its work, but secure storage supplies no cross-isolate atomic claim: overlapping
+workers can duplicate attempts or race bookkeeping. This is best effort, not exactly-once
+delivery. Mock data neither posts synthetic alerts nor changes production consumed markers.
+
+Both switches affect delivery only. Dashboard/Wear alerts, status, watch/widget publication,
+recovery tracking and reset-wake scheduling remain independent. Recovery preference failures
+mute posting while retaining tracking and wake work. The Wear app adds no dispatcher; Android
+may bridge phone notifications, without a delivery or mirroring guarantee.
 
 ## Rust Core Rule
 

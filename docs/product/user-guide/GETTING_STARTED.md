@@ -51,7 +51,7 @@ and [Troubleshooting](/guide/troubleshooting).
 | Watchface | Choose which known metrics fill the watch's ring slots. |
 | Widget | Choose the phone home widget's independent metric list. |
 | Providers | Connect accounts or keys, reconnect/remove them, and set alert thresholds or budget limits. |
-| Settings | Set refresh cadence and Plan recovery notifications; read sync information and legal information. |
+| Settings | Set refresh cadence, Alert notifications and Plan recovery delivery; read sync information and legal information. |
 
 Next, [set up the watch](/guide/watch), [add a home widget](/guide/widget), or adjust
 [sync and notifications](/guide/sync). WardPulse's budget limits help you track spending;

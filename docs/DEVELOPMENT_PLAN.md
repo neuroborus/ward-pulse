@@ -625,9 +625,10 @@ procedure; their receipts record acceptance separately from this implementation 
 
 ### Settings
 
-Settings is **systemic only** — no connection catalog, credentials, display toggles, or alerts:
+Settings is **systemic only** — no connection catalog, credentials, display layouts, or alert rules:
 
 - global minimum polling interval;
+- independent Alert notifications and Plan recovery delivery switches;
 - local-only diagnostics export;
 - data deletion;
 - legal disclaimer;
@@ -644,6 +645,7 @@ Split runtime output from configuration:
 | Concern | Surface | Notes |
 |---------|---------|--------|
 | Active alerts | Dashboard alerts panel (and Wear Alerts detail) | Only rules the user enabled, evaluated against the latest snapshot |
+| Alert notification delivery | **Settings → Notifications** | Default on when unset; independent of Plan recovery and of the opt-in threshold rules |
 | Plan defaults / window overrides / Purchased alert rules | **Providers** (plan catalog rows) | Connection-local opt-in thresholds as whole **0–100% left**, including custom values; a missing window override inherits Plan, explicit Off disables it |
 | Today / Week / Month budget **limits** | **Providers**, its own per-connection entry | The ceiling itself, not an alert — it is what makes a percentage exist at all. Platform / organization connections only; not under Settings and not inside the alert dialog |
 | Today / Week / Month budget **alert rules** | **Providers** (alert dialog) | Same preset/custom whole **0–100% left** editor; a period stays disabled until that connection has a limit for it, retaining its saved threshold |
@@ -2232,7 +2234,8 @@ multi-profile hatch patterns (same future note as Phase 13)
 
 ### Phase 15 — plan recovery notifications
 
-Status: complete as of 2026-10-05.
+Original Phase 15 implementation: complete as of 2026-10-05. Current delivery revision
+acceptance is recorded separately below.
 
 Everything WardPulse itself controls is covered by tests: the edge in the Rust core, the phone's
 memory of what was spent, the notification and what it may say, the wake booked from the reset
@@ -2245,7 +2248,30 @@ notification access: a notification posted on the phone appeared on the watch, b
 `WearServices` rather than reposted. WardPulse's Wear app posts no notifications of its own, so
 it cannot create a duplicate itself.
 
-Rationale: an exhausted plan window is the one state the user is actively waiting to leave.
+**2026-11-02 delivery revision — Source candidate; HOST acceptance Pending:** Rust now exposes
+typed `alertConditions` through the existing JSON export. Phone Alert notifications are
+independent of Plan recovery, with secure default-on delivery choices preserving saved Off.
+Only configured threshold observations qualify; provider errors/status alone do not notify.
+Consumed markers are keyed by provider/account/resolved connection and allowance source/ID or
+budget period, never messages, labels or threshold values. Positive clear rearms; unknown,
+absent and disabled observations retain history. Muted/denied crossings are consumed without
+backlog. Claim failures suppress that condition and may retry; after a successful claim, plugin
+failure/crash can lose delivery until clear. Per-isolate serialization supplies no cross-isolate
+atomic claim: duplicates and bookkeeping races remain possible. Neither notification kind has
+an exactly-once guarantee, and stable IDs/tags/counts are not proof of no repost.
+
+Production composition now injects secure delivery stores, including the previously omitted
+recovery preference; scheduled foreground acceptance also invokes recovery work. Delivery
+preferences are resolved inside independent delivery steps, and failed recovery preference
+reads mute posting while retaining tracking/wake work. Startup, polling and default ON never
+request permission; explicit foreground Off→On may ask Android. Lock-screen privacy, existing
+watch/widget behavior and recovery tracking remain independent. No Wear dispatcher is added.
+New source regressions do not establish actual Android delivery. Full phone checks, real
+production Off/restart, timer/headless dispatch, artifact joins and original shade observations
+remain required HOST work after the complete execution retires; the planned SDK driver is a
+later commit. Historical device observations above apply only to their dated artifacts.
+
+Original Phase 15 rationale (historical): an exhausted plan window is the state the user was actively waiting to leave.
 Today the product says nothing when it ends — the ring simply reappears after the next poll,
 and the user learns it by opening the app they could not use. A recovery is worth an
 interruption; nothing else in the product is.
@@ -2256,7 +2282,7 @@ edge — `usedPercent >= 100` yesterday, usable now — that happens once, has n
 needs no rule to configure. It must not enter the alerts list, must not be counted by Wear's
 `Alerts: N`, and must not bring back a phone Alerts tab.
 
-Deliverables:
+Original deliverables (historical; delivery controls and guarantees are revised above):
 
 - the edge is computed in Rust from the windows the phone remembered as spent and the new
   snapshot, so the rule stays deterministic and testable and the shells stay transport-only;
@@ -2308,7 +2334,7 @@ does not survive between polls. Keys, not whole snapshots — phone preferences 
 platform-secure storage beside credentials, and a few window ids belong there in a way that
 kilobytes of usage data do not.
 
-Acceptance:
+Original acceptance goals (historical; exactly-once wording is not a current delivery guarantee):
 
 ```text
 a window crossing exhausted → usable notifies exactly once per crossing

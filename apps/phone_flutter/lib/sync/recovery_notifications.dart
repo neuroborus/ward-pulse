@@ -40,7 +40,7 @@ final class LocalRecoveryNotifier implements RecoveryNotifier {
   LocalRecoveryNotifier({FlutterLocalNotificationsPlugin? plugin})
     : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
-  /// One channel for the one thing this product interrupts a reader for.
+  /// Recovery delivery has its own channel, independent of threshold alerts.
   static const _channelId = 'wardpulse.plan_recovery';
   static const _channelName = 'Plan recovery';
   static const _channelDescription =
@@ -62,10 +62,8 @@ final class LocalRecoveryNotifier implements RecoveryNotifier {
           _channelName,
           channelDescription: _channelDescription,
           category: AndroidNotificationCategory.status,
-          // High, because this is the one thing the product interrupts for: a
-          // window the reader has been waiting on is usable again. At the
-          // default the notification would wait quietly in the shade, which is
-          // the opposite of what the phase decided it is worth.
+          // Preserve the recovery channel's existing importance: a window the
+          // reader had exhausted is usable again.
           importance: Importance.high,
           priority: Priority.high,
         ),
@@ -117,8 +115,8 @@ String recoveryNotificationTitle(PlanRecovery recovery) {
 const recoveryNotificationBody = 'Usable again.';
 
 /// The notification a window owns, so a second telling replaces the first
-/// rather than stacking beside it — which is what makes a repeat harmless, and
-/// a repeat is what the reporting order deliberately risks.
+/// rather than stacking beside it. A replacement can still alert again; a
+/// stable identity does not prove no repost or exactly-once delivery.
 ///
 /// Computed here rather than taken from `hashCode`: Dart does not promise a
 /// string keeps its hash between runs, and an id that drifted across launches

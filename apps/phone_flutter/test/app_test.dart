@@ -22,6 +22,9 @@ import 'package:ward_pulse_phone/providers/provider_connection_row.dart';
 import 'package:ward_pulse_phone/providers/providers_screen.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
+import 'package:ward_pulse_phone/settings/alert_notification_preferences.dart';
+import 'package:ward_pulse_phone/settings/settings_screen.dart';
+import 'package:ward_pulse_phone/sync/alert_notifications.dart';
 import 'package:ward_pulse_phone/settings/alert_percent_threshold_editor.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/settings/debug_data_preferences.dart';
@@ -36,6 +39,8 @@ import 'package:ward_pulse_phone/sync/recovery_notifications.dart';
 import 'package:ward_pulse_phone/sync/recovery_watchlist.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 import 'package:ward_pulse_phone/watchface/watchface_screen.dart';
+
+import 'connection_cache_test_support.dart';
 
 void main() {
   for (final brightness in Brightness.values) {
@@ -3072,6 +3077,246 @@ void main() {
     );
   });
 
+  testWidgets(
+    'alert delivery choice persists and only Off to On requests permission',
+    (tester) async {
+      final storage = FakeSecureStorage();
+      final store = SecureAlertNotificationPreferenceStore(storage: storage);
+      final recovery = _MemoryRecoveryNotificationStore()..enabled = false;
+      final notifier = _FakeAlertNotifier();
+      Widget app() => WardPulseApp(
+        repository: ValueDashboardRepository(DashboardSnapshot.empty()),
+        alertNotificationStore: store,
+        alertNotifier: notifier,
+        recoveryNotificationStore: recovery,
+      );
+      Future<void> openSettings() async {
+        await tester.tap(find.text('Settings'));
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.widgetWithText(SwitchListTile, 'Alert notifications'),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+      }
+
+      await tester.pumpWidget(app());
+      await tester.pumpAndSettle();
+      await openSettings();
+      final toggle = find.widgetWithText(SwitchListTile, 'Alert notifications');
+      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+      expect(notifier.asked, 0);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(await store.read(), isFalse);
+      storage.failRead = true;
+      final refresh =
+          tester
+              .widget<SettingsScreen>(find.byType(SettingsScreen))
+              .onRefresh();
+      await tester.pumpAndSettle();
+      await refresh;
+      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+      storage.failRead = false;
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(app());
+      await tester.pumpAndSettle();
+      await openSettings();
+      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(await store.read(), isTrue);
+      expect(recovery.enabled, isFalse);
+      expect(notifier.asked, 1);
+      expect(
+        find.text('Android is blocking WardPulse notifications'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'scheduled acceptance runs recovery and alerts independently of a failed preference',
+    (tester) async {
+      const key = AlertConditionKey(
+        provider: 'claude',
+        accountId: 'account-a',
+        connection: 'anthropic.plan',
+        target: AllowanceAlertTarget(
+          source: AllowanceSource.plan,
+          id: 'weekly',
+        ),
+      );
+      DashboardSnapshot source(AlertCondition condition) =>
+          DashboardSnapshot.fromJson({
+            ...DashboardSnapshot.empty().toJson(),
+            'alertConditions': [condition.toJson()],
+          });
+      final repository = _PublicationRepository(
+        source(const AlertCondition.clear(key: key)),
+      );
+      final recovery = _MemoryRecoveryWatchlistStore();
+      final preference = _MemoryRecoveryNotificationStore()..failRead = true;
+      final notifier = _FakeAlertNotifier();
+      final watch = _FakeWatchSyncService();
+      final widget = _FakePhoneWidgetSyncService();
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          applyAlertSettings: (snapshot, _) => snapshot,
+          syncScheduler: scheduler,
+          watchSyncService: watch,
+          phoneWidgetSyncService: widget,
+          recoveryWatchlistStore: recovery,
+          recoveryNotificationStore: preference,
+          alertConditionStore: _MemoryAlertConditions(),
+          alertNotifier: notifier,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(recovery.reads, 1);
+      repository.snapshot = source(
+        const AlertCondition.crossed(
+          key: key,
+          alert: AlertSummary(
+            severity: 'warning',
+            message: 'Configured threshold',
+          ),
+        ),
+      );
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(recovery.reads, 2);
+      expect(notifier.posts, [key]);
+      expect(watch.syncedSnapshots, hasLength(2));
+      expect(widget.syncedSnapshots, hasLength(2));
+    },
+  );
+
+  testWidgets(
+    'a read begun during a delivery toggle cannot replace the saved Off',
+    (tester) async {
+      final store = _DelayedAlertPreferenceStore();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: ValueDashboardRepository(DashboardSnapshot.empty()),
+          alertNotificationStore: store,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      final settings = tester.widget<SettingsScreen>(
+        find.byType(SettingsScreen),
+      );
+      store
+        ..holdRead = true
+        ..holdWrite = true;
+      final saving = settings.onAlertNotificationsChanged(false);
+      await store.writeStarted.future;
+      final refreshing = settings.onRefresh();
+      await store.readStarted.future;
+      store.releaseWrite.complete();
+      await saving;
+      store.releaseRead.complete();
+      await refreshing;
+      await tester.pumpAndSettle();
+      final toggle = find.widgetWithText(SwitchListTile, 'Alert notifications');
+      await tester.scrollUntilVisible(
+        toggle,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(store.enabled, isFalse);
+      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+    },
+  );
+
+  testWidgets(
+    'scheduled delivery retains the rules used for its accepted observations',
+    (tester) async {
+      const key = AlertConditionKey(
+        provider: 'claude',
+        accountId: 'account-a',
+        connection: 'anthropic.plan',
+        target: AllowanceAlertTarget(
+          source: AllowanceSource.plan,
+          id: 'weekly',
+        ),
+      );
+      DashboardSnapshot source(AlertCondition condition) =>
+          DashboardSnapshot.fromJson({
+            ...DashboardSnapshot.empty().toJson(),
+            'alertConditions': [condition.toJson()],
+          });
+      final clear = source(const AlertCondition.clear(key: key));
+      final repository = _PublicationRepository(clear);
+      final rules =
+          _MemoryAlertThresholdStore()
+            ..value = const AlertThresholdPreferences(
+              connections: {
+                'anthropic.plan': ConnectionAlertThresholds(
+                  plan: AlertPercentThreshold(at: 80),
+                ),
+              },
+            );
+      final notifier = _FakeAlertNotifier();
+      final markers = _MemoryAlertConditions();
+      final watch = _HoldingWatchSyncService();
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          applyAlertSettings: (snapshot, _) => snapshot,
+          alertThresholdStore: rules,
+          alertConditionStore: markers,
+          alertNotifier: notifier,
+          watchSyncService: watch,
+          syncScheduler: scheduler,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      repository.snapshot = source(
+        const AlertCondition.crossed(
+          key: key,
+          alert: AlertSummary(
+            severity: 'warning',
+            message: 'Configured threshold',
+          ),
+        ),
+      );
+      watch.hold = true;
+      scheduler.tick();
+      await tester.pump();
+      await watch.entered.future;
+      final nextLoad = Completer<DashboardSnapshot>();
+      repository.response = nextLoad.future;
+      rules.value = const AlertThresholdPreferences();
+      final refreshing =
+          tester
+              .widget<SettingsScreen>(find.byType(SettingsScreen))
+              .onRefresh();
+      await tester.pump();
+      final loadsBeforeRelease = repository.loads;
+      watch.release.complete();
+      await tester.pump();
+      final consumedBeforeNextLoad = markers.values[key];
+      watch.hold = false;
+      nextLoad.complete(clear);
+      await refreshing;
+      await tester.pumpAndSettle();
+      expect(loadsBeforeRelease, 3);
+      expect(consumedBeforeNextLoad, isFalse);
+      expect(notifier.posts, isEmpty);
+    },
+  );
+
   testWidgets('hides mock data outside debug builds', (tester) async {
     await tester.pumpWidget(
       WardPulseApp(
@@ -3178,9 +3423,13 @@ DashboardSnapshot _alertTestSnapshot({
 class _MemoryRecoveryNotificationStore
     implements RecoveryNotificationPreferenceStore {
   bool enabled = true;
+  bool failRead = false;
 
   @override
-  Future<bool> read() async => enabled;
+  Future<bool> read() async {
+    if (failRead) throw StateError('Preference unavailable.');
+    return enabled;
+  }
 
   @override
   Future<void> write(bool value) async => enabled = value;
@@ -3202,12 +3451,69 @@ class _BlockedRecoveryNotifier implements RecoveryNotifier {
 
 class _MemoryRecoveryWatchlistStore implements RecoveryWatchlistStore {
   List<WindowKey> keys = const [];
+  int reads = 0;
 
   @override
-  Future<List<WindowKey>> read() async => keys;
+  Future<List<WindowKey>> read() async {
+    reads++;
+    return keys;
+  }
 
   @override
   Future<void> write(List<WindowKey> value) async => keys = value;
+}
+
+class _DelayedAlertPreferenceStore implements AlertNotificationPreferenceStore {
+  bool enabled = true;
+  bool holdRead = false;
+  bool holdWrite = false;
+  final readStarted = Completer<void>();
+  final writeStarted = Completer<void>();
+  final releaseRead = Completer<void>();
+  final releaseWrite = Completer<void>();
+  @override
+  Future<bool> read() async {
+    final captured = enabled;
+    if (holdRead) {
+      readStarted.complete();
+      await releaseRead.future;
+    }
+    return captured;
+  }
+
+  @override
+  Future<void> write(bool value) async {
+    if (holdWrite) {
+      writeStarted.complete();
+      await releaseWrite.future;
+    }
+    enabled = value;
+  }
+}
+
+class _MemoryAlertConditions implements AlertConditionStore {
+  final values = <AlertConditionKey, bool>{};
+  @override
+  Future<bool> read(AlertConditionKey key) async => values[key] ?? false;
+  @override
+  Future<void> write(AlertConditionKey key, bool value) async =>
+      values[key] = value;
+}
+
+class _FakeAlertNotifier implements AlertNotifier {
+  int asked = 0;
+  final posts = <AlertConditionKey>[];
+  @override
+  Future<bool> canPost() async => true;
+  @override
+  Future<bool> requestPermission() async {
+    asked++;
+    return false;
+  }
+
+  @override
+  Future<void> notify(AlertConditionKey key, {required String title}) async =>
+      posts.add(key);
 }
 
 class _FakeWatchSyncService implements WatchSyncService {
@@ -3236,6 +3542,30 @@ class _FakeWatchSyncService implements WatchSyncService {
   @override
   void unbindWatchRefreshListener() {
     refreshHandler = null;
+  }
+}
+
+class _HoldingWatchSyncService extends _FakeWatchSyncService {
+  bool hold = false;
+  final entered = Completer<void>();
+  final release = Completer<void>();
+  @override
+  Future<void> sync(
+    DashboardSnapshot snapshot,
+    WatchRingPreferences preferences, {
+    DateTime? manualRefreshAnchorAt,
+    bool mockDataMode = false,
+  }) async {
+    if (hold) {
+      if (!entered.isCompleted) entered.complete();
+      await release.future;
+    }
+    await super.sync(
+      snapshot,
+      preferences,
+      manualRefreshAnchorAt: manualRefreshAnchorAt,
+      mockDataMode: mockDataMode,
+    );
   }
 }
 

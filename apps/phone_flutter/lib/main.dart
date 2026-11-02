@@ -4,12 +4,15 @@ import 'package:flutter/widgets.dart';
 import 'app/ward_pulse_app.dart';
 import 'dashboard/dashboard_repository.dart';
 import 'dashboard/phone_live_bindings.dart';
+import 'settings/alert_notification_preferences.dart';
 import 'settings/alert_threshold_preferences.dart';
+import 'settings/recovery_notification_preferences.dart';
 import 'settings/debug_data_preferences.dart';
 import 'settings/refresh_interval_preferences.dart';
 import 'settings/watch_ring_preferences.dart';
 import 'widget/phone_widget_preferences.dart';
 import 'widget/phone_widget_sync.dart';
+import 'sync/alert_notifications.dart';
 import 'sync/headless_provider_sync.dart';
 import 'sync/provider_sync_scheduler.dart';
 import 'sync/recovery_notifications.dart';
@@ -32,10 +35,14 @@ Future<void> main() async {
       phoneWidgetPreferenceStore: SecurePhoneWidgetPreferenceStore(),
       phoneWidgetSyncService: HomeWidgetPhoneWidgetSyncService(),
       alertThresholdStore: SecureAlertThresholdPreferenceStore(),
+      alertNotificationStore: SecureAlertNotificationPreferenceStore(),
+      alertConditionStore: SecureAlertConditionStore(),
+      alertNotifier: LocalAlertNotifier(),
       syncScheduler: TimerProviderSyncScheduler(),
       debugDataAvailable: kDebugMode,
       debugDataPreferenceStore: debugDataPreferenceStore,
       recoveryWatchlistStore: SecureRecoveryWatchlistStore(),
+      recoveryNotificationStore: SecureRecoveryNotificationPreferenceStore(),
       recoveryNotifier: LocalRecoveryNotifier(),
       recoveryWake: const WorkmanagerRecoveryWakeScheduler(),
       repository:

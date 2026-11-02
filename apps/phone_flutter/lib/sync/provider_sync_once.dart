@@ -1,20 +1,25 @@
 import 'dart:developer' as developer;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../dashboard/apply_alert_settings.dart';
 import '../dashboard/phone_live_bindings.dart';
+import '../settings/alert_notification_preferences.dart';
 import '../settings/alert_threshold_preferences.dart';
+import '../settings/debug_data_preferences.dart';
 import '../settings/recovery_notification_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
 import '../widget/phone_widget_preferences.dart';
 import '../widget/phone_widget_sync.dart';
+import 'alert_notifications.dart';
 import 'recovery_notifications.dart';
 import 'recovery_wake.dart';
 import 'recovery_watchlist.dart';
 import 'watch_sync_service.dart';
 
 Future<bool> _alwaysCurrent() async => true;
+Future<void> _noAlertDelivery() async {}
 
 typedef ProviderSyncWorkLoader = Future<ProviderSyncWork> Function();
 typedef ProviderSyncFailureLogger =
@@ -26,12 +31,14 @@ final class ProviderSyncWork {
     required this.syncWatch,
     required this.syncWidget,
     required this.syncRecoveries,
+    this.syncAlerts = _noAlertDelivery,
     this.isCurrent = _alwaysCurrent,
   });
 
   final Future<void> Function() syncWatch;
   final Future<void> Function() syncWidget;
   final Future<void> Function() syncRecoveries;
+  final Future<void> Function() syncAlerts;
   final Future<bool> Function() isCurrent;
 }
 
@@ -67,6 +74,9 @@ Future<void> providerSyncOnce({
   await _attemptProviderSyncStep('recovery', () async {
     if (await work.isCurrent()) await work.syncRecoveries();
   }, logFailure);
+  await _attemptProviderSyncStep('alerts', () async {
+    if (await work.isCurrent()) await work.syncAlerts();
+  }, logFailure);
 }
 
 Future<ProviderSyncWork> _loadProviderSyncWork() async {
@@ -74,8 +84,6 @@ Future<ProviderSyncWork> _loadProviderSyncWork() async {
   final ringPreferences = await SecureWatchRingPreferenceStore().read();
   final widgetPreferences = await SecurePhoneWidgetPreferenceStore().read();
   final alertThresholds = await SecureAlertThresholdPreferenceStore().read();
-  final notifyOnRecovery =
-      await SecureRecoveryNotificationPreferenceStore().read();
   final snapshot = applyUserAlertSettings(
     await live.repository.load(),
     alertThresholds,
@@ -95,14 +103,42 @@ Future<ProviderSyncWork> _loadProviderSyncWork() async {
           snapshot,
           widgetPreferences,
         ),
-    syncRecoveries:
-        () => syncPlanRecoveries(
+    syncRecoveries: () async {
+      var notifications = false;
+      try {
+        notifications =
+            await SecureRecoveryNotificationPreferenceStore().read();
+      } catch (_) {
+        // Delivery preferences cannot block publication or recovery tracking.
+      }
+      if (!await live.repository.isSnapshotCurrent(snapshot)) return;
+      await syncPlanRecoveries(
+        snapshot,
+        SecureRecoveryWatchlistStore(),
+        LocalRecoveryNotifier(),
+        const WorkmanagerRecoveryWakeScheduler(),
+        notifications: notifications,
+        rethrowFailures: true,
+      );
+    },
+    syncAlerts:
+        () => AlertNotificationDelivery(
+          preferences: SecureAlertNotificationPreferenceStore(),
+          conditions: SecureAlertConditionStore(),
+          notifier: LocalAlertNotifier(),
+        ).sync(
           snapshot,
-          SecureRecoveryWatchlistStore(),
-          LocalRecoveryNotifier(),
-          const WorkmanagerRecoveryWakeScheduler(),
-          notifications: notifyOnRecovery,
-          rethrowFailures: true,
+          isCurrent: () async {
+            if (kDebugMode &&
+                await SecureDebugDataPreferenceStore().readMockDataEnabled())
+              return false;
+            // Rules can change while a headless load or bookkeeping is awaiting.
+            // Defer this observation until work captures the new effective rules.
+            final currentRules =
+                await SecureAlertThresholdPreferenceStore().read();
+            if (currentRules.encode() != alertThresholds.encode()) return false;
+            return live.repository.isSnapshotCurrent(snapshot);
+          },
         ),
   );
 }

@@ -29,6 +29,9 @@ void main() {
               syncRecoveries: () async {
                 attempts.add('recovery');
               },
+              syncAlerts: () async {
+                attempts.add('alerts');
+              },
             ),
       );
       expect(attempts, ['watch']);
@@ -50,6 +53,9 @@ void main() {
               },
               syncRecoveries: () async {
                 attempts.add('recovery');
+              },
+              syncAlerts: () async {
+                attempts.add('alerts');
               },
             ),
       );
@@ -82,24 +88,27 @@ void main() {
             syncRecoveries: () async {
               attempts.add('recovery');
             },
+            syncAlerts: () async {
+              attempts.add('alerts');
+            },
           ),
       logFailure: (step, error, stackTrace) {
         failures.add((step: step, error: error, stackTrace: stackTrace));
       },
     );
 
-    expect(attempts, ['watch', 'widget', 'recovery']);
+    expect(attempts, ['watch', 'widget', 'recovery', 'alerts']);
     expect(failures, hasLength(1));
     expect(failures.single.step, 'watch');
     expect(failures.single.error, isA<MissingPluginException>());
     expect(failures.single.stackTrace.toString(), isNotEmpty);
   });
 
-  for (final failedStep in ['watch', 'widget']) {
+  for (final failedStep in ['watch', 'widget', 'recovery', 'alerts']) {
     test(
       '$failedStep failure leaves every step attempted exactly once',
       () async {
-        final attempts = {'watch': 0, 'widget': 0, 'recovery': 0};
+        final attempts = {'watch': 0, 'widget': 0, 'recovery': 0, 'alerts': 0};
         final failures = <_RecordedFailure>[];
 
         Future<void> attempt(String step) async {
@@ -115,13 +124,14 @@ void main() {
                 syncWatch: () => attempt('watch'),
                 syncWidget: () => attempt('widget'),
                 syncRecoveries: () => attempt('recovery'),
+                syncAlerts: () => attempt('alerts'),
               ),
           logFailure: (step, error, stackTrace) {
             failures.add((step: step, error: error, stackTrace: stackTrace));
           },
         );
 
-        expect(attempts, {'watch': 1, 'widget': 1, 'recovery': 1});
+        expect(attempts, {'watch': 1, 'widget': 1, 'recovery': 1, 'alerts': 1});
         expect(failures, hasLength(1));
         expect(failures.single.step, failedStep);
         expect(failures.single.error, isA<StateError>());

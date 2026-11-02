@@ -29,6 +29,8 @@ class SettingsScreen extends StatefulWidget {
     required this.onSyncWatch,
     required this.recoveryNotificationsEnabled,
     required this.onRecoveryNotificationsChanged,
+    required this.alertNotificationsEnabled,
+    required this.onAlertNotificationsChanged,
     required this.debugDataAvailable,
     required this.mockDataEnabled,
     required this.onMockDataEnabledChanged,
@@ -39,6 +41,8 @@ class SettingsScreen extends StatefulWidget {
 
   /// Whether a plan window coming back may interrupt the reader.
   final bool recoveryNotificationsEnabled;
+  final bool alertNotificationsEnabled;
+  final Future<bool> Function(bool enabled) onAlertNotificationsChanged;
 
   /// Turning it on is also where Android is asked for the permission: only the
   /// foreground can ask, and the poll that posts runs without an Activity.
@@ -61,6 +65,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  bool _settingNotification = false;
   bool _isSyncing = false;
   String? _syncResult;
   int? _dragRefreshMinutes;
@@ -119,9 +124,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _setRecoveryNotifications(bool value) async {
+  Future<void> _setNotification(
+    bool value,
+    Future<bool> Function(bool) save,
+  ) async {
+    setState(() => _settingNotification = true);
     try {
-      final granted = await widget.onRecoveryNotificationsChanged(value);
+      final granted = await save(value);
       if (value && !granted && mounted) {
         // The reader said yes and Android said no; leaving the switch on
         // without a word would promise an interruption that cannot arrive.
@@ -139,6 +148,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         );
       }
+    } finally {
+      if (mounted) setState(() => _settingNotification = false);
     }
   }
 
@@ -258,14 +269,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const _SettingsSectionHeader(title: 'Notifications'),
         Card(
           child: SwitchListTile(
+            secondary: const Icon(Icons.notifications_outlined),
+            title: const Text('Alert notifications'),
+            subtitle: const Text(
+              'Your configured usage and budget thresholds · rules stay on Providers',
+            ),
+            value: widget.alertNotificationsEnabled,
+            onChanged:
+                _settingNotification
+                    ? null
+                    : (value) => _setNotification(
+                      value,
+                      widget.onAlertNotificationsChanged,
+                    ),
+          ),
+        ),
+        Card(
+          child: SwitchListTile(
             secondary: const Icon(Icons.notifications_active_outlined),
             title: const Text('Plan recovery'),
             subtitle: const Text(
-              'Tells you when a plan window you had run out of is usable again '
-              '· the only thing WardPulse interrupts for',
+              'Tells you when a plan window you had run out of is usable again',
             ),
             value: widget.recoveryNotificationsEnabled,
-            onChanged: _setRecoveryNotifications,
+            onChanged:
+                _settingNotification
+                    ? null
+                    : (value) => _setNotification(
+                      value,
+                      widget.onRecoveryNotificationsChanged,
+                    ),
           ),
         ),
         const SizedBox(height: 16),

@@ -113,11 +113,20 @@ Do not clear credentials or reset pairing as the first response to a delayed sum
 
 Widget choices are separate from Watchface. See [Home widget](/guide/widget).
 
+## Alert notifications do not appear
+
+Check your enabled threshold rules on **Providers**, **Settings → Notifications → Alert
+notifications**, and Android's app/channel notification settings for WardPulse. Provider errors
+alone are not threshold notifications. Repeated crossed reports are suppressed, including after
+a restart or a rule edit that remains crossed. Unknown/missing reports do not reset this.
+A report showing the condition clear is needed before a later crossing can notify again.
+Crossings seen while muted or denied are not delivered as a backlog when you enable delivery.
+
 ## Plan recovery notifications do not appear
 
 Check **Settings → Notifications → Plan recovery** and Android's notification permission for
-WardPulse. This feature is for an exhausted plan becoming usable again; it does not send every
-Dashboard threshold alert as a notification. It needs a later report to detect recovery, so
+WardPulse. This independent feature is for an exhausted plan becoming usable again; use
+**Alert notifications** for configured thresholds. It needs a later report to detect recovery, so
 its delivery is not an exact reset alarm.
 
 ## Asking for help

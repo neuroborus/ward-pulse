@@ -15,12 +15,14 @@ import '../providers/credential_dialog.dart';
 import '../providers/provider_connection.dart';
 import '../providers/provider_credential_store.dart';
 import '../providers/providers_screen.dart';
+import '../settings/alert_notification_preferences.dart';
 import '../settings/alert_threshold_preferences.dart';
 import '../settings/settings_screen.dart';
 import '../settings/debug_data_preferences.dart';
 import '../settings/recovery_notification_preferences.dart';
 import '../settings/refresh_interval_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
+import '../sync/alert_notifications.dart';
 import '../sync/headless_provider_sync.dart';
 import '../sync/manual_refresh_window.dart';
 import '../sync/provider_sync_scheduler.dart';
@@ -60,6 +62,10 @@ class WardPulseApp extends StatelessWidget {
     this.recoveryWake = const DisabledRecoveryWakeScheduler(),
     this.recoveryNotificationStore =
         const DefaultRecoveryNotificationPreferenceStore(),
+    this.alertNotificationStore =
+        const DefaultAlertNotificationPreferenceStore(),
+    this.alertConditionStore = const DisabledAlertConditionStore(),
+    this.alertNotifier = const SilentAlertNotifier(),
   });
 
   final DashboardRepository repository;
@@ -81,6 +87,9 @@ class WardPulseApp extends StatelessWidget {
   final RecoveryNotifier recoveryNotifier;
   final RecoveryWakeScheduler recoveryWake;
   final RecoveryNotificationPreferenceStore recoveryNotificationStore;
+  final AlertNotificationPreferenceStore alertNotificationStore;
+  final AlertConditionStore alertConditionStore;
+  final AlertNotifier alertNotifier;
 
   @override
   Widget build(BuildContext context) {
@@ -109,6 +118,9 @@ class WardPulseApp extends StatelessWidget {
         recoveryNotifier: recoveryNotifier,
         recoveryWake: recoveryWake,
         recoveryNotificationStore: recoveryNotificationStore,
+        alertNotificationStore: alertNotificationStore,
+        alertConditionStore: alertConditionStore,
+        alertNotifier: alertNotifier,
       ),
     );
   }
@@ -136,6 +148,9 @@ class DashboardHost extends StatefulWidget {
     required this.recoveryNotifier,
     required this.recoveryWake,
     required this.recoveryNotificationStore,
+    required this.alertNotificationStore,
+    required this.alertConditionStore,
+    required this.alertNotifier,
   });
 
   final DashboardRepository repository;
@@ -158,6 +173,10 @@ class DashboardHost extends StatefulWidget {
   final RecoveryNotifier recoveryNotifier;
   final RecoveryWatchlistStore recoveryWatchlistStore;
 
+  final AlertNotificationPreferenceStore alertNotificationStore;
+  final AlertConditionStore alertConditionStore;
+  final AlertNotifier alertNotifier;
+
   @override
   State<DashboardHost> createState() => _DashboardHostState();
 }
@@ -173,6 +192,8 @@ class _DashboardHostState extends State<DashboardHost> {
   var _surfaceRevision = 0;
   late Future<DashboardSnapshot> _snapshot = _loadSnapshot();
   DashboardSnapshot? _currentSnapshot;
+  // The effective rules that produced this accepted snapshot's observations.
+  AlertThresholdPreferences? _acceptedAlertThresholds;
   // The accepted repository input, before applying phone-local alert rules.
   DashboardSnapshot? _repositorySnapshot;
   final _reportingUpdates = <ProviderConnectionId, ConnectionReportingUpdate>{};
@@ -192,6 +213,9 @@ class _DashboardHostState extends State<DashboardHost> {
   Future<void> _snapshotSettingsWork = Future<void>.value();
   bool _mockDataEnabled = false;
   bool _recoveryNotificationsEnabled = true;
+  bool _alertNotificationsEnabled = true;
+  var _alertNotificationRevision = 0;
+  var _recoveryNotificationRevision = 0;
   int _selectedIndex = 0;
   bool _widgetNavigationPending = false;
   ({String provider, int token})? _reveal;
@@ -307,14 +331,39 @@ class _DashboardHostState extends State<DashboardHost> {
   }
 
   Future<void> _readRecoveryNotificationPreference() async {
+    final revision = _recoveryNotificationRevision;
     try {
-      _recoveryNotificationsEnabled =
-          await widget.recoveryNotificationStore.read();
+      final enabled = await widget.recoveryNotificationStore.read();
+      if (revision == _recoveryNotificationRevision)
+        _recoveryNotificationsEnabled = enabled;
     } catch (_) {
-      // A store that will not answer leaves the switch where it defaults, on:
-      // the feature exists to interrupt, and Android still gates the post.
-      _recoveryNotificationsEnabled = true;
+      // Keep the last known choice. Delivery reads independently and fails muted.
     }
+  }
+
+  Future<void> _readAlertNotificationPreference() async {
+    final revision = _alertNotificationRevision;
+    try {
+      final enabled = await widget.alertNotificationStore.read();
+      if (revision == _alertNotificationRevision)
+        _alertNotificationsEnabled = enabled;
+    } catch (_) {
+      // Never replace a known Off or persist a fallback on a failed read.
+    }
+  }
+
+  Future<bool> _updateAlertNotifications(bool enabled) async {
+    final wasEnabled = _alertNotificationsEnabled;
+    final revision = ++_alertNotificationRevision;
+    await widget.alertNotificationStore.write(enabled);
+    if (revision == _alertNotificationRevision) {
+      // Invalidate reads that began while the write was awaiting storage too.
+      _alertNotificationRevision++;
+      if (mounted) setState(() => _alertNotificationsEnabled = enabled);
+    }
+    if (enabled && !wasEnabled && mounted)
+      return widget.alertNotifier.requestPermission();
+    return true;
   }
 
   /// Writes the switch, and asks Android for the permission when it goes on.
@@ -324,15 +373,16 @@ class _DashboardHostState extends State<DashboardHost> {
   /// Answers whether a recovery may actually reach the reader now: the switch
   /// is the reader's wish, and Android has the last word on it.
   Future<bool> _updateRecoveryNotifications(bool enabled) async {
+    final wasEnabled = _recoveryNotificationsEnabled;
+    final revision = ++_recoveryNotificationRevision;
     await widget.recoveryNotificationStore.write(enabled);
-    final granted =
-        enabled ? await widget.recoveryNotifier.requestPermission() : true;
-    if (mounted) {
-      setState(() {
-        _recoveryNotificationsEnabled = enabled;
-      });
+    if (revision == _recoveryNotificationRevision) {
+      _recoveryNotificationRevision++;
+      if (mounted) setState(() => _recoveryNotificationsEnabled = enabled);
     }
-    return granted;
+    if (enabled && !wasEnabled && mounted)
+      return widget.recoveryNotifier.requestPermission();
+    return true;
   }
 
   Future<void> _readDebugDataPreference(int revision) async {
@@ -432,17 +482,20 @@ class _DashboardHostState extends State<DashboardHost> {
         _alertThresholds = value;
         if (publish && withAlerts != null) {
           _currentSnapshot = withAlerts;
+          _acceptedAlertThresholds = value;
         }
       });
     } else {
       _alertThresholds = value;
       if (publish && withAlerts != null) {
         _currentSnapshot = withAlerts;
+        _acceptedAlertThresholds = value;
       }
     }
     if (publish && withAlerts != null) {
       unawaited(_syncWatch(withAlerts));
       unawaited(_syncPhoneWidget(withAlerts));
+      unawaited(_syncAlerts(withAlerts));
     }
   });
 
@@ -465,6 +518,7 @@ class _DashboardHostState extends State<DashboardHost> {
     }
     _repositorySnapshot = repositorySnapshot;
     _currentSnapshot = snapshot;
+    _acceptedAlertThresholds = _alertThresholds;
     return snapshot;
   });
 
@@ -487,6 +541,7 @@ class _DashboardHostState extends State<DashboardHost> {
       await _serializeSnapshotSettings(_readAlertThresholds);
       await _readDebugDataPreference(revision);
       await _readRecoveryNotificationPreference();
+      await _readAlertNotificationPreference();
       // Rescheduling before the load keeps the next tick a full interval away, so
       // no connection is polled faster than its floor, and a failed load still
       // retries on the next tick. Headless WorkManager uses ≥15 minutes.
@@ -496,6 +551,7 @@ class _DashboardHostState extends State<DashboardHost> {
       unawaited(_syncRecoveries(snapshot));
       unawaited(_syncWatch(snapshot));
       unawaited(_syncPhoneWidget(snapshot));
+      unawaited(_syncAlerts(snapshot));
       return snapshot;
     } catch (_) {
       // A failed foreground load leaves an error-only Dashboard. Successful
@@ -503,6 +559,7 @@ class _DashboardHostState extends State<DashboardHost> {
       if (mounted && revision == _loadRevision) {
         _repositorySnapshot = null;
         _currentSnapshot = null;
+        _acceptedAlertThresholds = null;
       }
       rethrow;
     }
@@ -587,8 +644,16 @@ class _DashboardHostState extends State<DashboardHost> {
   Future<void> _syncRecoveries(DashboardSnapshot snapshot) async {
     try {
       final revision = _surfaceRevision;
+      var notifications = false;
+      try {
+        notifications = await widget.recoveryNotificationStore.read();
+      } catch (_) {
+        // Preference failure mutes posting, not tracking or wake scheduling.
+      }
       if (!await widget.repository.isSnapshotCurrent(snapshot) ||
-          revision != _surfaceRevision)
+          !mounted ||
+          revision != _surfaceRevision ||
+          !identical(snapshot, _currentSnapshot))
         return;
       await syncPlanRecoveries(
         snapshot,
@@ -596,11 +661,37 @@ class _DashboardHostState extends State<DashboardHost> {
         widget.recoveryNotifier,
         widget.recoveryWake,
         mockData: _mockDataEnabled,
-        notifications: _recoveryNotificationsEnabled,
+        notifications: notifications,
       );
     } catch (_) {
       // Recovery bookkeeping cannot publish retired data or block the dashboard.
     }
+  }
+
+  Future<void> _syncAlerts(DashboardSnapshot snapshot) async {
+    final revision = _surfaceRevision;
+    final rules = _acceptedAlertThresholds;
+    bool accepted() =>
+        rules != null &&
+        mounted &&
+        !_mockDataEnabled &&
+        revision == _surfaceRevision &&
+        identical(snapshot, _currentSnapshot) &&
+        identical(rules, _alertThresholds);
+    await AlertNotificationDelivery(
+      preferences: widget.alertNotificationStore,
+      conditions: widget.alertConditionStore,
+      notifier: widget.alertNotifier,
+    ).sync(
+      snapshot,
+      mockData: _mockDataEnabled,
+      isAccepted: accepted,
+      isCurrent: () async {
+        if (!accepted()) return false;
+        final current = await widget.repository.isSnapshotCurrent(snapshot);
+        return current && accepted();
+      },
+    );
   }
 
   Future<void> _scheduleAutoSync(Duration interval) async {
@@ -626,6 +717,8 @@ class _DashboardHostState extends State<DashboardHost> {
       }
       await _syncWatch(snapshot);
       await _syncPhoneWidget(snapshot);
+      await _syncRecoveries(snapshot);
+      await _syncAlerts(snapshot);
     } on DashboardLoadException catch (failure) {
       // Keep successful data, but an error-only dashboard must follow the most
       // recent guarded result rather than the exception from its first load.
@@ -643,6 +736,7 @@ class _DashboardHostState extends State<DashboardHost> {
           setState(() {
             _repositorySnapshot = null;
             _currentSnapshot = null;
+            _acceptedAlertThresholds = null;
             _snapshot = failed;
           });
         }
@@ -685,6 +779,7 @@ class _DashboardHostState extends State<DashboardHost> {
           } else {
             _repositorySnapshot = null;
             _currentSnapshot = null;
+            _acceptedAlertThresholds = null;
             final failed = Future<DashboardSnapshot>.error(
               const DashboardLoadException(),
             );
@@ -705,6 +800,7 @@ class _DashboardHostState extends State<DashboardHost> {
     setState(() {
       _repositorySnapshot = null;
       _currentSnapshot = null;
+      _acceptedAlertThresholds = null;
       _mockDataEnabled = value;
       _snapshot = _loadSnapshot();
     });
@@ -888,6 +984,7 @@ class _DashboardHostState extends State<DashboardHost> {
     _surfaceRevision++;
     _repositorySnapshot = null;
     _currentSnapshot = null;
+    _acceptedAlertThresholds = null;
     widget.repository.invalidate();
     _reload(forCredentialChange: true);
   }
@@ -1002,6 +1099,8 @@ class _DashboardHostState extends State<DashboardHost> {
                 onSyncWatch: _onSettingsSyncWatch,
                 recoveryNotificationsEnabled: _recoveryNotificationsEnabled,
                 onRecoveryNotificationsChanged: _updateRecoveryNotifications,
+                alertNotificationsEnabled: _alertNotificationsEnabled,
+                onAlertNotificationsChanged: _updateAlertNotifications,
                 debugDataAvailable: widget.debugDataAvailable,
                 mockDataEnabled: _mockDataEnabled,
                 onMockDataEnabledChanged: _updateMockDataEnabled,

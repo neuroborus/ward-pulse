@@ -61,11 +61,9 @@ final class DisabledRecoveryWatchlistStore implements RecoveryWatchlistStore {
 ///
 /// **Notify first, remember second.** Remembering first would lose a recovery
 /// for good if the process died in between: the key is gone and no later poll
-/// can see the edge. Notifying first risks a repeat instead, and a repeat costs
-/// nothing — the notification is keyed by the window and replaces its own
-/// earlier copy. The same property is why the two paths need no lock when they
-/// overlap: they read the same list, report the same windows, and write the
-/// same answer.
+/// can see the edge. Notifying first risks a repeat instead. Stable IDs replace
+/// the visible post but do not prevent another sound or prove no repost.
+/// Overlapping isolates can race reads/writes; recovery remains best effort.
 ///
 /// [notifications] off silences the telling and nothing else: the windows are
 /// still tracked and the wake is still booked, because the switch turns off an

@@ -47,6 +47,28 @@ fresh reporting need network access. Removed or replaced connections cannot reus
 These displays can update at different times. The two-hour rule applies to Wear, not the
 phone or widget, and a watch display may update after that time rather than exactly then.
 
+## Alert notifications
+
+1. On **Providers**, configure the usage or budget alert thresholds you want.
+2. Open **Settings → Notifications → Alert notifications** to control delivery.
+3. Allow notifications for WardPulse in Android's app settings. Turning the switch off and
+   back on in WardPulse may also open Android's permission request.
+
+Alert notifications and **Plan recovery** are independent and start on unless you saved Off.
+Startup and polling do not open a permission request. Android can block delivery even while a
+WardPulse switch is on; a denied request keeps your saved choice and reports the block.
+
+An enabled threshold can notify when first observed crossed. Unchanged crossings are suppressed
+across app restarts; a report showing the condition clear rearms it. Missing or unknown data does
+not rearm it. Changing a rule or disabling/re-enabling it while it remains crossed does not
+replay the notification. Crossings seen while muted or denied are not queued for later delivery.
+Provider errors alone do not trigger these notifications. Delivery is best effort: a failed
+attempt can be lost, and overlapping background/foreground work can repeat an attempt.
+
+Turning either delivery switch off leaves reporting, in-app alerts, watch/widget updates and
+recovery tracking active. Notification text contains only the provider family, window or budget
+name, and generic threshold/recovery copy. Check Android's lock-screen settings for visibility.
+
 ## Plan recovery notifications
 
 1. Open **Settings → Notifications**.
@@ -54,12 +76,13 @@ phone or widget, and a watch display may update after that time rather than exac
 3. If Android requests notification permission, allow it to receive those notifications.
 
 This feature tells you when a plan window that was exhausted becomes usable again. It is
-WardPulse's notification feature; Dashboard threshold alerts are configured separately in
-Providers. Detection depends on reporting and scheduling, so it is not an exact reset alarm.
+independent of Alert notifications and needs no threshold rule. Detection depends on reporting
+and scheduling, so it is not an exact reset alarm or an exactly-once delivery guarantee.
 
 If Android blocks notifications, WardPulse reports that. Enable notifications for WardPulse in
 Android's app settings, then return to the toggle. Reporting and the in-app Dashboard remain
 available without notification permission.
+Android may bridge phone notifications to a paired watch; WardPulse does not guarantee mirroring.
 
 For delayed watch delivery, unchanged figures or failed reports, see
 [Troubleshooting](/guide/troubleshooting).

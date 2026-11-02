@@ -9,12 +9,14 @@ home-widget metrics are on **Widget**.
 | Section | What it shows or changes |
 | --- | --- |
 | Refresh | Refresh interval while open and approximate background cadence. |
-| Notifications | Plan recovery notifications for an exhausted window becoming usable. |
+| Notifications | Independent Alert notifications and Plan recovery switches. |
 | Diagnostics | Sync timestamp/status and the next Watch summary, when a summary is available. |
 | Help | User guide in your external browser. |
 | Legal | Independent product information. |
 
 Follow [Sync and notifications](/guide/sync) to set the cadence or notification permission.
+Both notification switches start on and preserve your saved choice. Alert rules remain on
+Providers; turning delivery off does not remove those rules or the in-app alerts.
 Diagnostics helps you compare the phone's displayed data and watch summary. It does not
 guarantee that the watch has already received an update.
 
@@ -26,6 +28,7 @@ WardPulse stores credentials encrypted in secure phone storage and uses them to 
 requests directly to the matching provider. A saved secret is not shown back in the credential
 field. The app also keeps each connection's last successful usage data for recovery; those
 records contain no credentials, prompts or raw provider responses.
+Notification choices and remembered threshold crossings also stay in secure phone storage.
 
 WardPulse does not operate an application server or send usage telemetry to its developer.
 The watch receives compact summaries, not your credentials or raw reports. Google Play services
