@@ -11,6 +11,8 @@ import 'package:ward_pulse_phone/sync/recovery_notifications.dart';
 import 'connection_cache_test_support.dart';
 
 void main() {
+  setUp(AndroidFlutterLocalNotificationsPlugin.registerWith);
+
   testWidgets(
     'passive Android status and settings bypass readiness and attempts',
     (tester) async {
