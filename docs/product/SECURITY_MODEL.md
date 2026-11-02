@@ -214,8 +214,11 @@ delivery. Mock data neither posts synthetic alerts nor changes production consum
 
 Both switches affect delivery only. Dashboard/Wear alerts, status, watch/widget publication,
 recovery tracking and reset-wake scheduling remain independent. Recovery preference failures
-mute posting while retaining tracking and wake work. The Wear app adds no dispatcher; Android
-may bridge phone notifications, without a delivery or mirroring guarantee.
+mute posting while retaining tracking and wake work. Foreground callers recheck their current
+delivery choices after repository validation. Alert choice gates posting only; recovery samples
+it when entering tracking/delivery work. These checks do not make later awaits, storage or
+plugin delivery atomic. The Wear app adds no dispatcher; Android may bridge phone notifications,
+without a delivery or mirroring guarantee.
 
 ## Rust Core Rule
 

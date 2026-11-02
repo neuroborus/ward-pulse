@@ -7,6 +7,7 @@ import '../dashboard/apply_alert_settings.dart';
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_repository.dart';
 import '../dashboard/dashboard_screen.dart';
+import '../dashboard/plan_recoveries.dart';
 import '../dashboard/provider_status_color.dart';
 import '../dashboard/provider_status_severity.dart';
 import '../providers/claude_account_service.dart';
@@ -61,6 +62,8 @@ class WardPulseApp extends StatelessWidget {
     this.recoveryWatchlistStore = const DisabledRecoveryWatchlistStore(),
     this.recoveryNotifier = const SilentRecoveryNotifier(),
     this.recoveryWake = const DisabledRecoveryWakeScheduler(),
+    this.readPlanRecoveries = planRecoveries,
+    this.readExhaustedWindows = exhaustedWindows,
     this.recoveryNotificationStore =
         const DefaultRecoveryNotificationPreferenceStore(),
     this.alertNotificationStore =
@@ -88,6 +91,8 @@ class WardPulseApp extends StatelessWidget {
   final RecoveryWatchlistStore recoveryWatchlistStore;
   final RecoveryNotifier recoveryNotifier;
   final RecoveryWakeScheduler recoveryWake;
+  final ReadPlanRecoveries readPlanRecoveries;
+  final ReadExhaustedWindows readExhaustedWindows;
   final RecoveryNotificationPreferenceStore recoveryNotificationStore;
   final AlertNotificationPreferenceStore alertNotificationStore;
   final AlertConditionStore alertConditionStore;
@@ -120,6 +125,8 @@ class WardPulseApp extends StatelessWidget {
         recoveryWatchlistStore: recoveryWatchlistStore,
         recoveryNotifier: recoveryNotifier,
         recoveryWake: recoveryWake,
+        readPlanRecoveries: readPlanRecoveries,
+        readExhaustedWindows: readExhaustedWindows,
         recoveryNotificationStore: recoveryNotificationStore,
         alertNotificationStore: alertNotificationStore,
         alertConditionStore: alertConditionStore,
@@ -151,6 +158,8 @@ class DashboardHost extends StatefulWidget {
     required this.recoveryWatchlistStore,
     required this.recoveryNotifier,
     required this.recoveryWake,
+    required this.readPlanRecoveries,
+    required this.readExhaustedWindows,
     required this.recoveryNotificationStore,
     required this.alertNotificationStore,
     required this.alertConditionStore,
@@ -177,6 +186,8 @@ class DashboardHost extends StatefulWidget {
   final RecoveryWakeScheduler recoveryWake;
   final RecoveryNotifier recoveryNotifier;
   final RecoveryWatchlistStore recoveryWatchlistStore;
+  final ReadPlanRecoveries readPlanRecoveries;
+  final ReadExhaustedWindows readExhaustedWindows;
 
   final AlertNotificationPreferenceStore alertNotificationStore;
   final AlertConditionStore alertConditionStore;
@@ -666,7 +677,9 @@ class _DashboardHostState extends State<DashboardHost> {
         widget.recoveryNotifier,
         widget.recoveryWake,
         mockData: _mockDataEnabled,
-        notifications: notifications,
+        notifications: notifications && _recoveryNotificationsEnabled,
+        readRecoveries: widget.readPlanRecoveries,
+        readWindows: widget.readExhaustedWindows,
       );
     } catch (_) {
       // Recovery bookkeeping cannot publish retired data or block the dashboard.
@@ -691,6 +704,7 @@ class _DashboardHostState extends State<DashboardHost> {
       snapshot,
       mockData: _mockDataEnabled,
       isAccepted: accepted,
+      isDeliveryEnabled: () => _alertNotificationsEnabled,
       isCurrent: () async {
         if (!accepted()) return false;
         final current = await widget.repository.isSnapshotCurrent(snapshot);

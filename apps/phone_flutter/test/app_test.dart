@@ -37,6 +37,7 @@ import 'package:ward_pulse_phone/sync/provider_sync_scheduler.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_logger.dart';
 import 'package:ward_pulse_phone/settings/recovery_notification_preferences.dart';
 import 'package:ward_pulse_phone/sync/recovery_notifications.dart';
+import 'package:ward_pulse_phone/sync/recovery_wake.dart';
 import 'package:ward_pulse_phone/sync/recovery_watchlist.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 import 'package:ward_pulse_phone/watchface/watchface_screen.dart';
@@ -3261,6 +3262,179 @@ void main() {
   );
 
   testWidgets(
+    'saved Alert Off suppresses an older On read without replaying the crossing',
+    (tester) async {
+      const key = AlertConditionKey(
+        provider: 'claude',
+        accountId: 'account-a',
+        connection: 'anthropic.plan',
+        target: AllowanceAlertTarget(
+          source: AllowanceSource.plan,
+          id: 'weekly',
+        ),
+      );
+      DashboardSnapshot source(AlertCondition condition) =>
+          DashboardSnapshot.fromJson({
+            ...DashboardSnapshot.empty().toJson(),
+            'alertConditions': [condition.toJson()],
+          });
+      final clear = source(const AlertCondition.clear(key: key));
+      final crossed = source(
+        const AlertCondition.crossed(
+          key: key,
+          alert: AlertSummary(
+            severity: 'warning',
+            message: 'Configured threshold',
+          ),
+        ),
+      );
+      final repository = _PublicationRepository(clear);
+      final preference = _DelayedAlertPreferenceStore();
+      final markers = _MemoryAlertConditions();
+      final notifier = _FakeAlertNotifier();
+      final scheduler = _ManualProviderSyncScheduler();
+      try {
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            applyAlertSettings: (snapshot, _) => snapshot,
+            alertNotificationStore: preference,
+            alertConditionStore: markers,
+            alertNotifier: notifier,
+            syncScheduler: scheduler,
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Settings'));
+        await tester.pumpAndSettle();
+        final settings = tester.widget<SettingsScreen>(
+          find.byType(SettingsScreen),
+        );
+        repository.snapshot = crossed;
+        preference.holdRead = true;
+        scheduler.tick();
+        await tester.pump();
+        await preference.readStarted.future;
+        expect(markers.values[key], isTrue);
+        await settings.onAlertNotificationsChanged(false);
+        expect(preference.enabled, isFalse);
+        preference.holdRead = false;
+        preference.releaseRead.complete();
+        await tester.pumpAndSettle();
+        expect(notifier.posts, isEmpty);
+        expect(markers.values[key], isTrue);
+
+        repository.snapshot = clear;
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(markers.values[key], isFalse);
+        repository.snapshot = crossed;
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(markers.values[key], isTrue);
+        expect(notifier.posts, isEmpty);
+
+        await settings.onAlertNotificationsChanged(true);
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(notifier.posts, isEmpty);
+        expect(markers.values[key], isTrue);
+        repository.snapshot = clear;
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(markers.values[key], isFalse);
+        repository.snapshot = crossed;
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(notifier.posts, [key]);
+      } finally {
+        preference.holdRead = false;
+        if (!preference.releaseRead.isCompleted)
+          preference.releaseRead.complete();
+        try {
+          await tester.pumpWidget(const SizedBox());
+          await tester.pumpAndSettle();
+        } finally {
+          await scheduler.dispose();
+        }
+      }
+    },
+  );
+
+  testWidgets(
+    'saved Recovery Off during validation preserves tracking and wake work',
+    (tester) async {
+      const window = (accountId: 'account-a', allowanceId: 'weekly');
+      final repository = _PublicationRepository(DashboardSnapshot.empty());
+      final preference = _MemoryRecoveryNotificationStore();
+      final watchlist = _MemoryRecoveryWatchlistStore();
+      final notifier = _BlockedRecoveryNotifier();
+      final wake = _RecordingRecoveryWake();
+      final scheduler = _ManualProviderSyncScheduler();
+      var spent = true;
+      try {
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            recoveryNotificationStore: preference,
+            recoveryWatchlistStore: watchlist,
+            recoveryNotifier: notifier,
+            recoveryWake: wake,
+            readExhaustedWindows: (_) => spent ? const [window] : const [],
+            readPlanRecoveries:
+                (_, remembered) => [
+                  for (final key in remembered)
+                    (
+                      accountId: key.accountId,
+                      provider: 'claude',
+                      allowanceId: key.allowanceId,
+                      label: 'Weekly plan',
+                      resetsAt: null,
+                    ),
+                ],
+            syncScheduler: scheduler,
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Settings'));
+        await tester.pumpAndSettle();
+        final settings = tester.widget<SettingsScreen>(
+          find.byType(SettingsScreen),
+        );
+        expect(watchlist.keys, const [window]);
+        expect(wake.cancelled, 1);
+        spent = false;
+        preference.beforeRead = () {
+          preference.beforeRead = null;
+          repository.delayNextValidation = true;
+        };
+        scheduler.tick();
+        await tester.pump();
+        await repository.validationEntered.future;
+        await settings.onRecoveryNotificationsChanged(false);
+        expect(preference.enabled, isFalse);
+        expect(watchlist.keys, const [window]);
+        repository.validation.complete(true);
+        await tester.pumpAndSettle();
+        expect(notifier.reported, isEmpty);
+        expect(watchlist.reads, 2);
+        expect(watchlist.keys, isEmpty);
+        expect(wake.cancelled, 2);
+        expect(wake.booked, isEmpty);
+      } finally {
+        if (!repository.validation.isCompleted)
+          repository.validation.complete(true);
+        try {
+          await tester.pumpWidget(const SizedBox());
+          await tester.pumpAndSettle();
+        } finally {
+          await scheduler.dispose();
+        }
+      }
+    },
+  );
+
+  testWidgets(
     'scheduled delivery retains the rules used for its accepted observations',
     (tester) async {
       const key = AlertConditionKey(
@@ -3449,9 +3623,11 @@ class _MemoryRecoveryNotificationStore
     implements RecoveryNotificationPreferenceStore {
   bool enabled = true;
   bool failRead = false;
+  void Function()? beforeRead;
 
   @override
   Future<bool> read() async {
+    beforeRead?.call();
     if (failRead) throw StateError('Preference unavailable.');
     return enabled;
   }
@@ -3463,9 +3639,10 @@ class _MemoryRecoveryNotificationStore
 /// Android refusing the permission, which the switch alone cannot detect.
 class _BlockedRecoveryNotifier implements RecoveryNotifier {
   var asked = 0;
+  final reported = <PlanRecovery>[];
 
   @override
-  Future<void> notify(PlanRecovery recovery) async {}
+  Future<void> notify(PlanRecovery recovery) async => reported.add(recovery);
 
   @override
   Future<bool> requestPermission() async {
@@ -3486,6 +3663,17 @@ class _MemoryRecoveryWatchlistStore implements RecoveryWatchlistStore {
 
   @override
   Future<void> write(List<WindowKey> value) async => keys = value;
+}
+
+class _RecordingRecoveryWake implements RecoveryWakeScheduler {
+  final booked = <DateTime>[];
+  var cancelled = 0;
+
+  @override
+  Future<void> scheduleAt(DateTime resetsAt) async => booked.add(resetsAt);
+
+  @override
+  Future<void> cancel() async => cancelled++;
 }
 
 class _DelayedAlertPreferenceStore implements AlertNotificationPreferenceStore {
@@ -3896,6 +4084,7 @@ class _PublicationRepository extends DashboardRepository {
   bool current = true;
   bool delayNextValidation = false;
   bool validationStarted = false;
+  final validationEntered = Completer<void>();
   final validation = Completer<bool>();
   @override
   Future<DashboardSnapshot> load() async {
@@ -3920,6 +4109,7 @@ class _PublicationRepository extends DashboardRepository {
     if (delayNextValidation) {
       delayNextValidation = false;
       validationStarted = true;
+      if (!validationEntered.isCompleted) validationEntered.complete();
       return validation.future;
     }
     return current;

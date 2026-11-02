@@ -185,11 +185,14 @@ final class AlertNotificationDelivery {
   final AlertNotifier notifier;
   static Future<void> _pending = Future<void>.value();
 
+  /// [isDeliveryEnabled] gates posting only; accepted observations still update
+  /// consumed markers while delivery is off.
   Future<void> sync(
     DashboardSnapshot snapshot, {
     bool mockData = false,
     Future<bool> Function() isCurrent = _alwaysCurrent,
     bool Function() isAccepted = _alwaysAccepted,
+    bool Function() isDeliveryEnabled = _alwaysAccepted,
   }) async {
     if (mockData) return;
     final previous = _pending;
@@ -211,7 +214,10 @@ final class AlertNotificationDelivery {
           // Muted/denied crossings are consumed too: enabling delivery later
           // never replays a backlog. A preference read failure cannot post.
           if (!await notifier.canPost()) continue;
-          if (!await isCurrent() || !await preferences.read() || !isAccepted())
+          if (!await preferences.read() ||
+              !await isCurrent() ||
+              !isDeliveryEnabled() ||
+              !isAccepted())
             continue;
           await notifier.notify(
             condition.key,

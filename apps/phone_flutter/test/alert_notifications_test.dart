@@ -313,6 +313,37 @@ void main() {
     },
   );
 
+  test(
+    'retirement during the final preference read suppresses headless posting',
+    () async {
+      final entered = Completer<void>();
+      final release = Completer<void>();
+      var current = true;
+      final preferences =
+          _Preferences()
+            ..beforeRead = () async {
+              entered.complete();
+              await release.future;
+            };
+      final store = _Conditions();
+      final notifier = _Notifier();
+      final syncing = AlertNotificationDelivery(
+        preferences: preferences,
+        conditions: store,
+        notifier: notifier,
+      ).sync(_snapshot([_crossed]), isCurrent: () async => current);
+      try {
+        await entered.future;
+        current = false;
+      } finally {
+        release.complete();
+        await syncing;
+      }
+      expect(store.values[_key], isTrue);
+      expect(notifier.posts, isEmpty);
+    },
+  );
+
   test('separate service instances serialize within one isolate', () async {
     final entered = Completer<void>();
     final release = Completer<void>();
