@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/settings/notification_permission_preferences.dart';
 import 'package:ward_pulse_phone/sync/alert_notifications.dart';
 import 'package:ward_pulse_phone/sync/notification_coordinator.dart';
@@ -154,14 +155,64 @@ void main() {
         storage.values,
         isEmpty,
       ); // Readiness never consumes a foreground attempt.
-      await LocalRecoveryNotifier(coordinator: coordinator).notify((
+      const recovery = (
         accountId: 'account',
         provider: 'claude',
         allowanceId: 'weekly',
         label: 'Weekly plan',
         resetsAt: null,
-      ));
+      );
+      await LocalRecoveryNotifier(coordinator: coordinator).notify(recovery);
+      const alertKey = AlertConditionKey(
+        provider: 'claude',
+        accountId: 'account',
+        connection: 'anthropic.plan',
+        target: AllowanceAlertTarget(
+          source: AllowanceSource.plan,
+          id: 'weekly',
+        ),
+      );
+      await LocalAlertNotifier(coordinator: coordinator).notify(
+        alertKey,
+        title: 'Claude · Weekly plan',
+        body: 'Reached your alert threshold: 20% left.',
+      );
       expect(calls.last.method, 'show');
+      final posts =
+          calls
+              .where((call) => call.method == 'show')
+              .map((call) => call.arguments as Map)
+              .toList();
+      expect(posts, hasLength(2));
+      expect(posts[0]['id'], recoveryNotificationId(recovery));
+      expect(posts[0]['title'], 'Claude · Weekly plan');
+      expect(posts[0]['body'], 'Usable again.');
+      expect(posts[1]['id'], 0);
+      expect(posts[1]['title'], 'Claude · Weekly plan');
+      expect(posts[1]['body'], 'Reached your alert threshold: 20% left.');
+      final postDetails = [
+        for (final post in posts) post['platformSpecifics'] as Map,
+      ];
+      for (final details in [...channels, ...postDetails]) {
+        expect(details['sound'], 'wardpulse_notification_click');
+        expect(details['soundSource'], 0);
+        expect(details['playSound'], isTrue);
+      }
+      expect(
+        postDetails.map(
+          (value) => [
+            value['channelId'],
+            value['category'],
+            value['importance'],
+            value['priority'],
+            value['tag'],
+          ],
+        ),
+        [
+          ['wardpulse.plan_recovery', 'status', 4, 1, null],
+          ['wardpulse.alerts', 'status', 3, 0, alertNotificationTag(alertKey)],
+        ],
+      );
       expect(calls.where((call) => call.method == 'initialize'), hasLength(1));
       expect(
         calls.where((call) => call.method == 'createNotificationChannel'),

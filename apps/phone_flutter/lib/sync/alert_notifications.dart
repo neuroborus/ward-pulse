@@ -112,6 +112,7 @@ final class LocalAlertNotifier implements AlertNotifier {
         alertNotificationChannel.id,
         alertNotificationChannel.name,
         channelDescription: alertNotificationChannel.description,
+        sound: phoneNotificationSound,
         tag: alertNotificationTag(key),
         category: AndroidNotificationCategory.status,
       ),

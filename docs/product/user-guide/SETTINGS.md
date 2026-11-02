@@ -20,6 +20,13 @@ notification permission, with one automatic attempt on eligible foreground use a
 off-to-on retry. Saving both off suppresses that automatic attempt. Alert rules remain on
 Providers; turning delivery off does not remove those rules or the in-app alerts.
 
+On Android 8.0 and newer, newly created notification categories use WardPulse's shared
+click by default for Alert notifications and Plan recovery. Existing categories keep their
+previous default sound, custom sound or silence; updating WardPulse does not replace them.
+Older supported Android versions use the same click for both notification types. Sound
+still follows Android notification permission, notification volume and Do Not Disturb,
+and your saved notification switches still apply.
+
 If **Notifications are blocked** appears, choose **Enable notifications** to open WardPulse's
 Android settings. If Android opens the app information page, choose its notification controls.
 Return to WardPulse to recheck the warning.

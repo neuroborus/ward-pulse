@@ -4,17 +4,23 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../settings/notification_permission_preferences.dart';
 
+const phoneNotificationSound = RawResourceAndroidNotificationSound(
+  'wardpulse_notification_click',
+);
+
 const alertNotificationChannel = AndroidNotificationChannel(
   'wardpulse.alerts',
   'Alert notifications',
   description: 'Your configured usage and budget thresholds.',
   importance: Importance.defaultImportance,
+  sound: phoneNotificationSound,
 );
 const recoveryNotificationChannel = AndroidNotificationChannel(
   'wardpulse.plan_recovery',
   'Plan recovery',
   description: 'A plan window you had run out of is usable again.',
   importance: Importance.high,
+  sound: phoneNotificationSound,
 );
 
 /// Shared by the foreground host and its notifiers, for the lifetime of main.
@@ -86,7 +92,8 @@ final class PhoneNotificationCoordinator {
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       ),
     );
-    // Android preserves existing channel blocking and user-selected importance.
+    // Android preserves existing channel sound, blocking and user-selected
+    // importance.
     await android?.createNotificationChannel(alertNotificationChannel);
     await android?.createNotificationChannel(recoveryNotificationChannel);
   }

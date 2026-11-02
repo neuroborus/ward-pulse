@@ -149,6 +149,29 @@ also covers Retry, Cancel/back/reopen, Help and the empty Advanced paste editor.
 remained available without reading its value. These checks do not establish a new live
 Google/email login, session capture, account entitlement or billing repair.
 
+## Notification sound
+
+Alert notifications and Plan recovery share one bundled click. On Android 8.0 and newer,
+only newly created notification categories default to this sound. Existing categories retain
+their previous system default, custom sound or silence, along with their other Android
+settings. Updating WardPulse does not replace those sounds or reset categories.
+On older supported Android versions (API 24–25), both notification types use the same click
+on each post. Saved delivery choices, Android notification permission, notification volume
+and Do Not Disturb remain authoritative.
+
+The shared `phoneNotificationSound` in `lib/sync/notification_coordinator.dart` uses
+`flutter_local_notifications` 22.3.0's `RawResourceAndroidNotificationSound` with the
+extensionless name `wardpulse_notification_click`. Both channel declarations and both
+notifiers' per-post Android details reference it. The narrow `tools:keep` rule in
+`android/app/src/main/res/raw/keep.xml` retains this resource for release shrinking.
+
+`android/app/src/main/res/raw/wardpulse_notification_click.wav` is an owner-provided,
+first-party original sound, copied without conversion or byte changes. This audio asset is
+explicitly licensed under the [Apache License 2.0](../../LICENSE). WardPulse brand rights
+remain separate.
+
+SHA-256: `c056547acf175ddc7e46c0e35fdb586f8737dc83e533e5391de6e366885f9306`.
+
 ## Android notification integration case (HOST only)
 
 `integration_test/notification_delivery_test.dart` mounts `WardPulseApp` with inline normalized

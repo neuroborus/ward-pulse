@@ -58,6 +58,7 @@ final class LocalRecoveryNotifier implements RecoveryNotifier {
           recoveryNotificationChannel.id,
           recoveryNotificationChannel.name,
           channelDescription: recoveryNotificationChannel.description,
+          sound: phoneNotificationSound,
           category: AndroidNotificationCategory.status,
           // Preserve the recovery channel's existing importance: a window the
           // reader had exhausted is usable again.
