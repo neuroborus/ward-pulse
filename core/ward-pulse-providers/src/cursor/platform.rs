@@ -498,7 +498,7 @@ mod tests {
     fn amounts(snapshot: &ProviderSnapshot) -> [Option<i64>; 3] {
         [&snapshot.today, &snapshot.week, &snapshot.month].map(|budget| {
             budget.spent.as_ref().map(|money| {
-                assert_eq!(money.currency, "USD");
+                assert_eq!(money.currency.as_str(), "USD");
                 money.minor_units
             })
         })

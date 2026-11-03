@@ -800,14 +800,14 @@ Map<String, dynamic> _eventPage(
 }) => {
   'usageEvents': events,
   'totalUsageEventsCount': total ?? events.length,
-  'pagination': {
+  'pagination': <String, Object?>{
     'numPages': numPages,
     'currentPage': currentPage,
     'pageSize': 1000,
     'hasNextPage': currentPage < numPages,
     'hasPreviousPage': currentPage > 1,
   },
-  'period': {
+  'period': <String, Object?>{
     'startDate': period.requestStartMs,
     'endDate': period.endExclusiveMs - 1,
   },
