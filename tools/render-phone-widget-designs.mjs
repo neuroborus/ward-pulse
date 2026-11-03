@@ -24,6 +24,16 @@
  * Sample ink fit proves neither universal text coverage nor native/device fit.
  * The original hash-specific board is approved provenance; new proposals still require approval.
  * Default exports below use the bundled fonts and stay separate from that historical board.
+ *
+ * One new PRIVATE, UNAPPROVED six-panel responsive illustration (no default writes):
+ *   node tools/render-phone-widget-designs.mjs \
+ *     --own-font-preview-profile responsive-six \
+ *     --own-font-preview-output LOCAL_ARTIFACTS/<new-directory> \
+ *     --own-font-regular apps/phone_flutter/android/app/src/main/assets/fonts/NotoSans-Regular.ttf \
+ *     --own-font-bold apps/phone_flutter/android/app/src/main/assets/fonts/NotoSans-Bold.ttf
+ * Omit the profile to retain the historical route above. The responsive profile uses
+ * frozen historical values/measured reset instants, explicit UTC and synthetic USD money.
+ * It paints at 2.625 pixels per preview unit; host ink fit is not native acceptance.
  */
 
 import assert from 'node:assert/strict'
@@ -309,20 +319,57 @@ const WIDGET_BRIEF = 'LOCAL_ARTIFACTS/phone-widget-label-reset-refinement-2026-1
 const CLAUDE_FIXTURE = 'fixtures/providers/claude/oauth_usage.json'
 const OWN_FONT_AS_OF = '2026-11-01T12:00:00Z'
 
+const RESPONSIVE_INPUT_DIR = 'LOCAL_ARTIFACTS/widget-private-preview-authoring-2026-11-03/inputs'
+const RESPONSIVE_INPUTS = Object.fromEntries(Object.entries({
+  'DESIGN_PREPARATION.md': '845b27b9b1782c98af6f0b581d58a69e34f0711f8e01003d21df7d3ea1917391',
+  'NATIVE_STALE_HEADER_ADDENDUM.md': 'd9568fb18d9312151ed02d95a49aaa7e441e3b3fea97582d8425027be67202d0',
+  'CURRENT_WIDGET_RESETS.json': 'eb1e7c0bd9741c4dcde387c4f8f19f4ae90d19b31bece8e81993ae5f6d0933d0',
+  'CURRENT_WIDGET_GEOMETRY.json': '43f219cc3a3cfb03dfdce5658e0d76be3b4e3ac1970579283e795cd00ec0db4c',
+  'AFTER_HOME_SETTLED.private.png': '519f5d9de4dc18f477d444f2ca53e26eedd3bacbd5f002710a6da875492beb7a',
+  'AFTER_EDITOR_BACK_IMMEDIATE.private.png': '1cea22344abf412d2a2c56aa0a9031931f5a59b050e051002c250adbb67cff34',
+}).map(([file, sha256]) => [`${RESPONSIVE_INPUT_DIR}/${file}`, sha256]))
+const RESPONSIVE_MONEY = { currency: 'USD', spentMinor: 1234, limitMinor: 1_000_000 }
+const RESPONSIVE_REMAINING = (RESPONSIVE_MONEY.limitMinor - RESPONSIVE_MONEY.spentMinor) * 100 /
+  RESPONSIVE_MONEY.limitMinor
+// Generator-local illustration only. These rows never replace the shared/runtime catalogue.
+const RESPONSIVE_ROWS = [
+  { id: 'allowance.codex.codex-secondary', family: 'Codex', pool: 'Weekly plan',
+    percent: '0%', credits: '42.6K', color: FAMILY.codex, resetsAt: '2026-11-06T07:25:19.000Z' },
+  { id: 'allowance.cursor.cursor-plan-other', family: 'Cursor', pool: 'Other Models',
+    percent: '64%', color: FAMILY.cursor, resetsAt: '2026-11-18T18:52:15.000Z' },
+  { id: 'allowance.claude.claude-seven-day', family: 'Claude', pool: 'Weekly plan',
+    percent: '66%', color: FAMILY.claude, resetsAt: '2026-11-08T08:00:00.000Z' },
+  { id: 'allowance.claude.claude-seven-day-fable', family: 'Claude', pool: 'Fable weekly',
+    percent: '100%', color: '#FF603D', resetsAt: '2026-11-08T08:00:00.000Z' },
+  { id: 'allowance.cursor.cursor-plan-models', family: 'Cursor', pool: 'Models',
+    percent: '100%', color: FAMILY.cursorOwn, resetsAt: '2026-11-18T18:52:15.000Z' },
+  { id: 'budget.openai.today', family: 'OpenAI', pool: 'Today',
+    percent: `${Math.round(RESPONSIVE_REMAINING)}%`, color: FAMILY.codex, money: RESPONSIVE_MONEY,
+    sourceFamily: 'OpenAI platform' },
+].map((row) => ({ ...row,
+  valueSource: row.money ? 'Synthetic money; rounded percentage also matches the historical sample' :
+    `${RESPONSIVE_INPUT_DIR}/AFTER_HOME_SETTLED.private.png`,
+  resetSource: row.resetsAt ? `${RESPONSIVE_INPUT_DIR}/CURRENT_WIDGET_RESETS.json` : null,
+}))
+
 function parseOwnFontPreview(args) {
   if (args.length === 0 || (args.length === 1 && args[0] === '--check')) return null
   const flags = ['--own-font-preview-output', '--own-font-regular', '--own-font-bold']
+  const profileFlag = '--own-font-preview-profile'
   const values = new Map()
   for (let index = 0; index < args.length; index += 2) {
     const flag = args[index]
     const value = args[index + 1]
-    if (!flags.includes(flag) || values.has(flag) || !value || value.startsWith('--')) {
-      throw new Error('use all three own-font preview flags exactly once, without --check or other flags')
+    if ((!flags.includes(flag) && flag !== profileFlag) || values.has(flag) || !value || value.startsWith('--')) {
+      throw new Error('use all three own-font preview flags exactly once, with one optional profile and without --check or other flags')
     }
     values.set(flag, value)
   }
-  assert.equal(values.size, flags.length, 'own-font preview requires an output directory and both font files')
+  assert.ok(flags.every((flag) => values.has(flag)), 'own-font preview requires an output directory and both font files')
+  const profile = values.get(profileFlag)
+  assert.ok(profile === undefined || profile === 'responsive-six', 'unknown own-font preview profile')
   return {
+    profile,
     output: values.get(flags[0]),
     regular: resolve(values.get(flags[1])),
     bold: resolve(values.get(flags[2])),
@@ -369,6 +416,11 @@ function pngSize(bytes) {
 }
 
 async function renderOwnFontPreview(options) {
+  const responsive = options.profile === 'responsive-six'
+  const scale = responsive ? 2.625 : 1
+  const horizontal = (value) => Math.round(value * scale)
+  const vertical = (value) => responsive ? Math.ceil(value * scale) : value
+  const rows = responsive ? RESPONSIVE_ROWS : OWN_FONT_ROWS
   // All preflight failures precede exclusive output creation. Never substitute a font.
   const fonts = {}
   for (const weight of ['regular', 'bold']) {
@@ -397,10 +449,30 @@ async function renderOwnFontPreview(options) {
   const claude = JSON.parse(await readFile(join(root, CLAUDE_FIXTURE), 'utf8'))
   assert.equal(`${100 - claude.seven_day_opus.utilization}%`, OWN_FONT_ROWS[2].percent,
     'illustrative Opus remaining must match the cited fixture')
+  if (responsive) {
+    for (const [path, expected] of Object.entries(RESPONSIVE_INPUTS)) {
+      assert.equal(await hashFile(join(root, path)), expected, `responsive reference identity must match: ${path}`)
+    }
+    const resets = JSON.parse(await readFile(join(root, RESPONSIVE_INPUT_DIR, 'CURRENT_WIDGET_RESETS.json'), 'utf8'))
+    assert.equal(resets.rows.length, rows.length, 'frozen reset projection must retain six independent rows')
+    for (const [index, row] of rows.entries()) {
+      const source = resets.rows[index]
+      assert.equal(source.family, row.sourceFamily ?? row.family)
+      assert.equal(source.pool, row.pool)
+      assert.equal(source.resetIso, row.resetsAt ?? null)
+      assert.equal(source.creditsPresent, Boolean(row.credits))
+    }
+  }
   const directory = await ownFontDirectory(options.output)
   const convert = await previewExecutable('convert')
   const node = await realpath(process.execPath)
-  const { stdout: imageMagickVersion } = await runFile(convert, ['-version'], { encoding: 'utf8' })
+  const { stdout: imageMagickVersion, stderr: versionWarnings } = await runFile(convert, ['-version'], { encoding: 'utf8' })
+  if (responsive) assert.equal(versionWarnings.trim(), '', 'ImageMagick version warnings must not be silently accepted')
+  const toolIdentities = async () => ({
+    node: { executable: node, version: process.version, sha256: await hashFile(node) },
+    imageMagick: { executable: convert, version: imageMagickVersion.trim(), sha256: await hashFile(convert) },
+  })
+  const toolsBefore = responsive ? await toolIdentities() : null
   const watermarkPath = 'apps/phone_flutter/android/app/src/main/res/drawable/wardpulse_mono.png'
   const protectedPaths = [
     ...variants.flatMap(({ file }) => [file, file.replace('.svg', '.png')]
@@ -426,7 +498,8 @@ async function renderOwnFontPreview(options) {
     [path, await hashFile(join(root, path))])))
   const protectedBefore = await hashes(protectedPaths)
   const inputHashes = await hashes(['tools/render-phone-widget-designs.mjs', 'docs/DESIGN_ASSETS.md',
-    PHOTO, HOST_FRAME, hostPng, WIDGET_BRIEF, CLAUDE_FIXTURE, 'core/ward-pulse-providers/src/claude/mod.rs'])
+    PHOTO, HOST_FRAME, hostPng, WIDGET_BRIEF, CLAUDE_FIXTURE, 'core/ward-pulse-providers/src/claude/mod.rs',
+    ...(responsive ? Object.keys(RESPONSIVE_INPUTS) : [])])
 
   await mkdir(directory, { mode: 0o700 })
   const work = join(directory, '.rendering')
@@ -446,6 +519,21 @@ async function renderOwnFontPreview(options) {
     assert.equal(result.stderr.toString().trim(), '', 'ImageMagick warnings must not be silently accepted')
     return result.stdout
   }
+  const measurements = []
+  const requireFit = (condition, claim, dimensions) => {
+    if (!condition) {
+      const error = new Error(`${claim}: ${JSON.stringify(dimensions)}`)
+      error.fit = { claim, dimensions }
+      throw error
+    }
+  }
+  const alphaInk = async (file) => {
+    const bounds = (await image([file, '-alpha', 'extract', '-threshold', '0', '-format', '%@', 'info:'])).toString()
+    const match = /^(\d+)x(\d+)\+(\d+)\+(\d+)$/.exec(bounds)
+    assert.ok(match, 'raster alpha must have measurable ink')
+    const [, width, height, x, y] = match.map(Number)
+    return { x, y, width, height }
+  }
   try {
     await mkdir(work)
     const glyphs = new Map()
@@ -455,37 +543,79 @@ async function renderOwnFontPreview(options) {
         const file = join(work, `text-${glyphs.size}.png`)
         // ImageMagick labels interpret percent properties and backslash escapes.
         const literal = value.replaceAll('\\', '\\\\').replaceAll('%', '%%')
-        await image(['-background', 'none', '-density', '72', '-font', fonts[weight].path,
-          '-pointsize', String(size), '-fill', color, `label:${literal}`, '-trim', '+repage', '-strip', `png32:${file}`])
+        const argumentsBeforeTrim = ['-background', 'none', '-density', '72', '-font', fonts[weight].path,
+          '-pointsize', String(size * scale), '-fill', color, `label:${literal}`]
+        let line
+        if (responsive) {
+          // Retain the complete label line before trimming; STALE fitting and painting
+          // must share this padded line and its measured visible-ink offset.
+          await image([...argumentsBeforeTrim, '-strip', `png32:${file}`])
+          line = { ...pngSize(await readFile(file)), ink: await alphaInk(file) }
+          await image([file, '-trim', '+repage', '-strip', `png32:${file}`])
+        } else {
+          await image([...argumentsBeforeTrim, '-trim', '+repage', '-strip', `png32:${file}`])
+        }
         glyphs.set(key, { file, text: value, size, weight: fonts[weight].weight,
-          ...pngSize(await readFile(file)) })
+          ...pngSize(await readFile(file)), ...(responsive ? { line } : {}) })
       }
       return glyphs.get(key)
     }
-    const boardSize = { width: 488, height: 792 }
+    const boardSize = responsive ? { width: horizontal(1152), height: vertical(1140) } : { width: 488, height: 792 }
     const drawing = ['-size', `${boardSize.width}x${boardSize.height}`, 'xc:#080C0A']
     const composite = (file, x, y) => drawing.push(file, '-geometry', `+${Math.round(x)}+${Math.round(y)}`, '-composite')
     const captions = []
     const caption = async (value, y, center, size = 12, weight = 'regular') => {
       const ink = await text(value, size, weight, dark.muted)
       const box = { x: Math.round(center - ink.width / 2), y, width: ink.width, height: ink.height }
-      assert.ok(box.x >= 24 && box.x + box.width <= boardSize.width - 24 &&
-        box.y >= 0 && box.y + box.height <= boardSize.height, 'complete captions must fit the board')
+      const fits = box.x >= horizontal(24) && box.x + box.width <= boardSize.width - horizontal(24) &&
+        box.y >= 0 && box.y + box.height <= boardSize.height
+      if (responsive) requireFit(fits, 'complete caption must fit the board', { text: value, box, boardSize })
+      else assert.ok(fits, 'complete captions must fit the board')
       composite(ink.file, box.x, box.y)
       captions.push({ text: value, size, weight: ink.weight, box })
     }
-    await caption('UNAPPROVED · OWN-FONT PROPOSAL', 20, boardSize.width / 2, 13, 'bold')
-    await caption('Mixed-source illustration · not current native data', 42, boardSize.width / 2)
-    await caption('Fixed reference: 01 Nov 2026 12:00 UTC', 62, boardSize.width / 2, 11)
+    if (responsive) {
+      await caption('PRIVATE · UNAPPROVED · RESPONSIVE-SIX', vertical(20), boardSize.width / 2, 16, 'bold')
+      await caption('Retained historical plan values + measured reset instants · explicitly displayed in UTC',
+        vertical(48), boardSize.width / 2)
+      await caption('Synthetic USD 12.34 spent / USD 10,000.00 cap · 99.8766% remaining, rounded 100%',
+        vertical(70), boardSize.width / 2)
+      await caption('2.625 px per preview unit · host art only · no Android Paint/native/font-independence acceptance',
+        vertical(92), boardSize.width / 2, 11)
+    } else {
+      await caption('UNAPPROVED · OWN-FONT PROPOSAL', 20, boardSize.width / 2, 13, 'bold')
+      await caption('Mixed-source illustration · not current native data', 42, boardSize.width / 2)
+      await caption('Fixed reference: 01 Nov 2026 12:00 UTC', 62, boardSize.width / 2, 11)
+    }
 
-    const mark = join(work, 'watermark.png')
-    await image([join(root, watermarkPath), '-resize', '36x36', '-fill', dark.muted, '-colorize', '100',
-      '-channel', 'A', '-evaluate', 'multiply', '0.55', '+channel', '-trim', '+repage', '-strip', `png32:${mark}`])
-    const markBounds = (await image([mark, '-alpha', 'extract', '-threshold', '0', '-format', '%@', 'info:'])).toString()
-    const match = /^(\d+)x(\d+)\+(\d+)\+(\d+)$/.exec(markBounds)
-    assert.ok(match, 'watermark alpha must have measurable ink')
-    const [, markWidth, markHeight, markX, markY] = match.map(Number)
-    const frames = [
+    const marks = new Map()
+    const watermark = async (theme) => {
+      if (!marks.has(theme)) {
+        const file = join(work, responsive ? `watermark-${marks.size}.png` : 'watermark.png')
+        const tint = responsive ? argb(theme.watermark) : { color: dark.muted, opacity: 0.55 }
+        const size = horizontal(36)
+        await image([join(root, watermarkPath), '-resize', `${size}x${size}`, '-fill', tint.color, '-colorize', '100',
+          '-channel', 'A', '-evaluate', 'multiply', String(tint.opacity), '+channel', '-trim', '+repage', '-strip', `png32:${file}`])
+        marks.set(theme, { file, ...await alphaInk(file) })
+      }
+      return marks.get(theme)
+    }
+    const frames = responsive ? [
+      { name: 'Light main', width: 360, height: 344, x: 24, y: 124, columns: 3, rows: 6,
+        cardWidth: 360, theme: 'light', captionY: 484 },
+      { name: 'Dark main', width: 360, height: 344, x: 396, y: 124, columns: 3, rows: 6,
+        cardWidth: 360, theme: 'dark', captionY: 484 },
+      { name: 'Light STALE', width: 360, height: 344, x: 768, y: 124, columns: 3, rows: 6,
+        cardWidth: 360, theme: 'light', stale: true, captionY: 484 },
+      { name: 'Illustrative tall host', width: 360, height: 480, x: 24, y: 548, columns: 3, rows: 6,
+        cardWidth: 360, theme: 'light', captionY: 1044 },
+      { name: 'No detail column', width: 266, height: 184, x: 456, y: 548, columns: 2, rows: 3,
+        cardWidth: 242, theme: 'light', captionY: 748 },
+      { name: 'Percent only', width: 150, height: 184, x: 820, y: 548, columns: 1, rows: 3,
+        cardWidth: 128, theme: 'light', captionY: 748 },
+    ].map((nominal) => ({ ...nominal, nominal,
+      width: horizontal(nominal.width), height: vertical(nominal.height),
+      x: horizontal(nominal.x), y: vertical(nominal.y), captionY: vertical(nominal.captionY) })) : [
       { width: 360, height: 344, x: 64, y: 88, columns: 3, rows: 6, captionY: 448 },
       { width: 266, height: 184, x: 24, y: 504, columns: 2, rows: 3, captionY: 704 },
       { width: 150, height: 184, x: 314, y: 504, columns: 1, rows: 3, captionY: 704 },
@@ -496,56 +626,140 @@ async function renderOwnFontPreview(options) {
       bottom: Math.max(...boxes.map(({ y, height }) => y + height)) })
     const separation = (a, b) => ({ horizontal: Math.max(a.x - b.x - b.width, b.x - a.x - a.width),
       vertical: Math.max(a.y - b.y - b.height, b.y - a.y - a.height) })
-    const measurements = []
+    const roundedClearance = (box, card, radius) => {
+      // Signed distance at all four corners proves the complete box is inside the
+      // convex rounded fill, using the same 0.5px inset as its painted path.
+      const corners = [box.x, box.x + box.width].flatMap((px) => [box.y, box.y + box.height].map((py) => {
+        const dx = Math.abs(px - card.x - card.width / 2) - card.width / 2 + 0.5 + radius
+        const dy = Math.abs(py - card.y - card.height / 2) - card.height / 2 + 0.5 + radius
+        return radius - Math.hypot(Math.max(dx, 0), Math.max(dy, 0)) - Math.min(Math.max(dx, dy), 0)
+      }))
+      return { left: box.x - card.x, right: card.x + card.width - box.x - box.width,
+        top: box.y - card.y, bottom: card.y + card.height - box.y - box.height,
+        roundedEdge: Math.min(...corners) }
+    }
+    const checkerFields = new Map()
+    const checker = async (width, height) => {
+      const key = `${width}x${height}`
+      if (!checkerFields.has(key)) {
+        const tile = join(work, 'checker-tile.png')
+        if (checkerFields.size === 0) {
+          const side = horizontal(16)
+          const half = Math.floor(side / 2)
+          await image(['-size', `${side}x${side}`, 'xc:#CCD2CE', '-fill', '#E0E5E1', '-draw',
+            `rectangle 0,0 ${half - 1},${half - 1} rectangle ${half},${half} ${side - 1},${side - 1}`,
+            '-strip', `png32:${tile}`])
+        }
+        const file = join(work, `checker-${key}.png`)
+        await image(['-size', key, `tile:${tile}`, '-strip', `png32:${file}`])
+        checkerFields.set(key, file)
+      }
+      return checkerFields.get(key)
+    }
     for (const frame of frames) {
       const { x, y, width, height, columns } = frame
-      const outline = dark.outlineColor.match(/\w\w/g).map((part) => parseInt(part, 16))
-      drawing.push('-fill', dark.surface, '-stroke', `rgba(${outline.join(',')},${dark.outlineOpacity})`,
-        '-strokewidth', '1', '-draw', `roundrectangle ${x + 0.5},${y + 0.5} ${x + width - 0.5},${y + height - 0.5} 20,20`)
-      const markInk = { x: width - 16 - markWidth, y: 2, width: markWidth, height: markHeight }
-      composite(mark, x + markInk.x - markX, y + markInk.y - markY)
-      assert.ok(markInk.x >= 0 && markInk.y >= 0 && markInk.x + markWidth <= width &&
-        markInk.y + markHeight <= height, 'watermark overlay ink must stay inside its frame')
-      const rowHeight = 44
-      const rowGap = 8
+      const theme = responsive && frame.theme === 'light' ? light : dark
+      const rowHeight = vertical(44)
+      const rowGap = vertical(8)
       const contentHeight = frame.rows * rowHeight + (frame.rows - 1) * rowGap
-      const marginY = (height - contentHeight) / 2
-      const groupWidth = columns === 3 ? 328 : columns === 2 ? 222 : 89
-      const groupLeft = (width - groupWidth) / 2
-      assert.ok(marginY >= 16 && groupLeft >= 16, 'complete centered row/column groups must retain content margins')
-      const percentColumn = { left: groupLeft + 12, right: groupLeft + 89 }
-      const labelColumn = columns >= 2 ? { left: groupLeft + 95, right: groupLeft + 222 } : null
-      const detailColumn = columns === 3 ? { left: groupLeft + 228, right: groupLeft + 328 } : null
+      const headerHeight = vertical(19)
+      const cardLeft = responsive ? (frame.nominal.width - frame.cardWidth) / 2 : 0
+      const card = responsive ? { x: horizontal(cardLeft), y: Math.floor((height - headerHeight - contentHeight - vertical(16)) / 2),
+        width: horizontal(cardLeft + frame.cardWidth) - horizontal(cardLeft),
+        height: headerHeight + contentHeight + vertical(16) } : { x: 0, y: 0, width, height }
+      const radius = horizontal(20)
+      const marginY = responsive ? card.y + headerHeight : (height - contentHeight) / 2
+      const groupUnits = columns === 3 ? 328 : columns === 2 ? (responsive ? 210 : 222) : (responsive ? 96 : 89)
+      const groupOrigin = ((frame.nominal?.width ?? width) - groupUnits) / 2
+      const groupLeft = responsive ? horizontal(groupOrigin) : groupOrigin
+      const groupWidth = responsive ? horizontal(groupOrigin + groupUnits) - groupLeft : groupUnits
+      // Round each horizontal boundary once; independent rounded column widths can drift.
+      const percentColumn = responsive ? { left: horizontal(groupOrigin + 12), right: horizontal(groupOrigin + 96) } :
+        { left: (width - groupWidth) / 2 + 12, right: (width - groupWidth) / 2 + 89 }
+      const labelColumn = columns >= 2 ? (responsive ?
+        { left: horizontal(groupOrigin + 102), right: horizontal(groupOrigin + 210) } :
+        { left: (width - groupWidth) / 2 + 95, right: (width - groupWidth) / 2 + 222 }) : null
+      const detailColumn = columns === 3 ? (responsive ?
+        { left: horizontal(groupOrigin + 216), right: horizontal(groupOrigin + 328) } :
+        { left: (width - groupWidth) / 2 + 228, right: (width - groupWidth) / 2 + 328 }) : null
+      const outline = theme.outlineColor.match(/\w\w/g).map((part) => parseInt(part, 16))
+      if (responsive) {
+        requireFit(card.x >= 0 && card.y >= 0 && card.x + card.width <= width && card.y + card.height <= height,
+          'intrinsic card must fit its host', { frame: frame.nominal, card, contentHeight, headerHeight })
+        composite(await checker(width, height), x, y)
+      }
+      drawing.push('-fill', theme.surface, '-stroke', `rgba(${outline.join(',')},${theme.outlineOpacity})`,
+        '-strokewidth', '1', '-draw',
+        `roundrectangle ${x + card.x + 0.5},${y + card.y + 0.5} ${x + card.x + card.width - 0.5},${y + card.y + card.height - 0.5} ${radius},${radius}`)
+      if (responsive) drawing.push('-fill', 'none', '-stroke', 'rgba(95,103,92,0.35)', '-draw',
+        `rectangle ${x + 0.5},${y + 0.5} ${x + width - 0.5},${y + height - 0.5}`)
+      const mark = await watermark(theme)
+      const markInk = { x: card.x + card.width - horizontal(16) - mark.width, y: card.y + vertical(2),
+        width: mark.width, height: mark.height }
+      let header
+      if (responsive) {
+        header = { bounds: { x: card.x, y: card.y, width: card.width, height: headerHeight },
+          firstRowTop: marginY, mark: { box: markInk, clearance: roundedClearance(markInk, card, radius),
+            firstRowGap: marginY - markInk.y - markInk.height } }
+        requireFit(header.mark.clearance.roundedEdge >= 0 && header.mark.firstRowGap >= 0,
+          'quiet mark must fit the shared header and rounded card', { frame: frame.nominal, card, header })
+        if (frame.stale) {
+          const glyph = await text('STALE', 11, 'bold', theme.stale)
+          const line = { x: card.x + horizontal(16), y: card.y + Math.floor((headerHeight - glyph.line.height) / 2),
+            width: glyph.line.width, height: glyph.line.height }
+          const visible = { x: line.x + glyph.line.ink.x, y: line.y + glyph.line.ink.y,
+            width: glyph.width, height: glyph.height }
+          header.stale = { text: 'STALE', size: 11, weight: 700, color: theme.stale, line, ink: visible,
+            lineClearance: roundedClearance(line, card, radius), inkClearance: roundedClearance(visible, card, radius),
+            markSeparation: separation(line, markInk), visibleMarkSeparation: separation(visible, markInk),
+            firstRowGap: marginY - line.y - line.height, visibleFirstRowGap: marginY - visible.y - visible.height }
+          const stale = header.stale
+          requireFit(stale.line.y >= header.bounds.y && stale.firstRowGap >= 0 && stale.visibleFirstRowGap > 0 &&
+            stale.lineClearance.roundedEdge >= 0 && stale.inkClearance.roundedEdge >= 0 &&
+            (stale.markSeparation.horizontal >= 0 || stale.markSeparation.vertical >= 0),
+            'complete padded STALE line and ink must fit the unchanged compact header', { frame: frame.nominal, card, header })
+          // Paint the very boxes that were measured above, including the padded-line ink offset.
+          composite(glyph.file, x + stale.ink.x, y + stale.ink.y)
+        }
+      }
+      composite(mark.file, x + markInk.x - mark.x, y + markInk.y - mark.y)
+      assert.ok(markInk.x >= 0 && markInk.y >= 0 && markInk.x + mark.width <= width &&
+        markInk.y + mark.height <= height, 'watermark overlay ink must stay inside its frame')
+      assert.ok(marginY >= vertical(16) && groupLeft >= horizontal(16),
+        'complete centered row/column groups must retain content margins')
       const ink = []
       const place = (glyph, left, top, bounds, row, kind) => {
         const box = { x: Math.round(left), y: Math.round(top), width: glyph.width, height: glyph.height }
         const clearance = { left: box.x - bounds.left, right: bounds.right - box.x - box.width,
           top: box.y - bounds.top, bottom: bounds.bottom - box.y - box.height }
-        assert.ok(Object.values(clearance).every((gap) => gap >= 0), `complete ${glyph.text} ink must fit its column/row`)
+        const fits = Object.values(clearance).every((gap) => gap >= 0)
+        if (responsive) requireFit(fits, 'complete string ink must fit its column/row',
+          { frame: frame.nominal, row, kind, text: glyph.text, box, bounds, clearance, line: glyph.line })
+        else assert.ok(fits, `complete ${glyph.text} ink must fit its column/row`)
         composite(glyph.file, x + box.x, y + box.y)
         ink.push({ row, kind, text: glyph.text, size: glyph.size, weight: glyph.weight, box, bounds, clearance })
         return box
       }
       const rowBlocks = []
-      for (const [index, entry] of OWN_FONT_ROWS.slice(0, frame.rows).entries()) {
+      for (const [index, entry] of rows.slice(0, frame.rows).entries()) {
         const top = marginY + index * (rowHeight + rowGap)
         drawing.push('-stroke', 'none', '-fill', entry.color, '-draw',
-          `roundrectangle ${x + Math.round(groupLeft)},${y + top} ${x + Math.round(groupLeft) + 2},${y + top + rowHeight - 1} 1.5,1.5`)
+          `roundrectangle ${x + Math.round(groupLeft)},${y + top} ${x + Math.round(groupLeft) + horizontal(3) - 1},${y + top + rowHeight - 1} ${1.5 * scale},${1.5 * scale}`)
         const bounds = { top, bottom: top + rowHeight }
-        const percent = await text(entry.percent, 30, 'bold', dark.onSurface)
+        const percent = await text(entry.percent, 30, 'bold', theme.onSurface)
         const percentBox = place(percent, Math.floor(percentColumn.right) - percent.width,
           top + (rowHeight - percent.height) / 2, { ...bounds, ...percentColumn }, index, 'percent')
         const labelBoxes = []
         if (labelColumn) {
           const center = (labelColumn.left + labelColumn.right) / 2
           const pool = await text(entry.pool, entry.family ? 16 : 18, entry.family ? 'regular' : 'bold',
-            entry.family ? dark.muted : dark.onSurface)
+            entry.family ? theme.muted : theme.onSurface)
           if (entry.family) {
-            const family = await text(entry.family, 18, 'bold', dark.onSurface)
-            const familyTop = top + (rowHeight - family.height - pool.height - 4) / 2
+            const family = await text(entry.family, 18, 'bold', theme.onSurface)
+            const familyTop = top + (rowHeight - family.height - pool.height - vertical(4)) / 2
             labelBoxes.push(place(family, center - family.width / 2, familyTop,
               { ...bounds, ...labelColumn }, index, 'family'))
-            labelBoxes.push(place(pool, center - pool.width / 2, familyTop + family.height + 4,
+            labelBoxes.push(place(pool, center - pool.width / 2, familyTop + family.height + vertical(4),
               { ...bounds, ...labelColumn }, index, 'pool'))
           } else {
             labelBoxes.push(place(pool, center - pool.width / 2, top + (rowHeight - pool.height) / 2,
@@ -554,30 +768,36 @@ async function renderOwnFontPreview(options) {
         }
         const detailBoxes = []
         if (detailColumn) {
-          const credits = entry.credits ? await text(entry.credits, 26, 'bold', dark.onSurface) : null
+          const money = (minor) => `${entry.money.currency} ${(minor / 100).toLocaleString('en-US',
+            { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          const credits = entry.money ? await text(money(entry.money.spentMinor), 18, 'bold', theme.onSurface) :
+            entry.credits ? await text(entry.credits, 26, 'bold', theme.onSurface) : null
           let reset = null
           if (entry.resetsAt) {
             const instant = new Date(entry.resetsAt)
             const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][instant.getUTCMonth()]
             const day = String(instant.getUTCDate()).padStart(2, '0')
             const time = `${String(instant.getUTCHours()).padStart(2, '0')}:${String(instant.getUTCMinutes()).padStart(2, '0')}`
-            reset = await text(`Reset ${day} ${month} ${time}`, 11, 'regular', dark.muted)
+            reset = await text(`Reset ${day} ${month} ${time}`, 11, 'regular', theme.muted)
           }
-          const detailHeight = (credits?.height ?? 0) + (reset?.height ?? 0) + (credits && reset ? 3 : 0)
-          let detailTop = top + (rowHeight - detailHeight) / 2
-          for (const [kind, glyph] of [['purchasedBalance', credits], ['reset', reset]]) {
+          if (entry.money) reset = await text(`/ ${money(entry.money.limitMinor)}`, 11, 'regular', theme.muted)
+          const detailHeight = (credits?.height ?? 0) + (reset?.height ?? 0) + (credits && reset ? vertical(3) : 0)
+          let detailTop = responsive && credits && reset ? top + vertical(29) - vertical(3) - credits.height :
+            top + (rowHeight - detailHeight) / 2
+          for (const [kind, glyph] of [[entry.money ? 'budgetSpent' : 'purchasedBalance', credits],
+            [entry.money ? 'budgetLimit' : 'reset', reset]]) {
             if (!glyph) continue
-            if (kind === 'reset') detailTop = top + 29
+            if (kind === 'reset' || kind === 'budgetLimit') detailTop = top + vertical(29)
             detailBoxes.push(place(glyph, detailColumn.right - glyph.width, detailTop,
               { ...bounds, ...detailColumn }, index, kind))
-            detailTop += glyph.height + 3
+            detailTop += glyph.height + vertical(3)
           }
         }
         const rowInk = ink.filter(({ row }) => row === index).map(({ box }) => box)
         const previous = rowBlocks.at(-1)
         const actualInk = extent(rowInk)
         rowBlocks.push({ id: entry.id, top, bottom: top + rowHeight, family: entry.family, pool: entry.pool,
-          accent: { x: Math.round(groupLeft), y: top, width: 3, height: rowHeight },
+          accent: { x: Math.round(groupLeft), y: top, width: horizontal(3), height: rowHeight },
           inkBounds: actualInk,
           inkGaps: { percentToLabel: labelBoxes.length ? extent(labelBoxes).left - percentBox.x - percentBox.width : null,
             labelToDetail: detailBoxes.length && labelBoxes.length ? extent(detailBoxes).left - extent(labelBoxes).right : null,
@@ -586,24 +806,52 @@ async function renderOwnFontPreview(options) {
             fromPreviousRow: previous ? actualInk.top - previous.inkBounds.bottom : null } })
       }
       const boxes = ink.map(({ box }) => box)
+      if (responsive) {
+        header.firstRowInkTop = rowBlocks[0].inkBounds.top
+        if (header.stale) header.stale.firstRowInkGap = header.firstRowInkTop - header.stale.ink.y - header.stale.ink.height
+      }
       for (const [index, box] of boxes.entries()) {
-        assert.ok(box.x >= 16 && box.y >= 16 && box.x + box.width <= width - 16 &&
-          box.y + box.height <= height - 16, 'all actual ink must retain inner padding')
-        for (const other of [...boxes.slice(index + 1), markInk]) {
+        if (responsive) {
+          const clearance = roundedClearance(box, card, radius)
+          requireFit(clearance.left >= horizontal(16) && clearance.right >= horizontal(16) &&
+            clearance.bottom >= vertical(16) && clearance.roundedEdge >= 0,
+            'all complete row ink must retain card padding', { frame: frame.nominal, card, box, clearance })
+        } else {
+          assert.ok(box.x >= 16 && box.y >= 16 && box.x + box.width <= width - 16 &&
+            box.y + box.height <= height - 16, 'all actual ink must retain inner padding')
+        }
+        for (const other of [...boxes.slice(index + 1), markInk, ...(header?.stale ? [header.stale.ink] : [])]) {
           const gap = separation(box, other)
-          assert.ok(gap.horizontal >= 0 || gap.vertical >= 0, 'text/watermark ink must not overlap')
+          if (responsive) requireFit(gap.horizontal >= 0 || gap.vertical >= 0,
+            'text and decoration ink must not overlap', { frame: frame.nominal, box, other, gap })
+          else assert.ok(gap.horizontal >= 0 || gap.vertical >= 0, 'text/watermark ink must not overlap')
         }
       }
-      const description = `${width} × ${height} · ${columns === 1 ? '% only' : `${columns} columns`} / ${frame.rows} rows${columns === 3 ? ' · nominal' : ''}`
+      const description = responsive ?
+        `${columns === 3 ? `${frame.name} · ` : ''}${frame.nominal.width} × ${frame.nominal.height} · ${frame.rows} rows${columns === 1 ? ' · % only' : ''}` :
+        `${width} × ${height} · ${columns === 1 ? '% only' : `${columns} columns`} / ${frame.rows} rows${columns === 3 ? ' · nominal' : ''}`
       await caption(description, frame.captionY, x + width / 2, 11)
-      measurements.push({ ...frame, padding: 16, rowHeight, rowGap, marginY, groupLeft, groupWidth,
+      measurements.push({ ...frame, padding: horizontal(16), rowHeight, rowGap, marginY, groupLeft, groupWidth,
         columnBounds: { percent: percentColumn, label: labelColumn, rightDetail: detailColumn },
+        ...(responsive ? { card, radius, contentHeight, header,
+          exterior: 'Transparent proposed exterior, composited over a review-only checker; full-host outline is review chrome.',
+          nominalGeometry: { host: { width: frame.nominal.width, height: frame.nominal.height },
+            card: { width: frame.cardWidth, height: 19 + frame.rows * 44 + (frame.rows - 1) * 8 + 16 },
+            rowHeight: 44, rowGap: 8, headerHeight: 19, bottomPadding: 16, gridWidth: groupUnits },
+        } : {}),
         rowBlocks, ink, watermarkInk: markInk,
         watermarkClearances: ink.map(({ row, kind, box }) => ({ row, kind, ...separation(box, markInk) })) })
     }
-    await caption(`Measured host ${measuredAllocation.width.toFixed(3)} × 344 dp · old layout unchanged`, 468, boardSize.width / 2, 11)
-    await caption('Optional absolute resets · UTC · not implemented', 736, boardSize.width / 2, 11)
-    await caption('Host art only · approval pending', 756, boardSize.width / 2)
+    if (responsive) {
+      await caption(`Historical measured host ${measuredAllocation.width.toFixed(3)} × 344 dp · 480 height is illustrative · checker shows proposed transparency`,
+        vertical(1092), boardSize.width / 2, 11)
+      await caption('PRIVATE preview · exact-image Owner approval required before runtime/canonical/baseline adoption',
+        vertical(1114), boardSize.width / 2, 11)
+    } else {
+      await caption(`Measured host ${measuredAllocation.width.toFixed(3)} × 344 dp · old layout unchanged`, 468, boardSize.width / 2, 11)
+      await caption('Optional absolute resets · UTC · not implemented', 736, boardSize.width / 2, 11)
+      await caption('Host art only · approval pending', 756, boardSize.width / 2)
+    }
     for (const [index, { box }] of captions.entries()) {
       for (const other of [...frames, ...captions.slice(index + 1).map(({ box }) => box)]) {
         const gap = separation(box, other)
@@ -615,7 +863,18 @@ async function renderOwnFontPreview(options) {
     assert.deepEqual(pngSize(await readFile(png)), boardSize, 'board must retain nominal preview dimensions')
     const decoded = (await image([png, '-format', '%w %h', 'info:'])).toString()
     assert.equal(decoded, `${boardSize.width} ${boardSize.height}`, 'completed PNG must decode')
-    assert.deepEqual(await hashes(protectedPaths), protectedBefore, 'preview must not modify protected default inputs/exports')
+    const protectedAfter = await hashes(protectedPaths)
+    assert.deepEqual(protectedAfter, protectedBefore, 'preview must not modify protected default inputs/exports')
+    const tools = await toolIdentities()
+    let inputHashesAfter, fontHashesAfter
+    if (responsive) {
+      inputHashesAfter = await hashes(Object.keys(inputHashes))
+      fontHashesAfter = Object.fromEntries(await Promise.all(Object.entries(fonts).map(async ([weight, font]) =>
+        [weight, await hashFile(font.path)])))
+      assert.deepEqual(inputHashesAfter, inputHashes, 'responsive source and reference inputs must stay unchanged')
+      assert.deepEqual(fontHashesAfter, OWN_FONT_HASHES, 'responsive font bytes must stay pinned')
+      assert.deepEqual(tools, toolsBefore, 'responsive executable identities must stay unchanged')
+    }
     controller.signal.throwIfAborted()
     const metadata = {
       status: 'UNAPPROVED PREVIEW ONLY',
@@ -624,17 +883,36 @@ async function renderOwnFontPreview(options) {
       nativeReference: { file: HOST_FRAME, png: hostPng, pngSha256: host.pngSha256,
         bounds: roots[0].bounds, pxPerDp: host.pxPerDp, systemFontScale: host.systemFontScale,
         allocationDp: measuredAllocation, meaning: 'Existing old native layout; not a repair or resized-state proof.' },
-      illustrativeReference: { asOf: OWN_FONT_AS_OF, timezone: 'UTC',
+      illustrativeReference: responsive ? { timezone: 'UTC',
+        valueSource: `${RESPONSIVE_INPUT_DIR}/AFTER_HOME_SETTLED.private.png`,
+        resetSource: `${RESPONSIVE_INPUT_DIR}/CURRENT_WIDGET_RESETS.json`,
+        staleObservation: `${RESPONSIVE_INPUT_DIR}/AFTER_EDITOR_BACK_IMMEDIATE.private.png`,
+        observedDeviceOffset: '+01:00; separate historical observation, not a measured timezone name or preview display zone',
+        moneySource: 'Explicit synthetic USD illustration; the native widget did not carry these amounts.',
+        measuredHost: '360.381 × 344 dp is historical provenance; nominal 360 width rounds to 945 preview pixels, not the measured 946 native pixels.',
+        illustrativeSizes: '480 height and reduced hosts illustrate this proposal; no native resized-state acceptance.',
+      } : { asOf: OWN_FONT_AS_OF, timezone: 'UTC',
         resetSource: 'Fixed proposed absolute instants from DESIGN_BRIEF.md, not photo/provider reset facts.',
         reducedSizes: '266 is a nominal historical width reference; 150 and 184 are illustrative, not resized-state acceptance.' },
       invocation: { cwd: process.cwd(), argv: [process.execPath, ...process.argv.slice(1)] },
-      tools: { node: { executable: node, version: process.version, sha256: await hashFile(node) },
-        imageMagick: { executable: convert, version: imageMagickVersion.trim(), sha256: await hashFile(convert) } },
-      units: 'Nominal host preview units at 72dpi, not Android dp/sp or an adopted native sizing strategy.',
-      fonts, inputHashes, protectedInputsUnchanged: protectedBefore,
-      rows: OWN_FONT_ROWS, theme: dark,
+      tools,
+      units: responsive ? 'Nominal preview units at 2.625 raster pixels per unit, not Android Paint or native fit acceptance.' :
+        'Nominal host preview units at 72dpi, not Android dp/sp or an adopted native sizing strategy.',
+      fonts, inputHashes,
+      ...(responsive ? { profile: options.profile, scale, inputHashesAfter, fontHashesAfter, toolsBefore,
+        protectedBefore, protectedAfter,
+        rasterization: { horizontal: 'Round each nominal boundary once.',
+          vertical: 'Ceil component heights individually; center the resulting intrinsic card on integer pixels.',
+          ink: 'Complete ImageMagick label alpha bounds; full untrimmed padded line additionally retained for STALE.' },
+        nominalGrid: { accent: 12, percent: 84, label: 108, details: 112, gaps: [6, 6], sidePadding: 16, width: 328 },
+        syntheticMoney: { ...RESPONSIVE_MONEY, remainingMinor: RESPONSIVE_MONEY.limitMinor - RESPONSIVE_MONEY.spentMinor,
+          remainingPercent: RESPONSIVE_REMAINING, roundedRemainingPercent: Math.round(RESPONSIVE_REMAINING),
+          calculation: '(limitMinor - spentMinor) * 100 / limitMinor; display rounds only the percentage', synthetic: true },
+      } : { protectedInputsUnchanged: protectedBefore }),
+      rows, theme: responsive ? { light, dark } : dark,
       typography: { percent: [30, 700], purchasedBalance: [26, 700], family: [18, 700], pool: [16, 400],
-        familyContainedLabel: [18, 700], reset: [11, 400] },
+        familyContainedLabel: [18, 700], reset: [11, 400],
+        ...(responsive ? { budgetSpent: [18, 700], budgetLimit: [11, 400], stale: [11, 700] } : {}) },
       measurements, captions,
       uncertainty: [
         'Explicit pinned font files render the shown samples; no system family fallback is requested.',
@@ -647,6 +925,17 @@ async function renderOwnFontPreview(options) {
     }
     await writeFile(join(directory, 'UNAPPROVED-PREVIEW-ONLY.json'), `${JSON.stringify(metadata, null, 2)}\n`, { flag: 'wx' })
     console.log(`UNAPPROVED PREVIEW ONLY: ${png}`)
+  } catch (error) {
+    if (responsive && error.fit) {
+      // A failed measurement is evidence, never an implicitly adjusted or approved board.
+      await writeFile(join(directory, 'UNAPPROVED-PREVIEW-ONLY.json'), `${JSON.stringify({
+        status: 'FAILED PRIVATE PREVIEW FIT; no successful candidate or native acceptance',
+        profile: options.profile, scale, units: 'Raster pixels at 2.625 per nominal preview unit',
+        failure: error.fit, measurements, fonts, toolsBefore, inputHashes, rows, commands,
+        protectedBefore, protectedAfter: await hashes(protectedPaths),
+      }, null, 2)}\n`, { flag: 'wx' })
+    }
+    throw error
   } finally {
     // Abort rejects before child close; retire the child before removing owned intermediates.
     await closed
