@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/sync/provider_reporting.dart';
 import 'package:ward_pulse_phone/sync/provider_reporting_clients.dart';
+import 'package:ward_pulse_phone/sync/report_period.dart';
 
 void main() {
   group('AnthropicReportingClient', () {
@@ -359,6 +360,7 @@ void main() {
   });
 
   group('CursorPlatformClient', () {
+    final period = ReportPeriodBounds.utc(DateTime.utc(2026, 7, 19, 12));
     const missingScope = 'Team API key missing required scope: read:*';
     const invalidKey = 'Invalid API key';
     const unrelatedPermission = 'Insufficient permissions or scope';
@@ -423,7 +425,6 @@ void main() {
           });
           final client = CursorPlatformClient(
             http: ProviderReportingHttp(transport: transport),
-            clock: () => DateTime.utc(2026, 7, 19, 12),
           );
           final safeDiagnostics = allOf(
             isNot(contains(scenario.body)),
@@ -435,7 +436,7 @@ void main() {
           );
 
           await expectLater(
-            client.fetchReports(adminApiKey: apiKey),
+            client.fetchReports(adminApiKey: apiKey, period: period),
             throwsA(
               isA<ProviderReportingException>()
                   .having((error) => error.failure, 'failure', scenario.failure)
@@ -456,38 +457,311 @@ void main() {
       );
     }
 
-    test('uses Basic auth and paginates spend pages', () async {
-      final transport = _FakeTransport({
-        '/teams/daily-usage-data': [_response('{"data":[]}')],
-        '/teams/spend': [
-          _response(
-            '{"teamMemberSpend":[{"overallSpendCents":100}],"totalPages":2}',
+    test(
+      'uses one period, Basic auth and unchanged raw partial event pages',
+      () async {
+        final row = {
+          'timestamp': '${period.todayStartMs}',
+          'isChargeable': true,
+          'chargedCents': 0.125,
+        };
+        final raw = [
+          jsonEncode(
+            _eventPage(period, events: [row], numPages: 3, total: 2),
+          ).replaceFirst('0.125', '0.125000000000000000000000000001'),
+          jsonEncode(_eventPage(period, numPages: 3, currentPage: 2, total: 2)),
+          jsonEncode(
+            _eventPage(
+              period,
+              events: [row],
+              numPages: 3,
+              currentPage: 3,
+              total: 2,
+            ),
           ),
-          _response(
-            '{"teamMemberSpend":[{"overallSpendCents":50}],"totalPages":2}',
-          ),
-        ],
-      });
-      final client = CursorPlatformClient(
-        http: ProviderReportingHttp(transport: transport),
-        clock: () => DateTime.utc(2026, 7, 19, 12),
-      );
+        ];
+        final transport = _FakeTransport({
+          '/teams/daily-usage-data': [_response('{"data":[]}')],
+          '/teams/filtered-usage-events': raw.map(_response).toList(),
+        });
+        final client = CursorPlatformClient(
+          http: ProviderReportingHttp(transport: transport),
+        );
+        final reports = await client.fetchReports(
+          adminApiKey: 'synthetic-team-key',
+          period: period,
+        );
+        expect(reports.dailyUsage, ['{"data":[]}']);
+        expect(reports.usageEvents, raw);
+        expect(jsonDecode(transport.requestBodies.first!), {
+          'startDate':
+              period.endExclusiveMs - const Duration(days: 14).inMilliseconds,
+          'endDate': period.endExclusiveMs,
+        });
+        for (var index = 1; index < transport.requests.length; index++) {
+          expect(jsonDecode(transport.requestBodies[index]!), {
+            'startDate': period.requestStartMs,
+            'endDate': period.endExclusiveMs - 1,
+            'page': index,
+            'pageSize': 1000,
+          });
+        }
+        for (final request in transport.requests) {
+          expect(
+            request.headers['Authorization'],
+            encodeBasicAuth('synthetic-team-key'),
+          );
+        }
+      },
+    );
 
-      final reports = await client.fetchReports(adminApiKey: 'secret-team-key');
+    test(
+      'skips integer-empty money but retains daily history at midnight and +500us',
+      () async {
+        for (final micros in [0, 500]) {
+          final period = ReportPeriodBounds.utc(
+            DateTime.utc(2026, 6, 1).add(Duration(microseconds: micros)),
+          );
+          final transport = _FakeTransport({
+            '/teams/daily-usage-data': [_response('{"data":[]}')],
+          });
+          final reports = await CursorPlatformClient(
+            http: ProviderReportingHttp(transport: transport),
+          ).fetchReports(adminApiKey: 'synthetic', period: period);
+          expect(reports.usageEvents, isEmpty);
+          expect(reports.dailyUsage, hasLength(1));
+          expect(transport.requests, hasLength(1));
+        }
+      },
+    );
 
-      expect(reports.dailyUsage, ['{"data":[]}']);
-      expect(reports.spend, hasLength(2));
-      final expectedAuth = encodeBasicAuth('secret-team-key');
-      for (final request in transport.requests) {
-        expect(request.headers['Authorization'], expectedAuth);
+    test(
+      'requests a positive wider period even when Today and Month are integer-empty',
+      () async {
+        final period = ReportPeriodBounds.utc(
+          DateTime.utc(2026, 8, 1, 0, 0, 0, 0, 500),
+        );
+        final transport = _FakeTransport({
+          '/teams/daily-usage-data': [_response('{"data":[]}')],
+          '/teams/filtered-usage-events': [
+            _response(jsonEncode(_eventPage(period))),
+          ],
+        });
+        await CursorPlatformClient(
+          http: ProviderReportingHttp(transport: transport),
+        ).fetchReports(adminApiKey: 'synthetic', period: period);
+        expect(period.endExclusiveMs, period.monthStartMs);
+        expect(
+          jsonDecode(transport.requestBodies.last!)['startDate'],
+          period.weekStartMs,
+        );
+      },
+    );
+
+    for (final count in [0, 1]) {
+      for (final current in [0, 1]) {
+        test(
+          'accepts bounded terminal-empty metadata $count/$current',
+          () async {
+            final page = _eventPage(
+              period,
+              numPages: count,
+              currentPage: current,
+            );
+            page['pagination']['hasNextPage'] = false;
+            page['pagination']['hasPreviousPage'] = false;
+            final transport = _FakeTransport({
+              '/teams/daily-usage-data': [_response('{"data":[]}')],
+              '/teams/filtered-usage-events': [_response(jsonEncode(page))],
+            });
+            final reports = await CursorPlatformClient(
+              http: ProviderReportingHttp(transport: transport),
+            ).fetchReports(adminApiKey: 'synthetic', period: period);
+            expect(reports.usageEvents, hasLength(1));
+          },
+        );
       }
-      final spendBodies =
-          transport.requestBodies
-              .where((body) => body != null && body.contains('pageSize'))
-              .toList();
-      expect(jsonDecode(spendBodies[0]!), {'page': 1, 'pageSize': 100});
-      expect(jsonDecode(spendBodies[1]!), {'page': 2, 'pageSize': 100});
-    });
+    }
+
+    for (final scenario in <(String?, String, Object?)>[
+      (null, 'usageEvents', null),
+      (null, 'totalUsageEventsCount', -1),
+      (null, 'totalUsageEventsCount', 0.5),
+      (null, 'totalUsageEventsCount', '1'),
+      ('pagination', 'numPages', 0),
+      ('pagination', 'numPages', 1.5),
+      ('pagination', 'currentPage', 2),
+      ('pagination', 'pageSize', 100),
+      ('pagination', 'hasNextPage', true),
+      ('pagination', 'hasPreviousPage', true),
+      ('pagination', 'hasNextPage', null),
+      ('pagination', 'hasPreviousPage', 'false'),
+      ('period', 'startDate', period.requestStartMs + 1),
+      ('period', 'endDate', period.endExclusiveMs),
+      ('period', 'startDate', '${period.requestStartMs}'),
+    ]) {
+      test(
+        'rejects contradictory event metadata ${scenario.$1}/${scenario.$2}/${scenario.$3}',
+        () async {
+          final page = _eventPage(period, events: [<String, Object?>{}]);
+          final target = scenario.$1 == null ? page : page[scenario.$1] as Map;
+          target[scenario.$2] = scenario.$3;
+          final transport = _FakeTransport({
+            '/teams/daily-usage-data': [_response('{"data":[]}')],
+            '/teams/filtered-usage-events': [_response(jsonEncode(page))],
+          });
+          await expectLater(
+            CursorPlatformClient(
+              http: ProviderReportingHttp(transport: transport),
+            ).fetchReports(adminApiKey: 'synthetic', period: period),
+            throwsA(
+              isA<ProviderReportingException>().having(
+                (error) => error.failure,
+                'failure',
+                ProviderReportingFailure.invalidResponse,
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    test(
+      'rejects missing fields, capacity overflow, unstable counts and page identities',
+      () async {
+        final variants = <List<Map<String, dynamic>>>[];
+        for (final key in [
+          'usageEvents',
+          'totalUsageEventsCount',
+          'pagination',
+          'period',
+        ]) {
+          variants.add([_eventPage(period)..remove(key)]);
+        }
+        for (final key in [
+          'numPages',
+          'currentPage',
+          'pageSize',
+          'hasNextPage',
+          'hasPreviousPage',
+        ]) {
+          final page = _eventPage(period);
+          (page['pagination'] as Map).remove(key);
+          variants.add([page]);
+        }
+        variants.add([_eventPage(period, events: List.filled(1001, null))]);
+        variants.add([_eventPage(period, total: 1)]);
+        for (final (key, value) in [
+          ('currentPage', 1),
+          ('numPages', 3),
+          ('pageSize', 999),
+        ]) {
+          final second = _eventPage(period, numPages: 2, currentPage: 2);
+          second['pagination'][key] = value;
+          variants.add([_eventPage(period, numPages: 2), second]);
+        }
+        variants.add([
+          _eventPage(period, numPages: 2),
+          _eventPage(period, numPages: 2, currentPage: 2, total: 1),
+        ]);
+        for (final pages in variants) {
+          final transport = _FakeTransport({
+            '/teams/daily-usage-data': [_response('{"data":[]}')],
+            '/teams/filtered-usage-events':
+                pages.map((page) => _response(jsonEncode(page))).toList(),
+          });
+          await expectLater(
+            CursorPlatformClient(
+              http: ProviderReportingHttp(transport: transport),
+            ).fetchReports(adminApiKey: 'synthetic', period: period),
+            throwsA(
+              isA<ProviderReportingException>().having(
+                (error) => error.failure,
+                'failure',
+                ProviderReportingFailure.invalidResponse,
+              ),
+            ),
+          );
+        }
+      },
+    );
+
+    test(
+      'validates metadata lexemes before floating-point rounding can hide fractions',
+      () async {
+        final raw = jsonEncode(
+          _eventPage(period, events: [<String, Object?>{}]),
+        );
+        final invalid = [
+          raw.replaceFirst('"numPages":1', '"numPages":1.00000000000000000001'),
+          raw.replaceFirst(
+            '"totalUsageEventsCount":1',
+            '"totalUsageEventsCount":1.00000000000000000001',
+          ),
+          raw.replaceFirst(
+            '"startDate":${period.requestStartMs}',
+            '"startDate":${period.requestStartMs}.00000000000000000001',
+          ),
+        ];
+        for (final page in invalid) {
+          final transport = _FakeTransport({
+            '/teams/daily-usage-data': [_response('{"data":[]}')],
+            '/teams/filtered-usage-events': [_response(page)],
+          });
+          await expectLater(
+            CursorPlatformClient(
+              http: ProviderReportingHttp(transport: transport),
+            ).fetchReports(adminApiKey: 'synthetic', period: period),
+            throwsA(
+              isA<ProviderReportingException>().having(
+                (error) => error.failure,
+                'failure',
+                ProviderReportingFailure.invalidResponse,
+              ),
+            ),
+          );
+        }
+        final integral = raw
+            .replaceFirst('"numPages":1', '"numPages":1e0')
+            .replaceFirst('"pageSize":1000', '"pageSize":1000.0')
+            .replaceFirst(
+              '"startDate":${period.requestStartMs}',
+              '"startDate":${period.requestStartMs}.0',
+            );
+        final transport = _FakeTransport({
+          '/teams/daily-usage-data': [_response('{"data":[]}')],
+          '/teams/filtered-usage-events': [_response(integral)],
+        });
+        final reports = await CursorPlatformClient(
+          http: ProviderReportingHttp(transport: transport),
+        ).fetchReports(adminApiKey: 'synthetic', period: period);
+        expect(reports.usageEvents, [integral]);
+      },
+    );
+
+    test(
+      'rejects a page-100 continuation instead of publishing partial evidence',
+      () async {
+        final transport = _FakeTransport({
+          '/teams/daily-usage-data': [_response('{"data":[]}')],
+          '/teams/filtered-usage-events': [
+            for (var page = 1; page <= 100; page++)
+              _response(
+                jsonEncode(
+                  _eventPage(period, numPages: 101, currentPage: page),
+                ),
+              ),
+          ],
+        });
+        await expectLater(
+          CursorPlatformClient(
+            http: ProviderReportingHttp(transport: transport),
+          ).fetchReports(adminApiKey: 'synthetic', period: period),
+          throwsA(isA<ProviderReportingException>()),
+        );
+        expect(transport.requests, hasLength(101));
+      },
+    );
 
     test('maps a server error to unavailable', () async {
       final transport = _FakeTransport({
@@ -498,14 +772,13 @@ void main() {
             body: '{}',
           ),
         ],
-        '/teams/spend': [_response('{}')],
       });
       final client = CursorPlatformClient(
         http: ProviderReportingHttp(transport: transport),
       );
 
       await expectLater(
-        client.fetchReports(adminApiKey: 'secret-team-key'),
+        client.fetchReports(adminApiKey: 'secret-team-key', period: period),
         throwsA(
           isA<ProviderReportingException>().having(
             (error) => error.failure,
@@ -517,6 +790,28 @@ void main() {
     });
   });
 }
+
+Map<String, dynamic> _eventPage(
+  ReportPeriodBounds period, {
+  List<Object?> events = const [],
+  int numPages = 1,
+  int currentPage = 1,
+  int? total,
+}) => {
+  'usageEvents': events,
+  'totalUsageEventsCount': total ?? events.length,
+  'pagination': {
+    'numPages': numPages,
+    'currentPage': currentPage,
+    'pageSize': 1000,
+    'hasNextPage': currentPage < numPages,
+    'hasPreviousPage': currentPage > 1,
+  },
+  'period': {
+    'startDate': period.requestStartMs,
+    'endDate': period.endExclusiveMs - 1,
+  },
+};
 
 ProviderHttpResponse _response(String body) {
   return ProviderHttpResponse(

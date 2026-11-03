@@ -161,6 +161,24 @@ Team key, not a personal User key. See [connection status](/guide/providers#chec
 Team Admin API history counts requests, not tokens. These are raw usage events, not billed
 request units. If no team activity is reported, **Usage history** may be absent.
 
+**Today**, **Week** and **Month** spend show the authorized team's extra-paid usage, including
+applicable Cursor fees. Included usage does not contribute to these amounts, even when it
+appears in request history. Today starts at midnight UTC, Week on Monday UTC, and Month on
+the first day of the calendar month UTC; these are not billing-cycle totals or personal-plan
+percentages.
+
+**Budget limits** under Providers are local advisory ceilings. Your existing Cursor Month
+limit keeps its stored value; it now compares against extra-paid calendar-month spend.
+Review whether that amount still suits your intended limit. A percentage needs available
+spend and a positive USD ceiling. An unset ceiling differs from a saved zero ceiling, which
+cannot produce a percentage. Unavailable periods stay listed, and saved choices remain
+removable.
+
+Reported **USD 0.00** means complete reporting found no rounded extra-paid spend for an
+elapsed period. Unavailable or incomplete data is not zero. At a UTC period's first
+millisecond there may be no elapsed reporting interval yet. **Updated** is the report's
+capture time; a retained stale result keeps its original successful update time.
+
 Recent request history and spend from **Cursor Team Admin API may take several hours or
 longer to appear**. If the row shows **Connected** but recent activity is missing, wait a few
 hours, then refresh again. Repeated **Refresh** taps cannot make Cursor publish reports sooner.
@@ -168,6 +186,10 @@ hours, then refresh again. Repeated **Refresh** taps cannot make Cursor publish 
 Cursor documents [hourly aggregation](https://cursor.com/docs/api), not a guarantee that
 every request appears within an hour. **Updated** reflects WardPulse's report snapshot;
 it does not mean Cursor has included all recent activity.
+
+Cursor recommends polling at most once an hour and documents a team limit of 60 requests
+per minute. Choose an hourly refresh interval and avoid repeated manual refreshes. Those
+limits do not promise when new activity will become available.
 
 **Cursor plan** percentages come from a separate dashboard connection. The reporting delay
 described here applies to **Team Admin API**.

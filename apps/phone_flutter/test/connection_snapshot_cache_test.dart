@@ -69,6 +69,127 @@ void main() {
             const DashboardLoadException(issue: DashboardSyncIssue.rateLimited),
   );
 
+  test(
+    'Cursor legacy basis misses preserve bytes, timestamps and credential epochs',
+    () async {
+      const id = 'cursor.platform';
+      await credentials('ui', id).write('synthetic-team-key');
+      final original = firstAt.add(const Duration(microseconds: 500));
+      final version = (await credentials('ui', id).read())!.version;
+      final snapshot = _snapshot('cursor', id, original, 500);
+      await cache('ui', id).store(snapshot, version);
+      final legacy = [
+        snapshot.toJsonString(),
+        jsonEncode({
+          'monetaryBasis': 'cursor-cycle-v0',
+          'snapshot': snapshot.toJson(),
+        }),
+        '{unmarked-unreadable',
+      ];
+      for (final encoded in legacy) {
+        await bridge.invoke('test', 'setDisk', {
+          'key': '$id.snapshot',
+          'value': encoded,
+        });
+        await bridge.invoke('test', 'setDisk', {
+          'key': '$id.snapshotTimeUnit',
+          'value': 'milliseconds',
+        });
+        await bridge.invoke('test', 'setDisk', {
+          'key': '$id.snapshotAt',
+          'value': original.millisecondsSinceEpoch,
+        });
+        await bridge.invoke('test', 'restart', {});
+        final platform = _RecordingCachePlatform(bridge.platform('cold'));
+        final cold = ConnectionSnapshotCache(
+          connection: id,
+          platform: platform,
+          readCredentialVersion:
+              () async => (await credentials('cold', id).read())?.version,
+        );
+        for (final expected in <CredentialVersion?>[null, version]) {
+          final captured = await cold.capture(expected: expected);
+          expect(captured.snapshot, isNull);
+          expect(captured.version!.values, version.values);
+        }
+        expect(platform.methods, isNot(contains('upgradeSnapshotTimestamp')));
+        expect(platform.methods, isNot(contains('clearSnapshot')));
+        expect(
+          await bridge.invoke('test', 'readSnapshot', {
+            'connection': id,
+            'expected': version.values,
+          }),
+          encoded,
+        );
+        final retained = (await credentials('ui', id).read())!;
+        expect(retained.version.values, version.values);
+        expect(retained.value, 'synthetic-team-key');
+      }
+      final fresh =
+          await repository(
+            'live',
+            id,
+            () async => _snapshot('cursor', id, nextAt, 20).toJsonString(),
+          ).load();
+      expect(fresh.accounts.single.today.spent?.minorUnits, 20);
+      expect((await cache('cold', id).capture()).snapshot!.generatedAt, nextAt);
+    },
+  );
+
+  test(
+    'Cursor new-basis cold fallback keeps success times and refuses older writes',
+    () async {
+      const id = 'cursor.platform';
+      final original = firstAt.add(const Duration(microseconds: 500));
+      await credentials('ui', id).write('synthetic-team-key');
+      final fresh =
+          await repository(
+            'ui',
+            id,
+            () async => _snapshot('cursor', id, original, 25).toJsonString(),
+          ).load();
+      final version = (await credentials('ui', id).read())!.version;
+      final encoded =
+          await bridge.invoke('test', 'readSnapshot', {
+                'connection': id,
+                'expected': version.values,
+              })
+              as String;
+      final wrapper = jsonDecode(encoded) as Map;
+      expect(wrapper['monetaryBasis'], 'cursor-extra-paid-calendar-v1');
+      expect(
+        (wrapper['snapshot'] as Map)['generatedAt'],
+        original.toIso8601String(),
+      );
+      expect(
+        jsonDecode(fresh.toJsonString()),
+        isNot(contains('monetaryBasis')),
+      );
+      await bridge.invoke('test', 'restart', {});
+      final stale =
+          await repository(
+            'cold',
+            id,
+            () async => throw StateError('Synthetic offline report'),
+          ).load();
+      expect(stale.accounts.single.status, ProviderStatus.stale);
+      expect(stale.accounts.single.today.spent?.minorUnits, 25);
+      expect(stale.generatedAt, original);
+      expect(stale.accounts.single.lastSuccessfulSyncAt, original);
+      expect(
+        await cache(
+          'old',
+          id,
+        ).store(_snapshot('cursor', id, firstAt, 1), version),
+        isFalse,
+      );
+      expect(
+        (await cache('cold', id).capture()).snapshot!.generatedAt,
+        original,
+      );
+    },
+  );
+
   group('versioned reporting feedback', () {
     const ids = [
       ProviderConnections.openAiPlatform,
@@ -111,7 +232,9 @@ void main() {
         String empty(String _) =>
             DashboardSnapshot.empty(generatedAt: firstAt).toJsonString();
         Map<String, dynamic>? anthropicInput;
-        final capturedAt = firstAt.add(const Duration(microseconds: 1));
+        Map<String, dynamic>? cursorInput;
+        var clockReads = 0;
+        final capturedAt = firstAt.add(const Duration(microseconds: 500));
         final repository = buildLiveProviderStack(
           credentialStore: credentials,
           claudeAccountService: const EmptyClaudeAccountService(),
@@ -124,17 +247,20 @@ void main() {
             logger: const _SilentLogger(),
           ),
           caches: caches,
-          clock: () => capturedAt,
+          clock: () {
+            clockReads++;
+            return capturedAt;
+          },
           anthropicReportingClient: AnthropicReportingClient(http: http),
-          cursorReportingClient: CursorPlatformClient(
-            http: http,
-            clock: () => firstAt,
-          ),
+          cursorReportingClient: CursorPlatformClient(http: http),
           normalizeAnthropicReport: (report) {
             anthropicInput = jsonDecode(report) as Map<String, dynamic>;
             return empty(report);
           },
-          normalizeCursorPlatformReport: empty,
+          normalizeCursorPlatformReport: (report) {
+            cursorInput = jsonDecode(report) as Map<String, dynamic>;
+            return empty(report);
+          },
           mergeSnapshots: _merge,
           logger: const _SilentLogger(),
         );
@@ -148,6 +274,34 @@ void main() {
         expect(
           anthropicInput!['todayStart'],
           DateTime.utc(2026, 10, 13).toIso8601String(),
+        );
+        expect(
+          clockReads,
+          2,
+        ); // One capture for each configured reporting client.
+        expect(cursorInput!['generatedAt'], capturedAt.toIso8601String());
+        expect(
+          cursorInput!['endExclusiveMs'],
+          capturedAt.millisecondsSinceEpoch,
+        );
+        expect(
+          cursorInput!['todayStartMs'],
+          DateTime.utc(2026, 10, 13).millisecondsSinceEpoch,
+        );
+        expect(
+          cursorInput!['weekStartMs'],
+          DateTime.utc(2026, 10, 12).millisecondsSinceEpoch,
+        );
+        expect(
+          cursorInput!['monthStartMs'],
+          DateTime.utc(2026, 10, 1).millisecondsSinceEpoch,
+        );
+        expect(cursorInput!['requestStartMs'], cursorInput!['monthStartMs']);
+        final eventRequest = transport.eventRequest!;
+        expect(eventRequest['startDate'], cursorInput!['requestStartMs']);
+        expect(
+          eventRequest['endDate'],
+          (cursorInput!['endExclusiveMs'] as int) - 1,
         );
         expect(snapshot.accounts, isEmpty);
         expect(
@@ -178,7 +332,7 @@ void main() {
             '/v1/organizations/usage_report/messages',
             '/v1/organizations/cost_report',
             '/teams/daily-usage-data',
-            '/teams/spend',
+            '/teams/filtered-usage-events',
           ]),
         );
         expect(snapshot.toJsonString(), isNot(contains('synthetic-')));
@@ -1134,8 +1288,31 @@ final class _HeldDashboardRepository extends DashboardRepository {
 
 final class _EmptyReportingTransport implements ProviderHttpTransport {
   final requests = <String>[];
-  ProviderHttpResponse reply(Uri uri) {
+  Map<String, dynamic>? eventRequest;
+  ProviderHttpResponse reply(Uri uri, [String? requestBody]) {
     requests.add(uri.path);
+    if (uri.path == '/teams/filtered-usage-events') {
+      eventRequest = jsonDecode(requestBody!) as Map<String, dynamic>;
+      return ProviderHttpResponse(
+        statusCode: 200,
+        headers: const {},
+        body: jsonEncode({
+          'usageEvents': <Object>[],
+          'totalUsageEventsCount': 0,
+          'pagination': {
+            'numPages': 1,
+            'currentPage': 1,
+            'pageSize': 1000,
+            'hasNextPage': false,
+            'hasPreviousPage': false,
+          },
+          'period': {
+            'startDate': eventRequest!['startDate'],
+            'endDate': eventRequest!['endDate'],
+          },
+        }),
+      );
+    }
     return const ProviderHttpResponse(
       statusCode: 200,
       headers: {},
@@ -1153,7 +1330,7 @@ final class _EmptyReportingTransport implements ProviderHttpTransport {
     Uri uri, {
     required Map<String, String> headers,
     String? body,
-  }) async => reply(uri);
+  }) async => reply(uri, body);
 }
 
 final class _HeldReadFailure implements ConnectionCredentialAccess {
@@ -1220,4 +1397,15 @@ final class _CurrentReadFailure implements ConnectionCredentialAccess {
   @override
   Future<R> serializeFetch<R>(Future<R> Function() operation) =>
       access.serializeFetch(operation);
+}
+
+final class _RecordingCachePlatform implements ConnectionCachePlatform {
+  _RecordingCachePlatform(this.delegate);
+  final ConnectionCachePlatform delegate;
+  final methods = <String>[];
+  @override
+  Future<Object?> invoke(String method, Map<String, Object?> arguments) {
+    methods.add(method);
+    return delegate.invoke(method, arguments);
+  }
 }

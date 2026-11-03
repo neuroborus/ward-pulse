@@ -37,8 +37,7 @@ DashboardRepository buildLiveProviderStack({
   final anthropicClient =
       anthropicReportingClient ?? AnthropicReportingClient();
   final cursorPlanClient = CursorPlanClient();
-  final cursorPlatformClient =
-      cursorReportingClient ?? CursorPlatformClient(clock: now);
+  final cursorPlatformClient = cursorReportingClient ?? CursorPlatformClient();
 
   DashboardRepository connect({
     required String connection,
@@ -121,12 +120,21 @@ DashboardRepository buildLiveProviderStack({
     fallback: claude,
     normalizeReport: normalizeCursorPlatformReport,
     loadCredentialReport: (key) async {
-      final reports = await cursorPlatformClient.fetchReports(adminApiKey: key);
+      final period = ReportPeriodBounds.utc(now());
+      final reports = await cursorPlatformClient.fetchReports(
+        adminApiKey: key,
+        period: period,
+      );
       return jsonEncode({
         'accountId': 'cursor-team-local',
-        'generatedAt': now().toUtc().toIso8601String(),
+        'generatedAt': period.generatedAt.toIso8601String(),
+        'requestStartMs': period.requestStartMs,
+        'endExclusiveMs': period.endExclusiveMs,
+        'todayStartMs': period.todayStartMs,
+        'weekStartMs': period.weekStartMs,
+        'monthStartMs': period.monthStartMs,
         'dailyUsagePages': reports.dailyUsage,
-        'spendPages': reports.spend,
+        'usageEventPages': reports.usageEvents,
       });
     },
   );

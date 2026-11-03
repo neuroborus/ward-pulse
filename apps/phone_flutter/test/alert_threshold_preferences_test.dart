@@ -227,6 +227,55 @@ void main() {
     expect(saved.hasAlertRules, isFalse);
   });
 
+  test(
+    'Cursor preserves stored integer ceilings without changing other connections',
+    () {
+      final decoded = AlertThresholdPreferences.fromJson({
+        'connections': {
+          for (final id in [
+            ProviderConnections.cursorPlatform,
+            ProviderConnections.cursorPlan,
+            ProviderConnections.anthropicPlatform,
+          ])
+            id.storageKey: {
+              'budget': {'today': 0, 'week': -1, 'month': 5075},
+            },
+        },
+      });
+      final retained = AlertThresholdPreferences.decode(decoded.encode());
+      final cursor = retained.forConnection(ProviderConnections.cursorPlatform);
+      expect(cursor.budget.today, 0);
+      expect(cursor.budget.week, -1);
+      expect(cursor.budget.month, 5075);
+      expect(cursor.hasStoredSettings, isTrue);
+      for (final id in [
+        ProviderConnections.cursorPlan,
+        ProviderConnections.anthropicPlatform,
+      ]) {
+        expect(retained.forConnection(id).budget.today, isNull);
+        expect(retained.forConnection(id).budget.week, isNull);
+        expect(retained.forConnection(id).budget.month, 5075);
+      }
+      final zeroOnly = AlertThresholdPreferences.fromJson({
+        'connections': {
+          'cursor.platform': {
+            'budget': {'month': 0},
+          },
+        },
+      });
+      expect(
+        AlertThresholdPreferences.decode(
+          zeroOnly.encode(),
+        ).forConnection(ProviderConnections.cursorPlatform).budget.month,
+        0,
+      );
+      expect(
+        retained.forConnection(ProviderConnections.openAiPlatform).budget.month,
+        isNull,
+      );
+    },
+  );
+
   test('clearing every limit drops the rule', () {
     final prefs = const AlertThresholdPreferences().withConnection(
       ProviderConnections.openAiPlatform,

@@ -11,6 +11,7 @@ final class CapturedConnectionCache {
 
 /// Only canonical normalized data for the owning connection is persisted.
 final class ConnectionSnapshotCache {
+  static const _cursorMonetaryBasis = 'cursor-extra-paid-calendar-v1';
   ConnectionSnapshotCache({
     required this.connection,
     required Future<CredentialVersion?> Function() readCredentialVersion,
@@ -143,7 +144,22 @@ final class ConnectionSnapshotCache {
       return CapturedConnectionCache(version, null);
     }
     try {
-      final snapshot = parse(encoded);
+      String normalized = encoded;
+      if (connection == 'cursor.platform') {
+        final Object? wrapper;
+        try {
+          wrapper = jsonDecode(encoded);
+        } catch (_) {
+          // Unmarked old bytes are a basis miss, including unreadable old payloads.
+          return CapturedConnectionCache(version, null);
+        }
+        if (wrapper is! Map ||
+            wrapper['monetaryBasis'] != _cursorMonetaryBasis) {
+          return CapturedConnectionCache(version, null);
+        }
+        normalized = jsonEncode(wrapper['snapshot']);
+      }
+      final snapshot = parse(normalized);
       if (!owns(snapshot))
         throw const FormatException('Invalid connection cache.');
       try {
@@ -178,7 +194,13 @@ final class ConnectionSnapshotCache {
       throw const FormatException('Invalid connection snapshot.');
     try {
       return await _invoke('writeSnapshot', version, {
-            'snapshot': snapshot.toJsonString(),
+            'snapshot':
+                connection == 'cursor.platform'
+                    ? jsonEncode({
+                      'monetaryBasis': _cursorMonetaryBasis,
+                      'snapshot': snapshot.toJson(),
+                    })
+                    : snapshot.toJsonString(),
             'generatedAt': snapshot.generatedAt.microsecondsSinceEpoch,
           }) ==
           true;

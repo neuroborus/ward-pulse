@@ -80,6 +80,107 @@ void main() {
     expect(catalog.last.isAvailable, isTrue);
   });
 
+  test(
+    'Cursor calendar budget IDs and saved choices survive unavailable periods',
+    () {
+      const todayId = 'budget.cursor.platform.today';
+      const weekId = 'budget.cursor.platform.week';
+      const monthId = 'budget.cursor.platform.month';
+      const selected = WatchRingPreferences(selectedIds: [monthId, weekId]);
+      for (final (spent, limit, reason) in <(Money?, Money?, String?)>[
+        (
+          null,
+          const Money(minorUnits: 10000, currency: 'USD'),
+          'Reported spend',
+        ),
+        (
+          const Money(minorUnits: 0, currency: 'USD'),
+          null,
+          'Set this period’s limit',
+        ),
+        (
+          const Money(minorUnits: 0, currency: 'USD'),
+          const Money(minorUnits: 0, currency: 'USD'),
+          'positive limit in USD',
+        ),
+        (
+          const Money(minorUnits: 0, currency: 'USD'),
+          const Money(minorUnits: 10000, currency: 'EUR'),
+          'positive limit in USD',
+        ),
+        (
+          const Money(minorUnits: 0, currency: 'USD'),
+          const Money(minorUnits: 10000, currency: 'USD'),
+          null,
+        ),
+      ]) {
+        final json = _planAndBudgetSnapshot().toJson();
+        final account = (json['accounts'] as List).last as Map<String, dynamic>;
+        account['provider'] = 'cursor';
+        account['connection'] = 'cursor.platform';
+        account['accountId'] = 'cursor-platform';
+        account['today'] = {
+          ..._spentBudget('today', usedPercent: 0),
+          'spent': spent?.toJson(),
+          'limit': limit?.toJson(),
+        };
+        final snapshot = DashboardSnapshot.fromJson(json);
+        final catalog =
+            watchRingCatalog(snapshot)
+                .where((metric) => metric.id.startsWith('budget.cursor.'))
+                .toList();
+        expect(catalog.map((metric) => metric.id), [todayId, weekId, monthId]);
+        expect(catalog.first.isAvailable, reason == null);
+        expect(catalog.first.usedPercent, reason == null ? 0 : null);
+        expect(
+          catalog.first.unavailableReason,
+          reason == null ? isNull : contains(reason),
+        );
+        expect(catalog[1].unavailableReason, contains('Reported spend'));
+        expect(catalog.last.limit?.minorUnits, 10000);
+        expect(catalog.last.usedPercent, 40);
+        expect(watchRingSelectionIds(snapshot, selected), selected.selectedIds);
+        expect(
+          resolveWatchRings(snapshot, selected).map((metric) => metric.id),
+          [monthId],
+        );
+        expect(
+          resolveWatchRings(
+            snapshot,
+            const WatchRingPreferences(selectedIds: []),
+          ),
+          isEmpty,
+        );
+      }
+      final failed = DashboardSnapshot.empty().withReportingOutcomes([
+        const ConnectionReportingOutcome(
+          connection: ProviderConnections.cursorPlatform,
+          category: ReportingOutcomeCategory.transientFailure,
+          source: ReportingOutcomeSource.live,
+        ),
+      ]);
+      final cold = watchRingCatalog(
+        null,
+        reportingOutcomes: failed.reportingOutcomes,
+      );
+      expect(cold.map((metric) => metric.id), [todayId, weekId, monthId]);
+      expect(cold.every((metric) => !metric.isAvailable), isTrue);
+      expect(watchRingSelectionIds(failed, selected), selected.selectedIds);
+      expect(resolveWatchRings(failed, selected), isEmpty);
+      expect(
+        watchRingSelectionIds(failed, const WatchRingPreferences()),
+        isEmpty,
+      );
+      expect(
+        phoneWidgetCatalog(
+          null,
+          reportingOutcomes: failed.reportingOutcomes,
+        ).map((metric) => metric.id),
+        [todayId, weekId, monthId],
+      );
+    },
+  );
+
   test('budget percentages need reported spend and a usable ceiling', () {
     final cases = <(Money?, Money?, double, String?)>[
       (

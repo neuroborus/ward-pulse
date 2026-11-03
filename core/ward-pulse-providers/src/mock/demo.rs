@@ -39,7 +39,8 @@ const CURSOR_PLAN_FIXTURE: &str =
     include_str!("../../../../fixtures/providers/cursor/usage_summary.json");
 const CURSOR_DAILY_FIXTURE: &str =
     include_str!("../../../../fixtures/providers/cursor/daily_usage.json");
-const CURSOR_SPEND_FIXTURE: &str = include_str!("../../../../fixtures/providers/cursor/spend.json");
+const CURSOR_EVENTS_FIXTURE: &str =
+    include_str!("../../../../fixtures/providers/cursor/usage_events.json");
 const OPENAI_USAGE_FIXTURE: &str =
     include_str!("../../../../fixtures/providers/openai/usage_completions.json");
 const OPENAI_COST_FIXTURE: &str = include_str!("../../../../fixtures/providers/openai/costs.json");
@@ -433,8 +434,13 @@ fn cursor_platform_account(
     let report = json!({
         "accountId": "cursor-team-demo",
         "generatedAt": "2026-07-19T12:00:00Z",
+        "requestStartMs": 1782864000000_i64,
+        "endExclusiveMs": 1784462400000_i64,
+        "todayStartMs": 1784419200000_i64,
+        "weekStartMs": 1783900800000_i64,
+        "monthStartMs": 1782864000000_i64,
         "dailyUsagePages": [CURSOR_DAILY_FIXTURE],
-        "spendPages": [CURSOR_SPEND_FIXTURE]
+        "usageEventPages": [CURSOR_EVENTS_FIXTURE]
     })
     .to_string();
     cursor_platform_snapshot_from_report_json(&dated_report(&report, anchor)?)
@@ -553,6 +559,11 @@ fn dated_report(raw: &str, anchor: Option<DemoTime>) -> Result<String, DebugDemo
             .ok_or(DebugDemoDashboardError::InvalidAnchor)?,
     )?;
     rebase_fields(&mut report, anchor, original)?;
+    if report.get("usageEventPages").is_some()
+        && report["requestStartMs"] == report["endExclusiveMs"]
+    {
+        report["usageEventPages"] = json!([]);
+    }
     Ok(report.to_string())
 }
 
@@ -584,6 +595,31 @@ fn rebase_fields(
                 };
                 match key.as_str() {
                     "generatedAt" => *value = json!(anchor.stamp()),
+                    "endExclusiveMs" => *value = json!(anchor.0 * 1000),
+                    "todayStartMs" | "weekStartMs" | "monthStartMs" | "requestStartMs" => {
+                        let start = match key.as_str() {
+                            "todayStartMs" => anchor.day_start(),
+                            "weekStartMs" => anchor.week_start()?,
+                            "monthStartMs" => anchor.month_start(false)?,
+                            _ => DemoTime(anchor.week_start()?.0.min(anchor.month_start(false)?.0)),
+                        };
+                        *value = json!(start.0 * 1000);
+                    }
+                    "timestamp" if value.is_string() => {
+                        let millis = value
+                            .as_str()
+                            .and_then(|raw| raw.parse::<i64>().ok())
+                            .ok_or(DebugDemoDashboardError::InvalidAnchor)?;
+                        let shifted = millis
+                            .checked_add((anchor.0 - original.0) * 1000)
+                            .ok_or(DebugDemoDashboardError::InvalidAnchor)?;
+                        *value = json!(shifted.to_string());
+                    }
+                    "startDate" if value.is_number() => {
+                        *value =
+                            json!(anchor.week_start()?.0.min(anchor.month_start(false)?.0) * 1000);
+                    }
+                    "endDate" if value.is_number() => *value = json!(anchor.0 * 1000 - 1),
                     "todayStart" | "weekStart" | "monthStart" => {
                         let start = match key.as_str() {
                             "todayStart" => anchor.day_start(),
@@ -633,7 +669,7 @@ fn rebase_fields(
                         let stamp = shifted(DemoTime::parse(&stamp)?.0, delta)?.stamp();
                         *value = json!(if date_only { &stamp[..10] } else { &stamp });
                     }
-                    "usagePages" | "costPages" | "dailyUsagePages" | "spendPages" => {
+                    "usagePages" | "costPages" | "dailyUsagePages" | "usageEventPages" => {
                         for page in value
                             .as_array_mut()
                             .ok_or(DebugDemoDashboardError::InvalidAnchor)?
@@ -684,8 +720,7 @@ mod tests {
         for account in &snapshot.accounts {
             for state in [&account.today, &account.week, &account.month] {
                 // Spend without a percentage is the state that hid the rings. A
-                // period the provider never reports stays absent on purpose, the
-                // way Cursor leaves day and week.
+                // period without complete evidence stays absent on purpose.
                 if state.spent.is_none() {
                     continue;
                 }
@@ -768,11 +803,44 @@ mod tests {
             .iter()
             .find(|account| account.connection.as_deref() == Some("cursor.platform"))
             .unwrap();
-        for budget in [&cursor.today, &cursor.week] {
-            assert!(budget.spent.is_none());
-            assert_eq!(budget.status, ProviderStatus::Unknown);
+        for budget in [&cursor.today, &cursor.week, &cursor.month] {
+            assert!(budget.spent.is_some());
+            assert!(budget.used_percent.is_some());
         }
-        assert_ne!(cursor.status, ProviderStatus::Ok);
+    }
+
+    #[test]
+    fn cursor_rebasing_preserves_integer_event_and_calendar_meaning() {
+        for anchor in [
+            "2026-08-01T00:00:00Z",
+            "2027-01-01T12:00:00Z",
+            "2026-06-01T00:00:00Z",
+        ] {
+            let time = DemoTime::parse(anchor).unwrap();
+            let cursor = cursor_platform_account(Some(time)).unwrap();
+            assert_eq!(
+                cursor.last_successful_sync_at.as_ref().unwrap().as_str(),
+                anchor
+            );
+            assert_eq!(cursor.today.spent.is_some(), time.0 > time.day_start().0);
+            assert_eq!(
+                cursor.month.spent.is_some(),
+                time.0 > time.month_start(false).unwrap().0
+            );
+            assert_eq!(
+                cursor.week.spent.is_some(),
+                time.0 > time.week_start().unwrap().0
+            );
+            assert_eq!(
+                cursor
+                    .buckets
+                    .iter()
+                    .map(|bucket| bucket.requests)
+                    .collect::<Vec<_>>(),
+                vec![Some(45), Some(64)]
+            );
+            assert!(cursor.model_breakdown.is_empty());
+        }
     }
 
     #[test]
