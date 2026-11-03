@@ -227,7 +227,7 @@ void main() {
         final snapshots = cache('ui', id.storageKey);
         final transport = _EmptyReportingTransport();
         var normalizations = 0;
-        late Future<DashboardSnapshot> loading;
+        late CapturedDashboardLoad captured;
         await tester.runAsync(() async {
           await credentials.writeSecret(id, 'sk-ant-admin01-synthetic');
           await credentials.writeLabel(id, 'Saved organization');
@@ -256,7 +256,7 @@ void main() {
             logger: const _SilentLogger(),
           );
           final updates = <ConnectionReportingUpdate>[];
-          loading = repository.loadObserved(updates.add);
+          final loading = repository.loadObserved(updates.add);
           await expectLater(
             loading,
             throwsA(
@@ -267,7 +267,7 @@ void main() {
               ),
             ),
           );
-          final captured = await CapturedDashboardLoad.capture(() => loading);
+          captured = await CapturedDashboardLoad.capture(() => loading);
           final rejection = captured.reportingOutcomes.single;
           expect(rejection.connection, id);
           expect(
@@ -293,6 +293,10 @@ void main() {
           expect((await snapshots.capture()).snapshot, isNull);
         });
 
+        final loading = Future<DashboardSnapshot>.sync(() => captured.value);
+        unawaited(
+          loading.then<void>((_) {}).onError<DashboardLoadException>((_, _) {}),
+        );
         await tester.pumpWidget(
           WardPulseApp(
             repository: _HeldDashboardRepository(loading),
