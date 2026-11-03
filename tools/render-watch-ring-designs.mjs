@@ -194,13 +194,13 @@ const STRIP = {
 }
 
 /**
- * Active adopts the approved 10-unit upward translation; ambient retains its
- * measured 08:08 reference baseline. Host SVG metrics are illustrative, not native
- * fit or balanced-gap acceptance; other time strings retain their natural optics.
+ * Both modes share the approved active clock's size and reference baseline;
+ * ambient retains weight 100. Host SVG metrics are illustrative, not native fit
+ * or optical alignment acceptance; time strings retain their natural optics.
  */
 const CLOCK = {
   active: { fontSize: 86, baseline: 240.78125, weight: 700 },
-  ambient: { fontSize: 96, baseline: 254.296875, weight: 100 },
+  ambient: { fontSize: 86, baseline: 240.78125, weight: 100 },
 }
 
 /**

@@ -92,12 +92,21 @@ def check_composition_scale(root):
                 if math.hypot((px - 225) * COMPOSITION_SCALE, (py - 225) * COMPOSITION_SCALE) >= 225:
                     errors.append(f"cell {slot_id}: effective bounds exceed the circular viewport")
     times = clock.findall("TimeText")
-    if len(times) != 2 or [(node.get("y"), node.get("height"), node.find("Font").get("size"))
-                           for node in times] != [("166", "90", "86"), ("175", "90", "96")]:
-        errors.append("whole clocks must retain their reference sizes and placements beneath one scale")
-    if any(node.get("format") != "hh:mm" or node.get("hourFormat") != "SYNC_TO_DEVICE"
-           or node.find("Font").get("family") != "SYNC_TO_DEVICE" for node in times):
-        errors.append("whole-clock formatting and device font identity must stay synchronized")
+    if [node.tag for node in element_children(clock)] != ["TimeText", "TimeText"]:
+        errors.append("the scaled DigitalClock must contain exactly two whole clocks")
+    for node, (mode, weight, alpha, ambient_alpha) in zip(times, (
+            ("active", "BOLD", "255", "0"), ("ambient", "THIN", "0", "255"))):
+        font = node.find("Font")
+        if (node.attrib != {"x": "0", "y": "166", "width": "450", "height": "90",
+                            "alpha": alpha, "align": "CENTER", "format": "hh:mm",
+                            "hourFormat": "SYNC_TO_DEVICE"}
+                or [child.tag for child in element_children(node)] != ["Variant", "Font"]
+                or [variant.attrib for variant in node.findall("Variant")] !=
+                [{"mode": "AMBIENT", "target": "alpha", "value": ambient_alpha}]
+                or font is None or len(font) != 0
+                or font.attrib != {"family": "SYNC_TO_DEVICE", "size": "86", "weight": weight,
+                                   "slant": "NORMAL", "color": "#fff4fbf8"}):
+            errors.append(f"whole {mode} clock must retain its exact profile, formatting and mode swap beneath one scale")
     images = mark.findall("PartImage")
     expected = [("193", "141", "64", "95"), ("198", "146", "54", "0")]
     if (len(images) != 2 or [(node.get("x"), node.get("y"), node.get("width"), node.get("alpha"))

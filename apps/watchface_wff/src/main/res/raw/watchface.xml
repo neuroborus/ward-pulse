@@ -5867,7 +5867,7 @@
             </TimeText>
             <TimeText
                 x="0"
-                y="175"
+                y="166"
                 width="450"
                 height="90"
                 alpha="0"
@@ -5877,7 +5877,7 @@
                 <Variant mode="AMBIENT" target="alpha" value="255" />
                 <Font
                     family="SYNC_TO_DEVICE"
-                    size="96"
+                    size="86"
                     weight="THIN"
                     slant="NORMAL"
                     color="#fff4fbf8" />

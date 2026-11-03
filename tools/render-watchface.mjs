@@ -307,13 +307,13 @@ const STRIP = {
 const WORDMARK = { centerX: FACE.center, centerY: 173, size: 64, ambientSize: 54 }
 
 /**
- * The approved active composition translates the enlarged whole clock upward
- * by 10 design units; ambient retains its calibrated 08:08 placement. Native
- * font metrics must establish complete glyph fit, bottom and visible gaps.
+ * Both modes share the approved active clock's reference size and placement;
+ * ambient keeps Thin weight. Matching boxes do not establish optical alignment:
+ * native ink bounds and clearances still require matched device measurements.
  */
 const CLOCK = {
   active: { y: 166, height: 90, fontSize: 86 },
-  ambient: { y: 175, height: 90, fontSize: 96 },
+  ambient: { y: 166, height: 90, fontSize: 86 },
 }
 
 /**
