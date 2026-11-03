@@ -10,6 +10,7 @@ import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/providers/claude_account_service.dart';
 import 'package:ward_pulse_phone/providers/alert_threshold_dialogs.dart';
 import 'package:ward_pulse_phone/providers/codex_account_service.dart';
+import 'package:ward_pulse_phone/providers/credential_dialog.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/providers/provider_connection_row.dart';
@@ -322,7 +323,14 @@ void main() {
         );
         await tester.tap(find.text('Save'));
         await tester.pumpAndSettle();
-        expect(find.text(anthropicReportingKeyGuidance), findsOneWidget);
+        expect(find.text('Replace this Console Admin key.'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(CredentialDialog),
+            matching: find.textContaining(anthropicReportingKeyGuidance),
+          ),
+          findsOneWidget,
+        );
         expect(await store.readSecret(id), 'sk-ant-admin01-synthetic');
         await tester.tap(find.text('Cancel'));
         await tester.pumpAndSettle();

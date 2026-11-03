@@ -710,10 +710,23 @@ void main() {
       ),
     );
 
-    expect(find.text('Plan usage'), findsOneWidget);
+    final planUsage = find.text('Plan usage');
+    await tester.scrollUntilVisible(
+      planUsage,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(planUsage, findsOneWidget);
     expect(find.text('Unknown'), findsNothing);
 
-    await tester.tap(find.byTooltip('Why is this hidden?'));
+    final help = find.descendant(
+      of: find.ancestor(of: planUsage, matching: find.byType(ListTile)),
+      matching: find.byTooltip('Why is this hidden?'),
+    );
+    await tester.ensureVisible(help);
+    await tester.pumpAndSettle();
+    expect(help.hitTestable(), findsOneWidget);
+    await tester.tap(help);
     await tester.pumpAndSettle();
     expect(
       find.text(
@@ -727,7 +740,7 @@ void main() {
 
     await tester.scrollUntilVisible(
       find.text('Today'),
-      300,
+      -300,
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Today'), findsOneWidget);

@@ -2552,19 +2552,61 @@ void main() {
   });
 
   testWidgets('labels previous dashboard data as stale', (tester) async {
-    final snapshot = DashboardSnapshot.fromJsonString(
+    final original = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
-    ).withStaleStatus(syncIssue: DashboardSyncIssue.authentication);
+    );
+    final snapshot = original.withStaleStatus(
+      syncIssue: DashboardSyncIssue.authentication,
+    );
 
     await tester.pumpWidget(
       WardPulseApp(repository: ValueDashboardRepository(snapshot)),
     );
     await tester.pumpAndSettle();
 
-    // Staleness is an account state, so no card carries a glyph for it: the
-    // family answers with a count and the app bar with a way in — never the
-    // same mark twice down the screen (PHONE_DASHBOARD_DESIGN.md).
-    expect(find.byIcon(Icons.schedule), findsNothing);
+    // The source owns its Stale glyph; family and app-bar rollups keep counts.
+    final account = original.accounts.single;
+    final sourceExpenses = find.byKey(
+      ValueKey('source-expenses.${account.accountId}'),
+    );
+    expect(
+      find.descendant(
+        of: sourceExpenses,
+        matching: find.byWidgetPredicate(
+          (widget) => widget is Icon && widget.semanticLabel == 'Stale',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: sourceExpenses, matching: find.byTooltip('Stale')),
+      findsOneWidget,
+    );
+    for (final budget in [account.today, account.week, account.month]) {
+      final period = find.descendant(
+        of: sourceExpenses,
+        matching: find.byKey(ValueKey('source-expense.${budget.period}')),
+      );
+      expect(
+        find.descendant(of: period, matching: find.text(budget.spent!.label)),
+        findsOneWidget,
+      );
+    }
+    final asOf = account.lastSuccessfulSyncAt!;
+    expect(
+      find.descendant(
+        of: sourceExpenses,
+        matching: find.text('As of ${formatLocal(asOf)}'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: sourceExpenses,
+        matching: find.byTooltip(formatUtc(asOf)),
+      ),
+      findsOneWidget,
+    );
     expect(find.byTooltip('Stale'), findsWidgets);
     expect(find.byTooltip('Go to stale'), findsOneWidget);
     expect(

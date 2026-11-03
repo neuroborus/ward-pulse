@@ -12,15 +12,26 @@ void main() {
     testWidgets(
       'Anthropic validates ${installed ? 'replacement' : 'new'} values before Save',
       (tester) async {
+        const guidance =
+            '$anthropicReportingKeyGuidance '
+            'The key is encrypted on this phone and sent only to Anthropic.';
         final outcome = await _openCredential(
           tester,
           hasCredential: installed,
+          guidance: guidance,
           valueValidator: validateAnthropicReportingKey,
         );
         final value = find.widgetWithText(
           TextFormField,
           installed ? 'Value (leave blank to keep)' : 'Value',
         );
+        final editor = find.descendant(
+          of: value,
+          matching: find.byType(EditableText),
+        );
+        await tester.ensureVisible(editor);
+        await tester.pumpAndSettle();
+        expect(editor.hitTestable(), findsOneWidget);
         await tester.enterText(
           value,
           installed ? '  sk-ant-admin01-synthetic  ' : 'sk-ant-admin-synthetic',
@@ -28,7 +39,7 @@ void main() {
         await tester.tap(find.text('Save'));
         await tester.pumpAndSettle();
         expect(outcome.completed, isFalse);
-        final error = find.text(anthropicReportingKeyGuidance);
+        final error = find.text('Replace this Console Admin key.');
         expect(error, findsOneWidget);
         expect(
           tester.renderObject<RenderParagraph>(error).didExceedMaxLines,
@@ -36,18 +47,56 @@ void main() {
         );
         await tester.ensureVisible(error);
         await tester.pumpAndSettle();
-        final viewport = tester.getRect(
-          find.descendant(
-            of: find.byType(AlertDialog),
-            matching: find.byType(SingleChildScrollView),
-          ),
+        final scrollView = find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(SingleChildScrollView),
         );
+        final viewport = tester.getRect(scrollView);
         final errorBounds = tester.getRect(error);
         expect(errorBounds.top, greaterThanOrEqualTo(viewport.top));
         expect(errorBounds.bottom, lessThanOrEqualTo(viewport.bottom));
         expect(errorBounds.bottom, lessThanOrEqualTo(_keyboardTop));
-        _expectActionsAboveKeyboard(tester);
+        _expectActionsAboveKeyboard(tester, hasCredential: installed);
 
+        final guidanceText = find.text(guidance);
+        expect(
+          tester.renderObject<RenderParagraph>(guidanceText).didExceedMaxLines,
+          isFalse,
+        );
+        for (final alignment in [0.0, 1.0]) {
+          await Scrollable.ensureVisible(
+            tester.element(guidanceText),
+            alignment: alignment,
+          );
+          await tester.pumpAndSettle();
+          expect(
+            guidanceText.hitTestable(
+              at: Alignment(0, alignment == 0 ? -0.99 : 0.99),
+            ),
+            findsOneWidget,
+          );
+          _expectActionsAboveKeyboard(tester, hasCredential: installed);
+        }
+        final label = find.widgetWithText(TextFormField, 'Label (optional)');
+        await tester.ensureVisible(label);
+        await tester.pumpAndSettle();
+        expect(label.hitTestable(), findsOneWidget);
+        expect(
+          tester.getRect(label).bottom,
+          lessThanOrEqualTo(viewport.bottom),
+        );
+        expect(tester.getRect(label).bottom, lessThanOrEqualTo(_keyboardTop));
+        _expectActionsAboveKeyboard(tester, hasCredential: installed);
+
+        await tester.ensureVisible(editor);
+        await tester.pumpAndSettle();
+        expect(editor.hitTestable(), findsOneWidget);
+        expect(
+          tester.getRect(editor).bottom,
+          lessThanOrEqualTo(viewport.bottom),
+        );
+        expect(tester.getRect(editor).bottom, lessThanOrEqualTo(_keyboardTop));
+        _expectActionsAboveKeyboard(tester, hasCredential: installed);
         await tester.enterText(value, '  sk-ant-api03-synthetic  ');
         await tester.tap(find.text('Save'));
         await tester.pumpAndSettle();
@@ -233,8 +282,11 @@ void main() {
   );
 }
 
-void _expectActionsAboveKeyboard(WidgetTester tester) {
-  for (final label in ['Cancel', 'Save']) {
+void _expectActionsAboveKeyboard(
+  WidgetTester tester, {
+  bool hasCredential = false,
+}) {
+  for (final label in [if (hasCredential) 'Remove', 'Cancel', 'Save']) {
     final action = find.text(label);
     expect(action.hitTestable(), findsOneWidget);
     expect(tester.getRect(action).bottom, lessThanOrEqualTo(_keyboardTop));

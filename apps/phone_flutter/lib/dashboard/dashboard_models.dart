@@ -158,7 +158,7 @@ extension DashboardSyncIssueMessage on DashboardSyncIssue {
       DashboardSyncIssue.credentialUnavailable =>
         'The saved key could not be read. Re-enter it on the Providers tab.',
       DashboardSyncIssue.authentication =>
-        'The provider rejected the credential. Check that you pasted the full key or token.',
+        'The credential was not accepted. Check that you pasted the full key or token.',
       DashboardSyncIssue.permissionDenied =>
         'This credential cannot read the requested usage data. Use a credential with the right permissions.',
       DashboardSyncIssue.rateLimited =>

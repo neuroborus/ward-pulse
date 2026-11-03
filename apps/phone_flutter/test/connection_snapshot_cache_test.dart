@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/app/ward_pulse_app.dart';
 import 'package:ward_pulse_phone/dashboard/apply_alert_settings.dart';
 import 'package:ward_pulse_phone/dashboard/connection_snapshot_cache.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
@@ -215,6 +217,115 @@ void main() {
       mergeSnapshots: _merge,
       logger: const _SilentLogger(),
       mapError: (error) => mapReportingError(error, const _SilentLogger()),
+    );
+
+    testWidgets(
+      'uncached Admin rejection renders truthful replacement feedback',
+      (tester) async {
+        const id = ProviderConnections.anthropicPlatform;
+        final credentials = store('ui');
+        final snapshots = cache('ui', id.storageKey);
+        final transport = _EmptyReportingTransport();
+        var normalizations = 0;
+        late Future<DashboardSnapshot> loading;
+        await tester.runAsync(() async {
+          await credentials.writeSecret(id, 'sk-ant-admin01-synthetic');
+          await credentials.writeLabel(id, 'Saved organization');
+          final version = (await credentials.readVersion(id))!;
+          final savedSecrets = Map<String, String>.from(secure.values);
+          expect((await snapshots.capture()).snapshot, isNull);
+          final repository = buildLiveProviderStack(
+            credentialStore: credentials,
+            claudeAccountService: const EmptyClaudeAccountService(),
+            openAiAndCodex: const NoProvidersDashboardRepository(),
+            caches: {id.storageKey: snapshots},
+            clock: () => nextAt,
+            anthropicReportingClient: AnthropicReportingClient(
+              http: ProviderReportingHttp(transport: transport),
+            ),
+            normalizeAnthropicReport: (_) {
+              normalizations++;
+              return _snapshot(
+                'claude',
+                id.storageKey,
+                nextAt,
+                88,
+              ).toJsonString();
+            },
+            mergeSnapshots: _merge,
+            logger: const _SilentLogger(),
+          );
+          final updates = <ConnectionReportingUpdate>[];
+          loading = repository.loadObserved(updates.add);
+          await expectLater(
+            loading,
+            throwsA(
+              isA<DashboardLoadException>().having(
+                (failure) => failure.issue,
+                'issue',
+                DashboardSyncIssue.authentication,
+              ),
+            ),
+          );
+          final captured = await CapturedDashboardLoad.capture(() => loading);
+          final rejection = captured.reportingOutcomes.single;
+          expect(rejection.connection, id);
+          expect(
+            rejection.category,
+            ReportingOutcomeCategory.authenticationRejected,
+          );
+          expect(rejection.source, ReportingOutcomeSource.local);
+          expect(rejection.freshness, ReportingOutcomeFreshness.current);
+          expect(rejection.credentialVersion!.sameCache(version), isTrue);
+          expect(rejection.supportingCopy, anthropicReportingKeyGuidance);
+          expect(rejection.canEditKey, isTrue);
+          final reported =
+              updates.where((update) => update.outcome != null).single;
+          expect(reported.outcome?.source, ReportingOutcomeSource.local);
+          expect(reported.credentialVersion!.sameCache(version), isTrue);
+          expect(await credentials.readSecret(id), 'sk-ant-admin01-synthetic');
+          expect(await credentials.readLabel(id), 'Saved organization');
+          expect(
+            (await credentials.readVersion(id))!.sameCache(version),
+            isTrue,
+          );
+          expect(secure.values, savedSecrets);
+          expect((await snapshots.capture()).snapshot, isNull);
+        });
+
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: _HeldDashboardRepository(loading),
+            credentialStore: credentials,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Dashboard unavailable'), findsOneWidget);
+        expect(
+          find.textContaining(
+            'Anthropic · Organization reporting: Key rejected.',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining(anthropicReportingKeyGuidance),
+          findsOneWidget,
+        );
+        final editKey = find.widgetWithText(TextButton, 'Edit key');
+        expect(editKey.hitTestable(), findsOneWidget);
+        expect(tester.widget<TextButton>(editKey).onPressed, isNotNull);
+        const message =
+            'The credential was not accepted. Check that you pasted the full key or token.';
+        await tester.longPress(find.byTooltip(message));
+        await tester.pumpAndSettle();
+        expect(find.text(message), findsOneWidget);
+        expect(
+          find.textContaining('The provider rejected the credential'),
+          findsNothing,
+        );
+        expect(transport.requests, isEmpty);
+        expect(normalizations, 0);
+      },
     );
 
     test(

@@ -17,7 +17,7 @@ const anthropicReportingKeyGuidance =
 /// Marker exclusion is product policy, not proof of a candidate's access rights.
 String? validateAnthropicReportingKey(String value) =>
     value.trim().startsWith('sk-ant-admin')
-        ? anthropicReportingKeyGuidance
+        ? 'Replace this Console Admin key.'
         : null;
 
 final class ProviderConnectionId {
