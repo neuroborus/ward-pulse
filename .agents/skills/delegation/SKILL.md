@@ -5,9 +5,9 @@ description: WardPulse delegation contract — who does the work and who checks 
 
 # Delegation — WardPulse
 
-Neither the coordinating session nor a standalone subagent implements code outside Agent
-Runner. Design is delegated to a subagent; the coordinator verifies the result independently.
-This is the owner's standing instruction, clarified 2026-10-13.
+**Homogeneity is mandatory across providers and surfaces:** use shared semantics/patterns and reuse existing components; justify provider/platform differences with concrete data or platform capabilities and compare matched states side by side before acceptance.
+Neither the coordinating session nor a standalone subagent implements code outside Agent Runner. Design is delegated to a subagent; the coordinator verifies the result independently.
+These are the owner's standing instructions: authorship clarified 2026-10-13; homogeneity reaffirmed 2026-11-03.
 
 ## Who does what
 
