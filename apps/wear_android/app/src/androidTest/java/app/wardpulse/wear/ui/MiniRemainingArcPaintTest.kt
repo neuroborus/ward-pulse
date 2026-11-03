@@ -12,6 +12,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import org.junit.Assert.assertEquals
@@ -98,6 +99,9 @@ class MiniRemainingArcPaintTest {
         scales.forEach { scale ->
             val side = (39f * scale).roundToInt()
             val stroke = 5f * scale
+            val center = side / 2.0
+            val outerRadius = center
+            val innerRadius = outerRadius - stroke
             val colors = pairedColors + listOf(RingFamily.CLAUDE, RingFamily.CLAUDE_FABLE)
             colors.forEach { color ->
                 val context = "scale=$scale color=0x${"%08X".format(color)} side=$side stroke=$stroke"
@@ -106,16 +110,18 @@ class MiniRemainingArcPaintTest {
                 listOf(0.0, 90.0, 180.0, 270.0).forEach { angle ->
                     assertEquals("Full centreline at $angle: $context", color, full[pointAt(angle, side, stroke)])
                 }
+                // Guard both antialiased edges by one pixel; the core includes the top join.
                 full.forEachIndexed { index, pixel ->
-                    val opposite = full.lastIndex - index
-                    // A uniform circle is invariant under 180-degree rotation,
-                    // including both contour edges at the top join. Allow one
-                    // quantization unit per channel for native antialiasing.
-                    assertTrue(
-                        "Uneven full contour: $context pixel=(${index % side},${index / side}) " +
-                            "argb=0x${"%08X".format(pixel)} opposite=0x${"%08X".format(full[opposite])}",
-                        colorDistance(pixel, full[opposite]) <= 3,
-                    )
+                    val x = index % side
+                    val y = index / side
+                    val distance = hypot(x + 0.5 - center, y + 0.5 - center)
+                    val pixelContext = "$context pixel=($x,$y) distance=$distance"
+                    when {
+                        distance >= innerRadius + 1.0 && distance <= outerRadius - 1.0 ->
+                            assertEquals("Full stroke core: $pixelContext", color, pixel)
+                        distance < innerRadius - 1.0 || distance > outerRadius + 1.0 ->
+                            assertEquals("Full background: $pixelContext", background, pixel)
+                    }
                 }
                 // Both a displayed 100% partial and a partial rounded to Float 1
                 // must retain the compensated join rather than the closed contour.
