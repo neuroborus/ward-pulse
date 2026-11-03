@@ -15,6 +15,7 @@ import 'package:ward_pulse_phone/dashboard/plan_recoveries.dart';
 import 'package:ward_pulse_phone/dashboard/provider_status_color.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_screen.dart';
+import 'package:ward_pulse_phone/dashboard/status_pill.dart';
 import 'package:ward_pulse_phone/dashboard/merging_connection_repository.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/providers/alert_threshold_dialogs.dart';
@@ -1087,6 +1088,7 @@ void main() {
     expect(find.text('Diagnostics'), findsOneWidget);
     expect(find.text('Sync'), findsWidgets);
     expect(find.text('Watch summary'), findsOneWidget);
+    expect(find.text('Widget summary'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Help'),
       300,
@@ -1130,6 +1132,86 @@ void main() {
         'other provider. Product names are trademarks of their respective owners.',
       ),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('Settings Widget summary follows current widget preferences', (
+    tester,
+  ) async {
+    final snapshot =
+        _asConnection(
+          DashboardSnapshot.fromJsonString(
+            File(
+              '../../fixtures/snapshots/dashboard_today.json',
+            ).readAsStringSync(),
+          ),
+        ).withStaleStatus();
+    final preferences =
+        _MemoryPhoneWidgetStore()
+          ..value = const PhoneWidgetPreferences(
+            selectedIds: ['budget.anthropic.platform.today'],
+          );
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(snapshot),
+        phoneWidgetPreferenceStore: preferences,
+        applyAlertSettings: (current, _) => current,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    final summary = find.widgetWithText(ListTile, 'Widget summary');
+    await tester.scrollUntilVisible(
+      summary,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    final settings = tester.widget<SettingsScreen>(find.byType(SettingsScreen));
+    expect(
+      settings.widgetPreferences.selectedIds,
+      preferences.value.selectedIds,
+    );
+    final tile = tester.widget<ListTile>(summary);
+    expect(
+      (tile.subtitle as Text).data,
+      phoneWidgetPayloadSubtitle(snapshot, preferences.value),
+    );
+    expect(tile.onTap, isNull);
+    expect(tile.onLongPress, isNull);
+    expect(tile.trailing, isNull);
+    final sync = find.byWidgetPredicate(
+      (widget) =>
+          widget is ListTile &&
+          widget.title is Text &&
+          (widget.title as Text).data == 'Sync',
+    );
+    expect(
+      tester
+          .widget<StatusPill>(
+            find.descendant(of: sync, matching: find.byType(StatusPill)),
+          )
+          .status,
+      ProviderStatus.stale,
+    );
+
+    await tester.tap(find.text('Widget'));
+    await tester.pumpAndSettle();
+    final today = find.widgetWithText(CheckboxListTile, 'Today');
+    await tester.ensureVisible(today);
+    await tester.tap(today);
+    await tester.pumpAndSettle();
+    expect(preferences.value.selectedIds, isEmpty);
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      summary,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(
+      (tester.widget<ListTile>(summary).subtitle as Text).data,
+      'No metrics selected',
     );
   });
 

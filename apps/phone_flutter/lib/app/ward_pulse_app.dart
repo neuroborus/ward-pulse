@@ -1343,6 +1343,7 @@ class _DashboardHostState extends State<DashboardHost>
                 refreshInterval: _refreshInterval,
                 onRefreshIntervalChanged: _updateRefreshInterval,
                 ringPreferences: _ringPreferences,
+                widgetPreferences: _widgetPreferences,
                 onSyncWatch: _onSettingsSyncWatch,
                 recoveryNotificationsEnabled: _recoveryNotificationsEnabled,
                 onRecoveryNotificationsChanged: _updateRecoveryNotifications,

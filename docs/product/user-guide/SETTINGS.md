@@ -10,7 +10,7 @@ home-widget metrics are on **Widget**.
 | --- | --- |
 | Refresh | Refresh interval while open and approximate background cadence. |
 | Notifications | Independent Alert notifications and Plan recovery switches, plus an Android settings action when notifications are blocked. |
-| Diagnostics | Sync timestamp/status and the next Watch summary, when a summary is available. |
+| Diagnostics | Sync timestamp/status and the next Watch and Widget summaries, when phone data is available. |
 | Help | User guide in your external browser. |
 | Legal | Independent product information. |
 
@@ -35,8 +35,11 @@ without allowing notifications leaves the warning. The warning can appear even w
 switches off. Android channel settings and Do Not Disturb can still limit delivery when the
 warning is absent.
 
-Diagnostics helps you compare the phone's displayed data and watch summary. It does not
-guarantee that the watch has already received an update.
+Diagnostics helps you compare the phone's displayed data and watch summary. **Widget summary**
+describes your configured metric choices and their current results, including unavailable
+choices or an empty selection. The existing Sync status still identifies retained Stale data.
+These summaries do not confirm that the watch received an update, that widget publication
+succeeded, or how many rows and details fit your launcher's allocation.
 
 Choose **Settings → Help** to open the user guide in your external browser.
 

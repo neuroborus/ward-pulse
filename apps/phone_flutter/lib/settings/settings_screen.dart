@@ -7,6 +7,7 @@ import '../app/pull_to_refresh_list.dart';
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/status_pill.dart';
 import '../sync/poll_cadence.dart';
+import '../widget/phone_widget_preferences.dart';
 import 'refresh_interval_preferences.dart';
 import 'watch_ring_preferences.dart';
 
@@ -26,6 +27,7 @@ class SettingsScreen extends StatefulWidget {
     required this.refreshInterval,
     required this.onRefreshIntervalChanged,
     required this.ringPreferences,
+    required this.widgetPreferences,
     required this.onSyncWatch,
     required this.recoveryNotificationsEnabled,
     required this.onRecoveryNotificationsChanged,
@@ -56,6 +58,7 @@ class SettingsScreen extends StatefulWidget {
   final Future<void> Function(RefreshIntervalPreference value)
   onRefreshIntervalChanged;
   final WatchRingPreferences ringPreferences;
+  final PhoneWidgetPreferences widgetPreferences;
   final Future<void> Function() onSyncWatch;
   final bool debugDataAvailable;
   final bool mockDataEnabled;
@@ -419,6 +422,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   trailing: StatusPill(
                     status: snapshot.watchSummary.status,
                     tooltip: snapshot.syncTooltip,
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.widgets_outlined),
+                  title: const Text('Widget summary'),
+                  subtitle: Text(
+                    phoneWidgetPayloadSubtitle(
+                      snapshot,
+                      widget.widgetPreferences,
+                    ),
                   ),
                 ),
                 if (kDebugMode) ...[
