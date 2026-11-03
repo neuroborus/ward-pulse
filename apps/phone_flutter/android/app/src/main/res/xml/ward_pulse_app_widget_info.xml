@@ -2,7 +2,7 @@
 <!--
   Do not set a tight maxResizeHeight — when an existing span is taller than the max,
   Pixel hides vertical handles. Leave max unset so users can resize in either direction.
-  The card fills the allocation; complete measured content stays centered.
+  The launcher root and tap area fill the allocation; the measured intrinsic card stays centered.
   Cell counts are launcher hints; actual host bounds and glyphs decide row capacity.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
