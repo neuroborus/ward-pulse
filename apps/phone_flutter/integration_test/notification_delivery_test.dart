@@ -70,11 +70,24 @@ DashboardSnapshot _source(double used) {
 }
 
 void main() {
+  const firstForeground = bool.fromEnvironment(
+    'WARDPULSE_NOTIFICATION_FIRST_FOREGROUND',
+  );
+  const grantedSound = bool.fromEnvironment(
+    'WARDPULSE_NOTIFICATION_GRANTED_SOUND',
+  );
+  if (firstForeground && grantedSound) {
+    throw ArgumentError('Notification case selectors are incompatible.');
+  }
   final binding =
       IntegrationTestWidgetsFlutterBinding.ensureInitialized()
         ..framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
-  if (const bool.fromEnvironment('WARDPULSE_NOTIFICATION_FIRST_FOREGROUND')) {
+  if (firstForeground) {
     _firstForegroundPermission(binding);
+    return;
+  }
+  if (grantedSound) {
+    _grantedSound(binding);
     return;
   }
   testWidgets(
@@ -409,6 +422,494 @@ void main() {
   );
 }
 
+void _grantedSound(IntegrationTestWidgetsFlutterBinding binding) {
+  testWidgets(
+    'granted baseline with real Rust and Android notification sound witnesses',
+    (tester) async {
+      final elapsed = Stopwatch()..start();
+      const baselineBy = Duration(seconds: 60);
+      const recoveryReadyBy = Duration(seconds: 210);
+      const finalEntryBy = Duration(seconds: 360);
+      const observationsBy = Duration(seconds: 420);
+      const completeBy = Duration(minutes: 8);
+      binding.reportData = null;
+      final plugin = FlutterLocalNotificationsPlugin();
+      final previousPlatform = FlutterLocalNotificationsPlatform.instance;
+      final previousPointers = binding.shouldPropagateDevicePointerEvents;
+      final android = _ObservedAndroidNotifications();
+      final permissionAttempts = _PermissionAttempts()..handled = true;
+      final notifications = PhoneNotificationCoordinator(
+        plugin: plugin,
+        attempts: permissionAttempts,
+      );
+      late final _Alerts alerts;
+      late final _Recoveries recoveries;
+      final alertChoice = _Choice();
+      final recoveryChoice = _Choice();
+      final markers = _Markers();
+      final memory = _Windows();
+      final wake = _Wake();
+      final repository = _Repository(_source(20));
+      final banner = ValueNotifier<({String text, VoidCallback next})?>(null);
+      final stages = <String>[];
+      late AlertConditionKey key;
+      late String tag;
+      late int recoveryId;
+      Map<String, Map<String, Object?>>? beforePolicy;
+      bool identitiesUnused = false;
+      bool mountingStarted = false;
+      bool alertDispatched = false;
+      bool recoveryDispatched = false;
+      double? publishing;
+      Duration? postingBy;
+      Future<void>? pendingRefresh;
+      Future<void>? pendingWake;
+
+      void before(Duration cutoff, String phase) {
+        if (elapsed.elapsed >= cutoff) {
+          throw TimeoutException(
+            '$phase missed its ${cutoff.inSeconds}s cutoff '
+            'at ${elapsed.elapsedMilliseconds}ms; cleanup only.',
+          );
+        }
+      }
+
+      bool isAlert(ActiveNotification n) =>
+          n.id == alertNotificationId && n.tag == tag;
+      bool isRecovery(ActiveNotification n) =>
+          n.id == recoveryId && n.tag == null;
+      bool hasOwnedCopy(ActiveNotification n) =>
+          n.title == 'Claude · Weekly plan' &&
+          (isAlert(n)
+              ? n.channelId == alertNotificationChannel.id &&
+                  n.body == 'Reached your alert threshold: 20% left.'
+              : isRecovery(n) &&
+                  n.channelId == recoveryNotificationChannel.id &&
+                  n.body == recoveryNotificationBody);
+
+      // Compare the effective values returned by Android, not declarations or
+      // sound object identity. OS blocking/playback still needs HOST evidence.
+      Map<String, Object?> policy(AndroidNotificationChannel channel) => {
+        'id': channel.id,
+        'name': channel.name,
+        'description': channel.description,
+        'groupId': channel.groupId,
+        'importance': channel.importance,
+        'bypassDnd': channel.bypassDnd,
+        'playSound': channel.playSound,
+        'sound': channel.sound?.sound,
+        'enableVibration': channel.enableVibration,
+        'vibrationPattern': channel.vibrationPattern?.toList(),
+        'showBadge': channel.showBadge,
+        'enableLights': channel.enableLights,
+        'ledColor': channel.ledColor?.toARGB32(),
+        'audioAttributesUsage': channel.audioAttributesUsage,
+      };
+      Future<Map<String, Map<String, Object?>>> readPolicy() async {
+        final channels = await android.getNotificationChannels();
+        expect(channels, isNotNull, reason: 'Unknown existing channel policy.');
+        return {
+          for (final expected in [
+            alertNotificationChannel,
+            recoveryNotificationChannel,
+          ])
+            expected.id: policy(
+              channels!.singleWhere((channel) => channel.id == expected.id),
+            ),
+        };
+      }
+
+      Future<void> unchangedPolicy() async {
+        expect(await notifications.readAndroidNotificationStatus(), isTrue);
+        expect(await readPolicy(), beforePolicy);
+        expect(android.requests, 0);
+        expect(permissionAttempts.handled, isTrue);
+      }
+
+      Future<void> vacant({bool alert = false, bool recovery = false}) async {
+        final active = await plugin.getActiveNotifications();
+        if (alert) {
+          expect(
+            active.where(isAlert),
+            isEmpty,
+            reason: 'The next alert identity must be unused.',
+          );
+        }
+        if (recovery) {
+          expect(
+            active.where(isRecovery),
+            isEmpty,
+            reason: 'The next recovery identity must be unused.',
+          );
+        }
+      }
+
+      Future<void> visible({required bool recovery}) async {
+        final active = await plugin.getActiveNotifications();
+        expect(
+          active.where((n) => isAlert(n) || isRecovery(n)),
+          hasLength(recovery ? 2 : 1),
+        );
+        expect(hasOwnedCopy(active.singleWhere(isAlert)), isTrue);
+        if (recovery) {
+          expect(hasOwnedCopy(active.singleWhere(isRecovery)), isTrue);
+        }
+        await unchangedPolicy();
+      }
+
+      Future<void> barrier(
+        String stage,
+        String instructions,
+        Duration cutoff,
+      ) async {
+        before(cutoff, stage);
+        final continued = Completer<bool>();
+        banner.value = (
+          text:
+              '$stage: $instructions '
+              'Elapsed ${elapsed.elapsed.inSeconds}s; Continue before '
+              '${cutoff.inSeconds}s from case start.',
+          next: () {
+            if (!continued.isCompleted) {
+              continued.complete(elapsed.elapsed < cutoff);
+            }
+          },
+        );
+        try {
+          await tester.pump();
+          final success = await tester.runAsync(() async {
+            before(cutoff, stage);
+            final accepted = await continued.future.timeout(
+              cutoff - elapsed.elapsed,
+            );
+            before(cutoff, stage);
+            return accepted;
+          });
+          // Live runAsync reports exceptions and returns null. Never advance
+          // merely because its returned Future completed.
+          expect(
+            success,
+            isTrue,
+            reason: '$stage did not receive a valid Continue.',
+          );
+          before(cutoff, stage);
+        } finally {
+          banner.value = null;
+        }
+        await tester.pump();
+      }
+
+      Future<void> drainAlerts() => AlertNotificationDelivery(
+        preferences: alertChoice,
+        conditions: markers,
+        notifier: alerts,
+      ).sync(DashboardSnapshot.empty());
+      Future<void> publish(double used, Duration cutoff) async {
+        before(cutoff, 'Prepare $used');
+        await unchangedPolicy();
+        // 100 consumes no new crossing: the case-owned alert remains visible.
+        // Vacancy belongs only to the next intended post.
+        if (used == 90) await vacant(alert: true);
+        if (used == 20) await vacant(recovery: true);
+        final refresh =
+            tester
+                .widget<SettingsScreen>(find.byType(SettingsScreen))
+                .onRefresh;
+        before(cutoff, 'Publish $used');
+        publishing = used;
+        postingBy = cutoff;
+        wake.done = Completer<void>();
+        pendingWake = wake.done.future;
+        repository.snapshot = _source(used);
+        pendingRefresh = Future<void>.sync(refresh);
+        await pendingRefresh;
+        // Never time out and abandon delivery. Unsettled work cannot produce
+        // COMPLETE, even when the framework backstop has already failed.
+        await pendingWake;
+        await drainAlerts();
+        await tester.pumpAndSettle();
+      }
+
+      void counts(int alertCount, int recoveryCount) {
+        expect(alerts.attempts, alertCount);
+        expect(alerts.posts, alertCount);
+        expect(recoveries.attempts, recoveryCount);
+        expect(recoveries.posts, recoveryCount);
+      }
+
+      Future<void> removeOwned() async {
+        if (!identitiesUnused) return;
+        final active = await plugin.getActiveNotifications();
+        final changed = <ActiveNotification>[];
+        final cancellations = <Future<void>>[];
+        for (final post in active) {
+          if (!(alertDispatched && isAlert(post)) &&
+              !(recoveryDispatched && isRecovery(post)))
+            continue;
+          if (!hasOwnedCopy(post)) {
+            changed.add(post); // Preserve any replacement we cannot attribute.
+          } else {
+            cancellations.add(plugin.cancel(id: post.id!, tag: post.tag));
+          }
+        }
+        await Future.wait(cancellations);
+        expect(
+          changed,
+          isEmpty,
+          reason:
+              'Changed case identities were preserved; cleanup is unproved.',
+        );
+        final remaining = await plugin.getActiveNotifications();
+        expect(
+          remaining.where(
+            (n) =>
+                (alertDispatched && isAlert(n)) ||
+                (recoveryDispatched && isRecovery(n)),
+          ),
+          isEmpty,
+        );
+      }
+
+      Future<void> guardPost({required bool alert}) async {
+        final cutoff = postingBy;
+        expect(
+          publishing,
+          alert ? 90 : 20,
+          reason: 'No post is intended for this observation.',
+        );
+        if (cutoff == null)
+          throw StateError('No intended publication deadline.');
+        before(cutoff, 'Adapter publication');
+        await unchangedPolicy();
+        await vacant(alert: alert, recovery: !alert);
+        before(cutoff, 'Adapter publication');
+        // A guard failure must not claim an identity it never dispatched.
+        // A subsequent lost plugin reply still requires OS reconciliation.
+        if (alert) {
+          alertDispatched = true;
+        } else {
+          recoveryDispatched = true;
+        }
+      }
+
+      alerts = _Alerts(
+        LocalAlertNotifier(coordinator: notifications),
+        beforePost: () => guardPost(alert: true),
+      );
+      recoveries = _Recoveries(
+        LocalRecoveryNotifier(coordinator: notifications),
+        beforePost: () => guardPost(alert: false),
+      );
+      FlutterLocalNotificationsPlatform.instance = android;
+      try {
+        key =
+            applyUserAlertSettings(
+              _source(20),
+              _rules,
+            ).alertConditions.single.key;
+        final recovery =
+            planRecoveries(_source(20), exhaustedWindows(_source(100))).single;
+        tag = alertNotificationTag(key);
+        recoveryId = recoveryNotificationId(recovery);
+        // These inspections precede ensureReady/canPost and app initialization.
+        expect(
+          await notifications.readAndroidNotificationStatus(),
+          isTrue,
+          reason: 'HOST must qualify an already-granted baseline.',
+        );
+        beforePolicy = await readPolicy();
+        await vacant(alert: true, recovery: true);
+        identitiesUnused = true;
+        before(baselineBy, 'Granted preflight');
+        await notifications.ensureReady();
+        expect(await alerts.canPost(), isTrue);
+        await unchangedPolicy();
+        binding.shouldPropagateDevicePointerEvents = true;
+        mountingStarted = true;
+        pendingWake = wake.done.future;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Stack(
+              children: [
+                WardPulseApp(
+                  repository: repository,
+                  notificationCoordinator: notifications,
+                  alertNotifier: alerts,
+                  recoveryNotifier: recoveries,
+                  alertThresholdStore: _Rules(),
+                  alertNotificationStore: alertChoice,
+                  recoveryNotificationStore: recoveryChoice,
+                  alertConditionStore: markers,
+                  recoveryWatchlistStore: memory,
+                  recoveryWake: wake,
+                  watchSyncService: _NoWatch(),
+                  phoneWidgetSyncService:
+                      const DisabledPhoneWidgetSyncService(),
+                  phoneWidgetNavigationService: _NoNavigation(),
+                  syncScheduler: const DisabledProviderSyncScheduler(),
+                  scheduleHeadlessSync: (_) async {},
+                ),
+                ValueListenableBuilder(
+                  valueListenable: banner,
+                  builder:
+                      (context, value, _) =>
+                          value == null
+                              ? const SizedBox.shrink()
+                              : Align(
+                                alignment: Alignment.bottomCenter,
+                                child: Material(
+                                  child: SafeArea(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(value.text),
+                                          FilledButton(
+                                            onPressed: value.next,
+                                            child: const Text('Continue'),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                ),
+              ],
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await pendingWake;
+        await drainAlerts();
+        await tester.tap(find.text('Settings'));
+        await tester.pumpAndSettle();
+        counts(0, 0);
+        expect(markers.values, isEmpty);
+        expect(memory.keys, isEmpty);
+        await vacant(alert: true, recovery: true);
+        await unchangedPolicy();
+        await barrier(
+          'GRANTED READY',
+          'Clear 20 is settled. Alert ID $alertNotificationId, tag $tag; '
+              'recovery untagged ID $recoveryId. Arm the isolated alert capture '
+              'before Continue publishes 90; retain the capture start time.',
+          baselineBy,
+        );
+        await publish(90, baselineBy);
+        counts(1, 0);
+        expect(markers.values[key], isTrue);
+        expect(memory.keys, isEmpty);
+        // Plugin completion can precede OS visibility. The next Continue,
+        // after HOST observes the post, synchronizes its identity assertions.
+        await unchangedPolicy();
+        before(recoveryReadyBy, 'Alert witness');
+        stages.add('GRANTED READY');
+        await barrier(
+          'ALERT POSTED',
+          'Retain the alert sound, actual OS post/time and original shade evidence. '
+              'Continue publishes 100 without a second alert.',
+          recoveryReadyBy,
+        );
+        await visible(recovery: false);
+        counts(1, 0);
+        await publish(100, recoveryReadyBy);
+        counts(1, 0);
+        expect(markers.values[key], isTrue);
+        expect(memory.keys, exhaustedWindows(_source(100)));
+        expect(memory.keys, isNotEmpty);
+        await visible(recovery: false);
+        await vacant(recovery: true);
+        before(recoveryReadyBy, 'Recovery preparation');
+        stages.add('ALERT POSTED');
+        await barrier(
+          'RECOVERY READY',
+          'Exhausted 100 is remembered; the first alert remains owned. '
+              'Arm the separate isolated recovery capture before Continue publishes 20; '
+              'retain the capture start time.',
+          finalEntryBy,
+        );
+        counts(1, 0);
+        expect(markers.values[key], isTrue);
+        expect(memory.keys, exhaustedWindows(_source(100)));
+        await publish(20, finalEntryBy);
+        counts(1, 1);
+        expect(markers.values, isEmpty);
+        expect(memory.keys, isEmpty);
+        await unchangedPolicy();
+        before(finalEntryBy, 'Final phase entry');
+        stages.add('RECOVERY READY');
+        await barrier(
+          'RECOVERY POSTED',
+          'Retain recovery sound, both distinct OS identities/times and original '
+              'shade evidence. Continue finishes observations and starts owned teardown.',
+          observationsBy,
+        );
+        counts(1, 1);
+        expect(markers.values, isEmpty);
+        expect(memory.keys, isEmpty);
+        await visible(recovery: true);
+        before(observationsBy, 'Final observations');
+        stages.add('RECOVERY POSTED');
+      } finally {
+        try {
+          try {
+            if (mountingStarted) {
+              await tester.pumpWidget(const SizedBox());
+              await tester.pumpAndSettle();
+            }
+          } finally {
+            // Future.wait settles every owned operation even when one fails.
+            // No cancellation/reconciliation may race outstanding delivery.
+            await Future.wait<void>([
+              if (pendingRefresh != null) pendingRefresh!,
+              if (pendingWake != null) pendingWake!,
+              if (android.answer != null) android.answer!.then<void>((_) {}),
+              drainAlerts(),
+            ]);
+          }
+        } finally {
+          try {
+            await removeOwned();
+          } finally {
+            try {
+              if (beforePolicy != null) await unchangedPolicy();
+            } finally {
+              binding.shouldPropagateDevicePointerEvents = previousPointers;
+              FlutterLocalNotificationsPlatform.instance = previousPlatform;
+              banner.dispose();
+            }
+          }
+        }
+      }
+      before(completeBy, 'Cleanup/report');
+      expect(tester.takeException(), isNull);
+      stages.add('COMPLETE');
+      binding.reportData = {
+        'scope': 'granted baseline / real FFI and Android adapters',
+        'completed': true,
+        'alert': {
+          'channel': alertNotificationChannel.id,
+          'id': alertNotificationId,
+          'tag': tag,
+          'adapterAttempts': alerts.attempts,
+          'pluginCompletions': alerts.posts,
+        },
+        'recovery': {
+          'channel': recoveryNotificationChannel.id,
+          'id': recoveryId,
+          'tag': null,
+          'adapterAttempts': recoveries.attempts,
+          'pluginCompletions': recoveries.posts,
+        },
+        'barriers': List<String>.of(stages),
+      };
+    },
+    timeout: const Timeout(Duration(minutes: 8)),
+  );
+}
+
 void _firstForegroundPermission(IntegrationTestWidgetsFlutterBinding binding) {
   testWidgets(
     'first foreground requests the shared Android permission',
@@ -593,8 +1094,9 @@ final class _Wake implements RecoveryWakeScheduler {
 }
 
 final class _Alerts implements AlertNotifier {
-  _Alerts(this.real);
+  _Alerts(this.real, {this.beforePost});
   final LocalAlertNotifier real;
+  final Future<void> Function()? beforePost;
   int attempts = 0;
   int posts = 0;
   @override
@@ -608,14 +1110,16 @@ final class _Alerts implements AlertNotifier {
     required String body,
   }) async {
     attempts++;
+    if (beforePost != null) await beforePost!();
     await real.notify(key, title: title, body: body);
     posts++;
   }
 }
 
 final class _Recoveries implements RecoveryNotifier {
-  _Recoveries(this.real);
+  _Recoveries(this.real, {this.beforePost});
   final LocalRecoveryNotifier real;
+  final Future<void> Function()? beforePost;
   int attempts = 0;
   int posts = 0;
   @override
@@ -623,6 +1127,7 @@ final class _Recoveries implements RecoveryNotifier {
   @override
   Future<void> notify(PlanRecovery recovery) async {
     attempts++;
+    if (beforePost != null) await beforePost!();
     await real.notify(recovery);
     posts++;
   }

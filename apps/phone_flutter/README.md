@@ -359,3 +359,126 @@ prove it. Preserve scheduled work and prove actual process replacement through t
 background `am kill` route, never force-stop. Restore the verified normal current APK and
 legitimate newer data, not an old snapshot over newer publications. Physical/OEM menu behavior
 and public screenshots/release remain Pending separate work.
+
+### Granted-baseline sound case
+
+`WARDPULSE_NOTIFICATION_GRANTED_SOUND=true` selects a separate, bounded case with an
+already-granted Android baseline and both `wardpulse.alerts` and `wardpulse.plan_recovery`
+channels already present. Combining it with `WARDPULSE_NOTIFICATION_FIRST_FOREGROUND=true`
+fails before binding initialization. The default denied case and focused first-foreground
+case keep their existing prerequisites, assertions and report contracts; this route does
+not replay them or turn their earlier failed diagnostics into passes.
+
+Root alone performs this HOST acceptance after the whole owning execution is DONE, the
+original CLI/tool/observer have actually exited, all known owned processes have retired,
+controllers are zero and a separate fresh public idle/freelease check passes. Complete
+unchanged full `just check-phone`, full `just check-docs` and the existing extra nonmutating
+`dart format --output=none --set-exit-if-changed integration_test test_driver` from the phone
+directory. Native completion and its local commit do not await HOST sound qualification.
+
+Before any build or installation, retain the **exact actually installed normal APK** at
+an unused task-owned path outside `build/`, resolving the current package-manager APK path
+and retaining its hash, signer, version, package, installed UID and ABI facts. Stop if the
+installed artifact set cannot be uniquely resolved and retained. A newly built `lib/main.dart`
+APK is a separate ordinary-build candidate and cannot substitute for this restoration
+artifact. Preserve current normal data, profiles, rules, notification bookkeeping, permission
+flags, effective channel policy and legitimate posts without exporting credentials or
+overwriting newer state with an old snapshot. Qualify the complete restoration route first.
+
+Build the ordinary and selected SDK artifacts only after retention. Use the existing
+both-ABI Rust build route, or qualified unchanged JNI reuse explicitly owned by Root.
+For **each** `arm64-v8a` and `x86_64` library, join the owned JNI input to the Gradle merged
+library, the actual strip-task output, the APK member and the installed/active artifact.
+Inspect the actual strip result, including a documented unchanged output when stripping
+was legitimately skipped; do not demand byte equality between unstripped and stripped
+libraries or infer the strip result from an APK alone. Bind the APK hash, signer, application
+ID and version before installation, then rejoin installed bytes, UID, current PID/start ticks
+and active process to that artifact. Source, a build message or matching version alone is
+insufficient. Keep the retained normal APK and failed evidence outside overwritten outputs.
+
+From `apps/phone_flutter`, build the selected target:
+
+```sh
+flutter build apk --debug --target=integration_test/notification_delivery_test.dart --dart-define=INTEGRATION_TEST_SHOULD_REPORT_RESULTS_TO_NATIVE=false --dart-define=WARDPULSE_NOTIFICATION_GRANTED_SOUND=true
+```
+
+Between build and attach, use the guarded `adb -s "$PHONE_SERIAL" install -t -r` route and
+launch the verified target through the existing `am start -W` route. Stop on any failed leaf;
+there is no automatic install retry, uninstall, data clear, force-stop or baseline reset.
+Require a genuine existing grant and both existing channels **before** launch. Preserve their
+effective blocking, importance, sound and other policy; inspect notification volume, DND and
+the qualified output route without changing them. If prerequisites or reversible preservation
+are unknown, hold launch. This selected existing-channel case does not prove fresh-channel
+sound defaults. No permission, channel, volume, DND or audio-routing mutation is part of it.
+
+Discover the fresh VM-service URL from the verified current process, establish only the
+owned forward with the existing `adb forward tcp:0` route, and bind its device/host ports to
+that PID/start and VM identity. Keep the exact authentication path private; never publish
+the VM/auth URL or attach using an old process log. Then attach the stock driver:
+
+```sh
+flutter drive -d "$PHONE_SERIAL" --target=integration_test/notification_delivery_test.dart --driver=test_driver/notification_delivery.dart --dart-define=WARDPULSE_NOTIFICATION_GRANTED_SOUND=true --use-existing-app="$WARDPULSE_NOTIFICATION_VM_URI" --keep-app-running
+```
+
+Before launch, qualify the phase commands and actual operator/model/tool round trips,
+capture arming, posting and OS/original-shade observations against this fixed budget.
+These are conservative proposed allocations, **not measured HOST feasibility**. Failed
+qualification holds launch for reconciliation; it never extends an active case or permits
+automatic retry. The monotonic clock starts in the actual case body, before driver attachment
+can finish; attachment does not restart it. The eight-minute framework timeout is a backstop,
+not cancellation of delivery Futures or proof that teardown ran.
+
+| Case elapsed time | Required checkpoint |
+| --- | --- |
+| 0–60 seconds | Launch/attach and clear20 baseline; arm alert capture before GRANTED READY Continue publishes 90. |
+| By 210 seconds | First 150-second witness allocation finished; ALERT POSTED Continue publishes nonposting100 and recovery preparation is complete. |
+| By 360 seconds | Second 150-second witness allocation finished; RECOVERY READY Continue publishes 20 and final-phase entry is complete. |
+| By 420 seconds | RECOVERY POSTED observations, Continue and final assertions complete. |
+| By 480 seconds | Protected final 120-second phase ends after awaited cleanup and report; its last 60 seconds are reserved for cleanup/report. |
+
+Each sound witness requires its **own** 90-second recording of isolated canonical-emulator
+playback output, excluding microphone and unrelated host audio. Arm it before its triggering
+Continue, allow a 30-second completion margin and set every process/tool completion deadline
+to at least 120 seconds. Require publication within 45 seconds of actual capture start and
+inside its recording window, while respecting the case cutoffs. Retain actual capture start/end
+and actual owned OS post times: a recording that misses the event is not a witness. If a
+witness is missed, stop progression; never publish a later post to repair its evidence.
+
+The four manual barriers are GRANTED READY, ALERT POSTED, RECOVERY READY and RECOVERY POSTED.
+At the first, retain the settled clear20 and unused alert/recovery identities, then arm the
+alert capture. At ALERT POSTED, retain the real alert UID/channel/tag/ID/time and original
+shade frame plus sound evidence before Continue publishes 100. The consumed crossing must
+prevent a second alert while Rust remembers the exhausted window. The already-owned alert
+remains visible: vacancy applies to the **next intended post**, not that retained alert.
+At RECOVERY READY, arm the separate recovery capture before Continue publishes 20. At
+RECOVERY POSTED, retain the recovery witness and both distinct real identities/original shade
+frames before Continue permits final assertions and teardown. Join both sound observations
+to the original WAV SHA-256 `c056547acf175ddc7e46c0e35fdb586f8737dc83e533e5391de6e366885f9306`.
+Packaging, sound URIs, route readiness, plugin Futures and reports alone never establish sound.
+
+The case inspects grant and both channel policies before readiness, preserves real readiness,
+uses handled case-memory permission attempts and a forwarding real Android observer, and
+requires zero permission requests. Provider polling, normal preferences/credentials/bookkeeping,
+headless scheduling and watch/widget effects remain outside its injected memory/inert route.
+Only successful Continues and their assertions record stages. Null/error/expired `runAsync`
+results fail outside `runAsync`, and deadline/vacancy guards precede publication.
+
+Success and failure both unmount and await outstanding refresh, wake completion and queued
+alert delivery before reconciling attempted identities, including a lost plugin reply. Cleanup
+cancels only matching newly owned posts, preserves unowned or changed identities and restores
+pointer/platform state. Unsettled delivery or failed cleanup keeps the outcome incomplete.
+Only successful body **and awaited teardown** publish scope
+`granted baseline / real FFI and Android adapters`, `completed: true`, the exact ordered
+four stages followed by COMPLETE, and one integer attempt/plugin completion per identity.
+The stock awaited callback persists available response JSON before validation. Missing, null,
+malformed or incomplete reports fail; framework failure/timeout wins over driver/wrapper exit 0.
+Retain all old failed REARMED, report and capture diagnostics unchanged.
+
+After the case and driver terminate and owned teardown is established, remove only the owned
+forward and restore the **retained actually installed normal APK** through guarded `install -t -r`
+with data preserved. Stop on restoration failure without fallback. Reverify its actual installed
+and active identity, native libraries, normal operation and preserved current state; inspect
+original restoration frames before declaring success. Normal restoration has a separate HOST
+budget. Root then completes the full independent whole-Source zero-findings pass and native/audio
+acceptance. Ordinary timers/headless work, fresh-channel defaults, Wear, physical devices and
+general audibility remain separate claims.

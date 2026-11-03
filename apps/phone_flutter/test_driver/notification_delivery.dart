@@ -8,11 +8,12 @@ Future<void> main() => integrationDriver(
   },
 );
 
-/// Requires the terminal report shape of either notification case.
+/// Requires the terminal report shape of the selected notification case.
 void validateNotificationDeliveryReport(Map<String, dynamic>? report) {
   if (report == null) {
     throw const FormatException('Missing notification delivery report.');
   }
+  var granted = false;
   switch (report['scope']) {
     case 'first foreground / real Android request; HOST dialog observation required':
       if (report['requests'] is! int ||
@@ -22,6 +23,12 @@ void validateNotificationDeliveryReport(Map<String, dynamic>? report) {
         throw const FormatException('Incomplete first-foreground report.');
       }
       return;
+    case 'granted baseline / real FFI and Android adapters':
+      if (report['completed'] != true) {
+        throw const FormatException('Incomplete granted notification report.');
+      }
+      granted = true;
+      break;
     case 'injected pipeline / real FFI and Android adapters':
       break;
     default:
@@ -34,8 +41,8 @@ void validateNotificationDeliveryReport(Map<String, dynamic>? report) {
     throw const FormatException('Missing notification delivery identities.');
   }
   for (final (identity, channel, attempts) in [
-    (alert, 'wardpulse.alerts', 3),
-    (recovery, 'wardpulse.plan_recovery', 2),
+    (alert, 'wardpulse.alerts', granted ? 1 : 3),
+    (recovery, 'wardpulse.plan_recovery', granted ? 1 : 2),
   ]) {
     final id = identity['id'];
     final completions = identity['pluginCompletions'];
@@ -46,7 +53,7 @@ void validateNotificationDeliveryReport(Map<String, dynamic>? report) {
         identity['adapterAttempts'] is! int ||
         identity['adapterAttempts'] != attempts ||
         completions is! int ||
-        completions < 0 ||
+        completions < (granted ? attempts : 0) ||
         completions > attempts) {
       throw FormatException('Invalid $channel identity or completion counts.');
     }
@@ -60,28 +67,40 @@ void validateNotificationDeliveryReport(Map<String, dynamic>? report) {
     throw const FormatException('Invalid notification tags or alert ID.');
   }
 
-  const labels = [
-    'READY',
-    'DENIED ALERT',
-    'DENIED RECOVERY',
-    'GRANT',
-    'NO BACKLOG',
-    'CROSSED',
-    'UNCHANGED',
-    'CLEAR',
-    'REARMED',
-    'MUTED ALERT',
-    'MUTED RECOVERY',
-    'EXHAUSTED',
-    'RECOVERED',
-  ];
+  final labels =
+      granted
+          ? const [
+            'GRANTED READY',
+            'ALERT POSTED',
+            'RECOVERY READY',
+            'RECOVERY POSTED',
+            'COMPLETE',
+          ]
+          : const [
+            'READY',
+            'DENIED ALERT',
+            'DENIED RECOVERY',
+            'GRANT',
+            'NO BACKLOG',
+            'CROSSED',
+            'UNCHANGED',
+            'CLEAR',
+            'REARMED',
+            'MUTED ALERT',
+            'MUTED RECOVERY',
+            'EXHAUSTED',
+            'RECOVERED',
+          ];
   final barriers = report['barriers'];
   if (barriers is! List || barriers.length != labels.length) {
     throw const FormatException('Incomplete notification delivery barriers.');
   }
   for (var index = 0; index < labels.length; index++) {
     final barrier = barriers[index];
-    if (barrier is! String || !barrier.startsWith('${labels[index]}: ')) {
+    if (barrier is! String ||
+        (granted
+            ? barrier != labels[index]
+            : !barrier.startsWith('${labels[index]}: '))) {
       throw const FormatException('Invalid notification barrier order.');
     }
   }
