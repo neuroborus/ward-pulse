@@ -70,7 +70,7 @@ reopen the review and keep the public capture candidate Pending until actual rep
 
 Immediately before input, revalidate the current page AND a unique enabled visible intended node or its own
 enabled clickable ancestor from a fresh hierarchy and original frame; its current bounds and actual operation
-must support the intended action, established from current semantic labels/resource identity or a primary contract. Icon shape alone is insufficient: arrows can reorder instead of navigating/activating. Inspect both `text` and `content-desc` for page and section heading guards as well as action targets: either may identify the element while the other is empty.
+must support the intended action, established from current semantic labels/resource identity or a primary contract. Icon shape alone is insufficient: arrows can reorder instead of navigating/activating. Inspect both `text` and `content-desc` for page and section heading guards as well as action targets: either may identify the element while the other is empty. Match guards to observed merged/multiline semantics, keeping unqueried or missing focus fields Unknown rather than false.
 Do not reuse a picker/modal observation across model/tool round trips; prefer one prepared existing observation/action batch.
 Stop absence-driven scrolling once the target is visible; reveal a clipped target only for usable bounds.
 One empty label field or a selector ignoring the populated field does not prove absence. Ambiguous matches,
