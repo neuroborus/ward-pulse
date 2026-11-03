@@ -59,7 +59,11 @@ For physical phones and watches over USB/wireless ADB, use
 ## Preserve Emulator State
 
 - Keep suitable verified recovery before risky actions; reuse it when it still protects current
-  state. Follow [Preserving emulator state](../../../docs/ANDROID_TOOLCHAIN.md#preserving-emulator-state)
+  state. Before reconnecting a selected ADB device or stopping/restarting an emulator, retain
+  affected nonsecret forward/reverse endpoint tuples with their device and ownership required
+  for undo; a set hash/count is not a recovery handle. Keep lost mappings or obsolete dynamic
+  VM endpoints Unknown rather than guessing a replacement. Follow
+  [Preserving emulator state](../../../docs/ANDROID_TOOLCHAIN.md#preserving-emulator-state)
   for bounded snapshot retention and authorized cleanup; inspection/captures alone need no new snapshot.
 - Never delete or recreate an AVD as a troubleshooting step. That loses sign-in, browser
   sessions, system settings, keyboard layout, and pairing state.
@@ -72,7 +76,8 @@ For physical phones and watches over USB/wireless ADB, use
 
 ## Before Acting
 
-1. Identify the exact AVDs and discover their current ADB serials.
+1. Identify the exact AVDs and discover their current ADB serials; bind any running emulator to
+   current QEMU process argv using its actual `-avd NAME` or `@NAME` form, not one assumed shape.
 2. Inspect connection, process, and snapshot state without mutating it.
 3. Read the matching toolchain procedure and choose the least state-changing operation.
 4. Verify suitable recoverable state before any operation that could affect pairing or device data.
