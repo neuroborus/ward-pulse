@@ -88,6 +88,25 @@ does not confirm the reporting key. Zero or missing history can be normal before
 is reported. API token history can appear before reported costs. Costs stay unknown until
 Anthropic reports them.
 
+### Read reported costs and budget limits
+
+Organization reporting covers the organization authorized by the key, separately from your
+Claude plan. **Today** starts at midnight UTC, **Week** starts on Monday UTC, and **Month**
+starts on the first day of the calendar month UTC.
+
+Costs and budget percentages reflect what Anthropic has reported to date. They do not
+guarantee that all recent charges have been published. A period stays unavailable if any
+required day's costs are missing, even when token history is visible. A reported zero is
+different from missing costs; a period with no elapsed time is unavailable.
+
+Set advisory ceilings with the **piggy-bank icon's Budget limits** beside
+**Organization reporting** in **Providers**.
+These limits are local to WardPulse and do not stop API usage or change Anthropic's spending
+limits. A percentage needs reported spend and a positive ceiling in the same currency.
+Unavailable budget choices stay visible but cannot be added until usable data and a ceiling
+are available. Existing selections can still be removed, and unavailable reports do not
+reset saved ceilings.
+
 ## Reconnect, change or remove a connection
 
 Use **Reconnect** or **Disconnect** for Claude plan. Reporting-key controls are separate;

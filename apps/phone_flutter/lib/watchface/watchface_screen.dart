@@ -13,9 +13,11 @@ class WatchfaceScreen extends StatefulWidget {
     required this.ringPreferences,
     required this.onRingPreferencesChanged,
     required this.onRefresh,
+    this.reportingOutcomes = const [],
   });
 
   final DashboardSnapshot? snapshot;
+  final Iterable<ConnectionReportingOutcome> reportingOutcomes;
   final WatchRingPreferences ringPreferences;
   final Future<void> Function(WatchRingPreferences value)
   onRingPreferencesChanged;
@@ -61,7 +63,10 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
   Widget build(BuildContext context) {
     final snapshot = widget.snapshot;
     final selectedIds = _effectiveRingIds;
-    final reported = watchRingCatalog(snapshot);
+    final reported = watchRingCatalog(
+      snapshot,
+      reportingOutcomes: widget.reportingOutcomes,
+    );
     final reportedIds = reported.map((metric) => metric.id).toSet();
     final catalog = [
       ...reported,

@@ -1268,6 +1268,12 @@ class _DashboardHostState extends State<DashboardHost>
                   }.values,
                 );
 
+        final reportingOutcomes = <ConnectionReportingOutcome>[
+          if (!_mockDataEnabled)
+            for (final update in _reportingUpdates.values)
+              if (update.outcome != null) update.outcome!,
+        ];
+
         return Scaffold(
           appBar: AppBar(
             leading: const Center(
@@ -1298,6 +1304,7 @@ class _DashboardHostState extends State<DashboardHost>
                 key: const ValueKey('watchface'),
                 onRefresh: _pullToRefresh,
                 snapshot: snapshot,
+                reportingOutcomes: reportingOutcomes,
                 ringPreferences: _ringPreferences,
                 onRingPreferencesChanged: _updateRingPreferences,
               ),
@@ -1305,6 +1312,7 @@ class _DashboardHostState extends State<DashboardHost>
                 key: const ValueKey('widget'),
                 onRefresh: _pullToRefresh,
                 snapshot: snapshot,
+                reportingOutcomes: reportingOutcomes,
                 preferences: _widgetPreferences,
                 onPreferencesChanged: _updateWidgetPreferences,
               ),

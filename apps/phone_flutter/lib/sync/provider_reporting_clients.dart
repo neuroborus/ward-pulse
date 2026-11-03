@@ -16,8 +16,15 @@ final class AnthropicReportingClient {
     required DateTime start,
     required DateTime end,
   }) async {
+    if (!start.isBefore(end))
+      return (usage: const <String>[], costs: const <String>[]);
+
     final utcEnd = end.toUtc();
     final midnight = DateTime.utc(utcEnd.year, utcEnd.month, utcEnd.day);
+    // Cost selection compares daily bucket ends, including today's next midnight.
+    final costMidnight =
+        utcEnd == midnight ? midnight : midnight.add(const Duration(days: 1));
+    final costEnd = costMidnight.add(const Duration(seconds: 1));
     final usage = <String>[];
     if (start.isBefore(midnight)) {
       usage.addAll(
@@ -49,7 +56,7 @@ final class AnthropicReportingClient {
       path: '/v1/organizations/cost_report',
       adminApiKey: adminApiKey,
       start: start,
-      end: end,
+      end: costEnd,
       bucketWidth: '1d',
       limit: 31,
       groupByModel: false,

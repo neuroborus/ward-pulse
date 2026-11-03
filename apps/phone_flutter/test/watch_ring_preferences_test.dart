@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
+import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/sync/credit_request_runway.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
@@ -60,13 +61,13 @@ void main() {
     expect(watchRingCatalog(null), isEmpty);
   });
 
-  test('offers a budget ring per period a connection reports spend for', () {
+  test('keeps supported Anthropic budget periods visible when unavailable', () {
     final catalog = watchRingCatalog(_planAndBudgetSnapshot());
 
-    // Week reports no spend, so it never becomes a slot.
     expect(catalog.map((ring) => ring.id), [
       'allowance.codex.codex-weekly',
       'budget.anthropic.platform.today',
+      'budget.anthropic.platform.week',
       'budget.anthropic.platform.month',
     ]);
     final today = catalog[1];
@@ -74,8 +75,118 @@ void main() {
     // The reason names the budget entry, not the alert dialog.
     expect(today.unavailableReason, contains('Providers · Budget limits'));
     expect(today.catalogTitle, 'Anthropic platform · Today');
+    expect(catalog[2].isAvailable, isFalse);
+    expect(catalog[2].unavailableReason, contains('Reported spend'));
     expect(catalog.last.isAvailable, isTrue);
   });
+
+  test('budget percentages need reported spend and a usable ceiling', () {
+    final cases = <(Money?, Money?, double, String?)>[
+      (
+        null,
+        const Money(minorUnits: 10000, currency: 'USD'),
+        40,
+        'Reported spend',
+      ),
+      (
+        const Money(minorUnits: 4000, currency: 'USD'),
+        null,
+        40,
+        'Set this period’s limit',
+      ),
+      (
+        const Money(minorUnits: 4000, currency: 'USD'),
+        const Money(minorUnits: 0, currency: 'USD'),
+        40,
+        'positive limit in USD',
+      ),
+      (
+        const Money(minorUnits: 4000, currency: 'USD'),
+        const Money(minorUnits: 10000, currency: 'EUR'),
+        40,
+        'positive limit in USD',
+      ),
+      (
+        const Money(minorUnits: 0, currency: 'USD'),
+        const Money(minorUnits: 10000, currency: 'USD'),
+        0,
+        null,
+      ),
+    ];
+    for (final (spent, limit, usedPercent, reason) in cases) {
+      final json = _planAndBudgetSnapshot().toJson();
+      final account = (json['accounts'] as List)[1] as Map<String, dynamic>;
+      account['today'] = {
+        ..._spentBudget('today', usedPercent: usedPercent),
+        'spent': spent?.toJson(),
+        'limit': limit?.toJson(),
+        'remaining': null,
+      };
+      final catalog = watchRingCatalog(DashboardSnapshot.fromJson(json));
+      final today = catalog.singleWhere(
+        (metric) => metric.id == 'budget.anthropic.platform.today',
+      );
+      expect(today.isAvailable, reason == null);
+      expect(today.usedPercent, reason == null ? usedPercent : null);
+      expect(today.limit?.toJson(), limit?.toJson());
+      expect(
+        today.unavailableReason,
+        reason == null ? isNull : contains(reason),
+      );
+    }
+  });
+
+  test(
+    'cold reporting failures retain removable budget IDs without plan rows',
+    () {
+      final failed = DashboardSnapshot.empty().withReportingOutcomes([
+        const ConnectionReportingOutcome(
+          connection: ProviderConnections.anthropicPlatform,
+          category: ReportingOutcomeCategory.accessDenied,
+          source: ReportingOutcomeSource.live,
+        ),
+      ]);
+      final catalog = watchRingCatalog(failed);
+      final withoutSnapshot = watchRingCatalog(
+        null,
+        reportingOutcomes: failed.reportingOutcomes,
+      );
+      final widgetCatalog = phoneWidgetCatalog(
+        null,
+        reportingOutcomes: failed.reportingOutcomes,
+      );
+      expect(
+        withoutSnapshot.map((metric) => metric.id),
+        catalog.map((metric) => metric.id),
+      );
+      expect(
+        widgetCatalog.map((metric) => metric.id),
+        catalog.map((metric) => metric.id),
+      );
+      expect(catalog.map((metric) => metric.id), [
+        'budget.anthropic.platform.today',
+        'budget.anthropic.platform.week',
+        'budget.anthropic.platform.month',
+      ]);
+      expect(catalog.every((metric) => !metric.isAvailable), isTrue);
+      const selected = WatchRingPreferences(
+        selectedIds: ['budget.anthropic.platform.week'],
+      );
+      expect(watchRingSelectionIds(failed, selected), selected.selectedIds);
+      expect(resolveWatchRings(failed, selected), isEmpty);
+      expect(
+        watchRingSelectionIds(failed, const WatchRingPreferences()),
+        isEmpty,
+      );
+      expect(
+        watchRingSelectionIds(
+          failed,
+          const WatchRingPreferences(selectedIds: []),
+        ),
+        isEmpty,
+      );
+    },
+  );
 
   test('defaults to the first available percent metrics when unset', () {
     final rings = resolveWatchRings(
@@ -1191,7 +1302,7 @@ void main() {
 }
 
 /// A plan window plus a spend-reporting platform connection: Anthropic
-/// platform reports Today (no limit yet) and Month (limit set), never Week.
+/// platform reports Today (no limit yet) and Month (limit set); Week is unavailable.
 DashboardSnapshot _planAndBudgetSnapshot() {
   final source = DashboardSnapshot.fromJsonString(
     File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
