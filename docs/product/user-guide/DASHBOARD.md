@@ -28,6 +28,10 @@ its source. Remaining percentages do not set the Dashboard order. The
   state.
 - **Purchased** allowance bars track the amount **used**. Their headline can show a remaining
   balance, **Unlimited**, a percent used, or **Balance unavailable**, depending on the report.
+- **Claude Extra usage** shows the reported monthly amount used and applicable cap in
+  **Credits**, independently when available. It is a usage meter, not a prepaid balance.
+  A missing used amount is not zero; a missing or zero cap is neither **Unlimited** nor
+  proof of exhaustion. Its percentage is shown only when reported.
 - Read the units beside credits or purchased balances. A credit count is not a dollar amount.
 - A plan window can include a reset time. **Reset time unavailable** means WardPulse does not
   have that time; it does not mean the window never resets.
@@ -35,14 +39,6 @@ its source. Remaining percentages do not set the Dashboard order. The
 **Unknown** and **Balance unavailable** mean a value was not established. A real known
 **0% left** means the reported capacity is exhausted. A small positive percentage may round
 to 0%; watch displays keep ordinary styling for that rounded value.
-
-![Dashboard showing Claude plan windows and organization usage history in the light theme.](/screenshots/phone-dashboard-overview-light.png)
-
-![Dashboard showing Claude plan windows and organization usage history in the dark theme.](/screenshots/phone-dashboard-overview-dark.png)
-
-Read each plan's capacity **left** and the reporting status beside it. These captures show
-Claude's 5-hour session at **21% left**, its Weekly plan at **87% left**, and organization
-usage history totalling **39 tokens across 27 buckets** from October 1 to 27.
 
 Selected exhausted watch metrics remain present with an empty grey track and a pale-red zero
 percentage. They do not disappear or get replaced by a less-used Claude window. The widget
@@ -54,6 +50,10 @@ API reporting can show **Today**, **Week** and **Month** spend where available. 
 spend report is not proof of zero billing. History and **Model usage** appear when the provider
 supplies usable data; WardPulse does not create a local log of your prompts or a continuous
 activity history.
+
+Claude Plan extra usage provides monthly used/cap figures rather than Console API costs
+or Today/Week spending. It does not create a daily cost history. Ordinary Claude plan
+windows remain separate.
 
 Personal plan activity and API organization/team usage keep separate histories and balances
 within a family. Use the source label when more than one connection is listed. Read each
@@ -71,24 +71,18 @@ Find the connection you want to configure. Its **bell icon** opens **Alert thres
 reporting connections also have a **piggy-bank icon** for **Budget limits**. A filled
 piggy-bank or ringing bell indicates configured limits or rules, not successful provider sync.
 
-![Providers action icons beside Organization reporting in the light theme.](/screenshots/phone-providers-light.png)
-
-![Providers action icons beside Organization reporting in the dark theme.](/screenshots/phone-providers-dark.png)
-
 **Piggy-bank icon:** Budget limits. **Bell icon:** Alert thresholds.
 
 ### Budget limits
 
-1. On a reporting row, tap the **piggy-bank icon** to open **Budget limits**.
+1. On a supported reporting row, such as **OpenAI → Platform reporting**, tap the
+   **piggy-bank icon** to open **Budget limits**.
 2. Enter limits for **Today**, **Week** or **Month** in the connection's reporting currency,
    for example **25.00**. Amounts must be at least **0.01**, with up to two decimal places.
 3. Leave a period empty for no limit, then tap **Save**.
 
-![Organization reporting Budget dialog with a Today 25.00 draft in the light theme.](/screenshots/phone-budget-limits-light.png)
-
-![Organization reporting Budget dialog with a Today 25.00 draft in the dark theme.](/screenshots/phone-budget-limits-dark.png)
-
-Unsaved example: **Today 25.00**, with **Week** and **Month** empty. **Cancel** discards the draft.
+**Cancel** discards an unsaved budget draft. Claude Extra usage's reported cap is not a
+WardPulse-editable monetary budget.
 
 ### Alert thresholds
 

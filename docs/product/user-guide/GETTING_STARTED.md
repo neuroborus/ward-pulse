@@ -29,13 +29,9 @@ Read the [privacy policy](/product/privacy-policy) for what is stored and sent b
 5. Return to **Dashboard** to read balances and status. Use **Refresh** at the top, or pull
    down on the list, if you need another reporting attempt.
 
-![Providers connection choices in the light theme.](/screenshots/phone-providers-light.png)
-
-![Providers connection choices in the dark theme.](/screenshots/phone-providers-dark.png)
-
 Plan sign-in and reporting have separate rows under **Providers**. Reporting uses an OpenAI
-organization Admin key, an Anthropic key with organization reporting rights, or a Cursor
-key with team reporting access.
+organization Admin key or a Cursor key with team reporting access. Claude Plan monthly
+extra usage uses the Claude plan sign-in; Console API reporting is planned separately.
 
 Until a connected provider reports successfully, WardPulse has no usage data to show. A
 provider may also omit a meter that your account does not expose. **Unknown** or **Balance

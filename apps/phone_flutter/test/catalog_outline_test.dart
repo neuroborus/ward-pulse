@@ -76,6 +76,66 @@ void main() {
     });
   }
 
+  testWidgets('saved unavailable Extra usage stays removable', (tester) async {
+    const selected = ['allowance.claude.claude-extra-usage'];
+    final snapshots = <DashboardSnapshot?>[
+      null,
+      DashboardSnapshot.empty(),
+      for (final percent in [null, -1.0, double.nan, double.infinity])
+        DashboardSnapshot.fromJson({
+          ...DashboardSnapshot.empty().toJson(),
+          'accounts': [
+            {
+              'accountId': 'claude-local',
+              'provider': 'claude',
+              'connection': 'anthropic.plan',
+              'status': 'ok',
+              'credits': <Object>[],
+              'buckets': <Object>[],
+              'modelBreakdown': <Object>[],
+              for (final period in ['today', 'week', 'month'])
+                period: BudgetState.unknownPeriod(period).toJson(),
+              'allowances': [
+                {
+                  'id': 'claude-extra-usage',
+                  'source': 'purchased',
+                  'label': 'Extra usage',
+                  'usedPercent': percent,
+                  'limit': null,
+                },
+              ],
+            },
+          ],
+        }),
+    ];
+    for (final data in snapshots) {
+      List<String>? saved;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: WidgetScreen(
+              snapshot: data,
+              preferences: const PhoneWidgetPreferences(selectedIds: selected),
+              onPreferencesChanged: (value) async {
+                saved = value.selectedIds;
+              },
+              onRefresh: () async {},
+            ),
+          ),
+        ),
+      );
+      final row = find.byWidgetPredicate(
+        (widget) => widget is CheckboxListTile && widget.value == true,
+      );
+      expect(row, findsOneWidget);
+      expect(tester.widget<CheckboxListTile>(row).onChanged, isNotNull);
+      await tester.ensureVisible(row);
+      await tester.tap(row);
+      await tester.pump();
+      expect(saved, isEmpty);
+    }
+  });
+
   testWidgets('one heading per kind, one per connection, rows under them', (
     tester,
   ) async {

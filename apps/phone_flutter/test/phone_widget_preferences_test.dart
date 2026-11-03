@@ -256,6 +256,64 @@ void main() {
     expect(watchIds, isNot(contains('allowance.claude.claude-extra-usage')));
   });
 
+  test('Extra usage percent eligibility is independent of monthly cap', () {
+    const id = 'allowance.claude.claude-extra-usage';
+    const preferences = PhoneWidgetPreferences(selectedIds: [id]);
+    for (final percent in [
+      0.0,
+      20.0,
+      100.0,
+      150.0,
+      null,
+      -1.0,
+      double.nan,
+      double.infinity,
+    ]) {
+      final snapshot = DashboardSnapshot.fromJson({
+        ...DashboardSnapshot.empty().toJson(),
+        'accounts': [
+          {
+            'accountId': 'claude-local',
+            'provider': 'claude',
+            'connection': 'anthropic.plan',
+            'status': 'ok',
+            'credits': <Object>[],
+            'buckets': <Object>[],
+            'modelBreakdown': <Object>[],
+            for (final period in ['today', 'week', 'month'])
+              period: BudgetState.unknownPeriod(period).toJson(),
+            'allowances': [
+              {
+                'id': 'claude-extra-usage',
+                'source': 'purchased',
+                'label': 'Extra usage',
+                'usedPercent': percent,
+                'limit': null,
+              },
+            ],
+          },
+        ],
+      });
+      final eligible = percent != null && percent.isFinite && percent >= 0;
+      final metric = phoneWidgetCatalog(
+        snapshot,
+      ).singleWhere((metric) => metric.id == id);
+      expect(metric.isAvailable, eligible);
+      expect(
+        resolvePhoneWidgetMetrics(
+          snapshot,
+          preferences,
+        ).map((metric) => metric.id),
+        eligible ? [id] : isEmpty,
+      );
+      expect(preferences.migratedIds, [id]);
+      expect(
+        watchRingCatalog(snapshot).map((metric) => metric.id),
+        isNot(contains(id)),
+      );
+    }
+  });
+
   test('defaults prefer plan windows including exhausted Cursor pools', () {
     final base = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),

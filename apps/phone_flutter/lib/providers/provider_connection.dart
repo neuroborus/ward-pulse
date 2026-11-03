@@ -139,14 +139,6 @@ List<ProviderConnection> providerConnectionCatalog({
       title: 'Claude plan',
       subtitle: 'Experimental · Claude Code OAuth sign-in',
     ),
-    ProviderConnection(
-      id: ProviderConnections.anthropicPlatform,
-      title: 'Organization reporting',
-      subtitle: 'API key with reporting access · stored on this phone',
-      secretHint: 'API key',
-      displayName:
-          platformLabels[ProviderConnections.anthropicPlatform.storageKey],
-    ),
     const ProviderConnection(
       id: ProviderConnections.cursorPlan,
       title: 'Cursor plan',

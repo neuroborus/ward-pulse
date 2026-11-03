@@ -6,11 +6,22 @@ Apply [user-docs](../../.agents/skills/user-docs/SKILL.md) when capturing or rev
 Select up to three showcase subjects per platform for the landing/README gallery. Android
 phone and Wear OS are one platform, with both phone and watch represented. Reuse the same
 approved subjects on the landing page and root README. Theme variants do not add subjects.
-The current selection is Dashboard, Watch Glance and the watch face; Providers images
-illustrate connection tasks. Phone PNGs are 1920px high at the original aspect ratio, and
-watch PNGs are 500×500px with transparent corners outside the circular screen.
+The historical showcase selection is Dashboard, Watch Glance and the watch face. Retired
+Providers task images remain indexed as historical records. Phone PNGs are 1920px high at
+the original aspect ratio, and watch PNGs are 500×500px with transparent corners outside
+the circular screen.
 
 ## Screenshot index
+
+**Claude scope reconciliation, 2026-11-03.** No PNGs were changed or recaptured. The gallery
+is explicitly historical: its October Dashboard includes Console history, which is now
+deferred. Active setup/connection examples using the Providers, Anthropic reporting-key
+and Organization-budget pairs are omitted from the affected guides. Dashboard guide uses
+of the overview pair and its old current-value narration are also removed. Historical
+index rows, dates and capture/verification records below retain their original scope;
+they are not current Console setup or Connected evidence. The 37-image inventory and
+existing nineteen-replacement planning remain unchanged and pending. No monthly Extra
+usage or new widget runtime freshness is established by these captures.
 
 The library contains 37 screenshots. The Dashboard theme pair, Watchface-selection theme
 pair, healthy Glance, Plan windows and watch face form one shared-state group captured on
@@ -47,30 +58,31 @@ captured on 2026-10-28 from one cached Mock reference. Its gray neutral Unknown 
 marks unavailable Cursor reporting periods; it contains no warning, error or Stale state.
 These demonstration frames do not establish live reporting or refresh the other groups.
 
-The Used in column records the source placements for each image. Last verified records
-actual-frame review on the stated date; the dated capture sections describe its scope.
+The Used in column records source placements, with retired uses marked historical.
+Last verified records actual-frame review on the stated date; the dated capture sections
+describe its scope.
 Image review and publication review are
 separate: check theme selection, original-image links, layout and captions whenever an
 image or its placement changes.
 
 | File | Description | Theme | Date added | Captured | Last verified | Dimensions | App | Used in |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| [phone-dashboard-overview-light.png](phone-dashboard-overview-light.png) | Shared-state Dashboard: Claude 5h 21% / Weekly 87% left and organization history 39 tokens across 27 buckets. | Light | 2026-10-20 | 2026-10-27 | 2026-10-27 | 864×1920 | WardPulse phone | Light landing/README and Dashboard guide |
-| [phone-dashboard-overview-dark.png](phone-dashboard-overview-dark.png) | Shared-state Dashboard: Claude 5h 21% / Weekly 87% left and organization history 39 tokens across 27 buckets. | Dark | 2026-10-20 | 2026-10-27 | 2026-10-27 | 864×1920 | WardPulse phone | Dark landing/README and Dashboard guide |
+| [phone-dashboard-overview-light.png](phone-dashboard-overview-light.png) | Shared-state Dashboard: Claude 5h 21% / Weekly 87% left and organization history 39 tokens across 27 buckets. | Light | 2026-10-20 | 2026-10-27 | 2026-10-27 | 864×1920 | WardPulse phone | Historical placements: Light landing/README and Dashboard guide; gallery now historical; guide use retired 2026-11-03 |
+| [phone-dashboard-overview-dark.png](phone-dashboard-overview-dark.png) | Shared-state Dashboard: Claude 5h 21% / Weekly 87% left and organization history 39 tokens across 27 buckets. | Dark | 2026-10-20 | 2026-10-27 | 2026-10-27 | 864×1920 | WardPulse phone | Historical placements: Dark landing/README and Dashboard guide; gallery now historical; guide use retired 2026-11-03 |
 | [phone-dashboard-light.png](phone-dashboard-light.png) | Claude unsupported-response warning and previous data. | Light | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Light Troubleshooting guide, warning / previous-data example only |
 | [phone-dashboard-dark.png](phone-dashboard-dark.png) | Claude unsupported-response warning and previous data. | Dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Dark Troubleshooting guide, warning / previous-data example only |
-| [phone-providers-light.png](phone-providers-light.png) | Shared-state Providers: four visible Connected rows and independent actions, without a warning badge. | Light | 2026-10-14 | 2026-10-27 | 2026-10-27 | 864×1920 | WardPulse phone | Providers overview; Anthropic/Cursor connection examples; Getting started; Dashboard actions |
-| [phone-providers-dark.png](phone-providers-dark.png) | Shared-state Providers: four visible Connected rows and independent actions, without a warning badge. | Dark | 2026-10-14 | 2026-10-27 | 2026-10-27 | 864×1920 | WardPulse phone | Providers overview; Anthropic/Cursor connection examples; Getting started; Dashboard actions |
+| [phone-providers-light.png](phone-providers-light.png) | Shared-state Providers: four visible Connected rows and independent actions, without a warning badge. | Light | 2026-10-14 | 2026-10-27 | 2026-10-27 | 864×1920 | WardPulse phone | Historical placements: Providers overview; Anthropic/Cursor connection examples; Getting started; Dashboard actions; active guide uses retired 2026-11-03 |
+| [phone-providers-dark.png](phone-providers-dark.png) | Shared-state Providers: four visible Connected rows and independent actions, without a warning badge. | Dark | 2026-10-14 | 2026-10-27 | 2026-10-27 | 864×1920 | WardPulse phone | Historical placements: Providers overview; Anthropic/Cursor connection examples; Getting started; Dashboard actions; active guide uses retired 2026-11-03 |
 | [phone-cursor-sign-in-help-light.png](phone-cursor-sign-in-help-light.png) | Cursor Help with Google/email recovery and Advanced paste; neutral Mock setup background. | Light | 2026-10-14 | 2026-10-28 | 2026-10-28 | 864×1920 | WardPulse phone | Light Cursor guide, Advanced paste |
 | [phone-cursor-sign-in-help-dark.png](phone-cursor-sign-in-help-dark.png) | Cursor Help with Google/email recovery and Advanced paste; neutral Mock setup background. | Dark | 2026-10-14 | 2026-10-28 | 2026-10-28 | 864×1920 | WardPulse phone | Dark Cursor guide, Advanced paste |
 | [phone-cursor-paste-token-light.png](phone-cursor-paste-token-light.png) | Saved-token editor with empty Value and Remove/leave-blank-to-keep controls; the same Mock state. | Light | 2026-10-14 | 2026-10-28 | 2026-10-28 | 864×1920 | WardPulse phone | Light Cursor guide, Save the token |
 | [phone-cursor-paste-token-dark.png](phone-cursor-paste-token-dark.png) | Saved-token editor with empty Value and Remove/leave-blank-to-keep controls; the same Mock state. | Dark | 2026-10-14 | 2026-10-28 | 2026-10-28 | 864×1920 | WardPulse phone | Dark Cursor guide, Save the token |
-| [phone-reporting-key-light.png](phone-reporting-key-light.png) | Saved Anthropic reporting-key editor with empty Value/Label and keep/Remove controls. | Light | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Light Anthropic guide, Connect the key (Organization reporting) |
-| [phone-reporting-key-dark.png](phone-reporting-key-dark.png) | Saved Anthropic reporting-key editor with empty Value/Label and keep/Remove controls. | Dark | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Dark Anthropic guide, Connect the key (Organization reporting) |
+| [phone-reporting-key-light.png](phone-reporting-key-light.png) | Saved Anthropic reporting-key editor with empty Value/Label and keep/Remove controls. | Light | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Historical placements: Light Anthropic guide, Connect the key (Organization reporting); active guide uses retired 2026-11-03 |
+| [phone-reporting-key-dark.png](phone-reporting-key-dark.png) | Saved Anthropic reporting-key editor with empty Value/Label and keep/Remove controls. | Dark | 2026-10-14 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Historical placements: Dark Anthropic guide, Connect the key (Organization reporting); active guide uses retired 2026-11-03 |
 | [phone-openai-reporting-key-light.png](phone-openai-reporting-key-light.png) | Saved OpenAI Platform reporting editor with empty Value/Label and fixed sk-admin-… hint. | Light | 2026-10-18 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Light OpenAI guide, Connect the key (Platform reporting) |
 | [phone-openai-reporting-key-dark.png](phone-openai-reporting-key-dark.png) | Saved OpenAI Platform reporting editor with empty Value/Label and fixed sk-admin-… hint. | Dark | 2026-10-18 | 2026-10-20 | 2026-10-20 | 864×1920 | WardPulse phone | Dark OpenAI guide, Connect the key (Platform reporting) |
-| [phone-budget-limits-light.png](phone-budget-limits-light.png) | Shared-state Organization reporting Budget: unsaved Today 25.00; Week/Month empty. | Light | 2026-10-14 | 2026-10-27 | 2026-10-27 | 864×1920 | WardPulse phone | Light Dashboard guide |
-| [phone-budget-limits-dark.png](phone-budget-limits-dark.png) | Shared-state Organization reporting Budget: unsaved Today 25.00; Week/Month empty. | Dark | 2026-10-14 | 2026-10-27 | 2026-10-27 | 864×1920 | WardPulse phone | Dark Dashboard guide |
+| [phone-budget-limits-light.png](phone-budget-limits-light.png) | Shared-state Organization reporting Budget: unsaved Today 25.00; Week/Month empty. | Light | 2026-10-14 | 2026-10-27 | 2026-10-27 | 864×1920 | WardPulse phone | Historical placements: Light Dashboard guide; active guide uses retired 2026-11-03 |
+| [phone-budget-limits-dark.png](phone-budget-limits-dark.png) | Shared-state Organization reporting Budget: unsaved Today 25.00; Week/Month empty. | Dark | 2026-10-14 | 2026-10-27 | 2026-10-27 | 864×1920 | WardPulse phone | Historical placements: Dark Dashboard guide; active guide uses retired 2026-11-03 |
 | [phone-alert-thresholds-light.png](phone-alert-thresholds-light.png) | Cursor plan Alerts draft: Plan 20% left; Cursor Models default; Other Models Custom % left with input 17; Purchased Off visible. | Light | 2026-10-14 | 2026-10-27 | 2026-10-27 | 864×1920 | WardPulse phone | Light Dashboard guide |
 | [phone-alert-thresholds-dark.png](phone-alert-thresholds-dark.png) | Cursor plan Alerts draft: Plan 20% left; Cursor Models default; Other Models Custom % left with input 17; Purchased Off visible. | Dark | 2026-10-14 | 2026-10-27 | 2026-10-27 | 864×1920 | WardPulse phone | Dark Dashboard guide |
 | [phone-widget-settings-light.png](phone-widget-settings-light.png) | Five selected metrics: Claude 100%/100%, Cursor 100%/64%, Codex 72%, all OK. | Light | 2026-10-14 | 2026-10-25 | 2026-10-25 | 864×1920 | WardPulse phone | Light Widget guide |

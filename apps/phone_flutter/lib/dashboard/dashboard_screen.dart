@@ -176,7 +176,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final hasPurchasedAllowance = allAllowances.any(
       (allowance) => allowance.source == AllowanceSource.purchased,
     );
-    final showMissingPurchased = caps.showAllowances && !hasPurchasedAllowance;
+    final showMissingPurchased =
+        !hasPurchasedAllowance &&
+        snapshot.accounts.any(
+          (account) =>
+              !_isClaudePlan(account) &&
+              ConnectedCapabilities.fromAccounts([account]).showAllowances,
+        );
     final showPlatformSpend = true;
 
     return PullToRefreshList(
@@ -201,7 +207,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             sectionKeys: _sectionKeys,
             footer:
                 showMissingPurchased && hasVisibleAllowances
-                    ? const MissingPurchasedUsageCard()
+                    ? MissingPurchasedUsageCard(
+                      otherPlansOnly: snapshot.accounts.any(_isClaudePlan),
+                    )
                     : null,
           ),
           const SizedBox(height: 16),
@@ -366,15 +374,19 @@ class EmptyAllowanceCard extends StatelessWidget {
 }
 
 class MissingPurchasedUsageCard extends StatelessWidget {
-  const MissingPurchasedUsageCard({super.key});
+  const MissingPurchasedUsageCard({super.key, this.otherPlansOnly = false});
+
+  final bool otherPlansOnly;
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: const Padding(
-        padding: EdgeInsets.all(16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
         child: Text(
-          'Purchased usage: none reported. This account has no purchased credits right now.',
+          otherPlansOnly
+              ? 'Purchased usage: no data reported by other connected plans.'
+              : 'Purchased usage: none reported. This account has no purchased credits right now.',
         ),
       ),
     );
@@ -382,9 +394,15 @@ class MissingPurchasedUsageCard extends StatelessWidget {
 }
 
 class AllowanceSummaryCard extends StatelessWidget {
-  const AllowanceSummaryCard({super.key, required this.allowance, this.accent});
+  const AllowanceSummaryCard({
+    super.key,
+    required this.allowance,
+    this.accent,
+    this.monthlyExtraUsage = false,
+  });
 
   final AllowanceState allowance;
+  final bool monthlyExtraUsage;
 
   /// Metric identity tint for the progress fill; defaults to theme primary.
   final Color? accent;
@@ -399,6 +417,10 @@ class AllowanceSummaryCard extends StatelessWidget {
       AllowanceSource.purchased => allowance.usedFraction,
     };
     final headline = switch (allowance.source) {
+      _ when monthlyExtraUsage =>
+        allowance.used == null
+            ? 'Monthly usage unavailable'
+            : '${allowance.used!.label} used this month',
       AllowanceSource.plan => '${allowance.remainingPercentLabel} left',
       AllowanceSource.purchased when allowance.unlimited => 'Unlimited',
       AllowanceSource.purchased =>
@@ -408,6 +430,8 @@ class AllowanceSummaryCard extends StatelessWidget {
                 : 'Balance unavailable'),
     };
     final detail = switch (allowance.source) {
+      _ when monthlyExtraUsage =>
+        'Monthly cap: ${allowance.limit?.label ?? 'Unavailable'}',
       AllowanceSource.plan when allowance.resetsAt != null =>
         'Resets ${formatLocal(allowance.resetsAt!)}',
       AllowanceSource.plan => 'Reset time unavailable',
@@ -435,6 +459,8 @@ class AllowanceSummaryCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             Text(headline, style: textTheme.headlineSmall),
+            if (monthlyExtraUsage && allowance.usedPercent != null)
+              Text('${allowance.usedPercentLabel} used'),
             if (progress != null) ...[
               const SizedBox(height: 14),
               ClipRRect(
@@ -448,7 +474,7 @@ class AllowanceSummaryCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 10),
-            if (allowance.resetsAt != null)
+            if (!monthlyExtraUsage && allowance.resetsAt != null)
               Tooltip(
                 message: formatUtc(allowance.resetsAt!),
                 child: Text(detail),
@@ -923,6 +949,10 @@ String _dashboardSourceLabel(ProviderSnapshot account) {
   return account.providerLabel;
 }
 
+bool _isClaudePlan(ProviderSnapshot account) =>
+    account.provider == 'claude' &&
+    account.connection == ProviderConnections.claudePlan.storageKey;
+
 class _ProviderDashboardSourceView extends StatelessWidget {
   const _ProviderDashboardSourceView({
     required this.account,
@@ -940,6 +970,10 @@ class _ProviderDashboardSourceView extends StatelessWidget {
       for (final allowance in account.allowances)
         AllowanceSummaryCard(
           allowance: allowance,
+          monthlyExtraUsage:
+              _isClaudePlan(account) &&
+              allowance.source == AllowanceSource.purchased &&
+              allowance.id == 'claude-extra-usage',
           accent: switch ((account.provider, allowance.source, allowance.id)) {
             ('claude', AllowanceSource.plan, 'claude-seven-day-fable') =>
               familyClaudeFableColor,
@@ -947,6 +981,18 @@ class _ProviderDashboardSourceView extends StatelessWidget {
               familyCursorOwnColor,
             _ => accent,
           },
+        ),
+      if (_isClaudePlan(account) &&
+          !account.allowances.any(
+            (allowance) =>
+                allowance.source == AllowanceSource.purchased &&
+                allowance.id == 'claude-extra-usage',
+          ))
+        const Card(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Text('Claude Extra usage: monthly data unavailable.'),
+          ),
         ),
     ];
     return Column(

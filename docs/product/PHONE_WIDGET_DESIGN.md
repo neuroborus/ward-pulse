@@ -29,6 +29,17 @@ The declared baseline covers approved English labels, numeric tokens and reset f
 
 ## Metric rules and optional reset
 
+**Claude Extra usage qualification, 2026-11-03.** Preserve stable metric ID
+`allowance.claude.claude-extra-usage`: a reported finite nonnegative percentage needs no
+monthly cap to be selectable/resolvable. Missing/invalid percentage remains unavailable
+and omitted from runtime rows; saved unavailable choices remain removable. Known zero and
+exhausted values remain visible, with purchased meters still excluded from Wear/face rings.
+Monthly used/applicable-cap detail in Credits belongs to the separately approved next
+widget runtime/layout adoption, including its real private payload, formatter and
+accessibility route. Those details describe usage, not purchased credits left; missing
+amounts stay independent, and no monthly reset is inferred. This qualification changes no
+runtime field, renderer, geometry or review art and establishes no native acceptance.
+
 **Metric-color revision 2026-11-01.** Exact metric
 `allowance.claude.claude-seven-day-fable` takes `#FF603D`; ordinary Claude remains
 `#E8915A`. Similar labels/IDs, legacy windows, Anthropic budgets and provider/status

@@ -454,6 +454,149 @@ mod tests {
     }
 
     #[test]
+    fn optional_session_and_extra_usage_do_not_hide_independent_windows() {
+        let mut report = synthetic_fable_report();
+        let baseline = claude_provider_snapshot_from_report_json(&report.to_string())
+            .unwrap()
+            .provider_snapshot;
+        let expected: Vec<_> = baseline
+            .allowances
+            .into_iter()
+            .filter(|item| item.source == AllowanceSource::Plan && item.id != "claude-five-hour")
+            .collect();
+        assert!(expected.iter().any(|item| item.id == "claude-seven-day"));
+        assert!(expected
+            .iter()
+            .any(|item| item.id == "claude-seven-day-fable"));
+        for session in [None, Some(Value::Null)] {
+            for (extra, enabled) in [
+                (None, false),
+                (Some(Value::Null), false),
+                (Some(json!({"is_enabled": false})), false),
+                (
+                    Some(json!({"is_enabled": true, "used_credits": 0, "utilization": 0})),
+                    true,
+                ),
+            ] {
+                for (field, value) in [("five_hour", session.clone()), ("extra_usage", extra)] {
+                    report.as_object_mut().unwrap().remove(field);
+                    if let Some(value) = value {
+                        report[field] = value;
+                    }
+                }
+                let actual = claude_provider_snapshot_from_report_json(&report.to_string())
+                    .unwrap()
+                    .provider_snapshot;
+                assert_eq!(
+                    actual
+                        .allowances
+                        .iter()
+                        .any(|item| item.id == "claude-extra-usage"),
+                    enabled
+                );
+                assert_eq!(
+                    actual
+                        .allowances
+                        .into_iter()
+                        .filter(|item| item.source == AllowanceSource::Plan)
+                        .collect::<Vec<_>>(),
+                    expected
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn monthly_extra_usage_preserves_partial_reports_and_known_zero() {
+        for (extra, used, cap, percent) in [
+            (
+                json!({"is_enabled": true, "used_credits": 1250, "monthly_limit": 5000, "utilization": 25}),
+                Some("12.50"),
+                Some("50.00"),
+                Some(25.0),
+            ),
+            (
+                json!({"is_enabled": true, "used_credits": 0, "monthly_limit": 5000, "utilization": 0}),
+                Some("0.00"),
+                Some("50.00"),
+                Some(0.0),
+            ),
+            (
+                json!({"is_enabled": true, "used_credits": 1250, "monthly_limit": 0}),
+                Some("12.50"),
+                Some("0.00"),
+                None,
+            ),
+            (
+                json!({"is_enabled": true, "used_credits": 1250, "utilization": 25}),
+                Some("12.50"),
+                None,
+                Some(25.0),
+            ),
+            (
+                json!({"is_enabled": true, "monthly_limit": 5000, "utilization": 25}),
+                None,
+                Some("50.00"),
+                Some(25.0),
+            ),
+            (
+                json!({"is_enabled": true, "used_credits": 1250, "monthly_limit": 5000}),
+                Some("12.50"),
+                Some("50.00"),
+                None,
+            ),
+            (
+                json!({"is_enabled": true, "used_credits": null, "monthly_limit": null, "utilization": null}),
+                None,
+                None,
+                None,
+            ),
+            (json!({"is_enabled": true}), None, None, None),
+        ] {
+            let report = json!({"generatedAt": "2026-11-03T08:00:00Z", "extra_usage": extra});
+            let snapshot = claude_provider_snapshot_from_report_json(&report.to_string())
+                .unwrap()
+                .provider_snapshot;
+            assert_eq!(
+                snapshot.connection.as_deref(),
+                Some(connection::CLAUDE_PLAN)
+            );
+            assert_eq!(snapshot.allowances.len(), 1);
+            let allowance = &snapshot.allowances[0];
+            assert_eq!(allowance.id, "claude-extra-usage");
+            assert_eq!(allowance.source, AllowanceSource::Purchased);
+            assert_eq!(allowance.used.as_ref().map(|q| q.value.as_str()), used);
+            assert_eq!(allowance.limit.as_ref().map(|q| q.value.as_str()), cap);
+            assert_eq!(allowance.used_percent, percent);
+            assert_eq!(
+                allowance.status,
+                if percent.is_some() {
+                    ProviderStatus::Ok
+                } else {
+                    ProviderStatus::Unknown
+                }
+            );
+            for quantity in [&allowance.used, &allowance.limit].into_iter().flatten() {
+                assert_eq!(quantity.unit, ward_pulse_core::model::QuantityUnit::Credits);
+            }
+            if used.is_none() || cap.is_none() {
+                assert!(allowance.remaining.is_none());
+            }
+            assert!(!allowance.unlimited);
+            assert_eq!(
+                (allowance.window_minutes, &allowance.resets_at),
+                (None, &None)
+            );
+            assert!(snapshot.today.spent.is_none());
+            assert!(snapshot.week.spent.is_none());
+            assert!(snapshot.month.spent.is_none());
+            assert!(snapshot.credits.is_empty());
+            assert!(snapshot.buckets.is_empty());
+            assert!(snapshot.model_breakdown.is_empty());
+        }
+    }
+
+    #[test]
     fn synthetic_pro_projection_preserves_absent_null_and_empty_shares() {
         let mut report: Value = serde_json::from_str(include_str!(
             "../../../../fixtures/providers/claude/oauth_usage_pro_synthetic.json"

@@ -133,7 +133,8 @@ earlier observations retain their dated scope.
 
 **Clarification 2026-10-17.** Dashboard sections use `providerFamilyOf` and
 `providerFamilyLabel` from `provider_connection.dart`: OpenAI contains Codex plan
-and Platform reporting; Anthropic contains Claude plan and Organization reporting;
+and Platform reporting; Anthropic currently contains Claude plan (Organization reporting
+is deferred as of 2026-11-03);
 Cursor contains its plan and Team Admin API. Unclassified providers, including
 Mock, retain their fallback identity, label, state and data. Domain provider kinds
 and stored account/connection identities do not change.
@@ -177,6 +178,9 @@ separately pending.
 **Revision 2026-10-17.** A saved reporting key is not proof of reporting access. These
 rules apply to **OpenAI · Platform reporting**, **Anthropic · Organization reporting**
 and **Cursor · Team Admin API**, independently of each family's plan connection.
+**Scope qualification, 2026-11-03:** the Anthropic example is historical; Console reporting
+is deferred from both the active catalogue and shared collection route. The retained
+feedback guarantees apply to supported reporting connections.
 
 - Saving or replacing a key starts one check through the existing live-load lifecycle.
   **Checking…** means that request is running; **Not verified** means reporting access
@@ -201,6 +205,15 @@ and **Cursor · Team Admin API**, independently of each family's plan connection
   rules. Reporting failures do not create automatic alerts; alerts remain user-configured.
 
 ## Balances
+
+**Claude monthly Extra usage revision, 2026-11-03.** Only Claude Plan's purchased
+`claude-extra-usage` meter presents monthly reported used amount and applicable cap
+independently through existing Credits formatting, plus percentage only when reported.
+Use monthly-data-unavailable wording for absent/disabled/missing figures. A known zero
+stays known; missing or zero cap implies neither Unlimited nor exhaustion. This is not an
+available/prepaid balance and supplies no currency, daily history or monthly reset.
+Ordinary windows, Fable identity/accent, other purchased cards and user thresholds remain.
+Source changes do not establish Native/HOST/UI acceptance; that qualification remains pending.
 
 **Locked 2026-10-11.** A purchased allowance card drew its balance as
 `62479.294375 credits` — read off a real payload on 2026-10-11, where the same balance reached

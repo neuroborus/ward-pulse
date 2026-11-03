@@ -16,7 +16,6 @@ void main() {
       'openai.plan',
       'openai.platform',
       'anthropic.plan',
-      'anthropic.platform',
       'cursor.plan',
       'cursor.platform',
     ]);
@@ -25,6 +24,14 @@ void main() {
   });
 
   test('storage keys round-trip back to their connection id', () {
+    expect(
+      ProviderConnectionId.fromStorageKey('anthropic.platform'),
+      ProviderConnections.anthropicPlatform,
+    );
+    expect(
+      providerConnectionCatalog().map((connection) => connection.id),
+      isNot(contains(ProviderConnections.anthropicPlatform)),
+    );
     for (final connection in providerConnectionCatalog()) {
       expect(
         ProviderConnectionId.fromStorageKey(connection.id.storageKey),
@@ -81,7 +88,10 @@ void main() {
       (key) => key != 'mock.plan',
     );
 
-    expect(catalogKeys, containsAll(rustKeys));
+    expect({
+      ...catalogKeys,
+      ProviderConnections.anthropicPlatform.storageKey,
+    }, unorderedEquals(rustKeys));
   });
 }
 

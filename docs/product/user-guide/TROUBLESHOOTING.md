@@ -16,6 +16,8 @@ for its update timing.
 If a connection is saved but a meter says **Unknown**, **Balance unavailable** or is absent,
 check what that account exposes in the provider's own dashboard. Some providers do not report
 every balance, reset time, model breakdown or history. A missing value is not a zero.
+Claude Extra usage may report its monthly used amount, cap or percentage independently;
+a missing or zero cap is not Unlimited or proof of exhaustion.
 
 ## Loading or an error screen
 
@@ -26,9 +28,8 @@ If loading or errors continue, note the visible status and the step that failed 
 
 ## Credential rejected or access unavailable
 
-Read the connection name on Dashboard or **Providers**. **Platform reporting**,
-**Organization reporting** and **Team Admin API** are separate from the plan login
-in the same provider family.
+Read the connection name on Dashboard or **Providers**. **Platform reporting** and
+**Team Admin API** are separate from the plan login in the same provider family.
 
 - **Key rejected:** check that you entered the full key for the named reporting row, or
   replace it there. Use **Edit key** where offered.
@@ -48,9 +49,8 @@ Check the setup for the named connection:
 
 - [OpenAI Platform reporting](/guide/providers-openai#platform-reporting) needs an organization
   Admin key, not an ordinary project key.
-- [Anthropic Organization reporting](/guide/providers-anthropic#organization-reporting) needs
-  organization reporting access; personal/service keys must not be workspace-scoped.
-  An Individual API organization needs the [Console conversion](/guide/providers-anthropic#convert-an-individual-organization).
+- Claude Console API reporting is planned separately; see
+  [Anthropic reporting scope](/guide/providers-anthropic#organization-reporting).
 - [Cursor Team Admin API](/guide/providers-cursor#team-admin-api) needs a Team key with reporting
   access; check [General → View team resources](/guide/providers-cursor#team-key-permissions).
 

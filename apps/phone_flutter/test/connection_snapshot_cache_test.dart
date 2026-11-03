@@ -218,7 +218,7 @@ void main() {
     );
 
     test(
-      'all three real factories use their own read and empty reports verify access',
+      'shared factories collect supported reporting only and retain deferred Console state',
       () async {
         final credentials = store('ui');
         for (final id in ids) {
@@ -229,9 +229,22 @@ void main() {
         final caches = {
           for (final id in ids) id.storageKey: cache('ui', id.storageKey),
         };
+        const deferred = ProviderConnections.anthropicPlatform;
+        await credentials.writeLabel(deferred, 'Saved Console');
+        final deferredVersion =
+            (await credentials.credentialAccess(deferred)!.read())!.version;
+        final deferredCache = caches[deferred.storageKey]!;
+        expect(
+          await deferredCache.store(
+            _snapshot('claude', deferred.storageKey, firstAt, 77),
+            deferredVersion,
+          ),
+          isTrue,
+        );
+        final retained =
+            (await deferredCache.capture()).snapshot!.toJsonString();
         String empty(String _) =>
             DashboardSnapshot.empty(generatedAt: firstAt).toJsonString();
-        Map<String, dynamic>? anthropicInput;
         Map<String, dynamic>? cursorInput;
         var clockReads = 0;
         final capturedAt = firstAt.add(const Duration(microseconds: 500));
@@ -251,12 +264,7 @@ void main() {
             clockReads++;
             return capturedAt;
           },
-          anthropicReportingClient: AnthropicReportingClient(http: http),
           cursorReportingClient: CursorPlatformClient(http: http),
-          normalizeAnthropicReport: (report) {
-            anthropicInput = jsonDecode(report) as Map<String, dynamic>;
-            return empty(report);
-          },
           normalizeCursorPlatformReport: (report) {
             cursorInput = jsonDecode(report) as Map<String, dynamic>;
             return empty(report);
@@ -266,19 +274,7 @@ void main() {
         );
         final observations = <ConnectionReportingUpdate>[];
         final snapshot = await repository.loadObserved(observations.add);
-        expect(anthropicInput!['generatedAt'], capturedAt.toIso8601String());
-        expect(
-          anthropicInput!['capturedEndMicros'],
-          capturedAt.microsecondsSinceEpoch,
-        );
-        expect(
-          anthropicInput!['todayStart'],
-          DateTime.utc(2026, 10, 13).toIso8601String(),
-        );
-        expect(
-          clockReads,
-          2,
-        ); // One capture for each configured reporting client.
+        expect(clockReads, 1); // Only the supported Cursor reporting collector.
         expect(cursorInput!['generatedAt'], capturedAt.toIso8601String());
         expect(
           cursorInput!['endExclusiveMs'],
@@ -305,8 +301,34 @@ void main() {
         );
         expect(snapshot.accounts, isEmpty);
         expect(
+          await credentials.readSecret(deferred),
+          'synthetic-${deferred.storageKey}',
+        );
+        expect(await credentials.readLabel(deferred), 'Saved Console');
+        expect(
+          (await credentials.credentialAccess(deferred)!.read())!
+              .version
+              .values,
+          deferredVersion.values,
+        );
+        expect(
+          (await deferredCache.capture()).snapshot!.toJsonString(),
+          retained,
+        );
+        expect(
+          snapshot.connectionVersions,
+          isNot(contains(deferred.storageKey)),
+        );
+        expect(
+          observations.where((update) => update.connection == deferred),
+          isEmpty,
+        );
+        expect(
           snapshot.reportingOutcomes.map((outcome) => outcome.connection),
-          unorderedEquals(ids),
+          unorderedEquals([
+            ProviderConnections.openAiPlatform,
+            ProviderConnections.cursorPlatform,
+          ]),
         );
         for (final outcome in snapshot.reportingOutcomes) {
           final version =
@@ -328,9 +350,6 @@ void main() {
           unorderedEquals([
             '/v1/organization/usage/completions',
             '/v1/organization/costs',
-            '/v1/organizations/usage_report/messages',
-            '/v1/organizations/usage_report/messages',
-            '/v1/organizations/cost_report',
             '/teams/daily-usage-data',
             '/teams/filtered-usage-events',
           ]),
@@ -675,7 +694,6 @@ void main() {
               },
             ),
           },
-          anthropicReportingClient: AnthropicReportingClient(http: http),
           cursorReportingClient: CursorPlatformClient(http: http),
           mergeSnapshots: _merge,
           logger: const _SilentLogger(),

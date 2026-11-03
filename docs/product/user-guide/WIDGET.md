@@ -27,6 +27,12 @@ The watch's three-band/two-pair limits do not apply to the widget's six independ
 Widget updates continue while saved watch choices need correction. Selected exhausted pools stay as
 **0%**. With all six slots used, deselect a metric before adding another.
 
+**Claude Extra usage** can be selected when Claude reports a usable percentage. A missing
+monthly cap does not disable an otherwise usable percentage. When its percentage is
+unavailable, the choice remains unavailable; a saved choice can still be removed. Missing
+amounts or caps are not filled in as zero or Unlimited. The widget's Extra usage row shows
+a percentage; read the monthly used amount and cap on **Dashboard**.
+
 Lower remaining percentages appear first. The phone's metric selection is shared by
 placed WardPulse widgets; each widget's size determines how much is visible.
 

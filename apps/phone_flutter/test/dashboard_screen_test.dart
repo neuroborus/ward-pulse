@@ -22,13 +22,8 @@ void main() {
           source: ReportingOutcomeSource.live,
         ),
         ConnectionReportingOutcome(
-          connection: ProviderConnections.anthropicPlatform,
-          category: ReportingOutcomeCategory.accessDenied,
-          source: ReportingOutcomeSource.live,
-        ),
-        ConnectionReportingOutcome(
           connection: ProviderConnections.cursorPlatform,
-          category: ReportingOutcomeCategory.transientFailure,
+          category: ReportingOutcomeCategory.accessDenied,
           source: ReportingOutcomeSource.live,
         ),
       ];
@@ -65,7 +60,7 @@ void main() {
       expect(find.text('Edit key'), findsNWidgets(2));
       await tester.ensureVisible(find.text('Edit key').at(1));
       await tester.tap(find.text('Edit key').at(1));
-      expect(repaired, ProviderConnections.anthropicPlatform);
+      expect(repaired, ProviderConnections.cursorPlatform);
       expect(tester.takeException(), isNull);
     },
   );
@@ -510,6 +505,181 @@ void main() {
       }
     }
   });
+
+  testWidgets(
+    'Claude Extra usage shows independent monthly Credits and reported percent',
+    (tester) async {
+      final base = DashboardSnapshot.fromJsonString(
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync(),
+      );
+      for (final (used, cap, percent) in <(String?, String?, double?)>[
+        ('1250.25', '5000', 25),
+        ('0', '5000', 0),
+        ('1250.25', null, 25),
+        ('1250.25', '0', null),
+        (null, '5000', 25),
+        ('1250.25', '5000', null),
+        (null, null, null),
+      ]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: DashboardScreen(
+                onRefresh: _noRefresh,
+                snapshot: DashboardSnapshot.fromJson({
+                  ...base.toJson(),
+                  'accounts': [
+                    {
+                      ...base.primaryAccount!.toJson(),
+                      'provider': 'claude',
+                      'connection': 'anthropic.plan',
+                      'allowances': [
+                        {
+                          'id': 'claude-extra-usage',
+                          'source': 'purchased',
+                          'label': 'Extra usage',
+                          'used':
+                              used == null
+                                  ? null
+                                  : {'value': used, 'unit': 'credits'},
+                          'limit':
+                              cap == null
+                                  ? null
+                                  : {'value': cap, 'unit': 'credits'},
+                          'remaining': {'value': '9999', 'unit': 'credits'},
+                          'usedPercent': percent,
+                          'status': percent == null ? 'unknown' : 'ok',
+                        },
+                      ],
+                      'buckets': <Object>[],
+                      'modelBreakdown': <Object>[],
+                    },
+                  ],
+                }),
+              ),
+            ),
+          ),
+        );
+        final card = find.widgetWithText(AllowanceSummaryCard, 'Extra usage');
+        Finder text(String value) =>
+            find.descendant(of: card, matching: find.text(value));
+        expect(
+          text(
+            used == null
+                ? 'Monthly usage unavailable'
+                : '${formatQuantityValue(used)} credits used this month',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          text(
+            'Monthly cap: ${cap == null ? 'Unavailable' : '${formatQuantityValue(cap)} credits'}',
+          ),
+          findsOneWidget,
+        );
+        final bar = find.descendant(
+          of: card,
+          matching: find.byType(LinearProgressIndicator),
+        );
+        if (percent == null) {
+          expect(bar, findsNothing);
+          expect(
+            find.descendant(of: card, matching: find.textContaining('% used')),
+            findsNothing,
+          );
+        } else {
+          expect(text('${percent.toInt()}% used'), findsOneWidget);
+          expect(
+            tester.widget<LinearProgressIndicator>(bar).value,
+            percent / 100,
+          );
+        }
+        expect(text('Available balance'), findsNothing);
+        expect(text('9,999 credits'), findsNothing);
+        expect(text('Unlimited'), findsNothing);
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
+
+  testWidgets(
+    'Claude missing monthly data stays honest alongside another purchased source',
+    (tester) async {
+      final base = DashboardSnapshot.fromJsonString(
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync(),
+      );
+      for (final siblingSource in [null, 'plan', 'purchased']) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: DashboardScreen(
+                onRefresh: _noRefresh,
+                snapshot: DashboardSnapshot.fromJson({
+                  ...base.toJson(),
+                  'accounts': [
+                    {
+                      ...base.primaryAccount!.toJson(),
+                      'provider': 'claude',
+                      'connection': 'anthropic.plan',
+                      'allowances': <Object>[],
+                      'credits': <Object>[],
+                      'buckets': <Object>[],
+                      'modelBreakdown': <Object>[],
+                    },
+                    if (siblingSource != null)
+                      {
+                        ...base.primaryAccount!.toJson(),
+                        'provider': 'codex',
+                        'connection': 'openai.plan',
+                        'allowances': [
+                          {
+                            'id': 'claude-extra-usage',
+                            'label': 'Sibling balance',
+                            'source': siblingSource,
+                            'usedPercent': 20,
+                            'remaining':
+                                siblingSource == 'purchased'
+                                    ? {'value': '320', 'unit': 'credits'}
+                                    : null,
+                            'status': 'ok',
+                          },
+                        ],
+                        'buckets': <Object>[],
+                        'modelBreakdown': <Object>[],
+                      },
+                  ],
+                }),
+              ),
+            ),
+          ),
+        );
+        expect(
+          find.text('Claude Extra usage: monthly data unavailable.'),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('This account has no purchased credits'),
+          findsNothing,
+        );
+        if (siblingSource == 'plan') {
+          expect(
+            find.text(
+              'Purchased usage: no data reported by other connected plans.',
+            ),
+            findsOneWidget,
+          );
+        }
+        if (siblingSource == 'purchased') {
+          expect(find.text('320 credits'), findsOneWidget);
+          expect(find.text('Available balance'), findsOneWidget);
+        }
+      }
+    },
+  );
 
   testWidgets('always shows platform spend when budgets are available', (
     tester,
@@ -977,14 +1147,7 @@ void main() {
       tester,
     ) async {
       final connections = providerConnectionCatalog();
-      final providers = [
-        'codex',
-        'openai',
-        'claude',
-        'claude',
-        'cursor',
-        'cursor',
-      ];
+      final providers = ['codex', 'openai', 'claude', 'cursor', 'cursor'];
       final accounts = [
         for (final (index, connection) in connections.indexed)
           account(providers[index])
@@ -1011,13 +1174,12 @@ void main() {
       final charts = tester.widgetList<UsageHistoryChart>(
         find.byType(UsageHistoryChart),
       );
-      expect(charts, hasLength(6));
+      expect(charts, hasLength(5));
       // No cross-source buckets, even when both accounts have the same kind.
       expect(charts.map((chart) => chart.buckets.single.requests), [
         13,
         14,
         15,
-        16,
         11,
         12,
       ]);

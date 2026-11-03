@@ -245,22 +245,22 @@ void main() {
       'storage and Mock cannot verify; current proof is retired by replacement',
       (tester) async {
         final store = _MemoryCredentialStore();
-        const id = ProviderConnections.anthropicPlatform;
+        const id = ProviderConnections.cursorPlatform;
         await store.writeSecret(id, 'synthetic-A');
         await show(tester, store, {});
         expect(
-          _inRow('Organization reporting', find.text('Not verified')),
+          _inRow('Team Admin API', find.text('Not verified')),
           findsOneWidget,
         );
         final update = proof(store, id, ReportingOutcomeCategory.success);
         await show(tester, store, {id: update});
         expect(
-          _inRow('Organization reporting', find.text('Connected')),
+          _inRow('Team Admin API', find.text('Connected')),
           findsOneWidget,
         );
         await show(tester, store, {id: update}, mock: true);
         expect(
-          _inRow('Organization reporting', find.text('Not verified')),
+          _inRow('Team Admin API', find.text('Not verified')),
           findsOneWidget,
         );
         expect(
@@ -270,7 +270,7 @@ void main() {
         await store.writeSecret(id, 'synthetic-B');
         await show(tester, store, {id: update});
         expect(
-          _inRow('Organization reporting', find.text('Not verified')),
+          _inRow('Team Admin API', find.text('Not verified')),
           findsOneWidget,
         );
       },
@@ -280,13 +280,13 @@ void main() {
       tester,
     ) async {
       final store = _MemoryCredentialStore();
-      const id = ProviderConnections.anthropicPlatform;
+      const id = ProviderConnections.cursorPlatform;
       await store.writeSecret(id, 'synthetic-key');
       var polls = 0;
       await show(tester, store, {
         id: proof(store, id, ReportingOutcomeCategory.success),
       }, changed: () => polls++);
-      await tester.tap(find.text('Organization reporting'));
+      await tester.tap(find.text('Team Admin API'));
       await tester.pumpAndSettle();
       expect(
         tester
@@ -320,25 +320,25 @@ void main() {
       'a fresh failure replaces success, with distinct permission and retry results',
       (tester) async {
         final store = _MemoryCredentialStore();
-        const id = ProviderConnections.anthropicPlatform;
+        const id = ProviderConnections.cursorPlatform;
         await store.writeSecret(id, 'synthetic-key');
         for (final category in ReportingOutcomeCategory.values) {
           await show(tester, store, {id: proof(store, id, category)});
           final outcome = proof(store, id, category).outcome!;
           expect(
-            _inRow('Organization reporting', find.text(outcome.label)),
+            _inRow('Team Admin API', find.text(outcome.label)),
             findsOneWidget,
           );
           if (outcome.failed) {
             expect(
               _inRow(
-                'Organization reporting',
+                'Team Admin API',
                 find.textContaining(outcome.connectionLabel),
               ),
               findsWidgets,
             );
             expect(
-              _inRow('Organization reporting', find.text('Connected')),
+              _inRow('Team Admin API', find.text('Connected')),
               findsNothing,
             );
           }
@@ -346,21 +346,23 @@ void main() {
       },
     );
 
-    testWidgets(
-      'later label reads retire only obsolete proof and keep siblings',
-      (tester) async {
+    for (final category in <ReportingOutcomeCategory?>[
+      ReportingOutcomeCategory.accessDenied,
+      null,
+    ]) {
+      testWidgets('later label reads preserve the current sibling: $category', (
+        tester,
+      ) async {
         _setTestSurface(tester, const Size(800, 2000));
         final store = _MemoryCredentialStore();
         const first = ProviderConnections.openAiPlatform;
-        const later = ProviderConnections.anthropicPlatform;
-        const checking = ProviderConnections.cursorPlatform;
+        const later = ProviderConnections.cursorPlatform;
         await store.writeSecret(first, 'synthetic-first');
         await store.writeSecret(later, 'synthetic-later');
-        await store.writeSecret(checking, 'synthetic-checking');
         final held = Completer<void>();
         final started = Completer<void>();
         store.beforeReadLabel = (id) async {
-          if (id == checking) {
+          if (id == later) {
             started.complete();
             await held.future;
           }
@@ -376,15 +378,13 @@ void main() {
                 onCredentialsChanged: () {},
                 reportingUpdates: {
                   first: proof(store, first, ReportingOutcomeCategory.success),
-                  later: proof(
-                    store,
-                    later,
-                    ReportingOutcomeCategory.accessDenied,
-                  ),
-                  checking: ConnectionReportingUpdate(
-                    connection: checking,
-                    credentialVersion: store.version(checking),
-                  ),
+                  later:
+                      category == null
+                          ? ConnectionReportingUpdate(
+                            connection: later,
+                            credentialVersion: store.version(later),
+                          )
+                          : proof(store, later, category),
                 },
                 isSnapshotCurrent: (snapshot) async {
                   validated.add(snapshot);
@@ -411,15 +411,11 @@ void main() {
         await tester.pump();
         expect(
           validated.first.connectionVersions.keys,
-          unorderedEquals([
-            first.storageKey,
-            later.storageKey,
-            checking.storageKey,
-          ]),
+          unorderedEquals([first.storageKey, later.storageKey]),
         );
         expect(
           validated.last.connectionVersions.keys,
-          unorderedEquals([later.storageKey, checking.storageKey]),
+          unorderedEquals([later.storageKey]),
         );
         expect(
           _inRow('Platform reporting', find.text('Connected')),
@@ -430,11 +426,10 @@ void main() {
           findsOneWidget,
         );
         expect(
-          _inRow('Organization reporting', find.text('Access denied')),
-          findsOneWidget,
-        );
-        expect(
-          _inRow('Team Admin API', find.text('Checking…')),
+          _inRow(
+            'Team Admin API',
+            find.text(category == null ? 'Checking…' : 'Access denied'),
+          ),
           findsOneWidget,
         );
         expect(
@@ -443,44 +438,30 @@ void main() {
                 find.widgetWithText(ProviderConnectionRow, 'Team Admin API'),
               )
               .onTap,
-          isNull,
-        );
-        expect(
-          tester
-              .widget<ProviderConnectionRow>(
-                find.widgetWithText(
-                  ProviderConnectionRow,
-                  'Organization reporting',
-                ),
-              )
-              .onTap,
-          isNotNull,
+          category == null ? isNull : isNotNull,
         );
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pumpAndSettle();
-      },
-    );
+      });
+    }
 
     testWidgets('one unreadable key does not disconnect siblings', (
       tester,
     ) async {
       final store = _MemoryCredentialStore();
       await store.writeSecret(
-        ProviderConnections.anthropicPlatform,
+        ProviderConnections.cursorPlatform,
         'synthetic-key',
       );
       store.unreadable = ProviderConnections.openAiPlatform;
       await show(tester, store, {
-        ProviderConnections.anthropicPlatform: proof(
+        ProviderConnections.cursorPlatform: proof(
           store,
-          ProviderConnections.anthropicPlatform,
+          ProviderConnections.cursorPlatform,
           ReportingOutcomeCategory.success,
         ),
       });
-      expect(
-        _inRow('Organization reporting', find.text('Connected')),
-        findsOneWidget,
-      );
+      expect(_inRow('Team Admin API', find.text('Connected')), findsOneWidget);
       final primary = find.ancestor(
         of: _inRow('Platform reporting', find.text('Platform reporting')),
         matching: find.byType(InkWell),
@@ -511,17 +492,21 @@ void main() {
   });
 
   group('connection row layout', () {
-    testWidgets('all six rows keep actions right and status below at 360dp', (
+    testWidgets('all active rows keep actions right and status below at 360dp', (
       tester,
     ) async {
-      await _pumpProvidersAtSize(tester, const Size(360, 640));
+      final store = _MemoryCredentialStore();
+      await store.writeLabel(
+        ProviderConnections.openAiPlatform,
+        'Synthetic reporting connection',
+      );
+      await _pumpProvidersAtSize(tester, const Size(360, 640), store: store);
       for (final title in const [
         'Claude plan',
-        'Organization reporting',
         'Cursor plan',
         'Team Admin API',
         'Codex plan',
-        'Platform reporting',
+        'Synthetic reporting connection',
       ]) {
         final row = find.widgetWithText(ProviderConnectionRow, title);
         await tester.scrollUntilVisible(
@@ -613,7 +598,7 @@ void main() {
         );
         expect(paragraph.didExceedMaxLines, isFalse, reason: layoutContext);
         expect(titleBoxes, isNotEmpty, reason: layoutContext);
-        if (title == 'Organization reporting') {
+        if (title == 'Synthetic reporting connection') {
           expect(titleBoxes.length, greaterThan(1), reason: layoutContext);
         }
         // Full selection containment proves ownership and nonintrusion into
@@ -713,7 +698,7 @@ void main() {
         var budgetTaps = 0;
         var alertTaps = 0;
         const title = 'A long saved reporting label';
-        const purpose = 'Anthropic · Organization reporting';
+        const purpose = 'Cursor · Team Admin API';
         const error =
             "Check this key's permissions and your account's reporting access.";
         await tester.pumpWidget(
@@ -826,8 +811,8 @@ void main() {
                 Card(
                   child: ProviderConnectionRow(
                     icon: Icons.key_outlined,
-                    title: 'Organization reporting',
-                    subtitle: 'Admin API key · stored on this phone',
+                    title: 'Team Admin API',
+                    subtitle: 'Team key with reporting access',
                     status: const Text(longStatus),
                     actions: [
                       IconButton(
@@ -849,10 +834,7 @@ void main() {
         ),
       );
 
-      final row = find.widgetWithText(
-        ProviderConnectionRow,
-        'Organization reporting',
-      );
+      final row = find.widgetWithText(ProviderConnectionRow, 'Team Admin API');
       final status = find.text(longStatus);
       final rowRect = tester.getRect(row);
       final statusRect = tester.getRect(status);
@@ -1548,14 +1530,18 @@ Future<void> _chooseAlert(
   await tester.pumpAndSettle();
 }
 
-Future<void> _pumpProvidersAtSize(WidgetTester tester, Size size) async {
+Future<void> _pumpProvidersAtSize(
+  WidgetTester tester,
+  Size size, {
+  _MemoryCredentialStore? store,
+}) async {
   _setTestSurface(tester, size);
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
         body: ProvidersScreen(
           onRefresh: _noRefresh,
-          credentialStore: _MemoryCredentialStore(),
+          credentialStore: store ?? _MemoryCredentialStore(),
           codexAccountService: const EmptyCodexAccountService(),
           claudeAccountService: const EmptyClaudeAccountService(),
           onCredentialsChanged: () {},

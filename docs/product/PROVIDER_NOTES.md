@@ -45,6 +45,12 @@ report anything.
 
 ## Consumption display
 
+**Current Claude scope, 2026-11-03.** Claude Plan monthly Extra usage is the offered expense
+source; Console/API reporting is future work. Its reported used amount, applicable cap and
+percentage are independent. Keep the existing Credits conversion as a compatibility choice,
+not a documented wire-unit or USD contract. Infer no wallet, missing amount, unlimited state,
+daily history, timezone or monthly reset. There is no tier-name gate or all-tier live certification.
+
 Providers may report plan allowances, purchased tokens or credits, or both. These values stay
 separate from monetary budgets because their units and reset rules differ.
 
@@ -148,7 +154,7 @@ a running agent.
 
 ## Connection grouping
 
-Every family on the **Providers** tab is one section with distinct Plan and reporting connections:
+Every family on the **Providers** tab is one section. Supported connection kinds are:
 
 - `plan`: subscription or allowance reads (Codex device-code OAuth; Claude Code PKCE OAuth
   with authorization-code paste from the callback page; Cursor dashboard WebView sign-in that
@@ -157,9 +163,9 @@ Every family on the **Providers** tab is one section with distinct Plan and repo
   and reporting access.
 
 The current user-facing plan names are **Codex plan**, **Claude plan** and **Cursor plan**.
-OpenAI groups Codex plan with Platform reporting; Anthropic groups Claude plan with
-Organization reporting; Cursor groups Cursor plan with Team Admin API. The Dashboard
-uses the same family grouping while keeping each account's data and status separate.
+OpenAI groups Codex plan with Platform reporting; Anthropic currently offers Claude plan
+only; Cursor groups Cursor plan with Team Admin API. Organization reporting is deferred.
+The Dashboard uses the same family grouping while keeping each account's data and status separate.
 A plan login does not grant reporting access or verify its sibling reporting key.
 An optional user-defined label for reporting keys is plain phone-local display metadata:
 
@@ -323,6 +329,13 @@ Official references:
 
 ## Anthropic organization reporting
 
+**Current-scope qualification, 2026-11-03.** Console/API reporting is deferred from the
+active catalogue and the shared foreground/headless collection stack. Retained collectors,
+normalization and dated qualification below are backend/history evidence, not acceptance
+of current Console expense support. Stable connection/backend IDs, saved credentials,
+labels, cache identities/generations and settings remain; deferral performs no reset,
+deletion or reauthentication. Other reporting providers and shared helpers remain active.
+
 Status: implemented on 2026-07-25.
 
 Checked 2026-10-16: the official [Usage and Cost guide](https://platform.claude.com/docs/en/manage-claude/usage-cost-api)
@@ -421,12 +434,18 @@ authorization-code flow Claude Code uses (`client_id` for Claude Code, redirect
 refresh tokens in secure storage. Refresh is serialized like Codex. Reporting calls undocumented
 `GET /api/oauth/usage` with `anthropic-beta: oauth-2025-04-20` and a Claude Code user agent, then
 normalizes `five_hour`, `seven_day`, optional per-model weekly windows, and `extra_usage` into
-`AllowanceState`. Phone dashboard cards still list every window. Watch/Glance rings collapse
+`AllowanceState`. Optional `five_hour` and all other ordinary/Fable windows normalize
+independently; an absent session does not hide the remaining windows or extra usage.
+Phone dashboard cards still list every reported window. Watch/Glance rings collapse
 ordinary Claude **plan** windows into one slot (`allowance.claude.plan`): the tightest known
 remaining window wins, including an exhausted window; unknown windows cannot displace a known zero.
 Glance label is the short token (`5h`, `Weekly`, `Opus weekly`, `Sonnet weekly`). Purchased
 `extra_usage` is not in that collapse pool and is **not** a watch ring candidate — it stays on
-phone dashboard cards. It may surface as a warning/error alert
+the phone Dashboard as monthly used/applicable-cap Credits. The phone widget retains
+reported finite nonnegative-percentage eligibility even with no cap, using stable ID
+`allowance.claude.claude-extra-usage`. Missing/invalid percentage produces no widget row;
+saved unavailable choices remain removable. Monthly used/cap widget details remain pending
+the separately approved runtime adoption. It may surface as a warning/error alert
 **only when the user configures a threshold** for that meter on Providers — never from a
 hard-coded utilization cutoff alone.
 

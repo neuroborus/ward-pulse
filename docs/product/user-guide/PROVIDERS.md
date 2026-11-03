@@ -7,12 +7,11 @@ Each connection is independent.
 | Family | Plan connection | Reporting connection |
 | --- | --- | --- |
 | OpenAI | <span id="codex-subscription">[Codex plan](/guide/providers-openai#codex-plan)</span> | <span id="openai-platform-reporting">[Platform reporting](/guide/providers-openai#platform-reporting)</span> |
-| Anthropic | <span id="claude-subscription">[Claude plan](/guide/providers-anthropic#claude-plan)</span> | <span id="anthropic-organization-reporting">[Organization reporting](/guide/providers-anthropic#organization-reporting)</span> |
+| Anthropic | <span id="claude-subscription">[Claude plan](/guide/providers-anthropic#claude-plan)</span> | <span id="anthropic-organization-reporting">[Planned separately](/guide/providers-anthropic#organization-reporting)</span> |
 | Cursor | <span id="cursor-plan">[Cursor plan](/guide/providers-cursor#cursor-plan)</span> | <span id="cursor-team-admin-api">[Team Admin API](/guide/providers-cursor#team-admin-api)</span> |
 
-![Providers showing separate plan and reporting connections with their statuses in the light theme.](/screenshots/phone-providers-light.png)
-
-![Providers showing separate plan and reporting connections with their statuses in the dark theme.](/screenshots/phone-providers-dark.png)
+Claude Plan extra usage is read through the Claude plan connection. It is separate from
+Console API reporting, which is planned for a later update.
 
 Plan and reporting connections have separate statuses. Connected rows do not confirm a
 fresh Dashboard report.
@@ -29,7 +28,8 @@ by <span id="save-the-token">[saving the token in WardPulse](/guide/providers-cu
 
 ## Check the connection
 
-Saving a reporting key starts a check. Read the result beside the same connection:
+For a supported reporting connection, saving a key starts a check. Read the result beside
+the same connection:
 
 | Status | What to do |
 | --- | --- |

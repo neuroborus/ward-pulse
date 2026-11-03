@@ -75,6 +75,61 @@ void main() {
     },
   );
 
+  test('Extra usage rows require a reported valid percent but no cap', () {
+    const preferences = PhoneWidgetPreferences(
+      selectedIds: ['allowance.claude.claude-extra-usage'],
+    );
+    for (final percent in [
+      0.0,
+      20.0,
+      100.0,
+      150.0,
+      null,
+      -1.0,
+      double.nan,
+      double.infinity,
+    ]) {
+      final input = DashboardSnapshot.fromJson({
+        ...DashboardSnapshot.empty().toJson(),
+        'accounts': [
+          {
+            'accountId': 'claude-local',
+            'provider': 'claude',
+            'connection': 'anthropic.plan',
+            'status': 'ok',
+            'credits': <Object>[],
+            'buckets': <Object>[],
+            'modelBreakdown': <Object>[],
+            for (final period in ['today', 'week', 'month'])
+              period: BudgetState.unknownPeriod(period).toJson(),
+            'allowances': [
+              {
+                'id': 'claude-extra-usage',
+                'source': 'purchased',
+                'label': 'Extra usage',
+                'usedPercent': percent,
+                'limit': null,
+              },
+            ],
+          },
+        ],
+      });
+      final rows = buildPhoneWidgetPayload(input, preferences).rows;
+      if (percent == null || !percent.isFinite || percent < 0) {
+        expect(rows, isEmpty);
+      } else {
+        expect(rows, hasLength(1));
+        expect(
+          rows.single.remainingPercent,
+          (100 - percent).clamp(0, 100).round(),
+        );
+        expect(rows.single.poolLabel, 'Extra usage');
+        expect(rows.single.creditsSuffix, isNull);
+        expect(rows.single.resetsAt, isNull);
+      }
+    }
+  });
+
   test('marks stale when overall status is stale', () {
     final stale = snapshot.withStaleStatus(
       syncIssue: DashboardSyncIssue.authentication,

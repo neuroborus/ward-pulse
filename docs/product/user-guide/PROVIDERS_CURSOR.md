@@ -145,10 +145,6 @@ instead of enabling **All permissions**.
 2. Paste the Team key into **Value**, optionally add a **Label**, and tap **Save**.
 3. Wait for the result beside **Team Admin API**. **Connected** means reporting succeeded.
 
-![Providers showing the separate Cursor plan and Team Admin API connections in the light theme.](/screenshots/phone-providers-light.png)
-
-![Providers showing the separate Cursor plan and Team Admin API connections in the dark theme.](/screenshots/phone-providers-dark.png)
-
 Read the status beside Team Admin API; Cursor plan is a separate connection.
 
 For **Access denied**, check the Team key's reporting permissions and the team's
