@@ -34,7 +34,7 @@ View the original device/emulator frame, not only a scaled documentation export,
 status or screenshot filename. Identify the actual visible app/page/renderer and compare it with the
 evidence's artifact identities. Review art can be correct while the installed active face is older or uses retained bindings.
 
-For an owner-requested preview approval, deliver the exact artifact through an owner-visible channel.
+For an owner-requested preview approval, deliver the exact artifact through an owner-visible channel. Before treating a requirement as current, reconcile the dated Owner reply and exact approved artifact with older plan paraphrases; do not call an older paraphrase newer or supersede an exact approval without a later explicit receipt.
 An internal view, emitted image, file path or successful viewer launch alone does not prove visibility.
 If the owner cannot see it or asks to open it, use an existing authorized viewer/channel and verify the
 intended artifact/window or obtain owner acknowledgement before claiming it shown or requesting approval.
