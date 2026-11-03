@@ -105,6 +105,14 @@ See [Sync and notifications](/guide/sync#refresh-now) for request delivery and r
 
 These October 2026 examples predate the Fable choice and correction messages.
 
+Console organization and Cursor Team **Today**, **Week** and **Month** budget choices use
+remaining percentages. Each needs known spend, a positive cap in the same currency and a
+usable percentage. Missing spend or a missing/unusable cap is not a full or empty ring.
+Set a local cap under **Providers → Budget limits**; it does not enforce provider spending.
+These calendar periods begin at midnight UTC, Monday UTC and the first calendar day UTC.
+They do not supply a Plan reset time. Purchased Extra usage/on-demand meters stay off watch
+rings; their widget eligibility is separate.
+
 Until you make a selection, defaults admit available metrics in catalogue order within both
 limits. Clearing every checkbox is an explicit choice to show no rings.
 

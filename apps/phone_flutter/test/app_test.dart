@@ -2496,17 +2496,19 @@ void main() {
     await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
 
+    final alerts = find.descendant(
+      of: find.widgetWithText(ProviderConnectionRow, 'Codex plan'),
+      matching: find.byTooltip('Alert thresholds'),
+    );
     await tester.scrollUntilVisible(
-      find.text('Codex plan'),
+      alerts,
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(
-      find.descendant(
-        of: find.widgetWithText(ProviderConnectionRow, 'Codex plan'),
-        matching: find.byTooltip('Alert thresholds'),
-      ),
-    );
+    await tester.ensureVisible(alerts);
+    await tester.pumpAndSettle();
+    expect(alerts.hitTestable(), findsOneWidget);
+    await tester.tap(alerts);
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Alerts ·'), findsOneWidget);
@@ -3059,8 +3061,22 @@ void main() {
           findsOneWidget,
         );
       }
-      await tester.ensureVisible(find.text('Edit key').at(1));
-      await tester.tap(find.text('Edit key').at(1));
+      final repair = find.descendant(
+        of:
+            find
+                .ancestor(
+                  of: find.textContaining(
+                    'Anthropic · Organization reporting: Key rejected',
+                  ),
+                  matching: find.byType(Column),
+                )
+                .first,
+        matching: find.widgetWithText(TextButton, 'Edit key'),
+      );
+      await tester.ensureVisible(repair);
+      await tester.pumpAndSettle();
+      expect(repair.hitTestable(), findsOneWidget);
+      await tester.tap(repair);
       await tester.pumpAndSettle();
       expect(
         find.widgetWithText(AlertDialog, 'Anthropic · Organization reporting'),

@@ -29,6 +29,14 @@ The declared baseline covers approved English labels, numeric tokens and reset f
 
 ## Metric rules and optional reset
 
+**Console integration correction, 2026-11-03.** Preserve the shared Anthropic/Cursor
+budget-percentage catalogue, selection and publication path and all saved IDs. Known spend,
+a positive usable same-currency cap and percentage are required; unavailable saved choices
+remain removable. This restores collection, not uncapped Money widget rows. Raw Money,
+optional caps and independent Extra used/cap Credits belong to the next approved runtime
+adoption and remain OPEN pending its Source/HOST/native acceptance. No payload, native/JVM,
+geometry, generator or PNG changes are made by this integration correction.
+
 **Claude Extra usage qualification, 2026-11-03.** Preserve stable metric ID
 `allowance.claude.claude-extra-usage`: a reported finite nonnegative percentage needs no
 monthly cap to be selectable/resolvable. Missing/invalid percentage remains unavailable

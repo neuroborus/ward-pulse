@@ -7,11 +7,12 @@ Each connection is independent.
 | Family | Plan connection | Reporting connection |
 | --- | --- | --- |
 | OpenAI | <span id="codex-subscription">[Codex plan](/guide/providers-openai#codex-plan)</span> | <span id="openai-platform-reporting">[Platform reporting](/guide/providers-openai#platform-reporting)</span> |
-| Anthropic | <span id="claude-subscription">[Claude plan](/guide/providers-anthropic#claude-plan)</span> | <span id="anthropic-organization-reporting">[Planned separately](/guide/providers-anthropic#organization-reporting)</span> |
+| Anthropic | <span id="claude-subscription">[Claude plan](/guide/providers-anthropic#claude-plan)</span> | <span id="anthropic-organization-reporting">[Organization reporting](/guide/providers-anthropic#organization-reporting)</span> |
 | Cursor | <span id="cursor-plan">[Cursor plan](/guide/providers-cursor#cursor-plan)</span> | <span id="cursor-team-admin-api">[Team Admin API](/guide/providers-cursor#team-admin-api)</span> |
 
 Claude Plan extra usage is read through the Claude plan connection. It is separate from
-Console API reporting, which is planned for a later update.
+Console organization API expenses and from Cursor Team API expenses. Reporting keys need
+organization/team access independently of personal plan eligibility.
 
 Plan and reporting connections have separate statuses. Connected rows do not confirm a
 fresh Dashboard report.

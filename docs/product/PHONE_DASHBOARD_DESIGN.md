@@ -133,8 +133,7 @@ earlier observations retain their dated scope.
 
 **Clarification 2026-10-17.** Dashboard sections use `providerFamilyOf` and
 `providerFamilyLabel` from `provider_connection.dart`: OpenAI contains Codex plan
-and Platform reporting; Anthropic currently contains Claude plan (Organization reporting
-is deferred as of 2026-11-03);
+and Platform reporting; Anthropic contains Claude plan and Organization reporting;
 Cursor contains its plan and Team Admin API. Unclassified providers, including
 Mock, retain their fallback identity, label, state and data. Domain provider kinds
 and stored account/connection identities do not change.
@@ -155,8 +154,18 @@ display copy. `_providerDashboardSections` orders families by the existing
 severity scale, then admissible same-currency month spend, then family key.
 Month spend is aggregated only for ordering; mixed currencies are never added.
 `FrozenOrder` holds the result through number-only refreshes and label edits,
-reranking on the existing family identity/status changes. No new source total or
-common Plan/API remainder is displayed; unrelated Dashboard summaries remain.
+reranking on the existing family identity/status changes. No common Plan/API remainder
+is displayed; unrelated Dashboard summaries remain.
+
+**Console expense correction, 2026-11-03.** For provider `claude` with exact connection
+`anthropic.platform`, render source-owned Today/Week/Month Money below its caption, separate
+from aggregate cards and partial history. Known zero remains visible without a cap; missing
+cost says No spend reported. Show the optional Local cap independently, without inventing a
+percentage or unhealthy mark from an unset cap. Keep the actual account status and original
+successful as-of time visible, including retained Stale data. Budget evaluation without a
+cap is not a new source failure. Claude Plan monthly Extra Credits remain independent.
+This is a source correction with HOST/native presentation acceptance still pending; it does
+not update the dated device measurements or establish positive live Console expense.
 
 The locked status and balance rules above and below still apply: count each
 account's unhealthy cards, otherwise one for an unhealthy account, and sum these
@@ -178,9 +187,9 @@ separately pending.
 **Revision 2026-10-17.** A saved reporting key is not proof of reporting access. These
 rules apply to **OpenAI · Platform reporting**, **Anthropic · Organization reporting**
 and **Cursor · Team Admin API**, independently of each family's plan connection.
-**Scope qualification, 2026-11-03:** the Anthropic example is historical; Console reporting
-is deferred from both the active catalogue and shared collection route. The retained
-feedback guarantees apply to supported reporting connections.
+**Integration correction, 2026-11-03:** Console again participates in the active catalogue
+and shared collection route. These feedback guarantees apply to all three reporting rows;
+a healthy sibling, cached report or saved label never verifies a reporting credential.
 
 - Saving or replacing a key starts one check through the existing live-load lifecycle.
   **Checking…** means that request is running; **Not verified** means reporting access

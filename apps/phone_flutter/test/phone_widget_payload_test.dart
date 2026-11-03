@@ -105,6 +105,7 @@ void main() {
             'allowances': [
               {
                 'id': 'claude-extra-usage',
+                'status': 'ok',
                 'source': 'purchased',
                 'label': 'Extra usage',
                 'usedPercent': percent,

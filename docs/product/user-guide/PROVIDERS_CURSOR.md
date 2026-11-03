@@ -167,8 +167,11 @@ percentages.
 limit keeps its stored value; it now compares against extra-paid calendar-month spend.
 Review whether that amount still suits your intended limit. A percentage needs available
 spend and a positive USD ceiling. An unset ceiling differs from a saved zero ceiling, which
-cannot produce a percentage. Unavailable periods stay listed, and saved choices remain
-removable.
+cannot produce a percentage. This same budget-percentage rule applies to Console and
+Cursor Team choices on Watchface and Widget; it is separate from Plan on-demand Credits.
+The current widget needs that percentage and does not show Team spend as amount rows.
+Unavailable periods stay listed, and saved choices remain removable. Caps do not stop
+requests or change the team's provider-side spending controls.
 
 Reported **USD 0.00** means complete reporting found no rounded extra-paid spend for an
 elapsed period. Unavailable or incomplete data is not zero. At a UTC period's first

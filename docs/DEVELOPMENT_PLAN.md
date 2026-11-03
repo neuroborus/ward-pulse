@@ -1781,12 +1781,17 @@ a 429 response still slows the affected provider without blocking others
 
 ### Phase 12 — Anthropic and Cursor adapters on the connection model
 
-**Current-scope qualification, 2026-11-03.** Claude Plan monthly extra usage is the accepted
-current expense scope, with independently reported used/cap Credits and percentage.
-Console/API reporting is deferred from the active catalogue and shared foreground/headless
-route; retained backend implementation and dated observations below remain historical.
-Native checks and full Root Source/HOST/UI acceptance remain separately required. Approved
-widget runtime adoption, including Extra usage used/cap detail, is the next separate scope.
+**Integration correction, 2026-11-03.** Restore Console/API collection, management and
+source-owned Dashboard Money while retaining Claude Plan monthly Extra used/cap Credits
+and optional percentage. Preserve existing homogeneous Anthropic/Cursor budget rings and
+all IDs/preferences; no exclusion or migration. The direct collection's absent current-day
+cost bucket leaves its totals Unknown; it proves no positive expense or all-time no-charge
+claim. Correct three malformed downstream fixtures, nine Console integration dependencies
+and the separate Codex action hit; preserve all lifecycle assertions and parser-negative tests.
+Historical 692-pass/13-failure HOST evidence remains RED until corrected HOST execution.
+Native checks and full Root Source/HOST/build/install/UI acceptance are separately required.
+Approved raw-Money/Extra used-cap widget runtime adoption is the next separate scope, OPEN
+until its own acceptance. No new payload/native/layout/generator/PNG or Core/schema work.
 
 Status: implemented as of 2026-07-25.
 
@@ -3591,10 +3596,11 @@ for the planned sequence. These milestones do not establish release readiness or
 
 ## 25. Product roadmap beyond the Android MVP
 
-**Claude reporting qualification, 2026-11-03.** Separate Anthropic Console/API reporting is
-future work: establish collection coverage and cost availability, then qualify its
-connection, budgets, guidance and native behavior before offering it again. This adds no
-release date or completed live-support claim.
+**Claude reporting qualification, 2026-11-03.** The focused Console correction restores
+its retained collection/management and Dashboard expenses alongside independent Plan Extra
+Credits. Corrected HOST/native acceptance remains pending; raw Money and Extra used/cap
+widget rows stay in the next approved runtime task. This adds no release date, positive
+live-expense proof or completed widget/release claim.
 
 Owner direction recorded on 2026-10-15. These are planned milestones, not shipped features
 or release acceptance. The public summary is owned by

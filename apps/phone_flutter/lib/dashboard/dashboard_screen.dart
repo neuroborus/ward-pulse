@@ -488,7 +488,7 @@ class AllowanceSummaryCard extends StatelessWidget {
   }
 }
 
-/// Spend of one period across every connection — money only.
+/// Spend of one period, with an optional connection-local advisory cap.
 ///
 /// Limits are per connection, so the total has no ceiling to measure against:
 /// no bar, no percentage, and no status pill that would read `Unknown` forever.
@@ -497,10 +497,12 @@ class BudgetSummaryCard extends StatelessWidget {
     super.key,
     required this.title,
     required this.state,
+    this.supportingText,
   });
 
   final String title;
   final BudgetState state;
+  final String? supportingText;
 
   @override
   Widget build(BuildContext context) {
@@ -518,6 +520,10 @@ class BudgetSummaryCard extends StatelessWidget {
             spentLabel == null
                 ? const Text('No spend reported')
                 : Text(spentLabel, style: textTheme.headlineSmall),
+            if (supportingText case final text?) ...[
+              const SizedBox(height: 10),
+              Text(text),
+            ],
           ],
         ),
       ),
@@ -966,7 +972,17 @@ class _ProviderDashboardSourceView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isConsole =
+        account.provider == 'claude' &&
+        account.connection == ProviderConnections.anthropicPlatform.storageKey;
     final cards = [
+      if (isConsole)
+        for (final budget in [account.today, account.week, account.month])
+          BudgetSummaryCard(
+            title: budget.periodLabel,
+            state: budget,
+            supportingText: 'Local cap: ${budget.limit?.label ?? 'Not set'}',
+          ),
       for (final allowance in account.allowances)
         AllowanceSummaryCard(
           allowance: allowance,
@@ -1004,6 +1020,24 @@ class _ProviderDashboardSourceView extends StatelessWidget {
               account.buckets.isNotEmpty ||
               account.modelBreakdown.isNotEmpty)
             const SizedBox(height: 8),
+        ],
+        if (isConsole) ...[
+          Wrap(
+            spacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (account.lastSuccessfulSyncAt case final asOf?)
+                Tooltip(
+                  message: formatUtc(asOf),
+                  child: Text('As of ${formatLocal(asOf)}'),
+                )
+              else
+                const Text('Last successful report unavailable'),
+              if (account.status != ProviderStatus.ok)
+                StatusPill(status: account.status),
+            ],
+          ),
+          const SizedBox(height: 8),
         ],
         if (cards.isNotEmpty)
           LayoutBuilder(

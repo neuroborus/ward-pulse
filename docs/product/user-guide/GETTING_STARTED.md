@@ -30,8 +30,10 @@ Read the [privacy policy](/product/privacy-policy) for what is stored and sent b
    down on the list, if you need another reporting attempt.
 
 Plan sign-in and reporting have separate rows under **Providers**. Reporting uses an OpenAI
-organization Admin key or a Cursor key with team reporting access. Claude Plan monthly
-extra usage uses the Claude plan sign-in; Console API reporting is planned separately.
+organization Admin key, a qualifying non-workspace-scoped Anthropic key with organization
+reporting rights, or a Cursor Team key with reporting access. Claude Plan monthly Extra
+usage uses Claude plan sign-in and stays separate from Console API expenses. A personal plan
+alone does not grant organization/team reporting access.
 
 Until a connected provider reports successfully, WardPulse has no usage data to show. A
 provider may also omit a meter that your account does not expose. **Unknown** or **Balance

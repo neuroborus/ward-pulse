@@ -33,6 +33,13 @@ unavailable, the choice remains unavailable; a saved choice can still be removed
 amounts or caps are not filled in as zero or Unlimited. The widget's Extra usage row shows
 a percentage; read the monthly used amount and cap on **Dashboard**.
 
+Console and Cursor Team budget choices currently need known spend, a positive usable
+same-currency local cap and a usable percentage. Known zero spend is valid; missing
+cost is not zero. An unavailable saved choice can still be deselected. Read API spend
+without a local cap and Claude monthly used/cap Credits on **Dashboard**: those amount rows are not yet
+part of this widget. Budget periods use UTC Today, Monday Week and calendar Month; they
+have no provider-supplied reset to display. Local caps do not stop provider spending.
+
 Lower remaining percentages appear first. The phone's metric selection is shared by
 placed WardPulse widgets; each widget's size determines how much is visible.
 

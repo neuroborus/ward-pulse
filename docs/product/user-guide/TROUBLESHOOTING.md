@@ -49,10 +49,18 @@ Check the setup for the named connection:
 
 - [OpenAI Platform reporting](/guide/providers-openai#platform-reporting) needs an organization
   Admin key, not an ordinary project key.
-- Claude Console API reporting is planned separately; see
-  [Anthropic reporting scope](/guide/providers-anthropic#organization-reporting).
+- [Anthropic Organization reporting](/guide/providers-anthropic#organization-reporting)
+  needs an eligible Console organization and key with reporting rights, outside workspace
+  scope. A working Claude plan login does not establish these permissions.
 - [Cursor Team Admin API](/guide/providers-cursor#team-admin-api) needs a Team key with reporting
   access; check [General → View team resources](/guide/providers-cursor#team-key-permissions).
+
+Console reporting can be Connected while a required daily cost bucket is missing. Partial
+history does not establish complete Today/Week/Month totals or no charges. Keep unavailable
+cost distinct from known zero. Console and Cursor Team budget percentages need known spend
+and a positive same-currency cap; read known spend without a cap on Dashboard. Saved unavailable
+choices remain removable. An unset cap is not a provider outage. Retained Stale amounts keep
+the source's previous successful time, even when a sibling source updates.
 
 For a plan/session error, use the named plan row's **Reconnect** or Cursor's
 **Sign in again**. Claude callback paste expects **CODE#STATE**, not a reporting key.

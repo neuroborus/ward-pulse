@@ -14,9 +14,10 @@ the circular screen.
 ## Screenshot index
 
 **Claude scope reconciliation, 2026-11-03.** No PNGs were changed or recaptured. The gallery
-is explicitly historical: its October Dashboard includes Console history, which is now
-deferred. Active setup/connection examples using the Providers, Anthropic reporting-key
-and Organization-budget pairs are omitted from the affected guides. Dashboard guide uses
+is explicitly historical: its October Dashboard includes Console history. Restoring
+Console collection and source-specific Money does not freshly verify these captures or
+their reporting state. Setup/connection examples using the Providers, Anthropic reporting-key
+and Organization-budget pairs remain omitted from the affected guides. Dashboard guide uses
 of the overview pair and its old current-value narration are also removed. Historical
 index rows, dates and capture/verification records below retain their original scope;
 they are not current Console setup or Connected evidence. The 37-image inventory and

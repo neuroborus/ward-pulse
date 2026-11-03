@@ -218,7 +218,7 @@ void main() {
     );
 
     test(
-      'shared factories collect supported reporting only and retain deferred Console state',
+      'shared factories collect every reporting connection with captured bounds',
       () async {
         final credentials = store('ui');
         for (final id in ids) {
@@ -229,22 +229,21 @@ void main() {
         final caches = {
           for (final id in ids) id.storageKey: cache('ui', id.storageKey),
         };
-        const deferred = ProviderConnections.anthropicPlatform;
-        await credentials.writeLabel(deferred, 'Saved Console');
-        final deferredVersion =
-            (await credentials.credentialAccess(deferred)!.read())!.version;
-        final deferredCache = caches[deferred.storageKey]!;
+        const console = ProviderConnections.anthropicPlatform;
+        await credentials.writeLabel(console, 'Saved Console');
+        final consoleVersion =
+            (await credentials.credentialAccess(console)!.read())!.version;
+        final consoleCache = caches[console.storageKey]!;
         expect(
-          await deferredCache.store(
-            _snapshot('claude', deferred.storageKey, firstAt, 77),
-            deferredVersion,
+          await consoleCache.store(
+            _snapshot('claude', console.storageKey, firstAt, 77),
+            consoleVersion,
           ),
           isTrue,
         );
-        final retained =
-            (await deferredCache.capture()).snapshot!.toJsonString();
         String empty(String _) =>
             DashboardSnapshot.empty(generatedAt: firstAt).toJsonString();
+        Map<String, dynamic>? anthropicInput;
         Map<String, dynamic>? cursorInput;
         var clockReads = 0;
         final capturedAt = firstAt.add(const Duration(microseconds: 500));
@@ -264,6 +263,16 @@ void main() {
             clockReads++;
             return capturedAt;
           },
+          anthropicReportingClient: AnthropicReportingClient(http: http),
+          normalizeAnthropicReport: (report) {
+            anthropicInput = jsonDecode(report) as Map<String, dynamic>;
+            return _snapshot(
+              'claude',
+              console.storageKey,
+              capturedAt,
+              77,
+            ).toJsonString();
+          },
           cursorReportingClient: CursorPlatformClient(http: http),
           normalizeCursorPlatformReport: (report) {
             cursorInput = jsonDecode(report) as Map<String, dynamic>;
@@ -274,7 +283,59 @@ void main() {
         );
         final observations = <ConnectionReportingUpdate>[];
         final snapshot = await repository.loadObserved(observations.add);
-        expect(clockReads, 1); // Only the supported Cursor reporting collector.
+        expect(clockReads, 2); // One captured instant per reporting collector.
+        expect(anthropicInput!['accountId'], 'anthropic-local');
+        expect(anthropicInput!['generatedAt'], capturedAt.toIso8601String());
+        expect(
+          anthropicInput!['capturedEndMicros'],
+          capturedAt.microsecondsSinceEpoch,
+        );
+        expect(
+          anthropicInput!['todayStart'],
+          DateTime.utc(2026, 10, 13).toIso8601String(),
+        );
+        expect(
+          anthropicInput!['weekStart'],
+          DateTime.utc(2026, 10, 12).toIso8601String(),
+        );
+        expect(
+          anthropicInput!['monthStart'],
+          DateTime.utc(2026, 10, 1).toIso8601String(),
+        );
+        expect(anthropicInput!['usagePages'], hasLength(2));
+        expect(anthropicInput!['costPages'], hasLength(1));
+        expect(
+          transport.uris
+              .where((uri) => uri.path.startsWith('/v1/organizations/'))
+              .map(
+                (uri) => (
+                  uri.path,
+                  uri.queryParameters['bucket_width'],
+                  uri.queryParameters['starting_at'],
+                  uri.queryParameters['ending_at'],
+                ),
+              ),
+          unorderedEquals([
+            (
+              '/v1/organizations/usage_report/messages',
+              '1d',
+              DateTime.utc(2026, 10, 1).toIso8601String(),
+              DateTime.utc(2026, 10, 13).toIso8601String(),
+            ),
+            (
+              '/v1/organizations/usage_report/messages',
+              '1m',
+              DateTime.utc(2026, 10, 13).toIso8601String(),
+              capturedAt.toIso8601String(),
+            ),
+            (
+              '/v1/organizations/cost_report',
+              '1d',
+              DateTime.utc(2026, 10, 1).toIso8601String(),
+              DateTime.utc(2026, 10, 14, 0, 0, 1).toIso8601String(),
+            ),
+          ]),
+        );
         expect(cursorInput!['generatedAt'], capturedAt.toIso8601String());
         expect(
           cursorInput!['endExclusiveMs'],
@@ -299,34 +360,30 @@ void main() {
           eventRequest['endDate'],
           (cursorInput!['endExclusiveMs'] as int) - 1,
         );
-        expect(snapshot.accounts, isEmpty);
+        expect(snapshot.accounts.single.connection, console.storageKey);
+        expect(snapshot.accounts.single.today.spent!.minorUnits, 77);
         expect(
-          await credentials.readSecret(deferred),
-          'synthetic-${deferred.storageKey}',
+          await credentials.readSecret(console),
+          'synthetic-${console.storageKey}',
         );
-        expect(await credentials.readLabel(deferred), 'Saved Console');
+        expect(await credentials.readLabel(console), 'Saved Console');
         expect(
-          (await credentials.credentialAccess(deferred)!.read())!
-              .version
-              .values,
-          deferredVersion.values,
-        );
-        expect(
-          (await deferredCache.capture()).snapshot!.toJsonString(),
-          retained,
+          (await credentials.credentialAccess(console)!.read())!.version.values,
+          consoleVersion.values,
         );
         expect(
-          snapshot.connectionVersions,
-          isNot(contains(deferred.storageKey)),
+          (await consoleCache.capture()).snapshot!.generatedAt,
+          capturedAt,
         );
         expect(
-          observations.where((update) => update.connection == deferred),
-          isEmpty,
+          snapshot.connectionVersions[console.storageKey],
+          consoleVersion.values,
         );
         expect(
           snapshot.reportingOutcomes.map((outcome) => outcome.connection),
           unorderedEquals([
             ProviderConnections.openAiPlatform,
+            ProviderConnections.anthropicPlatform,
             ProviderConnections.cursorPlatform,
           ]),
         );
@@ -350,6 +407,9 @@ void main() {
           unorderedEquals([
             '/v1/organization/usage/completions',
             '/v1/organization/costs',
+            '/v1/organizations/usage_report/messages',
+            '/v1/organizations/usage_report/messages',
+            '/v1/organizations/cost_report',
             '/teams/daily-usage-data',
             '/teams/filtered-usage-events',
           ]),
@@ -1306,9 +1366,11 @@ final class _HeldDashboardRepository extends DashboardRepository {
 
 final class _EmptyReportingTransport implements ProviderHttpTransport {
   final requests = <String>[];
+  final uris = <Uri>[];
   Map<String, dynamic>? eventRequest;
   ProviderHttpResponse reply(Uri uri, [String? requestBody]) {
     requests.add(uri.path);
+    uris.add(uri);
     if (uri.path == '/teams/filtered-usage-events') {
       eventRequest = jsonDecode(requestBody!) as Map<String, dynamic>;
       return ProviderHttpResponse(

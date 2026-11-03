@@ -26,12 +26,16 @@ DashboardRepository buildLiveProviderStack({
   Map<String, ConnectionSnapshotCache> caches = const {},
   ProviderSyncLogger logger = const DeveloperProviderSyncLogger(),
   DateTime Function()? clock,
+  AnthropicReportingClient? anthropicReportingClient,
   CursorPlatformClient? cursorReportingClient,
+  ReportNormalizer normalizeAnthropicReport = normalizeAnthropicReportJson,
   ReportNormalizer normalizeCursorPlatformReport =
       normalizeCursorPlatformReportJson,
   DashboardSnapshotMerger mergeSnapshots = mergeDashboardSnapshotsJson,
 }) {
   final now = clock ?? DateTime.now;
+  final anthropicClient =
+      anthropicReportingClient ?? AnthropicReportingClient();
   final cursorPlanClient = CursorPlanClient();
   final cursorPlatformClient = cursorReportingClient ?? CursorPlatformClient();
 
@@ -79,11 +83,35 @@ DashboardRepository buildLiveProviderStack({
     };
   }
 
+  final anthropic = connect(
+    connection: ProviderConnections.anthropicPlatform.storageKey,
+    fallback: openAiAndCodex,
+    normalizeReport: normalizeAnthropicReport,
+    loadCredentialReport: (key) async {
+      final period = ReportPeriodBounds.utc(now());
+      final reports = await anthropicClient.fetchDailyReports(
+        adminApiKey: key,
+        start: period.reportStart,
+        end: period.generatedAt,
+      );
+      return jsonEncode({
+        'accountId': 'anthropic-local',
+        'generatedAt': period.generatedAt.toIso8601String(),
+        'capturedEndMicros': period.generatedAt.microsecondsSinceEpoch,
+        'todayStart': period.todayStart.toIso8601String(),
+        'weekStart': period.weekStart.toIso8601String(),
+        'monthStart': period.monthStart.toIso8601String(),
+        'usagePages': reports.usage,
+        'costPages': reports.costs,
+      });
+    },
+  );
+
   final claude = claudeDashboardRepository(
     accountService: claudeAccountService,
     mergeSnapshots: mergeSnapshots,
     cache: caches[ProviderConnections.claudePlan.storageKey],
-    fallback: openAiAndCodex,
+    fallback: anthropic,
     logger: logger,
   );
 

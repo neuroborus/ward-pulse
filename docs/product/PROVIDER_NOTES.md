@@ -45,10 +45,11 @@ report anything.
 
 ## Consumption display
 
-**Current Claude scope, 2026-11-03.** Claude Plan monthly Extra usage is the offered expense
-source; Console/API reporting is future work. Its reported used amount, applicable cap and
-percentage are independent. Keep the existing Credits conversion as a compatibility choice,
-not a documented wire-unit or USD contract. Infer no wallet, missing amount, unlimited state,
+**Current Claude scope, 2026-11-03.** Console organization API Money and Claude Plan monthly
+Extra usage are separate sources. Console's retained collection/management and source-owned
+Dashboard periods are restored; monthly Extra used amount, applicable cap and percentage
+remain independent. For Plan Extra, keep the existing Credits conversion as a compatibility
+choice, not a documented wire-unit or USD contract. Infer no wallet, missing amount, unlimited state,
 daily history, timezone or monthly reset. There is no tier-name gate or all-tier live certification.
 
 Providers may report plan allowances, purchased tokens or credits, or both. These values stay
@@ -163,8 +164,8 @@ Every family on the **Providers** tab is one section. Supported connection kinds
   and reporting access.
 
 The current user-facing plan names are **Codex plan**, **Claude plan** and **Cursor plan**.
-OpenAI groups Codex plan with Platform reporting; Anthropic currently offers Claude plan
-only; Cursor groups Cursor plan with Team Admin API. Organization reporting is deferred.
+OpenAI groups Codex plan with Platform reporting; Anthropic groups Claude plan with
+Organization reporting; Cursor groups Cursor plan with Team Admin API.
 The Dashboard uses the same family grouping while keeping each account's data and status separate.
 A plan login does not grant reporting access or verify its sibling reporting key.
 An optional user-defined label for reporting keys is plain phone-local display metadata:
@@ -329,12 +330,30 @@ Official references:
 
 ## Anthropic organization reporting
 
-**Current-scope qualification, 2026-11-03.** Console/API reporting is deferred from the
-active catalogue and the shared foreground/headless collection stack. Retained collectors,
-normalization and dated qualification below are backend/history evidence, not acceptance
-of current Console expense support. Stable connection/backend IDs, saved credentials,
-labels, cache identities/generations and settings remain; deferral performs no reset,
-deletion or reauthentication. Other reporting providers and shared helpers remain active.
+**Integration correction, 2026-11-03.** Organization reporting is restored in the active
+catalogue and `buildLiveProviderStack`, shared by foreground/headless `PhoneLiveBindings`.
+Retain `AnthropicReportingClient`, `normalizeAnthropicReportJson`, provider `claude`,
+connection/cache `anthropic.platform`, credential versions and cache generations. Capture
+one UTC instant for `generatedAt`, `capturedEndMicros` and calendar starts; keep the existing
+usage/cost envelopes and accepted request-bound repair. No query/core/schema repair,
+credential migration or fresh provider probe is part of this correction.
+
+The bound direct collection completed three HTTP 200 requests with pagination complete:
+November 1/2 cost buckets were explicitly empty, November 3 was absent, and usage had zero
+token totals. Complete-day normalization therefore retains current-period Unknown for that
+collection. The separate 10:49 normalized cache corroborates unavailability; it establishes
+neither identical app-key/wire inputs, all-time no-charge behavior nor positive expenses.
+
+Console Dashboard periods show known Money independently of optional local caps, including
+zero; missing cost stays unavailable. Source as-of/status and partial history remain
+separate from aggregate spend and from Claude Plan monthly Extra Credits. Existing common
+Anthropic/Cursor budget catalogue, selection and publication remain: known spend plus a
+positive usable same-currency cap and percentage are required. Preserve every stored ID,
+null default, explicit empty selection, unavailable removal and capacity rule. No exclusion,
+flag, catalogue split or migration is introduced. Current widget rows still require a
+percentage; uncapped Money and Extra used/cap paint belong to the next approved widget task.
+Native checks and full HOST/build/install/UI/Root acceptance remain pending until executed;
+historical 692-pass/13-failure evidence remains RED.
 
 Status: implemented on 2026-07-25.
 

@@ -19,6 +19,10 @@ and `justfile`; do not add a framework or dependency for this workflow.
 - Inputs, fixtures and assertions MUST be self-contained. Use minimal, neutral synthetic
   values. Never use names, paths, identifiers or contextual details from unrelated projects,
   including as deny-list entries or regression fixtures. Keep fixtures sanitized.
+  For downstream-behavior tests that parse nested synthetic maps with `fromJson`, satisfy
+  the actual nested parsers' required fields; an enclosing object's fields do not supply them.
+  Correct malformed fixtures rather than loosening production parsing. Intentional
+  malformed-input parser-rejection tests remain valid.
 - Add regressions for reproduced defects and known fragile boundaries; retain RED→GREEN
   evidence proving the failure and fix. Elsewhere, test only an important uncovered contract.
   A change alone does not justify another test.
@@ -37,6 +41,9 @@ and `justfile`; do not add a framework or dependency for this workflow.
 - Preserve distinct safety, recovery and failure-path guarantees. Before deleting a redundant
   test, name its retained replacement. Never weaken assertions, skip or disable failures,
   or lower concurrency to hide a race.
+  After catalogue changes, trace affected app integration callers beyond edited files,
+  including shared helper default identities and positional row/action selectors; preserve
+  their distinct guarantees rather than blindly rewriting expectations.
 - Affected ordinary host test execution with warm dependencies has a 60-second development
   budget. Measure it and remove avoidable cost; report build, toolchain and emulator setup
   separately. This is not a budget for `just test-all` or a reason to omit required gates.

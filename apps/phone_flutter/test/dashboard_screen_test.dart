@@ -1146,13 +1146,19 @@ void main() {
     testWidgets('families retain separate connection histories and models', (
       tester,
     ) async {
-      final connections = providerConnectionCatalog();
-      final providers = ['codex', 'openai', 'claude', 'cursor', 'cursor'];
+      const cases = <(ProviderConnectionId, String)>[
+        (ProviderConnections.codexPlan, 'codex'),
+        (ProviderConnections.openAiPlatform, 'openai'),
+        (ProviderConnections.claudePlan, 'claude'),
+        (ProviderConnections.anthropicPlatform, 'claude'),
+        (ProviderConnections.cursorPlan, 'cursor'),
+        (ProviderConnections.cursorPlatform, 'cursor'),
+      ];
       final accounts = [
-        for (final (index, connection) in connections.indexed)
-          account(providers[index])
+        for (final (index, (connection, provider)) in cases.indexed)
+          account(provider)
             ..['accountId'] = 'source-$index'
-            ..['connection'] = connection.id.storageKey
+            ..['connection'] = connection.storageKey
             ..['allowances'] = <Object>[]
             ..['buckets'] = [
               {
@@ -1174,17 +1180,22 @@ void main() {
       final charts = tester.widgetList<UsageHistoryChart>(
         find.byType(UsageHistoryChart),
       );
-      expect(charts, hasLength(5));
+      expect(charts, hasLength(6));
       // No cross-source buckets, even when both accounts have the same kind.
       expect(charts.map((chart) => chart.buckets.single.requests), [
         13,
         14,
         15,
+        16,
         11,
         12,
       ]);
-      for (final (index, connection) in connections.indexed) {
-        final caption = find.text(connection.title);
+      for (final (index, (connection, _)) in cases.indexed) {
+        final caption = find.text(
+          providerConnectionCatalog()
+              .singleWhere((metadata) => metadata.id == connection)
+              .title,
+        );
         final model = find.text('model-$index');
         final history = find.text('${11 + index} requests');
         expect(caption, findsOneWidget);
@@ -1206,6 +1217,136 @@ void main() {
         expect(find.text('source-$index'), findsNothing);
       }
     });
+
+    testWidgets(
+      'Console period Money stays separate from Plan monthly Credits',
+      (tester) async {
+        final asOf = DateTime.utc(2026, 10, 13, 11, 12);
+        for (final status in ['ok', 'stale']) {
+          final console =
+              account('claude', status: status)
+                ..['connection'] =
+                    ProviderConnections.anthropicPlatform.storageKey
+                ..['allowances'] = <Object>[]
+                ..['lastSuccessfulSyncAt'] = asOf.toIso8601String();
+          for (final (period, spent, cap) in <(String, int?, int?)>[
+            ('today', 1234, null),
+            ('week', 0, 10000),
+            ('month', null, 50000),
+          ]) {
+            console[period] = {
+              ...BudgetState.unknownPeriod(period).toJson(),
+              'spent':
+                  spent == null
+                      ? null
+                      : {'minorUnits': spent, 'currency': 'USD'},
+              'limit':
+                  cap == null ? null : {'minorUnits': cap, 'currency': 'USD'},
+              'remaining':
+                  spent != null && cap != null
+                      ? {'minorUnits': cap - spent, 'currency': 'USD'}
+                      : null,
+              'usedPercent':
+                  spent != null && cap != null ? spent / cap * 100 : null,
+              'status': spent != null && cap != null ? 'ok' : 'unknown',
+            };
+          }
+          final plan =
+              account('claude')
+                ..['connection'] = ProviderConnections.claudePlan.storageKey
+                ..['allowances'] = [
+                  {
+                    'id': 'claude-extra-usage',
+                    'source': 'purchased',
+                    'label': 'Extra usage',
+                    'used': {'value': '12.5', 'unit': 'credits'},
+                    'limit': {'value': '50', 'unit': 'credits'},
+                    'usedPercent': 25.0,
+                    'status': 'ok',
+                  },
+                ];
+          final snapshot = DashboardSnapshot.fromJson({
+            ...snapshotOf([console, plan]).toJson(),
+            'generatedAt': '2026-10-13T13:00:00Z',
+          });
+          await show(tester, snapshot);
+          final consoleSource =
+              find
+                  .ancestor(
+                    of: find.text('Organization reporting'),
+                    matching: find.byType(Column),
+                  )
+                  .first;
+          Finder periodCard(String period) => find.descendant(
+            of: consoleSource,
+            matching: find.widgetWithText(
+              BudgetSummaryCard,
+              BudgetState.unknownPeriod(period).periodLabel,
+            ),
+          );
+          Finder inPeriod(String period, String text) => find.descendant(
+            of: periodCard(period),
+            matching: find.text(text),
+          );
+          expect(inPeriod('today', 'USD 12.34'), findsOneWidget);
+          expect(inPeriod('today', 'Local cap: Not set'), findsOneWidget);
+          expect(inPeriod('week', 'USD 0.00'), findsOneWidget);
+          expect(inPeriod('week', 'Local cap: USD 100.00'), findsOneWidget);
+          expect(inPeriod('month', 'No spend reported'), findsOneWidget);
+          expect(inPeriod('month', 'Local cap: USD 500.00'), findsOneWidget);
+          for (final period in ['today', 'week', 'month']) {
+            expect(
+              find.descendant(
+                of: periodCard(period),
+                matching: find.byType(LinearProgressIndicator),
+              ),
+              findsNothing,
+            );
+          }
+          final extra = find.widgetWithText(
+            AllowanceSummaryCard,
+            'Extra usage',
+          );
+          expect(
+            find.descendant(
+              of: extra,
+              matching: find.text('12.5 credits used this month'),
+            ),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(
+              of: extra,
+              matching: find.text('Monthly cap: 50 credits'),
+            ),
+            findsOneWidget,
+          );
+          expect(find.byTooltip(formatUtc(asOf)), findsOneWidget);
+          expect(find.text('As of ${formatLocal(asOf)}'), findsOneWidget);
+          expect(
+            tester.getTopLeft(find.text('Organization reporting')).dy,
+            lessThan(tester.getTopLeft(periodCard('today')).dy),
+          );
+          expect(
+            find.byType(Badge),
+            status == 'ok' ? findsNothing : findsOneWidget,
+          );
+          expect(
+            find.byType(StatusPill),
+            status == 'ok' ? findsNothing : findsOneWidget,
+          );
+          if (status == 'stale')
+            expect(
+              find.descendant(
+                of: consoleSource,
+                matching: find.byTooltip('Stale'),
+              ),
+              findsOneWidget,
+            );
+          expect(tester.takeException(), isNull);
+        }
+      },
+    );
 
     testWidgets('keeps meters and history separate within a connection', (
       tester,

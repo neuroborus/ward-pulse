@@ -503,6 +503,7 @@ void main() {
       await _pumpProvidersAtSize(tester, const Size(360, 640), store: store);
       for (final title in const [
         'Claude plan',
+        'Organization reporting',
         'Cursor plan',
         'Team Admin API',
         'Codex plan',
